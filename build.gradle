@@ -1,0 +1,179 @@
+plugins {
+    id 'jacoco'
+    id 'java'
+    id 'groovy'
+}
+
+group = 'com.montplex'
+version = '1.0.0'
+
+repositories {
+    maven {
+        url 'https://maven.aliyun.com/repository/public'
+    }
+    mavenCentral()
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
+        groovy {
+            srcDirs = ['dyn/src']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+    }
+    test {
+        java {
+            srcDirs = ['src/test/java']
+        }
+        groovy {
+            srcDirs = ['src/test/groovy', 'dyn/test']
+        }
+        resources {
+            srcDirs = ['src/test/resources']
+        }
+    }
+}
+
+sourceCompatibility = 21
+targetCompatibility = 21
+
+compileGroovy {
+    groovyOptions.configurationScript = file("config.groovy")
+}
+
+def activejVersion = '6.0-beta2'
+
+dependencies {
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: '2.0.9'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.20.0'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-api', version: '2.20.0'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j2-impl', version: '2.20.0'
+
+    implementation group: 'org.apache.groovy', name: 'groovy', version: '4.0.12'
+
+    implementation group: 'io.activej', name: 'activej-types', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-common', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-bytebuf', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-datastream', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-csp', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-eventloop', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-net', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-http', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-inject', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-launcher', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-launchers-common', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-servicegraph', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-config', version: activejVersion
+    implementation group: 'io.activej', name: 'activej-boot', version: activejVersion
+
+    implementation group: 'commons-io', name: 'commons-io', version: '2.15.1'
+    implementation group: 'commons-net', name: 'commons-net', version: '3.9.0'
+    implementation group: 'org.apache.commons', name: 'commons-collections4', version: '4.4'
+    implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.26.0'
+    implementation group: 'io.netty', name: 'netty-buffer', version: '4.1.100.Final'
+
+    implementation group: 'com.google.guava', name: 'guava', version: '32.1.2-jre'
+
+    implementation group: 'com.github.jnr', name: 'jnr-posix', version: '3.1.19'
+    implementation group: 'com.github.jnr', name: 'jnr-ffi', version: '2.2.16'
+    implementation group: 'net.openhft', name: 'affinity', version: '3.23.3'
+    implementation group: 'net.openhft', name: 'posix', version: '2.25ea0'
+
+    implementation group: 'com.github.luben', name: 'zstd-jni', version: '1.5.5-10'
+    implementation group: 'org.lz4', name: 'lz4-java', version: '1.8.0'
+
+    implementation group: 'com.moilioncircle', name: 'redis-replicator', version: '3.8.1'
+
+    implementation group: 'redis.clients', name: 'jedis', version: '4.4.7'
+
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.14.3'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.14.3'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.14.3'
+
+    implementation group: 'io.prometheus', name: 'simpleclient', version: '0.15.0'
+    implementation group: 'io.prometheus', name: 'simpleclient_httpserver', version: '0.15.0'
+    implementation group: 'io.prometheus', name: 'simpleclient_hotspot', version: '0.15.0'
+
+    implementation group: 'org.apache.lucene', name: 'lucene-core', version: '9.11.1'
+
+    implementation group: 'org.apache.curator', name: 'curator-framework', version: '5.7.0'
+    implementation group: 'org.apache.curator', name: 'curator-recipes', version: '5.7.0'
+    implementation group: 'org.apache.curator', name: 'curator-client', version: '5.7.0'
+
+    testImplementation group: 'org.openjdk.jmh', name: 'jmh-core', version: '1.35'
+    testAnnotationProcessor group: 'org.openjdk.jmh', name: 'jmh-generator-annprocess', version: '1.35'
+
+    testImplementation group: 'org.openjdk.jol', name: 'jol-core', version: '0.17'
+    testImplementation group: 'org.spockframework', name: 'spock-core', version: '2.3-groovy-4.0'
+}
+
+test {
+    useJUnitPlatform()
+
+    maxHeapSize = '8G'
+    // parallel = true
+    forkEvery = 4
+}
+
+jacoco {
+    toolVersion = '0.8.12'
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = false
+        csv.required = false
+        html.outputLocation = layout.buildDirectory.dir('reports/jacocoHtml')
+    }
+}
+
+test.finalizedBy jacocoTestReport
+
+// for debug
+/*
+java \
+-Xmx1g -Xms1g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m \
+-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:17379 \
+-jar velo-1.0.0.jar
+ */
+
+jar {
+    manifest {
+        attributes "Main-Class": 'io.velo.MultiWorkerServer'
+        attributes "Class-Path": '. lib/' + configurations.runtimeClasspath.collect { it.name }.join(' lib/')
+    }
+    exclude 'log4j2.xml', 'velo.properties'
+    zip64 true
+}
+
+tasks.withType(Jar) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+task copyDynScript(type: Copy) {
+    from './dyn/src'
+    into "$buildDir/libs/dyn/src"
+}
+
+task copyLog4j2(type: Copy) {
+    from 'src/main/resources/log4j2.xml'
+    into "$buildDir/libs/"
+}
+
+task copyConfigFile(type: Copy) {
+    from 'src/main/resources/velo.properties'
+    into "$buildDir/libs/"
+}
+
+task copyDependencies(type: Copy) {
+    from configurations.runtimeClasspath
+    into 'build/libs/lib'
+}
+
+jar.dependsOn copyDynScript, copyLog4j2, copyConfigFile, copyDependencies
