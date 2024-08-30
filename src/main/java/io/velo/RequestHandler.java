@@ -226,6 +226,8 @@ public class RequestHandler {
         return dataTransfer;
     }
 
+    // request time summary already include all cmd, for all handlers
+    // this metrics for cmd include error reply count in this handler, for error debug
     // all cmd count is less than 1k, each group eg: ZGroup is less than 200
     private String[][] cmdStatArray = new String[26][200];
     private long[][] cmdStatCountArray = new long[26][200];
