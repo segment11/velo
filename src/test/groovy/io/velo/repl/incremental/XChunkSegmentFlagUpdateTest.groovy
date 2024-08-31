@@ -1,6 +1,7 @@
 package io.velo.repl.incremental
 
 import io.velo.persist.Chunk
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.repl.BinlogContent
@@ -55,6 +56,6 @@ class XChunkSegmentFlagUpdateTest extends Specification {
 
         cleanup:
         localPersist.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 }

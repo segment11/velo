@@ -1,8 +1,10 @@
 package io.velo.repl.incremental
 
 import io.velo.CompressedValue
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
+import io.velo.persist.Mock
 import io.velo.repl.BinlogContent
 import io.velo.repl.ReplPairTest
 import spock.lang.Specification
@@ -12,7 +14,7 @@ import java.nio.ByteBuffer
 class XWalVTest extends Specification {
     def 'test encode and decode'() {
         given:
-        def v = io.velo.persist.Mock.prepareValueList(1)[0]
+        def v = Mock.prepareValueList(1)[0]
         def xWalV = new XWalV(v, true, 0)
         def xWalV2 = new XWalV(v, false, 0)
         def xWalV3 = new XWalV(v)
@@ -91,6 +93,6 @@ class XWalVTest extends Specification {
 
         cleanup:
         localPersist.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 }

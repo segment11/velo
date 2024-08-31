@@ -1,6 +1,6 @@
 package io.velo.mock
 
-
+import io.velo.persist.Mock
 import spock.lang.Specification
 
 class InMemoryGetSetTest extends Specification {
@@ -10,7 +10,7 @@ class InMemoryGetSetTest extends Specification {
         def inMemoryGetSet = new InMemoryGetSet()
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(10)
+        def cvList = Mock.prepareCompressedValueList(10)
         for (cv in cvList) {
             inMemoryGetSet.put(slot, 'key' + cv.seq, 0, cv)
         }

@@ -1,8 +1,11 @@
 package io.velo.repl
 
 import io.velo.ConfForSlot
+import io.velo.persist.Consts
 import io.velo.persist.DynConfig
 import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
+import io.velo.persist.Mock
 import io.velo.repl.incremental.XWalV
 import spock.lang.Specification
 
@@ -54,7 +57,7 @@ class BinlogTest extends Specification {
         }
         def binlog2 = new Binlog(slot, slotDir2, dynConfig2)
         and:
-        def vList = io.velo.persist.Mock.prepareValueList(11)
+        def vList = Mock.prepareValueList(11)
         for (v in vList[0..9]) {
             binlog.append(new XWalV(v))
             binlog2.append(new XWalV(v))
@@ -364,7 +367,7 @@ class BinlogTest extends Specification {
         def buffer = ByteBuffer.wrap(oneSegmentBytes)
 
         and:
-        def vList = io.velo.persist.Mock.prepareValueList(10)
+        def vList = Mock.prepareValueList(10)
         vList.each { v ->
             def xWalV = new XWalV(v)
             def encoded = xWalV.encodeWithType()
@@ -372,7 +375,7 @@ class BinlogTest extends Specification {
         }
 
         and:
-        io.velo.persist.LocalPersistTest.prepareLocalPersist()
+        LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
@@ -390,6 +393,6 @@ class BinlogTest extends Specification {
 
         cleanup:
         localPersist.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 }

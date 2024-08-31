@@ -2,8 +2,11 @@ package io.velo.repl.incremental
 
 import io.velo.CompressedValue
 import io.velo.KeyHash
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import io.velo.repl.BinlogContent
+import io.velo.repl.ReplPairTest
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -74,16 +77,16 @@ class XBigStringsTest extends Specification {
 
         when:
         final short slot = 0
-        io.velo.persist.LocalPersistTest.prepareLocalPersist()
+        LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        def replPair = io.velo.repl.ReplPairTest.mockAsSlave()
+        def replPair = ReplPairTest.mockAsSlave()
         xBigStrings.apply(slot, replPair)
         then:
         replPair.toFetchBigStringUuidList.size() == 1
 
         cleanup:
         localPersist.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 }

@@ -3,6 +3,7 @@ package io.velo.repl
 import io.velo.CompressedValue
 import io.velo.Dict
 import io.velo.KeyHash
+import io.velo.persist.Mock
 import io.velo.repl.incremental.XBigStrings
 import io.velo.repl.incremental.XDict
 import io.velo.repl.incremental.XFlush
@@ -31,7 +32,7 @@ class BinlogContentTest extends Specification {
         exception
 
         when:
-        def v = io.velo.persist.Mock.prepareValueList(1)[0]
+        def v = Mock.prepareValueList(1)[0]
         def xWalV = new XWalV(v, true, 0)
         def encoded = xWalV.encodeWithType()
         def buffer = ByteBuffer.wrap(encoded)

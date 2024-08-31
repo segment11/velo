@@ -13,6 +13,7 @@ import io.velo.MultiWorkerServer
 import io.velo.RequestHandler
 import io.velo.SocketInspector
 import io.velo.decode.RequestDecoder
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.repl.content.RawBytesContent
@@ -117,6 +118,6 @@ class TcpClientTest extends Specification {
         tcpClient.cleanUp()
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         localPersist.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 }

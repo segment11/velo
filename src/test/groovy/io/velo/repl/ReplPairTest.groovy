@@ -12,7 +12,9 @@ import io.velo.MultiWorkerServer
 import io.velo.RequestHandler
 import io.velo.SocketInspector
 import io.velo.decode.RequestDecoder
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import io.velo.repl.content.RawBytesContent
 import spock.lang.Specification
 
@@ -188,7 +190,7 @@ class ReplPairTest extends Specification {
     def 'test connect'() {
         when:
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
-        io.velo.persist.LocalPersistTest.prepareLocalPersist()
+        LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
 
         def replPairAsMaster = mockAsMaster()
@@ -242,6 +244,6 @@ class ReplPairTest extends Specification {
         replPairAsSlave.close()
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         localPersist.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 }

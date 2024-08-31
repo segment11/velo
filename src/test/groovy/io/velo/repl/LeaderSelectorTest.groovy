@@ -5,6 +5,7 @@ import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
 import io.velo.SocketInspector
 import io.velo.command.XGroup
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.repl.support.JedisPoolHolder
@@ -18,6 +19,7 @@ class LeaderSelectorTest extends Specification {
         def leaderSelector = LeaderSelector.instance
         // only for coverage
         leaderSelector.cleanUp()
+        leaderSelector.masterAddressLocalMocked = null
 
         expect:
         leaderSelector.tryConnectAndGetMasterListenAddress() == null
@@ -240,7 +242,7 @@ class LeaderSelectorTest extends Specification {
 
         cleanup:
         oneSlot.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 
     def 'reset as slave'() {
@@ -380,6 +382,6 @@ class LeaderSelectorTest extends Specification {
         cleanup:
         JedisPoolHolder.instance.cleanUp()
         oneSlot.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 }
