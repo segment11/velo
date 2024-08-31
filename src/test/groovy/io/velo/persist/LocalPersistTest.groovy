@@ -53,14 +53,14 @@ class LocalPersistTest extends Specification {
 
         when:
         prepareLocalPersist((byte) 1, (short) 2)
-        localPersist.fixSlotThreadId((byte) 1, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
         then:
         localPersist.oneSlots().length == 2
         localPersist.currentThreadFirstOneSlot() == localPersist.oneSlots()[1]
 
         when:
         boolean exception = false
-        localPersist.fixSlotThreadId((byte) 1, -1L)
+        localPersist.fixSlotThreadId((short) 1, -1L)
         try {
             localPersist.currentThreadFirstOneSlot()
         } catch (IllegalStateException e) {
@@ -72,7 +72,7 @@ class LocalPersistTest extends Specification {
 
         cleanup:
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        localPersist.fixSlotThreadId((byte) 1, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }

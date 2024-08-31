@@ -357,7 +357,7 @@ class OneSlotTest extends Specification {
         LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        localPersist.fixSlotThreadId((byte) 1, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
         def oneSlot2 = localPersist.oneSlot((byte) 1)
 
