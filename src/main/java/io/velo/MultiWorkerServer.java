@@ -572,10 +572,8 @@ public class MultiWorkerServer extends Launcher {
 
             primaryScheduleRunnable.stop();
 
-            LeaderSelector.getInstance().cleanUp();
-            JedisPoolHolder.getInstance().cleanUp();
-
             if (socketInspector != null) {
+                socketInspector.isServerStopped = true;
                 socketInspector.socketMap.values().forEach(socket -> {
                     socket.getReactor().submit(() -> {
                         socket.close();
@@ -583,6 +581,9 @@ public class MultiWorkerServer extends Launcher {
                     });
                 });
             }
+
+            LeaderSelector.getInstance().cleanUp();
+            JedisPoolHolder.getInstance().cleanUp();
 
             // close local persist
             LocalPersist.getInstance().cleanUp();

@@ -19,6 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SocketInspector implements TcpSocket.Inspector {
     private final Logger log = LoggerFactory.getLogger(SocketInspector.class);
 
+    volatile boolean isServerStopped = false;
+
     Eventloop[] netWorkerEventloopArray;
 
     final ConcurrentHashMap<InetSocketAddress, TcpSocket> socketMap = new ConcurrentHashMap<>();
@@ -85,6 +87,12 @@ public class SocketInspector implements TcpSocket.Inspector {
 
     @Override
     public void onConnect(TcpSocket socket) {
+        if (isServerStopped) {
+            log.warn("Inspector on connect, server stopped, close the socket");
+            socket.close();
+            return;
+        }
+
         var userData = socket.getUserData();
         if (userData instanceof ReplPair replPair) {
             // this socket is a slave connection master

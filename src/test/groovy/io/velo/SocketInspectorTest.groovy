@@ -57,6 +57,18 @@ class SocketInspectorTest extends Specification {
         then:
         exception
 
+        when:
+        exception = false
+        inspector.isServerStopped = true
+        try {
+            inspector.onConnect(socket)
+        } catch (Exception e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
         cleanup:
         inspector.clearAll()
     }

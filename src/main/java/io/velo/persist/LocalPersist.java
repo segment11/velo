@@ -142,7 +142,8 @@ public class LocalPersist implements NeedCleanUp {
     @Override
     public void cleanUp() {
         for (var oneSlot : oneSlots) {
-            oneSlot.asyncRun(oneSlot::cleanUp);
+            oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId();
+            oneSlot.cleanUp();
         }
     }
 }
