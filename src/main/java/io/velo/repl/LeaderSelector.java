@@ -293,7 +293,7 @@ public class LeaderSelector implements NeedCleanUp {
 
         Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
         for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
-            var oneSlot = localPersist.oneSlot((byte) i);
+            var oneSlot = localPersist.oneSlot((short) i);
             promises[i] = oneSlot.asyncRun(() -> {
                 boolean canResetSelfAsMasterNow = false;
 
@@ -406,7 +406,7 @@ public class LeaderSelector implements NeedCleanUp {
 
                 Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
                 for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
-                    var oneSlot = localPersist.oneSlot((byte) i);
+                    var oneSlot = localPersist.oneSlot((short) i);
                     // still is a slave, need not reset readonly
                     promises[i] = oneSlot.asyncRun(() -> {
                         oneSlot.removeReplPairAsSlave();
@@ -462,7 +462,7 @@ public class LeaderSelector implements NeedCleanUp {
 
         Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
         for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
-            var oneSlot = localPersist.oneSlot((byte) i);
+            var oneSlot = localPersist.oneSlot((short) i);
             promises[i] = oneSlot.asyncRun(() -> {
                 // clear old as slave catch up binlog info
                 // need fetch from the beginning, for data consistency
