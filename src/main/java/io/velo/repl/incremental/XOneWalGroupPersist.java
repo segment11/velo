@@ -60,13 +60,13 @@ public class XOneWalGroupPersist implements BinlogContent {
         this.splitNumberAfterPut = splitNumberAfterPut;
     }
 
-    record SegmentFlagWithSeq(Chunk.Flag flag, long seq) {
+    record SegmentFlagWithSeq(byte flagByte, long seq) {
     }
 
     private final TreeMap<Integer, SegmentFlagWithSeq> updatedChunkSegmentFlagWithSeqMap = new TreeMap<>();
 
-    public void putUpdatedChunkSegmentFlagWithSeq(int segmentIndex, Chunk.Flag flag, long seq) {
-        updatedChunkSegmentFlagWithSeqMap.put(segmentIndex, new SegmentFlagWithSeq(flag, seq));
+    public void putUpdatedChunkSegmentFlagWithSeq(int segmentIndex, byte flagByte, long seq) {
+        updatedChunkSegmentFlagWithSeqMap.put(segmentIndex, new SegmentFlagWithSeq(flagByte, seq));
     }
 
     private final TreeMap<Integer, byte[]> updatedChunkSegmentBytesMap = new TreeMap<>();
@@ -181,7 +181,7 @@ public class XOneWalGroupPersist implements BinlogContent {
         buffer.putInt(updatedChunkSegmentFlagWithSeqMap.size());
         for (var entry : updatedChunkSegmentFlagWithSeqMap.entrySet()) {
             buffer.putInt(entry.getKey());
-            buffer.put(entry.getValue().flag.flagByte());
+            buffer.put(entry.getValue().flagByte());
             buffer.putLong(entry.getValue().seq);
         }
 
@@ -242,9 +242,9 @@ public class XOneWalGroupPersist implements BinlogContent {
         var updatedChunkSegmentFlagWithSeqMapSize = buffer.getInt();
         for (var i = 0; i < updatedChunkSegmentFlagWithSeqMapSize; i++) {
             var segmentIndex = buffer.getInt();
-            var flag = Chunk.Flag.fromFlagByte(buffer.get());
+            var flagByte = buffer.get();
             var seq = buffer.getLong();
-            x.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, flag, seq);
+            x.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, flagByte, seq);
         }
 
         var updatedChunkSegmentBytesMapSize = buffer.getInt();
@@ -285,10 +285,10 @@ public class XOneWalGroupPersist implements BinlogContent {
 
         for (var entry : updatedChunkSegmentFlagWithSeqMap.entrySet()) {
             var segmentIndex = entry.getKey();
-            var flag = entry.getValue().flag;
+            var flagByte = entry.getValue().flagByte;
             var seq = entry.getValue().seq;
             // RandAccessFile use os page cache, perf ok
-            oneSlot.setSegmentMergeFlag(segmentIndex, flag, seq, walGroupIndex);
+            oneSlot.setSegmentMergeFlag(segmentIndex, flagByte, seq, walGroupIndex);
         }
 
         var chunk = oneSlot.getChunk();

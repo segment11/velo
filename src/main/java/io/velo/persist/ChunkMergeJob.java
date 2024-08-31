@@ -144,15 +144,15 @@ public class ChunkMergeJob {
         HashSet<Integer> skipSegmentIndexSet = new HashSet<>();
         for (var segmentIndex : needMergeSegmentIndexList) {
             var segmentFlag = oneSlot.getSegmentMergeFlag(segmentIndex);
-            var flag = segmentFlag.flag();
+            var flagByte = segmentFlag.flagByte();
 
             // not write yet, skip
-            if (flag == Chunk.Flag.init) {
+            if (flagByte == Chunk.Flag.init.flagByte) {
                 skipSegmentIndexSet.add(segmentIndex);
                 continue;
             }
 
-            if (flag == Chunk.Flag.merged_and_persisted) {
+            if (flagByte == Chunk.Flag.merged_and_persisted.flagByte) {
                 skipSegmentIndexSet.add(segmentIndex);
 //                continue;
             }
@@ -193,7 +193,7 @@ public class ChunkMergeJob {
             // refer to Chunk.ONCE_PREPARE_SEGMENT_COUNT
             // last segments not write at all, need skip
             if (segmentBytesBatchRead == null || relativeOffsetInBatchBytes >= segmentBytesBatchRead.length) {
-                oneSlot.updateSegmentMergeFlag(segmentIndex, Chunk.Flag.merged_and_persisted, 0L);
+                oneSlot.updateSegmentMergeFlag(segmentIndex, Chunk.Flag.merged_and_persisted.flagByte, 0L);
                 if (doLog) {
                     log.info("Set segment flag to persisted as not write at all, s={}, i={}", slot, segmentIndex);
                 }
@@ -201,7 +201,7 @@ public class ChunkMergeJob {
                 continue;
             }
 
-            oneSlot.updateSegmentMergeFlag(segmentIndex, Chunk.Flag.merging, snowFlake.nextId());
+            oneSlot.updateSegmentMergeFlag(segmentIndex, Chunk.Flag.merging.flagByte, snowFlake.nextId());
             if (doLog && !alreadyDoLog) {
                 log.info("Set segment flag to merging, s={}, i={}", slot, segmentIndex);
                 alreadyDoLog = true;
@@ -242,8 +242,8 @@ public class ChunkMergeJob {
 
             if (hasValidCvSegmentIndexSet.contains(segmentIndex)) {
                 var segmentSeq = snowFlake.nextId();
-                oneSlot.updateSegmentMergeFlag(segmentIndex, Chunk.Flag.merged, segmentSeq);
-                xChunkSegmentFlagUpdate.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Chunk.Flag.merged, segmentSeq);
+                oneSlot.updateSegmentMergeFlag(segmentIndex, Chunk.Flag.merged.flagByte, segmentSeq);
+                xChunkSegmentFlagUpdate.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Chunk.Flag.merged.flagByte, segmentSeq);
 
                 if (doLog) {
                     log.info("Set segment flag to merged, s={}, i={}, valid cv count={}, invalid cv count={}",
@@ -252,8 +252,8 @@ public class ChunkMergeJob {
 
                 chunkMergeWorker.addMergedSegment(segmentIndex, validCvCountRecord.validCvCount);
             } else {
-                oneSlot.updateSegmentMergeFlag(segmentIndex, Chunk.Flag.merged_and_persisted, 0L);
-                xChunkSegmentFlagUpdate.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Chunk.Flag.merged_and_persisted, 0L);
+                oneSlot.updateSegmentMergeFlag(segmentIndex, Chunk.Flag.merged_and_persisted.flagByte, 0L);
+                xChunkSegmentFlagUpdate.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Chunk.Flag.merged_and_persisted.flagByte, 0L);
 
                 if (doLog && segmentIndex == firstSegmentIndex) {
                     log.info("Set segment flag to persisted, s={}, i={}, valid cv count={}, invalid cv count={}",

@@ -28,8 +28,8 @@ class ChunkMergeJobTest extends Specification {
         10.times {
             needMergeSegmentIndexList << (segmentIndex + it)
         }
-        oneSlot.setSegmentMergeFlag(segmentIndex, Chunk.Flag.new_write, 1L, 0)
-        oneSlot.setSegmentMergeFlag(segmentIndex + 1, Chunk.Flag.init, 1L, 0)
+        oneSlot.setSegmentMergeFlag(segmentIndex, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        oneSlot.setSegmentMergeFlag(segmentIndex + 1, Chunk.Flag.init.flagByte(), 1L, 0)
         def job = new ChunkMergeJob(slot, needMergeSegmentIndexList, chunkMergeWorker, oneSlot.snowFlake)
 
         when:
@@ -70,7 +70,7 @@ class ChunkMergeJobTest extends Specification {
         10.times {
             seqList << 1L
         }
-        oneSlot.setSegmentMergeFlagBatch(segmentIndex, 10, Chunk.Flag.new_write, seqList, 0)
+        oneSlot.setSegmentMergeFlagBatch(segmentIndex, 10, Chunk.Flag.new_write.flagByte(), seqList, 0)
         Debug.instance.logMerge = true
         chunkMergeWorker.logMergeCount = 999
         job.mergeSegments(needMergeSegmentIndexList)
@@ -128,7 +128,7 @@ class ChunkMergeJobTest extends Specification {
         ArrayList<Integer> needMergeSegmentIndexList = []
         10.times {
             needMergeSegmentIndexList << (segmentIndex + it)
-            oneSlot.setSegmentMergeFlag(segmentIndex + it, Chunk.Flag.new_write, 1L, 0)
+            oneSlot.setSegmentMergeFlag(segmentIndex + it, Chunk.Flag.new_write.flagByte(), 1L, 0)
         }
         def job = new ChunkMergeJob(slot, needMergeSegmentIndexList, chunkMergeWorker, oneSlot.snowFlake)
 

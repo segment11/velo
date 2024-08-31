@@ -122,9 +122,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
     }
 
     public interface IterateCallBack {
-        void call(int segmentIndex, Chunk.Flag flag, long segmentSeq, int walGroupIndex);
+        void call(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex);
     }
 
+    // performance critical
     int[] iterateAndFindThoseNeedToMerge(int beginSegmentIndex, int nextSegmentCount, int targetWalGroupIndex, Chunk chunk) {
         var findSegmentIndexWithSegmentCount = new int[]{Chunk.NO_NEED_MERGE_SEGMENT_INDEX, 0};
 
@@ -136,7 +137,6 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
             var offset = segmentIndex * ONE_LENGTH;
 
             var flagByte = inMemoryCachedByteBuffer.get(offset);
-            var flag = Chunk.Flag.fromFlagByte(flagByte);
 //            var segmentSeq = inMemoryCachedByteBuffer.getLong(offset + 1);
             var walGroupIndex = inMemoryCachedByteBuffer.getInt(offset + 1 + 8);
             if (walGroupIndex != targetWalGroupIndex) {
@@ -147,7 +147,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
                 continue;
             }
 
-            if (flag == Chunk.Flag.new_write || flag == Chunk.Flag.reuse_new) {
+            if (flagByte == Chunk.Flag.new_write.flagByte || flagByte == Chunk.Flag.reuse_new.flagByte) {
                 // only set first segment index
                 if (findSegmentIndexWithSegmentCount[0] == Chunk.NO_NEED_MERGE_SEGMENT_INDEX) {
                     findSegmentIndexWithSegmentCount[0] = segmentIndex;
@@ -182,7 +182,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
             var segmentSeq = inMemoryCachedByteBuffer.getLong(offset + 1);
             var walGroupIndex = inMemoryCachedByteBuffer.getInt(offset + 1 + 8);
 
-            callBack.call(segmentIndex, Chunk.Flag.fromFlagByte(flagByte), segmentSeq, walGroupIndex);
+            callBack.call(segmentIndex, flagByte, segmentSeq, walGroupIndex);
         }
     }
 
@@ -194,7 +194,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
             var segmentSeq = inMemoryCachedByteBuffer.getLong(offset + 1);
             var walGroupIndex = inMemoryCachedByteBuffer.getInt(offset + 1 + 8);
 
-            callBack.call(segmentIndex, Chunk.Flag.fromFlagByte(flagByte), segmentSeq, walGroupIndex);
+            callBack.call(segmentIndex, flagByte, segmentSeq, walGroupIndex);
         }
     }
 
@@ -227,11 +227,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
             var offset = segmentIndex * ONE_LENGTH;
 
             var flagByte = inMemoryCachedByteBuffer.get(offset);
-            var flag = Chunk.Flag.fromFlagByte(flagByte);
-            if (flag != Chunk.Flag.init) {
+            if (flagByte != Chunk.Flag.init.flagByte) {
                 isAllFlagInitHalf = false;
             }
-            if (flag == Chunk.Flag.merged || flag == Chunk.Flag.merged_and_persisted || flag == Chunk.Flag.init) {
+            if (flagByte == Chunk.Flag.merged.flagByte || flagByte == Chunk.Flag.merged_and_persisted.flagByte || flagByte == Chunk.Flag.init.flagByte) {
                 max = segmentIndex;
             } else {
                 break;
@@ -255,25 +254,25 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
     }
 
     @SlaveNeedReplay
-    public void setSegmentMergeFlag(int segmentIndex, Chunk.Flag flag, long segmentSeq, int walGroupIndex) {
+    public void setSegmentMergeFlag(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex) {
         var offset = segmentIndex * ONE_LENGTH;
 
         var bytes = new byte[ONE_LENGTH];
         ByteBuffer wrap = ByteBuffer.wrap(bytes);
-        wrap.put(flag.flagByte);
+        wrap.put(flagByte);
         wrap.putLong(segmentSeq);
         wrap.putInt(walGroupIndex);
 
         StatKeyCountInBuckets.writeToRaf(offset, bytes, inMemoryCachedByteBuffer, raf);
     }
 
-    public void setSegmentMergeFlagBatch(int beginSegmentIndex, int segmentCount, Chunk.Flag flag, List<Long> segmentSeqList, int walGroupIndex) {
+    public void setSegmentMergeFlagBatch(int beginSegmentIndex, int segmentCount, byte flagByte, List<Long> segmentSeqList, int walGroupIndex) {
         var offset = beginSegmentIndex * ONE_LENGTH;
 
         var bytes = new byte[segmentCount * ONE_LENGTH];
         var wrap = ByteBuffer.wrap(bytes);
         for (int i = 0; i < segmentCount; i++) {
-            wrap.put(i * ONE_LENGTH, flag.flagByte);
+            wrap.put(i * ONE_LENGTH, flagByte);
             wrap.putLong(i * ONE_LENGTH + 1, segmentSeqList.get(i));
             wrap.putInt(i * ONE_LENGTH + 1 + 8, walGroupIndex);
         }
@@ -283,7 +282,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
 
     Chunk.SegmentFlag getSegmentMergeFlag(int segmentIndex) {
         var offset = segmentIndex * ONE_LENGTH;
-        return new Chunk.SegmentFlag(Chunk.Flag.fromFlagByte(inMemoryCachedByteBuffer.get(offset)),
+        return new Chunk.SegmentFlag(inMemoryCachedByteBuffer.get(offset),
                 inMemoryCachedByteBuffer.getLong(offset + 1),
                 inMemoryCachedByteBuffer.getInt(offset + 1 + 8));
     }
@@ -292,7 +291,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
         var list = new ArrayList<Chunk.SegmentFlag>(segmentCount);
         var offset = beginSegmentIndex * ONE_LENGTH;
         for (int i = 0; i < segmentCount; i++) {
-            list.add(new Chunk.SegmentFlag(Chunk.Flag.fromFlagByte(inMemoryCachedByteBuffer.get(offset)),
+            list.add(new Chunk.SegmentFlag(inMemoryCachedByteBuffer.get(offset),
                     inMemoryCachedByteBuffer.getLong(offset + 1),
                     inMemoryCachedByteBuffer.getInt(offset + 1 + 8)));
             offset += ONE_LENGTH;

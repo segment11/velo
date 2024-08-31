@@ -57,20 +57,20 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         def one = new MetaChunkSegmentFlagSeq(slot, slotDir)
 
         when:
-        one.setSegmentMergeFlag(10, Chunk.Flag.merging, 1L, 0)
+        one.setSegmentMergeFlag(10, Chunk.Flag.merging.flagByte(), 1L, 0)
         def segmentFlag = one.getSegmentMergeFlag(10)
         then:
-        segmentFlag.flag() == Chunk.Flag.merging
+        segmentFlag.flagByte() == Chunk.Flag.merging.flagByte()
         segmentFlag.segmentSeq() == 1L
         segmentFlag.walGroupIndex() == 0
 
         when:
         ConfForGlobal.pureMemory = true
         def one2 = new MetaChunkSegmentFlagSeq(slot, slotDir)
-        one2.setSegmentMergeFlag(10, Chunk.Flag.merging, 1L, 0)
+        one2.setSegmentMergeFlag(10, Chunk.Flag.merging.flagByte(), 1L, 0)
         def segmentFlag2 = one2.getSegmentMergeFlag(10)
         then:
-        segmentFlag2.flag() == Chunk.Flag.merging
+        segmentFlag2.flagByte() == Chunk.Flag.merging.flagByte()
         segmentFlag2.segmentSeq() == 1L
         segmentFlag2.walGroupIndex() == 0
 
@@ -91,20 +91,20 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         def one = new MetaChunkSegmentFlagSeq(slot, slotDir)
 
         when:
-        one.setSegmentMergeFlag(10, Chunk.Flag.merging, 1L, 0)
-        one.setSegmentMergeFlag(11, Chunk.Flag.merged, 2L, 11)
+        one.setSegmentMergeFlag(10, Chunk.Flag.merging.flagByte(), 1L, 0)
+        one.setSegmentMergeFlag(11, Chunk.Flag.merged.flagByte(), 2L, 11)
         def segmentFlag = one.getSegmentMergeFlag(10)
         def segmentFlagList = one.getSegmentMergeFlagBatch(10, 2)
         then:
-        segmentFlag.flag() == Chunk.Flag.merging
+        segmentFlag.flagByte() == Chunk.Flag.merging.flagByte()
         segmentFlag.segmentSeq() == 1L
         segmentFlag.walGroupIndex() == 0
 
         segmentFlagList.size() == 2
-        segmentFlagList[0].flag() == Chunk.Flag.merging
+        segmentFlagList[0].flagByte() == Chunk.Flag.merging.flagByte()
         segmentFlagList[0].segmentSeq() == 1L
         segmentFlagList[0].walGroupIndex() == 0
-        segmentFlagList[1].flag() == Chunk.Flag.merged
+        segmentFlagList[1].flagByte() == Chunk.Flag.merged.flagByte()
         segmentFlagList[1].segmentSeq() == 2L
         segmentFlagList[1].walGroupIndex() == 11
 
@@ -124,7 +124,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         10.times {
             seqLongList << (it as Long)
         }
-        one.setSegmentMergeFlagBatch(10, 10, Chunk.Flag.merging, seqLongList, 0)
+        one.setSegmentMergeFlagBatch(10, 10, Chunk.Flag.merging.flagByte(), seqLongList, 0)
         then:
         one.getSegmentSeqListBatchForRepl(10, 10) == seqLongList
 
@@ -134,7 +134,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         10.times {
             seqLongList << (it as Long)
         }
-        one.setSegmentMergeFlagBatch(10, 10, Chunk.Flag.merging, seqLongList, 0)
+        one.setSegmentMergeFlagBatch(10, 10, Chunk.Flag.merging.flagByte(), seqLongList, 0)
         then:
         one.getSegmentSeqListBatchForRepl(10, 10) == seqLongList
 
@@ -158,13 +158,13 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
 
         when:
         new File('chunk_segment_flag.txt').withWriter { writer ->
-            one.iterateAll { segmentIndex, flag, seq, walGroupIndex ->
-                writer.writeLine("$segmentIndex, $flag, $seq, $walGroupIndex")
+            one.iterateAll { segmentIndex, flagByte, seq, walGroupIndex ->
+                writer.writeLine("$segmentIndex, $flagByte, $seq, $walGroupIndex")
             }
         }
         new File('chunk_segment_flag_range.txt').withWriter { writer ->
-            one.iterateRange(1024, 1024) { segmentIndex, flag, seq, walGroupIndex ->
-                writer.writeLine("$segmentIndex, $flag, $seq, $walGroupIndex")
+            one.iterateRange(1024, 1024) { segmentIndex, flagByte, seq, walGroupIndex ->
+                writer.writeLine("$segmentIndex, $flagByte, $seq, $walGroupIndex")
             }
         }
         then:
@@ -202,14 +202,14 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r[1] == 0
 
         when:
-        one.setSegmentMergeFlag(1024, Chunk.Flag.new_write, 1L, targetWalGroupIndex)
+        one.setSegmentMergeFlag(1024, Chunk.Flag.new_write.flagByte(), 1L, targetWalGroupIndex)
         def r2 = one.iterateAndFindThoseNeedToMerge(1024, 1024 * 10, targetWalGroupIndex, chunk)
         then:
         r2[0] == 1024
         r2[1] == 1
 
         when:
-        one.setSegmentMergeFlag(1024, Chunk.Flag.reuse_new, 1L, targetWalGroupIndex)
+        one.setSegmentMergeFlag(1024, Chunk.Flag.reuse_new.flagByte(), 1L, targetWalGroupIndex)
         r2 = one.iterateAndFindThoseNeedToMerge(1024, 1024 * 10, targetWalGroupIndex, chunk)
         then:
         r2[0] == 1024
@@ -217,7 +217,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
 
         when:
         10.times {
-            one.setSegmentMergeFlag(1024 + it, Chunk.Flag.reuse_new, 1L, targetWalGroupIndex)
+            one.setSegmentMergeFlag(1024 + it, Chunk.Flag.reuse_new.flagByte(), 1L, targetWalGroupIndex)
         }
         r2 = one.iterateAndFindThoseNeedToMerge(1024, 1024 * 10, targetWalGroupIndex, chunk)
         then:
@@ -227,16 +227,16 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
 
         when:
         // cross fd
-        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd - 1, Chunk.Flag.reuse_new, 1L, targetWalGroupIndex)
-        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd, Chunk.Flag.reuse_new, 1L, targetWalGroupIndex)
+        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd - 1, Chunk.Flag.reuse_new.flagByte(), 1L, targetWalGroupIndex)
+        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd, Chunk.Flag.reuse_new.flagByte(), 1L, targetWalGroupIndex)
         r2 = one.iterateAndFindThoseNeedToMerge(confChunk.segmentNumberPerFd - 1, 1024 * 10, targetWalGroupIndex, chunk)
         then:
         r2[0] == confChunk.segmentNumberPerFd - 1
         r2[1] == 1
 
         when:
-        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd - 1, Chunk.Flag.init, 1L, targetWalGroupIndex)
-        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd, Chunk.Flag.init, 1L, targetWalGroupIndex)
+        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd - 1, Chunk.Flag.init.flagByte(), 1L, targetWalGroupIndex)
+        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd, Chunk.Flag.init.flagByte(), 1L, targetWalGroupIndex)
         r2 = one.iterateAndFindThoseNeedToMerge(confChunk.segmentNumberPerFd - 1, 1024 * 10, targetWalGroupIndex, chunk)
         then:
         r2[0] == NO_NEED_MERGE_SEGMENT_INDEX
@@ -264,20 +264,20 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         when:
         def maxSegmentNumber = ConfForSlot.global.confChunk.maxSegmentNumber()
         int halfSegmentNumber = (maxSegmentNumber / 2).intValue()
-        one.setSegmentMergeFlag(10, Chunk.Flag.new_write, 1L, 0)
-        one.setSegmentMergeFlag(11, Chunk.Flag.new_write, 1L, 0)
+        one.setSegmentMergeFlag(10, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        one.setSegmentMergeFlag(11, Chunk.Flag.new_write.flagByte(), 1L, 0)
         def i2 = one.getMergedSegmentIndexEndLastTime(halfSegmentNumber, halfSegmentNumber)
         then:
         i2 == 9
 
         when:
-        one.setSegmentMergeFlag(10, Chunk.Flag.merged, 1L, 0)
+        one.setSegmentMergeFlag(10, Chunk.Flag.merged.flagByte(), 1L, 0)
         i2 = one.getMergedSegmentIndexEndLastTime(halfSegmentNumber, halfSegmentNumber)
         then:
         i2 == 10
 
         when:
-        one.setSegmentMergeFlag(10, Chunk.Flag.merged_and_persisted, 1L, 0)
+        one.setSegmentMergeFlag(10, Chunk.Flag.merged_and_persisted.flagByte(), 1L, 0)
         i2 = one.getMergedSegmentIndexEndLastTime(halfSegmentNumber, halfSegmentNumber)
         then:
         i2 == 10

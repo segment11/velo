@@ -113,7 +113,6 @@ class BaseCommandTest extends Specification {
         c.slot('key3{x}'.bytes).slot() == BaseCommand.slot('key3{x}'.bytes, 1).slot()
 
         c.compressStats != null
-        c.compressLevel == Zstd.defaultCompressionLevel()
         c.trainSampleListMaxSize == 100
         c.snowFlake != null
         c.trainSampleJob != null
@@ -222,7 +221,7 @@ class BaseCommandTest extends Specification {
 
         when:
         def longStringBytes = ('aaaaabbbbbccccc' * 10).bytes
-        def cvCompressed = CompressedValue.compress(longStringBytes, Dict.SELF_ZSTD_DICT, 3)
+        def cvCompressed = CompressedValue.compress(longStringBytes, Dict.SELF_ZSTD_DICT)
         cvCompressed.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
         cvCompressed.keyHash = sKey.keyHash()
         valueBytes = c.getValueBytesByCv(cvCompressed)
@@ -642,7 +641,7 @@ class BaseCommandTest extends Specification {
         exception
 
         when:
-        Dict.GLOBAL_ZSTD_DICT.dictBytes = trainedDict.dictBytes
+        Dict.resetGlobalDictBytes(trainedDict.dictBytes)
         c.set(firstKey.bytes, longValueBytes)
         cvGet = inMemoryGetSet.getBuf(slot, firstKey.bytes, sFirstKey.bucketIndex(), sFirstKey.keyHash()).cv()
         then:
@@ -650,7 +649,7 @@ class BaseCommandTest extends Specification {
         c.getValueBytesByCv(cvGet).length == longValueBytes.length
 
         when:
-        Dict.GLOBAL_ZSTD_DICT.dictBytes = null
+        Dict.resetGlobalDictBytes(new byte[1])
         exception = false
         try {
             c.getValueBytesByCv(cvGet)
@@ -663,6 +662,6 @@ class BaseCommandTest extends Specification {
 
         cleanup:
         dictMap.cleanUp()
-        io.velo.persist.Consts.testDir.deleteDir()
+        Consts.testDir.deleteDir()
     }
 }

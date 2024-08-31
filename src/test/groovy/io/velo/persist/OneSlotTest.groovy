@@ -753,9 +753,9 @@ class OneSlotTest extends Specification {
 
         when:
         oneSlot.getSegmentSeqListBatchForRepl(0, 1)
-        oneSlot.updateSegmentMergeFlag(0, Chunk.Flag.merged, 1L)
+        oneSlot.updateSegmentMergeFlag(0, Chunk.Flag.merged.flagByte(), 1L)
         List<Long> segmentSeqList = [1L]
-        oneSlot.setSegmentMergeFlagBatch(0, 1, Chunk.Flag.merged, segmentSeqList, 0)
+        oneSlot.setSegmentMergeFlagBatch(0, 1, Chunk.Flag.merged.flagByte(), segmentSeqList, 0)
         then:
         1 == 1
 
@@ -802,7 +802,7 @@ class OneSlotTest extends Specification {
 
         when:
         chunk.initSegmentIndexWhenFirstStart(chunk.halfSegmentNumber)
-        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write, 1L, walGroupIndex)
+        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, walGroupIndex)
         oneSlot.logMergeCount = 999
         e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
         then:
@@ -811,8 +811,8 @@ class OneSlotTest extends Specification {
 
         when:
         // last N
-        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 10, Chunk.Flag.new_write, 1L, walGroupIndex)
-        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 9, Chunk.Flag.new_write, 1L, walGroupIndex)
+        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 10, Chunk.Flag.new_write.flagByte(), 1L, walGroupIndex)
+        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 9, Chunk.Flag.new_write.flagByte(), 1L, walGroupIndex)
         e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
         then:
         e.isEmpty()
@@ -823,7 +823,7 @@ class OneSlotTest extends Specification {
         cv.keyHash = KeyHash.hash(testMergedKey.bytes)
         oneSlot.chunkMergeWorker.addMergedSegment(0, 1)
         oneSlot.chunkMergeWorker.addMergedCv(new ChunkMergeWorker.CvWithKeyAndBucketIndexAndSegmentIndex(cv, testMergedKey, 0, 0))
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.merged, 1L, walGroupIndex)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.merged.flagByte(), 1L, walGroupIndex)
         chunk.initSegmentIndexWhenFirstStart(1)
         10.times {
             batchPut(oneSlot, 100, 100, 0, slotNumber)
@@ -840,7 +840,7 @@ class OneSlotTest extends Specification {
             batchPut(oneSlot, 100, 100, 1, slotNumber)
         }
         then:
-        oneSlot.metaChunkSegmentFlagSeq.getSegmentMergeFlag(1).flag() == Chunk.Flag.merged_and_persisted
+        oneSlot.metaChunkSegmentFlagSeq.getSegmentMergeFlag(1).flagByte() == Chunk.Flag.merged_and_persisted.flagByte()
         oneSlot.chunkMergeWorker.isMergedSegmentSetEmpty()
 
         cleanup:
@@ -860,8 +860,8 @@ class OneSlotTest extends Specification {
         when:
         final int walGroupIndex = 0
         chunk.initSegmentIndexWhenFirstStart(chunk.maxSegmentIndex - 10)
-        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 10, Chunk.Flag.reuse, 1L, walGroupIndex)
-        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 9, Chunk.Flag.merged_and_persisted, 1L, walGroupIndex)
+        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 10, Chunk.Flag.reuse.flagByte(), 1L, walGroupIndex)
+        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 9, Chunk.Flag.merged_and_persisted.flagByte(), 1L, walGroupIndex)
         oneSlot.checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(true)
         then:
         1 == 1
@@ -872,7 +872,7 @@ class OneSlotTest extends Specification {
         1 == 1
 
         when:
-        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 8, Chunk.Flag.new_write, 1L, walGroupIndex)
+        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 8, Chunk.Flag.new_write.flagByte(), 1L, walGroupIndex)
         oneSlot.checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(true)
         then:
         1 == 1
@@ -974,7 +974,7 @@ class OneSlotTest extends Specification {
         def oneSlot = localPersist.oneSlot(slot)
 
         Chunk.ONCE_PREPARE_SEGMENT_COUNT.times {
-            oneSlot.setSegmentMergeFlag(it, Chunk.Flag.merged, 1L, 0)
+            oneSlot.setSegmentMergeFlag(it, Chunk.Flag.merged.flagByte(), 1L, 0)
         }
         oneSlot.cleanUp()
 
@@ -1042,15 +1042,15 @@ class OneSlotTest extends Specification {
 
         when:
         chunk.writeSegmentToTargetSegmentIndex(new byte[4096], 0)
-        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.merged, 1L, 0)
+        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.merged.flagByte(), 1L, 0)
         ArrayList<Long> seqList = [1L]
-        oneSlot.setSegmentMergeFlagBatch(0, 1, Chunk.Flag.merged, seqList, 0)
+        oneSlot.setSegmentMergeFlagBatch(0, 1, Chunk.Flag.merged.flagByte(), seqList, 0)
         then:
         chunk.preadOneSegment(0) != null
 
         when:
-        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.merged_and_persisted, 1L, 0)
-        oneSlot.setSegmentMergeFlagBatch(0, 1, Chunk.Flag.merged_and_persisted, seqList, 0)
+        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.merged_and_persisted.flagByte(), 1L, 0)
+        oneSlot.setSegmentMergeFlagBatch(0, 1, Chunk.Flag.merged_and_persisted.flagByte(), seqList, 0)
         then:
         chunk.preadOneSegment(0) == null
 

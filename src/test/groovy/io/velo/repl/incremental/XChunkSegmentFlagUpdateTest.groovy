@@ -20,8 +20,8 @@ class XChunkSegmentFlagUpdateTest extends Specification {
         x.isEmpty()
 
         when:
-        x.putUpdatedChunkSegmentFlagWithSeq(0, Chunk.Flag.new_write, 0L)
-        x.putUpdatedChunkSegmentFlagWithSeq(1, Chunk.Flag.new_write, 1L)
+        x.putUpdatedChunkSegmentFlagWithSeq(0, Chunk.Flag.new_write.flagByte(), 0L)
+        x.putUpdatedChunkSegmentFlagWithSeq(1, Chunk.Flag.new_write.flagByte(), 1L)
 
         def encoded = x.encodeWithType()
         def buffer = ByteBuffer.wrap(encoded)

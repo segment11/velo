@@ -33,24 +33,13 @@ class ChunkTest extends Specification {
         def flagInit = Chunk.Flag.init
         println flagInit
         println flagInit.flagByte()
-        println new Chunk.SegmentFlag(flagInit, 1L, 0)
+        println new Chunk.SegmentFlag(flagInit.flagByte(), 1L, 0)
 
         expect:
-        Chunk.Flag.init.canReuse() && Chunk.Flag.reuse.canReuse() && Chunk.Flag.merged_and_persisted.canReuse()
-        Chunk.Flag.merging.isMergingOrMerged() && Chunk.Flag.merged.isMergingOrMerged()
-        !Chunk.Flag.merging.canReuse()
-        !Chunk.Flag.init.isMergingOrMerged()
-
-        when:
-        byte flagByte = (byte) -200
-        boolean exception = false
-        try {
-            Chunk.Flag.fromFlagByte(flagByte)
-        } catch (IllegalArgumentException ignore) {
-            exception = true
-        }
-        then:
-        exception
+        Chunk.Flag.canReuse(Chunk.Flag.init.flagByte()) && Chunk.Flag.canReuse(Chunk.Flag.reuse.flagByte()) && Chunk.Flag.canReuse(Chunk.Flag.merged_and_persisted.flagByte())
+        Chunk.Flag.isMergingOrMerged(Chunk.Flag.merging.flagByte()) && Chunk.Flag.isMergingOrMerged(Chunk.Flag.merged.flagByte())
+        !Chunk.Flag.canReuse(Chunk.Flag.merging.flagByte())
+        !Chunk.Flag.isMergingOrMerged(Chunk.Flag.init.flagByte())
     }
 
     def 'test segment index'() {
@@ -215,39 +204,39 @@ class ChunkTest extends Specification {
         chunk.segmentIndex = 0
         chunk.reuseSegments(true, 1, true)
         then:
-        oneSlot.metaChunkSegmentFlagSeq.getSegmentMergeFlag(0).flag() == Chunk.Flag.reuse
+        oneSlot.metaChunkSegmentFlagSeq.getSegmentMergeFlag(0).flagByte() == Chunk.Flag.reuse.flagByte()
         chunk.reuseSegments(true, 1, true)
         chunk.reuseSegments(false, 1, true)
 
         when:
         chunk.segmentIndex = 0
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.merged_and_persisted, 1L, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.merged_and_persisted.flagByte(), 1L, 0)
         then:
         chunk.reuseSegments(false, 1, false)
         chunk.reuseSegments(false, 1, true)
 
         when:
         chunk.segmentIndex = 0
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.new_write, 1L, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
         then:
         chunk.reuseSegments(false, 1, false)
         chunk.segmentIndex == 1
 
         when:
         chunk.segmentIndex = 0
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.new_write, 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(1, Chunk.Flag.merging, 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(2, Chunk.Flag.merged, 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(3, Chunk.Flag.init, 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(4, Chunk.Flag.init, 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(5, Chunk.Flag.init, 1L, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(1, Chunk.Flag.merging.flagByte(), 1L, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(2, Chunk.Flag.merged.flagByte(), 1L, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(3, Chunk.Flag.init.flagByte(), 1L, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(4, Chunk.Flag.init.flagByte(), 1L, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(5, Chunk.Flag.init.flagByte(), 1L, 0)
         then:
         chunk.reuseSegments(false, 3, false)
         chunk.segmentIndex == 3
 
         when:
         chunk.segmentIndex = 0
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(2, Chunk.Flag.init, 1L, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(2, Chunk.Flag.init.flagByte(), 1L, 0)
         chunk.reuseSegments(false, 3, false)
         then:
         chunk.segmentIndex == 2
@@ -255,7 +244,7 @@ class ChunkTest extends Specification {
         when:
         chunk.segmentIndex = 0
         5.times {
-            oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0 + it, Chunk.Flag.new_write, 1L, 0)
+            oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0 + it, Chunk.Flag.new_write.flagByte(), 1L, 0)
         }
         then:
         !chunk.reuseSegments(true, 5, false)
@@ -334,7 +323,7 @@ class ChunkTest extends Specification {
         4.times {
             blankSeqList << 0L
         }
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.Flag.init, blankSeqList, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.Flag.init.flagByte(), blankSeqList, 0)
         chunk.segmentIndex = 0
         r = chunk.persist(0, vList, true, xForBinlog)
         then:
@@ -363,7 +352,7 @@ class ChunkTest extends Specification {
 //        exception
 
         when:
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.Flag.init, blankSeqList, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.Flag.init.flagByte(), blankSeqList, 0)
         chunk.segmentIndex = 0
         def vListManyCount = Mock.prepareValueList(100, 0)
         (1..<16).each {
@@ -381,7 +370,7 @@ class ChunkTest extends Specification {
         Chunk.ONCE_PREPARE_SEGMENT_COUNT.times {
             seqList << 0L
         }
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, seqList.size(), Chunk.Flag.merged_and_persisted, seqList, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, seqList.size(), Chunk.Flag.merged_and_persisted.flagByte(), seqList, 0)
         chunk.segmentIndex = 0
         r = chunk.persist(0, vListManyCount, false, xForBinlog)
         then:
@@ -411,7 +400,7 @@ class ChunkTest extends Specification {
         32.times {
             blankSeqList << 0L
         }
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqListMany.size(), Chunk.Flag.init, blankSeqListMany, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqListMany.size(), Chunk.Flag.init.flagByte(), blankSeqListMany, 0)
         chunk.segmentIndex = 0
         chunk.persist(0, vListManyCount, false, xForBinlog)
         then:

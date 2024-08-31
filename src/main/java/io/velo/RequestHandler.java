@@ -59,7 +59,6 @@ public class RequestHandler {
     @TestOnly
     final ArrayList<byte[]> localTestRandomValueList;
 
-    int compressLevel;
     int trainSampleListMaxSize;
 
     final CompressStats compressStats;
@@ -81,7 +80,6 @@ public class RequestHandler {
                 ", netWorkers=" + netWorkers +
                 ", slotNumber=" + slotNumber +
                 ", localTest=" + localTest +
-                ", compressLevel=" + compressLevel +
                 ", sampleToTrainList.size=" + sampleToTrainList.size() +
                 ", isStopped=" + isStopped +
                 '}';
@@ -117,7 +115,6 @@ public class RequestHandler {
 
         this.compressStats = new CompressStats("net_worker_" + workerId, "net_");
         // compress and train sample dict requestConfig
-        this.compressLevel = requestConfig.get(toInt, "compressLevel", Zstd.defaultCompressionLevel());
         this.trainSampleListMaxSize = requestConfig.get(toInt, "trainSampleListMaxSize", 1000);
 
         this.trainSampleJob = new TrainSampleJob(workerId);

@@ -1150,7 +1150,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 log.warn("Segment can not write, s={}, i={}", slot, currentSegmentIndex);
 
                 // set persisted flag reuse_new -> need merge before use
-                updateSegmentMergeFlag(currentSegmentIndex, Flag.reuse_new, snowFlake.nextId());
+                updateSegmentMergeFlag(currentSegmentIndex, Flag.reuse_new.flagByte, snowFlake.nextId());
                 log.warn("Reset segment persisted when init");
 
                 setMetaChunkSegmentIndexInt(currentSegmentIndex);
@@ -1302,7 +1302,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             // refer to Chunk.ONCE_PREPARE_SEGMENT_COUNT
             // last segments not write at all, need skip
             if (segmentBytesBatchRead == null || relativeOffsetInBatchBytes >= segmentBytesBatchRead.length) {
-                setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted, 0L, 0);
+                setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted.flagByte, 0L, 0);
                 if (doLog) {
                     log.info("Set segment flag to persisted as not write at all, s={}, i={}", slot, segmentIndex);
                 }
@@ -1382,17 +1382,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 for (var ignored : segmentIndexList) {
                     seq0List.add(0L);
                 }
-                setSegmentMergeFlagBatch(segmentIndexList.getFirst(), segmentIndexList.size(), Flag.merged_and_persisted, seq0List, walGroupIndex);
+                setSegmentMergeFlagBatch(segmentIndexList.getFirst(), segmentIndexList.size(), Flag.merged_and_persisted.flagByte, seq0List, walGroupIndex);
 
                 for (var segmentIndex : segmentIndexList) {
-                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted, 0L);
+                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
                 }
             } else {
                 // when read some segments before persist wal, meta is continuous, but segments read from chunk may be null, skip some, so is not continuous anymore
                 // usually not happen
                 for (var segmentIndex : segmentIndexList) {
-                    setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted, 0L, walGroupIndex);
-                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted, 0L);
+                    setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted.flagByte, 0L, walGroupIndex);
+                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
                 }
             }
 
@@ -1404,8 +1404,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             var segmentIndexList = ext2.segmentIndexList;
             // usually not continuous
             for (var segmentIndex : segmentIndexList) {
-                setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted, 0L, walGroupIndex);
-                xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted, 0L);
+                setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted.flagByte, 0L, walGroupIndex);
+                xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
             }
 
             chunkMergeWorker.removeMergedButNotPersistedAfterPersistWal(segmentIndexList, walGroupIndex);
@@ -1477,13 +1477,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
 
             var segmentFlag = getSegmentMergeFlag(targetSegmentIndex);
-            var flag = segmentFlag.flag();
+            var flagByte = segmentFlag.flagByte();
 
-            if (isServerStart && flag == Flag.reuse) {
+            if (isServerStart && flagByte == Flag.reuse.flagByte) {
                 continue;
             }
 
-            if (flag != Flag.init && flag != Flag.merged_and_persisted) {
+            if (flagByte != Flag.init.flagByte && flagByte != Flag.merged_and_persisted.flagByte) {
                 needMergeSegmentIndexList.add(targetSegmentIndex);
             }
         }
@@ -1535,30 +1535,30 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     @SlaveNeedReplay
     @SlaveReplay
-    public void updateSegmentMergeFlag(int segmentIndex, Flag flag, long segmentSeq) {
+    public void updateSegmentMergeFlag(int segmentIndex, byte flagByte, long segmentSeq) {
         var segmentFlag = getSegmentMergeFlag(segmentIndex);
-        setSegmentMergeFlag(segmentIndex, flag, segmentSeq, segmentFlag.walGroupIndex());
+        setSegmentMergeFlag(segmentIndex, flagByte, segmentSeq, segmentFlag.walGroupIndex());
     }
 
     @SlaveNeedReplay
     @SlaveReplay
-    public void setSegmentMergeFlag(int segmentIndex, Flag flag, long segmentSeq, int walGroupIndex) {
+    public void setSegmentMergeFlag(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex) {
         checkSegmentIndex(segmentIndex);
-        metaChunkSegmentFlagSeq.setSegmentMergeFlag(segmentIndex, flag, segmentSeq, walGroupIndex);
+        metaChunkSegmentFlagSeq.setSegmentMergeFlag(segmentIndex, flagByte, segmentSeq, walGroupIndex);
 
         if (ConfForGlobal.pureMemory) {
-            if (flag.canReuse()) {
+            if (Chunk.Flag.canReuse(flagByte)) {
                 chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
             }
         }
     }
 
-    void setSegmentMergeFlagBatch(int beginSegmentIndex, int segmentCount, Flag flag, List<Long> segmentSeqList, int walGroupIndex) {
+    void setSegmentMergeFlagBatch(int beginSegmentIndex, int segmentCount, byte flagByte, List<Long> segmentSeqList, int walGroupIndex) {
         checkBeginSegmentIndex(beginSegmentIndex, segmentCount);
-        metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(beginSegmentIndex, segmentCount, flag, segmentSeqList, walGroupIndex);
+        metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(beginSegmentIndex, segmentCount, flagByte, segmentSeqList, walGroupIndex);
 
         if (ConfForGlobal.pureMemory) {
-            if (flag.canReuse()) {
+            if (Chunk.Flag.canReuse(flagByte)) {
                 for (int i = 0; i < segmentCount; i++) {
                     var segmentIndex = beginSegmentIndex + i;
                     chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
@@ -1583,9 +1583,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public void persistMergingOrMergedSegmentsButNotPersisted() {
         ArrayList<Integer> needMergeSegmentIndexList = new ArrayList<>();
 
-        this.metaChunkSegmentFlagSeq.iterateAll((segmentIndex, flag, segmentSeq, walGroupIndex) -> {
-            if (flag.isMergingOrMerged()) {
-                log.warn("Segment not persisted after merging, s={}, i={}, flag={}", slot, segmentIndex, flag);
+        this.metaChunkSegmentFlagSeq.iterateAll((segmentIndex, flagByte, segmentSeq, walGroupIndex) -> {
+            if (Chunk.Flag.isMergingOrMerged(flagByte)) {
+                log.warn("Segment not persisted after merging, s={}, i={}, flag byte={}", slot, segmentIndex, flagByte);
                 needMergeSegmentIndexList.add(segmentIndex);
             }
         });

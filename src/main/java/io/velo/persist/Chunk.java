@@ -214,8 +214,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             int skipN = 0;
             for (int i = 0; i < segmentFlagList.size(); i++) {
                 var segmentFlag = segmentFlagList.get(i);
-                var flag = segmentFlag.flag();
-                if (!flag.canReuse()) {
+                var flagByte = segmentFlag.flagByte();
+                if (!Chunk.Flag.canReuse(flagByte)) {
                     skipN = (i + 1);
                 }
             }
@@ -231,32 +231,32 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             var targetSegmentIndex = segmentIndex + i;
 
             var segmentFlag = oneSlot.getSegmentMergeFlag(targetSegmentIndex);
-            var flag = segmentFlag.flag();
+            var flagByte = segmentFlag.flagByte();
 
             // already set flag to reuse, can reuse
-            if (flag == Flag.reuse) {
+            if (flagByte == Flag.reuse.flagByte) {
                 continue;
             }
 
             // init can reuse
-            if (flag == Flag.init) {
+            if (flagByte == Flag.init.flagByte) {
                 if (updateAsReuseFlag) {
-                    oneSlot.setSegmentMergeFlag(targetSegmentIndex, Flag.reuse, 0L, segmentFlag.walGroupIndex);
+                    oneSlot.setSegmentMergeFlag(targetSegmentIndex, Flag.reuse.flagByte, 0L, segmentFlag.walGroupIndex);
                 }
                 continue;
             }
 
             // merged and persisted, can reuse
-            if (flag == Flag.merged_and_persisted) {
+            if (flagByte == Flag.merged_and_persisted.flagByte) {
                 if (updateAsReuseFlag) {
-                    oneSlot.setSegmentMergeFlag(targetSegmentIndex, Flag.reuse, 0L, segmentFlag.walGroupIndex);
+                    oneSlot.setSegmentMergeFlag(targetSegmentIndex, Flag.reuse.flagByte, 0L, segmentFlag.walGroupIndex);
                 }
                 continue;
             }
 
             // left can not reuse: new_write, reuse_new, merging, merged
             log.warn("Chunk segment index is not init/merged and persisted/reuse, can not write, s={}, i={}, flag={}",
-                    slot, targetSegmentIndex, flag);
+                    slot, targetSegmentIndex, flagByte);
             return false;
         }
         return true;
@@ -281,21 +281,12 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             this.flagByte = flagByte;
         }
 
-        public static Flag fromFlagByte(byte flagByte) {
-            for (var f : values()) {
-                if (f.flagByte == flagByte) {
-                    return f;
-                }
-            }
-            throw new IllegalArgumentException("Flag not support: " + flagByte);
+        static boolean canReuse(byte flagByteTarget) {
+            return flagByteTarget == init.flagByte || flagByteTarget == reuse.flagByte || flagByteTarget == merged_and_persisted.flagByte;
         }
 
-        boolean canReuse() {
-            return this == init || this == reuse || this == merged_and_persisted;
-        }
-
-        boolean isMergingOrMerged() {
-            return this == merging || this == merged;
+        static boolean isMergingOrMerged(byte flagByteTarget) {
+            return flagByteTarget == merging.flagByte || flagByteTarget == merged.flagByte;
         }
 
         @Override
@@ -304,11 +295,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
     }
 
-    public record SegmentFlag(Flag flag, long segmentSeq, int walGroupIndex) {
+    public record SegmentFlag(byte flagByte, long segmentSeq, int walGroupIndex) {
         @Override
         public String toString() {
             return "SegmentFlag{" +
-                    "flag=" + flag +
+                    "flagByte=" + flagByte +
                     ", segmentSeq=" + segmentSeq +
                     ", walGroupIndex=" + walGroupIndex +
                     '}';
@@ -372,7 +363,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             segmentSeqListAll.add(segment.segmentSeq());
         }
         oneSlot.setSegmentMergeFlagBatch(segmentIndex, segments.size(),
-                Flag.reuse, segmentSeqListAll, walGroupIndex);
+                Flag.reuse.flagByte, segmentSeqListAll, walGroupIndex);
 
         boolean isNewAppendAfterBatch = true;
 
@@ -391,11 +382,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
                 xForBinlog.putUpdatedChunkSegmentBytes(segment.segmentIndex(), bytes);
                 xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segment.segmentIndex(),
-                        isNewAppendAfterBatch ? Flag.new_write : Flag.reuse_new, segment.segmentSeq());
+                        isNewAppendAfterBatch ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
             }
 
             oneSlot.setSegmentMergeFlagBatch(segmentIndex, segments.size(),
-                    isNewAppendAfterBatch ? Flag.new_write : Flag.reuse_new, segmentSeqListAll, walGroupIndex);
+                    isNewAppendAfterBatch ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segmentSeqListAll, walGroupIndex);
 
             moveSegmentIndexNext(segments.size());
         } else {
@@ -407,13 +398,13 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
                     // need set segment flag so that merge worker can merge
                     oneSlot.setSegmentMergeFlag(segment.segmentIndex(),
-                            isNewAppend ? Flag.new_write : Flag.reuse_new, segment.segmentSeq(), walGroupIndex);
+                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq(), walGroupIndex);
 
                     moveSegmentIndexNext(1);
 
                     xForBinlog.putUpdatedChunkSegmentBytes(segment.segmentIndex(), bytes);
                     xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segment.segmentIndex(),
-                            isNewAppend ? Flag.new_write : Flag.reuse_new, segment.segmentSeq());
+                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
                 }
             } else {
                 // batch write
@@ -450,13 +441,13 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
                     // need set segment flag so that merge worker can merge
                     oneSlot.setSegmentMergeFlagBatch(segmentIndex, BATCH_ONCE_SEGMENT_COUNT_PWRITE,
-                            isNewAppend ? Flag.new_write : Flag.reuse_new, segmentSeqListSubBatch, walGroupIndex);
+                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segmentSeqListSubBatch, walGroupIndex);
 
                     for (int j = 0; j < BATCH_ONCE_SEGMENT_COUNT_PWRITE; j++) {
                         var segment = segments.get(i * BATCH_ONCE_SEGMENT_COUNT_PWRITE + j);
 
                         xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segment.segmentIndex(),
-                                isNewAppend ? Flag.new_write : Flag.reuse_new, segment.segmentSeq());
+                                isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
                     }
 
                     moveSegmentIndexNext(BATCH_ONCE_SEGMENT_COUNT_PWRITE);
@@ -470,11 +461,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
                     xForBinlog.putUpdatedChunkSegmentBytes(segment.segmentIndex(), bytes);
                     xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segment.segmentIndex(),
-                            isNewAppend ? Flag.new_write : Flag.reuse_new, segment.segmentSeq());
+                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
 
                     // need set segment flag so that merge worker can merge
                     oneSlot.setSegmentMergeFlag(segment.segmentIndex(),
-                            isNewAppend ? Flag.new_write : Flag.reuse_new, segment.segmentSeq(), walGroupIndex);
+                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq(), walGroupIndex);
 
                     moveSegmentIndexNext(1);
                 }

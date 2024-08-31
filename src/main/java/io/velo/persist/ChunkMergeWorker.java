@@ -237,12 +237,12 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
             }
 
             // can reuse this chunk by segment segmentIndex
-            oneSlot.updateSegmentMergeFlag(one.segmentIndex, Chunk.Flag.merged_and_persisted, 0L);
+            oneSlot.updateSegmentMergeFlag(one.segmentIndex, Chunk.Flag.merged_and_persisted.flagByte, 0L);
             it.remove();
             sb.append(one.segmentIndex).append(";");
 
             // lastXForBinlog must not be null
-            lastXForBinlog.putUpdatedChunkSegmentFlagWithSeq(one.segmentIndex, Chunk.Flag.merged_and_persisted, 0L);
+            lastXForBinlog.putUpdatedChunkSegmentFlagWithSeq(one.segmentIndex, Chunk.Flag.merged_and_persisted.flagByte, 0L);
         }
         oneSlot.appendBinlog(lastXForBinlog);
 

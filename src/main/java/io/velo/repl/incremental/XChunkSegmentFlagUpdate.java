@@ -1,6 +1,5 @@
 package io.velo.repl.incremental;
 
-import io.velo.persist.Chunk;
 import io.velo.persist.LocalPersist;
 import io.velo.repl.BinlogContent;
 import io.velo.repl.ReplPair;
@@ -11,8 +10,8 @@ import java.util.TreeMap;
 public class XChunkSegmentFlagUpdate implements BinlogContent {
     private final TreeMap<Integer, XOneWalGroupPersist.SegmentFlagWithSeq> updatedChunkSegmentFlagWithSeqMap = new TreeMap<>();
 
-    public void putUpdatedChunkSegmentFlagWithSeq(int segmentIndex, Chunk.Flag flag, long seq) {
-        updatedChunkSegmentFlagWithSeqMap.put(segmentIndex, new XOneWalGroupPersist.SegmentFlagWithSeq(flag, seq));
+    public void putUpdatedChunkSegmentFlagWithSeq(int segmentIndex, Byte flagByte, long seq) {
+        updatedChunkSegmentFlagWithSeqMap.put(segmentIndex, new XOneWalGroupPersist.SegmentFlagWithSeq(flagByte, seq));
     }
 
     public boolean isEmpty() {
@@ -48,7 +47,7 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
         buffer.putInt(updatedChunkSegmentFlagWithSeqMap.size());
         for (var entry : updatedChunkSegmentFlagWithSeqMap.entrySet()) {
             buffer.putInt(entry.getKey());
-            buffer.put(entry.getValue().flag().flagByte());
+            buffer.put(entry.getValue().flagByte());
             buffer.putLong(entry.getValue().seq());
         }
         return bytes;
@@ -62,9 +61,9 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
         var updatedChunkSegmentFlagWithSeqMapSize = buffer.getInt();
         for (var i = 0; i < updatedChunkSegmentFlagWithSeqMapSize; i++) {
             var segmentIndex = buffer.getInt();
-            var flag = Chunk.Flag.fromFlagByte(buffer.get());
+            var flagByte = buffer.get();
             var seq = buffer.getLong();
-            x.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, flag, seq);
+            x.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, flagByte, seq);
         }
 
         if (encodedLength != x.encodedLength()) {
@@ -82,10 +81,10 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
 
         for (var entry : updatedChunkSegmentFlagWithSeqMap.entrySet()) {
             var segmentIndex = entry.getKey();
-            var flag = entry.getValue().flag();
+            var flagByte = entry.getValue().flagByte();
             var seq = entry.getValue().seq();
             // RandAccessFile use os page cache, perf ok
-            oneSlot.updateSegmentMergeFlag(segmentIndex, flag, seq);
+            oneSlot.updateSegmentMergeFlag(segmentIndex, flagByte, seq);
         }
     }
 }

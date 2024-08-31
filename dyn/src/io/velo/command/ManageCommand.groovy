@@ -235,16 +235,16 @@ class ManageCommand extends BaseCommand {
                 final String outputFileName = 'chunk_segment_flag.txt'
                 new File(outputDir, outputFileName).withWriter { writer ->
                     writer.writeLine Chunk.Flag.values().collect { it.name() + ':' + it.flagByte() }.join(',')
-                    oneSlot.metaChunkSegmentFlagSeq.iterateAll { segmentIndex, flag, seq, walGroupIndex ->
-                        writer.writeLine("$segmentIndex, $flag, $seq, $walGroupIndex")
+                    oneSlot.metaChunkSegmentFlagSeq.iterateAll { segmentIndex, flagByte, seq, walGroupIndex ->
+                        writer.writeLine("$segmentIndex, $flagByte, $seq, $walGroupIndex")
                     }
                 }
             } else {
                 final String outputFileName = 'chunk_segment_flag_range.txt'
                 new File(outputDir, outputFileName).withWriter { writer ->
                     writer.writeLine Chunk.Flag.values().collect { it.name() + ':' + it.flagByte() }.join(',')
-                    oneSlot.metaChunkSegmentFlagSeq.iterateRange(beginSegmentIndex, segmentCount) { segmentIndex, flag, seq, walGroupIndex ->
-                        writer.writeLine("$segmentIndex, $flag, $seq, $walGroupIndex")
+                    oneSlot.metaChunkSegmentFlagSeq.iterateRange(beginSegmentIndex, segmentCount) { segmentIndex, flagByte, seq, walGroupIndex ->
+                        writer.writeLine("$segmentIndex, $flagByte, $seq, $walGroupIndex")
                     }
                 }
             }

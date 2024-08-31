@@ -71,7 +71,8 @@ class TrainSampleJobTest extends Specification {
 
         when:
         def dict = result.cacheDict().get('key:')
-        def cv = CompressedValue.compress(sampleValueBytes, dict, Zstd.defaultCompressionLevel())
+        dict.initCtx()
+        def cv = CompressedValue.compress(sampleValueBytes, dict)
         def decompressBytes = cv.decompress(dict)
         then:
         Arrays.equals(sampleValueBytes, decompressBytes)
