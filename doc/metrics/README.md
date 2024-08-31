@@ -1,4 +1,4 @@
-# velo support prometheus metrics and expose them on /?metrics endpoint.
+# Velo support prometheus metrics and expose them on /?metrics endpoint.
 
 ## global metrics
 

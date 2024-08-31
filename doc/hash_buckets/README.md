@@ -1,4 +1,4 @@
-# velo use hash buckets to store data
+# Velo use hash buckets to store data
 
 ## key buckets
 

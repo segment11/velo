@@ -1,4 +1,4 @@
-# velo use a compress value object to store value bytes
+# Velo use a compress value object to store value bytes
 
 ## compress value
 
@@ -12,7 +12,7 @@ A compress value header includes:
 - compressed size (int)
 
 TIPS:
-velo support max key length is 256 bytes, compressed value length is 32K.
+Velo support max key length is 256 bytes, compressed value length is 32K.
 
 ## value type
 

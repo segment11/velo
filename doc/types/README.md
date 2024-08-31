@@ -1,8 +1,8 @@
-# velo supports hash / list / set / zset 4 types of data structures.
+# Velo supports hash / list / set / zset 4 types of data structures.
 
 ## Hash
 
-velo store hash in two ways:
+Velo store hash in two ways:
 
 - key + field is a unique key, a hash has many key + field pairs.
 - all fields + values are stored in a single key.
@@ -12,7 +12,7 @@ when a hash use many key + field pairs, the field value can be compressed by a t
 
 ## List
 
-velo store a list in a single key, all list members are stored as a compressed value.
+Velo store a list in a single key, all list members are stored as a compressed value.
 max list members is 1024 or 2048 by config.
 
 ## Set

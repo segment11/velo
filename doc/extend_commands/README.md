@@ -1,4 +1,4 @@
-# velo support user extend commands without recompile use groovy script
+# Velo support user extend commands without recompile use groovy script
 
 ## how to use
 

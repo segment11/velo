@@ -1,4 +1,4 @@
-# velo support 3 kinds of data lru
+# Velo support 3 kinds of data lru
 
 ## latest get compress value
 

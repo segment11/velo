@@ -1,4 +1,4 @@
-# velo support use haproxy to load balance and readonly route
+# Velo support use haproxy to load balance and readonly route
 
 ## haproxy config
 
