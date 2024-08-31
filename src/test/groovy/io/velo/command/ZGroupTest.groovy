@@ -73,10 +73,10 @@ zunionstore
 
         when:
         def sListList1 = singleKeyCmdList1.collect {
-            ZGroup.parseSlots(it, data4, slotNumber)
+            _ZGroup.parseSlots(it, data4, slotNumber)
         }
         def sListList11 = singleKeyCmdList1.collect {
-            ZGroup.parseSlots(it, data1, slotNumber)
+            _ZGroup.parseSlots(it, data1, slotNumber)
         }
         then:
         sListList1.size() == 22
@@ -86,10 +86,10 @@ zunionstore
 
         when:
         def sListList2 = multiKeyCmdList2.collect {
-            ZGroup.parseSlots(it, data4, slotNumber)
+            _ZGroup.parseSlots(it, data4, slotNumber)
         }
         def sListList22 = multiKeyCmdList2.collect {
-            ZGroup.parseSlots(it, data1, slotNumber)
+            _ZGroup.parseSlots(it, data1, slotNumber)
         }
         then:
         sListList2.size() == 4
@@ -106,7 +106,7 @@ zunionstore
         data6[5] = 'd'.bytes
         def sListList222 = multiKeyCmdList2.collect {
             try {
-                ZGroup.parseSlots(it, data6, slotNumber)
+                _ZGroup.parseSlots(it, data6, slotNumber)
                 return OKReply.INSTANCE
             } catch (ErrorReplyException e) {
                 println e.message
@@ -120,7 +120,7 @@ zunionstore
         data6[1] = 'a'.bytes
         sListList222 = multiKeyCmdList2.collect {
             try {
-                ZGroup.parseSlots(it, data6, slotNumber)
+                _ZGroup.parseSlots(it, data6, slotNumber)
                 return OKReply.INSTANCE
             } catch (ErrorReplyException e) {
                 println e.message
@@ -134,7 +134,7 @@ zunionstore
         data6[1] = '1'.bytes
         sListList222 = multiKeyCmdList2.collect {
             try {
-                ZGroup.parseSlots(it, data6, slotNumber)
+                _ZGroup.parseSlots(it, data6, slotNumber)
                 return OKReply.INSTANCE
             } catch (ErrorReplyException e) {
                 println e.message
@@ -151,10 +151,10 @@ zunionstore
         data5[3] = 'a'.bytes
         data5[4] = 'b'.bytes
         def sListList3 = multiKeyCmdList3.collect {
-            ZGroup.parseSlots(it, data5, slotNumber)
+            _ZGroup.parseSlots(it, data5, slotNumber)
         }
         def sListList33 = multiKeyCmdList3.collect {
-            ZGroup.parseSlots(it, data1, slotNumber)
+            _ZGroup.parseSlots(it, data1, slotNumber)
         }
         then:
         sListList3.size() == 3
@@ -173,7 +173,7 @@ zunionstore
         data7[6] = 'd'.bytes
         def sListList333 = multiKeyCmdList3.collect {
             try {
-                ZGroup.parseSlots(it, data7, slotNumber)
+                _ZGroup.parseSlots(it, data7, slotNumber)
                 return OKReply.INSTANCE
             } catch (ErrorReplyException e) {
                 println e.message
@@ -187,7 +187,7 @@ zunionstore
         data7[2] = 'a'.bytes
         sListList333 = multiKeyCmdList3.collect {
             try {
-                ZGroup.parseSlots(it, data7, slotNumber)
+                _ZGroup.parseSlots(it, data7, slotNumber)
                 return OKReply.INSTANCE
             } catch (ErrorReplyException e) {
                 println e.message
@@ -201,7 +201,7 @@ zunionstore
         data7[2] = '1'.bytes
         sListList333 = multiKeyCmdList3.collect {
             try {
-                ZGroup.parseSlots(it, data7, slotNumber)
+                _ZGroup.parseSlots(it, data7, slotNumber)
                 return OKReply.INSTANCE
             } catch (ErrorReplyException e) {
                 println e.message

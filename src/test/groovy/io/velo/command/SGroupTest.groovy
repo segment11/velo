@@ -79,7 +79,7 @@ sunionstore
 
         when:
         def sListList1 = singleKeyCmdList1.collect {
-            SGroup.parseSlots(it, data4, slotNumber)
+            _SGroup.parseSlots(it, data4, slotNumber)
         }
         then:
         sListList1.size() == 14
@@ -87,7 +87,7 @@ sunionstore
 
         when:
         def sListList11 = singleKeyCmdList1.collect {
-            SGroup.parseSlots(it, data1, slotNumber)
+            _SGroup.parseSlots(it, data1, slotNumber)
         }
         then:
         sListList11.size() == 14
@@ -95,7 +95,7 @@ sunionstore
 
         when:
         def sListList2 = multiKeyCmdList2.collect {
-            SGroup.parseSlots(it, data4, slotNumber)
+            _SGroup.parseSlots(it, data4, slotNumber)
         }
         then:
         sListList2.size() == 6
@@ -103,7 +103,7 @@ sunionstore
 
         when:
         def sListList22 = multiKeyCmdList2.collect {
-            SGroup.parseSlots(it, data1, slotNumber)
+            _SGroup.parseSlots(it, data1, slotNumber)
         }
         then:
         sListList22.size() == 6
