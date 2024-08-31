@@ -1,6 +1,5 @@
 package io.velo;
 
-import com.github.luben.zstd.Zstd;
 import io.activej.config.Config;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
@@ -165,13 +164,14 @@ public class RequestHandler {
 
         var data = request.getData();
         var firstByte = data[0][0];
-
-        var lowerChar = Character.toLowerCase(firstByte);
-        if (lowerChar < 'a' || lowerChar > 'z') {
+        if (firstByte >= 'A' && firstByte <= 'Z') {
+            firstByte += 32;
+        }
+        if (firstByte < 'a' || firstByte > 'z') {
             return;
         }
 
-        var commandGroup = commandGroups[lowerChar - 'a'];
+        var commandGroup = commandGroups[firstByte - 'a'];
         if (commandGroup instanceof GGroup) {
             if (data.length >= 2) {
                 var keyBytes = data[1];
@@ -544,14 +544,16 @@ public class RequestHandler {
 
             // else, use enum better
             var firstByte = data[0][0];
-            var lowerChar = Character.toLowerCase(firstByte);
-            if (lowerChar < 'a' || lowerChar > 'z') {
+            if (firstByte >= 'A' && firstByte <= 'Z') {
+                firstByte += 32;
+            }
+            if (firstByte < 'a' || firstByte > 'z') {
                 return ErrorReply.FORMAT;
             }
 
-            var commandGroup = commandGroups[lowerChar - 'a'];
+            var commandGroup = commandGroups[firstByte - 'a'];
             try {
-                increaseCmdStatArray((byte) (lowerChar), cmd);
+                increaseCmdStatArray(firstByte, cmd);
 
                 commandGroup.setCmd(cmd);
                 commandGroup.setData(data);
