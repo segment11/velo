@@ -202,8 +202,8 @@ class XGroupTest extends Specification {
         // slave uuid long
         data4[0] = new byte[8]
         // slot
-        data4[1] = new byte[1]
-        data4[1][0] = slot
+        data4[1] = new byte[2]
+        ByteBuffer.wrap(data4[1]).putShort(slot)
         // repl type
         data4[2] = new byte[1]
         // no exist repl type
@@ -745,8 +745,8 @@ class XGroupTest extends Specification {
         data4[0] = new byte[8]
         ByteBuffer.wrap(data4[0]).putLong(replPairAsMaster.slaveUuid)
         // slot
-        data4[1] = new byte[1]
-        data4[1][0] = slot
+        data4[1] = new byte[2]
+        ByteBuffer.wrap(data[1]).putShort(slot)
         // repl type
         data4[2] = new byte[1]
         // fetch exists chunk segments

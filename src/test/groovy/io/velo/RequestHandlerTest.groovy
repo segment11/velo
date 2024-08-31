@@ -292,8 +292,8 @@ class RequestHandlerTest extends Specification {
         def replData = new byte[4][]
         replData[0] = new byte[8]
         ByteBuffer.wrap(replData[0]).putLong(slaveUuid)
-        replData[1] = new byte[1]
-        replData[1][0] = slot
+        replData[1] = new byte[2]
+        ByteBuffer.wrap(replData[1]).putShort(slot)
         replData[2] = new byte[1]
         replData[2][0] = ReplType.test.code
         replData[3] = new byte[0]
