@@ -193,7 +193,7 @@ public class ReplPair {
         return sb.toString();
     }
 
-    @ForMasterField
+    @ForSlaveField
     private long slaveCatchUpLastSeq;
 
     public long getSlaveCatchUpLastSeq() {
@@ -215,7 +215,8 @@ public class ReplPair {
         this.slaveLastCatchUpBinlogFileIndexAndOffset = slaveLastCatchUpBinlogFileIndexAndOffset;
     }
 
-    // as both master and slave field
+    @ForMasterField
+    @ForSlaveField
     private long fetchedBytesLengthTotal;
 
     public long getFetchedBytesLengthTotal() {

@@ -491,7 +491,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         updatePvmBatchCostTimeTotalUs += costT;
 
         // update meta, segment index for next time
-        oneSlot.setMetaChunkSegmentIndex(segmentIndex);
+        oneSlot.setMetaChunkSegmentIndexInt(segmentIndex);
         xForBinlog.setChunkSegmentIndexAfterPersist(segmentIndex);
 
         ArrayList<Integer> needMergeSegmentIndexList = new ArrayList<>();

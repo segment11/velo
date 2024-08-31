@@ -384,7 +384,7 @@ public class XGroup extends BaseCommand {
 
         var oneSlot = localPersist.oneSlot(slot);
         // after exist all done, when catch up, XOneWalGroupSeq will update chunk segment index
-        oneSlot.setMetaChunkSegmentIndex(currentSegmentIndex);
+        oneSlot.setMetaChunkSegmentIndexInt(currentSegmentIndex);
         log.warn("Repl slave set meta chunk segment index, slot: {}, segment index: {}", slot, currentSegmentIndex);
 
         var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();

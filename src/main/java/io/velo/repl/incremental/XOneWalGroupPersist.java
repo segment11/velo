@@ -298,7 +298,7 @@ public class XOneWalGroupPersist implements BinlogContent {
             chunk.writeSegmentToTargetSegmentIndex(bytes, segmentIndex);
         }
 
-        oneSlot.setMetaChunkSegmentIndex(chunkSegmentIndexAfterPersist, true);
+        oneSlot.setMetaChunkSegmentIndexInt(chunkSegmentIndexAfterPersist, true);
 
         if (chunkMergedSegmentIndexEndLastTime != Chunk.NO_NEED_MERGE_SEGMENT_INDEX) {
             chunk.setMergedSegmentIndexEndLastTimeAfterSlaveCatchUp(chunkMergedSegmentIndexEndLastTime);

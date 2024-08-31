@@ -633,24 +633,25 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return metaChunkSegmentFlagSeq;
     }
 
-    private MetaChunkSegmentIndex metaChunkSegmentIndex;
+    @VisibleForTesting
+    MetaChunkSegmentIndex metaChunkSegmentIndex;
 
     public MetaChunkSegmentIndex getMetaChunkSegmentIndex() {
         return metaChunkSegmentIndex;
     }
 
     @VisibleForTesting
-    int getChunkWriteSegmentIndex() {
+    int getChunkWriteSegmentIndexInt() {
         return metaChunkSegmentIndex.get();
     }
 
-    public void setMetaChunkSegmentIndex(int segmentIndex) {
-        setMetaChunkSegmentIndex(segmentIndex, false);
+    public void setMetaChunkSegmentIndexInt(int segmentIndex) {
+        setMetaChunkSegmentIndexInt(segmentIndex, false);
     }
 
     @SlaveNeedReplay
     @SlaveReplay
-    public void setMetaChunkSegmentIndex(int segmentIndex, boolean updateChunkSegmentIndex) {
+    public void setMetaChunkSegmentIndexInt(int segmentIndex, boolean updateChunkSegmentIndex) {
         if (segmentIndex < 0 || segmentIndex > chunk.maxSegmentIndex) {
             throw new IllegalArgumentException("Segment index out of bound, s=" + slot + ", i=" + segmentIndex);
         }
@@ -1135,7 +1136,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.chunk = new Chunk(slot, slotDir, this, snowFlake, keyLoader);
         chunk.initFds(libC);
 
-        var segmentIndexLastSaved = getChunkWriteSegmentIndex();
+        var segmentIndexLastSaved = getChunkWriteSegmentIndexInt();
 
         // write index mmap crash recovery
         boolean isBreak = false;
@@ -1152,9 +1153,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 updateSegmentMergeFlag(currentSegmentIndex, Flag.reuse_new, snowFlake.nextId());
                 log.warn("Reset segment persisted when init");
 
-                setMetaChunkSegmentIndex(currentSegmentIndex);
+                setMetaChunkSegmentIndexInt(currentSegmentIndex);
             } else {
-                setMetaChunkSegmentIndex(currentSegmentIndex);
+                setMetaChunkSegmentIndexInt(currentSegmentIndex);
                 isBreak = true;
                 break;
             }
@@ -1778,14 +1779,33 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var replPairAsSlave = getOnlyOneReplPairAsSlave();
         if (replPairAsSlave != null) {
-            map.put("repl_slave_catch_up_last_seq",
-                    (double) replPairAsSlave.getSlaveCatchUpLastSeq());
-            map.put("repl_slave_fetched_bytes_total",
-                    (double) replPairAsSlave.getFetchedBytesLengthTotal());
+            map.put("repl_as_slave_fetched_bytes_total", (double) replPairAsSlave.getFetchedBytesLengthTotal());
+            map.put("repl_as_slave_is_link_up", (double) (replPairAsSlave.isLinkUp() ? 1 : 0));
+            map.put("repl_as_slave_is_master_readonly", (double) (replPairAsSlave.isMasterReadonly() ? 1 : 0));
+            map.put("repl_as_slave_is_all_caught_up", (double) (replPairAsSlave.isAllCaughtUp() ? 1 : 0));
+            map.put("repl_as_slave_is_master_can_not_connect", (double) (replPairAsSlave.isMasterCanNotConnect() ? 1 : 0));
+
+            var fo = metaChunkSegmentIndex.getMasterBinlogFileIndexAndOffset();
+            map.put("repl_as_slave_last_catch_up_binlog_file_index", (double) fo.fileIndex());
+            map.put("repl_as_slave_last_catch_up_binlog_offset", (double) fo.offset());
         }
 
-        var replPairSize = replPairs.stream().filter(one -> !one.isSendBye()).count();
-        map.put("repl_pair_size", (double) replPairSize);
+        var replPairAsMasterList = getReplPairAsMasterList();
+        if (!replPairAsMasterList.isEmpty()) {
+            map.put("repl_as_master_repl_pair_size", (double) replPairAsMasterList.size());
+
+            for (int i = 0; i < replPairAsMasterList.size(); i++) {
+                var replPair = replPairAsMasterList.get(i);
+                map.put("repl_as_master_repl_pair_" + i + "_slave_catch_up_last_seq", (double) replPair.getSlaveCatchUpLastSeq());
+                map.put("repl_as_master_repl_pair_" + i + "_is_link_up", (double) (replPair.isLinkUp() ? 1 : 0));
+
+                var fo = replPair.getSlaveLastCatchUpBinlogFileIndexAndOffset();
+                if (fo != null) {
+                    map.put("repl_as_master_repl_pair_" + i + "_slave_last_catch_up_binlog_file_index", (double) fo.fileIndex());
+                    map.put("repl_as_master_repl_pair_" + i + "_slave_last_catch_up_binlog_offset", (double) fo.offset());
+                }
+            }
+        }
 
         return map;
     }

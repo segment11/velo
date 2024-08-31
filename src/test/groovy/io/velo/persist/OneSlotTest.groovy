@@ -4,6 +4,7 @@ import io.activej.common.function.RunnableEx
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.velo.*
+import io.velo.repl.Binlog
 import io.velo.repl.ReplPairTest
 import io.velo.repl.incremental.XWalV
 import spock.lang.Specification
@@ -200,8 +201,11 @@ class OneSlotTest extends Specification {
         oneSlot.getReplPairAsMaster(11L) != null
 
         when:
+        oneSlot.metaChunkSegmentIndex = new MetaChunkSegmentIndex(slot, oneSlot.slotDir)
         oneSlot.replPairs.clear()
         oneSlot.replPairs.add(replPairAsMaster1)
+        replPairAsMaster1.slaveLastCatchUpBinlogFileIndexAndOffset = new Binlog.FileIndexAndOffset(1, 1)
+        oneSlot.collect()
         then:
         oneSlot.getReplPairAsMaster(11L) == null
 
@@ -209,7 +213,6 @@ class OneSlotTest extends Specification {
         replPairAsSlave0.sendBye = false
         oneSlot.replPairs.clear()
         oneSlot.replPairs.add(replPairAsSlave0)
-        oneSlot.globalGauge.collect()
         oneSlot.collect()
         then:
         oneSlot.getReplPairAsMaster(11L) == null
@@ -452,23 +455,23 @@ class OneSlotTest extends Specification {
         oneSlot.taskChain != null
         oneSlot.walKeyCount == 0
         oneSlot.allKeyCount == 0
-        oneSlot.chunkWriteSegmentIndex == 0
+        oneSlot.chunkWriteSegmentIndexInt == 0
 
         when:
-        oneSlot.setMetaChunkSegmentIndex(0)
+        oneSlot.setMetaChunkSegmentIndexInt(0)
         oneSlot.setChunkSegmentIndexFromMeta()
         then:
         oneSlot.chunk.segmentIndex == 0
 
         when:
-        oneSlot.setMetaChunkSegmentIndex(1, true)
+        oneSlot.setMetaChunkSegmentIndexInt(1, true)
         then:
         oneSlot.chunk.segmentIndex == 1
 
         when:
         boolean exception = false
         try {
-            oneSlot.setMetaChunkSegmentIndex(-1)
+            oneSlot.setMetaChunkSegmentIndexInt(-1)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
@@ -479,7 +482,7 @@ class OneSlotTest extends Specification {
         when:
         exception = false
         try {
-            oneSlot.setMetaChunkSegmentIndex(oneSlot.chunk.maxSegmentIndex + 1)
+            oneSlot.setMetaChunkSegmentIndexInt(oneSlot.chunk.maxSegmentIndex + 1)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
