@@ -5,6 +5,7 @@ import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
+import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.type.RedisList
 import spock.lang.Specification
@@ -12,6 +13,8 @@ import spock.lang.Specification
 import java.time.Duration
 
 class RGroupTest extends Specification {
+    def _RGroup = new RGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data3 = new byte[3][]
@@ -22,13 +25,13 @@ class RGroupTest extends Specification {
         data3[2] = 'b'.bytes
 
         when:
-        def sRenameList = RGroup.parseSlots('rename', data3, slotNumber)
-        def sRpoplpushList = RGroup.parseSlots('rpoplpush', data3, slotNumber)
-        def sRestoreList = RGroup.parseSlots('restore', data3, slotNumber)
-        def sRpopList = RGroup.parseSlots('rpop', data3, slotNumber)
-        def sRpushList = RGroup.parseSlots('rpush', data3, slotNumber)
-        def sRpushxList = RGroup.parseSlots('rpushx', data3, slotNumber)
-        def sList = RGroup.parseSlots('rxxx', data3, slotNumber)
+        def sRenameList = _RGroup.parseSlots('rename', data3, slotNumber)
+        def sRpoplpushList = _RGroup.parseSlots('rpoplpush', data3, slotNumber)
+        def sRestoreList = _RGroup.parseSlots('restore', data3, slotNumber)
+        def sRpopList = _RGroup.parseSlots('rpop', data3, slotNumber)
+        def sRpushList = _RGroup.parseSlots('rpush', data3, slotNumber)
+        def sRpushxList = _RGroup.parseSlots('rpushx', data3, slotNumber)
+        def sList = _RGroup.parseSlots('rxxx', data3, slotNumber)
         then:
         sRenameList.size() == 2
         sRpoplpushList.size() == 2
@@ -41,10 +44,10 @@ class RGroupTest extends Specification {
         when:
         def data4 = new byte[4][]
         data4[1] = 'a'.bytes
-        sRenameList = RGroup.parseSlots('rename', data4, slotNumber)
-        sRpoplpushList = RGroup.parseSlots('rpoplpush', data4, slotNumber)
-        sRestoreList = RGroup.parseSlots('restore', data4, slotNumber)
-        sRpopList = RGroup.parseSlots('rpop', data4, slotNumber)
+        sRenameList = _RGroup.parseSlots('rename', data4, slotNumber)
+        sRpoplpushList = _RGroup.parseSlots('rpoplpush', data4, slotNumber)
+        sRestoreList = _RGroup.parseSlots('restore', data4, slotNumber)
+        sRpopList = _RGroup.parseSlots('rpop', data4, slotNumber)
         then:
         sRenameList.size() == 0
         sRpoplpushList.size() == 0
@@ -53,8 +56,8 @@ class RGroupTest extends Specification {
 
         when:
         def data1 = new byte[1][]
-        sRpushList = RGroup.parseSlots('rpush', data1, slotNumber)
-        sRpushxList = RGroup.parseSlots('rpushx', data1, slotNumber)
+        sRpushList = _RGroup.parseSlots('rpush', data1, slotNumber)
+        sRpushxList = _RGroup.parseSlots('rpushx', data1, slotNumber)
         then:
         sRpushList.size() == 0
         sRpushxList.size() == 0
@@ -62,7 +65,7 @@ class RGroupTest extends Specification {
         when:
         def data2 = new byte[2][]
         data2[1] = 'a'.bytes
-        sRpopList = RGroup.parseSlots('rpop', data2, slotNumber)
+        sRpopList = _RGroup.parseSlots('rpop', data2, slotNumber)
         then:
         sRpopList.size() == 1
     }
@@ -113,7 +116,7 @@ class RGroupTest extends Specification {
         rGroup.from(BaseCommand.mockAGroup())
 
         when:
-        rGroup.slotWithKeyHashListParsed = RGroup.parseSlots('rename', data3, rGroup.slotNumber)
+        rGroup.slotWithKeyHashListParsed = _RGroup.parseSlots('rename', data3, rGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
         def reply = rGroup.rename()
@@ -121,7 +124,7 @@ class RGroupTest extends Specification {
         reply == ErrorReply.NO_SUCH_KEY
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = rGroup.rename()
         then:
@@ -183,7 +186,7 @@ class RGroupTest extends Specification {
         rGroup.from(BaseCommand.mockAGroup())
 
         when:
-        rGroup.slotWithKeyHashListParsed = RGroup.parseSlots('rpop', data3, rGroup.slotNumber)
+        rGroup.slotWithKeyHashListParsed = _RGroup.parseSlots('rpop', data3, rGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = rGroup.handle()
         then:
@@ -205,7 +208,7 @@ class RGroupTest extends Specification {
         rGroup.from(BaseCommand.mockAGroup())
 
         when:
-        rGroup.slotWithKeyHashListParsed = RGroup.parseSlots('rpoplpush', data3, rGroup.slotNumber)
+        rGroup.slotWithKeyHashListParsed = _RGroup.parseSlots('rpoplpush', data3, rGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
         def reply = rGroup.rpoplpush()
@@ -213,7 +216,7 @@ class RGroupTest extends Specification {
         reply == NilReply.INSTANCE
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(2)
+        def cvList = Mock.prepareCompressedValueList(2)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rlA = new RedisList()
@@ -289,7 +292,7 @@ class RGroupTest extends Specification {
         rGroup.from(BaseCommand.mockAGroup())
 
         when:
-        rGroup.slotWithKeyHashListParsed = RGroup.parseSlots('rpush', data3, rGroup.slotNumber)
+        rGroup.slotWithKeyHashListParsed = _RGroup.parseSlots('rpush', data3, rGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = rGroup.handle()
         then:

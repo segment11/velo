@@ -25,11 +25,15 @@ import static io.velo.TrainSampleJob.MIN_TRAIN_SAMPLE_SIZE
 class ManageCommand extends BaseCommand {
     static final String version = '1.0.1'
 
+    ManageCommand() {
+        super(null, null, null)
+    }
+
     ManageCommand(MGroup mGroup) {
         super(mGroup.cmd, mGroup.data, mGroup.socket)
     }
 
-    static ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
+    ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> r = []
 
         if (data.length < 2) {

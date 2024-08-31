@@ -5,12 +5,15 @@ import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
+import io.velo.persist.Mock
 import io.velo.reply.*
 import spock.lang.Specification
 
 import java.time.Duration
 
 class EGroupTest extends Specification {
+    def _EGroup = new EGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -20,11 +23,11 @@ class EGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sExistsList = EGroup.parseSlots('exists', data2, slotNumber)
-        def sExpireList = EGroup.parseSlots('expire', data2, slotNumber)
-        def sExpireAtList = EGroup.parseSlots('expireat', data2, slotNumber)
-        def sExpireTimeList = EGroup.parseSlots('expiretime', data2, slotNumber)
-        def sList = EGroup.parseSlots('exxx', data2, slotNumber)
+        def sExistsList = _EGroup.parseSlots('exists', data2, slotNumber)
+        def sExpireList = _EGroup.parseSlots('expire', data2, slotNumber)
+        def sExpireAtList = _EGroup.parseSlots('expireat', data2, slotNumber)
+        def sExpireTimeList = _EGroup.parseSlots('expiretime', data2, slotNumber)
+        def sList = _EGroup.parseSlots('exxx', data2, slotNumber)
         then:
         sExistsList.size() == 1
         sExpireList.size() == 1
@@ -36,14 +39,14 @@ class EGroupTest extends Specification {
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
-        sExistsList = EGroup.parseSlots('exists', data3, slotNumber)
+        sExistsList = _EGroup.parseSlots('exists', data3, slotNumber)
         then:
         sExistsList.size() == 2
 
         when:
         def data1 = new byte[1][]
-        sExistsList = EGroup.parseSlots('exists', data1, slotNumber)
-        sExpireList = EGroup.parseSlots('expire', data1, slotNumber)
+        sExistsList = _EGroup.parseSlots('exists', data1, slotNumber)
+        sExpireList = _EGroup.parseSlots('expire', data1, slotNumber)
         then:
         sExistsList.size() == 0
         sExpireList.size() == 0
@@ -59,7 +62,7 @@ class EGroupTest extends Specification {
         eGroup.byPassGetSet = inMemoryGetSet
         eGroup.from(BaseCommand.mockAGroup())
 
-        eGroup.slotWithKeyHashListParsed = EGroup.parseSlots('exists', data1, eGroup.slotNumber)
+        eGroup.slotWithKeyHashListParsed = _EGroup.parseSlots('exists', data1, eGroup.slotNumber)
 
         when:
         def reply = eGroup.handle()
@@ -122,23 +125,23 @@ class EGroupTest extends Specification {
         when:
         def data1 = new byte[1][]
         eGroup.data = data1
-        eGroup.slotWithKeyHashListParsed = DGroup.parseSlots('exists', data1, eGroup.slotNumber)
+        eGroup.slotWithKeyHashListParsed = _EGroup.parseSlots('exists', data1, eGroup.slotNumber)
         def reply = eGroup.exists()
         then:
         reply == ErrorReply.FORMAT
 
         when:
         eGroup.data = data2
-        eGroup.slotWithKeyHashListParsed = EGroup.parseSlots('exists', data2, eGroup.slotNumber)
+        eGroup.slotWithKeyHashListParsed = _EGroup.parseSlots('exists', data2, eGroup.slotNumber)
         reply = eGroup.exists()
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
         data2[1] = 'a'.bytes
-        eGroup.slotWithKeyHashListParsed = EGroup.parseSlots('exists', data2, eGroup.slotNumber)
+        eGroup.slotWithKeyHashListParsed = _EGroup.parseSlots('exists', data2, eGroup.slotNumber)
         reply = eGroup.exists()
         then:
         reply instanceof IntegerReply
@@ -169,7 +172,7 @@ class EGroupTest extends Specification {
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
         eGroup.data = data3
-        eGroup.slotWithKeyHashListParsed = EGroup.parseSlots('exists', data3, eGroup.slotNumber)
+        eGroup.slotWithKeyHashListParsed = _EGroup.parseSlots('exists', data3, eGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.put(slot, 'b', 0, cv)
         reply = eGroup.exists()
@@ -206,7 +209,7 @@ class EGroupTest extends Specification {
         data3[1] = 'a'.bytes
         data3[2] = (System.currentTimeMillis() + 1000 * 60).toString().bytes
         eGroup.data = data3
-        eGroup.slotWithKeyHashListParsed = EGroup.parseSlots('expire', data3, eGroup.slotNumber)
+        eGroup.slotWithKeyHashListParsed = _EGroup.parseSlots('expire', data3, eGroup.slotNumber)
         reply = eGroup.expire(true, true)
         then:
         // not exists
@@ -220,7 +223,7 @@ class EGroupTest extends Specification {
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
         data3[2] = (System.currentTimeMillis() + 1000 * 60).toString().bytes
         reply = eGroup.expire(true, true)
@@ -347,15 +350,15 @@ class EGroupTest extends Specification {
         when:
         def data1 = new byte[1][]
         eGroup.data = data1
-        eGroup.slotWithKeyHashListParsed = DGroup.parseSlots('expiretime', data1, eGroup.slotNumber)
+        eGroup.slotWithKeyHashListParsed = _EGroup.parseSlots('expiretime', data1, eGroup.slotNumber)
         def reply = eGroup.expiretime(true)
         then:
         reply == ErrorReply.FORMAT
 
         when:
         eGroup.data = data2
-        eGroup.slotWithKeyHashListParsed = EGroup.parseSlots('expiretime', data2, eGroup.slotNumber)
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        eGroup.slotWithKeyHashListParsed = _EGroup.parseSlots('expiretime', data2, eGroup.slotNumber)
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.expireAt = CompressedValue.NO_EXPIRE
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = eGroup.expiretime(true)

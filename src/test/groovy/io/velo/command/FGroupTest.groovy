@@ -14,6 +14,8 @@ import spock.lang.Specification
 import java.time.Duration
 
 class FGroupTest extends Specification {
+    def _FGroup = new FGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -23,7 +25,7 @@ class FGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sFlushDbList = FGroup.parseSlots('failover', data2, slotNumber)
+        def sFlushDbList = _FGroup.parseSlots('failover', data2, slotNumber)
         then:
         sFlushDbList.size() == 0
     }

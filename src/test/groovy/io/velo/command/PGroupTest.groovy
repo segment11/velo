@@ -11,6 +11,8 @@ import io.velo.reply.OKReply
 import spock.lang.Specification
 
 class PGroupTest extends Specification {
+    def _PGroup = new PGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -24,12 +26,12 @@ class PGroupTest extends Specification {
         data4[1] = 'a'.bytes
 
         when:
-        def sPexpireList = PGroup.parseSlots('pexpire', data4, slotNumber)
-        def sPexpireatList = PGroup.parseSlots('pexpireat', data4, slotNumber)
-        def sPexpiretimeList = PGroup.parseSlots('pexpiretime', data2, slotNumber)
-        def sPttlList = PGroup.parseSlots('pttl', data2, slotNumber)
-        def sPsetexList = PGroup.parseSlots('psetex', data4, slotNumber)
-        def sList = PGroup.parseSlots('pxxx', data2, slotNumber)
+        def sPexpireList = _PGroup.parseSlots('pexpire', data4, slotNumber)
+        def sPexpireatList = _PGroup.parseSlots('pexpireat', data4, slotNumber)
+        def sPexpiretimeList = _PGroup.parseSlots('pexpiretime', data2, slotNumber)
+        def sPttlList = _PGroup.parseSlots('pttl', data2, slotNumber)
+        def sPsetexList = _PGroup.parseSlots('psetex', data4, slotNumber)
+        def sList = _PGroup.parseSlots('pxxx', data2, slotNumber)
         then:
         sPexpireList.size() == 1
         sPexpireatList.size() == 1
@@ -41,33 +43,33 @@ class PGroupTest extends Specification {
         when:
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
-        sPexpireatList = PGroup.parseSlots('pexpireat', data3, slotNumber)
+        sPexpireatList = _PGroup.parseSlots('pexpireat', data3, slotNumber)
         then:
         sPexpireatList.size() == 1
 
         when:
         // wrong size
-        sPexpireList = PGroup.parseSlots('pexpire', data2, slotNumber)
+        sPexpireList = _PGroup.parseSlots('pexpire', data2, slotNumber)
         then:
         sPexpireList.size() == 0
 
         when:
-        sPexpireatList = PGroup.parseSlots('pexpireat', data2, slotNumber)
+        sPexpireatList = _PGroup.parseSlots('pexpireat', data2, slotNumber)
         then:
         sPexpireatList.size() == 0
 
         when:
-        sPexpiretimeList = PGroup.parseSlots('pexpiretime', data4, slotNumber)
+        sPexpiretimeList = _PGroup.parseSlots('pexpiretime', data4, slotNumber)
         then:
         sPexpiretimeList.size() == 0
 
         when:
-        sPttlList = PGroup.parseSlots('pttl', data4, slotNumber)
+        sPttlList = _PGroup.parseSlots('pttl', data4, slotNumber)
         then:
         sPttlList.size() == 0
 
         when:
-        sPsetexList = PGroup.parseSlots('psetex', data2, slotNumber)
+        sPsetexList = _PGroup.parseSlots('psetex', data2, slotNumber)
         then:
         sPsetexList.size() == 0
     }
@@ -87,7 +89,7 @@ class PGroupTest extends Specification {
         pGroup.from(BaseCommand.mockAGroup())
 
         when:
-        pGroup.slotWithKeyHashListParsed = PGroup.parseSlots('pexpire', data3, pGroup.slotNumber)
+        pGroup.slotWithKeyHashListParsed = _PGroup.parseSlots('pexpire', data3, pGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = pGroup.handle()
         then:
@@ -104,7 +106,7 @@ class PGroupTest extends Specification {
         data2[1] = 'a'.bytes
         pGroup.cmd = 'pexpiretime'
         pGroup.data = data2
-        pGroup.slotWithKeyHashListParsed = PGroup.parseSlots('pexpiretime', data2, pGroup.slotNumber)
+        pGroup.slotWithKeyHashListParsed = _PGroup.parseSlots('pexpiretime', data2, pGroup.slotNumber)
         reply = pGroup.handle()
         then:
         reply instanceof IntegerReply
@@ -130,7 +132,7 @@ class PGroupTest extends Specification {
         data4[3] = 'value'.bytes
         pGroup.cmd = 'psetex'
         pGroup.data = data4
-        pGroup.slotWithKeyHashListParsed = PGroup.parseSlots('psetex', data4, pGroup.slotNumber)
+        pGroup.slotWithKeyHashListParsed = _PGroup.parseSlots('psetex', data4, pGroup.slotNumber)
         reply = pGroup.handle()
         then:
         reply == OKReply.INSTANCE
@@ -160,14 +162,14 @@ class PGroupTest extends Specification {
         LocalPersist.instance.socketInspector = new SocketInspector()
 
         when:
-        def reply = PGroup.publish(data3)
+        def reply = _PGroup.publish(data3)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
         def data1 = new byte[1][]
-        reply = PGroup.publish(data1)
+        reply = _PGroup.publish(data1)
         then:
         reply == ErrorReply.FORMAT
     }

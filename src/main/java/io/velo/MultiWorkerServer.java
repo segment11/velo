@@ -293,7 +293,7 @@ public class MultiWorkerServer extends Launcher {
 
         for (var request : pipeline) {
             request.setSlotNumber(slotNumber);
-            RequestHandler.parseSlots(request);
+            requestHandlerArray[0].parseSlots(request);
         }
 
         if (pipeline.size() == 1) {

@@ -5,6 +5,8 @@ import io.velo.reply.NilReply
 import spock.lang.Specification
 
 class NGroupTest extends Specification {
+    def _NGroup = new NGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -14,7 +16,7 @@ class NGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sList = NGroup.parseSlots('nx', data2, slotNumber)
+        def sList = _NGroup.parseSlots('nx', data2, slotNumber)
         then:
         sList.size() == 0
     }

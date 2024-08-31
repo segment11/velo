@@ -3,11 +3,14 @@ package io.velo.command
 import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.type.RedisList
 import spock.lang.Specification
 
 class LGroupTest extends Specification {
+    def _LGroup = new LGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -17,18 +20,18 @@ class LGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sLindexList = LGroup.parseSlots('lindex', data2, slotNumber)
-        def sLinsertList = LGroup.parseSlots('linsert', data2, slotNumber)
-        def sLlenList = LGroup.parseSlots('llen', data2, slotNumber)
-        def sLpopList = LGroup.parseSlots('lpop', data2, slotNumber)
-        def sLposList = LGroup.parseSlots('lpos', data2, slotNumber)
-        def sLpushList = LGroup.parseSlots('lpush', data2, slotNumber)
-        def sLpushxList = LGroup.parseSlots('lpushx', data2, slotNumber)
-        def sLrangeList = LGroup.parseSlots('lrange', data2, slotNumber)
-        def sLremList = LGroup.parseSlots('lrem', data2, slotNumber)
-        def sLsetList = LGroup.parseSlots('lset', data2, slotNumber)
-        def sLtrimList = LGroup.parseSlots('ltrim', data2, slotNumber)
-        def sList = LGroup.parseSlots('lxxx', data2, slotNumber)
+        def sLindexList = _LGroup.parseSlots('lindex', data2, slotNumber)
+        def sLinsertList = _LGroup.parseSlots('linsert', data2, slotNumber)
+        def sLlenList = _LGroup.parseSlots('llen', data2, slotNumber)
+        def sLpopList = _LGroup.parseSlots('lpop', data2, slotNumber)
+        def sLposList = _LGroup.parseSlots('lpos', data2, slotNumber)
+        def sLpushList = _LGroup.parseSlots('lpush', data2, slotNumber)
+        def sLpushxList = _LGroup.parseSlots('lpushx', data2, slotNumber)
+        def sLrangeList = _LGroup.parseSlots('lrange', data2, slotNumber)
+        def sLremList = _LGroup.parseSlots('lrem', data2, slotNumber)
+        def sLsetList = _LGroup.parseSlots('lset', data2, slotNumber)
+        def sLtrimList = _LGroup.parseSlots('ltrim', data2, slotNumber)
+        def sList = _LGroup.parseSlots('lxxx', data2, slotNumber)
         then:
         sLindexList.size() == 1
         sLinsertList.size() == 1
@@ -45,7 +48,7 @@ class LGroupTest extends Specification {
 
         when:
         def data1 = new byte[1][]
-        sLinsertList = LGroup.parseSlots('linsert', data1, slotNumber)
+        sLinsertList = _LGroup.parseSlots('linsert', data1, slotNumber)
         then:
         sLinsertList.size() == 0
 
@@ -53,7 +56,7 @@ class LGroupTest extends Specification {
         def data5 = new byte[5][]
         data5[1] = 'a'.bytes
         data5[2] = 'a'.bytes
-        def sLmoveList = LGroup.parseSlots('lmove', data5, slotNumber)
+        def sLmoveList = _LGroup.parseSlots('lmove', data5, slotNumber)
         then:
         sLmoveList.size() == 2
 
@@ -62,7 +65,7 @@ class LGroupTest extends Specification {
         def data6 = new byte[6][]
         data6[1] = 'a'.bytes
         data6[2] = 'a'.bytes
-        sLmoveList = LGroup.parseSlots('lmove', data6, slotNumber)
+        sLmoveList = _LGroup.parseSlots('lmove', data6, slotNumber)
         then:
         sLmoveList.size() == 0
     }
@@ -174,14 +177,14 @@ class LGroupTest extends Specification {
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = LGroup.parseSlots('lindex', data3, lGroup.slotNumber)
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lindex', data3, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = lGroup.lindex()
         then:
         reply == NilReply.INSTANCE
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
         rl.addFirst('a'.bytes)
@@ -247,14 +250,14 @@ class LGroupTest extends Specification {
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = LGroup.parseSlots('linsert', data5, lGroup.slotNumber)
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('linsert', data5, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = lGroup.linsert()
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
         rl.addFirst('b'.bytes)
@@ -326,14 +329,14 @@ class LGroupTest extends Specification {
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = LGroup.parseSlots('llen', data2, lGroup.slotNumber)
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('llen', data2, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = lGroup.llen()
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
         rl.addFirst('a'.bytes)
@@ -368,7 +371,7 @@ class LGroupTest extends Specification {
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = LGroup.parseSlots('lmove', data5, lGroup.slotNumber)
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lmove', data5, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
         def reply = lGroup.lmove()
@@ -376,7 +379,7 @@ class LGroupTest extends Specification {
         reply == NilReply.INSTANCE
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(2)
+        def cvList = Mock.prepareCompressedValueList(2)
         def cv = cvList[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
@@ -465,14 +468,14 @@ class LGroupTest extends Specification {
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = LGroup.parseSlots('lpop', data2, lGroup.slotNumber)
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lpop', data2, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = lGroup.lpop(true)
         then:
         reply == NilReply.INSTANCE
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
         rl.addFirst('a'.bytes)
@@ -540,14 +543,14 @@ class LGroupTest extends Specification {
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = LGroup.parseSlots('lpos', data3, lGroup.slotNumber)
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lpos', data3, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = lGroup.lpos()
         then:
         reply == NilReply.INSTANCE
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
         rl.addFirst('a'.bytes)
@@ -742,7 +745,7 @@ class LGroupTest extends Specification {
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = LGroup.parseSlots('lpush', data3, lGroup.slotNumber)
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lpush', data3, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = lGroup.lpush(true, true)
         then:
@@ -761,7 +764,7 @@ class LGroupTest extends Specification {
         ((IntegerReply) reply).integer == 2
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
         RedisList.LIST_MAX_SIZE.times {
@@ -803,14 +806,14 @@ class LGroupTest extends Specification {
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = LGroup.parseSlots('lrange', data4, lGroup.slotNumber)
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lrange', data4, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = lGroup.lrange()
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
         10.times {
@@ -896,14 +899,14 @@ class LGroupTest extends Specification {
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = LGroup.parseSlots('lrem', data4, lGroup.slotNumber)
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lrem', data4, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = lGroup.lrem()
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
         10.times {
@@ -984,14 +987,14 @@ class LGroupTest extends Specification {
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = LGroup.parseSlots('lset', data4, lGroup.slotNumber)
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lset', data4, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = lGroup.lset()
         then:
         reply == ErrorReply.NO_SUCH_KEY
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
         10.times {
@@ -1069,14 +1072,14 @@ class LGroupTest extends Specification {
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = LGroup.parseSlots('ltrim', data4, lGroup.slotNumber)
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('ltrim', data4, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = lGroup.ltrim()
         then:
         reply == OKReply.INSTANCE
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
         10.times {

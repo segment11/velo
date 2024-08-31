@@ -3,6 +3,7 @@ package io.velo.command
 import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Mock
 import io.velo.reply.ErrorReply
 import io.velo.reply.IntegerReply
 import io.velo.reply.NilReply
@@ -10,6 +11,8 @@ import io.velo.type.RedisHashKeys
 import spock.lang.Specification
 
 class TGroupTest extends Specification {
+    def _TGroup = new TGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -19,9 +22,9 @@ class TGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sTypeList = TGroup.parseSlots('type', data2, slotNumber)
-        def sTtlList = TGroup.parseSlots('ttl', data2, slotNumber)
-        def sList = TGroup.parseSlots('txxx', data2, slotNumber)
+        def sTypeList = _TGroup.parseSlots('type', data2, slotNumber)
+        def sTtlList = _TGroup.parseSlots('ttl', data2, slotNumber)
+        def sList = _TGroup.parseSlots('txxx', data2, slotNumber)
         then:
         sTypeList.size() == 1
         sTtlList.size() == 1
@@ -30,8 +33,8 @@ class TGroupTest extends Specification {
 
         when:
         def data1 = new byte[1][]
-        sTypeList = TGroup.parseSlots('type', data1, slotNumber)
-        sTtlList = TGroup.parseSlots('ttl', data1, slotNumber)
+        sTypeList = _TGroup.parseSlots('type', data1, slotNumber)
+        sTtlList = _TGroup.parseSlots('ttl', data1, slotNumber)
         then:
         sTypeList.size() == 0
         sTtlList.size() == 0
@@ -76,61 +79,61 @@ class TGroupTest extends Specification {
         tGroup.from(BaseCommand.mockAGroup())
 
         when:
-        tGroup.slotWithKeyHashListParsed = TGroup.parseSlots('type', data2, tGroup.slotNumber)
+        tGroup.slotWithKeyHashListParsed = _TGroup.parseSlots('type', data2, tGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = tGroup.type()
         then:
         reply == NilReply.INSTANCE
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.type()
         then:
-        reply == TGroup.TYPE_HASH
+        reply == _TGroup.TYPE_HASH
 
         when:
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cv)
         reply = tGroup.type()
         then:
-        reply == TGroup.TYPE_HASH
+        reply == _TGroup.TYPE_HASH
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.type()
         then:
-        reply == TGroup.TYPE_LIST
+        reply == _TGroup.TYPE_LIST
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.type()
         then:
-        reply == TGroup.TYPE_SET
+        reply == _TGroup.TYPE_SET
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.type()
         then:
-        reply == TGroup.TYPE_ZSET
+        reply == _TGroup.TYPE_ZSET
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_STREAM
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.type()
         then:
-        reply == TGroup.TYPE_STREAM
+        reply == _TGroup.TYPE_STREAM
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.type()
         then:
-        reply == TGroup.TYPE_STRING
+        reply == _TGroup.TYPE_STRING
 
         when:
         data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
@@ -154,7 +157,7 @@ class TGroupTest extends Specification {
         tGroup.from(BaseCommand.mockAGroup())
 
         when:
-        tGroup.slotWithKeyHashListParsed = TGroup.parseSlots('ttl', data2, tGroup.slotNumber)
+        tGroup.slotWithKeyHashListParsed = _TGroup.parseSlots('ttl', data2, tGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = tGroup.ttl(false)
         then:
@@ -162,7 +165,7 @@ class TGroupTest extends Specification {
         ((IntegerReply) reply).integer == -2
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_INT
         cv.expireAt = CompressedValue.NO_EXPIRE
         inMemoryGetSet.put(slot, 'a', 0, cv)

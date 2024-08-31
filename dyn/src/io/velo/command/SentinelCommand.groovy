@@ -17,6 +17,12 @@ class SentinelCommand extends BaseCommand {
     }
 
     @Override
+    ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
+        ArrayList<SlotWithKeyHash> list = []
+        list
+    }
+
+    @Override
     Reply handle() {
         log.info 'Dyn sentinel command version: {}', version
 

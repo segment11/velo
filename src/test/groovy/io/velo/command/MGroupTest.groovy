@@ -6,12 +6,15 @@ import io.velo.Utils
 import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
+import io.velo.persist.Mock
 import io.velo.reply.*
 import spock.lang.Specification
 
 import java.time.Duration
 
 class MGroupTest extends Specification {
+    def _MGroup = new MGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data5 = new byte[5][]
@@ -24,9 +27,9 @@ class MGroupTest extends Specification {
         data5[4] = '0'.bytes
 
         when:
-        def sMgetList = MGroup.parseSlots('mget', data5, slotNumber)
-        def sMsetList = MGroup.parseSlots('mset', data5, slotNumber)
-        def s = MGroup.parseSlots('mxxx', data5, slotNumber)
+        def sMgetList = _MGroup.parseSlots('mget', data5, slotNumber)
+        def sMsetList = _MGroup.parseSlots('mset', data5, slotNumber)
+        def s = _MGroup.parseSlots('mxxx', data5, slotNumber)
         then:
         sMgetList.size() == 4
         sMsetList.size() == 2
@@ -39,59 +42,59 @@ class MGroupTest extends Specification {
         data5[1] = 'slot'.bytes
         data5[2] = '0'.bytes
         data5[3] = 'view-persist-key-count'.bytes
-        def sManageList = MGroup.parseSlots('manage', data5, slotNumber)
+        def sManageList = _MGroup.parseSlots('manage', data5, slotNumber)
         then:
         sManageList.size() == 1
 
         when:
         def data1 = new byte[1][]
-        def sList = MGroup.parseSlots('mget', data1, slotNumber)
+        def sList = _MGroup.parseSlots('mget', data1, slotNumber)
         then:
         sList.size() == 0
 
         when:
-        sList = MGroup.parseSlots('mset', data1, slotNumber)
+        sList = _MGroup.parseSlots('mset', data1, slotNumber)
         then:
         sList.size() == 0
 
         when:
         def data4 = new byte[4][]
-        sMsetList = MGroup.parseSlots('mset', data4, slotNumber)
+        sMsetList = _MGroup.parseSlots('mset', data4, slotNumber)
         then:
         sMsetList.size() == 0
 
         when:
-        sList = MGroup.parseSlots('manage', data1, slotNumber)
+        sList = _MGroup.parseSlots('manage', data1, slotNumber)
         then:
         sList.size() == 0
 
         when:
-        sList = MGroup.parseSlots('mset', data5, slotNumber)
+        sList = _MGroup.parseSlots('mset', data5, slotNumber)
         then:
         sList.size() == 2
 
         when:
         data5[1] = 'view-persist-key-count'.bytes
 
-        sList = MGroup.parseSlots('manage', data5, slotNumber)
+        sList = _MGroup.parseSlots('manage', data5, slotNumber)
         then:
         sList.size() == 0
 
         when:
         data5[1] = 'view-slot-bucket-keys'.bytes
-        sList = MGroup.parseSlots('manage', data5, slotNumber)
+        sList = _MGroup.parseSlots('manage', data5, slotNumber)
         then:
         sList.size() == 0
 
         when:
         data5[1] = 'output-dict-bytes'.bytes
-        sList = MGroup.parseSlots('manage', data5, slotNumber)
+        sList = _MGroup.parseSlots('manage', data5, slotNumber)
         then:
         sList.size() == 0
 
         when:
         data5[1] = 'xxx'.bytes
-        sList = MGroup.parseSlots('manage', data5, slotNumber)
+        sList = _MGroup.parseSlots('manage', data5, slotNumber)
         then:
         sList.size() == 0
     }
@@ -144,7 +147,7 @@ class MGroupTest extends Specification {
         mGroup.from(BaseCommand.mockAGroup())
 
         when:
-        mGroup.slotWithKeyHashListParsed = MGroup.parseSlots('mget', data3, mGroup.slotNumber)
+        mGroup.slotWithKeyHashListParsed = _MGroup.parseSlots('mget', data3, mGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
         def reply = mGroup.mget()
@@ -155,7 +158,7 @@ class MGroupTest extends Specification {
         ((MultiBulkReply) reply).replies[1] == NilReply.INSTANCE
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = mGroup.mget()
         then:
@@ -208,7 +211,7 @@ class MGroupTest extends Specification {
         mGroup.from(BaseCommand.mockAGroup())
 
         when:
-        mGroup.slotWithKeyHashListParsed = MGroup.parseSlots('mset', data5, mGroup.slotNumber)
+        mGroup.slotWithKeyHashListParsed = _MGroup.parseSlots('mset', data5, mGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
         def reply = mGroup.mset()

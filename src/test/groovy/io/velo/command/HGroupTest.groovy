@@ -4,12 +4,15 @@ import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
+import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.type.RedisHH
 import io.velo.type.RedisHashKeys
 import spock.lang.Specification
 
 class HGroupTest extends Specification {
+    def _HGroup = new HGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -19,22 +22,22 @@ class HGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sHdelList = HGroup.parseSlots('hdel', data2, slotNumber)
-        def sHexistsList = HGroup.parseSlots('hexists', data2, slotNumber)
-        def sHgetList = HGroup.parseSlots('hget', data2, slotNumber)
-        def sHgetallList = HGroup.parseSlots('hgetall', data2, slotNumber)
-        def sHincrbyList = HGroup.parseSlots('hincrby', data2, slotNumber)
-        def sHincrbyfloatList = HGroup.parseSlots('hincrbyfloat', data2, slotNumber)
-        def sHkeysList = HGroup.parseSlots('hkeys', data2, slotNumber)
-        def sHlenList = HGroup.parseSlots('hlen', data2, slotNumber)
-        def sHmgetList = HGroup.parseSlots('hmget', data2, slotNumber)
-        def sHmsetList = HGroup.parseSlots('hmset', data2, slotNumber)
-        def sHrandfieldList = HGroup.parseSlots('hrandfield', data2, slotNumber)
-        def sHsetList = HGroup.parseSlots('hset', data2, slotNumber)
-        def sHsetnxList = HGroup.parseSlots('hsetnx', data2, slotNumber)
-        def sHstrlenList = HGroup.parseSlots('hstrlen', data2, slotNumber)
-        def sHvalsList = HGroup.parseSlots('hvals', data2, slotNumber)
-        def sList = HGroup.parseSlots('hxxx', data2, slotNumber)
+        def sHdelList = _HGroup.parseSlots('hdel', data2, slotNumber)
+        def sHexistsList = _HGroup.parseSlots('hexists', data2, slotNumber)
+        def sHgetList = _HGroup.parseSlots('hget', data2, slotNumber)
+        def sHgetallList = _HGroup.parseSlots('hgetall', data2, slotNumber)
+        def sHincrbyList = _HGroup.parseSlots('hincrby', data2, slotNumber)
+        def sHincrbyfloatList = _HGroup.parseSlots('hincrbyfloat', data2, slotNumber)
+        def sHkeysList = _HGroup.parseSlots('hkeys', data2, slotNumber)
+        def sHlenList = _HGroup.parseSlots('hlen', data2, slotNumber)
+        def sHmgetList = _HGroup.parseSlots('hmget', data2, slotNumber)
+        def sHmsetList = _HGroup.parseSlots('hmset', data2, slotNumber)
+        def sHrandfieldList = _HGroup.parseSlots('hrandfield', data2, slotNumber)
+        def sHsetList = _HGroup.parseSlots('hset', data2, slotNumber)
+        def sHsetnxList = _HGroup.parseSlots('hsetnx', data2, slotNumber)
+        def sHstrlenList = _HGroup.parseSlots('hstrlen', data2, slotNumber)
+        def sHvalsList = _HGroup.parseSlots('hvals', data2, slotNumber)
+        def sList = _HGroup.parseSlots('hxxx', data2, slotNumber)
         then:
         sHdelList.size() == 1
         sHexistsList.size() == 1
@@ -55,7 +58,7 @@ class HGroupTest extends Specification {
 
         when:
         def data1 = new byte[1][]
-        sHgetList = HGroup.parseSlots('hget', data1, slotNumber)
+        sHgetList = _HGroup.parseSlots('hget', data1, slotNumber)
         then:
         sHgetList.size() == 0
     }
@@ -218,7 +221,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hdel', data3, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hdel', data3, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
         def reply = hGroup.hdel()
         then:
@@ -233,7 +236,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        def cvKeys = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
         cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         def rhk = new RedisHashKeys()
         rhk.add('field')
@@ -246,7 +249,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        def cvRhh = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
         cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
         def rhh = new RedisHH()
         rhh.put('field', ' '.bytes)
@@ -323,7 +326,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hexists', data3, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hexists', data3, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('a', 'field'))
         def reply = hGroup.hexists()
         then:
@@ -338,7 +341,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        def cvField = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvField = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field'), 0, cvField)
         reply = hGroup.hexists()
         then:
@@ -346,7 +349,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        def cvRhh = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
         cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
         def rhh = new RedisHH()
         rhh.put('field', ' '.bytes)
@@ -390,7 +393,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hget', data3, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hget', data3, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('a', 'field'))
         def reply = hGroup.hget(true)
         then:
@@ -417,7 +420,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        def cvField = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvField = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field'), 0, cvField)
         reply = hGroup.hget(true)
         then:
@@ -426,7 +429,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        def cvRhh = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
         cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
         def rhh = new RedisHH()
         rhh.put('field', ' '.bytes)
@@ -489,7 +492,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hgetall', data2, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hgetall', data2, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
         def reply = hGroup.hgetall()
         then:
@@ -504,7 +507,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(2)
+        def cvList = Mock.prepareCompressedValueList(2)
         def cvKeys = cvList[0]
         cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         def rhk = new RedisHashKeys()
@@ -524,7 +527,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        def cvRhh = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
         cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
         def rhh = new RedisHH()
         rhh.put('field', ' '.bytes)
@@ -589,7 +592,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hincrby', data4, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hincrby', data4, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('a', 'field'))
         def reply = hGroup.hincrby(false)
         then:
@@ -649,7 +652,7 @@ class HGroupTest extends Specification {
         data4[2] = 'field'.bytes
         data4[3] = '1'.bytes
         LocalPersist.instance.hashSaveMemberTogether = true
-        def cvRhh = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
         cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
         def rhh = new RedisHH()
         rhh.put('field', '0'.bytes)
@@ -700,7 +703,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hkeys', data2, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hkeys', data2, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
         def reply = hGroup.hkeys(false)
         then:
@@ -727,7 +730,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        def cvKeys = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
         cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         def rhk = new RedisHashKeys()
         rhk.add('field')
@@ -742,7 +745,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        def cvRhh = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
         cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
         def rhh = new RedisHH()
         rhh.put('field', ' '.bytes)
@@ -815,7 +818,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hmget', data4, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hmget', data4, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
         def reply = hGroup.hmget()
         then:
@@ -836,7 +839,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(2)
+        def cvList = Mock.prepareCompressedValueList(2)
         def cvField = cvList[0]
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field'), 0, cvField)
         def cvField1 = cvList[1]
@@ -852,7 +855,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        def cvRhh = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
         cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
         def rhh = new RedisHH()
         rhh.put('field', ' '.bytes)
@@ -898,7 +901,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hmset', data4, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hmset', data4, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
         def reply = hGroup.hmset()
         then:
@@ -913,7 +916,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        def cvKeys = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
         cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         def rhk = new RedisHashKeys()
         RedisHashKeys.HASH_MAX_SIZE.times {
@@ -927,7 +930,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        def cvRhh = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
         cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
         def rhh = new RedisHH()
         RedisHashKeys.HASH_MAX_SIZE.times {
@@ -951,7 +954,7 @@ class HGroupTest extends Specification {
         data6[4] = 'field0'.bytes
         data6[5] = 'value0'.bytes
         hGroup.data = data6
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hmset', data6, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hmset', data6, hGroup.slotNumber)
         reply = hGroup.hmset()
         then:
         reply == ErrorReply.HASH_SIZE_TO_LONG
@@ -1054,7 +1057,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hrandfield', data4, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hrandfield', data4, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
         def reply = hGroup.hrandfield()
         then:
@@ -1082,7 +1085,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        def cvKeys = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
         cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         def rhk = new RedisHashKeys()
         cvKeys.compressedData = rhk.encode()
@@ -1094,7 +1097,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        def cvRhh = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
         cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
         def rhh = new RedisHH()
         cvRhh.compressedData = rhh.encode()
@@ -1180,7 +1183,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(rhk.size())
+        def cvList = Mock.prepareCompressedValueList(rhk.size())
         rhk.size().times {
             inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field' + it), 0, cvList[it])
         }
@@ -1256,7 +1259,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hsetnx', data4, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hsetnx', data4, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
         def reply = hGroup.hsetnx()
         then:
@@ -1316,7 +1319,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = HGroup.parseSlots('hvals', data2, hGroup.slotNumber)
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hvals', data2, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
         def reply = hGroup.hvals()
         then:
@@ -1331,7 +1334,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        def cvKeys = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
         cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         def rhk = new RedisHashKeys()
         cvKeys.compressedData = rhk.encode()
@@ -1342,7 +1345,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        def cvRhh = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
         cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
         def rhh = new RedisHH()
         cvRhh.compressedData = rhh.encode()
@@ -1376,7 +1379,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        def cvField = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvField = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field'), 0, cvField)
         reply = hGroup.hvals()
         then:

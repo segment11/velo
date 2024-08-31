@@ -9,6 +9,8 @@ import io.velo.type.RedisHashKeys
 import spock.lang.Specification
 
 class IGroupTest extends Specification {
+    def _IGroup = new IGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -18,10 +20,10 @@ class IGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sIncrList = IGroup.parseSlots('incr', data2, slotNumber)
-        def sIncrbyList = IGroup.parseSlots('incrby', data2, slotNumber)
-        def sIncrbyfloatList = IGroup.parseSlots('incrbyfloat', data2, slotNumber)
-        def sList = IGroup.parseSlots('ixxx', data2, slotNumber)
+        def sIncrList = _IGroup.parseSlots('incr', data2, slotNumber)
+        def sIncrbyList = _IGroup.parseSlots('incrby', data2, slotNumber)
+        def sIncrbyfloatList = _IGroup.parseSlots('incrbyfloat', data2, slotNumber)
+        def sList = _IGroup.parseSlots('ixxx', data2, slotNumber)
         then:
         sIncrList.size() == 1
         sIncrbyList.size() == 1
@@ -31,7 +33,7 @@ class IGroupTest extends Specification {
         when:
         def data1 = new byte[1][]
 
-        sIncrbyList = IGroup.parseSlots('incrby', data1, slotNumber)
+        sIncrbyList = _IGroup.parseSlots('incrby', data1, slotNumber)
         then:
         sIncrbyList.size() == 0
     }
@@ -89,7 +91,7 @@ class IGroupTest extends Specification {
         iGroup.from(BaseCommand.mockAGroup())
 
         when:
-        iGroup.slotWithKeyHashListParsed = IGroup.parseSlots('incr', data2, iGroup.slotNumber)
+        iGroup.slotWithKeyHashListParsed = _IGroup.parseSlots('incr', data2, iGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
         def reply = iGroup.handle()
         then:

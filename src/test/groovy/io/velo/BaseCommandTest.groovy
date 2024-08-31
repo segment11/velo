@@ -5,7 +5,10 @@ import io.activej.config.Config
 import io.activej.net.socket.tcp.ITcpSocket
 import io.velo.decode.Request
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
+import io.velo.persist.Mock
 import io.velo.reply.Reply
 import io.velo.type.RedisList
 import org.apache.commons.io.FileUtils
@@ -17,6 +20,12 @@ class BaseCommandTest extends Specification {
     static class SubCommand extends BaseCommand {
         SubCommand(String cmd, byte[][] data, ITcpSocket socket) {
             super(cmd, data, socket)
+        }
+
+        @Override
+        ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
+            ArrayList<SlotWithKeyHash> list = []
+            list
         }
 
         @Override
@@ -131,7 +140,7 @@ class BaseCommandTest extends Specification {
         def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, null, Config.create())
         c.init(requestHandler, new Request(data2, false, false))
 
-        io.velo.persist.LocalPersistTest.prepareLocalPersist()
+        LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
@@ -146,7 +155,7 @@ class BaseCommandTest extends Specification {
         c.getCv(key.bytes, sKey) == null
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.keyHash = sKey.keyHash()
         inMemoryGetSet.put(slot, 'key', sKey.bucketIndex(), cv)
         then:
@@ -176,7 +185,7 @@ class BaseCommandTest extends Specification {
         // begin test big string
         def bigStringKey = 'kerry-test-big-string-key'
         def sBigString = BaseCommand.slot(bigStringKey.bytes, slotNumber)
-        def cvBigString = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cvBigString = Mock.prepareCompressedValueList(1)[0]
         cvBigString.keyHash = sBigString.keyHash()
         def rawData = cvBigString.compressedData
         oneSlot.put(bigStringKey, sBigString.bucketIndex(), cvBigString)
@@ -273,7 +282,7 @@ class BaseCommandTest extends Specification {
 
         cleanup:
         localPersist.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test set'() {
@@ -376,7 +385,7 @@ class BaseCommandTest extends Specification {
         exception
 
         when:
-        io.velo.persist.LocalPersistTest.prepareLocalPersist()
+        LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
@@ -560,7 +569,7 @@ class BaseCommandTest extends Specification {
 
         cleanup:
         localPersist.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test train dict'() {

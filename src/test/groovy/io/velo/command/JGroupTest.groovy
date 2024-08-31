@@ -5,6 +5,8 @@ import io.velo.reply.NilReply
 import spock.lang.Specification
 
 class JGroupTest extends Specification {
+    def _JGroup = new JGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -14,7 +16,7 @@ class JGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sList = JGroup.parseSlots('jx', data2, slotNumber)
+        def sList = _JGroup.parseSlots('jx', data2, slotNumber)
         then:
         sList.size() == 0
     }

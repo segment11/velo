@@ -5,8 +5,10 @@ import io.activej.eventloop.Eventloop
 import io.activej.inject.binding.OptionalDependency
 import io.activej.net.socket.tcp.TcpSocket
 import io.velo.decode.Request
+import io.velo.persist.Consts
 import io.velo.persist.KeyBucket
 import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import io.velo.repl.LeaderSelector
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
@@ -108,7 +110,7 @@ class MultiWorkerServerTest extends Specification {
 
         when:
         def localPersist = LocalPersist.instance
-        io.velo.persist.LocalPersistTest.prepareLocalPersist(netWorkers, slotNumber)
+        LocalPersistTest.prepareLocalPersist(netWorkers, slotNumber)
         localPersist.fixSlotThreadId(slot0, Thread.currentThread().threadId())
         localPersist.fixSlotThreadId(slot1, Thread.currentThread().threadId())
         def snowFlake = new SnowFlake(1, 1)
@@ -157,7 +159,7 @@ class MultiWorkerServerTest extends Specification {
         getData2[1] = 'key'.bytes
         def getRequest = new Request(getData2, false, false)
         getRequest.slotNumber = slotNumber
-        RequestHandler.parseSlots(getRequest)
+        m.requestHandlerArray[0].parseSlots(getRequest)
         def p = m.handleRequest(getRequest, socket)
         eventloopCurrent.run()
         then:
@@ -173,7 +175,7 @@ class MultiWorkerServerTest extends Specification {
         // for async reply
         def copyRequest = new Request(data3, false, false)
         copyRequest.slotNumber = slotNumber
-        RequestHandler.parseSlots(copyRequest)
+        m.requestHandlerArray[0].parseSlots(copyRequest)
         p = m.handleRequest(copyRequest, socket)
         eventloopCurrent.run()
         then:
@@ -189,7 +191,7 @@ class MultiWorkerServerTest extends Specification {
         mgetData6[5] = 'key5'.bytes
         def mgetRequest = new Request(mgetData6, true, false)
         mgetRequest.slotNumber = slotNumber
-        RequestHandler.parseSlots(mgetRequest)
+        m.requestHandlerArray[0].parseSlots(mgetRequest)
         p = m.handleRequest(mgetRequest, socket)
         eventloopCurrent.run()
         then:
@@ -201,7 +203,7 @@ class MultiWorkerServerTest extends Specification {
         pingData[0] = 'ping'.bytes
         def pingRequest = new Request(pingData, false, false)
         pingRequest.slotNumber = slotNumber
-        RequestHandler.parseSlots(pingRequest)
+        m.requestHandlerArray[0].parseSlots(pingRequest)
         p = m.handleRequest(pingRequest, socket)
         eventloopCurrent.run()
         then:
@@ -220,7 +222,7 @@ class MultiWorkerServerTest extends Specification {
         flushdbData[0] = 'flushdb'.bytes
         def flushdbRequest = new Request(flushdbData, false, false)
         flushdbRequest.slotNumber = slotNumber
-        RequestHandler.parseSlots(flushdbRequest)
+        m.requestHandlerArray[0].parseSlots(flushdbRequest)
         p = m.handleRequest(flushdbRequest, socket)
         eventloopCurrent.run()
         then:
@@ -476,7 +478,7 @@ class MultiWorkerServerTest extends Specification {
         ConfForGlobal.netListenAddresses = leaderSelector.masterAddressLocalMocked
 
         and:
-        io.velo.persist.LocalPersistTest.prepareLocalPersist()
+        LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot0, Thread.currentThread().threadId())
 
@@ -505,6 +507,6 @@ class MultiWorkerServerTest extends Specification {
 
         cleanup:
         localPersist.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 }

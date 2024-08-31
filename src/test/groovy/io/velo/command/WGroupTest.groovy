@@ -5,6 +5,8 @@ import io.velo.reply.NilReply
 import spock.lang.Specification
 
 class WGroupTest extends Specification {
+    def _WGroup = new WGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -14,7 +16,7 @@ class WGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sList = WGroup.parseSlots('wx', data2, slotNumber)
+        def sList = _WGroup.parseSlots('wx', data2, slotNumber)
         then:
         sList.size() == 0
     }

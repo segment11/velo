@@ -17,7 +17,7 @@ public class EGroup extends BaseCommand {
         super(cmd, data, socket);
     }
 
-    public static ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
+    public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
         if ("exists".equals(cmd)) {

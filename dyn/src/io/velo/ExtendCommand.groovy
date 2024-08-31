@@ -14,6 +14,12 @@ class ExtendCommand extends BaseCommand {
     }
 
     @Override
+    ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
+        ArrayList<SlotWithKeyHash> list = []
+        list
+    }
+
+    @Override
     Reply handle() {
         log.info 'Dyn extend command version: {}', version
         return NilReply.INSTANCE

@@ -271,6 +271,7 @@ public abstract class BaseCommand {
         return this;
     }
 
+    public abstract ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber);
     public abstract Reply handle();
 
     protected final LocalPersist localPersist = LocalPersist.getInstance();

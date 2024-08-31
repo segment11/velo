@@ -36,7 +36,7 @@ public class XGroup extends BaseCommand {
         super(cmd, data, socket);
     }
 
-    public static ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
+    public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
         // x_repl sub_cmd
         if (data.length < 2) {

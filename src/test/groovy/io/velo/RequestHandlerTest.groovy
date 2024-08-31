@@ -5,7 +5,9 @@ import io.activej.eventloop.Eventloop
 import io.activej.net.socket.tcp.TcpSocket
 import io.velo.command.XGroup
 import io.velo.decode.Request
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import io.velo.repl.LeaderSelector
 import io.velo.repl.Repl
 import io.velo.repl.ReplType
@@ -40,7 +42,8 @@ class RequestHandlerTest extends Specification {
                 new InetSocketAddress('localhost', 46379), null)
 
         def localPersist = LocalPersist.instance
-        io.velo.persist.LocalPersistTest.prepareLocalPersist()
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
 
         expect:
@@ -72,18 +75,18 @@ class RequestHandlerTest extends Specification {
         def otherData = new byte[1][]
         otherData[0] = '123'.bytes
         def otherRequest = new Request(otherData, false, false)
-        RequestHandler.parseSlots(otherRequest)
+        requestHandler.parseSlots(otherRequest)
         then:
         requestList.every {
-            RequestHandler.parseSlots(it)
+            requestHandler.parseSlots(it)
             it.slotWithKeyHashList.size() == 0
         }
         requestList2.every {
-            RequestHandler.parseSlots(it)
+            requestHandler.parseSlots(it)
             it.slotWithKeyHashList.size() == 0
         }
         someRequestList.every {
-            RequestHandler.parseSlots(it)
+            requestHandler.parseSlots(it)
             it.slotWithKeyHashList == null
         }
         otherRequest.slotWithKeyHashList == null
@@ -203,7 +206,7 @@ class RequestHandlerTest extends Specification {
         getData2[1] = key.bytes
         def getRequest2 = new Request(getData2, false, false)
         getRequest2.slotNumber = slotNumber
-        RequestHandler.parseSlots(getRequest2)
+        requestHandler.parseSlots(getRequest2)
         reply = requestHandler.handle(getRequest2, socket)
         then:
         reply == NilReply.INSTANCE
@@ -237,7 +240,7 @@ class RequestHandlerTest extends Specification {
 
         when:
         getData2[1] = (XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + ',' + XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD).bytes
-        RequestHandler.parseSlots(getRequest2)
+        requestHandler.parseSlots(getRequest2)
         reply = requestHandler.handle(getRequest2, socket)
         then:
         reply instanceof BulkReply
@@ -250,7 +253,7 @@ class RequestHandlerTest extends Specification {
         oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash())
         def setRequest = new Request(setData3, false, false)
         setRequest.slotNumber = slotNumber
-        RequestHandler.parseSlots(setRequest)
+        requestHandler.parseSlots(setRequest)
         reply = requestHandler.handle(setRequest, socket)
         then:
         reply == OKReply.INSTANCE
@@ -425,7 +428,7 @@ class RequestHandlerTest extends Specification {
         cleanup:
         Debug.instance.logCmd = false
         localPersist.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test cmd stat count'() {

@@ -4,8 +4,10 @@ import io.activej.eventloop.Eventloop
 import io.activej.net.socket.tcp.TcpSocket
 import io.velo.*
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
+import io.velo.persist.Mock
 import io.velo.repl.LeaderSelector
 import io.velo.reply.*
 import io.velo.type.RedisHashKeys
@@ -15,6 +17,8 @@ import java.nio.channels.SocketChannel
 import java.time.Duration
 
 class SGroupTest extends Specification {
+    def _SGroup = new SGroup(null, null, null)
+
     def singleKeyCmdList1 = '''
 set
 setex
@@ -56,18 +60,18 @@ sunionstore
 
         when:
         LocalPersist.instance.addOneSlotForTest2(slot)
-        def sSintercardList = SGroup.parseSlots('sintercard', data4, slotNumber)
-        def sSmoveList = SGroup.parseSlots('smove', data4, slotNumber)
-        def sList = SGroup.parseSlots('sxxx', data4, slotNumber)
+        def sSintercardList = _SGroup.parseSlots('sintercard', data4, slotNumber)
+        def sSmoveList = _SGroup.parseSlots('smove', data4, slotNumber)
+        def sList = _SGroup.parseSlots('sxxx', data4, slotNumber)
         then:
         sSintercardList.size() == 2
         sSmoveList.size() == 2
         sList.size() == 0
 
         when:
-        def sDiffList = SGroup.parseSlots('sdiff', data1, slotNumber)
-        sSintercardList = SGroup.parseSlots('sintercard', data1, slotNumber)
-        sSmoveList = SGroup.parseSlots('smove', data1, slotNumber)
+        def sDiffList = _SGroup.parseSlots('sdiff', data1, slotNumber)
+        sSintercardList = _SGroup.parseSlots('sintercard', data1, slotNumber)
+        sSmoveList = _SGroup.parseSlots('smove', data1, slotNumber)
         then:
         sDiffList.size() == 0
         sSintercardList.size() == 0
@@ -176,7 +180,7 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('set', data3, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('set', data3, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.set(data3)
         def slotWithKeyHash = sGroup.slotWithKeyHashListParsed[0]
@@ -261,7 +265,7 @@ sunionstore
         ((BulkReply) reply).raw == 'value'.bytes
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'a', 0, cv)
         data4[3] = 'get'.bytes
@@ -363,7 +367,7 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('setex', data4, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('setex', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.handle()
         then:
@@ -383,7 +387,7 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('setnx', data3, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('setnx', data3, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.handle()
         then:
@@ -415,7 +419,7 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('setrange', data4, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('setrange', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.setrange()
 
@@ -434,7 +438,7 @@ sunionstore
         ((IntegerReply) reply).integer == 6
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = '1234567890'.bytes
         cv.compressedLength = 10
         cv.uncompressedLength = 10
@@ -496,14 +500,14 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('strlen', data2, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('strlen', data2, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.strlen()
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = '1234567890'.bytes
         cv.compressedLength = 10
         cv.uncompressedLength = 10
@@ -546,7 +550,7 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('sadd', data4, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('sadd', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.sadd()
         then:
@@ -554,7 +558,7 @@ sunionstore
         ((IntegerReply) reply).integer == 2
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         def rhk = new RedisHashKeys()
         rhk.add('1')
@@ -604,14 +608,14 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('scard', data2, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('scard', data2, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.scard()
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         def rhk = new RedisHashKeys()
         rhk.add('1')
@@ -642,7 +646,7 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('sdiff', data3, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('sdiff', data3, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
         def reply = sGroup.sdiff(false, false)
@@ -651,7 +655,7 @@ sunionstore
 
         when:
         boolean wrongTypeException = false
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(2)
+        def cvList = Mock.prepareCompressedValueList(2)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'a', 0, cvA)
@@ -813,7 +817,7 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('sdiffstore', data4, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('sdiffstore', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'dst')
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
@@ -823,7 +827,7 @@ sunionstore
 
         when:
         boolean wrongTypeException = false
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(2)
+        def cvList = Mock.prepareCompressedValueList(2)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'a', 0, cvA)
@@ -1034,7 +1038,7 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('sintercard', data6, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('sintercard', data6, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
         def reply = sGroup.sintercard()
@@ -1042,7 +1046,7 @@ sunionstore
         reply == IntegerReply.REPLY_0
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(2)
+        def cvList = Mock.prepareCompressedValueList(2)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         def rhkA = new RedisHashKeys()
@@ -1229,14 +1233,14 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('sismember', data3, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('sismember', data3, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.sismember()
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(1)
+        def cvList = Mock.prepareCompressedValueList(1)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         def rhkA = new RedisHashKeys()
@@ -1281,14 +1285,14 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('smembers', data2, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('smembers', data2, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.smembers()
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(1)
+        def cvList = Mock.prepareCompressedValueList(1)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         def rhkA = new RedisHashKeys()
@@ -1329,14 +1333,14 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('smismember', data4, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('smismember', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.smismember()
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(1)
+        def cvList = Mock.prepareCompressedValueList(1)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         def rhkA = new RedisHashKeys()
@@ -1386,7 +1390,7 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('smove', data4, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('smove', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
         def reply = sGroup.smove()
@@ -1394,7 +1398,7 @@ sunionstore
         reply == IntegerReply.REPLY_0
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(2)
+        def cvList = Mock.prepareCompressedValueList(2)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         def rhkA = new RedisHashKeys()
@@ -1500,7 +1504,7 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('srandmember', data3, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('srandmember', data3, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.srandmember(false)
         then:
@@ -1513,7 +1517,7 @@ sunionstore
         reply == NilReply.INSTANCE
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(1)
+        def cvList = Mock.prepareCompressedValueList(1)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         def rhkA = new RedisHashKeys()
@@ -1606,14 +1610,14 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = SGroup.parseSlots('srem', data4, sGroup.slotNumber)
+        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('srem', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.srem()
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(1)
+        def cvList = Mock.prepareCompressedValueList(1)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         def rhkA = new RedisHashKeys()
@@ -1745,6 +1749,6 @@ sunionstore
 
         cleanup:
         oneSlot.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 }

@@ -12,6 +12,8 @@ import spock.lang.Specification
 import java.nio.channels.SocketChannel
 
 class UGroupTest extends Specification {
+    def _UGroup = new UGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -21,7 +23,7 @@ class UGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sList = UGroup.parseSlots('ux', data2, slotNumber)
+        def sList = _UGroup.parseSlots('ux', data2, slotNumber)
         then:
         sList.size() == 0
     }

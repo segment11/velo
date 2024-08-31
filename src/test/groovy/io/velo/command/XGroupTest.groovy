@@ -18,6 +18,8 @@ import spock.lang.Specification
 import java.nio.ByteBuffer
 
 class XGroupTest extends Specification {
+    def _XXGroup = new XGroup(null, null, null)
+
     final short slot = 0
     final short slotNumber = 1
 
@@ -39,13 +41,13 @@ class XGroupTest extends Specification {
         data2[1] = 'sub_cmd'.bytes
 
         when:
-        def sList = XGroup.parseSlots('x_repl', data2, slotNumber)
+        def sList = _XXGroup.parseSlots('x_repl', data2, slotNumber)
         then:
         sList.size() == 0
 
         when:
         def data1 = new byte[1][]
-        sList = XGroup.parseSlots('x_repl', data1, slotNumber)
+        sList = _XXGroup.parseSlots('x_repl', data1, slotNumber)
         then:
         sList.size() == 0
 
@@ -54,13 +56,13 @@ class XGroupTest extends Specification {
         data4[1] = 'slot'.bytes
         data4[2] = '0'.bytes
         data4[3] = 'sub_cmd'.bytes
-        sList = XGroup.parseSlots('x_repl', data4, slotNumber)
+        sList = _XXGroup.parseSlots('x_repl', data4, slotNumber)
         then:
         sList.size() == 1
 
         when:
         data4[2] = 'a'.bytes
-        sList = XGroup.parseSlots('x_repl', data4, slotNumber)
+        sList = _XXGroup.parseSlots('x_repl', data4, slotNumber)
         then:
         // invalid int
         sList.size() == 0
@@ -69,7 +71,7 @@ class XGroupTest extends Specification {
         def data3 = new byte[3][]
         data3[1] = 'slot'.bytes
         data3[2] = '0'.bytes
-        sList = XGroup.parseSlots('x_repl', data3, slotNumber)
+        sList = _XXGroup.parseSlots('x_repl', data3, slotNumber)
         then:
         sList.size() == 0
     }
@@ -92,7 +94,7 @@ class XGroupTest extends Specification {
         data4[2] = '0'.bytes
         data4[3] = 'xxx'.bytes
         xGroup.data = data4
-        xGroup.slotWithKeyHashListParsed = XGroup.parseSlots('x_repl', data4, slotNumber)
+        xGroup.slotWithKeyHashListParsed = _XXGroup.parseSlots('x_repl', data4, slotNumber)
         reply = xGroup.handle()
         then:
         reply == NilReply.INSTANCE
@@ -102,7 +104,7 @@ class XGroupTest extends Specification {
         data3[1] = 'slot'.bytes
         data3[2] = '0'.bytes
         xGroup.data = data3
-        xGroup.slotWithKeyHashListParsed = XGroup.parseSlots('x_repl', data3, slotNumber)
+        xGroup.slotWithKeyHashListParsed = _XXGroup.parseSlots('x_repl', data3, slotNumber)
         reply = xGroup.handle()
         then:
         reply == ErrorReply.SYNTAX
@@ -111,7 +113,7 @@ class XGroupTest extends Specification {
         def data2 = new byte[2][]
         data2[1] = XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD.bytes
         xGroup.data = data2
-        xGroup.slotWithKeyHashListParsed = XGroup.parseSlots('x_repl', data2, slotNumber)
+        xGroup.slotWithKeyHashListParsed = _XXGroup.parseSlots('x_repl', data2, slotNumber)
         reply = xGroup.handle()
         then:
         reply instanceof BulkReply
@@ -126,7 +128,7 @@ class XGroupTest extends Specification {
 
         def xGroup = new XGroup('x_repl', data4, null)
         xGroup.from(BaseCommand.mockAGroup())
-        xGroup.slotWithKeyHashListParsed = XGroup.parseSlots('x_repl', data4, slotNumber)
+        xGroup.slotWithKeyHashListParsed = _XXGroup.parseSlots('x_repl', data4, slotNumber)
 
         and:
         LocalPersistTest.prepareLocalPersist()
@@ -170,7 +172,7 @@ class XGroupTest extends Specification {
         data9[7] = binlogOneSegmentLength.toString().bytes
         data9[8] = '0'.bytes
         xGroup.data = data9
-        xGroup.slotWithKeyHashListParsed = XGroup.parseSlots('x_repl', data9, slotNumber)
+        xGroup.slotWithKeyHashListParsed = _XXGroup.parseSlots('x_repl', data9, slotNumber)
         reply = xGroup.handle()
         then:
         reply instanceof BulkReply
@@ -191,7 +193,7 @@ class XGroupTest extends Specification {
 
         cleanup:
         oneSlot.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test as master'() {
@@ -210,7 +212,7 @@ class XGroupTest extends Specification {
         def xGroup = new XGroup(null, data4, null)
 
         expect:
-        XGroup.parseSlots(null, data4, slotNumber).size() == 0
+        _XXGroup.parseSlots(null, data4, slotNumber).size() == 0
         // invalid repl type
         xGroup.handleRepl() == null
 
@@ -568,7 +570,7 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.s_catch_up)
 
         when:
-        def vList = io.velo.persist.Mock.prepareValueList(10)
+        def vList = Mock.prepareValueList(10)
         for (v in vList) {
             oneSlot.appendBinlog(new XWalV(v))
         }
@@ -625,7 +627,7 @@ class XGroupTest extends Specification {
 
         cleanup:
         localPersist.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test as slave'() {
@@ -681,7 +683,7 @@ class XGroupTest extends Specification {
         when:
         // first fetch dict, send local exist dict seq
         def dictMap = DictMap.instance
-        dictMap.initDictMap(io.velo.persist.Consts.persistDir)
+        dictMap.initDictMap(Consts.persistDir)
         dictMap.putDict('key:', new Dict(new byte[10]))
         r = x.handleRepl()
         then:
@@ -1068,7 +1070,7 @@ class XGroupTest extends Specification {
         data4[2][0] = ReplType.s_catch_up.code
         // mock 10 wal values in binlog
         int n = 0
-        def vList = io.velo.persist.Mock.prepareValueList(10)
+        def vList = Mock.prepareValueList(10)
         for (v in vList) {
             n += new XWalV(v).encodedLength()
         }
@@ -1250,7 +1252,7 @@ class XGroupTest extends Specification {
         cleanup:
         localPersist.cleanUp()
         dictMap.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test try catch up again after slave tcp client closed'() {
@@ -1280,7 +1282,7 @@ class XGroupTest extends Specification {
         when:
         // mock 10 wal values in binlog
         int n = 0
-        def vList = io.velo.persist.Mock.prepareValueList(10)
+        def vList = Mock.prepareValueList(10)
         for (v in vList) {
             n += new XWalV(v).encodedLength()
         }
@@ -1315,6 +1317,6 @@ class XGroupTest extends Specification {
 
         cleanup:
         oneSlot.cleanUp()
-        io.velo.persist.Consts.persistDir.deleteDir()
+        Consts.persistDir.deleteDir()
     }
 }

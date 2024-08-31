@@ -7,6 +7,8 @@ import io.velo.reply.NilReply
 import spock.lang.Specification
 
 class AGroupTest extends Specification {
+    def _AGroup = new AGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data3 = new byte[3][]
@@ -16,18 +18,18 @@ class AGroupTest extends Specification {
         data3[1] = 'a'.bytes
 
         when:
-        def sAppendList = AGroup.parseSlots('append', data3, slotNumber)
+        def sAppendList = _AGroup.parseSlots('append', data3, slotNumber)
         then:
         sAppendList.size() == 1
 
         when:
-        sAppendList = AGroup.parseSlots('axxx', data3, slotNumber)
+        sAppendList = _AGroup.parseSlots('axxx', data3, slotNumber)
         then:
         sAppendList.size() == 0
 
         when:
         def data1 = new byte[1][]
-        sAppendList = AGroup.parseSlots('append', data1, slotNumber)
+        sAppendList = _AGroup.parseSlots('append', data1, slotNumber)
         then:
         sAppendList.size() == 0
     }
@@ -66,7 +68,7 @@ class AGroupTest extends Specification {
         aGroup.from(BaseCommand.mockAGroup())
 
         when:
-        aGroup.slotWithKeyHashListParsed = AGroup.parseSlots('append', data3, aGroup.slotNumber)
+        aGroup.slotWithKeyHashListParsed = _AGroup.parseSlots('append', data3, aGroup.slotNumber)
         aGroup.append()
         then:
         aGroup.get('a'.bytes) == '123'.bytes

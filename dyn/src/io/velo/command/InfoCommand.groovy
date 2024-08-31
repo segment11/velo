@@ -15,6 +15,12 @@ class InfoCommand extends BaseCommand {
     }
 
     @Override
+    ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
+        ArrayList<SlotWithKeyHash> list = []
+        list
+    }
+
+    @Override
     Reply handle() {
         if (data.length != 1 && data.length != 2) {
             return ErrorReply.FORMAT

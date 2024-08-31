@@ -5,6 +5,7 @@ import io.activej.net.socket.tcp.TcpSocket
 import io.velo.BaseCommand
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
+import io.velo.persist.Mock
 import io.velo.reply.*
 import spock.lang.Specification
 
@@ -12,6 +13,7 @@ import java.nio.channels.SocketChannel
 import java.time.Duration
 
 class CGroupTest extends Specification {
+    def _CGroup = new CGroup(null, null, null)
     final short slot = 0
 
     def 'test parse slot'() {
@@ -28,8 +30,8 @@ class CGroupTest extends Specification {
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
 
-        def sCopyList = CGroup.parseSlots('copy', data3, slotNumber)
-        def sConfigList = CGroup.parseSlots('config', data3, slotNumber)
+        def sCopyList = _CGroup.parseSlots('copy', data3, slotNumber)
+        def sConfigList = _CGroup.parseSlots('config', data3, slotNumber)
         then:
         sCopyList.size() == 2
         sConfigList.size() == 1
@@ -37,7 +39,7 @@ class CGroupTest extends Specification {
 
         when:
         def data2 = new byte[2][]
-        sCopyList = CGroup.parseSlots('copy', data2, slotNumber)
+        sCopyList = _CGroup.parseSlots('copy', data2, slotNumber)
         then:
         sCopyList.size() == 0
     }
@@ -117,13 +119,13 @@ class CGroupTest extends Specification {
         cGroup.from(BaseCommand.mockAGroup())
 
         when:
-        cGroup.slotWithKeyHashListParsed = CGroup.parseSlots('copy', data3, cGroup.slotNumber)
+        cGroup.slotWithKeyHashListParsed = _CGroup.parseSlots('copy', data3, cGroup.slotNumber)
         def reply = cGroup.copy()
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = cGroup.copy()
         then:

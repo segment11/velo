@@ -10,6 +10,8 @@ import io.velo.reply.NilReply
 import spock.lang.Specification
 
 class GGroupTest extends Specification {
+    def _GGroup = new GGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -19,12 +21,12 @@ class GGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sGetList = GGroup.parseSlots('get', data2, slotNumber)
-        def sGetDelList = GGroup.parseSlots('getdel', data2, slotNumber)
-        def sGetExList = GGroup.parseSlots('getex', data2, slotNumber)
-        def sGetRangeList = GGroup.parseSlots('getrange', data2, slotNumber)
-        def sGetSetList = GGroup.parseSlots('getset', data2, slotNumber)
-        def sList = GGroup.parseSlots('gxxx', data2, slotNumber)
+        def sGetList = _GGroup.parseSlots('get', data2, slotNumber)
+        def sGetDelList = _GGroup.parseSlots('getdel', data2, slotNumber)
+        def sGetExList = _GGroup.parseSlots('getex', data2, slotNumber)
+        def sGetRangeList = _GGroup.parseSlots('getrange', data2, slotNumber)
+        def sGetSetList = _GGroup.parseSlots('getset', data2, slotNumber)
+        def sList = _GGroup.parseSlots('gxxx', data2, slotNumber)
         then:
         sGetList.size() == 1
         sGetDelList.size() == 1
@@ -35,7 +37,7 @@ class GGroupTest extends Specification {
 
         when:
         def data1 = new byte[1][]
-        sGetList = GGroup.parseSlots('get', data1, slotNumber)
+        sGetList = _GGroup.parseSlots('get', data1, slotNumber)
         then:
         sGetList.size() == 0
     }
@@ -91,7 +93,7 @@ class GGroupTest extends Specification {
         gGroup.from(BaseCommand.mockAGroup())
 
         when:
-        gGroup.slotWithKeyHashListParsed = GGroup.parseSlots('getdel', data2, gGroup.slotNumber)
+        gGroup.slotWithKeyHashListParsed = _GGroup.parseSlots('getdel', data2, gGroup.slotNumber)
         def reply = gGroup.getdel()
         then:
         reply == NilReply.INSTANCE
@@ -119,7 +121,7 @@ class GGroupTest extends Specification {
         gGroup.from(BaseCommand.mockAGroup())
 
         when:
-        gGroup.slotWithKeyHashListParsed = GGroup.parseSlots('getex', data2, gGroup.slotNumber)
+        gGroup.slotWithKeyHashListParsed = _GGroup.parseSlots('getex', data2, gGroup.slotNumber)
         def reply = gGroup.getex()
         then:
         reply == NilReply.INSTANCE
@@ -237,7 +239,7 @@ class GGroupTest extends Specification {
         gGroup.from(BaseCommand.mockAGroup())
 
         when:
-        gGroup.slotWithKeyHashListParsed = GGroup.parseSlots('getrange', data4, gGroup.slotNumber)
+        gGroup.slotWithKeyHashListParsed = _GGroup.parseSlots('getrange', data4, gGroup.slotNumber)
         def reply = gGroup.getrange()
         then:
         reply == NilReply.INSTANCE
@@ -328,7 +330,7 @@ class GGroupTest extends Specification {
         gGroup.from(BaseCommand.mockAGroup())
 
         when:
-        gGroup.slotWithKeyHashListParsed = GGroup.parseSlots('getset', data3, gGroup.slotNumber)
+        gGroup.slotWithKeyHashListParsed = _GGroup.parseSlots('getset', data3, gGroup.slotNumber)
         def reply = gGroup.getset()
         then:
         reply == NilReply.INSTANCE

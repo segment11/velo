@@ -19,7 +19,7 @@ public class DGroup extends BaseCommand {
         super(cmd, data, socket);
     }
 
-    public static ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
+    public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
         if ("del".equals(cmd)) {
@@ -172,7 +172,7 @@ public class DGroup extends BaseCommand {
 
         Promise<Long>[] promises = new Promise[slotNumber];
         for (int i = 0; i < slotNumber; i++) {
-            var oneSlot = localPersist.oneSlot((byte) i);
+            var oneSlot = localPersist.oneSlot((short) i);
             promises[i] = oneSlot.asyncCall(oneSlot::getAllKeyCount);
         }
 

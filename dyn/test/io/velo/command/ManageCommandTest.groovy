@@ -11,6 +11,8 @@ import redis.clients.jedis.Jedis
 import spock.lang.Specification
 
 class ManageCommandTest extends Specification {
+    def _ManageCommand = new ManageCommand()
+
     final short slot = 0
 
     def 'test parse slot'() {
@@ -18,32 +20,32 @@ class ManageCommandTest extends Specification {
         def data1 = new byte[1][]
 
         expect:
-        ManageCommand.parseSlots('manage', data1, 1).size() == 0
+        _ManageCommand.parseSlots('manage', data1, 1).size() == 0
 
         when:
         def data5 = new byte[5][]
         data5[1] = 'slot'.bytes
         data5[2] = '0'.bytes
-        def sList = ManageCommand.parseSlots('manage', data5, 1)
+        def sList = _ManageCommand.parseSlots('manage', data5, 1)
         then:
         sList.size() == 1
 
         when:
         data5[2] = 'a'.bytes
-        sList = ManageCommand.parseSlots('manage', data5, 1)
+        sList = _ManageCommand.parseSlots('manage', data5, 1)
         then:
         sList.size() == 0
 
         when:
         def data4 = new byte[4][]
         data4[1] = 'slot'.bytes
-        sList = ManageCommand.parseSlots('manage', data4, 1)
+        sList = _ManageCommand.parseSlots('manage', data4, 1)
         then:
         sList.size() == 0
 
         when:
         data4[1] = 'xxx'.bytes
-        sList = ManageCommand.parseSlots('manage', data4, 1)
+        sList = _ManageCommand.parseSlots('manage', data4, 1)
         then:
         sList.size() == 0
     }

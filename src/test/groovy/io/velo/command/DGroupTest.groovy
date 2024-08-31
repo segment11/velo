@@ -6,6 +6,7 @@ import io.velo.CompressedValue
 import io.velo.Dict
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
+import io.velo.persist.Mock
 import io.velo.reply.*
 import spock.lang.Specification
 
@@ -13,6 +14,8 @@ import java.nio.ByteBuffer
 import java.time.Duration
 
 class DGroupTest extends Specification {
+    def _DGroup = new DGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -22,10 +25,10 @@ class DGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sDecrList = DGroup.parseSlots('decr', data2, slotNumber)
-        def sDecrByList = DGroup.parseSlots('decrby', data2, slotNumber)
-        def sDelList = DGroup.parseSlots('del', data2, slotNumber)
-        def sList = DGroup.parseSlots('dxxx', data2, slotNumber)
+        def sDecrList = _DGroup.parseSlots('decr', data2, slotNumber)
+        def sDecrByList = _DGroup.parseSlots('decrby', data2, slotNumber)
+        def sDelList = _DGroup.parseSlots('del', data2, slotNumber)
+        def sList = _DGroup.parseSlots('dxxx', data2, slotNumber)
         then:
         sDecrList.size() == 1
         sDecrByList.size() == 1
@@ -36,14 +39,14 @@ class DGroupTest extends Specification {
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
-        sDelList = DGroup.parseSlots('del', data3, slotNumber)
+        sDelList = _DGroup.parseSlots('del', data3, slotNumber)
         then:
         sDelList.size() == 2
 
         when:
         def data1 = new byte[1][]
-        sDecrList = DGroup.parseSlots('decr', data1, slotNumber)
-        sDelList = DGroup.parseSlots('del', data1, slotNumber)
+        sDecrList = _DGroup.parseSlots('decr', data1, slotNumber)
+        sDelList = _DGroup.parseSlots('del', data1, slotNumber)
         then:
         sDecrList.size() == 0
         sDelList.size() == 0
@@ -89,7 +92,7 @@ class DGroupTest extends Specification {
         when:
         dGroup.data = data2
         dGroup.cmd = 'decr'
-        dGroup.slotWithKeyHashListParsed = DGroup.parseSlots('decr', data2, dGroup.slotNumber)
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decr', data2, dGroup.slotNumber)
         reply = dGroup.handle()
         then:
         reply instanceof IntegerReply
@@ -101,7 +104,7 @@ class DGroupTest extends Specification {
         data3[2] = 'b'.bytes
         dGroup.data = data3
         dGroup.cmd = 'decrby'
-        dGroup.slotWithKeyHashListParsed = DGroup.parseSlots('decrby', data3, dGroup.slotNumber)
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data3, dGroup.slotNumber)
         reply = dGroup.handle()
         then:
         reply == ErrorReply.NOT_INTEGER
@@ -139,23 +142,23 @@ class DGroupTest extends Specification {
         when:
         def data1 = new byte[1][]
         dGroup.data = data1
-        dGroup.slotWithKeyHashListParsed = DGroup.parseSlots('del', data1, dGroup.slotNumber)
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('del', data1, dGroup.slotNumber)
         def reply = dGroup.del()
         then:
         reply == ErrorReply.FORMAT
 
         when:
         dGroup.data = data2
-        dGroup.slotWithKeyHashListParsed = DGroup.parseSlots('del', data2, dGroup.slotNumber)
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('del', data2, dGroup.slotNumber)
         reply = dGroup.del()
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
         data2[1] = 'a'.bytes
-        dGroup.slotWithKeyHashListParsed = DGroup.parseSlots('del', data2, dGroup.slotNumber)
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('del', data2, dGroup.slotNumber)
         reply = dGroup.del()
         then:
         reply instanceof IntegerReply
@@ -185,7 +188,7 @@ class DGroupTest extends Specification {
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
         dGroup.data = data3
-        dGroup.slotWithKeyHashListParsed = DGroup.parseSlots('del', data3, dGroup.slotNumber)
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('del', data3, dGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.put(slot, 'b', 0, cv)
         reply = dGroup.del()
@@ -248,7 +251,7 @@ class DGroupTest extends Specification {
         dGroup.from(BaseCommand.mockAGroup())
 
         when:
-        dGroup.slotWithKeyHashListParsed = DGroup.parseSlots('decrby', data2, dGroup.slotNumber)
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data2, dGroup.slotNumber)
         def cv = new CompressedValue()
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_BYTE
         // 0
@@ -262,14 +265,14 @@ class DGroupTest extends Specification {
 
         when:
         data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        dGroup.slotWithKeyHashListParsed = DGroup.parseSlots('decrby', data2, dGroup.slotNumber)
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data2, dGroup.slotNumber)
         reply = dGroup.decrBy(1, 0)
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
         data2[1] = 'a'.bytes
-        dGroup.slotWithKeyHashListParsed = DGroup.parseSlots('decrby', data2, dGroup.slotNumber)
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data2, dGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         reply = dGroup.decrBy(1, 0)
         then:

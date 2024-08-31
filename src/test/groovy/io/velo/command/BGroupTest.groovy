@@ -6,13 +6,15 @@ import io.velo.reply.OKReply
 import spock.lang.Specification
 
 class BGroupTest extends Specification {
+    def _BGroup = new BGroup(null, null, null)
+
     def 'test parse slot'() {
         given:
         def data1 = new byte[1][]
         int slotNumber = 128
 
         when:
-        def sBgsaveList = BGroup.parseSlots('bgsave', data1, slotNumber)
+        def sBgsaveList = _BGroup.parseSlots('bgsave', data1, slotNumber)
         then:
         sBgsaveList.size() == 0
     }

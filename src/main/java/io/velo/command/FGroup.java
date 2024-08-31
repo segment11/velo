@@ -17,7 +17,7 @@ public class FGroup extends BaseCommand {
         super(cmd, data, socket);
     }
 
-    public static ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
+    public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
         return slotWithKeyHashList;
     }
@@ -71,7 +71,7 @@ public class FGroup extends BaseCommand {
 
         Promise<Void>[] promises = new Promise[slotNumber];
         for (int i = 0; i < slotNumber; i++) {
-            var oneSlot = localPersist.oneSlot((byte) i);
+            var oneSlot = localPersist.oneSlot((short) i);
             promises[i] = oneSlot.asyncRun(() -> {
                 oneSlot.setReadonly(true);
                 oneSlot.getDynConfig().setBinlogOn(false);
@@ -112,7 +112,7 @@ public class FGroup extends BaseCommand {
 
         Promise<Void>[] promises = new Promise[slotNumber];
         for (int i = 0; i < slotNumber; i++) {
-            var oneSlot = localPersist.oneSlot((byte) i);
+            var oneSlot = localPersist.oneSlot((short) i);
             promises[i] = oneSlot.asyncRun(oneSlot::flush);
         }
 

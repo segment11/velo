@@ -5,6 +5,7 @@ import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
+import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.type.RedisZSet
 import spock.lang.Specification
@@ -12,6 +13,8 @@ import spock.lang.Specification
 import java.time.Duration
 
 class ZGroupTest extends Specification {
+    def _ZGroup = new ZGroup(null, null, null)
+
     def singleKeyCmdList1 = '''
 zadd
 zcard
@@ -62,8 +65,8 @@ zunionstore
         data4[3] = 'b'.bytes
 
         when:
-        def sZdiff = ZGroup.parseSlots('zdiff', data1, slotNumber)
-        def sList = ZGroup.parseSlots('zxxx', data4, slotNumber)
+        def sZdiff = _ZGroup.parseSlots('zdiff', data1, slotNumber)
+        def sList = _ZGroup.parseSlots('zxxx', data4, slotNumber)
         then:
         sZdiff.size() == 0
         sList.size() == 0
@@ -214,12 +217,12 @@ zunionstore
         data5[2] = 'a'.bytes
         data5[3] = '0'.bytes
         data5[4] = '-1'.bytes
-        def sZrangestoreList = ZGroup.parseSlots('zrangestore', data5, slotNumber)
+        def sZrangestoreList = _ZGroup.parseSlots('zrangestore', data5, slotNumber)
         then:
         sZrangestoreList.size() == 2
 
         when:
-        sZrangestoreList = ZGroup.parseSlots('zrangestore', data1, slotNumber)
+        sZrangestoreList = _ZGroup.parseSlots('zrangestore', data1, slotNumber)
         then:
         sZrangestoreList.size() == 0
 
@@ -228,12 +231,12 @@ zunionstore
         data4[1] = '2'.bytes
         data4[2] = 'a'.bytes
         data4[3] = 'b'.bytes
-        def sZintercardList = ZGroup.parseSlots('zintercard', data4, slotNumber)
+        def sZintercardList = _ZGroup.parseSlots('zintercard', data4, slotNumber)
         then:
         sZintercardList.size() == 2
 
         when:
-        sZintercardList = ZGroup.parseSlots('zintercard', data1, slotNumber)
+        sZintercardList = _ZGroup.parseSlots('zintercard', data1, slotNumber)
         then:
         sZintercardList.size() == 0
     }
@@ -290,7 +293,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zadd', data6, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zadd', data6, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zadd()
         then:
@@ -365,7 +368,7 @@ zunionstore
         ((IntegerReply) reply).integer == 0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         rz.add(0.1, 'member0')
@@ -489,14 +492,14 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zcard', data2, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zcard', data2, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zcard()
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         rz.add(0.1, 'member0')
@@ -530,14 +533,14 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zcount', data4, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zcount', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zcount(false)
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
@@ -675,7 +678,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zdiff', data5, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zdiff', data5, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zdiff(false, false)
         then:
@@ -712,7 +715,7 @@ zunionstore
         reply == IntegerReply.REPLY_0
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(2)
+        def cvList = Mock.prepareCompressedValueList(2)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rzA = new RedisZSet()
@@ -1263,7 +1266,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zincrby', data4, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zincrby', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zincrby()
         then:
@@ -1277,7 +1280,7 @@ zunionstore
         ((BulkReply) reply).raw == '2.0'.bytes
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         RedisZSet.ZSET_MAX_SIZE.times {
@@ -1328,14 +1331,14 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zintercard', data6, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zintercard', data6, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zintercard()
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cvList = io.velo.persist.Mock.prepareCompressedValueList(2)
+        def cvList = Mock.prepareCompressedValueList(2)
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rzA = new RedisZSet()
@@ -1556,7 +1559,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zmscore', data4, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zmscore', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zmscore()
         then:
@@ -1566,7 +1569,7 @@ zunionstore
         ((MultiBulkReply) reply).replies[1] == NilReply.INSTANCE
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
@@ -1619,14 +1622,14 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zpopmax', data3, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zpopmax', data3, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zpopmax(false)
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
@@ -1711,7 +1714,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zrandmember', data4, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrandmember', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zrandmember()
         then:
@@ -1724,7 +1727,7 @@ zunionstore
         reply == NilReply.INSTANCE
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
@@ -1861,7 +1864,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zrange', data10, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrange', data10, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zrange(data10)
         then:
@@ -1873,7 +1876,7 @@ zunionstore
         reply == IntegerReply.REPLY_0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
@@ -1961,7 +1964,7 @@ zunionstore
         def tmpData5 = new byte[5][]
         tmpData5[1] = dstKeyBytes
         tmpData5[2] = 'a'.bytes
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
         // rev
         data10[5] = 'byscore'.bytes
         // start / stop
@@ -2460,7 +2463,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zrangebylex', data7, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangebylex', data7, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.handle()
         then:
@@ -2503,7 +2506,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zrangebyscore', data7, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangebyscore', data7, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.handle()
         then:
@@ -2540,7 +2543,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zrangestore', data8, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', data8, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.handle()
         then:
@@ -2564,7 +2567,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zrevrange', data5, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrevrange', data5, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.handle()
         then:
@@ -2590,7 +2593,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zrevrangebylex', data7, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrevrangebylex', data7, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.handle()
         then:
@@ -2616,7 +2619,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zrevrangebyscore', data7, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrevrangebyscore', data7, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.handle()
         then:
@@ -2639,7 +2642,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zrank', data4, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrank', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zrank(false)
         then:
@@ -2653,7 +2656,7 @@ zunionstore
 
         when:
         data4[3] = 'withscore_'.bytes
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
@@ -2738,14 +2741,14 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zrem', data4, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrem', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zrem()
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
@@ -2800,7 +2803,7 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zremrangebyscore', data4, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zremrangebyscore', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zremrangebyscore(true, false, false)
         then:
@@ -2819,7 +2822,7 @@ zunionstore
         reply == IntegerReply.REPLY_0
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
@@ -3026,14 +3029,14 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = ZGroup.parseSlots('zscore', data3, zGroup.slotNumber)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zscore', data3, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.zscore()
         then:
         reply == NilReply.INSTANCE
 
         when:
-        def cv = io.velo.persist.Mock.prepareCompressedValueList(1)[0]
+        def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()

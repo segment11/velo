@@ -23,7 +23,7 @@ public class HGroup extends BaseCommand {
         super(cmd, data, socket);
     }
 
-    public static ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
+    public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
         if ("hdel".equals(cmd) || "hexists".equals(cmd) || "hget".equals(cmd) || "hgetall".equals(cmd) ||
@@ -455,7 +455,7 @@ public class HGroup extends BaseCommand {
         byte[][] dd = {null, fieldKey.getBytes()};
         var dGroup = new DGroup(cmd, dd, socket);
         dGroup.from(this);
-        dGroup.setSlotWithKeyHashListParsed(DGroup.parseSlots("decrby", dd, slotNumber));
+        dGroup.setSlotWithKeyHashListParsed(dGroup.parseSlots("decrby", dd, slotNumber));
 
         if (isFloat) {
             return dGroup.decrBy(0, -byFloat);
