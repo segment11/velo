@@ -21,18 +21,16 @@ class BGroupTest extends Specification {
 
     def 'test handle'() {
         given:
-        def data1 = new byte[1][]
-        def bGroup = new BGroup('bgsave', data1, null)
+        def bGroup = new BGroup(null, null, null)
         bGroup.from(BaseCommand.mockAGroup())
 
         when:
-        def reply = bGroup.handle()
+        def reply = bGroup.execute('bgsave')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        bGroup.cmd = 'zzz'
-        reply = bGroup.handle()
+        reply = bGroup.execute('zzz')
         then:
         reply == NilReply.INSTANCE
     }

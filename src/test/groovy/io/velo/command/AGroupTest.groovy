@@ -54,37 +54,24 @@ class AGroupTest extends Specification {
     }
 
     def 'test append'() {
-        given:
-        def data3 = new byte[3][]
-
-        and:
-        data3[1] = 'a'.bytes
-        data3[2] = '123'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def aGroup = new AGroup('append', data3, null)
+        def aGroup = new AGroup(null, null, null)
         aGroup.byPassGetSet = inMemoryGetSet
         aGroup.from(BaseCommand.mockAGroup())
 
         when:
-        aGroup.slotWithKeyHashListParsed = _AGroup.parseSlots('append', data3, aGroup.slotNumber)
-        aGroup.append()
+        aGroup.execute('append a 123')
         then:
         aGroup.get('a'.bytes) == '123'.bytes
 
         when:
-        data3[2] = '456'.bytes
-        aGroup.append()
+        aGroup.execute('append a 456')
         then:
         aGroup.get('a'.bytes) == '123456'.bytes
 
         when:
-        def data2 = new byte[2][]
-        def aGroup2 = new AGroup('append', data2, null)
-//        aGroup2.byPassGetSet = inMemoryGetSet
-//        aGroup2.from(BaseCommand.mockAGroup())
-        def reply = aGroup2.append()
+        def reply = aGroup.execute('append a')
         then:
         reply == ErrorReply.FORMAT
     }

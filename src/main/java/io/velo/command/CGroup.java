@@ -5,7 +5,6 @@ import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
-import io.velo.persist.LocalPersist;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -31,13 +30,6 @@ public class CGroup extends BaseCommand {
             var s2 = slot(dstKeyBytes, slotNumber);
             slotWithKeyHashList.add(s1);
             slotWithKeyHashList.add(s2);
-            return slotWithKeyHashList;
-        }
-
-        if ("config".equals(cmd)) {
-            // config always use the first slot
-            var firstOneSlot = LocalPersist.getInstance().currentThreadFirstOneSlot();
-            slotWithKeyHashList.add(new SlotWithKeyHash(firstOneSlot.slot(), 0, 1L));
             return slotWithKeyHashList;
         }
 

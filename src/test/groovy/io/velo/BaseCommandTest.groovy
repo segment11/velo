@@ -94,6 +94,7 @@ class BaseCommandTest extends Specification {
         c.cmd == 'get'
         c.data == data2
         c.socket == null
+        c.execute('test test') == null
 
         when:
         def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, null, Config.create())

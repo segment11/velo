@@ -272,7 +272,23 @@ public abstract class BaseCommand {
     }
 
     public abstract ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber);
+
     public abstract Reply handle();
+
+    @TestOnly
+    public Reply execute(String allDataString) {
+        var dataStrings = allDataString.split(" ");
+        var data = new byte[dataStrings.length][];
+        for (int i = 0; i < dataStrings.length; i++) {
+            data[i] = dataStrings[i].getBytes();
+        }
+
+        this.cmd = dataStrings[0];
+        this.data = data;
+
+        slotWithKeyHashListParsed = parseSlots(cmd, data, slotNumber);
+        return handle();
+    }
 
     protected final LocalPersist localPersist = LocalPersist.getInstance();
 

@@ -3,6 +3,8 @@ package io.velo.command
 import io.activej.eventloop.Eventloop
 import io.activej.net.socket.tcp.TcpSocket
 import io.velo.BaseCommand
+import io.velo.Utils
+import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
@@ -31,11 +33,8 @@ class CGroupTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
 
         def sCopyList = _CGroup.parseSlots('copy', data3, slotNumber)
-        def sConfigList = _CGroup.parseSlots('config', data3, slotNumber)
         then:
         sCopyList.size() == 2
-        sConfigList.size() == 1
-        sConfigList[0].slot() == slot
 
         when:
         def data2 = new byte[2][]
@@ -77,73 +76,70 @@ class CGroupTest extends Specification {
 
     def 'test client'() {
         given:
-        def data2 = new byte[2][]
-        data2[1] = 'id'.bytes
-
         def socket = TcpSocket.wrapChannel(null, SocketChannel.open(),
                 new InetSocketAddress('localhost', 46379), null)
 
-        def cGroup = new CGroup('client', data2, socket)
+        def cGroup = new CGroup(null, null, socket)
         cGroup.from(BaseCommand.mockAGroup())
 
         when:
-        def reply = cGroup.client()
+        def reply = cGroup.execute('client id')
         then:
         reply instanceof IntegerReply
 
         when:
-        data2[1] = 'setinfo'.bytes
-        reply = cGroup.client()
+        reply = cGroup.execute('client setinfo')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        data2[1] = 'zzz'.bytes
-        reply = cGroup.client()
+        reply = cGroup.execute('client zzz')
         then:
         reply == NilReply.INSTANCE
     }
 
+    def 'test config'() {
+        given:
+        def cGroup = new CGroup(null, null, null)
+
+        and:
+        def loader = CachedGroovyClassLoader.instance
+        def classpath = Utils.projectPath('/dyn/src')
+        loader.init(GroovyClassLoader.getClass().classLoader, classpath, null)
+
+        when:
+        def reply = cGroup.execute('config zzz')
+        then:
+        reply == ErrorReply.SYNTAX
+    }
+
     def 'test copy'() {
         given:
-        final short slot = 0
-
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'b'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def cGroup = new CGroup('copy', data3, null)
+        def cGroup = new CGroup(null, null, null)
         cGroup.byPassGetSet = inMemoryGetSet
         cGroup.from(BaseCommand.mockAGroup())
 
         when:
-        cGroup.slotWithKeyHashListParsed = _CGroup.parseSlots('copy', data3, cGroup.slotNumber)
-        def reply = cGroup.copy()
+        def reply = cGroup.execute('copy a b')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = cGroup.copy()
+        reply = cGroup.execute('copy a b')
         then:
         reply == IntegerReply.REPLY_1
 
         when:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'b'.bytes
-        data4[3] = 'replace_'.bytes
-        cGroup.data = data4
-        reply = cGroup.copy()
+        reply = cGroup.execute('copy a b replace_')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data4[3] = 'replace'.bytes
-        reply = cGroup.copy()
+        reply = cGroup.execute('copy a b replace')
         then:
         reply == IntegerReply.REPLY_1
 
@@ -161,7 +157,7 @@ class CGroupTest extends Specification {
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
         cGroup.crossRequestWorker = true
-        reply = cGroup.copy()
+        reply = cGroup.execute('copy a b replace')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -171,8 +167,7 @@ class CGroupTest extends Specification {
 
         when:
         inMemoryGetSet.remove(slot, 'b')
-
-        reply = cGroup.copy()
+        reply = cGroup.execute('copy a b replace')
         then:
         reply instanceof AsyncReply
         ((AsyncReply) reply).settablePromise.whenResult { result ->
@@ -180,8 +175,7 @@ class CGroupTest extends Specification {
         }.result
 
         when:
-        data4[3] = 'replace_'.bytes
-        reply = cGroup.copy()
+        reply = cGroup.execute('copy a b replace_')
         then:
         reply instanceof AsyncReply
         ((AsyncReply) reply).settablePromise.whenResult { result ->
