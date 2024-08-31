@@ -7,36 +7,46 @@ import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 
 public class LoopMGet extends Thread {
-    private final int loopId;
+    private final String host;
+    private final int port;
+
     private final CountDownLatch latch;
 
-    private final int batchNum = 10000;
-    private final int port = 7379;
-//    private final int port = 6379;
+    private final int threadIndex;
+    private final int oneThreadChargeKeyNumber;
 
-    private static final int threadNumber = 60;
-
-    private final int mgetKeyNum = 50;
-
-    private boolean isKeyNumberSeq = true;
+    private final int mgetOnceKeyCount;
+    private final boolean isKeyNumberSeq;
 
     int nullGetNumber = 0;
 
     long costT = 0;
 
-    public LoopMGet(int loopId, CountDownLatch latch) {
-        this.loopId = loopId;
+    public LoopMGet(String host, int port,
+                    int threadNumber, int threadIndex, CountDownLatch latch,
+                    int oneThreadChargeKeyNumber, int mgetOnceKeyCount, boolean isKeyNumberSeq) {
+        this.host = host;
+        this.port = port;
+
+        this.threadIndex = threadIndex;
         this.latch = latch;
+        this.oneThreadChargeKeyNumber = oneThreadChargeKeyNumber;
+
+        this.mgetOnceKeyCount = mgetOnceKeyCount;
+        this.isKeyNumberSeq = isKeyNumberSeq;
     }
 
     public static void main(String[] args) throws InterruptedException {
+        var threadNumber = 2;
         var latch = new CountDownLatch(threadNumber);
-        var beginT = System.currentTimeMillis();
-
         Thread[] threads = new Thread[threadNumber];
+
+        var beginT = System.currentTimeMillis();
         // 10 threads
         for (int i = 0; i < threadNumber; i++) {
-            var thread = new LoopMGet(i, latch);
+            // todo change here
+            var thread = new LoopMGet("localhost", 7379, threadNumber, i, latch,
+                    100000, 50, true);
             threads[i] = thread;
             thread.start();
         }
@@ -55,8 +65,8 @@ public class LoopMGet extends Thread {
         System.out.println("total cost: " + totalCostT / 1000000 + "ms");
     }
 
-    private String generateRandomKey(int x, boolean isNumberSeq) {
-        if (isNumberSeq) {
+    private static String generateRandomKey(int x, boolean isKeyNumberSeq) {
+        if (isKeyNumberSeq) {
             return "key:" + Utils.leftPad(String.valueOf(x), "0", 16);
         }
 
@@ -71,16 +81,16 @@ public class LoopMGet extends Thread {
 
     @Override
     public void run() {
-        var jedis = new Jedis("localhost", port);
+        var jedis = new Jedis(host, port);
 
-        var beginI = loopId * batchNum;
+        var beginI = threadIndex * oneThreadChargeKeyNumber;
 
-        var times = batchNum / mgetKeyNum;
+        var times = oneThreadChargeKeyNumber / mgetOnceKeyCount;
         var rand = new Random();
         for (int i = 0; i < times; i++) {
-            var keys = new String[mgetKeyNum];
-            for (int j = 0; j < mgetKeyNum; j++) {
-                keys[j] = generateRandomKey(beginI + rand.nextInt(batchNum), isKeyNumberSeq);
+            var keys = new String[mgetOnceKeyCount];
+            for (int j = 0; j < mgetOnceKeyCount; j++) {
+                keys[j] = generateRandomKey(beginI + rand.nextInt(oneThreadChargeKeyNumber), isKeyNumberSeq);
             }
 
             var beginT = System.nanoTime();
@@ -93,6 +103,7 @@ public class LoopMGet extends Thread {
             }
         }
 
+        jedis.close();
         latch.countDown();
     }
 }
