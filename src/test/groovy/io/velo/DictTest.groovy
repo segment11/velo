@@ -50,9 +50,9 @@ class DictTest extends Specification {
         def file = new File('dict-global-test.dat')
         file.bytes = 'test'.bytes
 
-        Dict.resetGlobalDictBytesByFile(file, false)
+        Dict.initGlobalDictBytesByFile(file)
         file.delete()
-        Dict.resetGlobalDictBytesByFile(file, true)
+        Dict.initGlobalDictBytesByFile(file)
 
         expect:
         Dict.GLOBAL_ZSTD_DICT.hasDictBytes()
@@ -62,7 +62,7 @@ class DictTest extends Specification {
         file.bytes = ('test' * 5000).bytes
         boolean exception = false
         try {
-            Dict.resetGlobalDictBytesByFile(file, false)
+            Dict.initGlobalDictBytesByFile(file)
         } catch (IllegalStateException e) {
             println e.message
             exception = true
@@ -71,14 +71,14 @@ class DictTest extends Specification {
         exception
 
         when:
-        Dict.resetGlobalDictBytes('test'.bytes, true)
+        Dict.resetGlobalDictBytes('test'.bytes)
         then:
         Dict.GLOBAL_ZSTD_DICT.dictBytes == 'test'.bytes
 
         when:
         exception = false
         try {
-            Dict.resetGlobalDictBytes(new byte[0], true)
+            Dict.resetGlobalDictBytes(new byte[0])
         } catch (IllegalStateException e) {
             println e.message
             exception = true
@@ -89,7 +89,7 @@ class DictTest extends Specification {
         when:
         exception = false
         try {
-            Dict.resetGlobalDictBytes(('test' * 5000).bytes, true)
+            Dict.resetGlobalDictBytes(('test' * 5000).bytes)
         } catch (IllegalStateException e) {
             println e.message
             exception = true
@@ -99,21 +99,10 @@ class DictTest extends Specification {
 
         when:
         // not change
-        Dict.resetGlobalDictBytes('test'.bytes, false)
+        Dict.resetGlobalDictBytes('test'.bytes)
+        Dict.saveGlobalDictBytesToFile(file)
         then:
         Dict.GLOBAL_ZSTD_DICT.dictBytes == 'test'.bytes
-
-        when:
-        exception = false
-        try {
-            Dict.resetGlobalDictBytes('test2'.bytes, false)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-        Dict.GLOBAL_ZSTD_DICT.dictBytes != 'test2'.bytes
     }
 
     def 'test decode'() {

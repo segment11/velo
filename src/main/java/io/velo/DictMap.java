@@ -57,12 +57,10 @@ public class DictMap implements NeedCleanUp {
             }
         }
 
-        synchronized (fos) {
-            try {
-                fos.write(dict.encode(keyPrefixOrSuffix));
-            } catch (IOException e) {
-                throw new RuntimeException("Write dict to file error", e);
-            }
+        try {
+            fos.write(dict.encode(keyPrefixOrSuffix));
+        } catch (IOException e) {
+            throw new RuntimeException("Write dict to file error", e);
         }
 
         if (binlog != null) {
@@ -104,16 +102,14 @@ public class DictMap implements NeedCleanUp {
     private FileOutputStream fos;
 
     @Override
-    public void cleanUp() {
+    public synchronized void cleanUp() {
         if (fos != null) {
-            synchronized (fos) {
-                try {
-                    fos.close();
-                    System.out.println("Close dict fos");
-                    fos = null;
-                } catch (IOException e) {
-                    System.err.println("Close dict fos error, message: " + e.getMessage());
-                }
+            try {
+                fos.close();
+                System.out.println("Close dict fos");
+                fos = null;
+            } catch (IOException e) {
+                System.err.println("Close dict fos error, message: " + e.getMessage());
             }
         }
 
@@ -123,7 +119,7 @@ public class DictMap implements NeedCleanUp {
         Dict.GLOBAL_ZSTD_DICT.closeCtx();
     }
 
-    public void clearAll() {
+    public synchronized void clearAll() {
         for (var entry : cacheDictBySeq.entrySet()) {
             entry.getValue().closeCtx();
         }
@@ -132,20 +128,18 @@ public class DictMap implements NeedCleanUp {
         cacheDictBySeq.clear();
 
         // truncate file
-        synchronized (fos) {
-            try {
-                fos.getChannel().truncate(0);
-                System.out.println("Truncate dict file");
-            } catch (IOException e) {
-                throw new RuntimeException("Truncate dict file error", e);
-            }
+        try {
+            fos.getChannel().truncate(0);
+            System.out.println("Truncate dict file");
+        } catch (IOException e) {
+            throw new RuntimeException("Truncate dict file error", e);
         }
     }
 
     private static final String FILE_NAME = "dict-map.dat";
     private File dirFile;
 
-    public void initDictMap(File dirFile) throws IOException {
+    public synchronized void initDictMap(File dirFile) throws IOException {
         this.dirFile = dirFile;
         var file = new File(dirFile, FILE_NAME);
         if (!file.exists()) {
@@ -165,8 +159,10 @@ public class DictMap implements NeedCleanUp {
                 }
 
                 var dict = dictWithKey.dict();
-                cacheDict.put(dictWithKey.keyPrefixOrSuffix(), dict);
+                dict.initCtx();
+
                 cacheDictBySeq.put(dict.getSeq(), dict);
+                cacheDict.put(dictWithKey.keyPrefixOrSuffix(), dict);
 
                 loadedSeqList.add(dict.getSeq());
                 n++;
@@ -182,13 +178,11 @@ public class DictMap implements NeedCleanUp {
             TrainSampleJob.addKeyPrefixGroupIfNotExist(keyPrefixOrSuffix);
         }
 
-        Dict.resetGlobalDictBytesByFile(new File(dirFile, Dict.GLOBAL_DICT_FILE_NAME), false);
+        Dict.initGlobalDictBytesByFile(new File(dirFile, Dict.GLOBAL_DICT_FILE_NAME));
     }
 
-    public void updateGlobalDictBytes(byte[] dictBytes) {
-        Dict.GLOBAL_ZSTD_DICT.setDictBytes(dictBytes);
-        log.warn("Dict global dict bytes updated, dict bytes length: {}", dictBytes.length);
-        Dict.GLOBAL_ZSTD_DICT.initCtx();
+    public synchronized void updateGlobalDictBytes(byte[] dictBytes) {
+        Dict.resetGlobalDictBytes(dictBytes);
         Dict.saveGlobalDictBytesToFile(new File(dirFile, Dict.GLOBAL_DICT_FILE_NAME));
     }
 }

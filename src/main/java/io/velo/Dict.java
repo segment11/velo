@@ -38,27 +38,18 @@ public class Dict implements Serializable {
         GLOBAL_ZSTD_DICT.seq = GLOBAL_ZSTD_DICT_SEQ;
     }
 
-    public static void resetGlobalDictBytes(byte[] dictBytes, boolean isOverwrite) {
+    public static void resetGlobalDictBytes(byte[] dictBytes) {
         if (dictBytes.length == 0 || dictBytes.length > GLOBAL_DICT_BYTES_MAX_LENGTH) {
             throw new IllegalStateException("Dict global dict bytes too long: " + dictBytes.length);
         }
 
-        if (isOverwrite) {
-            GLOBAL_ZSTD_DICT.dictBytes = dictBytes;
-            log.warn("Dict global dict bytes overwritten, dict bytes length: {}", dictBytes.length);
-        } else {
-            if (GLOBAL_ZSTD_DICT.hasDictBytes()) {
-                if (!Arrays.equals(GLOBAL_ZSTD_DICT.dictBytes, dictBytes)) {
-                    throw new IllegalStateException("Dict global dict bytes already set and not equal to new bytes");
-                }
-            } else {
-                GLOBAL_ZSTD_DICT.dictBytes = dictBytes;
-                log.warn("Dict global dict bytes set, dict bytes length: {}", dictBytes.length);
-            }
-        }
+        GLOBAL_ZSTD_DICT.dictBytes = dictBytes;
+        log.warn("Dict global dict bytes overwritten, dict bytes length: {}", dictBytes.length);
+        GLOBAL_ZSTD_DICT.closeCtx();
+        GLOBAL_ZSTD_DICT.initCtx();
     }
 
-    public static void resetGlobalDictBytesByFile(File targetFile, boolean isOverwrite) {
+    public static void initGlobalDictBytesByFile(File targetFile) {
         if (!targetFile.exists()) {
             log.warn("Dict global dict file not exists: {}", targetFile.getAbsolutePath());
             return;
@@ -67,7 +58,7 @@ public class Dict implements Serializable {
         byte[] dictBytes;
         try {
             dictBytes = Files.readAllBytes(targetFile.toPath());
-            resetGlobalDictBytes(dictBytes, isOverwrite);
+            resetGlobalDictBytes(dictBytes);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
