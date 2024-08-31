@@ -1,6 +1,5 @@
 package io.velo.persist;
 
-import com.github.luben.zstd.Zstd;
 import io.activej.async.callback.AsyncComputation;
 import io.activej.common.function.RunnableEx;
 import io.activej.common.function.SupplierEx;
@@ -872,10 +871,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         var pvm = PersistValueMeta.decode(valueBytes);
-        var decompressedBytes = getSegmentSubBlockDecompressedBytesByPvm(pvm);
-//        SegmentBatch.iterateFromSegmentBytesForDebug(decompressedBytes);
+        var segmentBytes = getSegmentBytesByPvm(pvm);
+//        SegmentBatch.iterateFromSegmentBytesForDebug(segmentBytes);
 
-        var buf = Unpooled.wrappedBuffer(decompressedBytes);
+        var buf = Unpooled.wrappedBuffer(segmentBytes);
         // crc check
 //        var segmentSeq = buf.readLong();
 //        var cvCount = buf.readInt();
@@ -912,38 +911,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return targetWal.get(key);
     }
 
-    private byte[] getSegmentSubBlockDecompressedBytesByPvm(PersistValueMeta pvm) {
-        byte[] tightBytesWithLength = chunk.preadOneSegment(pvm.segmentIndex);
-        if (tightBytesWithLength == null) {
-            throw new IllegalStateException("Load persisted segment bytes error, pvm: " + pvm);
-        }
-
-        var buffer = ByteBuffer.wrap(tightBytesWithLength);
-        buffer.position(SegmentBatch.subBlockMetaPosition(pvm.subBlockIndex));
-        var subBlockOffset = buffer.getShort();
-        var subBlockLength = buffer.getShort();
-
-        if (subBlockOffset == 0) {
-            throw new IllegalStateException("Sub block offset is 0, pvm: " + pvm);
-        }
-
-        var decompressedBytes = new byte[chunkSegmentLength];
-
-        var beginT = System.nanoTime();
-        var d = Zstd.decompressByteArray(decompressedBytes, 0, chunkSegmentLength,
-                tightBytesWithLength, subBlockOffset, subBlockLength);
-        var costT = (System.nanoTime() - beginT) / 1000;
-
-        // stats
-        segmentDecompressTimeTotalUs += costT;
-        segmentDecompressCountTotal++;
-
-        if (d != chunkSegmentLength) {
-            throw new IllegalStateException("Decompress segment sub block error, s=" + pvm.slot +
-                    ", i=" + pvm.segmentIndex + ", sbi=" + pvm.subBlockIndex + ", d=" + d + ", chunkSegmentLength=" + chunkSegmentLength);
-        }
-
-        return decompressedBytes;
+    private byte[] getSegmentBytesByPvm(PersistValueMeta pvm) {
+        return chunk.preadOneSegment(pvm.segmentIndex);
     }
 
     public boolean exists(String key, int bucketIndex, long keyHash) {

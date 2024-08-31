@@ -1,6 +1,5 @@
 package io.velo.persist;
 
-import com.github.luben.zstd.Zstd;
 import io.velo.*;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.incremental.XChunkSegmentFlagUpdate;
@@ -279,36 +278,15 @@ public class ChunkMergeJob {
     static int readToCvList(ArrayList<CvWithKeyAndSegmentOffset> cvList, byte[] segmentBytesBatchRead, int relativeOffsetInBatchBytes,
                             int chunkSegmentLength, int segmentIndex, OneSlot oneSlot) {
         final int[] expiredCountArray = {0};
-        var buffer = ByteBuffer.wrap(segmentBytesBatchRead, relativeOffsetInBatchBytes, Math.min(segmentBytesBatchRead.length, chunkSegmentLength)).slice();
-        // sub blocks
-        // refer to SegmentBatch tight HEADER_LENGTH
-        for (int subBlockIndex = 0; subBlockIndex < SegmentBatch.MAX_BLOCK_NUMBER; subBlockIndex++) {
-            // position to target sub block
-            buffer.position(SegmentBatch.subBlockMetaPosition(subBlockIndex));
-            var subBlockOffset = buffer.getShort();
-            if (subBlockOffset == 0) {
-                break;
+        var length = Math.min(segmentBytesBatchRead.length, chunkSegmentLength);
+        SegmentBatch2.iterateFromSegmentBytes(segmentBytesBatchRead, relativeOffsetInBatchBytes, length, (key, cv, offsetInThisSegment) -> {
+            // exclude expired
+            if (cv.isExpired()) {
+                expiredCountArray[0]++;
+                return;
             }
-            var subBlockLength = buffer.getShort();
-
-            var decompressedBytes = new byte[chunkSegmentLength];
-            var d = Zstd.decompressByteArray(decompressedBytes, 0, chunkSegmentLength,
-                    segmentBytesBatchRead, relativeOffsetInBatchBytes + subBlockOffset, subBlockLength);
-            if (d != chunkSegmentLength) {
-                throw new IllegalStateException("Decompress error, s=" + oneSlot.slot()
-                        + ", i=" + segmentIndex + ", sbi=" + subBlockIndex + ", d=" + d + ", chunkSegmentLength=" + chunkSegmentLength);
-            }
-
-            int finalSubBlockIndex = subBlockIndex;
-            SegmentBatch.iterateFromSegmentBytes(decompressedBytes, (key, cv, offsetInThisSegment) -> {
-                // exclude expired
-                if (cv.isExpired()) {
-                    expiredCountArray[0]++;
-                    return;
-                }
-                cvList.add(new CvWithKeyAndSegmentOffset(cv, key, offsetInThisSegment, segmentIndex, (byte) finalSubBlockIndex));
-            });
-        }
+            cvList.add(new CvWithKeyAndSegmentOffset(cv, key, offsetInThisSegment, segmentIndex, (byte) 0));
+        });
         return expiredCountArray[0];
     }
 

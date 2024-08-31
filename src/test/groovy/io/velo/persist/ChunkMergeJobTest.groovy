@@ -174,14 +174,15 @@ class ChunkMergeJobTest extends Specification {
         int[] nextNSegmentIndex = [0, 1, 2, 3, 4, 5, 6]
         ArrayList<PersistValueMeta> returnPvmList = []
 
-        def segmentBatch = new SegmentBatch(slot, oneSlot.snowFlake)
-        def r = segmentBatch.splitAndTight(valueList, nextNSegmentIndex, returnPvmList)
-        println 'split and tight: ' + r.size() + ' segments, ' + returnPvmList.size() + ' pvm list'
+        def segmentBatch2 = new SegmentBatch2(slot, oneSlot.snowFlake)
+        def r = segmentBatch2.split(valueList, nextNSegmentIndex, returnPvmList)
+        println 'split: ' + r.size() + ' segments, ' + returnPvmList.size() + ' pvm list'
 
         def fdChunk = oneSlot.chunk.fdReadWriteArray[0]
-        fdChunk.writeOneInner(segmentIndex, r[0].tightBytesWithLength(), false)
-        fdChunk.writeOneInner(segmentIndex + 1, r[1].tightBytesWithLength(), false)
-        println 'write segment ' + segmentIndex + ', ' + (segmentIndex + 1)
+        r.eachWithIndex { SegmentBatch2.SegmentBytesWithIndex one, int i ->
+            fdChunk.writeOneInner(segmentIndex + i, one.segmentBytes(), false)
+            println 'write segment ' + (segmentIndex + i) + ' with ' + one.segmentBytes().length + ' bytes'
+        }
 
         def xForBinlog = new XOneWalGroupPersist(true, false, 0)
         oneSlot.keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, returnPvmList, xForBinlog)

@@ -4,6 +4,7 @@ import com.github.luben.zstd.Zstd;
 import io.velo.ConfForSlot;
 import io.velo.persist.ChunkMergeJob;
 import io.velo.persist.SegmentBatch;
+import io.velo.persist.SegmentBatch2;
 
 import java.io.File;
 import java.io.IOException;
@@ -62,15 +63,15 @@ public class GetOneCvFromChunkSegments {
             }
 
             int finalSubBlockIndex = subBlockIndex;
-            SegmentBatch.iterateFromSegmentBytes(decompressedBytes, (key, cv, offsetInThisSegment) -> {
+            SegmentBatch2.iterateFromSegmentBytes(decompressedBytes, 0, decompressedBytes.length, (key, cv, offsetInThisSegment) -> {
                 cvList.add(new ChunkMergeJob.CvWithKeyAndSegmentOffset(cv, key, offsetInThisSegment, segmentIndex, (byte) finalSubBlockIndex));
 
                 if (segmentOffset == offsetInThisSegment) {
-                    System.out.println("key: " + new String(key) + ", cv: " + cv);
+                    System.out.println("key: " + key + ", cv: " + cv);
                 }
 
-                if (toFindKey.equals(new String(key))) {
-                    System.out.println("key: " + new String(key) + ", cv: " + cv);
+                if (toFindKey.equals(key)) {
+                    System.out.println("key: " + key + ", cv: " + cv);
                 }
             });
         }

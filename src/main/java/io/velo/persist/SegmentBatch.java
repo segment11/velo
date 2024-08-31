@@ -1,13 +1,10 @@
 package io.velo.persist;
 
 import com.github.luben.zstd.Zstd;
-import io.netty.buffer.Unpooled;
-import io.velo.CompressedValue;
 import io.velo.ConfForSlot;
 import io.velo.KeyHash;
 import io.velo.SnowFlake;
 import io.velo.metric.InSlotMetricCollector;
-import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +19,6 @@ public class SegmentBatch implements InSlotMetricCollector {
     private final byte[] bytes;
     private final ByteBuffer buffer;
     private final short slot;
-    private final String slotStr;
 
     private final int chunkSegmentLength;
     private final SnowFlake snowFlake;
@@ -48,7 +44,6 @@ public class SegmentBatch implements InSlotMetricCollector {
     public SegmentBatch(short slot, SnowFlake snowFlake) {
         this.chunkSegmentLength = ConfForSlot.global.confChunk.segmentLength;
         this.slot = slot;
-        this.slotStr = String.valueOf(slot);
 
         this.bytes = new byte[chunkSegmentLength];
         this.buffer = ByteBuffer.wrap(bytes);
@@ -311,53 +306,5 @@ public class SegmentBatch implements InSlotMetricCollector {
         Arrays.fill(bytes, (byte) 0);
 
         return new SegmentCompressedBytesWithIndex(compressedBytes, segmentIndex, segmentSeq);
-    }
-
-    public interface CvCallback {
-        void callback(String key, CompressedValue cv, int offsetInThisSegment);
-    }
-
-    @TestOnly
-    static class ForDebugCvCallback implements CvCallback {
-        @Override
-        public void callback(String key, CompressedValue cv, int offsetInThisSegment) {
-            System.out.println("key: " + key + ", cv: " + cv + ", offsetInThisSegment: " + offsetInThisSegment);
-        }
-    }
-
-    public static void iterateFromSegmentBytes(byte[] decompressedBytes, CvCallback cvCallback) {
-        var buf = Unpooled.wrappedBuffer(decompressedBytes);
-        // for crc check
-        var segmentSeq = buf.readLong();
-        var cvCount = buf.readInt();
-        var segmentCrc32 = buf.readInt();
-
-        int offsetInThisSegment = Chunk.SEGMENT_HEADER_LENGTH;
-        while (true) {
-            // refer to comment: write 0 short, so merge loop can break, because reuse old bytes
-            if (buf.readableBytes() < 2) {
-                break;
-            }
-
-            var keyLength = buf.readShort();
-            if (keyLength == 0) {
-                break;
-            }
-
-            if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
-                throw new IllegalStateException("Key length error, key length: " + keyLength);
-            }
-
-            var keyBytes = new byte[keyLength];
-            buf.readBytes(keyBytes);
-            var key = new String(keyBytes);
-
-            var cv = CompressedValue.decode(buf, keyBytes, 0);
-            int length = Wal.V.persistLength(keyLength, cv.encodedLength());
-
-            cvCallback.callback(key, cv, offsetInThisSegment);
-
-            offsetInThisSegment += length;
-        }
     }
 }

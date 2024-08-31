@@ -315,7 +315,7 @@ class ChunkTest extends Specification {
         chunk.segmentIndex = 0
         def r = chunk.persist(0, vList, false, xForBinlog)
         then:
-        chunk.segmentIndex == 1
+        chunk.segmentIndex == 2
         r.size() == 0
 
         when:
@@ -327,7 +327,7 @@ class ChunkTest extends Specification {
         chunk.segmentIndex = 0
         r = chunk.persist(0, vList, true, xForBinlog)
         then:
-        chunk.segmentIndex == 1
+        chunk.segmentIndex == 2
         r.size() == 0
 
 //        when:

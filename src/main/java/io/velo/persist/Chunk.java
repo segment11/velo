@@ -59,7 +59,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     @VisibleForTesting
     final OneSlot oneSlot;
     private final KeyLoader keyLoader;
-    private final SegmentBatch segmentBatch;
+    private final SegmentBatch2 segmentBatch2;
 
     @VisibleForTesting
     int[] fdLengths;
@@ -87,7 +87,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
         this.oneSlot = oneSlot;
         this.keyLoader = keyLoader;
-        this.segmentBatch = new SegmentBatch(slot, snowFlake);
+        this.segmentBatch2 = new SegmentBatch2(slot, snowFlake);
     }
 
     @Override
@@ -356,7 +356,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
 
         ArrayList<PersistValueMeta> pvmList = new ArrayList<>();
-        var segments = segmentBatch.splitAndTight(list, nextNSegmentIndex, pvmList);
+        var segments = segmentBatch2.split(list, nextNSegmentIndex, pvmList);
 
         List<Long> segmentSeqListAll = new ArrayList<>();
         for (var segment : segments) {
@@ -377,7 +377,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         if (ConfForGlobal.pureMemory) {
             isNewAppendAfterBatch = fdReadWrite.isTargetSegmentIndexNullInMemory(segmentIndexTargetFd);
             for (var segment : segments) {
-                var bytes = segment.tightBytesWithLength();
+                var bytes = segment.segmentBytes();
                 fdReadWrite.writeOneInner(targetSegmentIndexTargetFd(segment.segmentIndex()), bytes, false);
 
                 xForBinlog.putUpdatedChunkSegmentBytes(segment.segmentIndex(), bytes);
@@ -392,7 +392,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         } else {
             if (segments.size() < BATCH_ONCE_SEGMENT_COUNT_PWRITE) {
                 for (var segment : segments) {
-                    var bytes = segment.tightBytesWithLength();
+                    var bytes = segment.segmentBytes();
                     boolean isNewAppend = writeSegments(bytes, 1);
                     isNewAppendAfterBatch = isNewAppend;
 
@@ -423,7 +423,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                     List<Long> segmentSeqListSubBatch = new ArrayList<>();
                     for (int j = 0; j < BATCH_ONCE_SEGMENT_COUNT_PWRITE; j++) {
                         var segment = segments.get(i * BATCH_ONCE_SEGMENT_COUNT_PWRITE + j);
-                        var bytes = segment.tightBytesWithLength();
+                        var bytes = segment.segmentBytes();
                         buffer.put(bytes);
 
                         // padding to segment length
@@ -455,7 +455,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
                 for (int i = 0; i < remainCount; i++) {
                     var segment = segments.get(batchCount * BATCH_ONCE_SEGMENT_COUNT_PWRITE + i);
-                    var bytes = segment.tightBytesWithLength();
+                    var bytes = segment.segmentBytes();
                     boolean isNewAppend = writeSegments(bytes, 1);
                     isNewAppendAfterBatch = isNewAppend;
 
@@ -765,7 +765,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             map.put("chunk_update_pvm_batch_cost_time_avg_us", (double) updatePvmBatchCostTimeTotalUs / persistCountTotal);
         }
 
-        map.putAll(segmentBatch.collect());
+        map.putAll(segmentBatch2.collect());
 
         if (fdReadWriteArray != null) {
             for (var fdReadWrite : fdReadWriteArray) {
