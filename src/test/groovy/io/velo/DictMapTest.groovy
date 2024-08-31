@@ -1,6 +1,8 @@
 package io.velo
 
+import io.velo.persist.Consts
 import io.velo.persist.DynConfig
+import io.velo.persist.DynConfigTest
 import io.velo.repl.Binlog
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
@@ -8,9 +10,9 @@ import spock.lang.Specification
 class DictMapTest extends Specification {
     def 'test all'() {
         given:
-        FileUtils.forceMkdir(io.velo.persist.Consts.testDir)
+        FileUtils.forceMkdir(Consts.testDir)
 
-        def dictFile = new File(io.velo.persist.Consts.testDir, 'dict-map.dat')
+        def dictFile = new File(Consts.testDir, 'dict-map.dat')
         if (dictFile.exists()) {
             dictFile.delete()
         }
@@ -18,12 +20,12 @@ class DictMapTest extends Specification {
         and:
         def dictMap = DictMap.instance
         dictMap.cleanUp()
-        dictMap.initDictMap(io.velo.persist.Consts.testDir)
+        dictMap.initDictMap(Consts.testDir)
 
         and:
         final short slot = 0
-        def dynConfig = new DynConfig(slot, io.velo.persist.DynConfigTest.tmpFile)
-        def binlog = new Binlog(slot, io.velo.persist.Consts.slotDir, dynConfig)
+        def dynConfig = new DynConfig(slot, DynConfigTest.tmpFile)
+        def binlog = new Binlog(slot, Consts.slotDir, dynConfig)
         dictMap.binlog = binlog
 
         def dict = new Dict()
@@ -61,7 +63,7 @@ class DictMapTest extends Specification {
 
         when:
         // reload again
-        dictMap.initDictMap(io.velo.persist.Consts.testDir)
+        dictMap.initDictMap(Consts.testDir)
         then:
         dictMap.dictSize() == 3
 
@@ -92,7 +94,7 @@ class DictMapTest extends Specification {
         cleanup:
         binlog.truncateAll()
         binlog.cleanUp()
-        io.velo.persist.Consts.slotDir.deleteDir()
-        io.velo.persist.Consts.testDir.deleteDir()
+        Consts.slotDir.deleteDir()
+        Consts.testDir.deleteDir()
     }
 }

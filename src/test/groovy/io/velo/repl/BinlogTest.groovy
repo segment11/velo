@@ -3,6 +3,7 @@ package io.velo.repl
 import io.velo.ConfForSlot
 import io.velo.persist.Consts
 import io.velo.persist.DynConfig
+import io.velo.persist.DynConfigTest
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
@@ -36,11 +37,11 @@ class BinlogTest extends Specification {
         Binlog.marginFileOffset(1024 * 1024 + 100) == 1024 * 1024
 
         when:
-        def dynConfig = new DynConfig(slot, io.velo.persist.DynConfigTest.tmpFile)
-        def dynConfig2 = new DynConfig(slot, io.velo.persist.DynConfigTest.tmpFile2)
+        def dynConfig = new DynConfig(slot, DynConfigTest.tmpFile)
+        def dynConfig2 = new DynConfig(slot, DynConfigTest.tmpFile2)
         dynConfig.binlogOn = true
         dynConfig2.binlogOn = false
-        def binlog = new Binlog(slot, io.velo.persist.Consts.slotDir, dynConfig)
+        def binlog = new Binlog(slot, Consts.slotDir, dynConfig)
         println binlog
         println binlog.currentFileIndexAndOffset()
         println binlog.earliestFileIndexAndOffset()
@@ -173,7 +174,7 @@ class BinlogTest extends Specification {
         def oldCurrentFileIndex = binlog.currentFileIndex
         binlog.cleanUp()
         // load again
-        binlog = new Binlog(slot, io.velo.persist.Consts.slotDir, dynConfig)
+        binlog = new Binlog(slot, Consts.slotDir, dynConfig)
         then:
         binlog.currentFileIndex == oldCurrentFileIndex
         binlog.currentFileOffset == lastAppendFileOffset
@@ -356,7 +357,7 @@ class BinlogTest extends Specification {
         println 'in memory size estimate: ' + binlog.estimate()
         binlog.truncateAll()
         binlog.cleanUp()
-        io.velo.persist.Consts.slotDir.deleteDir()
+        Consts.slotDir.deleteDir()
         slotDir2.deleteDir()
     }
 

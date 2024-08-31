@@ -588,10 +588,10 @@ class BaseCommandTest extends Specification {
         c.init(requestHandler, new Request(data3, false, false))
 
         and:
-        FileUtils.forceMkdir(io.velo.persist.Consts.testDir)
+        FileUtils.forceMkdir(Consts.testDir)
 
         def dictMap = DictMap.instance
-        dictMap.initDictMap(io.velo.persist.Consts.testDir)
+        dictMap.initDictMap(Consts.testDir)
         if (dictMap.dictSize() != 0) {
             dictMap.clearAll()
         }

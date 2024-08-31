@@ -1,6 +1,7 @@
 package io.velo.task
 
 import io.activej.eventloop.Eventloop
+import io.velo.persist.Consts
 import io.velo.persist.OneSlot
 import spock.lang.Specification
 
@@ -10,7 +11,7 @@ class TaskRunnableTest extends Specification {
     def 'test delay run task'() {
         given:
         final short slot = 0
-        def oneSlot = new OneSlot(slot, io.velo.persist.Consts.slotDir, null, null)
+        def oneSlot = new OneSlot(slot, Consts.slotDir, null, null)
         oneSlot.taskChain.add(new TaskChainTest.Task1())
 
         OneSlot[] oneSlots = new OneSlot[1]
@@ -47,9 +48,9 @@ class TaskRunnableTest extends Specification {
     def 'test some branches'() {
         given:
         final short slot = 0
-        def oneSlot = new OneSlot(slot, io.velo.persist.Consts.slotDir, null, null)
+        def oneSlot = new OneSlot(slot, Consts.slotDir, null, null)
         oneSlot.taskChain.add(new TaskChainTest.Task1())
-        def oneSlot2 = new OneSlot((byte) 1, io.velo.persist.Consts.slotDir, null, null)
+        def oneSlot2 = new OneSlot((byte) 1, Consts.slotDir, null, null)
         oneSlot2.taskChain.add(new TaskChainTest.Task1())
 
 

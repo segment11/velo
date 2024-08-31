@@ -1,6 +1,7 @@
 package io.velo.type
 
 import io.velo.*
+import io.velo.persist.Consts
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -219,7 +220,7 @@ class RedisHHTest extends Specification {
         def dictTrained = result.cacheDict().get('key:')
 
         def dictMap = DictMap.instance
-        dictMap.initDictMap(io.velo.persist.Consts.testDir)
+        dictMap.initDictMap(Consts.testDir)
         dictMap.putDict('key:', dictTrained)
 
         def encoded2 = rh.encode(dictTrained)
@@ -256,6 +257,6 @@ class RedisHHTest extends Specification {
 
         cleanup:
         dictMap.cleanUp()
-        io.velo.persist.Consts.testDir.deleteDir()
+        Consts.testDir.deleteDir()
     }
 }

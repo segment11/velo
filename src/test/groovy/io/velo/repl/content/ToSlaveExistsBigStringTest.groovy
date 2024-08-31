@@ -1,6 +1,7 @@
 package io.velo.repl.content
 
 import io.activej.bytebuf.ByteBuf
+import io.velo.persist.Consts
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -8,7 +9,7 @@ import java.nio.ByteBuffer
 class ToSlaveExistsBigStringTest extends Specification {
     def 'test all'() {
         given:
-        def bigStringDir = new File(io.velo.persist.Consts.slotDir, 'big-string')
+        def bigStringDir = new File(Consts.slotDir, 'big-string')
         if (!bigStringDir.exists()) {
             bigStringDir.mkdirs()
         }
