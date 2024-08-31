@@ -1232,7 +1232,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         for (var replPair : replPairs) {
             replPair.bye();
-            replPair.close();
+            // no reactor anymore
+//            replPair.close();
         }
     }
 

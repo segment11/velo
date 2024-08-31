@@ -588,8 +588,21 @@ public class MultiWorkerServer extends Launcher {
             // close local persist
             LocalPersist.getInstance().cleanUp();
             DictMap.getInstance().cleanUp();
+
+            for (var netWorkerEventloop : netWorkerEventloopArray) {
+                System.out.println("Net worker eventloop wake up");
+                netWorkerEventloop.execute(() -> {
+                    System.out.println("Net worker eventloop stopping");
+                });
+            }
+
+            System.out.println("Primary eventloop wake up");
+            primaryEventloop.execute(() -> {
+                System.out.println("Primary eventloop stopping");
+            });
         } catch (Exception e) {
             System.err.println("Stop error: " + e.getMessage());
+            e.printStackTrace();
             throw e;
         }
     }

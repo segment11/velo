@@ -356,8 +356,9 @@ public class ReplPair {
                 log.warn("Repl pair master close slave socket, {}:{}", host, port);
             } catch (Exception e) {
                 log.error("Repl pair master close slave socket error, {}:{}", host, port, e);
+            } finally {
+                slaveConnectSocketInMaster = null;
             }
-            slaveConnectSocketInMaster = null;
         }
     }
 
@@ -410,6 +411,8 @@ public class ReplPair {
             tcpClient.close();
             tcpClient = null;
         }
+
+        closeSlaveConnectSocket();
     }
 
     // as both master and slave field
