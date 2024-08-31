@@ -75,6 +75,8 @@ public class DictMap implements NeedCleanUp {
 
         TrainSampleJob.addKeyPrefixGroupIfNotExist(keyPrefixOrSuffix);
 
+        dict.initCtx();
+
         cacheDictBySeq.put(dict.getSeq(), dict);
         return cacheDict.put(keyPrefixOrSuffix, dict);
     }
@@ -108,14 +110,24 @@ public class DictMap implements NeedCleanUp {
                 try {
                     fos.close();
                     System.out.println("Close dict fos");
+                    fos = null;
                 } catch (IOException e) {
                     System.err.println("Close dict fos error, message: " + e.getMessage());
                 }
             }
         }
+
+        for (var entry : cacheDictBySeq.entrySet()) {
+            entry.getValue().closeCtx();
+        }
+        Dict.GLOBAL_ZSTD_DICT.closeCtx();
     }
 
     public void clearAll() {
+        for (var entry : cacheDictBySeq.entrySet()) {
+            entry.getValue().closeCtx();
+        }
+
         cacheDict.clear();
         cacheDictBySeq.clear();
 
@@ -176,6 +188,7 @@ public class DictMap implements NeedCleanUp {
     public void updateGlobalDictBytes(byte[] dictBytes) {
         Dict.GLOBAL_ZSTD_DICT.setDictBytes(dictBytes);
         log.warn("Dict global dict bytes updated, dict bytes length: {}", dictBytes.length);
+        Dict.GLOBAL_ZSTD_DICT.initCtx();
         Dict.saveGlobalDictBytesToFile(new File(dirFile, Dict.GLOBAL_DICT_FILE_NAME));
     }
 }

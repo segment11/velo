@@ -1,5 +1,9 @@
 package io.velo;
 
+import com.github.luben.zstd.Zstd;
+import com.github.luben.zstd.ZstdCompressCtx;
+import com.github.luben.zstd.ZstdDecompressCtx;
+import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -110,6 +114,52 @@ public class Dict implements Serializable {
 
     public void setDictBytes(byte[] dictBytes) {
         this.dictBytes = dictBytes;
+    }
+
+    @VisibleForTesting
+    ZstdDecompressCtx decompressCtx;
+    @VisibleForTesting
+    ZstdCompressCtx ctxCompress;
+
+    void initCtx() {
+        if (decompressCtx == null) {
+            decompressCtx = new ZstdDecompressCtx();
+            decompressCtx.loadDict(dictBytes);
+            log.info("Dict init decompress ctx, dict bytes length: {}", dictBytes.length);
+        }
+
+        if (ctxCompress == null) {
+            ctxCompress = new ZstdCompressCtx();
+            ctxCompress.loadDict(dictBytes);
+            ctxCompress.setLevel(Zstd.defaultCompressionLevel());
+            log.info("Dict init compress ctx, dict bytes length: {}", dictBytes.length);
+        }
+    }
+
+    void closeCtx() {
+        if (decompressCtx != null) {
+            decompressCtx.close();
+            log.warn("Dict close decompress ctx, dict bytes length: {}", dictBytes.length);
+            decompressCtx = null;
+        }
+
+        if (ctxCompress != null) {
+            ctxCompress.close();
+            log.warn("Dict close compress ctx, dict bytes length: {}", dictBytes.length);
+            ctxCompress = null;
+        }
+    }
+
+    public byte[] compressByteArray(byte[] src) {
+        return ctxCompress.compress(src);
+    }
+
+    public int compressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
+        return ctxCompress.compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
+    }
+
+    public int decompressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
+        return decompressCtx.decompressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
     }
 
     @Override

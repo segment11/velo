@@ -1,6 +1,5 @@
 package io.velo.command
 
-import com.github.luben.zstd.Zstd
 import groovy.transform.CompileStatic
 import io.activej.promise.Promise
 import io.activej.promise.Promises
@@ -292,7 +291,7 @@ class ManageCommand extends BaseCommand {
         long totalCompressedBytes = 0
         for (sample in sampleToTrainList) {
             totalBytes += sample.valueBytes().length
-            def compressedBytes = Zstd.compressUsingDict(sample.valueBytes(), onlyOneDict.dictBytes, Zstd.defaultCompressionLevel())
+            def compressedBytes = onlyOneDict.compressByteArray(sample.valueBytes())
             totalCompressedBytes += compressedBytes.length
         }
 

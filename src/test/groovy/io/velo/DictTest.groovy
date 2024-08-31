@@ -1,6 +1,7 @@
 package io.velo
 
-
+import com.github.luben.zstd.Zstd
+import io.velo.persist.Consts
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -192,5 +193,69 @@ class DictTest extends Specification {
         }
         then:
         exception
+    }
+
+    def 'test init ctx'() {
+        given:
+        def dictMap = DictMap.instance
+        dictMap.initDictMap(Consts.testDir)
+
+        and:
+        def job = new TrainSampleJob((byte) 0)
+        job.dictSize = 512
+        job.trainSampleMinBodyLength = 1024
+
+        and:
+        def sampleValue = 'xxxx' * 5 + 'yyyy' * 5 + 'zzzz' * 5
+        def sampleValueBytes = sampleValue.bytes
+
+        def snowFlake = new SnowFlake(0, 0)
+
+
+        def keyPrefix = 'key:'
+        TrainSampleJob.keyPrefixOrSuffixGroupList = [keyPrefix]
+        List<TrainSampleJob.TrainSampleKV> sampleToTrainList = []
+        11.times {
+            sampleToTrainList << new TrainSampleJob.TrainSampleKV("key:$it", null, snowFlake.nextId(), sampleValueBytes)
+        }
+
+        job.resetSampleToTrainList(sampleToTrainList)
+        def result = job.train()
+
+        expect:
+        result.cacheDict().size() == 1
+
+        when:
+        def dictTrained = result.cacheDict().get(keyPrefix)
+        dictMap.putDict(keyPrefix, dictTrained)
+        then:
+        dictTrained.decompressCtx != null
+        dictTrained.ctxCompress != null
+
+        when:
+        def sampleCompressedValueBytes = dictTrained.compressByteArray(sampleValueBytes)
+        println 'compressed length: ' + sampleCompressedValueBytes.length
+        println 'uncompressed length: ' + sampleValueBytes.length
+        println 'compress ratio: ' + (sampleCompressedValueBytes.length / sampleValueBytes.length)
+        then:
+        sampleCompressedValueBytes.length < sampleValueBytes.length
+
+        when:
+        def dst = new byte[((int) Zstd.compressBound(sampleValueBytes.length))];
+        def compressedSize = dictTrained.compressByteArray(dst, 0, sampleValueBytes, 0, sampleValueBytes.length)
+        then:
+        compressedSize == sampleCompressedValueBytes.length
+
+        when:
+        def dst2 = new byte[sampleValueBytes.length]
+        dictTrained.decompressByteArray(dst2, 0, sampleCompressedValueBytes, 0, sampleCompressedValueBytes.length)
+        then:
+        dst2 == sampleValueBytes
+
+        cleanup:
+        // for coverage
+        dictTrained.initCtx()
+        dictTrained.closeCtx()
+        dictMap.cleanUp()
     }
 }

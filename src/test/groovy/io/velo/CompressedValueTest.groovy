@@ -1,6 +1,5 @@
 package io.velo
 
-import com.github.luben.zstd.Zstd
 import io.activej.bytebuf.ByteBuf
 import io.netty.buffer.Unpooled
 import spock.lang.Specification
@@ -343,8 +342,8 @@ class CompressedValueTest extends Specification {
         def rawBytes = ('111112222233333' * 10).bytes
 
         when:
-        def cv1 = CompressedValue.compress(rawBytes, null, Zstd.defaultCompressionLevel())
-        def cv2 = CompressedValue.compress(rawBytes, Dict.SELF_ZSTD_DICT, Zstd.defaultCompressionLevel())
+        def cv1 = CompressedValue.compress(rawBytes, null)
+        def cv2 = CompressedValue.compress(rawBytes, Dict.SELF_ZSTD_DICT)
         then:
         cv1.compressedLength < rawBytes.length
         cv2.compressedLength < rawBytes.length
@@ -363,7 +362,7 @@ class CompressedValueTest extends Specification {
         when:
         def rawBytes2 = '1234'.bytes
         // will not compress
-        def cv3 = CompressedValue.compress(rawBytes2, null, Zstd.defaultCompressionLevel())
+        def cv3 = CompressedValue.compress(rawBytes2, null)
         then:
         cv3.isIgnoreCompression(rawBytes2)
         !cv3.isIgnoreCompression('12345'.bytes)
@@ -382,7 +381,8 @@ class CompressedValueTest extends Specification {
         job.resetSampleToTrainList(sampleToTrainList)
         def result = job.train()
         def dict = result.cacheDict().get('key:')
-        def cv4 = CompressedValue.compress(rawBytes, dict, Zstd.defaultCompressionLevel())
+        dict.initCtx()
+        def cv4 = CompressedValue.compress(rawBytes, dict)
         then:
         cv4.compressedLength < rawBytes.length
 
@@ -390,5 +390,8 @@ class CompressedValueTest extends Specification {
         def rawBytesDecompressed = cv4.decompress(dict)
         then:
         rawBytes == rawBytesDecompressed
+
+        cleanup:
+        dict.closeCtx()
     }
 }

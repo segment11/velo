@@ -134,7 +134,6 @@ public abstract class BaseCommand {
     protected short slotNumber;
     protected CompressStats compressStats;
 
-    protected int compressLevel = Zstd.defaultCompressionLevel();
     protected int trainSampleListMaxSize = 1000;
 
     protected SnowFlake snowFlake;
@@ -205,7 +204,6 @@ public abstract class BaseCommand {
 
         aGroup.compressStats = compressStats;
 
-        aGroup.compressLevel = compressLevel;
         aGroup.trainSampleListMaxSize = trainSampleListMaxSize;
 
         aGroup.snowFlake = snowFlake;
@@ -228,7 +226,6 @@ public abstract class BaseCommand {
 
         this.compressStats = other.compressStats;
 
-        this.compressLevel = other.compressLevel;
         this.trainSampleListMaxSize = other.trainSampleListMaxSize;
 
         this.snowFlake = other.snowFlake;
@@ -254,7 +251,6 @@ public abstract class BaseCommand {
 
         this.compressStats = requestHandler.compressStats;
 
-        this.compressLevel = requestHandler.compressLevel;
         this.trainSampleListMaxSize = requestHandler.trainSampleListMaxSize;
 
         this.snowFlake = requestHandler.snowFlake;
@@ -641,7 +637,7 @@ public abstract class BaseCommand {
                 dict != null) {
             var beginT = System.nanoTime();
             // dict may be null
-            var cv = CompressedValue.compress(valueBytes, dict, compressLevel);
+            var cv = CompressedValue.compress(valueBytes, dict);
             var costT = (System.nanoTime() - beginT) / 1000;
             cv.setSeq(snowFlake.nextId());
             if (cv.isIgnoreCompression(valueBytes)) {

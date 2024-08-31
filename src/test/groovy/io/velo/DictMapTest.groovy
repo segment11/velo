@@ -63,6 +63,7 @@ class DictMapTest extends Specification {
 
         when:
         // reload again
+        dictMap.cleanUp()
         dictMap.initDictMap(Consts.testDir)
         then:
         dictMap.dictSize() == 3

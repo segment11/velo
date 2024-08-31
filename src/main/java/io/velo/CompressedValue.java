@@ -265,24 +265,31 @@ public class CompressedValue {
 
     public byte[] decompress(Dict dict) {
         var dst = new byte[uncompressedLength];
+        int r;
         if (dict == null || dict == Dict.SELF_ZSTD_DICT) {
-            Zstd.decompress(dst, compressedData);
+            r = (int) Zstd.decompress(dst, compressedData);
         } else {
-            Zstd.decompressUsingDict(dst, 0, compressedData, 0, compressedData.length, dict.getDictBytes());
+            r = dict.decompressByteArray(dst, 0, compressedData, 0, compressedData.length);
+        }
+        if (r <= 0) {
+            throw new IllegalStateException("Decompress error");
         }
         return dst;
     }
 
-    public static CompressedValue compress(byte[] data, Dict dict, int level) {
+    public static CompressedValue compress(byte[] data, Dict dict) {
         var cv = new CompressedValue();
 
         // memory copy too much, use direct buffer better
         var dst = new byte[((int) Zstd.compressBound(data.length))];
         int compressedSize;
         if (dict == null || dict == Dict.SELF_ZSTD_DICT) {
-            compressedSize = (int) Zstd.compress(dst, data, level);
+            compressedSize = (int) Zstd.compress(dst, data, Zstd.defaultCompressionLevel());
         } else {
-            compressedSize = (int) Zstd.compressUsingDict(dst, 0, data, 0, data.length, dict.getDictBytes(), level);
+            compressedSize = dict.compressByteArray(dst, 0, data, 0, data.length);
+        }
+        if (compressedSize <= 0) {
+            throw new IllegalStateException("Compress error");
         }
 
         if (compressedSize > data.length) {

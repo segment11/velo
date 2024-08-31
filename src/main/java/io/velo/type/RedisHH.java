@@ -114,7 +114,7 @@ public class RedisHH {
         if (dict == Dict.SELF_ZSTD_DICT) {
             compressedSize = (int) Zstd.compressByteArray(dst, 0, dst.length, rawBytesWithHeader, HEADER_LENGTH, bodyBytesLength, Zstd.defaultCompressionLevel());
         } else {
-            compressedSize = (int) Zstd.compressUsingDict(dst, 0, rawBytesWithHeader, HEADER_LENGTH, bodyBytesLength, dict.getDictBytes(), Zstd.defaultCompressionLevel());
+            compressedSize = dict.compressByteArray(dst, 0, rawBytesWithHeader, HEADER_LENGTH, bodyBytesLength);
         }
 
         if (compressedSize < bodyBytesLength * PREFER_COMPRESS_RATIO) {
@@ -209,7 +209,7 @@ public class RedisHH {
             }
 
             var bodyBytes = new byte[bodyBytesLength];
-            int decompressedSize = (int) Zstd.decompressUsingDict(bodyBytes, 0, data, HEADER_LENGTH, data.length - HEADER_LENGTH, dict.getDictBytes());
+            var decompressedSize = dict.decompressByteArray(bodyBytes, 0, data, HEADER_LENGTH, data.length - HEADER_LENGTH);
             if (decompressedSize <= 0) {
                 throw new IllegalStateException("Decompress error");
             }
