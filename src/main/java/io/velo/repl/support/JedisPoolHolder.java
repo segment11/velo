@@ -25,7 +25,7 @@ public class JedisPoolHolder implements NeedCleanUp {
 
     private final Map<String, JedisPool> cached = new HashMap<>();
 
-    private final Logger log = LoggerFactory.getLogger(JedisPoolHolder.class);
+    private static final Logger log = LoggerFactory.getLogger(JedisPoolHolder.class);
 
     public synchronized JedisPool create(String host, int port) {
         var key = host + ":" + port;

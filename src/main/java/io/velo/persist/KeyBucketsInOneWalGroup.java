@@ -35,7 +35,7 @@ public class KeyBucketsInOneWalGroup {
 
     private final KeyLoader keyLoader;
 
-    private final Logger log = LoggerFactory.getLogger(KeyBucketsInOneWalGroup.class);
+    private static final Logger log = LoggerFactory.getLogger(KeyBucketsInOneWalGroup.class);
 
     // outer index is split index, inner index is relative (bucket index - begin bucket index)
     @VisibleForTesting

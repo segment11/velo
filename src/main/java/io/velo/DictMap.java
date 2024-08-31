@@ -32,7 +32,7 @@ public class DictMap implements NeedCleanUp {
         this.binlog = binlog;
     }
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(DictMap.class);
 
     public Dict getDictBySeq(int seq) {
         return cacheDictBySeq.get(seq);

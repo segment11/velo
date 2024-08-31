@@ -67,7 +67,7 @@ public class RefreshLoader {
         }
     }
 
-    private final Logger log = org.slf4j.LoggerFactory.getLogger(RefreshLoader.class);
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(RefreshLoader.class);
 
     private final Map<String, Long> lastModified = new HashMap<>();
 

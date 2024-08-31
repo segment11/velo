@@ -17,7 +17,7 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class SocketInspector implements TcpSocket.Inspector {
-    private final Logger log = LoggerFactory.getLogger(SocketInspector.class);
+    private static final Logger log = LoggerFactory.getLogger(SocketInspector.class);
 
     volatile boolean isServerStopped = false;
 

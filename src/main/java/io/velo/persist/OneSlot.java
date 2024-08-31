@@ -239,7 +239,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 '}';
     }
 
-    private final Logger log = LoggerFactory.getLogger(OneSlot.class);
+    private static final Logger log = LoggerFactory.getLogger(OneSlot.class);
 
     public long getMasterUuid() {
         return masterUuid;

@@ -45,7 +45,7 @@ public class XFlush implements BinlogContent {
 
     private final LocalPersist localPersist = LocalPersist.getInstance();
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(XFlush.class);
 
     @Override
     public void apply(short slot, ReplPair replPair) {

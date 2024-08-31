@@ -22,7 +22,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     private final byte[] inMemoryCachedBytes;
     private final ByteBuffer inMemoryCachedByteBuffer;
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(MetaChunkSegmentIndex.class);
 
     public MetaChunkSegmentIndex(short slot, File slotDir) throws IOException {
         // 4 bytes for chunk segment index int

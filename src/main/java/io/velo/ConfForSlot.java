@@ -12,7 +12,7 @@ public enum ConfForSlot {
     debugMode(100_000), c1m(1_000_000L),
     c10m(10_000_000L), c100m(100_000_000L);
 
-    public static Logger log = LoggerFactory.getLogger(ConfForSlot.class);
+    public static final Logger log = LoggerFactory.getLogger(ConfForSlot.class);
 
     public final ConfBucket confBucket;
     public final ConfChunk confChunk;

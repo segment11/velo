@@ -5,8 +5,6 @@ import io.velo.CompressedValue;
 import io.velo.SnowFlake;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.nio.ByteBuffer;
@@ -42,8 +40,6 @@ public class KeyBucket {
 //            throw new IllegalStateException("INIT_BYTES_LENGTH > KEY_BUCKET_ONE_COST_SIZE");
 //        }
 //    }
-
-    private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final int capacity;
     short size;
@@ -610,8 +606,8 @@ public class KeyBucket {
                 break;
             } else {
                 // hash conflict, just continue
-                log.warn("Key hash conflict, key hash={}, target cell index={}, key={}, slot={}, bucket index={}",
-                        keyHash, cellIndex, new String(keyBytes), slot, bucketIndex);
+                System.err.println("Key hash conflict, key hash=" + keyHash + ", target cell index=" + cellIndex
+                        + ", key=" + new String(keyBytes) + ", slot=" + slot + ", bucket index=" + bucketIndex);
             }
         }
 

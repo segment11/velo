@@ -33,7 +33,7 @@ public class TcpClient implements NeedCleanUp {
         this.replPair = replPair;
     }
 
-    private final Logger log = LoggerFactory.getLogger(TcpClient.class);
+    private static final Logger log = LoggerFactory.getLogger(TcpClient.class);
 
     private TcpSocket sock;
 

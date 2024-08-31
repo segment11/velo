@@ -32,7 +32,7 @@ import java.util.Map;
 // need refactor to FdChunkSegments + FdKeyBuckets, todo
 public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp {
 
-    private final Logger log = LoggerFactory.getLogger(this.getClass());
+    private static final Logger log = LoggerFactory.getLogger(FdReadWrite.class);
 
     public FdReadWrite(short slot, String name, LibC libC, File file) throws IOException {
         this.slot = slot;

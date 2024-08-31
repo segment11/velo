@@ -20,7 +20,7 @@ public class TrainSampleJob {
         this.workerId = workerId;
     }
 
-    private final Logger log = org.slf4j.LoggerFactory.getLogger(TrainSampleJob.class);
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(TrainSampleJob.class);
 
     public static final int MIN_TRAIN_SAMPLE_SIZE = 10;
 

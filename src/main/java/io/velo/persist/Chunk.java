@@ -27,7 +27,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     // seq long + cv number int + crc int
     public static final int SEGMENT_HEADER_LENGTH = 8 + 4 + 4;
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(Chunk.class);
 
     private final short slot;
     private final String slotStr;

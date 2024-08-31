@@ -28,7 +28,7 @@ public class XDict implements BinlogContent {
         this.dict = dict;
     }
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(XDict.class);
 
     @Override
     public Type type() {

@@ -37,7 +37,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector {
         return map;
     }
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(BigStringFiles.class);
 
     public BigStringFiles(short slot, File slotDir) throws IOException {
         this.slot = slot;

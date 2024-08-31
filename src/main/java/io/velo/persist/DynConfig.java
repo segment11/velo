@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public class DynConfig {
-    private final Logger log = LoggerFactory.getLogger(DynConfig.class);
+    private static final Logger log = LoggerFactory.getLogger(DynConfig.class);
     private final short slot;
     private final File dynConfigFile;
 

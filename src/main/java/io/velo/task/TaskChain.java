@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 
 public class TaskChain {
-    private final Logger log = LoggerFactory.getLogger(TaskChain.class);
+    private static final Logger log = LoggerFactory.getLogger(TaskChain.class);
 
     // need not thread safe
     final ArrayList<ITask> list = new ArrayList<>();

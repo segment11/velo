@@ -29,7 +29,7 @@ import static io.activej.config.converter.ConfigConverters.ofBoolean;
 import static io.activej.config.converter.ConfigConverters.ofInteger;
 
 public class RequestHandler {
-    private final Logger log = LoggerFactory.getLogger(this.getClass());
+    private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
 
     private static final String PING_COMMAND = "ping";
     private static final String AUTH_COMMAND = "auth";

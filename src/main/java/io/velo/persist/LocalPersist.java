@@ -34,7 +34,7 @@ public class LocalPersist implements NeedCleanUp {
         return instance;
     }
 
-    private final Logger log = LoggerFactory.getLogger(LocalPersist.class);
+    private static final Logger log = LoggerFactory.getLogger(LocalPersist.class);
 
     private LocalPersist() {
         System.setProperty("jnr.ffi.asm.enabled", "false");

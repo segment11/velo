@@ -28,7 +28,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
     long validCvCountTotal = 0;
     long invalidCvCountTotal = 0;
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(ChunkMergeWorker.class);
 
     record CvWithKeyAndBucketIndexAndSegmentIndex(CompressedValue cv, String key, int bucketIndex, int segmentIndex) {
     }

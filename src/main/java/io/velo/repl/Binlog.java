@@ -79,7 +79,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
-    private final Logger log = LoggerFactory.getLogger(Binlog.class);
+    private static final Logger log = LoggerFactory.getLogger(Binlog.class);
 
     // return sorted by file index
     private ArrayList<File> listFiles() {

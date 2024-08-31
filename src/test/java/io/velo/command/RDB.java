@@ -46,7 +46,7 @@ public class RDB {
     final static int QuickListNodeContainerPlain = 1;
     final static int QuickListNodeContainerPacked = 2;
 
-    private final Logger log = LoggerFactory.getLogger(this.getClass());
+    private static final Logger log = LoggerFactory.getLogger(RDB.class);
 
     private final ByteBuf buf;
 

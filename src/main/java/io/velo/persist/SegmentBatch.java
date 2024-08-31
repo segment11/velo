@@ -43,7 +43,7 @@ public class SegmentBatch implements InSlotMetricCollector {
     @VisibleForTesting
     long afterTightSegmentCountTotal;
 
-    private final Logger log = LoggerFactory.getLogger(SegmentBatch.class);
+    private static final Logger log = LoggerFactory.getLogger(SegmentBatch.class);
 
     public SegmentBatch(short slot, SnowFlake snowFlake) {
         this.chunkSegmentLength = ConfForSlot.global.confChunk.segmentLength;

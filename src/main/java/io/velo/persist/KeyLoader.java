@@ -169,7 +169,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     @VisibleForTesting
     FdReadWrite[] fdReadWriteArray;
 
-    private final Logger log = org.slf4j.LoggerFactory.getLogger(KeyLoader.class);
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(KeyLoader.class);
 
     private StatKeyCountInBuckets statKeyCountInBuckets;
 

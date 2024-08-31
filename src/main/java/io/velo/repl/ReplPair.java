@@ -46,7 +46,7 @@ public class ReplPair {
     private final String host;
     private final int port;
 
-    private final Logger log = LoggerFactory.getLogger(ReplPair.class);
+    private static final Logger log = LoggerFactory.getLogger(ReplPair.class);
 
     public short getSlot() {
         return slot;
