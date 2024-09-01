@@ -19,6 +19,7 @@ Velo is a redis compatible kv store, base on slot and hash buckets.
 - Prometheus' metrics support
 - Http api support
 - LRU cache support
+- Big key monitor / Slow command monitor
 
 # Architecture
 
