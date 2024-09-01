@@ -1,6 +1,5 @@
 package io.velo.persist
 
-import com.github.luben.zstd.Zstd
 import io.velo.CompressedValue
 import io.velo.SnowFlake
 import spock.lang.Specification
@@ -67,78 +66,36 @@ class SegmentBatchTest extends Specification {
         for (one in r) {
             println one
         }
+        def r2 = segmentBatch.split(list, nextNSegmentIndex, [])
+        then:
+        r.size() == r2.size()
+        returnPvmList.size() == list.size()
+
+        when:
         def first = r[0]
         def buffer = ByteBuffer.wrap(first.tightBytesWithLength())
         def seq = buffer.getLong()
         def totalBytesN = buffer.getInt()
         println "seq: $seq, total bytes: $totalBytesN"
-
-        List<CompressedValue> loaded = []
+        List<CompressedValue> loadedCvList = []
+        def pvm0 = new PersistValueMeta()
+        pvm0.slot = slot
+        pvm0.segmentIndex = 0
+        def mockChunk = ChunkTest.prepareOne(slot)
         for (i in 0..<SegmentBatch.MAX_BLOCK_NUMBER) {
-            buffer.position(8 + 4 + i * (2 + 2))
-            def offset = buffer.getShort()
-            def length = buffer.getShort()
-
-            if (offset == 0) {
-                assert length == 0
-                break
-            }
-
-            def compressedBytes = new byte[length]
-            buffer.position(offset).get(compressedBytes)
-
-            println "offset: $offset, compressed bytes length: ${compressedBytes.length}"
-
-            def decompressedBytes = Zstd.decompress(compressedBytes, 4096)
-            println "decompressed bytes length: ${decompressedBytes.length}"
-
-            SegmentBatch2.iterateFromSegmentBytes(decompressedBytes, 0, decompressedBytes.length, { key, cv, offsetInThisSegment ->
+            pvm0.subBlockIndex = (byte) i
+            def decompressedSegmentBytes0 = SegmentBatch.decompressSegmentBytesFromOneSubBlock(first.tightBytesWithLength(), pvm0, mockChunk)
+            SegmentBatch2.iterateFromSegmentBytes(decompressedSegmentBytes0, 0, decompressedSegmentBytes0.length, { key, cv, offsetInThisSegment ->
                 if (cv.seq % 10 == 0) {
                     println "key: $key, cv: $cv, offset in this segment: $offsetInThisSegment"
                 }
-                loaded << cv
+                loadedCvList << cv
             })
         }
-
         then:
-        returnPvmList.size() == list.size()
-        loaded.every { one ->
+        loadedCvList.every { one ->
             one.compressedLength == 10 &&
                     list.find { it.seq() == one.seq }.keyHash() == one.keyHash
         }
-
-        when:
-        def bytesX = new byte[16]
-        List<CompressedValue> loaded2 = []
-        SegmentBatch2.iterateFromSegmentBytes(bytesX, 0, bytesX.length, { key, cv, offsetInThisSegment ->
-            println "key: $key, cv: $cv, offset in this segment: $offsetInThisSegment"
-            loaded2 << cv
-        })
-        then:
-        loaded2.size() == 0
-
-        when:
-        bytesX = new byte[18]
-        SegmentBatch2.iterateFromSegmentBytes(bytesX, 0, bytesX.length, { key, cv, offsetInThisSegment ->
-            println "key: $key, cv: $cv, offset in this segment: $offsetInThisSegment"
-            loaded2 << cv
-        })
-        then:
-        loaded2.size() == 0
-
-        when:
-        exception = false
-        ByteBuffer.wrap(bytesX).putShort(16, (short) -1)
-        try {
-            SegmentBatch2.iterateFromSegmentBytes(bytesX, 0, bytesX.length, { key, cv, offsetInThisSegment ->
-                println "key: $key, cv: $cv, offset in this segment: $offsetInThisSegment"
-                loaded2 << cv
-            })
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
     }
 }

@@ -44,6 +44,7 @@ public enum ConfForSlot {
         map.put("chunk.segmentNumberPerFd", confChunk.segmentNumberPerFd);
         map.put("chunk.fdPerChunk", confChunk.fdPerChunk);
         map.put("chunk.segmentLength", confChunk.segmentLength);
+        map.put("chunk.isSegmentUseCompression", confChunk.isSegmentUseCompression);
         map.put("wal.oneChargeBucketNumber", confWal.oneChargeBucketNumber);
         map.put("repl.binlogOneSegmentLength", confRepl.binlogOneSegmentLength);
         map.put("repl.binlogOneFileMaxLength", confRepl.binlogOneFileMaxLength);
@@ -147,6 +148,7 @@ public enum ConfForSlot {
         public byte fdPerChunk;
         // for better latency, PAGE_SIZE 4K is ok
         public int segmentLength;
+        public boolean isSegmentUseCompression;
 
         // 4KB one segment, 25 * 1000 * 4KB = 100MB
         public final ConfLru lruPerFd = new ConfLru(0);
@@ -180,6 +182,9 @@ public enum ConfForSlot {
             boolean isValueSetUseCompression1 = ConfForGlobal.isValueSetUseCompression;
             // if not use compression, chunk files number need to be doubled
             if (!isValueSetUseCompression1) {
+                this.fdPerChunk = (byte) (2 * this.fdPerChunk);
+            }
+            if (!isSegmentUseCompression) {
                 this.fdPerChunk = (byte) (2 * this.fdPerChunk);
             }
 

@@ -872,7 +872,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var pvm = PersistValueMeta.decode(valueBytes);
         var segmentBytes = getSegmentBytesByPvm(pvm);
-//        SegmentBatch.iterateFromSegmentBytesForDebug(segmentBytes);
+        if (segmentBytes == null) {
+            throw new IllegalStateException("Load persisted segment bytes error, pvm: " + pvm);
+        }
+        if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
+            segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(segmentBytes, pvm, chunk);
+        }
+//        SegmentBatch2.iterateFromSegmentBytes(segmentBytes, 0, segmentBytes.length, new SegmentBatch2.ForDebugCvCallback());
 
         var buf = Unpooled.wrappedBuffer(segmentBytes);
         // crc check
@@ -1627,11 +1633,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         globalGauge.register();
     }
 
-    @VisibleForTesting
-    long segmentDecompressTimeTotalUs = 0;
-    @VisibleForTesting
-    long segmentDecompressCountTotal = 0;
-
     private void initMetricsCollect() {
         // only first slot show global metrics
         if (slot == 0) {
@@ -1738,13 +1739,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (kvLRUHitTotal > 0) {
             var kvLRUCvEncodedLengthAvg = (double) kvLRUCvEncodedLengthTotal / kvLRUHitTotal;
             map.put("slot_kv_lru_cv_encoded_length_avg", kvLRUCvEncodedLengthAvg);
-        }
-
-        if (segmentDecompressCountTotal > 0) {
-            map.put("segment_decompress_time_total_us", (double) segmentDecompressTimeTotalUs);
-            map.put("segment_decompress_count_total", (double) segmentDecompressCountTotal);
-            double segmentDecompressedCostTAvg = (double) segmentDecompressTimeTotalUs / segmentDecompressCountTotal;
-            map.put("segment_decompress_cost_time_avg_us", segmentDecompressedCostTAvg);
         }
 
         var replPairAsSlave = getOnlyOneReplPairAsSlave();

@@ -2,7 +2,6 @@ package io.velo.persist;
 
 import com.github.luben.zstd.Zstd;
 import io.velo.ConfForSlot;
-import io.velo.KeyHash;
 import io.velo.SnowFlake;
 import io.velo.metric.InSlotMetricCollector;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -113,6 +112,10 @@ public class SegmentBatch implements InSlotMetricCollector {
     private static final int HEADER_LENGTH = 8 + 4 + MAX_BLOCK_NUMBER * (2 + 2);
 
     public static int subBlockMetaPosition(int subBlockIndex) {
+        if (subBlockIndex >= MAX_BLOCK_NUMBER) {
+            throw new IllegalArgumentException("Segment batch sub block index must be less than: " + MAX_BLOCK_NUMBER);
+        }
+
         return 8 + 4 + subBlockIndex * (2 + 2);
     }
 
@@ -183,16 +186,24 @@ public class SegmentBatch implements InSlotMetricCollector {
             onceListBytesLength += compressedBytes.length;
         }
 
-        if (!onceList.isEmpty()) {
-            var tightOne = tightSegments(afterTightSegmentIndex, onceList, returnPvmList);
-            r.add(tightOne);
-        }
+        var tightOne = tightSegments(afterTightSegmentIndex, onceList, returnPvmList);
+        r.add(tightOne);
 
         afterTightSegmentCountTotal += r.size();
         return r;
     }
 
-    public ArrayList<SegmentTightBytesWithLengthAndSegmentIndex> splitAndTight(ArrayList<Wal.V> list, int[] nextNSegmentIndex, ArrayList<PersistValueMeta> returnPvmList) {
+    ArrayList<SegmentBatch2.SegmentBytesWithIndex> split(ArrayList<Wal.V> list, int[] nextNSegmentIndex, ArrayList<PersistValueMeta> returnPvmList) {
+        var r = splitAndTight(list, nextNSegmentIndex, returnPvmList);
+        ArrayList<SegmentBatch2.SegmentBytesWithIndex> returnList = new ArrayList<>(r.size());
+        for (var one : r) {
+            returnList.add(new SegmentBatch2.SegmentBytesWithIndex(one.tightBytesWithLength, one.segmentIndex, one.segmentSeq));
+        }
+        return returnList;
+    }
+
+    @VisibleForTesting
+    ArrayList<SegmentTightBytesWithLengthAndSegmentIndex> splitAndTight(ArrayList<Wal.V> list, int[] nextNSegmentIndex, ArrayList<PersistValueMeta> returnPvmList) {
         ArrayList<SegmentCompressedBytesWithIndex> result = new ArrayList<>(100);
         ArrayList<Wal.V> onceList = new ArrayList<>(100);
 
@@ -236,60 +247,7 @@ public class SegmentBatch implements InSlotMetricCollector {
         batchKvCountTotal += list.size();
 
         long segmentSeq = snowFlake.nextId();
-
-        // only use key bytes hash to calculate crc
-        var crcCalBytes = new byte[8 * list.size()];
-        var crcCalBuffer = ByteBuffer.wrap(crcCalBytes);
-
-        // write segment header
-        buffer.clear();
-        buffer.putLong(segmentSeq);
-        buffer.putInt(list.size());
-        // temp write crc, then update
-        buffer.putInt(0);
-
-        int offsetInThisSegment = Chunk.SEGMENT_HEADER_LENGTH;
-
-        for (var v : list) {
-            crcCalBuffer.putLong(v.keyHash());
-
-            var keyBytes = v.key().getBytes();
-            buffer.putShort((short) keyBytes.length);
-            buffer.put(keyBytes);
-            buffer.put(v.cvEncoded());
-
-            int length = v.persistLength();
-
-            var pvm = new PersistValueMeta();
-            pvm.keyBytes = keyBytes;
-            pvm.keyHash = v.keyHash();
-            pvm.bucketIndex = v.bucketIndex();
-            pvm.isFromMerge = v.isFromMerge();
-
-            pvm.slot = slot;
-            // tmp 0, then update
-            pvm.subBlockIndex = 0;
-            pvm.length = length;
-            // tmp current segment index, then update
-            pvm.segmentIndex = segmentIndex;
-            pvm.segmentOffset = offsetInThisSegment;
-            pvm.expireAt = v.expireAt();
-            pvm.seq = v.seq();
-            returnPvmList.add(pvm);
-
-            offsetInThisSegment += length;
-        }
-
-        if (buffer.remaining() >= 2) {
-            // write 0 short, so merge loop can break, because reuse old bytes
-            buffer.putShort((short) 0);
-        }
-
-        // update crc
-        int segmentCrc32 = KeyHash.hash32(crcCalBytes);
-        // refer to SEGMENT_HEADER_LENGTH definition
-        // seq long + cv number int + crc int
-        buffer.putInt(8 + 4, segmentCrc32);
+        SegmentBatch2.encodeToBuffer(list, buffer, returnPvmList, slot, segmentIndex, segmentSeq);
 
         // important: 4KB decompress cost ~200us, so use 4KB segment length for better read latency
         // double compress
@@ -306,5 +264,34 @@ public class SegmentBatch implements InSlotMetricCollector {
         Arrays.fill(bytes, (byte) 0);
 
         return new SegmentCompressedBytesWithIndex(compressedBytes, segmentIndex, segmentSeq);
+    }
+
+    static byte[] decompressSegmentBytesFromOneSubBlock(byte[] tightBytesWithLength, PersistValueMeta pvm, Chunk chunk) {
+        var buffer = ByteBuffer.wrap(tightBytesWithLength);
+        buffer.position(subBlockMetaPosition(pvm.subBlockIndex));
+        var subBlockOffset = buffer.getShort();
+        var subBlockLength = buffer.getShort();
+
+        if (subBlockOffset == 0) {
+            throw new IllegalStateException("Sub block offset is 0, pvm: " + pvm);
+        }
+
+        var decompressedBytes = new byte[chunk.chunkSegmentLength];
+
+        var beginT = System.nanoTime();
+        var d = Zstd.decompressByteArray(decompressedBytes, 0, chunk.chunkSegmentLength,
+                tightBytesWithLength, subBlockOffset, subBlockLength);
+        var costT = (System.nanoTime() - beginT) / 1000;
+
+        // stats
+        chunk.segmentDecompressTimeTotalUs += costT;
+        chunk.segmentDecompressCountTotal++;
+
+        if (d != chunk.chunkSegmentLength) {
+            throw new IllegalStateException("Decompress segment sub block error, s=" + pvm.slot +
+                    ", i=" + pvm.segmentIndex + ", sbi=" + pvm.subBlockIndex + ", d=" + d + ", chunkSegmentLength=" + chunk.chunkSegmentLength);
+        }
+
+        return decompressedBytes;
     }
 }

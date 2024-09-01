@@ -55,6 +55,8 @@ class ChunkTest extends Specification {
         chunk.persistCountTotal = 1
         chunk.persistCvCountTotal = 100
         chunk.updatePvmBatchCostTimeTotalUs = 100
+        chunk.segmentDecompressCountTotal = 10
+        chunk.segmentDecompressTimeTotalUs = 100
         chunk.collect()
 
         def segmentNumberPerFd = confChunk.segmentNumberPerFd

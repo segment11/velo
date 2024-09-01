@@ -80,7 +80,7 @@ public class IterateChunkSegments {
                 }
 
                 int finalSubBlockIndex = subBlockIndex;
-                SegmentBatch2.iterateFromSegmentBytes(decompressedBytes, 0, decompressedBytes.length, (key, cv, offsetInThisSegment) -> {
+                SegmentBatch2.iterateFromSegmentBytes(decompressedBytes, (key, cv, offsetInThisSegment) -> {
                     cvList.add(new ChunkMergeJob.CvWithKeyAndSegmentOffset(cv, key, offsetInThisSegment, segmentIndex, (byte) finalSubBlockIndex));
                 });
             }

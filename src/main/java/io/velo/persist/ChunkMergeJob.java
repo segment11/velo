@@ -1,5 +1,6 @@
 package io.velo.persist;
 
+import com.github.luben.zstd.Zstd;
 import io.velo.*;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.incremental.XChunkSegmentFlagUpdate;
@@ -279,14 +280,47 @@ public class ChunkMergeJob {
                             int chunkSegmentLength, int segmentIndex, OneSlot oneSlot) {
         final int[] expiredCountArray = {0};
         var length = Math.min(segmentBytesBatchRead.length, chunkSegmentLength);
-        SegmentBatch2.iterateFromSegmentBytes(segmentBytesBatchRead, relativeOffsetInBatchBytes, length, (key, cv, offsetInThisSegment) -> {
-            // exclude expired
-            if (cv.isExpired()) {
-                expiredCountArray[0]++;
-                return;
+
+        if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
+            var buffer = ByteBuffer.wrap(segmentBytesBatchRead, relativeOffsetInBatchBytes, length).slice();
+            // iterate sub blocks, refer to SegmentBatch.tight
+            for (int subBlockIndex = 0; subBlockIndex < SegmentBatch.MAX_BLOCK_NUMBER; subBlockIndex++) {
+                buffer.position(SegmentBatch.subBlockMetaPosition(subBlockIndex));
+                var subBlockOffset = buffer.getShort();
+                if (subBlockOffset == 0) {
+                    // skip
+                    break;
+                }
+                var subBlockLength = buffer.getShort();
+
+                var decompressedBytes = new byte[chunkSegmentLength];
+                var d = Zstd.decompressByteArray(decompressedBytes, 0, chunkSegmentLength,
+                        segmentBytesBatchRead, relativeOffsetInBatchBytes + subBlockOffset, subBlockLength);
+                if (d != chunkSegmentLength) {
+                    throw new IllegalStateException("Decompress error, s=" + oneSlot.slot()
+                            + ", i=" + segmentIndex + ", sbi=" + subBlockIndex + ", d=" + d + ", chunkSegmentLength=" + chunkSegmentLength);
+                }
+
+                int finalSubBlockIndex = subBlockIndex;
+                SegmentBatch2.iterateFromSegmentBytes(decompressedBytes, (key, cv, offsetInThisSegment) -> {
+                    // exclude expired
+                    if (cv.isExpired()) {
+                        expiredCountArray[0]++;
+                        return;
+                    }
+                    cvList.add(new CvWithKeyAndSegmentOffset(cv, key, offsetInThisSegment, segmentIndex, (byte) finalSubBlockIndex));
+                });
             }
-            cvList.add(new CvWithKeyAndSegmentOffset(cv, key, offsetInThisSegment, segmentIndex, (byte) 0));
-        });
+        } else {
+            SegmentBatch2.iterateFromSegmentBytes(segmentBytesBatchRead, relativeOffsetInBatchBytes, length, (key, cv, offsetInThisSegment) -> {
+                // exclude expired
+                if (cv.isExpired()) {
+                    expiredCountArray[0]++;
+                    return;
+                }
+                cvList.add(new CvWithKeyAndSegmentOffset(cv, key, offsetInThisSegment, segmentIndex, (byte) 0));
+            });
+        }
         return expiredCountArray[0];
     }
 

@@ -427,8 +427,6 @@ class OneSlotTest extends Specification {
         oneSlot.globalGauge.collect()
         oneSlot.collect()
         oneSlot.kvLRUHitTotal = 1
-        oneSlot.segmentDecompressCountTotal = 1
-        oneSlot.segmentDecompressTimeTotalUs = 10
         oneSlot.createReplPairAsSlave('localhost', 6379)
         oneSlot.collect()
         then:

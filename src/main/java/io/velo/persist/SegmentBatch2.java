@@ -109,7 +109,17 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         batchKvCountTotal += list.size();
 
         long segmentSeq = snowFlake.nextId();
+        encodeToBuffer(list, buffer, returnPvmList, slot, segmentIndex, segmentSeq);
 
+        var copyBytes = Arrays.copyOf(this.bytes, this.bytes.length);
+
+        buffer.clear();
+        Arrays.fill(bytes, (byte) 0);
+
+        return new SegmentBytesWithIndex(copyBytes, segmentIndex, segmentSeq);
+    }
+
+    static void encodeToBuffer(ArrayList<Wal.V> list, ByteBuffer buffer, ArrayList<PersistValueMeta> returnPvmList, short slot, int segmentIndex, long segmentSeq) {
         // only use key bytes hash to calculate crc
         var crcCalBytes = new byte[8 * list.size()];
         var crcCalBuffer = ByteBuffer.wrap(crcCalBytes);
@@ -163,13 +173,6 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         // refer to SEGMENT_HEADER_LENGTH definition
         // seq long + cv number int + crc int
         buffer.putInt(8 + 4, segmentCrc32);
-
-        var copyBytes = Arrays.copyOf(this.bytes, this.bytes.length);
-
-        buffer.clear();
-        Arrays.fill(bytes, (byte) 0);
-
-        return new SegmentBytesWithIndex(copyBytes, segmentIndex, segmentSeq);
     }
 
     public interface CvCallback {
@@ -182,6 +185,10 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         public void callback(String key, CompressedValue cv, int offsetInThisSegment) {
             System.out.println("key: " + key + ", cv: " + cv + ", offsetInThisSegment: " + offsetInThisSegment);
         }
+    }
+
+    public static void iterateFromSegmentBytes(byte[] segmentBytes, CvCallback cvCallback) {
+        iterateFromSegmentBytes(segmentBytes, 0, segmentBytes.length, cvCallback);
     }
 
     public static void iterateFromSegmentBytes(byte[] segmentBytes, int offset, int length, CvCallback cvCallback) {

@@ -30,7 +30,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     private static final Logger log = LoggerFactory.getLogger(Chunk.class);
 
     private final short slot;
-    private final String slotStr;
     private final File slotDir;
 
     // for better latency, segment length = 4096 decompress performance is better
@@ -55,10 +54,15 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     long persistCvCountTotal;
     @VisibleForTesting
     long updatePvmBatchCostTimeTotalUs;
+    @VisibleForTesting
+    long segmentDecompressTimeTotalUs = 0;
+    @VisibleForTesting
+    long segmentDecompressCountTotal = 0;
 
     @VisibleForTesting
     final OneSlot oneSlot;
     private final KeyLoader keyLoader;
+    final SegmentBatch segmentBatch;
     private final SegmentBatch2 segmentBatch2;
 
     @VisibleForTesting
@@ -80,13 +84,13 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                 slot, segmentNumberPerFd, fdPerChunk, maxSegmentIndex, halfSegmentNumber);
 
         this.slot = slot;
-        this.slotStr = String.valueOf(slot);
         this.slotDir = slotDir;
 
         this.chunkSegmentLength = confChunk.segmentLength;
 
         this.oneSlot = oneSlot;
         this.keyLoader = keyLoader;
+        this.segmentBatch = new SegmentBatch(slot, snowFlake);
         this.segmentBatch2 = new SegmentBatch2(slot, snowFlake);
     }
 
@@ -356,7 +360,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
 
         ArrayList<PersistValueMeta> pvmList = new ArrayList<>();
-        var segments = segmentBatch2.split(list, nextNSegmentIndex, pvmList);
+        var segments = ConfForSlot.global.confChunk.isSegmentUseCompression ?
+                segmentBatch.split(list, nextNSegmentIndex, pvmList) : segmentBatch2.split(list, nextNSegmentIndex, pvmList);
 
         List<Long> segmentSeqListAll = new ArrayList<>();
         for (var segment : segments) {
@@ -765,7 +770,18 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             map.put("chunk_update_pvm_batch_cost_time_avg_us", (double) updatePvmBatchCostTimeTotalUs / persistCountTotal);
         }
 
-        map.putAll(segmentBatch2.collect());
+        if (segmentDecompressCountTotal > 0) {
+            map.put("chunk_segment_decompress_time_total_us", (double) segmentDecompressTimeTotalUs);
+            map.put("chunk_segment_decompress_count_total", (double) segmentDecompressCountTotal);
+            double segmentDecompressedCostTAvg = (double) segmentDecompressTimeTotalUs / segmentDecompressCountTotal;
+            map.put("chunk_segment_decompress_cost_time_avg_us", segmentDecompressedCostTAvg);
+        }
+
+        if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
+            map.putAll(segmentBatch.collect());
+        } else {
+            map.putAll(segmentBatch2.collect());
+        }
 
         if (fdReadWriteArray != null) {
             for (var fdReadWrite : fdReadWriteArray) {
