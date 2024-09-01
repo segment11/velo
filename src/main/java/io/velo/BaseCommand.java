@@ -335,7 +335,7 @@ public abstract class BaseCommand {
         return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash);
     }
 
-    protected SlotWithKeyHash slot(byte[] keyBytes) {
+    public SlotWithKeyHash slot(byte[] keyBytes) {
         return slot(keyBytes, slotNumber);
     }
 
@@ -360,12 +360,7 @@ public abstract class BaseCommand {
         }
     }
 
-    public CompressedValue getCv(byte[] keyBytes) {
-        return getCv(keyBytes, null);
-    }
-
-    public CompressedValue getCv(byte[] keyBytes, SlotWithKeyHash slotWithKeyHashReuse) {
-        var slotWithKeyHash = slotWithKeyHashReuse != null ? slotWithKeyHashReuse : slot(keyBytes);
+    public CompressedValue getCv(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
         var slot = slotWithKeyHash.slot();
 
         OneSlot.BufOrCompressedValue bufOrCompressedValue;
@@ -406,7 +401,12 @@ public abstract class BaseCommand {
         return cv;
     }
 
-    public byte[] getValueBytesByCv(CompressedValue cv) {
+    @TestOnly
+    byte[] getValueBytesByCv(CompressedValue cv) {
+        return getValueBytesByCv(cv, null, null);
+    }
+
+    public byte[] getValueBytesByCv(CompressedValue cv, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
         if (cv.isTypeNumber()) {
             return String.valueOf(cv.numberValue()).getBytes();
         }
@@ -438,18 +438,21 @@ public abstract class BaseCommand {
             compressStats.decompressedCount++;
             compressStats.decompressedCostTimeTotalUs += costT;
 
+            if (slotWithKeyHash != null && byPassGetSet == null) {
+                localPersist.oneSlot(slotWithKeyHash.slot).monitorBigKeyByValueLength(keyBytes, decompressed.length);
+            }
             return decompressed;
         } else {
-            return cv.getCompressedData();
+            var compressedData = cv.getCompressedData();
+            if (slotWithKeyHash != null && byPassGetSet == null) {
+                localPersist.oneSlot(slotWithKeyHash.slot).monitorBigKeyByValueLength(keyBytes, compressedData.length);
+            }
+            return compressedData;
         }
     }
 
-    public byte[] get(byte[] keyBytes) {
-        return get(keyBytes, null);
-    }
-
-    public byte[] get(byte[] keyBytes, SlotWithKeyHash slotWithKeyHashReuse) {
-        return get(keyBytes, slotWithKeyHashReuse, false);
+    public byte[] get(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
+        return get(keyBytes, slotWithKeyHash, false);
     }
 
     private static boolean contain(Integer[] expectSpTypeArray, int spType) {
@@ -461,8 +464,8 @@ public abstract class BaseCommand {
         return false;
     }
 
-    public byte[] get(byte[] keyBytes, SlotWithKeyHash slotWithKeyHashReuse, boolean expectTypeString, Integer... expectSpTypeArray) {
-        var cv = getCv(keyBytes, slotWithKeyHashReuse);
+    public byte[] get(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, boolean expectTypeString, Integer... expectSpTypeArray) {
+        var cv = getCv(keyBytes, slotWithKeyHash);
         if (cv == null) {
             return null;
         }
@@ -472,7 +475,7 @@ public abstract class BaseCommand {
         if (expectSpTypeArray.length > 0 && !contain(expectSpTypeArray, cv.getDictSeqOrSpType())) {
             throw new TypeMismatchException("Expect sp type array: " + Arrays.toString(expectSpTypeArray) + ", but got sp type: " + cv.getDictSeqOrSpType());
         }
-        return getValueBytesByCv(cv);
+        return getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
     }
 
     public void setNumber(byte[] keyBytes, Number value, SlotWithKeyHash slotWithKeyHashReuse) {

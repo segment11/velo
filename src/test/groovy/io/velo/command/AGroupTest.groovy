@@ -63,12 +63,12 @@ class AGroupTest extends Specification {
         when:
         aGroup.execute('append a 123')
         then:
-        aGroup.get('a'.bytes) == '123'.bytes
+        aGroup.get('a'.bytes, aGroup.slot('a'.bytes)) == '123'.bytes
 
         when:
         aGroup.execute('append a 456')
         then:
-        aGroup.get('a'.bytes) == '123456'.bytes
+        aGroup.get('a'.bytes, aGroup.slot('a'.bytes)) == '123456'.bytes
 
         when:
         def reply = aGroup.execute('append a')

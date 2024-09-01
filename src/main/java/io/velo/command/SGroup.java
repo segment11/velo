@@ -434,7 +434,7 @@ public class SGroup extends BaseCommand {
             if (cv == null) {
                 return NilReply.INSTANCE;
             } else {
-                return new BulkReply(getValueBytesByCv(cv));
+                return new BulkReply(getValueBytesByCv(cv, keyBytes, slotWithKeyHash));
             }
         }
 

@@ -72,7 +72,7 @@ public class TGroup extends BaseCommand {
         if (cv == null) {
             // hash keys changed
             var keysKey = RedisHashKeys.keysKey(new String(keyBytes));
-            cv = getCv(keysKey.getBytes());
+            cv = getCv(keysKey.getBytes(), slot(keysKey.getBytes()));
 
             if (cv == null) {
                 return NilReply.INSTANCE;

@@ -292,7 +292,7 @@ public class RGroup extends BaseCommand {
                 return;
             }
 
-            var encodedBytesDst = getValueBytesByCv(cvDst);
+            var encodedBytesDst = getValueBytesByCv(cvDst, dstKeyBytes, dstSlotWithKeyHash);
             rlDst = RedisList.decode(encodedBytesDst);
         }
 
@@ -316,7 +316,7 @@ public class RGroup extends BaseCommand {
             return ErrorReply.WRONG_TYPE;
         }
 
-        var valueBytesSrc = getValueBytesByCv(cvSrc);
+        var valueBytesSrc = getValueBytesByCv(cvSrc, srcKeyBytes, srcSlotWithKeyHash);
         var rlSrc = RedisList.decode(valueBytesSrc);
 
         var size = rlSrc.size();

@@ -151,7 +151,6 @@ class BaseCommandTest extends Specification {
         c.byPassGetSet = inMemoryGetSet
         then:
         c.getExpireAt(key.bytes, sKey) == null
-        c.getCv(key.bytes) == null
         c.getCv(key.bytes, sKey) == null
 
         when:
@@ -231,7 +230,7 @@ class BaseCommandTest extends Specification {
         when:
         c.byPassGetSet = inMemoryGetSet
         inMemoryGetSet.put(slot, 'key', sKey.bucketIndex(), cv)
-        valueBytes = c.get(key.bytes)
+        valueBytes = c.get(key.bytes, sKey)
         then:
         valueBytes.length == cv.compressedLength
 

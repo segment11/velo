@@ -108,7 +108,7 @@ public class HGroup extends BaseCommand {
         var keysKey = RedisHashKeys.keysKey(key);
         var keysKeyBytes = keysKey.getBytes();
 
-        var keysValueBytes = get(keysKeyBytes, null, false, CompressedValue.SP_TYPE_HASH);
+        var keysValueBytes = get(keysKeyBytes, slot(keysKeyBytes), false, CompressedValue.SP_TYPE_HASH);
         if (keysValueBytes == null) {
             return null;
         }
@@ -262,7 +262,7 @@ public class HGroup extends BaseCommand {
         var key = new String(keyBytes);
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
-        var fieldCv = getCv(fieldKey.getBytes());
+        var fieldCv = getCv(fieldKey.getBytes(), slot(fieldKey.getBytes()));
         return fieldCv != null ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
 
 //        var rhk = getRedisHashKeys(keyBytes);
@@ -317,13 +317,14 @@ public class HGroup extends BaseCommand {
         var key = new String(keyBytes);
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
-        var fieldCv = getCv(fieldKey.getBytes());
+        var sFieldKey = slot(fieldKey.getBytes());
+        var fieldCv = getCv(fieldKey.getBytes(), sFieldKey);
 
         if (fieldCv == null) {
             return onlyReturnLength ? IntegerReply.REPLY_0 : NilReply.INSTANCE;
         }
 
-        var fieldValueBytes = getValueBytesByCv(fieldCv);
+        var fieldValueBytes = getValueBytesByCv(fieldCv, fieldBytes, sFieldKey);
         return onlyReturnLength ? new IntegerReply(fieldValueBytes.length) : new BulkReply(fieldValueBytes);
     }
 
@@ -382,9 +383,10 @@ public class HGroup extends BaseCommand {
         int i = 0;
         for (var field : set) {
             var fieldKey = RedisHashKeys.fieldKey(key, field);
-            var fieldCv = getCv(fieldKey.getBytes());
+            var sFieldKey = slot(fieldKey.getBytes());
+            var fieldCv = getCv(fieldKey.getBytes(), sFieldKey);
             replies[i++] = new BulkReply(field.getBytes());
-            replies[i++] = fieldCv == null ? NilReply.INSTANCE : new BulkReply(getValueBytesByCv(fieldCv));
+            replies[i++] = fieldCv == null ? NilReply.INSTANCE : new BulkReply(getValueBytesByCv(fieldCv, fieldKey.getBytes(), sFieldKey));
         }
         return new MultiBulkReply(replies);
     }
@@ -544,7 +546,7 @@ public class HGroup extends BaseCommand {
         var keysKey = RedisHashKeys.keysKey(key);
         var keysKeyBytes = keysKey.getBytes();
 
-        var keysValueBytes = get(keysKeyBytes);
+        var keysValueBytes = get(keysKeyBytes, slot(keysKeyBytes));
         if (keysValueBytes == null) {
             return onlyReturnSize ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
         }
@@ -625,7 +627,7 @@ public class HGroup extends BaseCommand {
         int i = 0;
         for (var field : fields) {
             var fieldKey = RedisHashKeys.fieldKey(key, field);
-            var fieldValueBytes = get(fieldKey.getBytes());
+            var fieldValueBytes = get(fieldKey.getBytes(), slot(fieldKey.getBytes()));
             replies[i++] = fieldValueBytes == null ? NilReply.INSTANCE : new BulkReply(fieldValueBytes);
         }
         return new MultiBulkReply(replies);
@@ -775,7 +777,7 @@ public class HGroup extends BaseCommand {
                 replies[i++] = new BulkReply(field.getBytes());
                 if (withValues) {
                     var fieldKey = RedisHashKeys.fieldKey(key, field);
-                    var fieldValueBytes = get(fieldKey.getBytes());
+                    var fieldValueBytes = get(fieldKey.getBytes(), slot(fieldKey.getBytes()));
                     replies[i++] = fieldValueBytes == null ? NilReply.INSTANCE : new BulkReply(fieldValueBytes);
                 }
             }
@@ -944,7 +946,7 @@ public class HGroup extends BaseCommand {
         int i = 0;
         for (var field : set) {
             var fieldKey = RedisHashKeys.fieldKey(key, field);
-            var fieldValueBytes = get(fieldKey.getBytes());
+            var fieldValueBytes = get(fieldKey.getBytes(), slot(fieldKey.getBytes()));
             replies[i++] = fieldValueBytes == null ? NilReply.INSTANCE : new BulkReply(fieldValueBytes);
         }
         return new MultiBulkReply(replies);

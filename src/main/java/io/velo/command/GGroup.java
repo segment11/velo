@@ -130,7 +130,7 @@ public class GGroup extends BaseCommand {
             return NilReply.INSTANCE;
         }
 
-        var valueBytes = getValueBytesByCv(cv);
+        var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
 
         long expireAt = cv.getExpireAt();
         long expireAtOld = expireAt;
