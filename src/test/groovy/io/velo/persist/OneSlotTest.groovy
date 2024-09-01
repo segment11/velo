@@ -113,10 +113,11 @@ class OneSlotTest extends Specification {
         when:
         // test big key top k init
         oneSlot.dynConfig.update(BigKeyTopK.KEY_IN_DYN_CONFIG, '100')
-        oneSlot.initBigKeyTopK(100)
+        oneSlot.initBigKeyTopK(10)
         oneSlot.monitorBigKeyByValueLength('test'.bytes, 1024)
         then:
-        1 == 1
+        oneSlot.bigKeyTopK != null
+        oneSlot.bigKeyTopK.size() == 1
 
         cleanup:
         oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()

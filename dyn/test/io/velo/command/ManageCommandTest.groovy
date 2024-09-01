@@ -434,10 +434,17 @@ class ManageCommandTest extends Specification {
         def oneSlot = localPersist.oneSlot(slot)
 
         when:
+        oneSlot.monitorBigKeyByValueLength('test'.bytes, 1024)
         data5[1] = 'slot'.bytes
         data5[2] = '0'.bytes
         data5[3] = 'view-metrics'.bytes
         def reply = manage.manageInOneSlot()
+        then:
+        reply instanceof BulkReply
+
+        when:
+        data5[3] = 'view-big-key-top-k'.bytes
+        reply = manage.manageInOneSlot()
         then:
         reply instanceof BulkReply
 

@@ -145,6 +145,12 @@ class ManageCommand extends BaseCommand {
                 sb << k << '{slot="' << slot << '",} ' << v << '\n'
             }
             return new BulkReply(sb.toString().bytes)
+        } else if (subSubCmd == 'view-big-key-top-k') {
+            def queue = oneSlot.bigKeyTopK.queue
+            def str = queue.collect {
+                new String(it.keyBytes()) + ': ' + it.length()
+            }.join(', ')
+            return new BulkReply(str.bytes)
         } else if (subSubCmd == 'view-bucket-key-count') {
             // manage slot 0 view-bucket-key-count
             // manage slot 0 bucket 0 view-bucket-key-count

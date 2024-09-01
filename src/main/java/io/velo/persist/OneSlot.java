@@ -189,7 +189,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             DictMap.getInstance().setBinlog(this.binlog);
         }
 
-        initBigKeyTopK(100);
+        initBigKeyTopK(10);
 
         this.initTasks();
         this.initMetricsCollect();
@@ -693,6 +693,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     private BigKeyTopK bigKeyTopK;
+
+    public BigKeyTopK getBigKeyTopK() {
+        return bigKeyTopK;
+    }
 
     void initBigKeyTopK(int k) {
         // may be dyn config init already init big key top k
@@ -1709,6 +1713,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
+    // change dyn config or global config, todo
+    private static final int BIG_KEY_LENGTH_CHECK = 2048;
+
     @Override
     public Map<String, Double> collect() {
         var map = new TreeMap<String, Double>();
@@ -1753,7 +1760,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         if (bigKeyTopK != null) {
-            map.put("big_key_count", (double) bigKeyTopK.size());
+            map.put("big_key_count", (double) bigKeyTopK.sizeIfBiggerThan(BIG_KEY_LENGTH_CHECK));
         }
 
         var hitMissTotal = kvLRUHitTotal + kvLRUMissTotal;
