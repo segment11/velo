@@ -1,12 +1,7 @@
 package io.velo.repl
 
 import io.velo.ConfForSlot
-import io.velo.persist.Consts
-import io.velo.persist.DynConfig
-import io.velo.persist.DynConfigTest
-import io.velo.persist.LocalPersist
-import io.velo.persist.LocalPersistTest
-import io.velo.persist.Mock
+import io.velo.persist.*
 import io.velo.repl.incremental.XWalV
 import spock.lang.Specification
 
@@ -37,8 +32,9 @@ class BinlogTest extends Specification {
         Binlog.marginFileOffset(1024 * 1024 + 100) == 1024 * 1024
 
         when:
-        def dynConfig = new DynConfig(slot, DynConfigTest.tmpFile)
-        def dynConfig2 = new DynConfig(slot, DynConfigTest.tmpFile2)
+        def oneSlot = new OneSlot(slot)
+        def dynConfig = new DynConfig(slot, DynConfigTest.tmpFile, oneSlot)
+        def dynConfig2 = new DynConfig(slot, DynConfigTest.tmpFile2, oneSlot)
         dynConfig.binlogOn = true
         dynConfig2.binlogOn = false
         def binlog = new Binlog(slot, Consts.slotDir, dynConfig)

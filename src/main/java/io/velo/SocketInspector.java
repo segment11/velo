@@ -79,6 +79,8 @@ public class SocketInspector implements TcpSocket.Inspector {
         this.maxConnections = maxConnections;
     }
 
+    public static final String MAX_CONNECTIONS_KEY_IN_DYN_CONFIG = "max_connections";
+
     // inject, singleton, need not static
     private static final Gauge connectedCountGauge = Gauge.build()
             .name("connected_client_count")

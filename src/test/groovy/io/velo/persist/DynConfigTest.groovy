@@ -3,6 +3,7 @@ package io.velo.persist
 import io.velo.MultiWorkerServer
 import io.velo.SocketInspector
 import io.velo.TrainSampleJob
+import io.velo.monitor.BigKeyTopK
 import spock.lang.Specification
 
 class DynConfigTest extends Specification {
@@ -16,7 +17,8 @@ class DynConfigTest extends Specification {
         if (tmpFile.exists()) {
             tmpFile.delete()
         }
-        def config = new DynConfig(slot, tmpFile)
+        def oneSlot = new OneSlot(slot)
+        def config = new DynConfig(slot, tmpFile, oneSlot)
 
         expect:
         config.masterUuid == null
@@ -58,9 +60,10 @@ class DynConfigTest extends Specification {
         // reload from file
         when:
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
-        config = new DynConfig(slot, tmpFile)
-        config.update('max_connections', 100)
-        config.update('dict_key_prefix_groups', 'key:,xxx:')
+        config = new DynConfig(slot, tmpFile, oneSlot)
+        config.update(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, 100)
+        config.update(TrainSampleJob.KEY_IN_DYN_CONFIG, 'key:,xxx:')
+        config.update(BigKeyTopK.KEY_IN_DYN_CONFIG, 100)
         then:
         config.afterUpdateCallback != null
         config.masterUuid == 1234L
@@ -80,7 +83,7 @@ class DynConfigTest extends Specification {
 
         when:
         // reload from file again
-        new DynConfig(slot, tmpFile)
+        new DynConfig(slot, tmpFile, oneSlot)
         then:
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.maxConnections == 100
         TrainSampleJob.keyPrefixOrSuffixGroupList == ['key:', 'xxx:']

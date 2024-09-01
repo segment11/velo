@@ -52,6 +52,8 @@ public class TrainSampleJob {
         TrainSampleJob.dictKeyPrefixEndIndex = dictKeyPrefixEndIndex;
     }
 
+    public static final String KEY_IN_DYN_CONFIG = "dict_key_prefix_groups";
+
     private static ArrayList<String> keyPrefixOrSuffixGroupList = new ArrayList<>();
 
     public static ArrayList<String> getKeyPrefixOrSuffixGroupList() {

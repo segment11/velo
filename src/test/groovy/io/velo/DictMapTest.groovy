@@ -3,6 +3,7 @@ package io.velo
 import io.velo.persist.Consts
 import io.velo.persist.DynConfig
 import io.velo.persist.DynConfigTest
+import io.velo.persist.OneSlot
 import io.velo.repl.Binlog
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
@@ -24,7 +25,8 @@ class DictMapTest extends Specification {
 
         and:
         final short slot = 0
-        def dynConfig = new DynConfig(slot, DynConfigTest.tmpFile)
+        def oneSlot = new OneSlot(slot)
+        def dynConfig = new DynConfig(slot, DynConfigTest.tmpFile, oneSlot)
         def binlog = new Binlog(slot, Consts.slotDir, dynConfig)
         dictMap.binlog = binlog
 

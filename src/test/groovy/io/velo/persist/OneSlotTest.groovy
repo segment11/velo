@@ -4,6 +4,7 @@ import io.activej.common.function.RunnableEx
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.velo.*
+import io.velo.monitor.BigKeyTopK
 import io.velo.repl.Binlog
 import io.velo.repl.ReplPairTest
 import io.velo.repl.incremental.XWalV
@@ -68,7 +69,7 @@ class OneSlotTest extends Specification {
         eventloop.breakEventloop()
     }
 
-    def 'test init and repl pair'() {
+    def 'test init'() {
         given:
         def persistConfig = Config.create()
         ConfVolumeDirsForSlot.initFromConfig(persistConfig, slotNumber)
@@ -108,6 +109,25 @@ class OneSlotTest extends Specification {
         oneSlot32_.slot() == (byte) 32
         oneSlot0.slotDir.absolutePath == '/tmp/data0/slot-0'
         oneSlot32.slotDir.absolutePath == '/tmp/data1/slot-32'
+
+        when:
+        // test big key top k init
+        oneSlot.dynConfig.update(BigKeyTopK.KEY_IN_DYN_CONFIG, '100')
+        oneSlot.initBigKeyTopK(100)
+        oneSlot.monitorBigKeyByValueLength('test', 1024)
+        then:
+        1 == 1
+
+        cleanup:
+        oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()
+        oneSlot.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test repl pair'() {
+        given:
+        def snowFlake = new SnowFlake(1, 1)
+        def oneSlot = new OneSlot(slot, slotNumber, snowFlake, Consts.persistDir, Config.create())
 
         when:
         // test repl pair
@@ -369,9 +389,10 @@ class OneSlotTest extends Specification {
         oneSlot.dynConfig != null
         !oneSlot.readonly
         oneSlot.canRead
-        !oneSlot.updateDynConfig('xxx', 'xxx'.bytes)
-        oneSlot.updateDynConfig('testKey', '1'.bytes)
-        !oneSlot.updateDynConfig('testKey2', '1'.bytes)
+        oneSlot.updateDynConfig(BigKeyTopK.KEY_IN_DYN_CONFIG, '100')
+        !oneSlot.updateDynConfig('xxx', 'xxx')
+        oneSlot.updateDynConfig('testKey', '1')
+        !oneSlot.updateDynConfig('testKey2', '1')
 
         when:
         oneSlot.readonly = true

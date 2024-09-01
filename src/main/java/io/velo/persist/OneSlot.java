@@ -11,6 +11,7 @@ import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.metric.SimpleGauge;
+import io.velo.monitor.BigKeyTopK;
 import io.velo.repl.*;
 import io.velo.repl.content.RawBytesContent;
 import io.velo.repl.incremental.XBigStrings;
@@ -63,11 +64,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.metaChunkSegmentIndex = new MetaChunkSegmentIndex(slot, slotDir);
 
         this.binlog = null;
+        this.bigKeyTopK = null;
     }
 
     // only for local persist one slot array
     @TestOnly
-    OneSlot(short slot) {
+    public OneSlot(short slot) {
         this(slot, null);
     }
 
@@ -96,6 +98,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.metaChunkSegmentIndex = null;
 
         this.binlog = null;
+        this.bigKeyTopK = null;
 
         this.netWorkerEventloop = eventloop;
     }
@@ -128,7 +131,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.chunkMergeWorker = new ChunkMergeWorker(slot, this);
 
         var dynConfigFile = new File(slotDir, DYN_CONFIG_FILE_NAME);
-        this.dynConfig = new DynConfig(slot, dynConfigFile);
+        this.dynConfig = new DynConfig(slot, dynConfigFile, this);
 
         var masterUuidSaved = dynConfig.getMasterUuid();
         if (masterUuidSaved != null) {
@@ -185,6 +188,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (this.slot == 0) {
             DictMap.getInstance().setBinlog(this.binlog);
         }
+
+        initBigKeyTopK(100);
 
         this.initTasks();
         this.initMetricsCollect();
@@ -548,7 +553,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         dynConfigKeyWhiteList.add("testKey2");
     }
 
-    public boolean updateDynConfig(String key, byte[] configValueBytes) throws IOException {
+    public boolean updateDynConfig(String key, String valueString) throws IOException {
+        if (BigKeyTopK.KEY_IN_DYN_CONFIG.equals(key)) {
+            var k = Integer.parseInt(valueString);
+            dynConfig.update(key, k);
+            return true;
+        }
+
         // check key white list
         if (!dynConfigKeyWhiteList.contains(key)) {
             log.warn("Update dyn config key not in white list, key: {}, slot: {}", key, slot);
@@ -556,7 +567,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         if (key.equals("testKey")) {
-            dynConfig.setTestKey(Integer.parseInt(new String(configValueBytes)));
+            dynConfig.setTestKey(Integer.parseInt(valueString));
             return true;
             // add else if here
         } else {
@@ -679,6 +690,19 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 throw new RuntimeException("Append binlog error, slot: " + slot, e);
             }
         }
+    }
+
+    private BigKeyTopK bigKeyTopK;
+
+    void initBigKeyTopK(int k) {
+        // may be dyn config init already init big key top k
+        if (bigKeyTopK == null) {
+            bigKeyTopK = new BigKeyTopK(k);
+        }
+    }
+
+    public void monitorBigKeyByValueLength(byte[] keyBytes, int valueBytesLength) {
+        bigKeyTopK.add(keyBytes, valueBytesLength);
     }
 
     private final TaskChain taskChain = new TaskChain();
@@ -1726,6 +1750,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             var fo = binlog.currentFileIndexAndOffset();
             var offsetFromFileIndex0 = (long) fo.fileIndex() * binlogOneFileMaxLength + fo.offset();
             map.put("binlog_current_offset_from_the_beginning", (double) offsetFromFileIndex0);
+        }
+
+        if (bigKeyTopK != null) {
+            map.put("big_key_count", (double) bigKeyTopK.size());
         }
 
         var hitMissTotal = kvLRUHitTotal + kvLRUMissTotal;

@@ -2,7 +2,9 @@ package io.velo.persist;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.velo.MultiWorkerServer;
+import io.velo.SocketInspector;
 import io.velo.TrainSampleJob;
+import io.velo.monitor.BigKeyTopK;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
@@ -11,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 
 public class DynConfig {
@@ -28,29 +31,33 @@ public class DynConfig {
         void afterUpdate(String key, Object value);
     }
 
-    private class AfterUpdateCallbackInner implements AfterUpdateCallback {
+    private static class AfterUpdateCallbackInner implements AfterUpdateCallback {
         private final short currentSlot;
+        private final OneSlot oneSlot;
 
-        public AfterUpdateCallbackInner(short currentSlot) {
+        public AfterUpdateCallbackInner(short currentSlot, OneSlot oneSlot) {
             this.currentSlot = currentSlot;
+            this.oneSlot = oneSlot;
         }
 
         @Override
         public void afterUpdate(String key, Object value) {
-            if ("max_connections".equals(key)) {
+            if (SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG.equals(key)) {
                 MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections((int) value);
-                log.warn("Global config set max_connections={}, slot: {}", value, currentSlot);
+                log.warn("Dyn config for global set max_connections={}, slot: {}", value, currentSlot);
             }
 
-            if ("dict_key_prefix_groups".equals(key)) {
+            if (TrainSampleJob.KEY_IN_DYN_CONFIG.equals(key)) {
                 var keyPrefixGroups = (String) value;
-                ArrayList<String> keyPrefixGroupList = new ArrayList<>();
-                for (var keyPrefixGroup : keyPrefixGroups.split(",")) {
-                    keyPrefixGroupList.add(keyPrefixGroup);
-                }
+                ArrayList<String> keyPrefixGroupList = new ArrayList<>(Arrays.asList(keyPrefixGroups.split(",")));
 
                 TrainSampleJob.setKeyPrefixOrSuffixGroupList(keyPrefixGroupList);
-                log.warn("Global config set dict_key_prefix_groups={}, slot: {}", value, currentSlot);
+                log.warn("Dyn config for global set dict_key_prefix_groups={}, slot: {}", value, currentSlot);
+            }
+
+            if (BigKeyTopK.KEY_IN_DYN_CONFIG.equals(key)) {
+                oneSlot.initBigKeyTopK(Integer.parseInt(value.toString()));
+                log.warn("Global config for current slot set monitor_big_key_top_k={}, slot: {}", value, currentSlot);
             }
             // todo
         }
@@ -120,10 +127,10 @@ public class DynConfig {
         update("binlogOn", binlogOn);
     }
 
-    public DynConfig(short slot, File dynConfigFile) throws IOException {
+    public DynConfig(short slot, File dynConfigFile, OneSlot oneSlot) throws IOException {
         this.slot = slot;
         this.dynConfigFile = dynConfigFile;
-        this.afterUpdateCallback = new AfterUpdateCallbackInner(slot);
+        this.afterUpdateCallback = new AfterUpdateCallbackInner(slot, oneSlot);
 
         if (!dynConfigFile.exists()) {
             FileUtils.touch(dynConfigFile);

@@ -317,7 +317,7 @@ class ManageCommand extends BaseCommand {
             }
 
             var firstOneSlot = localPersist.currentThreadFirstOneSlot()
-            firstOneSlot.dynConfig.update("dict_key_prefix_groups", keyPrefixGroups);
+            firstOneSlot.dynConfig.update(TrainSampleJob.KEY_IN_DYN_CONFIG, keyPrefixGroups);
 
             return OKReply.INSTANCE
         }
@@ -484,11 +484,12 @@ class ManageCommand extends BaseCommand {
         def configValueBytes = data[3]
 
         def configKey = new String(configKeyBytes)
+        def configValue = new String(configValueBytes)
 
         ArrayList<Promise<Boolean>> promises = []
         def oneSlots = localPersist.oneSlots()
         for (oneSlot in oneSlots) {
-            def p = oneSlot.asyncCall(() -> oneSlot.updateDynConfig(configKey, configValueBytes))
+            def p = oneSlot.asyncCall(() -> oneSlot.updateDynConfig(configKey, configValue))
             promises.add(p)
         }
 
