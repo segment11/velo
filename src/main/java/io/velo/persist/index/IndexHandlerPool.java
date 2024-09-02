@@ -96,10 +96,10 @@ public class IndexHandlerPool implements NeedCleanUp {
         }
     }
 
-    public Promise<Void> run(byte workerId, Consumer<IndexHandler> targetIndexHandler) {
+    public Promise<Void> run(byte workerId, Consumer<IndexHandler> consumer) {
         var indexHandler = indexHandlers[workerId];
         return indexHandler.asyncRun(() -> {
-            targetIndexHandler.accept(indexHandler);
+            consumer.accept(indexHandler);
         });
     }
 
