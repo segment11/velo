@@ -8,6 +8,7 @@ class Consts {
     static final File slotDir2 = new File(persistDir, 'test-slot2')
     static final File indexDir = new File(persistDir, 'test-index')
     static final File indexDir2 = new File(persistDir, 'test-index2')
+    static final File indexWorkerDir = new File(indexDir, 'worker-0')
     static final File testDir = new File('/tmp/test-velo-data/')
 
     static {

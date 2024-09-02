@@ -84,7 +84,7 @@ class MetaIndexWordsTest extends Specification {
         wordSet << 'unenthusiastically'
         metaIndexWords4.putWords(wordSet)
         then:
-        metaIndexWords4.afterPutWordSetSize() == 5
+        metaIndexWords4.afterPutWordCount() == 5
         metaIndexWords4.getOneWordMeta('bad') != null
         metaIndexWords4.getOneWordMeta('BAD') != null
         metaIndexWords4.getOneWordMeta('calculator') != null
@@ -94,37 +94,34 @@ class MetaIndexWordsTest extends Specification {
         metaIndexWords4.getOneWordMeta('unenthusiastically_') == null
 
         when:
-        boolean exception = false
-        wordSet.clear()
-        wordSet << 'a'
-        try {
-            metaIndexWords4.putWords(wordSet)
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        wordSet.clear()
-        wordSet << 'long_long_long_long_long_long_long_long_long'
-        try {
-            metaIndexWords4.putWords(wordSet)
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
         metaIndexWords4.cleanUp()
         def metaIndexWords5 = new MetaIndexWords(workerId, Consts.indexDir)
         println metaIndexWords5
         then:
-        metaIndexWords5.afterPutWordSetSize() == 5
+        metaIndexWords5.afterPutWordCount() == 5
+
+        when:
+        // already exist
+        metaIndexWords5.putWord('bad', 0)
+        then:
+        metaIndexWords5.afterPutWordCount() == 5
+
+        when:
+        metaIndexWords5.putWord('cake', 0)
+        then:
+        metaIndexWords5.afterPutWordCount() == 6
+
+        when:
+        def exception = false
+        try {
+            metaIndexWords5.putWord('cake', 1)
+        } catch (IllegalStateException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        // segment index not match
+        exception
 
         when:
         metaIndexWords5.cleanUp()
@@ -136,7 +133,7 @@ class MetaIndexWordsTest extends Specification {
         }
         metaIndexWords6.putWords(wordSet)
         then:
-        metaIndexWords6.afterPutWordSetSize() == 64
+        metaIndexWords6.afterPutWordCount() == 64
 
         when:
         exception = false

@@ -1,6 +1,8 @@
 package io.velo.persist.index
 
+import io.activej.config.Config
 import io.activej.eventloop.Eventloop
+import io.velo.persist.Consts
 import spock.lang.Specification
 
 import java.time.Duration
@@ -23,8 +25,8 @@ class IndexHandlerTest extends Specification {
             eventloop.run()
         }
 
-        def indexHandler0 = new IndexHandler((byte) 0, (byte) 2, eventloopCurrent)
-        def indexHandler1 = new IndexHandler((byte) 1, (byte) 2, eventloop)
+        def indexHandler0 = new IndexHandler((byte) 0, eventloopCurrent)
+        def indexHandler1 = new IndexHandler((byte) 1, eventloop)
 
         when:
         indexHandler0.threadIdProtectedForSafe = Thread.currentThread().threadId()
@@ -61,5 +63,68 @@ class IndexHandlerTest extends Specification {
         cleanup:
         indexHandler0.cleanUp()
         indexHandler1.cleanUp()
+    }
+
+    def 'test put word'() {
+        given:
+        def indexHandler = new IndexHandler((byte) 0, null)
+
+        when:
+        boolean exception = false
+        try {
+            indexHandler.checkWordLength('ab')
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        // ab is valid word
+        !exception
+
+        when:
+        exception = false
+        try {
+            indexHandler.checkWordLength('a')
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        try {
+            indexHandler.checkWordLength('long_long_long_long_long_long_long_long_long')
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+    }
+
+    def 'test put'() {
+        given:
+        def indexHandler = new IndexHandler((byte) 0, null)
+        // no expire for test
+        def persistConfig = Config.create().with('expiredIfSecondsFromNow', '0')
+
+        and:
+        indexHandler.initChunk((byte) 1, Consts.indexWorkerDir, persistConfig)
+
+        when:
+        indexHandler.putWordIfNotExist('bad')
+        then:
+        1 == 1
+
+        when:
+        indexHandler.addLongId('bad', 1L)
+        then:
+        indexHandler.getLongIds('bad', 0, 10).size() == 1
+
+        cleanup:
+        indexHandler.cleanUp()
+        Consts.indexWorkerDir.deleteDir()
     }
 }

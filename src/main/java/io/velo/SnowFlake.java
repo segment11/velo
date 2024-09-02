@@ -78,4 +78,12 @@ public class SnowFlake {
     private long getNewStamp() {
         return System.currentTimeMillis();
     }
+
+    public static boolean isExpired(long id, int secondsFromNow) {
+        if (secondsFromNow <= 0) {
+            return false;
+        }
+
+        return (System.currentTimeMillis() - secondsFromNow * 1000L) - ((id >> TIMESTAMP_LEFT) + START_STAMP) > 0;
+    }
 }

@@ -81,7 +81,12 @@ public class LocalPersist implements NeedCleanUp {
         this.oneSlots[slot] = oneSlot;
     }
 
+    private File persistDir;
+    private Config persistConfig;
+
     public void initSlots(byte netWorkers, short slotNumber, SnowFlake[] snowFlakes, File persistDir, Config persistConfig) throws IOException {
+        this.persistDir = persistDir;
+        this.persistConfig = persistConfig;
         ConfVolumeDirsForSlot.initFromConfig(persistConfig, slotNumber);
 
         isHashSaveMemberTogether = persistConfig.get(ofBoolean(), "isHashSaveMemberTogether", true);
@@ -129,8 +134,8 @@ public class LocalPersist implements NeedCleanUp {
 
     IndexHandlerPool indexHandlerPool;
 
-    public void startIndexHandlerPool() {
-        this.indexHandlerPool = new IndexHandlerPool(ConfForGlobal.indexWorkers);
+    public void startIndexHandlerPool() throws IOException {
+        this.indexHandlerPool = new IndexHandlerPool(ConfForGlobal.indexWorkers, persistDir, persistConfig);
         this.indexHandlerPool.start();
     }
 

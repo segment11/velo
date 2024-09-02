@@ -1,6 +1,5 @@
 package io.velo
 
-
 import spock.lang.Specification
 
 class SnowFlakeTest extends Specification {
@@ -83,5 +82,21 @@ class SnowFlakeTest extends Specification {
         }
         then:
         exception
+    }
+
+    def 'test expire'() {
+        given:
+        def snowFlake = new SnowFlake(1, 1)
+
+        when:
+        def seq = snowFlake.nextId()
+        then:
+        !SnowFlake.isExpired(seq, 0)
+        !SnowFlake.isExpired(seq, 1)
+
+        when:
+        Thread.sleep(1000 * 2)
+        then:
+        SnowFlake.isExpired(seq, 1)
     }
 }
