@@ -1,6 +1,5 @@
 package io.velo.persist.index;
 
-import io.activej.common.function.RunnableEx;
 import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
@@ -15,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.function.Consumer;
 
 public class IndexHandlerPool implements NeedCleanUp {
 
@@ -96,8 +96,11 @@ public class IndexHandlerPool implements NeedCleanUp {
         }
     }
 
-    public Promise<Void> run(byte workerId, RunnableEx runnableEx) {
-        return indexHandlers[workerId].asyncRun(runnableEx);
+    public Promise<Void> run(byte workerId, Consumer<IndexHandler> targetIndexHandler) {
+        var indexHandler = indexHandlers[workerId];
+        return indexHandler.asyncRun(() -> {
+            targetIndexHandler.accept(indexHandler);
+        });
     }
 
     public byte getChargeWorkerIdByWordKeyHash(long wordKeyHash) {

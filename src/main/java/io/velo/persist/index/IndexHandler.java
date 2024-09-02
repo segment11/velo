@@ -40,7 +40,7 @@ public class IndexHandler implements NeedCleanUp {
         }
     }
 
-    void putWordIfNotExist(String word) {
+    public void putWordIfNotExist(String word) {
         checkWordLength(word);
 
         var lowerCaseWord = word.toLowerCase();
@@ -48,14 +48,14 @@ public class IndexHandler implements NeedCleanUp {
         metaIndexWords.putWord(lowerCaseWord, segmentIndex);
     }
 
-    void addLongId(String word, long longId) {
+    public void addLongId(String word, long longId) {
         checkWordLength(word);
 
         var lowerCaseWord = word.toLowerCase();
         reverseIndexChunk.addLongId(lowerCaseWord, longId);
     }
 
-    TreeSet<Long> getLongIds(String word, int offset, int limit) {
+    public TreeSet<Long> getLongIds(String word, int offset, int limit) {
         checkWordLength(word);
 
         var lowerCaseWord = word.toLowerCase();

@@ -12,6 +12,7 @@ import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.metric.SimpleGauge;
 import io.velo.monitor.BigKeyTopK;
+import io.velo.persist.index.IndexHandler;
 import io.velo.repl.*;
 import io.velo.repl.content.RawBytesContent;
 import io.velo.repl.incremental.XBigStrings;
@@ -34,6 +35,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.function.Consumer;
 
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
 import static io.velo.persist.Chunk.*;
@@ -466,12 +468,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     // when complete, need call submitIndexJobDone
-    public Promise<Void> submitIndexJobRun(String word, RunnableEx runnableEx) {
+    public Promise<Void> submitIndexJobRun(String word, Consumer<IndexHandler> consumer) {
         pendingSubmitIndexJobRunCount++;
 
         var indexHandlerPool = LocalPersist.getInstance().indexHandlerPool;
         var indexWorkerId = indexHandlerPool.getChargeWorkerIdByWordKeyHash(KeyHash.hash(word.getBytes()));
-        return indexHandlerPool.run(indexWorkerId, runnableEx);
+        return indexHandlerPool.run(indexWorkerId, consumer);
     }
 
     private final short slot;
@@ -1010,6 +1012,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     long threadIdProtectedForSafe = -1;
+
+    public long getThreadIdProtectedForSafe() {
+        return threadIdProtectedForSafe;
+    }
 
     public void put(String key, int bucketIndex, CompressedValue cv) {
         put(key, bucketIndex, cv, false);

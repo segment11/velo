@@ -454,6 +454,8 @@ public class MultiWorkerServer extends Launcher {
         }
         logger.info("Net worker eventloop scheduler started");
 
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = netWorkerThreadIds;
+
         // start primary schedule
         primaryScheduleRunnable = new PrimaryTaskRunnable(loopCount -> {
             // load and execute groovy script if changed, every 10s
@@ -879,6 +881,7 @@ public class MultiWorkerServer extends Launcher {
 
     public static class StaticGlobalV {
         public SocketInspector socketInspector;
+        public long[] netWorkerThreadIds;
     }
 
     public static final StaticGlobalV STATIC_GLOBAL_V = new StaticGlobalV();

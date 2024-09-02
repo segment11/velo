@@ -153,6 +153,10 @@ public class RequestHandler {
         commandGroups[23] = new XGroup(null, null, null);
         commandGroups[24] = new YGroup(null, null, null);
         commandGroups[25] = new ZGroup(null, null, null);
+
+        for(var cmd : commandGroups) {
+            cmd.snowFlake = snowFlake;
+        }
     }
 
     // cross threads, need be thread safe

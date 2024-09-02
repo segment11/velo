@@ -1086,6 +1086,7 @@ class OneSlotTest extends Specification {
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
+        println oneSlot.threadIdProtectedForSafe
 
         def eventloopCurrent = Eventloop.builder()
                 .withCurrentThread()
@@ -1099,9 +1100,9 @@ class OneSlotTest extends Specification {
 
         when:
         boolean runResult = false
-        oneSlot.submitIndexJobRun('word0', RunnableEx.of(() -> {
+        oneSlot.submitIndexJobRun('word0', (indexHandler) -> {
             println 'index job run'
-        })).whenComplete { r, e ->
+        }).whenComplete { r, e ->
             println 'index job run complete'
             oneSlot.submitIndexJobDone()
             runResult = true
@@ -1114,9 +1115,9 @@ class OneSlotTest extends Specification {
         when:
         runResult = false
         oneSlot.pendingSubmitIndexJobRunCount = -1
-        oneSlot.submitIndexJobRun('word0', RunnableEx.of(() -> {
+        oneSlot.submitIndexJobRun('word0', (indexHandler) -> {
             println 'index job run again'
-        })).whenComplete { r, e ->
+        }).whenComplete { r, e ->
             println 'index job run again complete'
             oneSlot.submitIndexJobDone()
             runResult = true
