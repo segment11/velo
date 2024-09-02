@@ -24,6 +24,7 @@ public class ConfForGlobal {
     public static boolean pureMemory = false;
     public static short slotNumber = 1;
     public static byte netWorkers = 1;
+    public static byte indexWorkers = 1;
     public static int eventLoopIdleMillis = 10;
 
     // for repl leader select

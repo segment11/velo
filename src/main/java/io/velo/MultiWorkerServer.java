@@ -84,6 +84,7 @@ public class MultiWorkerServer extends Launcher {
     public static long UP_TIME;
 
     static final int MAX_NET_WORKERS = 128;
+    static final int MAX_INDEX_WORKERS = 64;
 
     @Inject
     PrimaryServer primaryServer;
@@ -481,6 +482,8 @@ public class MultiWorkerServer extends Launcher {
             localPersist.fixSlotThreadId(slot, netWorkerThreadIds[i]);
         }
 
+        localPersist.startIndexHandlerPool();
+
         socketInspector.netWorkerEventloopArray = netWorkerEventloopArray;
         localPersist.setSocketInspector(socketInspector);
 
@@ -803,6 +806,16 @@ public class MultiWorkerServer extends Launcher {
             }
             ConfForGlobal.netWorkers = (byte) netWorkers;
             log.warn("Global config, netWorkers: " + ConfForGlobal.netWorkers);
+
+            int indexWorkers = config.get(ofInteger(), "indexWorkers", 1);
+            if (indexWorkers > MAX_INDEX_WORKERS) {
+                throw new IllegalArgumentException("Index workers too large, index workers should be less than " + MAX_INDEX_WORKERS);
+            }
+            if (indexWorkers >= cpuNumber) {
+                throw new IllegalArgumentException("Index workers should be less than cpu number");
+            }
+            ConfForGlobal.indexWorkers = (byte) indexWorkers;
+            log.warn("Global config, indexWorkers: " + ConfForGlobal.indexWorkers);
 
             var dirFile = dirFile(config);
 

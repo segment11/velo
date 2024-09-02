@@ -3,9 +3,11 @@ package io.velo.persist
 import org.apache.commons.net.telnet.TelnetClient
 
 class Consts {
-    static final File slotDir = new File('/tmp/velo-data/test-persist/test-slot')
-    static final File slotDir2 = new File('/tmp/velo-data/test-persist/test-slot2')
     static final File persistDir = new File('/tmp/velo-data/test-persist/')
+    static final File slotDir = new File(persistDir, 'test-slot')
+    static final File slotDir2 = new File(persistDir, 'test-slot2')
+    static final File indexDir = new File(persistDir, 'test-index')
+    static final File indexDir2 = new File(persistDir, 'test-index2')
     static final File testDir = new File('/tmp/test-velo-data/')
 
     static {

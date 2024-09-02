@@ -1079,4 +1079,56 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
         ConfForGlobal.pureMemory = false
     }
+
+    def 'test run index handler'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+
+        and:
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
+        when:
+        boolean runResult = false
+        oneSlot.submitIndexJobRun('word0', RunnableEx.of(() -> {
+            println 'index job run'
+        })).whenComplete { r, e ->
+            println 'index job run complete'
+            oneSlot.submitIndexJobDone()
+            runResult = true
+        }
+        eventloopCurrent.run()
+        Thread.sleep(200)
+        then:
+        runResult
+
+        when:
+        runResult = false
+        oneSlot.pendingSubmitIndexJobRunCount = -1
+        oneSlot.submitIndexJobRun('word0', RunnableEx.of(() -> {
+            println 'index job run again'
+        })).whenComplete { r, e ->
+            println 'index job run again complete'
+            oneSlot.submitIndexJobDone()
+            runResult = true
+        }
+        eventloopCurrent.run()
+        Thread.sleep(200)
+        then:
+        runResult
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.pureMemory = false
+    }
 }

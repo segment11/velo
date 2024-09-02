@@ -42,7 +42,13 @@ class LocalPersistTest extends Specification {
         localPersist.oneSlot(slot) != null
         localPersist.currentThreadFirstOneSlot() == localPersist.oneSlots()[0]
 
+        when:
+        localPersist.startIndexHandlerPool()
+        then:
+        localPersist.indexHandlerPool != null
+
         cleanup:
+        Thread.sleep(100)
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }

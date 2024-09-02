@@ -3,10 +3,8 @@ package io.velo.persist;
 import com.kenai.jffi.PageManager;
 import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
-import io.velo.ConfVolumeDirsForSlot;
-import io.velo.NeedCleanUp;
-import io.velo.SnowFlake;
-import io.velo.SocketInspector;
+import io.velo.*;
+import io.velo.persist.index.IndexHandlerPool;
 import jnr.ffi.LibraryLoader;
 import jnr.posix.LibC;
 import org.jetbrains.annotations.TestOnly;
@@ -129,6 +127,13 @@ public class LocalPersist implements NeedCleanUp {
         throw new IllegalStateException("No one slot for current thread");
     }
 
+    IndexHandlerPool indexHandlerPool;
+
+    public void startIndexHandlerPool() {
+        this.indexHandlerPool = new IndexHandlerPool(ConfForGlobal.indexWorkers);
+        this.indexHandlerPool.start();
+    }
+
     private SocketInspector socketInspector;
 
     public SocketInspector getSocketInspector() {
@@ -144,6 +149,10 @@ public class LocalPersist implements NeedCleanUp {
         for (var oneSlot : oneSlots) {
             oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId();
             oneSlot.cleanUp();
+        }
+
+        if (indexHandlerPool != null) {
+            indexHandlerPool.cleanUp();
         }
     }
 }

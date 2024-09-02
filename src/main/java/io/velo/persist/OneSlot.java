@@ -454,6 +454,26 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         netWorkerEventloop.delay(millis, runnable);
     }
 
+    @VisibleForTesting
+    int pendingSubmitIndexJobRunCount = 0;
+
+    public void submitIndexJobDone() {
+        pendingSubmitIndexJobRunCount--;
+        if (pendingSubmitIndexJobRunCount < 0) {
+            log.warn("Pending submit index job run count less than 0, slot: {}", OneSlot.this.slot);
+            pendingSubmitIndexJobRunCount = 0;
+        }
+    }
+
+    // when complete, need call submitIndexJobDone
+    public Promise<Void> submitIndexJobRun(String word, RunnableEx runnableEx) {
+        pendingSubmitIndexJobRunCount++;
+
+        var indexHandlerPool = LocalPersist.getInstance().indexHandlerPool;
+        var indexWorkerId = indexHandlerPool.getChargeWorkerIdByWordKeyHash(KeyHash.hash(word.getBytes()));
+        return indexHandlerPool.run(indexWorkerId, runnableEx);
+    }
+
     private final short slot;
     private final String slotStr;
     private final short slotNumber;
@@ -1805,6 +1825,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 }
             }
         }
+
+        map.put("slot_pending_submit_index_job_count", (double) pendingSubmitIndexJobRunCount);
 
         return map;
     }

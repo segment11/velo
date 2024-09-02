@@ -398,6 +398,32 @@ class MultiWorkerServerTest extends Specification {
 
         when:
         exception = false
+        def config44 = Config.create()
+                .with("indexWorkers", (MultiWorkerServer.MAX_INDEX_WORKERS + 1).toString())
+        try {
+            m1.beforeCreateHandler(c, snowFlakes1, config44)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        def config55 = Config.create()
+                .with("indexWorkers", (cpuNumber + 1).toString())
+        try {
+            m1.beforeCreateHandler(c, snowFlakes1, config55)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
         def config8 = Config.create()
                 .with("bucket.bucketsPerSlot", (KeyBucket.MAX_BUCKETS_PER_SLOT + 1).toString())
         try {
