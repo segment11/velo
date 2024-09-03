@@ -256,8 +256,7 @@ public class VGroup extends BaseCommand {
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
         for (var word : words) {
             oneSlot.submitIndexJobRun(word, (indexHandler) -> {
-                indexHandler.putWordIfNotExist(word);
-                indexHandler.addLongId(word, longId);
+                indexHandler.putWordAndAddLongId(word, longId);
             }).whenComplete((v, e) -> {
                 if (e != null) {
                     log.error("Submit index job error: " + e.getMessage());

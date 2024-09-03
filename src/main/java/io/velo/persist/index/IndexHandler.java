@@ -5,6 +5,7 @@ import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
 import io.velo.NeedCleanUp;
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.io.File;
@@ -40,7 +41,8 @@ public class IndexHandler implements NeedCleanUp {
         }
     }
 
-    public void putWordIfNotExist(String word) {
+    @TestOnly
+    void putWordIfNotExist(String word) {
         checkWordLength(word);
 
         var lowerCaseWord = word.toLowerCase();
@@ -48,10 +50,20 @@ public class IndexHandler implements NeedCleanUp {
         metaIndexWords.putWord(lowerCaseWord, segmentIndex);
     }
 
-    public void addLongId(String word, long longId) {
+    @TestOnly
+    void addLongId(String word, long longId) {
         checkWordLength(word);
 
         var lowerCaseWord = word.toLowerCase();
+        reverseIndexChunk.addLongId(lowerCaseWord, longId);
+    }
+
+    public void putWordAndAddLongId(String word, long longId) {
+        checkWordLength(word);
+
+        var lowerCaseWord = word.toLowerCase();
+        var segmentIndex = reverseIndexChunk.initMetaForOneWord(lowerCaseWord);
+        metaIndexWords.putWord(lowerCaseWord, segmentIndex);
         reverseIndexChunk.addLongId(lowerCaseWord, longId);
     }
 
