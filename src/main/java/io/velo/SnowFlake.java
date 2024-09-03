@@ -1,5 +1,6 @@
 package io.velo;
 
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
 public class SnowFlake {
@@ -79,11 +80,16 @@ public class SnowFlake {
         return System.currentTimeMillis();
     }
 
-    public static boolean isExpired(long id, int secondsFromNow) {
+    public static boolean isExpired(long id, int secondsFromNow, long compareStamp) {
         if (secondsFromNow <= 0) {
             return false;
         }
 
-        return (System.currentTimeMillis() - secondsFromNow * 1000L) - ((id >> TIMESTAMP_LEFT) + START_STAMP) > 0;
+        return (compareStamp - secondsFromNow * 1000L) - ((id >> TIMESTAMP_LEFT) + START_STAMP) > 0;
+    }
+
+    @TestOnly
+    static boolean isExpired(long id, int secondsFromNow) {
+        return isExpired(id, secondsFromNow, System.currentTimeMillis());
     }
 }

@@ -28,6 +28,9 @@ public class ReverseIndexChunk implements NeedCleanUp {
     private static final int ONE_WORD_HOLD_ONE_SEGMENT_LENGTH = ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB * 1024;
     private static final int ONE_WORD_HOLD_ONE_SEGMENT_LONG_ID_COUNT = ONE_WORD_HOLD_ONE_SEGMENT_LENGTH / 8;
 
+    // reuse as thread safe
+    private final byte[] oneSegmentBytesForRead = new byte[ONE_WORD_HOLD_ONE_SEGMENT_LENGTH];
+
     // 2GB / 256K = 8192
     // one file max 2GB, 8192 * 256KB = 2GB, one segment for delta update, so 4096 words need one file
     // one segment contains 32768 long, 4096 * 32768 = 134217728
@@ -37,7 +40,8 @@ public class ReverseIndexChunk implements NeedCleanUp {
     private static final String CHUNK_FILE_NAME_PREFIX = "index-chunk-";
 
     // use 4 segments save meta info
-    private static final int HEADER_USED_SEGMENT_COUNT = 4;
+    @VisibleForTesting
+    static final int HEADER_USED_SEGMENT_COUNT = 4;
     // when meta index words clear, all fill byte 0, segment index = 0 will never be used
     private static final int HEADER_FOR_META_LENGTH = HEADER_USED_SEGMENT_COUNT * ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB * 1024;
 
@@ -45,16 +49,17 @@ public class ReverseIndexChunk implements NeedCleanUp {
     // one fd = 4096 words, 4096 * (4 + 4 + 4 + 32) = 4K * 44 = 176KB
     private static final int ONE_SEGMENT_INDEX_META_LENGTH = 4 + 4 + 4 + 32;
 
+    @VisibleForTesting
     // 160KB * 8 = 1.28MB > 1MB
-    private static final int MAX_FD_PER_CHUNK = 4;
+    static final int MAX_FD_PER_CHUNK = 4;
 
     private final byte workerId;
 
     @VisibleForTesting
     final int segmentNumberPerFd;
     private final byte fdPerChunk;
+    @VisibleForTesting
     final int maxSegmentNumber;
-    final int maxSegmentIndex;
 
     private final RandomAccessFile[] rafArray;
 
@@ -75,7 +80,6 @@ public class ReverseIndexChunk implements NeedCleanUp {
         this.segmentNumberPerFd = 2048 * 1024 / ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB;
         this.fdPerChunk = fdPerChunk;
         this.maxSegmentNumber = segmentNumberPerFd * fdPerChunk;
-        this.maxSegmentIndex = maxSegmentNumber - 1;
 
         // default 7 days
         expiredIfSecondsFromNow = persistConfig.get(ofInteger(), "expiredIfSecondsFromNow", 3600 * 24 * 7);
@@ -123,18 +127,14 @@ public class ReverseIndexChunk implements NeedCleanUp {
             byte[] wordBytes = new byte[wordLength];
             metaByteBuffer.get(wordBytes);
 
-            segmentIndexToWord.put(segmentIndex, new String(wordBytes));
-            wordToSegmentIndex.put(new String(wordBytes), segmentIndex);
+            var lowerCaseWord = new String(wordBytes);
+            segmentIndexToWord.put(segmentIndex, lowerCaseWord);
+            wordToSegmentIndex.put(lowerCaseWord, segmentIndex);
         }
     }
 
     private int findOneSegmentAvailableForOneWord(String lowerCaseWord) {
-        var segmentIndex = wordToSegmentIndex.get(lowerCaseWord);
-        if (segmentIndex != null) {
-            return segmentIndex;
-        }
-
-        for (int i = HEADER_USED_SEGMENT_COUNT; i < maxSegmentIndex; i++) {
+        for (int i = HEADER_USED_SEGMENT_COUNT; i < maxSegmentNumber; i++) {
             var usedByWord = segmentIndexToWord.get(i);
             if (usedByWord == null) {
                 return i;
@@ -148,6 +148,11 @@ public class ReverseIndexChunk implements NeedCleanUp {
     }
 
     int initMetaForOneWord(String lowerCaseWord) {
+        var alreadyInitSegmentIndex = wordToSegmentIndex.get(lowerCaseWord);
+        if (alreadyInitSegmentIndex != null) {
+            return alreadyInitSegmentIndex;
+        }
+
         var segmentIndex = findOneSegmentAvailableForOneWord(lowerCaseWord);
         if (segmentIndex == -1) {
             throw new RuntimeException("No available segment for word: " + lowerCaseWord);
@@ -160,10 +165,13 @@ public class ReverseIndexChunk implements NeedCleanUp {
         metaByteBuffer.putInt(lowerCaseWord.length());
         metaByteBuffer.put(lowerCaseWord.getBytes());
 
+        var changedMetaBytes = new byte[ONE_SEGMENT_INDEX_META_LENGTH];
+        metaByteBuffer.position(metaOffset).get(changedMetaBytes);
+
         var firstRaf = rafArray[0];
         try {
             firstRaf.seek(metaOffset);
-            firstRaf.write(metaBytes, metaOffset, ONE_SEGMENT_INDEX_META_LENGTH);
+            firstRaf.write(changedMetaBytes);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -207,19 +215,21 @@ public class ReverseIndexChunk implements NeedCleanUp {
         var targetSegmentIndexTargetFd = targetSegmentIndexTargetFd(segmentIndex);
         var targetSegmentOffsetInRaf = (long) targetSegmentIndexTargetFd * ONE_WORD_HOLD_ONE_SEGMENT_LENGTH;
 
+        var currentTimeStamp = System.currentTimeMillis();
+
         var raf = rafArray[targetFdIndex];
         try {
             raf.seek(targetSegmentOffsetInRaf);
-            var bytes = new byte[ONE_WORD_HOLD_ONE_SEGMENT_LENGTH];
-            raf.read(bytes);
+            // n should be oneSegmentBytesForRead.length
+            var n = raf.read(oneSegmentBytesForRead);
 
             TreeSet<Long> set = new TreeSet<>();
 
-            var buffer = ByteBuffer.wrap(bytes);
+            var buffer = ByteBuffer.wrap(oneSegmentBytesForRead, 0, n).slice();
             // vector optimize, todo
             for (int i = 0; i < ONE_WORD_HOLD_ONE_SEGMENT_LONG_ID_COUNT; i++) {
                 long existLongId = buffer.getLong(i * 8);
-                if (SnowFlake.isExpired(existLongId, expiredIfSecondsFromNow)) {
+                if (SnowFlake.isExpired(existLongId, expiredIfSecondsFromNow, currentTimeStamp)) {
                     continue;
                 }
                 set.add(existLongId);
@@ -229,14 +239,14 @@ public class ReverseIndexChunk implements NeedCleanUp {
             }
             set.add(longId);
 
-            Arrays.fill(bytes, (byte) 0);
+            Arrays.fill(oneSegmentBytesForRead, (byte) 0);
             buffer.clear();
             for (var longIdOne : set) {
                 buffer.putLong(longIdOne);
             }
 
             raf.seek(targetSegmentOffsetInRaf);
-            raf.write(bytes);
+            raf.write(oneSegmentBytesForRead);
 
             updateMetaWriteIndexBySegmentIndex(segmentIndex, set.size() * 8);
         } catch (IOException e) {
@@ -291,23 +301,26 @@ public class ReverseIndexChunk implements NeedCleanUp {
         var targetSegmentIndexTargetFd = targetSegmentIndexTargetFd(segmentIndex);
         var targetSegmentOffsetInRaf = (long) targetSegmentIndexTargetFd * ONE_WORD_HOLD_ONE_SEGMENT_LENGTH;
 
+        var currentTimeStamp = System.currentTimeMillis();
+
         var raf = rafArray[targetFdIndex];
         try {
-            var bytes = new byte[ONE_WORD_HOLD_ONE_SEGMENT_LENGTH];
-
             raf.seek(targetSegmentOffsetInRaf);
-            raf.read(bytes);
+            var n = raf.read(oneSegmentBytesForRead, 0, writeIndex);
+            if (n != writeIndex) {
+                throw new IllegalStateException("Index read by write index error, expect: " + writeIndex + ", n: " + n + ", worker id: " + workerId);
+            }
 
             TreeSet<Long> set = new TreeSet<>();
 
-            var buffer = ByteBuffer.wrap(bytes);
-            for (int i = 0; i < ONE_WORD_HOLD_ONE_SEGMENT_LONG_ID_COUNT; i++) {
+            var buffer = ByteBuffer.wrap(oneSegmentBytesForRead, 0, writeIndex).slice();
+            for (int i = 0; i < writeIndex / 8; i++) {
                 long existLongId = buffer.getLong(i * 8);
                 if (existLongId == 0L) {
                     break;
                 }
 
-                if (SnowFlake.isExpired(existLongId, expiredIfSecondsFromNow)) {
+                if (SnowFlake.isExpired(existLongId, expiredIfSecondsFromNow, currentTimeStamp)) {
                     continue;
                 }
 

@@ -93,6 +93,7 @@ class SnowFlakeTest extends Specification {
         then:
         !SnowFlake.isExpired(seq, 0)
         !SnowFlake.isExpired(seq, 1)
+        !SnowFlake.isExpired(seq, 1, System.currentTimeMillis())
 
         when:
         Thread.sleep(1000 * 2)
