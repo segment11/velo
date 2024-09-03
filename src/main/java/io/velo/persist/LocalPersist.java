@@ -132,7 +132,11 @@ public class LocalPersist implements NeedCleanUp {
         throw new IllegalStateException("No one slot for current thread");
     }
 
-    IndexHandlerPool indexHandlerPool;
+    private IndexHandlerPool indexHandlerPool;
+
+    public IndexHandlerPool getIndexHandlerPool() {
+        return indexHandlerPool;
+    }
 
     public void startIndexHandlerPool() throws IOException {
         this.indexHandlerPool = new IndexHandlerPool(ConfForGlobal.indexWorkers, persistDir, persistConfig);

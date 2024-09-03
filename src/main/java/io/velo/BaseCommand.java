@@ -136,6 +136,11 @@ public abstract class BaseCommand {
 
     protected int trainSampleListMaxSize = 1000;
 
+    @TestOnly
+    public void setSnowFlake(SnowFlake snowFlake) {
+        this.snowFlake = snowFlake;
+    }
+
     protected SnowFlake snowFlake;
     protected TrainSampleJob trainSampleJob;
     protected List<TrainSampleJob.TrainSampleKV> sampleToTrainList;

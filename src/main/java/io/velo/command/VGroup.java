@@ -83,7 +83,8 @@ public class VGroup extends BaseCommand {
         return ErrorReply.SYNTAX;
     }
 
-    private Reply vv_query() {
+    @VisibleForTesting
+    Reply vv_query() {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }
@@ -92,19 +93,17 @@ public class VGroup extends BaseCommand {
 
         boolean isOr = value.contains("|");
         var wordsArray = value.split(isOr ? "\\|" : "&");
-        if (wordsArray.length > 2) {
-            return new ErrorReply("Only support 2 words query");
-        }
 
-        if (wordsArray.length == 0) {
+        var wordSet = toWordSetWithLowerCase(wordsArray);
+        if (wordSet.isEmpty()) {
             return MultiBulkReply.EMPTY;
         }
 
-        // unique words
-        TreeSet<String> wordSet = new TreeSet<>();
-        for (var word : wordsArray) {
-            wordSet.add(word.toLowerCase());
+        if (wordSet.size() > 2) {
+            return new ErrorReply("Only support 2 words query");
         }
+
+        // in sequence
         ArrayList<String> wordList = new ArrayList<>(wordSet);
 
         var firstOneSlot = localPersist.currentThreadFirstOneSlot();
@@ -231,7 +230,8 @@ public class VGroup extends BaseCommand {
         });
     }
 
-    private Reply vv_count() {
+    @VisibleForTesting
+    Reply vv_count() {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }
@@ -241,15 +241,12 @@ public class VGroup extends BaseCommand {
         var value = new String(valueBytes);
         var wordsArray = value.split(",");
 
-        if (wordsArray.length == 0) {
+        var wordSet = toWordSetWithLowerCase(wordsArray);
+        if (wordSet.isEmpty()) {
             return IntegerReply.REPLY_0;
         }
 
-        // unique words
-        TreeSet<String> wordSet = new TreeSet<>();
-        for (var word : wordsArray) {
-            wordSet.add(word.toLowerCase());
-        }
+        // in sequence
         ArrayList<String> wordList = new ArrayList<>(wordSet);
 
         var firstOneSlot = localPersist.currentThreadFirstOneSlot();
@@ -299,7 +296,8 @@ public class VGroup extends BaseCommand {
         return asyncReply;
     }
 
-    private Reply vv_add() {
+    @VisibleForTesting
+    Reply vv_add() {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }
@@ -312,38 +310,16 @@ public class VGroup extends BaseCommand {
         var slotWithKeyHash = new SlotWithKeyHash(slotWithKeyHashTmp.slot(), slotWithKeyHashTmp.bucketIndex(), KeyHash.hash(keyBytes));
 
         var valueBytes = data[2];
-        set(keyBytes, valueBytes, slotWithKeyHash);
 
-        TreeSet<String> wordSet = new TreeSet<>();
         var value = new String(valueBytes);
         var wordsArray = value.split(",");
-        for (var word : wordsArray) {
-            // filter all alphabet words
-            var wordBytes = word.getBytes();
-            if (wordBytes.length == 0) {
-                continue;
-            }
 
-            var isAllAlphabet = true;
-            for (var wordByte : wordBytes) {
-                if (wordByte < 'a' || wordByte > 'z') {
-                    // A-Z case
-                    if (wordByte < 'A' || wordByte > 'Z') {
-                        isAllAlphabet = false;
-                        break;
-                    }
-                }
-            }
-            if (!isAllAlphabet) {
-                continue;
-            }
-
-            wordSet.add(word.toLowerCase());
-        }
-
+        var wordSet = toWordSetWithLowerCase(wordsArray);
         if (wordSet.isEmpty()) {
             return IntegerReply.REPLY_0;
         }
+
+        set(keyBytes, valueBytes, slotWithKeyHash);
 
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
         // async or wait ?
@@ -362,5 +338,34 @@ public class VGroup extends BaseCommand {
         }
 
         return new IntegerReply(wordSet.size());
+    }
+
+    private TreeSet<String> toWordSetWithLowerCase(String[] wordsArray) {
+        TreeSet<String> wordSet = new TreeSet<>();
+        for (var word : wordsArray) {
+            // at least 3 characters
+            var wordBytes = word.getBytes();
+            if (wordBytes.length < 3) {
+                continue;
+            }
+
+            // filter all alphabet words
+            var isAllAlphabet = true;
+            for (var wordByte : wordBytes) {
+                if (wordByte < 'a' || wordByte > 'z') {
+                    // A-Z case
+                    if (wordByte < 'A' || wordByte > 'Z') {
+                        isAllAlphabet = false;
+                        break;
+                    }
+                }
+            }
+            if (!isAllAlphabet) {
+                continue;
+            }
+
+            wordSet.add(word.toLowerCase());
+        }
+        return wordSet;
     }
 }

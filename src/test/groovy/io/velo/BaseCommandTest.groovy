@@ -106,6 +106,7 @@ class BaseCommandTest extends Specification {
         c.from(aGroup)
         c.from(aGroup2)
         c.byPassGetSet = null
+        c.snowFlake = null
         then:
         c.workerId == 0
         c.netWorkers == 1
