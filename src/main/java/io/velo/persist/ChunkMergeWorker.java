@@ -17,7 +17,6 @@ import java.util.stream.Collectors;
 
 public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector {
     private final short slot;
-    private final String slotStr;
     final OneSlot oneSlot;
 
     // metrics
@@ -58,7 +57,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
                 lruMemoryRequireMB,
                 slot);
         log.info("LRU prepare, type: {}, MB: {}, slot: {}", LRUPrepareBytesStats.Type.chunk_segment_merged_cv_buffer, lruMemoryRequireMB, slot);
-        LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.chunk_segment_merged_cv_buffer, slotStr, lruMemoryRequireMB, false);
+        LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.chunk_segment_merged_cv_buffer, String.valueOf(slot), lruMemoryRequireMB, false);
     }
 
     private final List<CvWithKeyAndBucketIndexAndSegmentIndex> mergedCvList = new ArrayList<>(MERGED_CV_SIZE_THRESHOLD);
@@ -268,7 +267,6 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
 
     public ChunkMergeWorker(short slot, OneSlot oneSlot) {
         this.slot = slot;
-        this.slotStr = String.valueOf(slot);
         this.oneSlot = oneSlot;
     }
 
