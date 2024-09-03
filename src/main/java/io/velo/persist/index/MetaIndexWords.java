@@ -47,11 +47,10 @@ public class MetaIndexWords implements NeedCleanUp {
 
     private static final int ONE_GROUP_OFFSET;
 
-    // 2 bytes for real word length, 4 bytes for int id, 4 bytes for segment index
-    private static final int ONE_WORD_META_LENGTH = 2 + 4 + 4;
+    // 2 bytes for real word length, 4 bytes for int id, 4 bytes for segment index, 4 bytes for total count
+    private static final int ONE_WORD_META_LENGTH = 2 + 4 + 4 + 4;
 
     static {
-        // 2 bytes for real word length, 4 bytes for int id, 4 bytes for segment index, 4 bytes for delta segment index
         ONE_WORD_GROUP_WORD_LENGTH8_OFFSET = 0;
         ONE_WORD_GROUP_WORD_LENGTH16_OFFSET = ONE_WORD_GROUP_WORD_LENGTH8_OFFSET + (ONE_WORD_META_LENGTH + 8) * ONE_WORD_GROUP_ESTIMATE_WORD_COUNT;
         log.info("Index, one word group length <= 8 take {} bytes", ONE_WORD_GROUP_WORD_LENGTH16_OFFSET);
@@ -143,7 +142,11 @@ public class MetaIndexWords implements NeedCleanUp {
         this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
         if (needRead) {
             iterate((lowerCaseWord, wordMeta) -> {
-                afterPutWordToSegmentIndex.put(lowerCaseWord, wordMeta.segmentIndex);
+                var arr = new int[2];
+                arr[0] = wordMeta.segmentIndex;
+                arr[1] = wordMeta.totalCount;
+                afterPutWordToSegmentIndex.put(lowerCaseWord, arr);
+
                 if (intIdForOneWord < wordMeta.intId) {
                     intIdForOneWord = wordMeta.intId;
                 }
@@ -172,7 +175,7 @@ public class MetaIndexWords implements NeedCleanUp {
         }
     }
 
-    record WordMeta(int intId, int segmentIndex) {
+    record WordMeta(int intId, int segmentIndex, int totalCount, int offset) {
     }
 
     record WordOffsetMeta(int wordLength8or16or32, int offset) {
@@ -208,7 +211,9 @@ public class MetaIndexWords implements NeedCleanUp {
                 continue;
             }
 
+            // word bytes match
             j = i;
+            break;
         }
 
         if (j == -1) {
@@ -255,14 +260,24 @@ public class MetaIndexWords implements NeedCleanUp {
 
         var intId = inMemoryCachedByteBuffer.getInt(oneWordOffsetMeta.offset + 2);
         var segmentIndex = inMemoryCachedByteBuffer.getInt(oneWordOffsetMeta.offset + 6);
-        return new WordMeta(intId, segmentIndex);
+        var totalCount = inMemoryCachedByteBuffer.getInt(oneWordOffsetMeta.offset + 10);
+        return new WordMeta(intId, segmentIndex, totalCount, oneWordOffsetMeta.offset);
     }
 
-    // lower case word
-    private final TreeMap<String, Integer> afterPutWordToSegmentIndex = new TreeMap<>();
+    // key is lower case word
+    // value is [segment index int, total count int]
+    private final TreeMap<String, int[]> afterPutWordToSegmentIndex = new TreeMap<>();
 
     public int afterPutWordCount() {
         return afterPutWordToSegmentIndex.size();
+    }
+
+    public int getTotalCount(String lowerCaseWord) {
+        var existArr = afterPutWordToSegmentIndex.get(lowerCaseWord);
+        if (existArr == null) {
+            return 0;
+        }
+        return existArr[1];
     }
 
     private interface IterateCallback {
@@ -305,7 +320,9 @@ public class MetaIndexWords implements NeedCleanUp {
 
             var oneWordMeta = new WordMeta(
                     inMemoryCachedByteBuffer.getInt(oneWordOffset + 2),
-                    inMemoryCachedByteBuffer.getInt(oneWordOffset + 6)
+                    inMemoryCachedByteBuffer.getInt(oneWordOffset + 6),
+                    inMemoryCachedByteBuffer.getInt(oneWordOffset + 10),
+                    oneWordOffset
             );
 
             var oneWordBytes = new byte[oneWordLength];
@@ -315,14 +332,29 @@ public class MetaIndexWords implements NeedCleanUp {
         }
     }
 
-    void putWord(String lowerCaseWord, int segmentIndex) {
-        var existSegmentIndex = afterPutWordToSegmentIndex.get(lowerCaseWord);
-        if (existSegmentIndex != null) {
-            if (existSegmentIndex == segmentIndex) {
+    private void updateMetaTotalCount(String lowerCaseWord, int addCount) {
+        if (addCount == 0) {
+            return;
+        }
+
+        var oneWordMeta = getOneWordMeta(lowerCaseWord);
+//        if (oneWordMeta == null) {
+//            throw new IllegalStateException("Word: " + lowerCaseWord + " not exist");
+//        }
+        var totalCount = oneWordMeta.totalCount + addCount;
+        updateOneWordMetaTotalCount(oneWordMeta, totalCount);
+    }
+
+    void putWord(String lowerCaseWord, int segmentIndex, int addCount) {
+        var existArr = afterPutWordToSegmentIndex.get(lowerCaseWord);
+        if (existArr != null) {
+            if (existArr[0] == segmentIndex) {
+                updateMetaTotalCount(lowerCaseWord, addCount);
+                existArr[1] += addCount;
                 return;
             } else {
                 throw new IllegalStateException("Word: " + lowerCaseWord + " already exist, but segment index not match, exist: " +
-                        existSegmentIndex + ", new: " + segmentIndex);
+                        existArr[0] + ", new: " + segmentIndex);
             }
         }
 
@@ -342,8 +374,12 @@ public class MetaIndexWords implements NeedCleanUp {
             throw new IllegalStateException("No empty left for word: " + lowerCaseWord);
         }
 
-        putOneWord(lowerCaseWord, oneWordOffsetMetaToPut.offset, oneWordOffsetMetaToPut.wordLength8or16or32, segmentIndex);
-        afterPutWordToSegmentIndex.put(lowerCaseWord, segmentIndex);
+        // add count should >= 0
+        putOneWord(lowerCaseWord, oneWordOffsetMetaToPut.offset, oneWordOffsetMetaToPut.wordLength8or16or32, segmentIndex, addCount);
+        var arr = new int[2];
+        arr[0] = segmentIndex;
+        arr[1] = addCount;
+        afterPutWordToSegmentIndex.put(lowerCaseWord, arr);
     }
 
     @TestOnly
@@ -359,18 +395,18 @@ public class MetaIndexWords implements NeedCleanUp {
             if (oneWordOffsetMetaToPut == null) {
                 throw new IllegalStateException("No empty left for word: " + lowerCaseWord);
             }
-            putOneWord(lowerCaseWord, oneWordOffsetMetaToPut.offset, oneWordOffsetMetaToPut.wordLength8or16or32, 0);
-            afterPutWordToSegmentIndex.put(lowerCaseWord, 0);
+            putOneWord(lowerCaseWord, oneWordOffsetMetaToPut.offset, oneWordOffsetMetaToPut.wordLength8or16or32, 0, 0);
+            afterPutWordToSegmentIndex.put(lowerCaseWord, new int[]{0, 0});
         }
     }
 
-    private void putOneWord(String lowerCaseWord, int offset, int wordLength8or16or32, int segmentIndex) {
+    private void putOneWord(String lowerCaseWord, int offset, int wordLength8or16or32, int segmentIndex, int initCount) {
         var bytes = new byte[ONE_WORD_META_LENGTH + wordLength8or16or32];
         var tmpBuffer = ByteBuffer.wrap(bytes);
         tmpBuffer.putShort((short) lowerCaseWord.length());
         tmpBuffer.putInt(generateIntIdForOneWord());
-        // 0 means not set yet
         tmpBuffer.putInt(segmentIndex);
+        tmpBuffer.putInt(initCount);
         tmpBuffer.put(lowerCaseWord.getBytes());
 
         if (ConfForGlobal.pureMemory) {
@@ -382,6 +418,21 @@ public class MetaIndexWords implements NeedCleanUp {
             raf.seek(offset);
             raf.write(bytes);
             inMemoryCachedByteBuffer.put(offset, bytes);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void updateOneWordMetaTotalCount(WordMeta oneWordMeta, int totalCount) {
+        if (ConfForGlobal.pureMemory) {
+            inMemoryCachedByteBuffer.putInt(oneWordMeta.offset + 10, totalCount);
+            return;
+        }
+
+        try {
+            raf.seek(oneWordMeta.offset + 10);
+            raf.writeInt(totalCount);
+            inMemoryCachedByteBuffer.putInt(oneWordMeta.offset + 10, totalCount);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

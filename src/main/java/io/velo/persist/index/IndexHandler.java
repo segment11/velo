@@ -47,7 +47,7 @@ public class IndexHandler implements NeedCleanUp {
 
         var lowerCaseWord = word.toLowerCase();
         var segmentIndex = reverseIndexChunk.initMetaForOneWord(lowerCaseWord);
-        metaIndexWords.putWord(lowerCaseWord, segmentIndex);
+        metaIndexWords.putWord(lowerCaseWord, segmentIndex, 0);
     }
 
     @TestOnly
@@ -55,7 +55,8 @@ public class IndexHandler implements NeedCleanUp {
         checkWordLength(word);
 
         var lowerCaseWord = word.toLowerCase();
-        reverseIndexChunk.addLongId(lowerCaseWord, longId);
+        var segmentIndex = reverseIndexChunk.addLongId(lowerCaseWord, longId);
+        metaIndexWords.putWord(lowerCaseWord, segmentIndex, longId > 0 ? 1 : -1);
     }
 
     public void putWordAndAddLongId(String word, long longId) {
@@ -63,7 +64,8 @@ public class IndexHandler implements NeedCleanUp {
 
         var lowerCaseWord = word.toLowerCase();
         var segmentIndex = reverseIndexChunk.initMetaForOneWord(lowerCaseWord);
-        metaIndexWords.putWord(lowerCaseWord, segmentIndex);
+        // long id < 0 means delete
+        metaIndexWords.putWord(lowerCaseWord, segmentIndex, longId > 0 ? 1 : -1);
         reverseIndexChunk.addLongId(lowerCaseWord, longId);
     }
 
@@ -72,6 +74,13 @@ public class IndexHandler implements NeedCleanUp {
 
         var lowerCaseWord = word.toLowerCase();
         return reverseIndexChunk.getLongIds(lowerCaseWord, offset, limit);
+    }
+
+    public int getTotalCount(String word) {
+        checkWordLength(word);
+
+        var lowerCaseWord = word.toLowerCase();
+        return metaIndexWords.getTotalCount(lowerCaseWord);
     }
 
     long threadIdProtectedForSafe = -1;

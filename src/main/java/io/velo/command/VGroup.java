@@ -68,6 +68,11 @@ public class VGroup extends BaseCommand {
             return vv_add();
         }
 
+        if ("count".equals(subCmd)) {
+            // eg: vv count bad,cake
+            return vv_count();
+        }
+
         if ("query".equals(subCmd)) {
             // vv query bad
             // vv query bad&daddy
@@ -79,6 +84,10 @@ public class VGroup extends BaseCommand {
     }
 
     private Reply vv_query() {
+        if (data.length != 3) {
+            return ErrorReply.FORMAT;
+        }
+
         var value = new String(data[2]);
 
         boolean isOr = value.contains("|");
@@ -87,19 +96,30 @@ public class VGroup extends BaseCommand {
             return new ErrorReply("Only support 2 words query");
         }
 
+        if (wordsArray.length == 0) {
+            return MultiBulkReply.EMPTY;
+        }
+
+        // unique words
+        TreeSet<String> wordSet = new TreeSet<>();
+        for (var word : wordsArray) {
+            wordSet.add(word.toLowerCase());
+        }
+        ArrayList<String> wordList = new ArrayList<>(wordSet);
+
         var firstOneSlot = localPersist.currentThreadFirstOneSlot();
 
-        Promise<Void>[] promises = new Promise[wordsArray.length];
-        TreeSet<Long>[] returnSetArray = new TreeSet[wordsArray.length];
+        Promise<Void>[] promises = new Promise[wordList.size()];
+        TreeSet<Long>[] returnSetArray = new TreeSet[wordList.size()];
         for (int i = 0; i < returnSetArray.length; i++) {
-            var word = wordsArray[i];
+            var word = wordList.get(i);
             int finalI = i;
             promises[i] = firstOneSlot.submitIndexJobRun(word, (indexHandler) -> {
                 var r = indexHandler.getLongIds(word, 0, limit);
                 returnSetArray[finalI] = r;
-            }).whenComplete((longIds, e) -> {
+            }).whenComplete((ignored, e) -> {
                 if (e != null) {
-                    log.error("Submit index job error: " + e.getMessage());
+                    log.error("Submit index job get longs ids error: " + e.getMessage());
                     return;
                 }
 
@@ -110,7 +130,7 @@ public class VGroup extends BaseCommand {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        Promises.all(promises).whenComplete((r, e) -> {
+        Promises.all(promises).whenComplete((ignored, e) -> {
             if (e != null) {
                 log.error("mget error: {}", e.getMessage());
                 return;
@@ -211,7 +231,79 @@ public class VGroup extends BaseCommand {
         });
     }
 
+    private Reply vv_count() {
+        if (data.length != 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var valueBytes = data[2];
+
+        var value = new String(valueBytes);
+        var wordsArray = value.split(",");
+
+        if (wordsArray.length == 0) {
+            return IntegerReply.REPLY_0;
+        }
+
+        // unique words
+        TreeSet<String> wordSet = new TreeSet<>();
+        for (var word : wordsArray) {
+            wordSet.add(word.toLowerCase());
+        }
+        ArrayList<String> wordList = new ArrayList<>(wordSet);
+
+        var firstOneSlot = localPersist.currentThreadFirstOneSlot();
+
+        Promise<Void>[] promises = new Promise[wordList.size()];
+        Integer[] returnTotalCountArray = new Integer[wordList.size()];
+        for (int i = 0; i < returnTotalCountArray.length; i++) {
+            var word = wordList.get(i);
+            int finalI = i;
+            promises[i] = firstOneSlot.submitIndexJobRun(word, (indexHandler) -> {
+                var r = indexHandler.getTotalCount(word);
+                returnTotalCountArray[finalI] = r;
+            }).whenComplete((ignored, e) -> {
+                if (e != null) {
+                    log.error("Submit index job get total count error: " + e.getMessage());
+                    return;
+                }
+
+                firstOneSlot.submitIndexJobDone();
+            });
+        }
+
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        Promises.all(promises).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error("mget error: {}", e.getMessage());
+                return;
+            }
+
+            if (wordList.size() == 1) {
+                finalPromise.set(new IntegerReply(returnTotalCountArray[0]));
+                return;
+            }
+
+            // multi reply
+            var replies = new Reply[wordList.size()];
+            for (int i = 0; i < wordList.size(); i++) {
+                replies[i] = new IntegerReply(returnTotalCountArray[i]);
+            }
+
+            finalPromise.set(new MultiBulkReply(replies));
+        });
+
+        return asyncReply;
+    }
+
     private Reply vv_add() {
+        if (data.length != 3) {
+            return ErrorReply.FORMAT;
+        }
+
         var slotWithKeyHashTmp = slotWithKeyHashListParsed.getFirst();
         var longId = slotWithKeyHashTmp.keyHash();
 
@@ -222,7 +314,7 @@ public class VGroup extends BaseCommand {
         var valueBytes = data[2];
         set(keyBytes, valueBytes, slotWithKeyHash);
 
-        TreeSet<String> words = new TreeSet<>();
+        TreeSet<String> wordSet = new TreeSet<>();
         var value = new String(valueBytes);
         var wordsArray = value.split(",");
         for (var word : wordsArray) {
@@ -246,20 +338,22 @@ public class VGroup extends BaseCommand {
                 continue;
             }
 
-            words.add(word);
+            wordSet.add(word.toLowerCase());
         }
 
-        if (words.isEmpty()) {
+        if (wordSet.isEmpty()) {
             return IntegerReply.REPLY_0;
         }
 
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
-        for (var word : words) {
+        // async or wait ?
+        // ignore sequence
+        for (var word : wordSet) {
             oneSlot.submitIndexJobRun(word, (indexHandler) -> {
                 indexHandler.putWordAndAddLongId(word, longId);
             }).whenComplete((v, e) -> {
                 if (e != null) {
-                    log.error("Submit index job error: " + e.getMessage());
+                    log.error("Submit index job put word and add long id error: " + e.getMessage());
                     return;
                 }
 
@@ -267,6 +361,6 @@ public class VGroup extends BaseCommand {
             });
         }
 
-        return new IntegerReply(words.size());
+        return new IntegerReply(wordSet.size());
     }
 }

@@ -244,7 +244,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
         }
     }
 
-    void addLongId(String lowerCaseWord, long longId) {
+    int addLongId(String lowerCaseWord, long longId) {
         var segmentIndex = wordToSegmentIndex.get(lowerCaseWord);
         if (segmentIndex == null) {
             throw new RuntimeException("No segment index for word: " + lowerCaseWord);
@@ -273,6 +273,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
                 throw new RuntimeException(e);
             }
         }
+        return segmentIndex;
     }
 
     TreeSet<Long> getLongIds(String lowerCaseWord, int skipCount, int limit) {

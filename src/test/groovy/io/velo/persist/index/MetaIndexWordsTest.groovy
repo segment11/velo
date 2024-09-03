@@ -102,19 +102,27 @@ class MetaIndexWordsTest extends Specification {
 
         when:
         // already exist
-        metaIndexWords5.putWord('bad', 0)
+        metaIndexWords5.putWord('bad', 0, 0)
         then:
         metaIndexWords5.afterPutWordCount() == 5
 
         when:
-        metaIndexWords5.putWord('cake', 0)
+        metaIndexWords5.putWord('cake', 0, 0)
         then:
         metaIndexWords5.afterPutWordCount() == 6
 
         when:
+        metaIndexWords5.putWord('cake', 0, 1)
+        then:
+        // read from memory bytes
+        metaIndexWords5.getOneWordMeta('cake').totalCount() == 1
+        // read from hash map
+        metaIndexWords5.getTotalCount('cake') == 1
+
+        when:
         def exception = false
         try {
-            metaIndexWords5.putWord('cake', 1)
+            metaIndexWords5.putWord('cake', 1, 0)
         } catch (IllegalStateException e) {
             println e.message
             exception = true
@@ -125,22 +133,35 @@ class MetaIndexWordsTest extends Specification {
 
         when:
         metaIndexWords5.cleanUp()
-        ConfForGlobal.pureMemory = true
+        // load again
         def metaIndexWords6 = new MetaIndexWords(workerId, Consts.indexDir)
+        then:
+        metaIndexWords6.getTotalCount('cake') == 1
+
+        when:
+        metaIndexWords6.cleanUp()
+        ConfForGlobal.pureMemory = true
+        def metaIndexWords7 = new MetaIndexWords(workerId, Consts.indexDir)
         wordSet.clear()
         64.times {
             wordSet << 'key:' + it
         }
-        metaIndexWords6.putWords(wordSet)
+        metaIndexWords7.putWords(wordSet)
         then:
-        metaIndexWords6.afterPutWordCount() == 64
+        metaIndexWords7.afterPutWordCount() == 64
+
+        when:
+        // pure memory mode update meta total count
+        metaIndexWords7.putWord('key:63', 0, 1)
+        then:
+        metaIndexWords7.getTotalCount('key:63') == 1
 
         when:
         exception = false
         wordSet.clear()
         wordSet << 'key:64'
         try {
-            metaIndexWords6.putWords(wordSet)
+            metaIndexWords7.putWords(wordSet)
         } catch (IllegalStateException e) {
             println e.message
             exception = true
@@ -149,7 +170,7 @@ class MetaIndexWordsTest extends Specification {
         exception
 
         cleanup:
-        metaIndexWords6.cleanUp()
+        metaIndexWords7.cleanUp()
         Consts.indexDir.deleteDir()
         ConfForGlobal.pureMemory = false
     }
