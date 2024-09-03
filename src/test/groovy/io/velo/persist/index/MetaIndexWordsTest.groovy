@@ -77,7 +77,6 @@ class MetaIndexWordsTest extends Specification {
         def metaIndexWords4 = new MetaIndexWords(workerId, Consts.indexDir)
         TreeSet<String> wordSet = []
         wordSet << 'bad'
-        wordSet << 'BAD'
         wordSet << 'calculator'
         wordSet << 'calculate'
         wordSet << 'ca_123456'
@@ -86,7 +85,6 @@ class MetaIndexWordsTest extends Specification {
         then:
         metaIndexWords4.afterPutWordCount() == 5
         metaIndexWords4.getOneWordMeta('bad') != null
-        metaIndexWords4.getOneWordMeta('BAD') != null
         metaIndexWords4.getOneWordMeta('calculator') != null
         metaIndexWords4.getOneWordMeta('calculate') != null
         metaIndexWords4.getOneWordMeta('ca_123456') != null

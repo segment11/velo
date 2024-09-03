@@ -32,54 +32,49 @@ public class IndexHandler implements NeedCleanUp {
     }
 
     @VisibleForTesting
-    void checkWordLength(String word) {
-        if (word.length() < 2) {
+    void checkWordLength(String lowerCaseWord) {
+        if (lowerCaseWord.length() < 2) {
             throw new IllegalArgumentException("Word length must be greater than 1");
         }
-        if (word.length() > ONE_WORD_MAX_LENGTH) {
+        if (lowerCaseWord.length() > ONE_WORD_MAX_LENGTH) {
             throw new IllegalArgumentException("Word length must be less than " + ONE_WORD_MAX_LENGTH);
         }
     }
 
     @TestOnly
-    void putWordIfNotExist(String word) {
-        checkWordLength(word);
+    void putWordIfNotExist(String lowerCaseWord) {
+        checkWordLength(lowerCaseWord);
 
-        var lowerCaseWord = word.toLowerCase();
         var segmentIndex = reverseIndexChunk.initMetaForOneWord(lowerCaseWord);
         metaIndexWords.putWord(lowerCaseWord, segmentIndex, 0);
     }
 
     @TestOnly
-    void addLongId(String word, long longId) {
-        checkWordLength(word);
+    void addLongId(String lowerCaseWord, long longId) {
+        checkWordLength(lowerCaseWord);
 
-        var lowerCaseWord = word.toLowerCase();
         var segmentIndex = reverseIndexChunk.addLongId(lowerCaseWord, longId);
         metaIndexWords.putWord(lowerCaseWord, segmentIndex, longId > 0 ? 1 : -1);
     }
 
-    public void putWordAndAddLongId(String word, long longId) {
-        checkWordLength(word);
+    public void putWordAndAddLongId(String lowerCaseWord, long longId) {
+        checkWordLength(lowerCaseWord);
 
-        var lowerCaseWord = word.toLowerCase();
         var segmentIndex = reverseIndexChunk.initMetaForOneWord(lowerCaseWord);
         // long id < 0 means delete
         metaIndexWords.putWord(lowerCaseWord, segmentIndex, longId > 0 ? 1 : -1);
         reverseIndexChunk.addLongId(lowerCaseWord, longId);
     }
 
-    public TreeSet<Long> getLongIds(String word, int offset, int limit) {
-        checkWordLength(word);
+    public TreeSet<Long> getLongIds(String lowerCaseWord, int offset, int limit) {
+        checkWordLength(lowerCaseWord);
 
-        var lowerCaseWord = word.toLowerCase();
         return reverseIndexChunk.getLongIds(lowerCaseWord, offset, limit);
     }
 
-    public int getTotalCount(String word) {
-        checkWordLength(word);
+    public int getTotalCount(String lowerCaseWord) {
+        checkWordLength(lowerCaseWord);
 
-        var lowerCaseWord = word.toLowerCase();
         return metaIndexWords.getTotalCount(lowerCaseWord);
     }
 

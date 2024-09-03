@@ -252,8 +252,8 @@ public class MetaIndexWords implements NeedCleanUp {
     }
 
     @TestOnly
-    WordMeta getOneWordMeta(String word) {
-        var oneWordOffsetMeta = getOneWordOffsetMeta(word.toLowerCase());
+    WordMeta getOneWordMeta(String lowerCaseWord) {
+        var oneWordOffsetMeta = getOneWordOffsetMeta(lowerCaseWord);
         if (oneWordOffsetMeta == null) {
             return null;
         }
@@ -384,8 +384,7 @@ public class MetaIndexWords implements NeedCleanUp {
 
     @TestOnly
     void putWords(TreeSet<String> wordSet) {
-        for (var word : wordSet) {
-            var lowerCaseWord = word.toLowerCase();
+        for (var lowerCaseWord : wordSet) {
             var oneWordOffsetMeta = getOneWordOffsetMeta(lowerCaseWord);
             if (oneWordOffsetMeta != null) {
                 continue;

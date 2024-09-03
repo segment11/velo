@@ -123,6 +123,11 @@ class IndexHandlerTest extends Specification {
         then:
         indexHandler.getLongIds('bad', 0, 10).size() == 1
 
+        when:
+        indexHandler.putWordAndAddLongId('bad', 2L)
+        then:
+        indexHandler.getTotalCount('bad') == 2
+
         cleanup:
         indexHandler.cleanUp()
         Consts.indexWorkerDir.deleteDir()
