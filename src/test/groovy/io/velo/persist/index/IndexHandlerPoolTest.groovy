@@ -13,6 +13,7 @@ class IndexHandlerPoolTest extends Specification {
         pool.start()
         then:
         pool.indexHandlers.length == 2
+        pool.getIndexHandler((byte) 0) != null
         pool.indexHandlers[0].threadIdProtectedForSafe != 0
         pool.getChargeWorkerIdByWordKeyHash(1234L) == (byte) 0
         pool.getChargeWorkerIdByWordKeyHash(123L) == (byte) 1

@@ -7,6 +7,7 @@ import io.velo.ConfForGlobal;
 import io.velo.NeedCleanUp;
 import net.openhft.affinity.AffinityStrategies;
 import net.openhft.affinity.AffinityThreadFactory;
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +21,12 @@ public class IndexHandlerPool implements NeedCleanUp {
 
     @VisibleForTesting
     final IndexHandler[] indexHandlers;
+
+    @TestOnly
+    public IndexHandler getIndexHandler(byte workerId) {
+        return indexHandlers[workerId];
+    }
+
     private final Eventloop[] workerEventloopArray;
 
     private static final Logger log = LoggerFactory.getLogger(IndexHandlerPool.class);

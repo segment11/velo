@@ -480,11 +480,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     // when complete, need call submitIndexJobDone
-    public Promise<Void> submitIndexJobRun(String word, Consumer<IndexHandler> consumer) {
+    public Promise<Void> submitIndexJobRun(String lowerCaseWord, Consumer<IndexHandler> consumer) {
         pendingSubmitIndexJobRunCount++;
 
         var indexHandlerPool = LocalPersist.getInstance().getIndexHandlerPool();
-        var indexWorkerId = indexHandlerPool.getChargeWorkerIdByWordKeyHash(KeyHash.hash(word.getBytes()));
+        var indexWorkerId = indexHandlerPool.getChargeWorkerIdByWordKeyHash(KeyHash.hash(lowerCaseWord.getBytes()));
         return indexHandlerPool.run(indexWorkerId, consumer);
     }
 

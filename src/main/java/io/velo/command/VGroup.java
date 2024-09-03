@@ -8,6 +8,7 @@ import io.velo.BaseCommand;
 import io.velo.ConfForGlobal;
 import io.velo.KeyHash;
 import io.velo.MultiWorkerServer;
+import io.velo.repl.incremental.XReverseIndexPutWord;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -111,10 +112,10 @@ public class VGroup extends BaseCommand {
         Promise<Void>[] promises = new Promise[wordList.size()];
         TreeSet<Long>[] returnSetArray = new TreeSet[wordList.size()];
         for (int i = 0; i < returnSetArray.length; i++) {
-            var word = wordList.get(i);
+            var lowerCaseWord = wordList.get(i);
             int finalI = i;
-            promises[i] = firstOneSlot.submitIndexJobRun(word, (indexHandler) -> {
-                var r = indexHandler.getLongIds(word, 0, limit);
+            promises[i] = firstOneSlot.submitIndexJobRun(lowerCaseWord, (indexHandler) -> {
+                var r = indexHandler.getLongIds(lowerCaseWord, 0, limit);
                 returnSetArray[finalI] = r;
             }).whenComplete((ignored, e) -> {
                 if (e != null) {
@@ -254,10 +255,10 @@ public class VGroup extends BaseCommand {
         Promise<Void>[] promises = new Promise[wordList.size()];
         Integer[] returnTotalCountArray = new Integer[wordList.size()];
         for (int i = 0; i < returnTotalCountArray.length; i++) {
-            var word = wordList.get(i);
+            var lowerCaseWord = wordList.get(i);
             int finalI = i;
-            promises[i] = firstOneSlot.submitIndexJobRun(word, (indexHandler) -> {
-                var r = indexHandler.getTotalCount(word);
+            promises[i] = firstOneSlot.submitIndexJobRun(lowerCaseWord, (indexHandler) -> {
+                var r = indexHandler.getTotalCount(lowerCaseWord);
                 returnTotalCountArray[finalI] = r;
             }).whenComplete((ignored, e) -> {
                 if (e != null) {
@@ -324,9 +325,9 @@ public class VGroup extends BaseCommand {
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
         // async or wait ?
         // ignore sequence
-        for (var word : wordSet) {
-            oneSlot.submitIndexJobRun(word, (indexHandler) -> {
-                indexHandler.putWordAndAddLongId(word, longId);
+        for (var lowerCaseWord : wordSet) {
+            oneSlot.submitIndexJobRun(lowerCaseWord, (indexHandler) -> {
+                indexHandler.putWordAndAddLongId(lowerCaseWord, longId);
             }).whenComplete((v, e) -> {
                 if (e != null) {
                     log.error("Submit index job put word and add long id error: " + e.getMessage());
@@ -334,6 +335,9 @@ public class VGroup extends BaseCommand {
                 }
 
                 oneSlot.submitIndexJobDone();
+
+                // write binlog
+                oneSlot.appendBinlog(new XReverseIndexPutWord(lowerCaseWord, longId));
             });
         }
 
