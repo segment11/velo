@@ -22,8 +22,8 @@ class ReverseIndexChunkTest extends Specification {
         def segmentIndex = reverseIndexChunk.initMetaForOneWord('bad')
         def segmentIndex2 = reverseIndexChunk.initMetaForOneWord('bad')
         then:
-        segmentIndex == 4
-        segmentIndex2 == 4
+        segmentIndex == ReverseIndexChunk.HEADER_USED_SEGMENT_COUNT
+        segmentIndex2 == ReverseIndexChunk.HEADER_USED_SEGMENT_COUNT
 
         when:
         reverseIndexChunk.initMetaForOneWord('xxx')
