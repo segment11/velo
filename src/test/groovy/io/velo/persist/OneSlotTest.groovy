@@ -119,6 +119,18 @@ class OneSlotTest extends Specification {
         oneSlot.bigKeyTopK != null
         oneSlot.bigKeyTopK.size() == 1
 
+        when:
+        oneSlot.handleWhenCvExpiredOrDeleted('', null, null)
+        oneSlot.handlersRegisteredList << new HandlerWhenCvExpiredOrDeleted() {
+            @Override
+            void handleWhenCvExpiredOrDeleted(String key, CompressedValue shortStringCv, PersistValueMeta pvm) {
+                println "test handle when cv expired or deleted, key: $key, cv: $shortStringCv, pvm: $pvm"
+            }
+        }
+        oneSlot.handleWhenCvExpiredOrDeleted('', null, null)
+        then:
+        1 == 1
+
         cleanup:
         oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()
         oneSlot.cleanUp()

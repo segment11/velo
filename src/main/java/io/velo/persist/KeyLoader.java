@@ -30,25 +30,31 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     public KeyLoader(short slot, int bucketsPerSlot, File slotDir, SnowFlake snowFlake, OneSlot oneSlot) {
         this.slot = slot;
-        this.slotStr = String.valueOf(slot);
         this.bucketsPerSlot = bucketsPerSlot;
         this.slotDir = slotDir;
         this.snowFlake = snowFlake;
         this.oneSlot = oneSlot;
-        this.shortValueCvExpiredCallBack = (key, cvExpired) -> {
-            if (oneSlot == null) {
-                log.warn("Short value cv expired, slot: {}", slot);
-                return;
+        this.cvExpiredOrDeletedCallBack = new KeyBucket.CvExpiredOrDeletedCallBack() {
+            @Override
+            public void handle(String key, CompressedValue shortStringCv) {
+                // for unit test
+                if (oneSlot == null) {
+                    log.warn("Short value cv expired, type: {}, slot: {}", shortStringCv.getDictSeqOrSpType(), slot);
+                    return;
+                }
+
+                oneSlot.handleWhenCvExpiredOrDeleted(key, shortStringCv, null);
             }
 
-            if (cvExpired.isBigString()) {
-                var uuid = cvExpired.getBigStringMetaUuid();
-                var isDeleted = oneSlot.getBigStringFiles().deleteBigStringFileIfExist(uuid);
-                if (!isDeleted) {
-                    throw new RuntimeException("Delete big string file error, s=" + slot + ", key=" + key + ", uuid=" + uuid);
-                } else {
-                    log.warn("Delete big string file, s={}, key={}, uuid={}", slot, key, uuid);
+            @Override
+            public void handle(String key, PersistValueMeta pvm) {
+                // for unit test
+                if (oneSlot == null) {
+                    log.warn("Cv expired, pvm: {}, slot: {}", pvm, slot);
+                    return;
                 }
+
+                oneSlot.handleWhenCvExpiredOrDeleted(key, null, pvm);
             }
         };
     }
@@ -76,14 +82,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     private final short slot;
-    private final String slotStr;
     final int bucketsPerSlot;
     private final File slotDir;
     final SnowFlake snowFlake;
 
     private final OneSlot oneSlot;
 
-    final KeyBucket.ShortValueCvExpiredCallBack shortValueCvExpiredCallBack;
+    final KeyBucket.CvExpiredOrDeletedCallBack cvExpiredOrDeletedCallBack;
 
     @VisibleForTesting
     MetaKeyBucketSplitNumber metaKeyBucketSplitNumber;
@@ -308,7 +313,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 return null;
             }
             var r = new KeyBucket(slot, bucketIndex, splitIndex, splitNumber, bytes, position, snowFlake);
-            r.shortValueCvExpiredCallBack = shortValueCvExpiredCallBack;
+            r.cvExpiredOrDeletedCallBack = cvExpiredOrDeletedCallBack;
             return r;
         }
 
@@ -316,7 +321,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return null;
         }
         var r = new KeyBucket(slot, bucketIndex, splitIndex, splitNumber, bytes, snowFlake);
-        r.shortValueCvExpiredCallBack = shortValueCvExpiredCallBack;
+        r.cvExpiredOrDeletedCallBack = cvExpiredOrDeletedCallBack;
         return r;
     }
 

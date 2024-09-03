@@ -261,27 +261,32 @@ public class KeyBucket {
         }
     }
 
-    public interface ShortValueCvExpiredCallBack {
-        void handle(String key, CompressedValue cvExpired);
+    public interface CvExpiredOrDeletedCallBack {
+        void handle(String key, CompressedValue shortStringCv);
+
+        void handle(String key, PersistValueMeta cv);
     }
 
-    ShortValueCvExpiredCallBack shortValueCvExpiredCallBack;
+    CvExpiredOrDeletedCallBack cvExpiredOrDeletedCallBack;
 
     @VisibleForTesting
-    void clearOneExpired(int i) {
-        clearOneExpired(i, null);
+    void clearOneExpiredOrDeleted(int i) {
+        clearOneExpiredOrDeleted(i, null);
     }
 
-    private void clearOneExpired(int i, KeyBytesAndValueBytes kvBytesAlreadyGet) {
+    private void clearOneExpiredOrDeleted(int i, KeyBytesAndValueBytes kvBytesAlreadyGet) {
         if (i >= capacity) {
             throw new IllegalArgumentException("i >= capacity");
         }
 
-        if (shortValueCvExpiredCallBack != null) {
+        if (cvExpiredOrDeletedCallBack != null) {
             var kvBytes = kvBytesAlreadyGet == null ? getFromOneCell(i) : kvBytesAlreadyGet;
             if (!PersistValueMeta.isPvm(kvBytes.valueBytes)) {
-                var cv = CompressedValue.decode(Unpooled.wrappedBuffer(kvBytes.valueBytes), kvBytes.keyBytes, 0L);
-                shortValueCvExpiredCallBack.handle(new String(kvBytes.keyBytes), cv);
+                var shortStringCv = CompressedValue.decode(Unpooled.wrappedBuffer(kvBytes.valueBytes), kvBytes.keyBytes, 0L);
+                cvExpiredOrDeletedCallBack.handle(new String(kvBytes.keyBytes), shortStringCv);
+            } else {
+                var pvm = PersistValueMeta.decode(kvBytes.valueBytes);
+                cvExpiredOrDeletedCallBack.handle(new String(kvBytes.keyBytes), pvm);
             }
         }
 
@@ -310,7 +315,7 @@ public class KeyBucket {
 
             var expireAt = buffer.getLong(metaIndex + HASH_VALUE_LENGTH);
             if (expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis()) {
-                clearOneExpired(i);
+                clearOneExpiredOrDeleted(i);
             }
         }
     }
@@ -469,7 +474,7 @@ public class KeyBucket {
             return new CanPutResult(false, false);
         } else {
             if (expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis()) {
-                clearOneExpired(cellIndex);
+                clearOneExpiredOrDeleted(cellIndex);
                 // check again
                 return canPut(keyBytes, keyHash, cellIndex, cellCount);
             }
@@ -595,7 +600,7 @@ public class KeyBucket {
                 var valueBytes = new byte[matchMeta.valueLength];
                 buffer.position(matchMeta.valueOffset()).get(valueBytes);
 
-                clearOneExpired(cellIndex, new KeyBytesAndValueBytes(keyBytes, valueBytes));
+                clearOneExpiredOrDeleted(cellIndex, new KeyBytesAndValueBytes(keyBytes, valueBytes));
 
                 if (doUpdateSeq) {
                     updateSeq();

@@ -3,6 +3,7 @@ package io.velo.persist
 import io.velo.CompressedValue
 import io.velo.KeyHash
 import io.velo.SnowFlake
+import io.velo.type.RedisHH
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -260,7 +261,7 @@ class KeyBucketTest extends Specification {
         when:
         exception = false
         try {
-            keyBucket.clearOneExpired(KeyBucket.INIT_CAPACITY)
+            keyBucket.clearOneExpiredOrDeleted(KeyBucket.INIT_CAPACITY)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
@@ -368,18 +369,30 @@ class KeyBucketTest extends Specification {
         keyBucket.cellCost == KeyBucket.INIT_CAPACITY
 
         when:
-        keyBucket.shortValueCvExpiredCallBack = new KeyBucket.ShortValueCvExpiredCallBack() {
+        keyBucket.cvExpiredOrDeletedCallBack = new KeyBucket.CvExpiredOrDeletedCallBack() {
             @Override
-            void handle(String key, CompressedValue cvExpired) {
-                println key + ' expired'
+            void handle(String key, CompressedValue shortStringCv) {
+                println key + ' with short string cv expired'
+            }
+
+            @Override
+            void handle(String key, PersistValueMeta pvm) {
+                println key + ' with pvm expired'
             }
         }
         keyBucket.del(cell2Key.bytes, 100L, false)
         // put again
         keyBucket.put(cell2Key.bytes, 100L, 0, 100L, cell2Cv.encode())
-        keyBucket.clearOneExpired(KeyBucket.INIT_CAPACITY - 2)
+        keyBucket.clearOneExpiredOrDeleted(KeyBucket.INIT_CAPACITY - 2)
         then:
         keyBucket.size == KeyBucket.INIT_CAPACITY - 2
         keyBucket.cellCost == KeyBucket.INIT_CAPACITY - 2
+
+        when:
+        def pvm = new PersistValueMeta()
+        keyBucket.put('normal-key'.bytes, 100L, 0, 100L, pvm.encode())
+        keyBucket.clearOneExpiredOrDeleted(KeyBucket.INIT_CAPACITY - 2)
+        then:
+        keyBucket.size == KeyBucket.INIT_CAPACITY - 2
     }
 }

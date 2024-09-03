@@ -41,7 +41,7 @@ import static io.activej.config.converter.ConfigConverters.ofBoolean;
 import static io.velo.persist.Chunk.*;
 import static io.velo.persist.FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE;
 
-public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp {
+public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, HandlerWhenCvExpiredOrDeleted {
     @TestOnly
     public OneSlot(short slot, File slotDir, KeyLoader keyLoader, Wal wal) throws IOException {
         this.slot = slot;
@@ -54,6 +54,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.chunkSegmentLength = 4096;
 
         this.bigStringFiles = new BigStringFiles(slot, slotDir);
+        handlersRegisteredList.add(bigStringFiles);
+
         this.chunkMergeWorker = null;
         this.dynConfig = null;
         this.walGroupNumber = 1;
@@ -129,6 +131,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         this.bigStringFiles = new BigStringFiles(slot, slotDir);
+        handlersRegisteredList.add(bigStringFiles);
 
         this.chunkMergeWorker = new ChunkMergeWorker(slot, this);
 
@@ -454,6 +457,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         netWorkerEventloop.delay(millis, runnable);
+    }
+
+    final ArrayList<HandlerWhenCvExpiredOrDeleted> handlersRegisteredList = new ArrayList<>();
+
+    @Override
+    public void handleWhenCvExpiredOrDeleted(String key, CompressedValue shortStringCv, PersistValueMeta pvm) {
+        for (var handler : handlersRegisteredList) {
+            handler.handleWhenCvExpiredOrDeleted(key, shortStringCv, pvm);
+        }
     }
 
     @VisibleForTesting

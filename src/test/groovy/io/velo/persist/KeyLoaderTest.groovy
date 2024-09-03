@@ -394,6 +394,9 @@ class KeyLoaderTest extends Specification {
         })
 
         when:
+        def pvm = new PersistValueMeta()
+        // put a expired pvm so can callback
+        keyLoader.putValueByKey(0, 'normal-key'.bytes, 100L, System.currentTimeMillis() - 1, 100L, pvm.encode())
         def xForBinlog = new XOneWalGroupPersist(true, false, 0)
         keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList, xForBinlog)
         then:

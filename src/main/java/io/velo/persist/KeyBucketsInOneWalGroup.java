@@ -86,7 +86,7 @@ public class KeyBucketsInOneWalGroup {
                 var currentSplitNumber = splitNumberTmp[i];
                 var keyBucket = new KeyBucket(slot, bucketIndex, (byte) splitIndex, currentSplitNumber, sharedBytes,
                         KeyLoader.KEY_BUCKET_ONE_COST_SIZE * i, keyLoader.snowFlake);
-                keyBucket.shortValueCvExpiredCallBack = keyLoader.shortValueCvExpiredCallBack;
+                keyBucket.cvExpiredOrDeletedCallBack = keyLoader.cvExpiredOrDeletedCallBack;
                 // one key bucket max size = KeyBucket.INIT_CAPACITY (48), max split number = 9 or 27, 27 * 48 = 1296 < short max value
                 keyCountForStatsTmp[i] += keyBucket.size;
                 list.set(i, keyBucket);
@@ -192,7 +192,7 @@ public class KeyBucketsInOneWalGroup {
             var keyBucket = list.get(relativeBucketIndex);
             if (keyBucket == null) {
                 keyBucket = new KeyBucket(slot, bucketIndex, splitIndex, currentSplitNumber, null, 0, keyLoader.snowFlake);
-                keyBucket.shortValueCvExpiredCallBack = keyLoader.shortValueCvExpiredCallBack;
+                keyBucket.cvExpiredOrDeletedCallBack = keyLoader.cvExpiredOrDeletedCallBack;
                 list.set(relativeBucketIndex, keyBucket);
             }
 

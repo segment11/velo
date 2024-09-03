@@ -1,5 +1,6 @@
 package io.velo.persist
 
+import io.velo.CompressedValue
 import io.velo.ConfForGlobal
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
@@ -70,6 +71,20 @@ class BigStringFilesTest extends Specification {
         bigStringFiles.deleteBigStringFileIfExist(1L)
         then:
         bigStringFiles.getBigStringFileUuidList().size() == 0
+
+        when:
+        bigStringFiles.writeBigStringBytes(1L, 'a', bigString.bytes)
+        // skip
+        bigStringFiles.handleWhenCvExpiredOrDeleted('a', null, null)
+        def cv = new CompressedValue()
+        // skip as cv type is not big string
+        bigStringFiles.handleWhenCvExpiredOrDeleted('a', cv, null)
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv.compressedData = new byte[8]
+        // uuid not match
+        bigStringFiles.handleWhenCvExpiredOrDeleted('a', cv, null)
+        then:
+        1 == 1
 
         cleanup:
         bigStringFiles.deleteAllBigStringFiles()

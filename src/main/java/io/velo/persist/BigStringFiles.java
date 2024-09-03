@@ -1,5 +1,6 @@
 package io.velo.persist;
 
+import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.metric.InSlotMetricCollector;
@@ -18,9 +19,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector {
+public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, HandlerWhenCvExpiredOrDeleted {
     private final short slot;
-    private final String slotStr;
     final File bigStringDir;
 
     private static final String BIG_STRING_DIR_NAME = "big-string";
@@ -43,13 +43,11 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector {
         this.slot = slot;
         if (ConfForGlobal.pureMemory) {
             log.warn("Pure memory mode, big string files will not be used, slot: {}", slot);
-            this.slotStr = null;
             this.bigStringDir = null;
             this.bigStringBytesByUuidLRU = null;
             return;
         }
 
-        this.slotStr = String.valueOf(slot);
         this.bigStringDir = new File(slotDir, BIG_STRING_DIR_NAME);
         if (!bigStringDir.exists()) {
             if (!bigStringDir.mkdirs()) {
@@ -66,7 +64,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector {
                 lruMemoryRequireMB,
                 slot);
         log.info("LRU prepare, type: {}, MB: {}, slot: {}", LRUPrepareBytesStats.Type.big_string, lruMemoryRequireMB, slot);
-        LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.big_string, slotStr, lruMemoryRequireMB, false);
+        LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.big_string, String.valueOf(slot), lruMemoryRequireMB, false);
 
         this.bigStringBytesByUuidLRU = new LRUMap<>(maxSize);
 
@@ -187,6 +185,25 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector {
             log.warn("Delete all big string files, slot: {}", slot);
         } catch (IOException e) {
             log.error("Delete all big string files error, slot: " + slot, e);
+        }
+    }
+
+    @Override
+    public void handleWhenCvExpiredOrDeleted(String key, CompressedValue shortStringCv, PersistValueMeta pvm) {
+        if (shortStringCv == null) {
+            return;
+        }
+
+        if (!shortStringCv.isBigString()) {
+            return;
+        }
+
+        var uuid = shortStringCv.getBigStringMetaUuid();
+        var isDeleted = deleteBigStringFileIfExist(uuid);
+        if (!isDeleted) {
+            throw new RuntimeException("Delete big string file error, s=" + slot + ", key=" + key + ", uuid=" + uuid);
+        } else {
+            log.warn("Delete big string file, s={}, key={}, uuid={}", slot, key, uuid);
         }
     }
 }
