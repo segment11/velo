@@ -39,14 +39,14 @@ public class ReverseIndexChunk implements NeedCleanUp {
 
     private static final String CHUNK_FILE_NAME_PREFIX = "index-chunk-";
 
-    // use 4 segments save meta info
+    // use 8 segments save meta info, 8 * 256KB = 2MB
     @VisibleForTesting
-    static final int HEADER_USED_SEGMENT_COUNT = 4;
+    static final int HEADER_USED_SEGMENT_COUNT = 8;
     // when meta index words clear, all fill byte 0, segment index = 0 will never be used
     private static final int HEADER_FOR_META_LENGTH = HEADER_USED_SEGMENT_COUNT * ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB * 1024;
 
     // 4 bytes int for segment index, 4 bytes int for write index, 4 bytes short for word length, 32 bytes for word
-    // one fd = 4096 words, 4096 * (4 + 4 + 4 + 32) = 4K * 44 = 176KB
+    // one fd = 8192 words, 8192 * (4 + 4 + 4 + 32) = 8192 * 44 = 360448, max 4 fd = need 1.4MB
     private static final int ONE_SEGMENT_INDEX_META_LENGTH = 4 + 4 + 4 + 32;
 
     @VisibleForTesting
@@ -57,7 +57,6 @@ public class ReverseIndexChunk implements NeedCleanUp {
 
     @VisibleForTesting
     final int segmentNumberPerFd;
-    private final byte fdPerChunk;
     @VisibleForTesting
     final int maxSegmentNumber;
 
@@ -77,8 +76,8 @@ public class ReverseIndexChunk implements NeedCleanUp {
 
         this.workerId = workerId;
 
+        // 2GB / 256KB = 8192
         this.segmentNumberPerFd = 2048 * 1024 / ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB;
-        this.fdPerChunk = fdPerChunk;
         this.maxSegmentNumber = segmentNumberPerFd * fdPerChunk;
 
         // default 7 days
@@ -111,7 +110,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
     final TreeMap<String, Integer> wordToSegmentIndex = new TreeMap<>();
 
     private void iterateMeta() {
-        for (int i = 4; i < fdPerChunk * ONE_FD_MAX_HOLD_WORD_COUNT; i++) {
+        for (int i = HEADER_USED_SEGMENT_COUNT; i < maxSegmentNumber; i++) {
             var metaOffset = i * ONE_SEGMENT_INDEX_META_LENGTH;
 
             metaByteBuffer.position(metaOffset);
