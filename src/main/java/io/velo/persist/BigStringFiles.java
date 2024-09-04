@@ -154,15 +154,18 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     public boolean deleteBigStringFileIfExist(long uuid) {
         if (ConfForGlobal.pureMemory) {
-            allBytesByUuid.remove(uuid);
+            var r = allBytesByUuid.remove(uuid);
+            if (r != null) {
+                bigStringFilesCount--;
+            }
             return true;
         }
 
         bigStringBytesByUuidLRU.remove(uuid);
-        bigStringFilesCount--;
 
         var file = new File(bigStringDir, String.valueOf(uuid));
         if (file.exists()) {
+            bigStringFilesCount--;
             return file.delete();
         } else {
             return true;
@@ -178,11 +181,11 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
 
         bigStringBytesByUuidLRU.clear();
-        bigStringFilesCount = 0;
 
         try {
             FileUtils.cleanDirectory(bigStringDir);
             log.warn("Delete all big string files, slot: {}", slot);
+            bigStringFilesCount = 0;
         } catch (IOException e) {
             log.error("Delete all big string files error, slot: " + slot, e);
         }
