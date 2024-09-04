@@ -123,6 +123,9 @@ public class IndexHandlerPool implements NeedCleanUp {
     @Override
     public void cleanUp() {
         for (var eventloop : workerEventloopArray) {
+            eventloop.execute(() -> {
+                System.out.println("Index worker eventloop stopping");
+            });
             eventloop.breakEventloop();
             log.warn("Index worker eventloop stopped, worker thread id: {}", eventloop.getEventloopThread().threadId());
         }

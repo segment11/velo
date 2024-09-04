@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
+import io.activej.promise.SettablePromise;
 import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.persist.*;
@@ -14,10 +15,7 @@ import io.velo.repl.ReplPair;
 import io.velo.repl.ReplType;
 import io.velo.repl.content.*;
 import io.velo.repl.support.JedisPoolHolder;
-import io.velo.reply.BulkReply;
-import io.velo.reply.ErrorReply;
-import io.velo.reply.NilReply;
-import io.velo.reply.Reply;
+import io.velo.reply.*;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -171,7 +169,7 @@ public class XGroup extends BaseCommand {
 
     private ReplPair replPair;
 
-    public Repl.ReplReply handleRepl() {
+    public Reply handleRepl() {
         var slaveUuid = ByteBuffer.wrap(data[0]).getLong();
 
         var slot = data[1][0];
@@ -188,7 +186,7 @@ public class XGroup extends BaseCommand {
         }
     }
 
-    private Repl.ReplReply handleReplInner(short slot, ReplType replType, long slaveUuid) {
+    private Reply handleReplInner(short slot, ReplType replType, long slaveUuid) {
         var contentBytes = data[3];
 
         var oneSlot = localPersist.oneSlot(slot);
@@ -462,16 +460,24 @@ public class XGroup extends BaseCommand {
     private static final byte reverseIndexByteAsForChunk = 1;
 
     @VisibleForTesting
-    Repl.ReplReply exists_reverse_index(short slot, byte[] contentBytes) {
+    Reply exists_reverse_index(short slot, byte[] contentBytes) {
         // server received from client
         var buffer = ByteBuffer.wrap(contentBytes);
         var isMetaIndexWords = buffer.get() == reverseIndexByteAsForMetaIndexWords;
         var indexWorkerId = buffer.get();
         var beginOffset = buffer.getInt();
 
+        if (beginOffset % 1000 == 0) {
+            log.warn("Repl master fetch exists reverse index, slot: {}, is meta index words: {}, index worker id: {}, begin offset: {}",
+                    slot, isMetaIndexWords, indexWorkerId, beginOffset);
+        }
+
         // always slot == 0
         var oneSlot = localPersist.oneSlot(slot);
         var readBytesArray = new byte[1][];
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
 
         oneSlot.submitIndexToTargetWorkerJobRun(indexWorkerId, (indexHandler -> {
             if (isMetaIndexWords) {
@@ -484,7 +490,7 @@ public class XGroup extends BaseCommand {
             if (e != null) {
                 var message = "Repl master read meta index words error, slot: " + slot;
                 log.error(message, e);
-                replPair.write(error, new RawBytesContent((message + ", error: " + e.getMessage()).getBytes()));
+                finalPromise.set(Repl.error(slot, replPair, message + ", error: " + e.getMessage()));
                 return;
             }
 
@@ -497,19 +503,23 @@ public class XGroup extends BaseCommand {
             responseBuffer.putInt(beginOffset);
             responseBuffer.put(readBytes);
 
-            replPair.write(ReplType.s_exists_reverse_index, new RawBytesContent(responseBytes));
+            finalPromise.set(Repl.reply(slot, replPair, s_exists_reverse_index, new RawBytesContent(responseBytes)));
         });
 
-        // async
-        return Repl.emptyReply();
+        return asyncReply;
     }
 
-    Repl.ReplReply s_exists_reverse_index(short slot, byte[] contentBytes) {
+    Reply s_exists_reverse_index(short slot, byte[] contentBytes) {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
         var isMetaIndexWords = buffer.get() == reverseIndexByteAsForMetaIndexWords;
         var indexWorkerId = buffer.get();
         var beginOffset = buffer.getInt();
+
+        if (beginOffset % 1000 == 0) {
+            log.warn("Repl slave fetch exists reverse index, slot: {}, is meta index words: {}, index worker id: {}, begin offset: {}",
+                    slot, isMetaIndexWords, indexWorkerId, beginOffset);
+        }
 
         var remainingLength = buffer.remaining();
         var bytes = new byte[remainingLength];
@@ -533,7 +543,7 @@ public class XGroup extends BaseCommand {
             }
         })).whenComplete((ignore, e) -> {
             if (e != null) {
-                var message = "Repl master read meta index words / index chunk error, slot: " + slot;
+                var message = "Repl slave write meta index words / index chunk error, slot: " + slot;
                 log.error(message, e);
                 replPair.write(error, new RawBytesContent((message + ", error: " + e.getMessage()).getBytes()));
                 return;
@@ -564,7 +574,8 @@ public class XGroup extends BaseCommand {
                     requestBuffer.put(indexWorkerId);
                     requestBuffer.putInt(beginOffset + INDEX_EXISTS_WORDS_ONCE_READ_LENGTH);
                 }
-                replPair.write(ReplType.s_exists_reverse_index, new RawBytesContent(requestBytes));
+
+                replPair.write(exists_reverse_index, new RawBytesContent(requestBytes));
                 return;
             }
 
@@ -576,19 +587,21 @@ public class XGroup extends BaseCommand {
                     requestBuffer.put(reverseIndexByteAsForChunk);
                     requestBuffer.put(nextIndexWorkerId);
                     requestBuffer.putInt(0);
-                    replPair.write(ReplType.exists_reverse_index, new RawBytesContent(requestBytes));
+
+                    replPair.write(exists_reverse_index, new RawBytesContent(requestBytes));
                 } else {
-                    replPair.write(ReplType.exists_all_done, NextStepContent.INSTANCE);
+                    replPair.write(exists_all_done, NextStepContent.INSTANCE);
                 }
             } else {
+                // fetch next segment
                 requestBuffer.put(reverseIndexByteAsForChunk);
                 requestBuffer.put(indexWorkerId);
                 requestBuffer.putInt(beginOffset + 1);
-                replPair.write(ReplType.s_exists_reverse_index, new RawBytesContent(requestBytes));
+
+                replPair.write(exists_reverse_index, new RawBytesContent(requestBytes));
             }
         });
 
-        // async
         return Repl.emptyReply();
     }
 
