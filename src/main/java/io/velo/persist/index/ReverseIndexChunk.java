@@ -24,8 +24,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
     // if one word hold more documents, need split by time range or other strategy
     // eg: 5min one MetaIndexWords, one seconds one word can contain: 32768 / 5 / 60 = 109
     private static final int ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB = 256;
-    @VisibleForTesting
-    static final int ONE_WORD_HOLD_ONE_SEGMENT_LENGTH = ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB * 1024;
+    public static final int ONE_WORD_HOLD_ONE_SEGMENT_LENGTH = ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB * 1024;
     private static final int ONE_WORD_HOLD_ONE_SEGMENT_LONG_ID_COUNT = ONE_WORD_HOLD_ONE_SEGMENT_LENGTH / 8;
 
     // reuse as thread safe

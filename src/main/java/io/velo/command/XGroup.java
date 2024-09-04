@@ -7,6 +7,7 @@ import io.activej.net.socket.tcp.TcpSocket;
 import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.persist.*;
+import io.velo.persist.index.ReverseIndexChunk;
 import io.velo.repl.Binlog;
 import io.velo.repl.Repl;
 import io.velo.repl.ReplPair;
@@ -522,7 +523,13 @@ public class XGroup extends BaseCommand {
                 indexHandler.metaIndexWordsWriteOneBatch(beginOffset, bytes);
             } else {
                 // begin offset is segment index for chunk
-                indexHandler.chunkWriteOneSegment(beginOffset, bytes);
+                if (bytes.length == 1) {
+                    // read empty segment bytes, refer to ReverseIndexChunk.readOneSegment
+                    var emptyBytes = new byte[ReverseIndexChunk.ONE_WORD_HOLD_ONE_SEGMENT_LENGTH];
+                    indexHandler.chunkWriteOneSegment(beginOffset, emptyBytes);
+                } else {
+                    indexHandler.chunkWriteOneSegment(beginOffset, bytes);
+                }
             }
         })).whenComplete((ignore, e) -> {
             if (e != null) {
@@ -1018,7 +1025,7 @@ public class XGroup extends BaseCommand {
     }
 
     @VisibleForTesting
-    // need delete local big string file if not exists in master, todo
+        // need delete local big string file if not exists in master, todo
     Repl.ReplReply s_exists_big_string(short slot, byte[] contentBytes) {
         // client received from server
         // empty content means no big string, next step
