@@ -559,7 +559,8 @@ public class XGroup extends BaseCommand {
                         requestBuffer.putInt(0);
                     }
                 } else {
-                    requestBuffer.put((byte) 0);
+                    // fetch next batch
+                    requestBuffer.put(reverseIndexByteAsForMetaIndexWords);
                     requestBuffer.put(indexWorkerId);
                     requestBuffer.putInt(beginOffset + INDEX_EXISTS_WORDS_ONCE_READ_LENGTH);
                 }
