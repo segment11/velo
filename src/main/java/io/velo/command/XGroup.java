@@ -272,7 +272,7 @@ public class XGroup extends BaseCommand {
                 }
 
                 oneSlot.addDelayNeedCloseReplPair(replPair);
-                yield Repl.reply(slot, replPair, ReplType.byeBye, new Pong(ConfForGlobal.netListenAddresses));
+                yield Repl.reply(slot, replPair, byeBye, new Pong(ConfForGlobal.netListenAddresses));
             }
             case byeBye -> {
                 // client received bye from server
@@ -282,6 +282,8 @@ public class XGroup extends BaseCommand {
                 oneSlot.addDelayNeedCloseReplPair(replPair);
                 yield Repl.emptyReply();
             }
+            case exists_reverse_index -> exists_reverse_index(slot, contentBytes);
+            case s_exists_reverse_index -> s_exists_reverse_index(slot, contentBytes);
             case exists_wal -> exists_wal(slot, contentBytes);
             case exists_chunk_segments -> exists_chunk_segments(slot, contentBytes);
             case exists_key_buckets -> exists_key_buckets(slot, contentBytes);
@@ -453,6 +455,135 @@ public class XGroup extends BaseCommand {
         }
     }
 
+    private static final int INDEX_EXISTS_WORDS_ONCE_READ_LENGTH = 1024 * 1024;
+
+    private static final byte reverseIndexByteAsForMetaIndexWords = 0;
+    private static final byte reverseIndexByteAsForChunk = 1;
+
+    @VisibleForTesting
+    Repl.ReplReply exists_reverse_index(short slot, byte[] contentBytes) {
+        // server received from client
+        var buffer = ByteBuffer.wrap(contentBytes);
+        var isMetaIndexWords = buffer.get() == reverseIndexByteAsForMetaIndexWords;
+        var indexWorkerId = buffer.get();
+        var beginOffset = buffer.getInt();
+
+        // always slot == 0
+        var oneSlot = localPersist.oneSlot(slot);
+        var readBytesArray = new byte[1][];
+
+        oneSlot.submitIndexToTargetWorkerJobRun(indexWorkerId, (indexHandler -> {
+            if (isMetaIndexWords) {
+                readBytesArray[0] = indexHandler.metaIndexWordsReadOneBatch(beginOffset, INDEX_EXISTS_WORDS_ONCE_READ_LENGTH);
+            } else {
+                // begin offset is segment index for chunk
+                readBytesArray[0] = indexHandler.chunkReadOneSegment(beginOffset);
+            }
+        })).whenComplete((ignore, e) -> {
+            if (e != null) {
+                var message = "Repl master read meta index words error, slot: " + slot;
+                log.error(message, e);
+                replPair.write(error, new RawBytesContent((message + ", error: " + e.getMessage()).getBytes()));
+                return;
+            }
+
+            var readBytes = readBytesArray[0];
+
+            var responseBytes = new byte[1 + 1 + 4 + readBytes.length];
+            var responseBuffer = ByteBuffer.wrap(responseBytes);
+            responseBuffer.put(isMetaIndexWords ? reverseIndexByteAsForMetaIndexWords : reverseIndexByteAsForChunk);
+            responseBuffer.put(indexWorkerId);
+            responseBuffer.putInt(beginOffset);
+            responseBuffer.put(readBytes);
+
+            replPair.write(ReplType.s_exists_reverse_index, new RawBytesContent(responseBytes));
+        });
+
+        // async
+        return Repl.emptyReply();
+    }
+
+    Repl.ReplReply s_exists_reverse_index(short slot, byte[] contentBytes) {
+        // client received from server
+        var buffer = ByteBuffer.wrap(contentBytes);
+        var isMetaIndexWords = buffer.get() == reverseIndexByteAsForMetaIndexWords;
+        var indexWorkerId = buffer.get();
+        var beginOffset = buffer.getInt();
+
+        var remainingLength = buffer.remaining();
+        var bytes = new byte[remainingLength];
+        buffer.get(bytes);
+
+        // always slot == 0
+        var oneSlot = localPersist.oneSlot(slot);
+
+        oneSlot.submitIndexToTargetWorkerJobRun(indexWorkerId, (indexHandler -> {
+            if (isMetaIndexWords) {
+                indexHandler.metaIndexWordsWriteOneBatch(beginOffset, bytes);
+            } else {
+                // begin offset is segment index for chunk
+                indexHandler.chunkWriteOneSegment(beginOffset, bytes);
+            }
+        })).whenComplete((ignore, e) -> {
+            if (e != null) {
+                var message = "Repl master read meta index words / index chunk error, slot: " + slot;
+                log.error(message, e);
+                replPair.write(error, new RawBytesContent((message + ", error: " + e.getMessage()).getBytes()));
+                return;
+            }
+
+            var requestBytes = new byte[1 + 1 + 4];
+            var requestBuffer = ByteBuffer.wrap(requestBytes);
+
+            if (isMetaIndexWords) {
+                // meta index words total file length is not exact n MB
+                var isMetaIndexWordsDone = remainingLength < INDEX_EXISTS_WORDS_ONCE_READ_LENGTH;
+                if (isMetaIndexWordsDone) {
+                    // has more index worker
+                    if (indexWorkerId < ConfForGlobal.indexWorkers - 1) {
+                        var nextIndexWorkerId = (byte) (indexWorkerId + 1);
+                        requestBuffer.put(reverseIndexByteAsForMetaIndexWords);
+                        requestBuffer.put(nextIndexWorkerId);
+                        requestBuffer.putInt(0);
+                    } else {
+                        // fetch index chunk
+                        requestBuffer.put(reverseIndexByteAsForChunk);
+                        requestBuffer.put((byte) 0);
+                        requestBuffer.putInt(0);
+                    }
+                } else {
+                    requestBuffer.put((byte) 0);
+                    requestBuffer.put(indexWorkerId);
+                    requestBuffer.putInt(beginOffset + INDEX_EXISTS_WORDS_ONCE_READ_LENGTH);
+                }
+                replPair.write(ReplType.s_exists_reverse_index, new RawBytesContent(requestBytes));
+                return;
+            }
+
+            var isIndexChunkDone = beginOffset == localPersist.getIndexHandlerPool().getChunkMaxSegmentNumber() - 1;
+            if (isIndexChunkDone) {
+                // has more index worker
+                if (indexWorkerId < ConfForGlobal.indexWorkers - 1) {
+                    var nextIndexWorkerId = (byte) (indexWorkerId + 1);
+                    requestBuffer.put(reverseIndexByteAsForChunk);
+                    requestBuffer.put(nextIndexWorkerId);
+                    requestBuffer.putInt(0);
+                    replPair.write(ReplType.exists_reverse_index, new RawBytesContent(requestBytes));
+                } else {
+                    replPair.write(ReplType.exists_all_done, NextStepContent.INSTANCE);
+                }
+            } else {
+                requestBuffer.put(reverseIndexByteAsForChunk);
+                requestBuffer.put(indexWorkerId);
+                requestBuffer.putInt(beginOffset + 1);
+                replPair.write(ReplType.s_exists_reverse_index, new RawBytesContent(requestBytes));
+            }
+        });
+
+        // async
+        return Repl.emptyReply();
+    }
+
     @VisibleForTesting
     Repl.ReplReply exists_wal(short slot, byte[] contentBytes) {
         // server received from client
@@ -521,7 +652,19 @@ public class XGroup extends BaseCommand {
 
         var walGroupNumber = Wal.calcWalGroupNumber();
         if (groupIndex == walGroupNumber - 1) {
-            return Repl.reply(slot, replPair, ReplType.exists_all_done, NextStepContent.INSTANCE);
+            if (slot != 0) {
+                return Repl.reply(slot, replPair, exists_all_done, NextStepContent.INSTANCE);
+            } else {
+                // only slot 0 fetch exists reverse index data
+                var requestBytes = new byte[1 + 1 + 4];
+                var requestBuffer = ByteBuffer.wrap(requestBytes);
+                requestBuffer.put(reverseIndexByteAsForMetaIndexWords);
+                // begin with the first index worker
+                requestBuffer.put((byte) 0);
+                // begin offset
+                requestBuffer.putInt(0);
+                return Repl.reply(slot, replPair, exists_reverse_index, new RawBytesContent(requestBytes));
+            }
         } else {
             var nextGroupIndex = groupIndex + 1;
             if (nextGroupIndex % 100 == 0) {

@@ -10,6 +10,9 @@ public enum ReplType {
     byeBye(true, false, (byte) 5),
     test(true, true, (byte) 100),
 
+    exists_reverse_index(false, true, (byte) 49),
+    s_exists_reverse_index(false, true, (byte) 50),
+
     exists_wal(false, true, (byte) 19),
     exists_chunk_segments(false, true, (byte) 20),
     exists_key_buckets(false, true, (byte) 21),

@@ -1139,6 +1139,20 @@ class OneSlotTest extends Specification {
         then:
         runResult
 
+        when:
+        runResult = false
+        oneSlot.submitIndexToTargetWorkerJobRun((byte) 0, (indexHandler) -> {
+            println 'index worker 0 job run again'
+        }).whenComplete { r, e ->
+            println 'index worker 0 job run again complete'
+            oneSlot.submitIndexJobDone()
+            runResult = true
+        }
+        eventloopCurrent.run()
+        Thread.sleep(200)
+        then:
+        runResult
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()

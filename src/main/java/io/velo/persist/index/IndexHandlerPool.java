@@ -1,6 +1,5 @@
 package io.velo.persist.index;
 
-import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
 import io.velo.ConfForGlobal;
@@ -25,6 +24,10 @@ public class IndexHandlerPool implements NeedCleanUp {
     @TestOnly
     public IndexHandler getIndexHandler(byte workerId) {
         return indexHandlers[workerId];
+    }
+
+    public int getChunkMaxSegmentNumber() {
+        return indexHandlers[0].getChunkMaxSegmentNumber();
     }
 
     private final Eventloop[] workerEventloopArray;

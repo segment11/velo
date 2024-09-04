@@ -1,6 +1,5 @@
 package io.velo.persist.index
 
-import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.velo.persist.Consts
 import spock.lang.Specification
@@ -8,7 +7,7 @@ import spock.lang.Specification
 import java.time.Duration
 
 class IndexHandlerTest extends Specification {
-    def 'test base'() {
+    def 'test run'() {
         given:
         def eventloopCurrent = Eventloop.builder()
                 .withThreadName('test-index-handler0')
@@ -110,6 +109,8 @@ class IndexHandlerTest extends Specification {
 
         and:
         indexHandler.initChunk((byte) 1, Consts.indexWorkerDir, 0)
+        expect:
+        indexHandler.chunkMaxSegmentNumber > 0
 
         when:
         indexHandler.putWordIfNotExist('bad')
@@ -125,6 +126,44 @@ class IndexHandlerTest extends Specification {
         indexHandler.putWordAndAddLongId('bad', 2L)
         then:
         indexHandler.getTotalCount('bad') == 2
+
+        cleanup:
+        indexHandler.cleanUp()
+        Consts.indexWorkerDir.deleteDir()
+    }
+
+    def 'test repl'() {
+        given:
+        def indexHandler = new IndexHandler((byte) 0, null)
+
+        and:
+        indexHandler.initChunk((byte) 1, Consts.indexWorkerDir, 0)
+
+        when:
+        def bytes = indexHandler.metaIndexWordsReadOneBatch(0, 1024)
+        then:
+        bytes.length == 1024
+
+        when:
+        indexHandler.metaIndexWordsWriteOneBatch(0, bytes)
+        then:
+        1 == 1
+
+        when:
+        def bytes1 = indexHandler.chunkReadOneSegment(0)
+        then:
+        bytes1.length == 1
+
+        when:
+        indexHandler.reverseIndexChunk.setMinLength(ReverseIndexChunk.ONE_WORD_HOLD_ONE_SEGMENT_LENGTH)
+        bytes1 = indexHandler.chunkReadOneSegment(0)
+        then:
+        bytes1.length == ReverseIndexChunk.ONE_WORD_HOLD_ONE_SEGMENT_LENGTH
+
+        when:
+        indexHandler.chunkWriteOneSegment(0, bytes1)
+        then:
+        1 == 1
 
         cleanup:
         indexHandler.cleanUp()

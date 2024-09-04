@@ -1,6 +1,5 @@
 package io.velo.persist.index
 
-import io.activej.config.Config
 import io.velo.SnowFlake
 import io.velo.persist.Consts
 import spock.lang.Specification
@@ -8,9 +7,7 @@ import spock.lang.Specification
 class ReverseIndexChunkTest extends Specification {
     def 'test all'() {
         given:
-        // no expire for test
-        def persistConfig = Config.create().with('expiredIfSecondsFromNow', '3600')
-        def reverseIndexChunk = new ReverseIndexChunk((byte) 0, Consts.indexWorkerDir, (byte) 1, persistConfig)
+        def reverseIndexChunk = new ReverseIndexChunk((byte) 0, Consts.indexWorkerDir, (byte) 1, 3600)
 
         expect:
         reverseIndexChunk.targetFdIndex(0) == 0
@@ -79,8 +76,7 @@ class ReverseIndexChunkTest extends Specification {
         when:
         reverseIndexChunk.cleanUp()
         // load again
-        def persistConfig2 = Config.create().with('expiredIfSecondsFromNow', '1')
-        def reverseIndexChunk2 = new ReverseIndexChunk((byte) 0, Consts.indexWorkerDir, (byte) 1, persistConfig2)
+        def reverseIndexChunk2 = new ReverseIndexChunk((byte) 0, Consts.indexWorkerDir, (byte) 1, 1)
         // wait expired
         Thread.sleep(1000 * 2)
         then:
@@ -108,7 +104,7 @@ class ReverseIndexChunkTest extends Specification {
         when:
         exception = false
         try {
-            new ReverseIndexChunk((byte) 0, Consts.indexWorkerDir, (byte) (ReverseIndexChunk.MAX_FD_PER_CHUNK + 1), persistConfig)
+            new ReverseIndexChunk((byte) 0, Consts.indexWorkerDir, (byte) (ReverseIndexChunk.MAX_FD_PER_CHUNK + 1), 1)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
@@ -119,6 +115,44 @@ class ReverseIndexChunkTest extends Specification {
         cleanup:
         reverseIndexChunk2.clear()
         reverseIndexChunk2.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test repl'() {
+        given:
+        def reverseIndexChunk = new ReverseIndexChunk((byte) 0, Consts.indexWorkerDir, (byte) 1, 3600)
+
+        when:
+        reverseIndexChunk.setMinLength(0)
+        def bytes = reverseIndexChunk.readOneSegment(0)
+        then:
+        bytes.length == 1
+
+        when:
+        reverseIndexChunk.setMinLength(ReverseIndexChunk.ONE_WORD_HOLD_ONE_SEGMENT_LENGTH)
+        bytes = reverseIndexChunk.readOneSegment(0)
+        then:
+        bytes.length == ReverseIndexChunk.ONE_WORD_HOLD_ONE_SEGMENT_LENGTH
+
+        when:
+        reverseIndexChunk.writeOneSegment(0, bytes)
+        then:
+        1 == 1
+
+        when:
+        def exception = false
+        try {
+            reverseIndexChunk.writeOneSegment(reverseIndexChunk.maxSegmentNumber, bytes)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        cleanup:
+        reverseIndexChunk.clear()
+        reverseIndexChunk.cleanUp()
         Consts.persistDir.deleteDir()
     }
 }

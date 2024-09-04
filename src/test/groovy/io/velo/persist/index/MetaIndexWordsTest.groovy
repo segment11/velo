@@ -7,7 +7,7 @@ import spock.lang.Specification
 class MetaIndexWordsTest extends Specification {
     final byte workerId = 0
 
-    def 'test all'() {
+    def 'test put'() {
         given:
         def metaIndexWords = new MetaIndexWords(workerId, Consts.indexDir)
 
@@ -169,6 +169,48 @@ class MetaIndexWordsTest extends Specification {
 
         cleanup:
         metaIndexWords7.cleanUp()
+        Consts.indexDir.deleteDir()
+        ConfForGlobal.pureMemory = false
+    }
+
+    def 'test repl'() {
+        given:
+        def metaIndexWords = new MetaIndexWords(workerId, Consts.indexDir)
+
+        when:
+        def bytes = metaIndexWords.readOneBatch(0, 1024)
+        then:
+        bytes.length == 1024
+
+        when:
+        def bytes2 = metaIndexWords.readOneBatch(metaIndexWords.allCapacity - 100, 1024)
+        then:
+        bytes2.length == 100
+
+        when:
+        metaIndexWords.writeOneBatch(0, bytes)
+        then:
+        1 == 1
+
+        when:
+        ConfForGlobal.pureMemory = true
+        metaIndexWords.writeOneBatch(0, bytes)
+        then:
+        1 == 1
+
+        when:
+        def exception = false
+        try {
+            metaIndexWords.writeOneBatch(metaIndexWords.allCapacity - 100, new byte[101])
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        cleanup:
+        metaIndexWords.cleanUp()
         Consts.indexDir.deleteDir()
         ConfForGlobal.pureMemory = false
     }

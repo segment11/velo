@@ -23,8 +23,41 @@ public class MetaIndexWords implements NeedCleanUp {
     private RandomAccessFile raf;
 
     private final byte workerId;
+    @VisibleForTesting
+    final int allCapacity;
     private final byte[] inMemoryCachedBytes;
     private final ByteBuffer inMemoryCachedByteBuffer;
+
+    // for repl
+    byte[] readOneBatch(int beginOffset, int length) {
+        var realReadLength = Math.min(length, allCapacity - beginOffset);
+        var bytes = new byte[realReadLength];
+        inMemoryCachedByteBuffer.position(beginOffset);
+        inMemoryCachedByteBuffer.get(bytes);
+        return bytes;
+    }
+
+    void writeOneBatch(int beginOffset, byte[] bytes) {
+        if (beginOffset + bytes.length > allCapacity) {
+            throw new IllegalArgumentException("Write bytes out of capacity, begin offset: " + beginOffset + ", bytes length: " + bytes.length);
+        }
+
+        if (ConfForGlobal.pureMemory) {
+            inMemoryCachedByteBuffer.position(beginOffset);
+            inMemoryCachedByteBuffer.put(bytes);
+            return;
+        }
+
+        try {
+            raf.seek(beginOffset);
+            raf.write(bytes);
+
+            inMemoryCachedByteBuffer.position(beginOffset);
+            inMemoryCachedByteBuffer.put(bytes);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private static final Logger log = LoggerFactory.getLogger(MetaIndexWords.class);
 
@@ -117,6 +150,7 @@ public class MetaIndexWords implements NeedCleanUp {
         this.workerId = workerId;
         this.inMemoryCachedBytes = new byte[HEADER_FOR_META_LENGTH + ONE_GROUP_OFFSET * ALL_WORDS_GROUP_NUMBER];
         log.warn("Index meta index words init size: {}KB, worker id: {}", inMemoryCachedBytes.length / 1024, workerId);
+        this.allCapacity = inMemoryCachedBytes.length;
 
         if (ConfForGlobal.pureMemory) {
             this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);

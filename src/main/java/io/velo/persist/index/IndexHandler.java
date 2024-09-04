@@ -23,11 +23,33 @@ public class IndexHandler implements NeedCleanUp {
     }
 
     private MetaIndexWords metaIndexWords;
-    private ReverseIndexChunk reverseIndexChunk;
+    @VisibleForTesting
+    ReverseIndexChunk reverseIndexChunk;
 
     void initChunk(byte fdPerChunk, File workerIdDir, int expiredIfSecondsFromNow) throws IOException {
         this.metaIndexWords = new MetaIndexWords(workerId, workerIdDir);
         this.reverseIndexChunk = new ReverseIndexChunk(workerId, workerIdDir, fdPerChunk, expiredIfSecondsFromNow);
+    }
+
+    // for repl
+    public byte[] metaIndexWordsReadOneBatch(int beginOffset, int length) {
+        return metaIndexWords.readOneBatch(beginOffset, length);
+    }
+
+    public void metaIndexWordsWriteOneBatch(int beginOffset, byte[] bytes) {
+        metaIndexWords.writeOneBatch(beginOffset, bytes);
+    }
+
+    public byte[] chunkReadOneSegment(int segmentIndex) {
+        return reverseIndexChunk.readOneSegment(segmentIndex);
+    }
+
+    public void chunkWriteOneSegment(int segmentIndex, byte[] bytes) {
+        reverseIndexChunk.writeOneSegment(segmentIndex, bytes);
+    }
+
+    public int getChunkMaxSegmentNumber() {
+        return reverseIndexChunk.maxSegmentNumber;
     }
 
     @VisibleForTesting

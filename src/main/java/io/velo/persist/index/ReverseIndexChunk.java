@@ -2,7 +2,9 @@ package io.velo.persist.index;
 
 import io.velo.NeedCleanUp;
 import io.velo.SnowFlake;
+import io.velo.repl.MasterReset;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +24,8 @@ public class ReverseIndexChunk implements NeedCleanUp {
     // if one word hold more documents, need split by time range or other strategy
     // eg: 5min one MetaIndexWords, one seconds one word can contain: 32768 / 5 / 60 = 109
     private static final int ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB = 256;
-    private static final int ONE_WORD_HOLD_ONE_SEGMENT_LENGTH = ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB * 1024;
+    @VisibleForTesting
+    static final int ONE_WORD_HOLD_ONE_SEGMENT_LENGTH = ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB * 1024;
     private static final int ONE_WORD_HOLD_ONE_SEGMENT_LONG_ID_COUNT = ONE_WORD_HOLD_ONE_SEGMENT_LENGTH / 8;
 
     // reuse as thread safe
@@ -63,6 +66,48 @@ public class ReverseIndexChunk implements NeedCleanUp {
     private final byte[] metaBytes = new byte[HEADER_FOR_META_LENGTH];
     private final ByteBuffer metaByteBuffer = ByteBuffer.wrap(metaBytes);
 
+    // for repl
+    byte[] readOneSegment(int segmentIndex) {
+        var targetFdIndex = targetFdIndex(segmentIndex);
+        var targetSegmentIndexTargetFd = targetSegmentIndexTargetFd(segmentIndex);
+
+        try {
+            var raf = rafArray[targetFdIndex];
+            if (raf.length() < ONE_WORD_HOLD_ONE_SEGMENT_LENGTH) {
+                return new byte[1];
+            }
+
+            var bytes = new byte[ONE_WORD_HOLD_ONE_SEGMENT_LENGTH];
+            var targetSegmentOffsetInRaf = (long) targetSegmentIndexTargetFd * ONE_WORD_HOLD_ONE_SEGMENT_LENGTH;
+            raf.seek(targetSegmentOffsetInRaf);
+            var n = raf.read(bytes);
+            if (n != ONE_WORD_HOLD_ONE_SEGMENT_LENGTH) {
+                throw new IllegalStateException("Index read by segment index error, expect: " + ONE_WORD_HOLD_ONE_SEGMENT_LENGTH + ", n: " + n + ", worker id: " + workerId);
+            }
+            return bytes;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    void writeOneSegment(int segmentIndex, byte[] bytes) {
+        if (segmentIndex >= maxSegmentNumber) {
+            throw new IllegalArgumentException("Segment index out of range: " + segmentIndex);
+        }
+
+        var targetFdIndex = targetFdIndex(segmentIndex);
+        var targetSegmentIndexTargetFd = targetSegmentIndexTargetFd(segmentIndex);
+
+        var raf = rafArray[targetFdIndex];
+        try {
+            var targetSegmentOffsetInRaf = (long) targetSegmentIndexTargetFd * ONE_WORD_HOLD_ONE_SEGMENT_LENGTH;
+            raf.seek(targetSegmentOffsetInRaf);
+            raf.write(bytes);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private final int expiredIfSecondsFromNow;
 
     private static final Logger log = LoggerFactory.getLogger(ReverseIndexChunk.class);
@@ -90,14 +135,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
             rafArray[i] = raf;
         }
 
-        var firstRaf = rafArray[0];
-        if (firstRaf.length() > HEADER_FOR_META_LENGTH) {
-            // read meta info
-            firstRaf.seek(0);
-            firstRaf.read(metaBytes);
-
-            iterateMeta();
-        }
+        iterateMeta();
     }
 
     // lower case word
@@ -106,7 +144,30 @@ public class ReverseIndexChunk implements NeedCleanUp {
     @VisibleForTesting
     final TreeMap<String, Integer> wordToSegmentIndex = new TreeMap<>();
 
-    private void iterateMeta() {
+    @TestOnly
+    void setMinLength(int minLength) {
+        for (int i = 0; i < rafArray.length; i++) {
+            var raf = rafArray[i];
+            try {
+                if (raf.length() >= minLength) {
+                    continue;
+                }
+                raf.setLength(minLength);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    @MasterReset
+    void iterateMeta() throws IOException {
+        var firstRaf = rafArray[0];
+        if (firstRaf.length() > HEADER_FOR_META_LENGTH) {
+            // read meta info
+            firstRaf.seek(0);
+            firstRaf.read(metaBytes);
+        }
+
         for (int i = HEADER_USED_SEGMENT_COUNT; i < maxSegmentNumber; i++) {
             var metaOffset = i * ONE_SEGMENT_INDEX_META_LENGTH;
 

@@ -1,6 +1,5 @@
 package io.velo.persist.index
 
-
 import io.velo.persist.Consts
 import spock.lang.Specification
 
@@ -14,6 +13,7 @@ class IndexHandlerPoolTest extends Specification {
         then:
         pool.indexHandlers.length == 2
         pool.getIndexHandler((byte) 0) != null
+        pool.getChunkMaxSegmentNumber() > 0
         pool.indexHandlers[0].threadIdProtectedForSafe != 0
         pool.getChargeWorkerIdByWordKeyHash(1234L) == (byte) 0
         pool.getChargeWorkerIdByWordKeyHash(123L) == (byte) 1
