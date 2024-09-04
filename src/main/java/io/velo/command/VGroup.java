@@ -4,10 +4,7 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
-import io.velo.BaseCommand;
-import io.velo.ConfForGlobal;
-import io.velo.KeyHash;
-import io.velo.MultiWorkerServer;
+import io.velo.*;
 import io.velo.repl.incremental.XReverseIndexPutWord;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -320,7 +317,8 @@ public class VGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
-        set(keyBytes, valueBytes, slotWithKeyHash);
+        set(keyBytes, valueBytes, slotWithKeyHash, CompressedValue.NULL_DICT_SEQ,
+                System.currentTimeMillis() + 1000L * localPersist.getReverseIndexExpiredIfSecondsFromNow());
 
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
         // async or wait ?

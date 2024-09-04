@@ -15,6 +15,7 @@ import java.io.File;
 import java.io.IOException;
 
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
+import static io.activej.config.converter.ConfigConverters.ofInteger;
 
 public class LocalPersist implements NeedCleanUp {
     public static final int PAGE_SIZE = (int) PageManager.getInstance().pageSize();
@@ -138,8 +139,17 @@ public class LocalPersist implements NeedCleanUp {
         return indexHandlerPool;
     }
 
+    private int reverseIndexExpiredIfSecondsFromNow = 3600 * 24 * 7;
+
+    public int getReverseIndexExpiredIfSecondsFromNow() {
+        return reverseIndexExpiredIfSecondsFromNow;
+    }
+
     public void startIndexHandlerPool() throws IOException {
-        this.indexHandlerPool = new IndexHandlerPool(ConfForGlobal.indexWorkers, persistDir, persistConfig);
+        // default 7 days
+        reverseIndexExpiredIfSecondsFromNow = persistConfig.get(ofInteger(), "reverseIndexExpiredIfSecondsFromNow", 3600 * 24 * 7);
+
+        this.indexHandlerPool = new IndexHandlerPool(ConfForGlobal.indexWorkers, persistDir, reverseIndexExpiredIfSecondsFromNow);
         this.indexHandlerPool.start();
     }
 

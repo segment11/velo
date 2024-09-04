@@ -1,7 +1,6 @@
 package io.velo.persist.index;
 
 import io.activej.common.function.RunnableEx;
-import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
 import io.velo.NeedCleanUp;
@@ -26,9 +25,9 @@ public class IndexHandler implements NeedCleanUp {
     private MetaIndexWords metaIndexWords;
     private ReverseIndexChunk reverseIndexChunk;
 
-    void initChunk(byte fdPerChunk, File workerIdDir, Config persistConfig) throws IOException {
+    void initChunk(byte fdPerChunk, File workerIdDir, int expiredIfSecondsFromNow) throws IOException {
         this.metaIndexWords = new MetaIndexWords(workerId, workerIdDir);
-        this.reverseIndexChunk = new ReverseIndexChunk(workerId, workerIdDir, fdPerChunk, persistConfig);
+        this.reverseIndexChunk = new ReverseIndexChunk(workerId, workerIdDir, fdPerChunk, expiredIfSecondsFromNow);
     }
 
     @VisibleForTesting

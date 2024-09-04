@@ -33,7 +33,7 @@ public class IndexHandlerPool implements NeedCleanUp {
 
     private static final String INDEX_DIR_NAME = "reverse-index";
 
-    public IndexHandlerPool(byte indexWorkers, File persistDir, Config persistConfig) throws IOException {
+    public IndexHandlerPool(byte indexWorkers, File persistDir, int expiredIfSecondsFromNow) throws IOException {
         var eachIndexHandlerChunkFdNumber = getEachIndexHandlerChunkFdNumber(indexWorkers);
 
         var indexDir = new File(persistDir, INDEX_DIR_NAME);
@@ -63,7 +63,7 @@ public class IndexHandlerPool implements NeedCleanUp {
                     throw new RuntimeException("Create dir " + workerIdDir.getAbsolutePath() + " failed");
                 }
             }
-            indexHandler.initChunk((byte) eachIndexHandlerChunkFdNumber, workerIdDir, persistConfig);
+            indexHandler.initChunk((byte) eachIndexHandlerChunkFdNumber, workerIdDir, expiredIfSecondsFromNow);
         }
     }
 

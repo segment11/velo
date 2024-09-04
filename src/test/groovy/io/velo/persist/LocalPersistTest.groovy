@@ -45,6 +45,7 @@ class LocalPersistTest extends Specification {
         when:
         localPersist.startIndexHandlerPool()
         then:
+        localPersist.reverseIndexExpiredIfSecondsFromNow == 3600 * 24 * 7
         localPersist.indexHandlerPool != null
 
         cleanup:

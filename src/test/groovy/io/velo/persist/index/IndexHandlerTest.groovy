@@ -107,11 +107,9 @@ class IndexHandlerTest extends Specification {
     def 'test put'() {
         given:
         def indexHandler = new IndexHandler((byte) 0, null)
-        // no expire for test
-        def persistConfig = Config.create().with('expiredIfSecondsFromNow', '0')
 
         and:
-        indexHandler.initChunk((byte) 1, Consts.indexWorkerDir, persistConfig)
+        indexHandler.initChunk((byte) 1, Consts.indexWorkerDir, 0)
 
         when:
         indexHandler.putWordIfNotExist('bad')

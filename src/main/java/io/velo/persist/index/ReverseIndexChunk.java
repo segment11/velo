@@ -1,6 +1,5 @@
 package io.velo.persist.index;
 
-import io.activej.config.Config;
 import io.velo.NeedCleanUp;
 import io.velo.SnowFlake;
 import org.apache.commons.io.FileUtils;
@@ -16,8 +15,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
-
-import static io.activej.config.converter.ConfigConverters.ofInteger;
 
 public class ReverseIndexChunk implements NeedCleanUp {
     // seq is long 8 bytes with time millis, 256KB = 256 * 1024 / 8 = 32768
@@ -70,7 +67,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(ReverseIndexChunk.class);
 
-    public ReverseIndexChunk(byte workerId, File workerIdDir, byte fdPerChunk, Config persistConfig) throws IOException {
+    public ReverseIndexChunk(byte workerId, File workerIdDir, byte fdPerChunk, int expiredIfSecondsFromNow) throws IOException {
         if (fdPerChunk > MAX_FD_PER_CHUNK) {
             throw new IllegalArgumentException("Reverse index chunk init, fd per chunk must less than " + MAX_FD_PER_CHUNK);
         }
@@ -81,8 +78,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
         this.segmentNumberPerFd = 2048 * 1024 / ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB;
         this.maxSegmentNumber = segmentNumberPerFd * fdPerChunk;
 
-        // default 7 days
-        expiredIfSecondsFromNow = persistConfig.get(ofInteger(), "expiredIfSecondsFromNow", 3600 * 24 * 7);
+        this.expiredIfSecondsFromNow = expiredIfSecondsFromNow;
 
         this.rafArray = new RandomAccessFile[fdPerChunk];
         for (int i = 0; i < fdPerChunk; i++) {
