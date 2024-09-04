@@ -30,6 +30,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
 
     // reuse as thread safe
     private final byte[] oneSegmentBytesForRead = new byte[ONE_WORD_HOLD_ONE_SEGMENT_LENGTH];
+    private final ByteBuffer byteBufferForRead = ByteBuffer.wrap(oneSegmentBytesForRead);
 
     // 2GB / 256K = 8192
     // one file max 2GB, 8192 * 256KB = 2GB, one segment for delta update, so 4096 words need one file
@@ -224,10 +225,11 @@ public class ReverseIndexChunk implements NeedCleanUp {
 
             TreeSet<Long> set = new TreeSet<>();
 
-            var buffer = ByteBuffer.wrap(oneSegmentBytesForRead, 0, n).slice();
+            byteBufferForRead.position(0);
+            byteBufferForRead.limit(n);
             // vector optimize, todo
             for (int i = 0; i < ONE_WORD_HOLD_ONE_SEGMENT_LONG_ID_COUNT; i++) {
-                long existLongId = buffer.getLong(i * 8);
+                long existLongId = byteBufferForRead.getLong(i * 8);
                 if (SnowFlake.isExpired(existLongId, expiredIfSecondsFromNow, currentTimeStamp)) {
                     continue;
                 }
@@ -239,9 +241,9 @@ public class ReverseIndexChunk implements NeedCleanUp {
             set.add(longId);
 
             Arrays.fill(oneSegmentBytesForRead, (byte) 0);
-            buffer.clear();
+            byteBufferForRead.clear();
             for (var longIdOne : set) {
-                buffer.putLong(longIdOne);
+                byteBufferForRead.putLong(longIdOne);
             }
 
             raf.seek(targetSegmentOffsetInRaf);
@@ -310,11 +312,13 @@ public class ReverseIndexChunk implements NeedCleanUp {
                 throw new IllegalStateException("Index read by write index error, expect: " + writeIndex + ", n: " + n + ", worker id: " + workerId);
             }
 
+            byteBufferForRead.position(0);
+            byteBufferForRead.limit(writeIndex);
+
             TreeSet<Long> set = new TreeSet<>();
 
-            var buffer = ByteBuffer.wrap(oneSegmentBytesForRead, 0, writeIndex).slice();
             for (int i = 0; i < writeIndex / 8; i++) {
-                long existLongId = buffer.getLong(i * 8);
+                long existLongId = byteBufferForRead.getLong(i * 8);
                 if (existLongId == 0L) {
                     break;
                 }
