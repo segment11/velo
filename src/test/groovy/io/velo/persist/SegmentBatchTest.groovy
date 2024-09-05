@@ -79,7 +79,6 @@ class SegmentBatchTest extends Specification {
         println "seq: $seq, total bytes: $totalBytesN"
         List<CompressedValue> loadedCvList = []
         def pvm0 = new PersistValueMeta()
-        pvm0.slot = slot
         pvm0.segmentIndex = 0
         def mockChunk = ChunkTest.prepareOne(slot)
         for (i in 0..<SegmentBatch.MAX_BLOCK_NUMBER) {
