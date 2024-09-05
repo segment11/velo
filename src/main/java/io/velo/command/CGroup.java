@@ -42,6 +42,10 @@ public class CGroup extends BaseCommand {
             return client();
         }
 
+        if ("clusterx".equals(cmd)) {
+            return clusterx();
+        }
+
         if ("config".equals(cmd)) {
             return config();
         }
@@ -70,6 +74,19 @@ public class CGroup extends BaseCommand {
 
         // todo
         return NilReply.INSTANCE;
+    }
+
+    @VisibleForTesting
+    Reply clusterx() {
+        if (data.length < 2) {
+            return ErrorReply.FORMAT;
+        }
+
+        var scriptText = RefreshLoader.getScriptText("/dyn/src/io/velo/script/ClusterxCommandHandle.groovy");
+
+        var variables = new HashMap<String, Object>();
+        variables.put("cGroup", this);
+        return (Reply) CachedGroovyClassLoader.getInstance().eval(scriptText, variables);
     }
 
     @VisibleForTesting

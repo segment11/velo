@@ -56,6 +56,12 @@ class CGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        cGroup.cmd = 'clusterx'
+        cGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         cGroup.cmd = 'config'
         cGroup.handle()
         then:
@@ -96,6 +102,21 @@ class CGroupTest extends Specification {
         reply = cGroup.execute('client zzz')
         then:
         reply == NilReply.INSTANCE
+    }
+
+    def 'test clusterx'() {
+        given:
+        def cGroup = new CGroup(null, null, null)
+
+        and:
+        def loader = CachedGroovyClassLoader.instance
+        def classpath = Utils.projectPath('/dyn/src')
+        loader.init(GroovyClassLoader.getClass().classLoader, classpath, null)
+
+        when:
+        def reply = cGroup.execute('clusterx setnodeid')
+        then:
+        reply == ErrorReply.FORMAT
     }
 
     def 'test config'() {
