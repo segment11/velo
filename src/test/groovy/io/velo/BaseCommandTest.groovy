@@ -115,7 +115,7 @@ class BaseCommandTest extends Specification {
 
         c.compressStats != null
         c.trainSampleListMaxSize == 100
-        c.snowFlake != null
+        c.snowFlake == null
         c.trainSampleJob != null
         c.sampleToTrainList.size() == 0
 
