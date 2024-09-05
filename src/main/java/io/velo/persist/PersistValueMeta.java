@@ -1,16 +1,17 @@
 package io.velo.persist;
 
 import io.activej.bytebuf.ByteBuf;
+import io.velo.CompressedValue;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import static io.velo.CompressedValue.NO_EXPIRE;
 
 public class PersistValueMeta {
-    // slot short + segment sub block index byte
+    // 2 bytes for 0 if not special type + type int + segment sub block index byte
     // + length int + segment index int + segment offset int
     // may add type or other metadata in the future
     @VisibleForTesting
-    static final int ENCODED_LENGTH = 2 + 2 + 4 + 4 + 4;
+    static final int ENCODED_LENGTH = 2 + 4 + 2 + 4 + 4 + 4;
 
     // CompressedValue encoded length is much more than PersistValueMeta encoded length
     public static boolean isPvm(byte[] bytes) {
@@ -19,7 +20,7 @@ public class PersistValueMeta {
         return bytes[0] >= 0 && (bytes.length == ENCODED_LENGTH);
     }
 
-    short slot;
+    int spType = CompressedValue.NULL_DICT_SEQ;
     byte subBlockIndex;
     public int length;
     int segmentIndex;
@@ -56,7 +57,7 @@ public class PersistValueMeta {
     @Override
     public String toString() {
         return "PersistValueMeta{" +
-                "slot=" + slot +
+                "spType=" + spType +
                 ", length=" + length +
                 ", segmentIndex=" + segmentIndex +
                 ", subBlockIndex=" + subBlockIndex +
@@ -68,7 +69,8 @@ public class PersistValueMeta {
     public byte[] encode() {
         var bytes = new byte[ENCODED_LENGTH];
         var buf = ByteBuf.wrapForWriting(bytes);
-        buf.writeShort(slot);
+        buf.writeShort((short) 0);
+        buf.writeInt(spType);
         buf.writeShort(subBlockIndex);
         buf.writeInt(length);
         buf.writeInt(segmentIndex);
@@ -79,7 +81,8 @@ public class PersistValueMeta {
     public static PersistValueMeta decode(byte[] bytes) {
         var buf = ByteBuf.wrapForReading(bytes);
         var pvm = new PersistValueMeta();
-        pvm.slot = buf.readShort();
+        buf.readShort(); // skip 0
+        pvm.spType = buf.readInt();
         pvm.subBlockIndex = (byte) buf.readShort();
         pvm.length = buf.readInt();
         pvm.segmentIndex = buf.readInt();

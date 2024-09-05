@@ -26,7 +26,7 @@ class Mock {
 
             def keyHash = KeyHash.hash(keyBytes)
 
-            def v = new Wal.V(it, bucketIndex, keyHash, CompressedValue.NO_EXPIRE,
+            def v = new Wal.V(it, bucketIndex, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
                     key, cvEncoded, false)
             if (transfer != null) {
                 v = transfer.apply(v)
@@ -53,7 +53,7 @@ class Mock {
             cv.compressedLength = 10
             cv.uncompressedLength = 10
 
-            def v = new Wal.V(it, bucketIndex, keyHash, CompressedValue.NO_EXPIRE,
+            def v = new Wal.V(it, bucketIndex, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
                     key, cv.encode(), false)
 
             valueList << v

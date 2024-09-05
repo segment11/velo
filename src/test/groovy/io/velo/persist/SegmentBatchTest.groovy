@@ -84,7 +84,7 @@ class SegmentBatchTest extends Specification {
         def mockChunk = ChunkTest.prepareOne(slot)
         for (i in 0..<SegmentBatch.MAX_BLOCK_NUMBER) {
             pvm0.subBlockIndex = (byte) i
-            def decompressedSegmentBytes0 = SegmentBatch.decompressSegmentBytesFromOneSubBlock(first.tightBytesWithLength(), pvm0, mockChunk)
+            def decompressedSegmentBytes0 = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, first.tightBytesWithLength(), pvm0, mockChunk)
             SegmentBatch2.iterateFromSegmentBytes(decompressedSegmentBytes0, 0, decompressedSegmentBytes0.length, { key, cv, offsetInThisSegment ->
                 if (cv.seq % 10 == 0) {
                     println "key: $key, cv: $cv, offset in this segment: $offsetInThisSegment"

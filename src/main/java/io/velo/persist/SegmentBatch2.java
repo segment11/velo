@@ -149,7 +149,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             pvm.bucketIndex = v.bucketIndex();
             pvm.isFromMerge = v.isFromMerge();
 
-            pvm.slot = slot;
+            pvm.spType = v.spType();
             // tmp 0, then update
             pvm.subBlockIndex = 0;
             pvm.length = length;

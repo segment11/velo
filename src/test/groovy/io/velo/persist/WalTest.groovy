@@ -88,7 +88,7 @@ class WalTest extends Specification {
         boolean exception = false
         def v1Encoded = v1.encode()
         def v1Buffer = ByteBuffer.wrap(v1Encoded)
-        v1Buffer.putShort(32, (CompressedValue.KEY_MAX_LENGTH + 1).shortValue())
+        v1Buffer.putShort(36, (CompressedValue.KEY_MAX_LENGTH + 1).shortValue())
         try {
             Wal.V.decode(new DataInputStream(new ByteArrayInputStream(v1Encoded)))
         } catch (IllegalStateException e) {
@@ -100,7 +100,7 @@ class WalTest extends Specification {
 
         when:
         exception = false
-        v1Buffer.putShort(32, (short) -1)
+        v1Buffer.putShort(36, (short) -1)
         try {
             Wal.V.decode(new DataInputStream(new ByteArrayInputStream(v1Encoded)))
         } catch (IllegalStateException e) {
@@ -112,7 +112,7 @@ class WalTest extends Specification {
 
         when:
         exception = false
-        v1Buffer.putShort(32, (short) v1.key().length())
+        v1Buffer.putShort(36, (short) v1.key().length())
         v1Buffer.putInt(0, 1)
         try {
             Wal.V.decode(new DataInputStream(new ByteArrayInputStream(v1Encoded)))
@@ -213,9 +213,9 @@ class WalTest extends Specification {
         def wal = new Wal(slot, 0, null, null, snowFlake)
 
         def key = 'test-key'
-        def shortV = new Wal.V(1, 0, 0, 0, key, 'short-value'.bytes, false)
-        def v = new Wal.V(2, 0, 0, 0, key, 'value'.bytes, false)
-        def shortV2 = new Wal.V(3, 0, 0, 0, key, 'short-value-x'.bytes, false)
+        def shortV = new Wal.V(1, 0, 0, 0, 0, key, 'short-value'.bytes, false)
+        def v = new Wal.V(2, 0, 0, 0, 0, key, 'value'.bytes, false)
+        def shortV2 = new Wal.V(3, 0, 0, 0, 0, key, 'short-value-x'.bytes, false)
 
         expect:
         wal.get(key) == null
@@ -265,7 +265,7 @@ class WalTest extends Specification {
         !wal.exists(key + '-not-exist')
 
         when:
-        def longV = new Wal.V(4, 0, 0, 0, key, ('long-value' * 100).bytes, false)
+        def longV = new Wal.V(4, 0, 0, 0, 0, key, ('long-value' * 100).bytes, false)
         def longKey = 'long-key'
         List<Wal.PutResult> putResultList = []
         100.times {

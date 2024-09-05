@@ -18,7 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 
 public class Wal implements InMemoryEstimate {
-    public record V(long seq, int bucketIndex, long keyHash, long expireAt,
+    public record V(long seq, int bucketIndex, long keyHash, long expireAt, int spType,
                     String key, byte[] cvEncoded, boolean isFromMerge) {
         boolean isRemove() {
             return CompressedValue.isDeleted(cvEncoded);
@@ -45,9 +45,9 @@ public class Wal implements InMemoryEstimate {
             return CompressedValue.KEY_HEADER_LENGTH + keyLength + cvEncodedLength;
         }
 
-        // seq long + bucket index int + key hash long + expire at long +
+        // seq long + bucket index int + key hash long + expire at long + sp type int
         // key length short + cv encoded length int
-        private static final int ENCODED_HEADER_LENGTH = 8 + 4 + 8 + 8 + 2 + 4;
+        private static final int ENCODED_HEADER_LENGTH = 8 + 4 + 8 + 8 + 4 + 2 + 4;
 
         public int encodeLength() {
             int vLength = ENCODED_HEADER_LENGTH + key.length() + cvEncoded.length;
@@ -65,6 +65,7 @@ public class Wal implements InMemoryEstimate {
             buffer.putInt(bucketIndex);
             buffer.putLong(keyHash);
             buffer.putLong(expireAt);
+            buffer.putInt(spType);
             buffer.putShort((short) key.length());
             buffer.put(key.getBytes());
             buffer.putInt(cvEncoded.length);
@@ -86,6 +87,7 @@ public class Wal implements InMemoryEstimate {
             var bucketIndex = is.readInt();
             var keyHash = is.readLong();
             var expireAt = is.readLong();
+            var spType = is.readInt();
             var keyLength = is.readShort();
 
             if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
@@ -108,7 +110,7 @@ public class Wal implements InMemoryEstimate {
                 throw new IllegalStateException("Invalid length: " + vLength);
             }
 
-            return new V(seq, bucketIndex, keyHash, expireAt, new String(keyBytes), cvEncoded, false);
+            return new V(seq, bucketIndex, keyHash, expireAt, spType, new String(keyBytes), cvEncoded, false);
         }
     }
 
@@ -364,7 +366,8 @@ public class Wal implements InMemoryEstimate {
 
     PutResult removeDelay(String key, int bucketIndex, long keyHash) {
         byte[] encoded = {CompressedValue.SP_FLAG_DELETE_TMP};
-        var v = new V(snowFlake.nextId(), bucketIndex, keyHash, CompressedValue.EXPIRE_NOW, key, encoded, false);
+        var v = new V(snowFlake.nextId(), bucketIndex, keyHash, CompressedValue.EXPIRE_NOW,
+                CompressedValue.NULL_DICT_SEQ, key, encoded, false);
 
         return put(true, key, v);
     }

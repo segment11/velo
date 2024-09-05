@@ -73,6 +73,7 @@ class StatKeyCountInBucketsTest extends Specification {
         then:
         one.getKeyCountForBucketIndex(10) == 10
         one.getKeyCountForBucketIndex(20) == 20
+        one.getKeyCountForOneWalGroup(0) == 30
         one.keyCount == 30
 
         when:

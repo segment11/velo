@@ -4,8 +4,6 @@ package io.velo.persist
 import spock.lang.Specification
 
 class PersistValueMetaTest extends Specification {
-    final short slot = 0
-
     def 'test is pvm'() {
         given:
         def bytes = new byte[PersistValueMeta.ENCODED_LENGTH]
@@ -23,7 +21,7 @@ class PersistValueMetaTest extends Specification {
     def 'test encode'() {
         given:
         def one = new PersistValueMeta()
-        one.slot = slot
+        one.spType = 0
         one.subBlockIndex = (byte) 0
         one.length = 100
         one.segmentIndex = 10

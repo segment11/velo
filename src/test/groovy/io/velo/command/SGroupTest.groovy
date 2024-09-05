@@ -4,11 +4,9 @@ import io.activej.eventloop.Eventloop
 import io.activej.net.socket.tcp.TcpSocket
 import io.velo.*
 import io.velo.mock.InMemoryGetSet
-import io.velo.persist.Consts
-import io.velo.persist.LocalPersist
-import io.velo.persist.LocalPersistTest
-import io.velo.persist.Mock
+import io.velo.persist.*
 import io.velo.repl.LeaderSelector
+import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.reply.*
 import io.velo.type.RedisHashKeys
 import spock.lang.Specification
@@ -62,10 +60,12 @@ sunionstore
         LocalPersist.instance.addOneSlotForTest2(slot)
         def sSintercardList = _SGroup.parseSlots('sintercard', data4, slotNumber)
         def sSmoveList = _SGroup.parseSlots('smove', data4, slotNumber)
+        def sScanList = _SGroup.parseSlots('scan', data4, slotNumber)
         def sList = _SGroup.parseSlots('sxxx', data4, slotNumber)
         then:
         sSintercardList.size() == 2
         sSmoveList.size() == 2
+        sScanList.size() == 0
         sList.size() == 0
 
         when:
@@ -76,6 +76,13 @@ sunionstore
         sDiffList.size() == 0
         sSintercardList.size() == 0
         sSmoveList.size() == 0
+
+        when:
+        def data2 = new byte[2][]
+        data2[1] = new ScanCursor((short) 1, (short) 1, (short) 4, (byte) 1).toLong().toString().bytes
+        def sScanList2 = _SGroup.parseSlots('scan', data2, slotNumber)
+        then:
+        sScanList2.size() == 1
 
         when:
         def sListList1 = singleKeyCmdList1.collect {
@@ -117,7 +124,7 @@ sunionstore
         def sGroup = new SGroup('set', data1, null)
         sGroup.from(BaseCommand.mockAGroup())
 
-        def allCmdList = singleKeyCmdList1 + multiKeyCmdList2 + ['sintercard', 'smove']
+        def allCmdList = singleKeyCmdList1 + multiKeyCmdList2 + ['sintercard', 'smove', 'scan']
 
         when:
         sGroup.data = data1
@@ -165,6 +172,125 @@ sunionstore
         reply = sGroup.handle()
         then:
         reply == NilReply.INSTANCE
+    }
+
+    def 'test scan'() {
+        given:
+        def data8 = new byte[8][]
+        data8[1] = new ScanCursor((short) 0, (short) 0, (short) 0, (byte) 0).toLong().toString().bytes
+        data8[2] = 'match'.bytes
+        data8[3] = 'key:'.bytes
+        data8[4] = 'count'.bytes
+        data8[5] = '10'.bytes
+        data8[6] = 'type'.bytes
+        data8[7] = 'string'.bytes
+
+        def sGroup = new SGroup('scan', data8, null)
+        sGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
+        ConfForSlot.global.confBucket.bucketsPerSlot = 4096
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when:
+        def reply = sGroup.scan()
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 2
+
+        when:
+        data8[7] = 'hash'.bytes
+        reply = sGroup.scan()
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        data8[7] = 'list'.bytes
+        reply = sGroup.scan()
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        data8[7] = 'set'.bytes
+        reply = sGroup.scan()
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        data8[7] = 'zset'.bytes
+        reply = sGroup.scan()
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        data8[7] = 'xxx'.bytes
+        reply = sGroup.scan()
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        data8[7] = 'string'.bytes
+        def shortValueList = Mock.prepareShortValueList(10, 0)
+        def xForBinlog = new XOneWalGroupPersist(true, false, 0)
+        def keyLoader = localPersist.oneSlot(slot).keyLoader
+        keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList, xForBinlog)
+        reply = sGroup.scan()
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 2
+
+        when:
+        // invalid integer
+        data8[5] = 'a'.bytes
+        reply = sGroup.scan()
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        data8[5] = '-1'.bytes
+        reply = sGroup.scan()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        data8[5] = '10'.bytes
+        data8[4] = 'xxx'.bytes
+        reply = sGroup.scan()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        def data7 = new byte[7][]
+        data7[1] = new ScanCursor((short) 0, (short) 0, (short) 0, (byte) 0).toLong().toString().bytes
+        data7[2] = 'match'.bytes
+        data7[3] = 'key:'.bytes
+        data7[4] = 'count'.bytes
+        data7[5] = '10'.bytes
+        data7[6] = 'type'.bytes
+        sGroup.data = data7
+        reply = sGroup.scan()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        data7[6] = 'count'.bytes
+        reply = sGroup.scan()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        data7[6] = 'match'.bytes
+        data7[4] = 'match'.bytes
+        reply = sGroup.scan()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test set'() {

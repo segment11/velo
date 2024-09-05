@@ -187,20 +187,41 @@ public class CompressedValue {
                 dictSeqOrSpType == SP_TYPE_HASH;
     }
 
+    public static boolean isHash(int spType) {
+        return spType == SP_TYPE_HH ||
+                spType == SP_TYPE_HASH;
+    }
+
     public boolean isList() {
         return dictSeqOrSpType == SP_TYPE_LIST;
+    }
+
+    public static boolean isList(int spType) {
+        return spType == SP_TYPE_LIST;
     }
 
     public boolean isSet() {
         return dictSeqOrSpType == SP_TYPE_SET;
     }
 
+    public static boolean isSet(int spType) {
+        return spType == SP_TYPE_SET;
+    }
+
     public boolean isZSet() {
         return dictSeqOrSpType == SP_TYPE_ZSET;
     }
 
+    public static boolean isZSet(int spType) {
+        return spType == SP_TYPE_ZSET;
+    }
+
     public boolean isStream() {
         return dictSeqOrSpType == SP_TYPE_STREAM;
+    }
+
+    public static boolean isStream(int spType) {
+        return spType == SP_TYPE_STREAM;
     }
 
     @Override

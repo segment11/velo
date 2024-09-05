@@ -46,9 +46,9 @@ public class XWalV implements BinlogContent {
     public int encodedLength() {
         // 1 byte for type, 4 bytes for encoded length for check
         // 1 byte for is value short, 4 bytes as int for offset
-        // 8 bytes for seq, 4 bytes for bucket index, 8 bytes for key hash, 8 bytes for expire at
+        // 8 bytes for seq, 4 bytes for bucket index, 8 bytes for key hash, 8 bytes for expire at, 4 bytes for sp type
         // 2 bytes for key length, key bytes, 4 bytes for cv encoded length, cv encoded bytes
-        return 1 + 4 + 1 + 4 + 8 + 4 + 8 + 8 + 2 + v.key().length() + 4 + v.cvEncoded().length;
+        return 1 + 4 + 1 + 4 + 8 + 4 + 8 + 8 + 4 + 2 + v.key().length() + 4 + v.cvEncoded().length;
     }
 
     @Override
@@ -64,6 +64,7 @@ public class XWalV implements BinlogContent {
         buffer.putInt(v.bucketIndex());
         buffer.putLong(v.keyHash());
         buffer.putLong(v.expireAt());
+        buffer.putInt(v.spType());
         buffer.putShort((short) v.key().length());
         buffer.put(v.key().getBytes());
         buffer.putInt(v.cvEncoded().length);
@@ -82,6 +83,7 @@ public class XWalV implements BinlogContent {
         var bucketIndex = buffer.getInt();
         var keyHash = buffer.getLong();
         var expireAt = buffer.getLong();
+        var spType = buffer.getInt();
         var keyLength = buffer.getShort();
 
         if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
@@ -94,7 +96,7 @@ public class XWalV implements BinlogContent {
         var cvEncoded = new byte[cvEncodedLength];
         buffer.get(cvEncoded);
 
-        var v = new Wal.V(seq, bucketIndex, keyHash, expireAt, new String(keyBytes), cvEncoded, false);
+        var v = new Wal.V(seq, bucketIndex, keyHash, expireAt, spType, new String(keyBytes), cvEncoded, false);
         var r = new XWalV(v, isValueShort, offset);
         if (encodedLength != r.encodedLength()) {
             throw new IllegalStateException("Invalid encoded length: " + encodedLength);

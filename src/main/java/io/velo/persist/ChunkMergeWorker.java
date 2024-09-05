@@ -136,7 +136,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
                 continue;
             }
 
-            vList.add(new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(),
+            vList.add(new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
                     key, cv.encode(), true));
             if (!segmentIndexList.contains(one.segmentIndex)) {
                 segmentIndexList.add(one.segmentIndex);
@@ -202,7 +202,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
                 var key = one.key;
                 var bucketIndex = one.bucketIndex;
 
-                list.add(new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(),
+                list.add(new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
                         key, cv.encode(), true));
             }
 

@@ -44,10 +44,15 @@ class CompressedValueTest extends Specification {
         !cv.isTypeNumber()
         !cv.isBigString()
         !cv.isHash()
+        !CompressedValue.isHash(cv.dictSeqOrSpType)
         !cv.isList()
+        !CompressedValue.isList(cv.dictSeqOrSpType)
         !cv.isSet()
+        !CompressedValue.isSet(cv.dictSeqOrSpType)
         !cv.isZSet()
+        !CompressedValue.isZSet(cv.dictSeqOrSpType)
         !cv.isStream()
+        !CompressedValue.isStream(cv.dictSeqOrSpType)
         !cv.isUseDict()
 
         when:

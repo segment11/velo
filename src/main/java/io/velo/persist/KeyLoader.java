@@ -1,5 +1,6 @@
 package io.velo.persist;
 
+import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
@@ -296,6 +297,134 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         }
 
         return (bucketIndex - firstBucketIndexInTargetWalGroup) * KEY_BUCKET_ONE_COST_SIZE;
+    }
+
+    public static final byte typeAsByteString = 1;
+    public static final byte typeAsByteList = 2;
+    public static final byte typeAsByteSet = 3;
+    public static final byte typeAsByteZSet = 4;
+    public static final byte typeAsByteHash = 5;
+
+    @VisibleForTesting
+    static boolean isSpTypeMatch(byte typeAsByte, int spType) {
+        if (typeAsByte == typeAsByteString) {
+            return CompressedValue.isTypeString(spType);
+        } else if (typeAsByte == typeAsByteList) {
+            return CompressedValue.isList(spType);
+        } else if (typeAsByte == typeAsByteSet) {
+            return CompressedValue.isSet(spType);
+        } else if (typeAsByte == typeAsByteZSet) {
+            return CompressedValue.isZSet(spType);
+        } else if (typeAsByte == typeAsByteHash) {
+            return CompressedValue.isHash(spType);
+        }
+        return true;
+    }
+
+    private ScanCursor readKeysToList(ArrayList<String> keys, int walGroupIndex, byte splitIndex, short skipCount,
+                                      byte typeAsByte, String matchPattern, int[] countArray) {
+        var keyCountThisWalGroup = statKeyCountInBuckets.getKeyCountForOneWalGroup(walGroupIndex);
+        if (keyCountThisWalGroup == 0) {
+            return null;
+        }
+
+        var beginBucketIndex = walGroupIndex * ConfForSlot.global.confWal.oneChargeBucketNumber;
+        var sharedBytes = readBatchInOneWalGroup(splitIndex, beginBucketIndex);
+
+        if (sharedBytes == null) {
+            return null;
+        }
+
+        for (int i = 0; i < ConfForSlot.global.confWal.oneChargeBucketNumber; i++) {
+            var position = getPositionInSharedBytes(beginBucketIndex + i);
+            if (position >= sharedBytes.length) {
+                continue;
+            }
+
+            if (!isBytesValidAsKeyBucket(sharedBytes, position)) {
+                continue;
+            }
+
+            var splitNumber = metaKeyBucketSplitNumber.get(beginBucketIndex + i);
+            var keyBucket = new KeyBucket(slot, beginBucketIndex + i, splitIndex, splitNumber, sharedBytes, position, snowFlake);
+
+            final short[] returnSkipCount = {0};
+            final short[] tmpSkipCount = {skipCount};
+            final long currentTimeMillis = System.currentTimeMillis();
+            keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+                // skip expired
+                if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
+                    return;
+                }
+
+                var key = new String(keyBytes);
+                // todo * match
+                if (matchPattern != null && !key.startsWith(matchPattern)) {
+                    return;
+                }
+
+                if (typeAsByte != 0) {
+                    if (PersistValueMeta.isPvm(valueBytes)) {
+                        var pvm = PersistValueMeta.decode(valueBytes);
+                        if (!isSpTypeMatch(typeAsByte, pvm.spType)) {
+                            return;
+                        }
+                    } else {
+                        var shortStringCv = CompressedValue.decode(Unpooled.wrappedBuffer(valueBytes), keyBytes, 0L);
+                        if (!isSpTypeMatch(typeAsByte, shortStringCv.getDictSeqOrSpType())) {
+                            return;
+                        }
+                    }
+                }
+
+                if (tmpSkipCount[0] > 0) {
+                    tmpSkipCount[0]--;
+                    return;
+                }
+
+                if (countArray[0] <= 0) {
+                    return;
+                }
+
+                keys.add(key);
+                countArray[0]--;
+                returnSkipCount[0]++;
+            });
+
+            if (countArray[0] <= 0) {
+                return new ScanCursor(slot, (short) walGroupIndex, returnSkipCount[0], splitIndex);
+            }
+        }
+        return null;
+    }
+
+    public record ScanCursorWithReturnKeys(ScanCursor scanCursor, ArrayList<String> keys) {
+    }
+
+    public ScanCursorWithReturnKeys scan(int walGroupIndex, byte splitIndex, short skipCount,
+                                         byte typeAsByte, String matchPattern, int count) {
+        ArrayList<String> keys = new ArrayList<>(count);
+
+        var walGroupNumber = Wal.calcWalGroupNumber();
+        var maxSplitNumber = metaKeyBucketSplitNumber.maxSplitNumber();
+
+        int[] countArray = new int[]{count};
+        for (int j = walGroupIndex; j < walGroupNumber; j++) {
+            for (int i = 0; i < maxSplitNumber; i++) {
+                if (j == walGroupIndex && i < splitIndex) {
+                    continue;
+                }
+
+                var skipCountInThisWalGroupThisSplitIndex = i == splitIndex && j == walGroupIndex ? skipCount : 0;
+
+                var scanCursor = readKeysToList(keys, j, (byte) i, skipCountInThisWalGroupThisSplitIndex,
+                        typeAsByte, matchPattern, countArray);
+                if (scanCursor != null) {
+                    return new ScanCursorWithReturnKeys(scanCursor, keys);
+                }
+            }
+        }
+        return null;
     }
 
     @VisibleForTesting

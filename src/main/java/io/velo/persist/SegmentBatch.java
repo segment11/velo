@@ -266,7 +266,7 @@ public class SegmentBatch implements InSlotMetricCollector {
         return new SegmentCompressedBytesWithIndex(compressedBytes, segmentIndex, segmentSeq);
     }
 
-    static byte[] decompressSegmentBytesFromOneSubBlock(byte[] tightBytesWithLength, PersistValueMeta pvm, Chunk chunk) {
+    static byte[] decompressSegmentBytesFromOneSubBlock(short slot, byte[] tightBytesWithLength, PersistValueMeta pvm, Chunk chunk) {
         var buffer = ByteBuffer.wrap(tightBytesWithLength);
         buffer.position(subBlockMetaPosition(pvm.subBlockIndex));
         var subBlockOffset = buffer.getShort();
@@ -288,7 +288,7 @@ public class SegmentBatch implements InSlotMetricCollector {
         chunk.segmentDecompressCountTotal++;
 
         if (d != chunk.chunkSegmentLength) {
-            throw new IllegalStateException("Decompress segment sub block error, s=" + pvm.slot +
+            throw new IllegalStateException("Decompress segment sub block error, s=" + slot +
                     ", i=" + pvm.segmentIndex + ", sbi=" + pvm.subBlockIndex + ", d=" + d + ", chunkSegmentLength=" + chunk.chunkSegmentLength);
         }
 

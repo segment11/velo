@@ -387,7 +387,7 @@ class KeyLoaderTest extends Specification {
                 bigStringCv.expireAt = System.currentTimeMillis() - 1
                 def bigStringCvEncoded = bigStringCv.encodeAsBigStringMeta(uuid)
 
-                def v2 = new Wal.V(v.seq(), 0, v.keyHash(), bigStringCv.expireAt,
+                def v2 = new Wal.V(v.seq(), 0, v.keyHash(), bigStringCv.expireAt, bigStringCv.dictSeqOrSpType,
                         v.key(), bigStringCvEncoded, false)
                 return v2
             }
@@ -466,5 +466,79 @@ class KeyLoaderTest extends Specification {
         keyLoader.cleanUp()
         keyLoader2.flush()
         keyLoader2.cleanUp()
+    }
+
+    def 'test scan'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 3
+
+        expect:
+        KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteString, CompressedValue.NULL_DICT_SEQ)
+        !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteString, CompressedValue.SP_TYPE_HASH)
+        KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteHash, CompressedValue.SP_TYPE_HASH)
+        !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteHash, CompressedValue.SP_TYPE_LIST)
+        KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteList, CompressedValue.SP_TYPE_LIST)
+        !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteList, CompressedValue.SP_TYPE_SET)
+        KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteSet, CompressedValue.SP_TYPE_SET)
+        !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteSet, CompressedValue.SP_TYPE_ZSET)
+        KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteZSet, CompressedValue.SP_TYPE_ZSET)
+        !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteZSet, CompressedValue.NULL_DICT_SEQ)
+        KeyLoader.isSpTypeMatch((byte) 10, CompressedValue.NULL_DICT_SEQ)
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def keyLoader = oneSlot.keyLoader
+
+        when:
+        // no keys put yet
+        def r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10)
+        then:
+        r == null
+
+        when:
+        List<PersistValueMeta> pvmList = []
+        10.times {
+            def key = "key:" + it.toString().padLeft(12, '0')
+            def keyBytes = key.bytes
+
+            def keyHash = KeyHash.hash(keyBytes)
+
+            def pvm = new PersistValueMeta()
+            pvm.keyBytes = keyBytes
+            pvm.keyHash = keyHash
+            pvm.bucketIndex = 0
+            pvm.segmentOffset = it
+
+            // last one expired, or will clear when put
+            if (it == 9) {
+                pvm.expireAt = System.currentTimeMillis() - 1000
+            }
+
+            // one key not prefix match
+            if (it == 6) {
+                pvm.keyBytes = 'xxx'.bytes
+            }
+
+            // one type not match
+            if (it == 7) {
+                pvm.spType = CompressedValue.SP_TYPE_HASH
+            }
+
+            pvmList << pvm
+        }
+        def xForBinlog = new XOneWalGroupPersist(true, false, 0)
+        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog)
+        r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:', 6)
+        then:
+        r.keys().size() == 6
+        r.keys().every { key ->
+            key in pvmList.collect { new String(it.keyBytes) }
+        }
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 }

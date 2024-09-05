@@ -943,7 +943,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             throw new IllegalStateException("Load persisted segment bytes error, pvm: " + pvm);
         }
         if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
-            segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(segmentBytes, pvm, chunk);
+            segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
         }
 //        SegmentBatch2.iterateFromSegmentBytes(segmentBytes, 0, segmentBytes.length, new SegmentBatch2.ForDebugCvCallback());
 
@@ -1062,7 +1062,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         } else {
             cvEncoded = cv.encode();
         }
-        var v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(),
+        var v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
                 key, cvEncoded, isFromMerge);
 
         // for big string, use single file
@@ -1080,7 +1080,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             var xBigStrings = new XBigStrings(uuid, key, cvEncoded);
             appendBinlog(xBigStrings);
 
-            v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(),
+            v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
                     key, cvEncoded, isFromMerge);
 
             isValueShort = true;
@@ -1396,7 +1396,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     if (extWalGroupIndex != walGroupIndex) {
                         throw new IllegalStateException("Wal group index not match, s=" + slot + ", wal group index=" + walGroupIndex + ", ext wal group index=" + extWalGroupIndex);
                     }
-                    list.add(new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(),
+                    list.add(new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
                             one.key, cv.encode(), true));
                 }
             }

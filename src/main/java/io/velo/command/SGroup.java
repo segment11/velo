@@ -10,6 +10,8 @@ import io.velo.Dict;
 import io.velo.TrainSampleJob;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
+import io.velo.persist.KeyLoader;
+import io.velo.persist.ScanCursor;
 import io.velo.repl.LeaderSelector;
 import io.velo.reply.*;
 import io.velo.type.RedisHashKeys;
@@ -84,10 +86,29 @@ public class SGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("scan".equals(cmd)) {
+            if (data.length != 2) {
+                return slotWithKeyHashList;
+            }
+
+            var cursorBytes = data[1];
+            var cursor = new String(cursorBytes);
+            var cursorLong = Long.parseLong(cursor);
+            var scanCursor = ScanCursor.fromLong(cursorLong);
+
+            var slotWithKeyHash = new SlotWithKeyHash(scanCursor.slot(), 0, 0L);
+            slotWithKeyHashList.add(slotWithKeyHash);
+            return slotWithKeyHashList;
+        }
+
         return slotWithKeyHashList;
     }
 
     public Reply handle() {
+        if ("scan".equals(cmd)) {
+            return scan();
+        }
+
         if ("sentinel".equals(cmd)) {
             return sentinel();
         }
@@ -215,6 +236,105 @@ public class SGroup extends BaseCommand {
         }
 
         return NilReply.INSTANCE;
+    }
+
+    @VisibleForTesting
+    Reply scan() {
+        if (data.length < 2) {
+            return ErrorReply.FORMAT;
+        }
+
+        var cursorBytes = data[1];
+        var cursor = new String(cursorBytes);
+        var cursorLong = Long.parseLong(cursor);
+        var scanCursor = ScanCursor.fromLong(cursorLong);
+
+        String matchPattern = null;
+        String type = null;
+        int count = 10;
+        if (data.length > 2) {
+            for (int i = 2; i < data.length; i++) {
+                var tmp = new String(data[i]).toLowerCase();
+                if ("match".equals(tmp)) {
+                    if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    matchPattern = new String(data[i + 1]);
+                    i++;
+                } else if ("count".equals(tmp)) {
+                    if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    try {
+                        count = Integer.parseInt(new String(data[i + 1]));
+                    } catch (NumberFormatException e) {
+                        return ErrorReply.NOT_INTEGER;
+                    }
+                    if (count < 0) {
+                        return ErrorReply.INVALID_INTEGER;
+                    }
+                    i++;
+                } else if ("type".equals(tmp)) {
+                    if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    type = new String(data[i + 1]).toLowerCase();
+                    i++;
+                } else {
+                    return ErrorReply.SYNTAX;
+                }
+            }
+        }
+
+        // string
+        byte typeAsByte = KeyLoader.typeAsByteString;
+        if (type != null) {
+            // only support string / hash / list / set / zset
+            var isString = "string".equals(type);
+            var isHash = "hash".equals(type);
+            var isList = "list".equals(type);
+            var isSet = "set".equals(type);
+            var isZset = "zset".equals(type);
+            if (!isString && !isHash && !isList && !isSet && !isZset) {
+                return new ErrorReply("type not support");
+            }
+
+            if (isHash) {
+                typeAsByte = KeyLoader.typeAsByteHash;
+            } else if (isList) {
+                typeAsByte = KeyLoader.typeAsByteList;
+            } else if (isSet) {
+                typeAsByte = KeyLoader.typeAsByteSet;
+            } else if (isZset) {
+                typeAsByte = KeyLoader.typeAsByteZSet;
+            }
+        }
+
+        var oneSlot = localPersist.oneSlot(scanCursor.slot());
+        var keyLoader = oneSlot.getKeyLoader();
+        var r = keyLoader.scan(scanCursor.walGroupIndex(), scanCursor.splitIndex(), scanCursor.skipCount(),
+                typeAsByte, matchPattern, count);
+
+        if (r == null) {
+            return new MultiBulkReply(new Reply[]{new BulkReply("0".getBytes()), MultiBulkReply.EMPTY});
+        }
+
+        var keys = r.keys();
+        if (r.keys().isEmpty()) {
+            return new MultiBulkReply(new Reply[]{new BulkReply("0".getBytes()), MultiBulkReply.EMPTY});
+        }
+
+        var replies = new Reply[2];
+        replies[0] = new BulkReply(String.valueOf(r.scanCursor().toLong()).getBytes());
+
+        var keysReplies = new Reply[keys.size()];
+        replies[1] = new MultiBulkReply(keysReplies);
+
+        int i = 0;
+        for (var key : keys) {
+            keysReplies[i++] = new BulkReply(key.getBytes());
+        }
+        return new MultiBulkReply(replies);
     }
 
     private Reply sentinel() {

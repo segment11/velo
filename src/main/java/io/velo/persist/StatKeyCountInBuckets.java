@@ -30,6 +30,10 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
 
     private final int[] keyCountInOneWalGroup;
 
+    public int getKeyCountForOneWalGroup(int walGroupIndex) {
+        return keyCountInOneWalGroup[walGroupIndex];
+    }
+
     private long totalKeyCountCached;
 
     @SlaveReplay

@@ -162,7 +162,7 @@ class ChunkMergeJobTest extends Specification {
             }
 
             def encoded = it % 20 == 0 ? cv.encodeAsBigStringMeta(it) : cv.encode()
-            def v = new Wal.V(it, bucketIndex, keyHash, cv.expireAt, key, encoded, false)
+            def v = new Wal.V(it, bucketIndex, keyHash, cv.expireAt, cv.dictSeqOrSpType, key, encoded, false)
             valueList << v
         }
 
