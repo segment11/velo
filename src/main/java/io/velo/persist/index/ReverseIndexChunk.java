@@ -100,8 +100,15 @@ public class ReverseIndexChunk implements NeedCleanUp {
         var raf = rafArray[targetFdIndex];
         try {
             var targetSegmentOffsetInRaf = (long) targetSegmentIndexTargetFd * ONE_WORD_HOLD_ONE_SEGMENT_LENGTH;
-            raf.seek(targetSegmentOffsetInRaf);
-            raf.write(bytes);
+
+            // read empty segment bytes
+            if (bytes.length == 1) {
+                raf.setLength(targetSegmentOffsetInRaf);
+                log.warn("Reverse index chunk reset length as read empty, set length to {}, worker id: {}", targetSegmentOffsetInRaf, workerId);
+            } else {
+                raf.seek(targetSegmentOffsetInRaf);
+                raf.write(bytes);
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

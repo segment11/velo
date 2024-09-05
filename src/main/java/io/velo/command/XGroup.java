@@ -8,7 +8,6 @@ import io.activej.promise.SettablePromise;
 import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.persist.*;
-import io.velo.persist.index.ReverseIndexChunk;
 import io.velo.repl.Binlog;
 import io.velo.repl.Repl;
 import io.velo.repl.ReplPair;
@@ -532,14 +531,7 @@ public class XGroup extends BaseCommand {
             if (isMetaIndexWords) {
                 indexHandler.metaIndexWordsWriteOneBatch(beginOffset, bytes);
             } else {
-                // begin offset is segment index for chunk
-                if (bytes.length == 1) {
-                    // read empty segment bytes, refer to ReverseIndexChunk.readOneSegment
-                    var emptyBytes = new byte[ReverseIndexChunk.ONE_WORD_HOLD_ONE_SEGMENT_LENGTH];
-                    indexHandler.chunkWriteOneSegment(beginOffset, emptyBytes);
-                } else {
-                    indexHandler.chunkWriteOneSegment(beginOffset, bytes);
-                }
+                indexHandler.chunkWriteOneSegment(beginOffset, bytes);
             }
         })).whenComplete((ignore, e) -> {
             if (e != null) {
@@ -579,7 +571,9 @@ public class XGroup extends BaseCommand {
                 return;
             }
 
-            var isIndexChunkDone = beginOffset == localPersist.getIndexHandlerPool().getChunkMaxSegmentNumber() - 1;
+            // bytes.length == 1 -> read empty segment
+            var isIndexChunkDone = bytes.length == 1 ||
+                    beginOffset == localPersist.getIndexHandlerPool().getChunkMaxSegmentNumber() - 1;
             if (isIndexChunkDone) {
                 // has more index worker
                 if (indexWorkerId < ConfForGlobal.indexWorkers - 1) {

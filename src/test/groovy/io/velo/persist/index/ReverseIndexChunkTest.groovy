@@ -140,6 +140,11 @@ class ReverseIndexChunkTest extends Specification {
         1 == 1
 
         when:
+        reverseIndexChunk.writeOneSegment(0, new byte[1])
+        then:
+        1 == 1
+
+        when:
         def exception = false
         try {
             reverseIndexChunk.writeOneSegment(reverseIndexChunk.maxSegmentNumber, bytes)
