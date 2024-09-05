@@ -1,6 +1,7 @@
 package io.velo.repl
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import io.activej.eventloop.Eventloop
 import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
 import io.velo.SocketInspector
@@ -11,6 +12,7 @@ import io.velo.persist.LocalPersistTest
 import io.velo.repl.support.JedisPoolHolder
 import spock.lang.Specification
 
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 class LeaderSelectorTest extends Specification {
@@ -129,6 +131,15 @@ class LeaderSelectorTest extends Specification {
         and:
         def leaderSelector = LeaderSelector.instance
 
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+
         when:
         CompletableFuture<Boolean> future = new CompletableFuture()
         leaderSelector.resetAsMaster(true) { e ->
@@ -241,7 +252,7 @@ class LeaderSelectorTest extends Specification {
         r
 
         cleanup:
-        oneSlot.cleanUp()
+        localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
 
