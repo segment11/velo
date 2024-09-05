@@ -33,7 +33,7 @@ public class IndexHandlerPool implements NeedCleanUp {
 
     @MasterReset
     public void resetAsMaster() {
-        for(var indexHandler : indexHandlers){
+        for (var indexHandler : indexHandlers) {
             indexHandler.asyncRun(indexHandler::resetAsMaster);
         }
     }
@@ -130,12 +130,14 @@ public class IndexHandlerPool implements NeedCleanUp {
 
     @Override
     public void cleanUp() {
+        var i = 0;
         for (var eventloop : workerEventloopArray) {
             eventloop.execute(() -> {
                 System.out.println("Index worker eventloop stopping");
             });
             eventloop.breakEventloop();
-            log.warn("Index worker eventloop stopped, worker thread id: {}", eventloop.getEventloopThread().threadId());
+            log.warn("Index worker eventloop stopped, worker index: {}", i);
+            i++;
         }
 
         for (var indexHandler : indexHandlers) {
