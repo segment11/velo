@@ -40,7 +40,7 @@ class RequestTest extends Specification {
         when:
         def dataRepl = new byte[3][]
         dataRepl[0] = new byte[8]
-        dataRepl[1] = new byte[1]
+        dataRepl[1] = new byte[2]
         dataRepl[1][0] = (byte) 0
         def requestRepl = new Request(dataRepl, false, true)
         then:
