@@ -153,6 +153,16 @@ public class LocalPersist implements NeedCleanUp {
         this.indexHandlerPool.start();
     }
 
+    private volatile boolean isAsSlaveSlot0FetchedExistsAllDone = false;
+
+    public boolean isAsSlaveSlot0FetchedExistsAllDone() {
+        return isAsSlaveSlot0FetchedExistsAllDone;
+    }
+
+    public void setAsSlaveSlot0FetchedExistsAllDone(boolean asSlaveSlot0FetchedExistsAllDone) {
+        isAsSlaveSlot0FetchedExistsAllDone = asSlaveSlot0FetchedExistsAllDone;
+    }
+
     private SocketInspector socketInspector;
 
     public SocketInspector getSocketInspector() {

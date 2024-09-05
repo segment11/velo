@@ -170,8 +170,7 @@ public class XGroup extends BaseCommand {
 
     public Reply handleRepl() {
         var slaveUuid = ByteBuffer.wrap(data[0]).getLong();
-
-        var slot = data[1][0];
+        var slot = ByteBuffer.wrap(data[1]).getShort();
         var replType = ReplType.fromCode(data[2][0]);
         if (replType == null) {
             log.error("Repl handle error: unknown repl type code: {}", data[2][0]);
@@ -382,6 +381,10 @@ public class XGroup extends BaseCommand {
         replPair.setMasterUuid(masterUuid);
         log.warn("Repl slave handle hi: slave uuid={}, master uuid={}", slaveUuid, masterUuid);
 
+        if (slot == 0) {
+            localPersist.setAsSlaveSlot0FetchedExistsAllDone(false);
+        }
+
         var oneSlot = localPersist.oneSlot(slot);
         // after exist all done, when catch up, XOneWalGroupSeq will update chunk segment index
         oneSlot.setMetaChunkSegmentIndexInt(currentSegmentIndex);
@@ -453,10 +456,12 @@ public class XGroup extends BaseCommand {
         }
     }
 
-    private static final int INDEX_EXISTS_WORDS_ONCE_READ_LENGTH = 1024 * 1024;
-
-    private static final byte reverseIndexByteAsForMetaIndexWords = 0;
-    private static final byte reverseIndexByteAsForChunk = 1;
+    @VisibleForTesting
+    static final int INDEX_EXISTS_WORDS_ONCE_READ_LENGTH = 1024 * 1024;
+    @VisibleForTesting
+    static final byte reverseIndexByteAsForMetaIndexWords = 0;
+    @VisibleForTesting
+    static final byte reverseIndexByteAsForChunk = 1;
 
     @VisibleForTesting
     Reply exists_reverse_index(short slot, byte[] contentBytes) {
@@ -1190,6 +1195,10 @@ public class XGroup extends BaseCommand {
         metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(binlogMasterUuid, true,
                 lastUpdatedFileIndex, lastUpdatedOffset);
 
+        if (slot == 0) {
+            localPersist.setAsSlaveSlot0FetchedExistsAllDone(true);
+        }
+
         // begin incremental data catch up
         var marginLastUpdatedOffset = Binlog.marginFileOffset(lastUpdatedOffset);
         var content = toMasterCatchUp(binlogMasterUuid, lastUpdatedFileIndex, marginLastUpdatedOffset, lastUpdatedOffset);
@@ -1285,6 +1294,19 @@ public class XGroup extends BaseCommand {
         var lastUpdatedFileIndexAndOffset = metaChunkSegmentIndex.getMasterBinlogFileIndexAndOffset();
         var lastUpdatedFileIndex = lastUpdatedFileIndexAndOffset.fileIndex();
         var lastUpdatedOffset = lastUpdatedFileIndexAndOffset.offset();
+
+        if (slot != 0) {
+            // wait slot0 fetched exists all done
+            if (!localPersist.isAsSlaveSlot0FetchedExistsAllDone()) {
+                // use margin file offset
+                var marginLastUpdatedOffset = Binlog.marginFileOffset(lastUpdatedOffset);
+                var content = toMasterCatchUp(binlogMasterUuid, lastUpdatedFileIndex, marginLastUpdatedOffset, lastUpdatedOffset);
+                oneSlot.delayRun(1000, () -> {
+                    replPair.write(ReplType.catch_up, content);
+                });
+                return Repl.emptyReply();
+            }
+        }
 
         // master has no more binlog to catch up, delay to catch up again
         if (contentBytes.length == 1 || contentBytes.length == 2) {

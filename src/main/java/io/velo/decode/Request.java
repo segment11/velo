@@ -2,6 +2,7 @@ package io.velo.decode;
 
 import io.velo.BaseCommand;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Map;
 
@@ -75,8 +76,9 @@ public class Request {
 
     public short getSingleSlot() {
         if (isRepl) {
-            // refer to Repl.decode
-            return data[1][0];
+            // refer to Repl.decode, byte[1] == two length bytes
+//            return (short) (((data[1][0] & 0xFF) << 8) | (data[1][1] & 0xFF));
+            return ByteBuffer.wrap(data[1]).getShort();
         }
 
         if (slotWithKeyHashList == null || slotWithKeyHashList.isEmpty()) {
