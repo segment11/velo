@@ -186,7 +186,7 @@ class LeaderSelectorTest extends Specification {
         !r
 
         when:
-        var replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
+        def replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
         replPairAsSlave.masterCanNotConnect = true
         future = new CompletableFuture()
         leaderSelector.resetAsMaster(false) { e ->
@@ -304,11 +304,11 @@ class LeaderSelectorTest extends Specification {
         // need redis-server running
         when:
         boolean doThisCase = false
-        var map = ConfForSlot.global.slaveCanMatchCheckValues()
-        var objectMapper = new ObjectMapper();
-        var jsonStr = objectMapper.writeValueAsString(map)
+        def map = ConfForSlot.global.slaveCanMatchCheckValues()
+        def objectMapper = new ObjectMapper()
+        def jsonStr = objectMapper.writeValueAsString(map)
         try {
-            var jedisPool = JedisPoolHolder.instance.create('localhost', 6379)
+            def jedisPool = JedisPoolHolder.instance.create('localhost', 6379)
             JedisPoolHolder.exe(jedisPool) { jedis ->
                 jedis.set(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + "," +
                         XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD,
@@ -342,7 +342,7 @@ class LeaderSelectorTest extends Specification {
 
         when:
         if (doThisCase) {
-            var jedisPool = JedisPoolHolder.instance.create('localhost', 6379);
+            def jedisPool = JedisPoolHolder.instance.create('localhost', 6379);
             JedisPoolHolder.exe(jedisPool) { jedis ->
                 jedis.set(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + "," +
                         XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD,

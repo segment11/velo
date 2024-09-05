@@ -672,7 +672,7 @@ class XGroupTest extends Specification {
 
         // hi
         when:
-        var metaChunkSegmentIndex = oneSlot.metaChunkSegmentIndex
+        def metaChunkSegmentIndex = oneSlot.metaChunkSegmentIndex
         metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, false, 0, 0L)
         def hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
                 new Binlog.FileIndexAndOffset(1, 1L),
@@ -1279,7 +1279,7 @@ class XGroupTest extends Specification {
         def oneSlot = localPersist.oneSlot(slot)
 
         when:
-        var metaChunkSegmentIndex = oneSlot.metaChunkSegmentIndex
+        def metaChunkSegmentIndex = oneSlot.metaChunkSegmentIndex
         metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(replPair.masterUuid, false, 0, 0L)
         XGroup.skipTryCatchUpAgainAfterSlaveTcpClientClosed = false
         XGroup.tryCatchUpAgainAfterSlaveTcpClientClosed(replPair)

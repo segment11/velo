@@ -6,7 +6,7 @@ class TmpForJsonTest extends Specification {
     // only for coverage
     def 'test all'() {
         given:
-        var x = new TmpForJson()
+        def x = new TmpForJson()
         x.list = []
         x.nodes = []
 

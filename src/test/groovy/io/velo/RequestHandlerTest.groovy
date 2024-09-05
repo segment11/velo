@@ -317,7 +317,7 @@ class RequestHandlerTest extends Specification {
         when:
         // for haproxy
         // http metrics
-        var leaderSelector = LeaderSelector.instance
+        def leaderSelector = LeaderSelector.instance
         leaderSelector.hasLeadershipLocalMocked = true
         httpData[0] = 'master'.bytes
         reply = requestHandler.handle(httpRequest, socket)

@@ -81,7 +81,7 @@ class TcpClientTest extends Specification {
                                 for (int i = 0; i < pipeline.size(); i++) {
                                     def request = pipeline[i]
                                     println 'Mock server get request from client, data.length: ' + request.data.length
-                                    var promiseI = Promise.of(Repl.test(slot, replPair2, 'ok').buffer())
+                                    def promiseI = Promise.of(Repl.test(slot, replPair2, 'ok').buffer())
                                     promiseN[i] = promiseI
                                 }
 

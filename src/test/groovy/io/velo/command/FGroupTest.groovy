@@ -90,7 +90,7 @@ class FGroupTest extends Specification {
         when:
         def firstOneSlot = localPersist.currentThreadFirstOneSlot()
         def rp1 = firstOneSlot.createIfNotExistReplPairAsMaster(11L, 'localhost', 6380)
-        var rp2 = firstOneSlot.createIfNotExistReplPairAsMaster(12L, 'localhost', 6381)
+        def rp2 = firstOneSlot.createIfNotExistReplPairAsMaster(12L, 'localhost', 6381)
         rp1.slaveLastCatchUpBinlogFileIndexAndOffset = new Binlog.FileIndexAndOffset(0, 0L)
         reply = fGroup.failover()
         then:
