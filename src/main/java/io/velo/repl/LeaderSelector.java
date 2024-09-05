@@ -343,6 +343,10 @@ public class LeaderSelector implements NeedCleanUp {
                 metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
 
                 oneSlot.resetReadonlyFalseAsMaster();
+
+                if (oneSlot.slot() == 0) {
+                    localPersist.getIndexHandlerPool().resetAsMaster();
+                }
             });
         }
 

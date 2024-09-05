@@ -165,6 +165,11 @@ class IndexHandlerTest extends Specification {
         then:
         1 == 1
 
+        when:
+        indexHandler.resetAsMaster()
+        then:
+        1 == 1
+
         cleanup:
         indexHandler.cleanUp()
         Consts.indexWorkerDir.deleteDir()

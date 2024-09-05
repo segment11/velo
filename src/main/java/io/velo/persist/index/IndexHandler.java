@@ -4,8 +4,11 @@ import io.activej.common.function.RunnableEx;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
 import io.velo.NeedCleanUp;
+import io.velo.repl.MasterReset;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -26,9 +29,19 @@ public class IndexHandler implements NeedCleanUp {
     @VisibleForTesting
     ReverseIndexChunk reverseIndexChunk;
 
+    private static final Logger log = LoggerFactory.getLogger(IndexHandler.class);
+
     void initChunk(byte fdPerChunk, File workerIdDir, int expiredIfSecondsFromNow) throws IOException {
         this.metaIndexWords = new MetaIndexWords(workerId, workerIdDir);
         this.reverseIndexChunk = new ReverseIndexChunk(workerId, workerIdDir, fdPerChunk, expiredIfSecondsFromNow);
+    }
+
+    @MasterReset
+    public void resetAsMaster() throws IOException {
+        log.warn("Index reset as master begin, reload meta from exists file, worker id: {}", workerId);
+        metaIndexWords.reload();
+        reverseIndexChunk.loadMeta();
+        log.warn("Index reset as master done, worker id: {}", workerId);
     }
 
     // for repl

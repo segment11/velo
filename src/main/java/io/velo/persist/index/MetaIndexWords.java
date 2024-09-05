@@ -2,6 +2,7 @@ package io.velo.persist.index;
 
 import io.velo.ConfForGlobal;
 import io.velo.NeedCleanUp;
+import io.velo.repl.MasterReset;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import org.apache.commons.io.FileUtils;
@@ -23,6 +24,7 @@ public class MetaIndexWords implements NeedCleanUp {
     private RandomAccessFile raf;
 
     private final byte workerId;
+    private final File workerIdDir;
     @VisibleForTesting
     final int allCapacity;
     private final byte[] inMemoryCachedBytes;
@@ -148,6 +150,7 @@ public class MetaIndexWords implements NeedCleanUp {
 
     public MetaIndexWords(byte workerId, File workerIdDir) throws IOException {
         this.workerId = workerId;
+        this.workerIdDir = workerIdDir;
         this.inMemoryCachedBytes = new byte[HEADER_FOR_META_LENGTH + ONE_GROUP_OFFSET * ALL_WORDS_GROUP_NUMBER];
         log.warn("Index meta index words init size: {}KB, worker id: {}", inMemoryCachedBytes.length / 1024, workerId);
         this.allCapacity = inMemoryCachedBytes.length;
@@ -167,26 +170,29 @@ public class MetaIndexWords implements NeedCleanUp {
         }
         this.raf = new RandomAccessFile(file, "rw");
 
-        if (needRead) {
-            raf.seek(0);
-            raf.read(inMemoryCachedBytes);
-            log.warn("Index read meta index words file success, file: {}, worker id: {}", file, workerId);
-        }
-
         this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
         if (needRead) {
-            iterate((lowerCaseWord, wordMeta) -> {
-                var arr = new int[2];
-                arr[0] = wordMeta.segmentIndex;
-                arr[1] = wordMeta.totalCount;
-                afterPutWordToSegmentIndex.put(lowerCaseWord, arr);
-
-                if (intIdForOneWord < wordMeta.intId) {
-                    intIdForOneWord = wordMeta.intId;
-                }
-            });
-            log.warn("Index meta index words loaded, word count: {}, worker id: {}", afterPutWordToSegmentIndex.size(), workerId);
+            reload();
         }
+    }
+
+    @MasterReset
+    void reload() throws IOException {
+        raf.seek(0);
+        raf.read(inMemoryCachedBytes);
+        log.warn("Index read meta index words file success, worker id: {}", workerId);
+
+        iterate((lowerCaseWord, wordMeta) -> {
+            var arr = new int[2];
+            arr[0] = wordMeta.segmentIndex;
+            arr[1] = wordMeta.totalCount;
+            afterPutWordToSegmentIndex.put(lowerCaseWord, arr);
+
+            if (intIdForOneWord < wordMeta.intId) {
+                intIdForOneWord = wordMeta.intId;
+            }
+        });
+        log.warn("Index meta index words loaded, word count: {}, worker id: {}", afterPutWordToSegmentIndex.size(), workerId);
     }
 
     @Override

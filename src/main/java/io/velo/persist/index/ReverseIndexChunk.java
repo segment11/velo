@@ -141,7 +141,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
             rafArray[i] = raf;
         }
 
-        iterateMeta();
+        loadMeta();
     }
 
     // lower case word
@@ -166,7 +166,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
     }
 
     @MasterReset
-    void iterateMeta() throws IOException {
+    void loadMeta() throws IOException {
         var firstRaf = rafArray[0];
         if (firstRaf.length() > HEADER_FOR_META_LENGTH) {
             // read meta info
@@ -194,6 +194,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
             segmentIndexToWord.put(segmentIndex, lowerCaseWord);
             wordToSegmentIndex.put(lowerCaseWord, segmentIndex);
         }
+        log.warn("Index reverse index chunk meta loaded, word count: {}, worker id: {}", wordToSegmentIndex.size(), workerId);
     }
 
     private int findOneSegmentAvailableForOneWord(String lowerCaseWord) {

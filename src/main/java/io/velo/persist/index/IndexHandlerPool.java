@@ -4,6 +4,7 @@ import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
 import io.velo.ConfForGlobal;
 import io.velo.NeedCleanUp;
+import io.velo.repl.MasterReset;
 import net.openhft.affinity.AffinityStrategies;
 import net.openhft.affinity.AffinityThreadFactory;
 import org.jetbrains.annotations.TestOnly;
@@ -28,6 +29,13 @@ public class IndexHandlerPool implements NeedCleanUp {
 
     public int getChunkMaxSegmentNumber() {
         return indexHandlers[0].getChunkMaxSegmentNumber();
+    }
+
+    @MasterReset
+    public void resetAsMaster() {
+        for(var indexHandler : indexHandlers){
+            indexHandler.asyncRun(indexHandler::resetAsMaster);
+        }
     }
 
     private final Eventloop[] workerEventloopArray;

@@ -1,7 +1,10 @@
 package io.velo.persist.index
 
+import io.activej.eventloop.Eventloop
 import io.velo.persist.Consts
 import spock.lang.Specification
+
+import java.time.Duration
 
 class IndexHandlerPoolTest extends Specification {
     def 'test start and clean up'() {
@@ -24,6 +27,17 @@ class IndexHandlerPoolTest extends Specification {
         pool.run((byte) 0) {
             println 'async run'
         }
+        then:
+        1 == 1
+
+        when:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        pool.resetAsMaster()
+        eventloopCurrent.run()
+        Thread.sleep(200)
         then:
         1 == 1
 
