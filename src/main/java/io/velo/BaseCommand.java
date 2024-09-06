@@ -558,21 +558,7 @@ public abstract class BaseCommand {
                 var dstKey = new String(keyBytes);
                 var slot = slotWithKeyHash.slot();
 
-                if (byPassGetSet != null) {
-                    byPassGetSet.put(slot, dstKey, slotWithKeyHash.bucketIndex, cv);
-                } else {
-                    var oneSlot = localPersist.oneSlot(slot);
-                    try {
-                        oneSlot.put(dstKey, slotWithKeyHash.bucketIndex, cv);
-                    } catch (SegmentOverflowException e) {
-                        log.error("Set error, key: {}, message: {}", dstKey, e.getMessage());
-                        throw e;
-                    } catch (Exception e) {
-                        var message = e.getMessage();
-                        log.error("Set error, key: {}, message: {}", dstKey, message);
-                        throw e;
-                    }
-                }
+                putToOneSlot(slot, dstKey, slotWithKeyHash, cv);
             } else {
                 set(keyBytes, cv.getCompressedData(), slotWithKeyHash, 0, cv.getExpireAt());
             }
@@ -655,21 +641,7 @@ public abstract class BaseCommand {
             cv.setKeyHash(slotWithKeyHash.keyHash);
             cv.setExpireAt(expireAt);
 
-            if (byPassGetSet != null) {
-                byPassGetSet.put(slot, key, slotWithKeyHash.bucketIndex, cv);
-            } else {
-                var oneSlot = localPersist.oneSlot(slot);
-                try {
-                    oneSlot.put(key, slotWithKeyHash.bucketIndex, cv);
-                } catch (SegmentOverflowException e) {
-                    log.error("Set error, key: {}, message: {}", key, e.getMessage());
-                    throw e;
-                } catch (Exception e) {
-                    var message = e.getMessage();
-                    log.error("Set error, key: {}, message: {}", key, message);
-                    throw e;
-                }
-            }
+            putToOneSlot(slot, key, slotWithKeyHash, cv);
 
             // stats
             compressStats.compressedCount++;
@@ -699,22 +671,7 @@ public abstract class BaseCommand {
             cvRaw.setCompressedLength(valueBytes.length);
             cvRaw.setCompressedData(valueBytes);
 
-            if (byPassGetSet != null) {
-                byPassGetSet.put(slot, key, slotWithKeyHash.bucketIndex, cvRaw);
-            } else {
-                var oneSlot = localPersist.oneSlot(slot);
-                try {
-                    // uncompressed
-                    oneSlot.put(key, slotWithKeyHash.bucketIndex, cvRaw);
-                } catch (SegmentOverflowException e) {
-                    log.error("Set error, key: {}, message: {}", key, e.getMessage());
-                    throw e;
-                } catch (IllegalStateException e) {
-                    var message = e.getMessage();
-                    log.error("Set error, key: {}, message: {}", key, message);
-                    throw e;
-                }
-            }
+            putToOneSlot(slot, key, slotWithKeyHash, cvRaw);
 
             if (ConfForGlobal.isValueSetUseCompression && ConfForGlobal.isOnDynTrainDictForCompression) {
                 // add train sample list
@@ -732,6 +689,24 @@ public abstract class BaseCommand {
                 // stats
                 compressStats.rawCount++;
                 compressStats.compressedTotalLength += valueBytes.length;
+            }
+        }
+    }
+
+    private void putToOneSlot(short slot, String key, @NotNull SlotWithKeyHash slotWithKeyHash, CompressedValue cv) {
+        if (byPassGetSet != null) {
+            byPassGetSet.put(slot, key, slotWithKeyHash.bucketIndex, cv);
+        } else {
+            var oneSlot = localPersist.oneSlot(slot);
+            try {
+                oneSlot.put(key, slotWithKeyHash.bucketIndex, cv);
+            } catch (SegmentOverflowException e) {
+                log.error("Set error, key: {}, message: {}", key, e.getMessage());
+                throw e;
+            } catch (Exception e) {
+                var message = e.getMessage();
+                log.error("Set error, key: {}, message: {}", key, message);
+                throw e;
             }
         }
     }
