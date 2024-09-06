@@ -262,14 +262,16 @@ public class RGroup extends BaseCommand {
                 public void onHashKeys(byte[] encodedBytes) {
                     var keysKey = RedisHashKeys.keysKey(key);
                     var keysKeyBytes = keysKey.getBytes();
-
-                    set(keysKeyBytes, encodedBytes, null, CompressedValue.SP_TYPE_HASH, finalExpireAt);
+                    var slotWithKeyHash = slot(keysKeyBytes, slotNumber);
+                    set(keysKeyBytes, encodedBytes, slotWithKeyHash, CompressedValue.SP_TYPE_HASH, finalExpireAt);
                 }
 
                 @Override
                 public void onHashFieldValues(String field, byte[] fieldValueBytes) {
                     var fieldKey = RedisHashKeys.fieldKey(key, field);
-                    set(fieldKey.getBytes(), fieldValueBytes);
+                    var fieldKeyBytes = fieldKey.getBytes();
+                    var slotWithKeyHash = slot(fieldKeyBytes, slotNumber);
+                    set(fieldKeyBytes, fieldValueBytes, slotWithKeyHash);
                 }
             });
             return OKReply.INSTANCE;

@@ -579,21 +579,22 @@ public abstract class BaseCommand {
         }
     }
 
+    @TestOnly
     public void set(byte[] keyBytes, byte[] valueBytes) {
-        set(keyBytes, valueBytes, null, CompressedValue.NULL_DICT_SEQ, CompressedValue.NO_EXPIRE);
+        set(keyBytes, valueBytes, slot(keyBytes, slotNumber), CompressedValue.NULL_DICT_SEQ, CompressedValue.NO_EXPIRE);
     }
 
-    public void set(byte[] keyBytes, byte[] valueBytes, SlotWithKeyHash slotWithKeyHashReuse) {
+    public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHashReuse) {
         set(keyBytes, valueBytes, slotWithKeyHashReuse, CompressedValue.NULL_DICT_SEQ, CompressedValue.NO_EXPIRE);
     }
 
-    public void set(byte[] keyBytes, byte[] valueBytes, SlotWithKeyHash slotWithKeyHashReuse, int spType) {
+    public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHashReuse, int spType) {
         set(keyBytes, valueBytes, slotWithKeyHashReuse, spType, CompressedValue.NO_EXPIRE);
     }
 
     private static final int MAX_LONG_VALUE_IN_BYTES_LENGTH = String.valueOf(Long.MAX_VALUE).length();
 
-    public void set(byte[] keyBytes, byte[] valueBytes, SlotWithKeyHash slotWithKeyHashReuse, int spType, long expireAt) {
+    public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType, long expireAt) {
         compressStats.rawTotalLength += valueBytes.length;
 
         // prefer store as number type
@@ -605,7 +606,7 @@ public abstract class BaseCommand {
             long longValue;
             try {
                 longValue = Long.parseLong(value);
-                setNumber(keyBytes, longValue, slotWithKeyHashReuse, expireAt);
+                setNumber(keyBytes, longValue, slotWithKeyHash, expireAt);
                 return;
             } catch (NumberFormatException ignore) {
             }
@@ -613,14 +614,11 @@ public abstract class BaseCommand {
             double doubleValue = 0;
             try {
                 doubleValue = Double.parseDouble(value);
-                setNumber(keyBytes, doubleValue, slotWithKeyHashReuse, expireAt);
+                setNumber(keyBytes, doubleValue, slotWithKeyHash, expireAt);
                 return;
             } catch (NumberFormatException ignore) {
             }
         }
-
-        var slotWithKeyHash = slotWithKeyHashReuse != null ? slotWithKeyHashReuse : slot(keyBytes);
-        var slot = slotWithKeyHash.slot;
 
         var key = new String(keyBytes);
 
@@ -640,6 +638,7 @@ public abstract class BaseCommand {
             }
         }
 
+        var slot = slotWithKeyHash.slot;
         if (ConfForGlobal.isValueSetUseCompression &&
                 valueBytes.length >= DictMap.TO_COMPRESS_MIN_DATA_LENGTH &&
                 dict != null) {
@@ -651,7 +650,7 @@ public abstract class BaseCommand {
             if (cv.isIgnoreCompression(valueBytes)) {
                 cv.setDictSeqOrSpType(CompressedValue.NULL_DICT_SEQ);
             } else {
-                cv.setDictSeqOrSpType(dict != null ? dict.getSeq() : spType);
+                cv.setDictSeqOrSpType(dict.getSeq());
             }
             cv.setKeyHash(slotWithKeyHash.keyHash);
             cv.setExpireAt(expireAt);

@@ -154,7 +154,7 @@ public class RequestHandler {
         commandGroups[24] = new YGroup(null, null, null);
         commandGroups[25] = new ZGroup(null, null, null);
 
-        for(var cmd : commandGroups) {
+        for (var cmd : commandGroups) {
             cmd.snowFlake = snowFlake;
         }
     }
@@ -533,7 +533,7 @@ public class RequestHandler {
 
                 var sGroup = new SGroup(cmd, data, socket).init(this, request);
                 try {
-                    sGroup.set(keyBytes, valueBytes);
+                    sGroup.set(keyBytes, valueBytes, sGroup.slotWithKeyHashListParsed.getFirst());
                 } catch (ReadonlyException e) {
                     increaseCmdStatArray((byte) 'r', READONLY_FOR_STAT_AS_COMMAND);
                     return ErrorReply.READONLY;
