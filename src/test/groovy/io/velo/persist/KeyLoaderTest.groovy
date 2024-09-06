@@ -495,7 +495,7 @@ class KeyLoaderTest extends Specification {
         // no keys put yet
         def r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10)
         then:
-        r == null
+        r.scanCursor() == ScanCursor.END
 
         when:
         List<PersistValueMeta> pvmList = []

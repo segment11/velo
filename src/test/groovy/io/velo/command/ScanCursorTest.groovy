@@ -7,6 +7,7 @@ class ScanCursorTest extends Specification {
     def 'test base'() {
         given:
         def scanCursor = new ScanCursor((short) 1, (short) 1, (short) 4, (byte) 1)
+        println ScanCursor.END
 
         when:
         def l = scanCursor.toLong()
