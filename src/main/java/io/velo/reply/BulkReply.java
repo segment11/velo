@@ -16,6 +16,8 @@ public class BulkReply implements Reply {
         this.raw = raw;
     }
 
+    public static final BulkReply ZERO = new BulkReply("0".getBytes());
+
     // copy from camellia-redis-proxy-core/src/main/java/com/netease/nim/camellia/redis/proxy/util/Utils.java
     private static final char CR = '\r';
     private static final char LF = '\n';

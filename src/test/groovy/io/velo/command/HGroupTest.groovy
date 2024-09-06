@@ -32,6 +32,7 @@ class HGroupTest extends Specification {
         def sHlenList = _HGroup.parseSlots('hlen', data2, slotNumber)
         def sHmgetList = _HGroup.parseSlots('hmget', data2, slotNumber)
         def sHmsetList = _HGroup.parseSlots('hmset', data2, slotNumber)
+        def sHscanList = _HGroup.parseSlots('hscan', data2, slotNumber)
         def sHrandfieldList = _HGroup.parseSlots('hrandfield', data2, slotNumber)
         def sHsetList = _HGroup.parseSlots('hset', data2, slotNumber)
         def sHsetnxList = _HGroup.parseSlots('hsetnx', data2, slotNumber)
@@ -49,6 +50,7 @@ class HGroupTest extends Specification {
         sHlenList.size() == 1
         sHmgetList.size() == 1
         sHmsetList.size() == 1
+        sHscanList.size() == 1
         sHrandfieldList.size() == 1
         sHsetList.size() == 1
         sHsetnxList.size() == 1
@@ -138,6 +140,12 @@ class HGroupTest extends Specification {
 
         when:
         hGroup.data = data1
+        hGroup.cmd = 'hscan'
+        reply = hGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         hGroup.cmd = 'hrandfield'
         reply = hGroup.handle()
         then:
@@ -1254,6 +1262,170 @@ class HGroupTest extends Specification {
         reply = hGroup.hrandfield()
         then:
         reply == ErrorReply.NOT_INTEGER
+    }
+
+    def 'test hscan'() {
+        given:
+        def data8 = new byte[8][]
+        data8[1] = 'a'.bytes
+        data8[2] = '0'.bytes
+        data8[3] = 'match'.bytes
+        data8[4] = 'field'.bytes
+        data8[5] = 'count'.bytes
+        data8[6] = '5'.bytes
+        data8[7] = 'novalues'.bytes
+
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def hGroup = new HGroup('hscan', data8, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hscan', data8, hGroup.slotNumber)
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
+        def reply = hGroup.hscan()
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'a')
+        reply = hGroup.hscan()
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def rhk = new RedisHashKeys()
+        cvKeys.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
+        reply = hGroup.hscan()
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = true
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
+        cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        def rhh = new RedisHH()
+        cvRhh.compressedData = rhh.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvRhh)
+        reply = hGroup.hscan()
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        10.times {
+            if (it == 5) {
+                rhk.add('xxx')
+            } else {
+                rhk.add('field' + it)
+            }
+        }
+        cvKeys.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
+        reply = hGroup.hscan()
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 2
+        ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 5
+
+        when:
+        data8[4] = 'zzz'.bytes
+        reply = hGroup.hscan()
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when:
+        data8[7] = 'withvalues'.bytes
+        reply = hGroup.hscan()
+        then:
+        reply == ErrorReply.NOT_SUPPORT
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = true
+        data8[4] = 'field'.bytes
+        data8[7] = 'novalues'.bytes
+        10.times {
+            if (it == 5) {
+                rhh.put('xxx', ' '.bytes)
+            } else {
+                rhh.put('field' + it, ' '.bytes)
+            }
+        }
+        cvRhh.compressedData = rhh.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvRhh)
+        reply = hGroup.hscan()
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 2
+        ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 5
+
+        when:
+        data8[7] = 'withvalues'.bytes
+        reply = hGroup.hscan()
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 2
+        ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 10
+
+        when:
+        data8[4] = 'zzz'.bytes
+        reply = hGroup.hscan()
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when:
+        // invalid integer
+        data8[6] = 'a'.bytes
+        reply = hGroup.hscan()
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        data8[6] = '-1'.bytes
+        reply = hGroup.hscan()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        data8[6] = '10'.bytes
+        data8[5] = 'xxx'.bytes
+        reply = hGroup.hscan()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        data8[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        reply = hGroup.hscan()
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        def data6 = new byte[6][]
+        data6[1] = 'a'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'match'.bytes
+        data6[4] = 'field'.bytes
+        data6[5] = 'count'.bytes
+        hGroup.data = data6
+        reply = hGroup.hscan()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        data6[5] = 'match'.bytes
+        reply = hGroup.hscan()
+        then:
+        reply == ErrorReply.SYNTAX
     }
 
     def 'test hsetnx'() {

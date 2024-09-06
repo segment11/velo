@@ -90,7 +90,7 @@ public class HGroup extends BaseCommand {
         }
 
         if ("hscan".equals(cmd)) {
-//            return hscan();
+            return hscan();
         }
 
         if ("hset".equals(cmd)) {
@@ -866,6 +866,157 @@ public class HGroup extends BaseCommand {
             }
         }
         return indexes;
+    }
+
+    @VisibleForTesting
+    Reply hscan() {
+        if (data.length < 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        var cursorBytes = data[2];
+        var cursor = new String(cursorBytes);
+        var cursorLong = Long.parseLong(cursor);
+
+        String matchPattern = null;
+        int count = 10;
+        boolean noValues = false;
+        if (data.length > 3) {
+            for (int i = 3; i < data.length; i++) {
+                var tmp = new String(data[i]).toLowerCase();
+                if ("match".equals(tmp)) {
+                    if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    matchPattern = new String(data[i + 1]);
+                    i++;
+                } else if ("count".equals(tmp)) {
+                    if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    try {
+                        count = Integer.parseInt(new String(data[i + 1]));
+                    } catch (NumberFormatException e) {
+                        return ErrorReply.NOT_INTEGER;
+                    }
+                    if (count < 0) {
+                        return ErrorReply.INVALID_INTEGER;
+                    }
+                    i++;
+                } else if ("novalues".equals(tmp)) {
+                    noValues = true;
+                } else if ("withvalues".equals(tmp)) {
+                    noValues = false;
+                } else {
+                    return ErrorReply.SYNTAX;
+                }
+            }
+        }
+
+        if (isUseHH(keyBytes)) {
+            return hscan2(keyBytes, cursorLong, matchPattern, count, noValues);
+        }
+
+        // performance bad
+        if (!noValues) {
+            return ErrorReply.NOT_SUPPORT;
+        }
+
+        var rhk = getRedisHashKeys(keyBytes);
+        if (rhk == null || rhk.size() == 0) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
+        int skipCount = (int) cursorLong;
+
+        var set = rhk.getSet();
+        ArrayList<String> matchFields = new ArrayList<>();
+        int loopCount = 0;
+        for (var field : set) {
+            loopCount++;
+            // todo: match pattern
+            if (matchPattern != null && !field.startsWith(matchPattern)) {
+                continue;
+            }
+
+            if (skipCount > 0) {
+                skipCount--;
+                continue;
+            }
+
+            matchFields.add(field);
+            if (matchFields.size() >= count) {
+                break;
+            }
+        }
+
+        if (matchFields.isEmpty()) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
+        var replies = new Reply[matchFields.size()];
+        int i = 0;
+        for (var field : matchFields) {
+            replies[i++] = new BulkReply(field.getBytes());
+        }
+
+        var isEnd = loopCount == set.size();
+        var nextCursor = String.valueOf(isEnd ? 0 : skipCount + matchFields.size());
+        // always end
+        return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor.getBytes()), new MultiBulkReply(replies)});
+    }
+
+    Reply hscan2(byte[] keyBytes, long cursorLong, String matchPattern, int count, boolean noValues) {
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        if (rhh == null || rhh.size() == 0) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
+        int skipCount = (int) cursorLong;
+
+        ArrayList<String> matchFields = new ArrayList<>();
+        int loopCount = 0;
+        for (var entry : rhh.getMap().entrySet()) {
+            loopCount++;
+            var field = entry.getKey();
+            // todo: match pattern
+            if (matchPattern != null && !field.startsWith(matchPattern)) {
+                continue;
+            }
+
+            if (skipCount > 0) {
+                skipCount--;
+                continue;
+            }
+
+            matchFields.add(field);
+            if (matchFields.size() >= count) {
+                break;
+            }
+        }
+
+        if (matchFields.isEmpty()) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
+        var replies = new Reply[noValues ? matchFields.size() : matchFields.size() * 2];
+        int i = 0;
+        for (var field : matchFields) {
+            replies[i++] = new BulkReply(field.getBytes());
+            if (!noValues) {
+                replies[i++] = new BulkReply(rhh.get(field));
+            }
+        }
+
+        var isEnd = loopCount == rhh.size();
+        var nextCursor = String.valueOf(isEnd ? 0 : skipCount + matchFields.size());
+        return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor.getBytes()), new MultiBulkReply(replies)});
     }
 
     @VisibleForTesting

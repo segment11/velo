@@ -316,12 +316,12 @@ public class SGroup extends BaseCommand {
                 typeAsByte, matchPattern, count);
 
         if (r == null) {
-            return new MultiBulkReply(new Reply[]{new BulkReply("0".getBytes()), MultiBulkReply.EMPTY});
+            return MultiBulkReply.SCAN_EMPTY;
         }
 
         var keys = r.keys();
         if (r.keys().isEmpty()) {
-            return new MultiBulkReply(new Reply[]{new BulkReply("0".getBytes()), MultiBulkReply.EMPTY});
+            return MultiBulkReply.SCAN_EMPTY;
         }
 
         var replies = new Reply[2];
