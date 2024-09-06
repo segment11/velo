@@ -12,6 +12,7 @@ class RESPReplyTest extends Specification {
         IntegerReply.REPLY_0.buffer().asArray() == ":0\r\n".bytes
         IntegerReply.REPLY_1.buffer().asArray() == ":1\r\n".bytes
         MultiBulkReply.EMPTY.buffer().asArray() == "*0\r\n".bytes
+        MultiBulkReply.SCAN_EMPTY.buffer().asArray() == "*2\r\n\$1\r\n0\r\n*0\r\n".bytes
     }
 
     def 'test static as http'() {

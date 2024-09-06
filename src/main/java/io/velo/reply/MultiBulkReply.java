@@ -18,6 +18,8 @@ public class MultiBulkReply implements Reply {
         }
     };
 
+    public static final Reply SCAN_EMPTY = new MultiBulkReply(new Reply[]{BulkReply.ZERO, EMPTY});
+
     private static final ByteBuf emptyByteBuf = new MultiBulkReply(new Reply[0]).buffer();
 
     private static final byte MARKER = '*';
@@ -42,7 +44,8 @@ public class MultiBulkReply implements Reply {
         } else {
             buf.writeBytes(BulkReply.numToBytes(replies.length, true));
             for (var reply : replies) {
-                buf.writeBytes(reply.buffer().array());
+                var subBuffer = reply.buffer();
+                buf.writeBytes(subBuffer.array(), subBuffer.head(), subBuffer.tail() - subBuffer.head());
             }
         }
         return ByteBuf.wrap(buf.array(), 0, buf.writerIndex());
