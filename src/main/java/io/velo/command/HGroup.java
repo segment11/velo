@@ -9,6 +9,7 @@ import io.velo.reply.*;
 import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.math.BigDecimal;
@@ -28,7 +29,7 @@ public class HGroup extends BaseCommand {
 
         if ("hdel".equals(cmd) || "hexists".equals(cmd) || "hget".equals(cmd) || "hgetall".equals(cmd) ||
                 "hincrby".equals(cmd) || "hincrbyfloat".equals(cmd) || "hkeys".equals(cmd) || "hlen".equals(cmd) ||
-                "hmget".equals(cmd) || "hmset".equals(cmd) || "hrandfield".equals(cmd) ||
+                "hmget".equals(cmd) || "hmset".equals(cmd) || "hrandfield".equals(cmd) || "hscan".equals(cmd) ||
                 "hset".equals(cmd) || "hsetnx".equals(cmd) ||
                 "hstrlen".equals(cmd) || "hvals".equals(cmd)) {
             if (data.length < 2) {
@@ -80,12 +81,20 @@ public class HGroup extends BaseCommand {
             return hmget();
         }
 
-        if ("hmset".equals(cmd) || "hset".equals(cmd)) {
-            return hmset();
+        if ("hmset".equals(cmd)) {
+            return hmset(false);
         }
 
         if ("hrandfield".equals(cmd)) {
             return hrandfield();
+        }
+
+        if ("hscan".equals(cmd)) {
+//            return hscan();
+        }
+
+        if ("hset".equals(cmd)) {
+            return hmset(true);
         }
 
         if ("hsetnx".equals(cmd)) {
@@ -647,8 +656,13 @@ public class HGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
+    @TestOnly
     Reply hmset() {
+        return hmset(false);
+    }
+
+    @VisibleForTesting
+    Reply hmset(boolean isHset) {
         if (data.length < 4 || data.length % 2 != 0) {
             return ErrorReply.FORMAT;
         }
@@ -658,7 +672,6 @@ public class HGroup extends BaseCommand {
             return ErrorReply.KEY_TOO_LONG;
         }
 
-//        var dictMap = DictMap.getInstance();
         LinkedHashMap<String, byte[]> fieldValues = new LinkedHashMap<>();
         for (int i = 2; i < data.length; i += 2) {
             var fieldBytes = data[i];
@@ -674,7 +687,7 @@ public class HGroup extends BaseCommand {
         }
 
         if (isUseHH(keyBytes)) {
-            return hmset2(keyBytes, fieldValues);
+            return hmset2(keyBytes, fieldValues, isHset);
         }
 
         var rhk = getRedisHashKeys(keyBytes);
@@ -691,17 +704,22 @@ public class HGroup extends BaseCommand {
             var field = entry.getKey();
             var fieldKey = RedisHashKeys.fieldKey(key, field);
             var fieldValueBytes = entry.getValue();
-            set(fieldKey.getBytes(), fieldValueBytes);
+            var slotWithKeyHashThisField = slot(fieldKey.getBytes());
+            set(fieldKey.getBytes(), fieldValueBytes, slotWithKeyHashThisField);
 
             rhk.add(field);
         }
 
         saveRedisHashKeys(rhk, key);
-        return OKReply.INSTANCE;
+        if (isHset) {
+            return new IntegerReply(fieldValues.size());
+        } else {
+            return OKReply.INSTANCE;
+        }
     }
 
     @VisibleForTesting
-    Reply hmset2(byte[] keyBytes, LinkedHashMap<String, byte[]> fieldValues) {
+    Reply hmset2(byte[] keyBytes, LinkedHashMap<String, byte[]> fieldValues, boolean isHset) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rhh = getRedisHH(keyBytes, slotWithKeyHash);
         if (rhh == null) {
@@ -717,7 +735,11 @@ public class HGroup extends BaseCommand {
         }
 
         saveRedisHH(rhh, keyBytes, slotWithKeyHash);
-        return OKReply.INSTANCE;
+        if (isHset) {
+            return new IntegerReply(fieldValues.size());
+        } else {
+            return OKReply.INSTANCE;
+        }
     }
 
     @VisibleForTesting

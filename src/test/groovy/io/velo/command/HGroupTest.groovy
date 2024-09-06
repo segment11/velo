@@ -980,6 +980,12 @@ class HGroupTest extends Specification {
         reply == OKReply.INSTANCE
 
         when:
+        reply = hGroup.hmset(true)
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 2
+
+        when:
         LocalPersist.instance.hashSaveMemberTogether = true
         10.times {
             rhh.remove('field' + it)
@@ -989,6 +995,12 @@ class HGroupTest extends Specification {
         reply = hGroup.hmset()
         then:
         reply == OKReply.INSTANCE
+
+        when:
+        reply = hGroup.hmset(true)
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 2
 
         // get and compare
         when:
