@@ -3,22 +3,34 @@ package io.velo.repl.cluster;
 import java.util.ArrayList;
 
 public class TmpForJson {
-    public ArrayList<SlotRange> getList() {
-        return list;
+
+    public ArrayList<Shard> getShards() {
+        return shards;
     }
 
-    public void setList(ArrayList<SlotRange> list) {
-        this.list = list;
+    public void setShards(ArrayList<Shard> shards) {
+        this.shards = shards;
     }
 
-    public ArrayList<ShardNode> getNodes() {
-        return nodes;
+    public int getClusterMyEpoch() {
+        return clusterMyEpoch;
     }
 
-    public void setNodes(ArrayList<ShardNode> nodes) {
-        this.nodes = nodes;
+    public void setClusterMyEpoch(int clusterMyEpoch) {
+        this.clusterMyEpoch = clusterMyEpoch;
     }
 
-    private ArrayList<SlotRange> list;
-    private ArrayList<ShardNode> nodes;
+    public int getClusterCurrentEpoch() {
+        return clusterCurrentEpoch;
+    }
+
+    public void setClusterCurrentEpoch(int clusterCurrentEpoch) {
+        this.clusterCurrentEpoch = clusterCurrentEpoch;
+    }
+
+    private ArrayList<Shard> shards;
+
+    private int clusterMyEpoch;
+
+    private int clusterCurrentEpoch;
 }

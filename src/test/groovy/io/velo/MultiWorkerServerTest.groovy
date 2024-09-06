@@ -340,6 +340,21 @@ class MultiWorkerServerTest extends Specification {
         exception
 
         when:
+        ConfForGlobal.clusterEnabled = true
+        exception = false
+        def config33 = Config.create()
+                .with("slotNumber", "384")
+        try {
+            m1.beforeCreateHandler(c, snowFlakes1, config33)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        ConfForGlobal.clusterEnabled = false
         exception = false
         def config4 = Config.create()
                 .with("slotNumber", "1")

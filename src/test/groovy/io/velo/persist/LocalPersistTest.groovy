@@ -127,6 +127,7 @@ class LocalPersistTest extends Specification {
 
         expect:
         localPersist.isHashSaveMemberTogether
+        localPersist.multiShard != null
 
         when:
         localPersist.hashSaveMemberTogether = false

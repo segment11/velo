@@ -6,11 +6,14 @@ class MultiSlotRangeTest extends Specification {
     def 'test all'() {
         given:
         def m0 = new MultiSlotRange()
+        m0.list = []
         def m1 = new MultiSlotRange()
+        m1.list = []
         println m0
         println m0.clusterNodesSlotRangeList('xxx', 'localhost', 7379)
 
         expect:
+        m0.list.isEmpty()
         m0.slotCount() == 0
         m0 < m1
         m1 < m0
@@ -94,5 +97,15 @@ class MultiSlotRangeTest extends Specification {
         then:
         m0.slotCount() == 8188
         m1.slotCount() == 8196
+
+        when:
+        removeSet.clear()
+        addSet.clear()
+        16384.times {
+            removeSet << it
+        }
+        m0.removeOrAddSet(removeSet, addSet)
+        then:
+        m0.slotCount() == 0
     }
 }

@@ -45,6 +45,7 @@ import io.velo.persist.LocalPersist;
 import io.velo.persist.Wal;
 import io.velo.repl.LeaderSelector;
 import io.velo.repl.ReplPair;
+import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.support.JedisPoolHolder;
 import io.velo.reply.AsyncReply;
 import io.velo.reply.ErrorReply;
@@ -602,6 +603,7 @@ public class MultiWorkerServer extends Launcher {
             }
 
             System.out.println("Primary eventloop wake up");
+//            primaryEventloop.breakEventloop();
             primaryEventloop.execute(() -> {
                 System.out.println("Primary eventloop stopping");
             });
@@ -680,6 +682,7 @@ public class MultiWorkerServer extends Launcher {
                     }
                 }
             }
+            ConfForGlobal.clusterEnabled = config.get(ofBoolean(), "clusterEnabled", false);
 
             DictMap.TO_COMPRESS_MIN_DATA_LENGTH = config.get(ofInteger(), "toCompressMinDataLength", 64);
 
@@ -791,6 +794,12 @@ public class MultiWorkerServer extends Launcher {
             }
             ConfForGlobal.slotNumber = (short) slotNumber;
             log.warn("Global config, slotNumber: " + ConfForGlobal.slotNumber);
+
+            if (ConfForGlobal.clusterEnabled) {
+                if (MultiShard.TO_CLIENT_SLOT_NUMBER % slotNumber != 0) {
+                    throw new IllegalArgumentException("Slot number should be divided by " + MultiShard.TO_CLIENT_SLOT_NUMBER);
+                }
+            }
 
             int netWorkers = config.get(ofInteger(), "netWorkers", 1);
             if (netWorkers > MAX_NET_WORKERS) {

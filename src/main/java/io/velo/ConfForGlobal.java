@@ -40,4 +40,6 @@ public class ConfForGlobal {
     public static final String LEADER_LATCH_PATH = "/leader_latch";
 
     public static String targetAvailableZone;
+
+    public static boolean clusterEnabled = false;
 }

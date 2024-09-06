@@ -1,57 +1,40 @@
 package io.velo.repl.cluster;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.io.FileUtils;
-import org.jetbrains.annotations.VisibleForTesting;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 public class Shard {
-    static final String metaFileName = "nodes.json";
-
-    private final MultiSlotRange multiSlotRange = new MultiSlotRange();
-    private final ArrayList<ShardNode> nodes = new ArrayList<>();
-    private final File persistDir;
-
-    private static final Logger log = LoggerFactory.getLogger(Shard.class);
-
-    public Shard(File persistDir) throws IOException {
-        this.persistDir = persistDir;
-        loadMeta();
+    // for json
+    public MultiSlotRange getMultiSlotRange() {
+        return multiSlotRange;
     }
 
-    @VisibleForTesting
-    void loadMeta() throws IOException {
-        var metaFile = new File(persistDir, metaFileName);
-        if (!metaFile.exists()) {
-            log.warn("Repl clusterx meta file not found: {}", metaFile);
-            return;
-        }
-
-        var metaJson = FileUtils.readFileToString(metaFile, StandardCharsets.UTF_8);
-
-        var objectMapper = new ObjectMapper();
-        var m0 = objectMapper.readValue(metaJson, TmpForJson.class);
-        multiSlotRange.list.addAll(m0.getList());
-        nodes.addAll(m0.getNodes());
+    public void setMultiSlotRange(MultiSlotRange multiSlotRange) {
+        this.multiSlotRange = multiSlotRange;
     }
 
-    public void saveMeta() throws IOException {
-        var metaFile = new File(persistDir, metaFileName);
-        var objectMapper = new ObjectMapper();
-        var m0 = new TmpForJson();
-        m0.setList(multiSlotRange.list);
-        m0.setNodes(nodes);
-        var metaJson = objectMapper.writeValueAsString(m0);
-        FileUtils.writeStringToFile(metaFile, metaJson, StandardCharsets.UTF_8);
+    public ArrayList<Node> getNodes() {
+        return nodes;
     }
 
-    public ShardNode master() {
+    public void setNodes(ArrayList<Node> nodes) {
+        this.nodes = nodes;
+    }
+
+    public int getMigratingSlot() {
+        return migratingSlot;
+    }
+
+    public void setMigratingSlot(int migratingSlot) {
+        this.migratingSlot = migratingSlot;
+    }
+
+    private MultiSlotRange multiSlotRange = new MultiSlotRange();
+
+    private ArrayList<Node> nodes = new ArrayList<>();
+
+    private int migratingSlot = -1;
+
+    public Node master() {
         for (var node : nodes) {
             if (node.isMaster) {
                 return node;
@@ -60,12 +43,31 @@ public class Shard {
         return null;
     }
 
-    public ShardNode slave(int slaveIndex) {
+    public Node slave(int slaveIndex) {
         for (var node : nodes) {
             if (!node.isMaster && node.slaveIndex == slaveIndex) {
                 return node;
             }
         }
         return null;
+    }
+
+    public boolean contains(int slot) {
+        return multiSlotRange.contains(slot);
+    }
+
+    public ArrayList<String> clusterNodesSlotRangeList() {
+        ArrayList<String> list = new ArrayList<>();
+        if (this.multiSlotRange.getList().isEmpty()) {
+            for (var node : nodes) {
+                list.add(node.nodeInfoPrefix() + " - ");
+            }
+        } else {
+            var allSlotRange = this.multiSlotRange.getList().stream().map(SlotRange::toString).reduce((a, b) -> a + " " + b).orElse("");
+            for (var node : nodes) {
+                list.add(node.nodeInfoPrefix() + " - " + allSlotRange);
+            }
+        }
+        return list;
     }
 }

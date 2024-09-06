@@ -19,9 +19,14 @@ public class SlotRange implements Comparable<SlotRange> {
     }
 
     int begin;
+
     int end;
 
-    public SlotRange(int begin, int end) {
+    // for json
+    public SlotRange() {
+    }
+
+    SlotRange(int begin, int end) {
         this.begin = begin;
         this.end = end;
     }

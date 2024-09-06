@@ -5,6 +5,7 @@ import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.velo.*;
 import io.velo.persist.index.IndexHandlerPool;
+import io.velo.repl.cluster.MultiShard;
 import jnr.ffi.LibraryLoader;
 import jnr.posix.LibC;
 import org.jetbrains.annotations.TestOnly;
@@ -100,6 +101,8 @@ public class LocalPersist implements NeedCleanUp {
 
             oneSlots[slot] = oneSlot;
         }
+
+        this.multiShard = new MultiShard(persistDir);
     }
 
     private boolean isHashSaveMemberTogether;
@@ -161,6 +164,12 @@ public class LocalPersist implements NeedCleanUp {
 
     public void setAsSlaveSlot0FetchedExistsAllDone(boolean asSlaveSlot0FetchedExistsAllDone) {
         isAsSlaveSlot0FetchedExistsAllDone = asSlaveSlot0FetchedExistsAllDone;
+    }
+
+    private MultiShard multiShard;
+
+    public MultiShard getMultiShard() {
+        return multiShard;
     }
 
     private SocketInspector socketInspector;

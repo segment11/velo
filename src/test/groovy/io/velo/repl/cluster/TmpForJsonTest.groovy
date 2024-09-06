@@ -7,11 +7,9 @@ class TmpForJsonTest extends Specification {
     def 'test all'() {
         given:
         def x = new TmpForJson()
-        x.list = []
-        x.nodes = []
+        x.shards = []
 
         expect:
-        x.list.size() == 0
-        x.nodes.size() == 0
+        x.shards.size() == 0
     }
 }

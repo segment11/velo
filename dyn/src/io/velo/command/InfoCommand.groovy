@@ -2,6 +2,7 @@ package io.velo.command
 
 import groovy.transform.CompileStatic
 import io.velo.BaseCommand
+import io.velo.ConfForGlobal
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.Reply
@@ -58,6 +59,20 @@ class InfoCommand extends BaseCommand {
         }
 
         // todo
+        if (ConfForGlobal.clusterEnabled) {
+            def multiShard = localPersist.multiShard
+            def shards = multiShard.shards
+
+            list << new Tuple2('master_link_status', 'up')
+            list << new Tuple2('master_repl_offset', '0')
+            list << new Tuple2('slave_repl_offset', '0')
+
+            // todo use repl pair list
+        } else {
+            if (ConfForGlobal.zookeeperRootPath) {
+
+            }
+        }
 
         def sb = new StringBuilder()
         list.each { Tuple2<String, Object> tuple ->

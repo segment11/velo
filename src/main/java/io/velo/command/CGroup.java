@@ -42,7 +42,7 @@ public class CGroup extends BaseCommand {
             return client();
         }
 
-        if ("clusterx".equals(cmd)) {
+        if ("cluster".equals(cmd) || "clusterx".equals(cmd)) {
             return clusterx();
         }
 

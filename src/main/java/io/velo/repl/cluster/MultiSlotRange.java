@@ -7,7 +7,15 @@ import java.util.Collections;
 import java.util.TreeSet;
 
 public class MultiSlotRange implements Comparable<MultiSlotRange> {
-    final ArrayList<SlotRange> list = new ArrayList<>();
+    public ArrayList<SlotRange> getList() {
+        return list;
+    }
+
+    public void setList(ArrayList<SlotRange> list) {
+        this.list = list;
+    }
+
+    private ArrayList<SlotRange> list = new ArrayList<>();
 
     public int slotCount() {
         int total = 0;
@@ -17,7 +25,7 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         return total;
     }
 
-    boolean contains(int slot) {
+    public boolean contains(int slot) {
         for (var slotRange : list) {
             if (slotRange.contains(slot)) {
                 return true;
@@ -59,6 +67,7 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
 
     public static MultiSlotRange fromSelfString(String toString) {
         var r = new MultiSlotRange();
+        r.list = new ArrayList<>();
         if (toString.isEmpty()) {
             return r;
         }
@@ -97,7 +106,7 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
 
     private static MultiSlotRange fromSet(TreeSet<Integer> all) {
         var r = new MultiSlotRange();
-
+        r.list = new ArrayList<>();
         if (all.isEmpty()) {
             return r;
         }
