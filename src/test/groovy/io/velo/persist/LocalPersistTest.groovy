@@ -2,6 +2,7 @@ package io.velo.persist
 
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
+import io.velo.ConfForGlobal
 import io.velo.SnowFlake
 import spock.lang.Specification
 
@@ -9,6 +10,10 @@ import java.time.Duration
 
 class LocalPersistTest extends Specification {
     static void prepareLocalPersist(byte netWorkers = 1, short slotNumber = 1) {
+        if (!ConfForGlobal.netListenAddresses) {
+            ConfForGlobal.netListenAddresses = 'localhost:7379'
+        }
+
         def localPersist = LocalPersist.instance
 
         def snowFlakes = new SnowFlake[netWorkers]

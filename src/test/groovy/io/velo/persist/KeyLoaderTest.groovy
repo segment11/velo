@@ -484,6 +484,10 @@ class KeyLoaderTest extends Specification {
         KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteZSet, CompressedValue.SP_TYPE_ZSET)
         !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteZSet, CompressedValue.NULL_DICT_SEQ)
         KeyLoader.isSpTypeMatch((byte) 10, CompressedValue.NULL_DICT_SEQ)
+        KeyLoader.isKeyMatch('aaa', null)
+        KeyLoader.isKeyMatch('aaa', 'a*')
+        KeyLoader.isKeyMatch('aaa', 'aa')
+        !KeyLoader.isKeyMatch('aaa', 'bb')
 
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance

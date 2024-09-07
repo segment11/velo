@@ -299,6 +299,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         return (bucketIndex - firstBucketIndexInTargetWalGroup) * KEY_BUCKET_ONE_COST_SIZE;
     }
 
+    public static final byte typeAsByteIgnore = 0;
     public static final byte typeAsByteString = 1;
     public static final byte typeAsByteList = 2;
     public static final byte typeAsByteSet = 3;
@@ -319,6 +320,18 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return CompressedValue.isHash(spType);
         }
         return true;
+    }
+
+    public static boolean isKeyMatch(String key, String matchPattern) {
+        if (matchPattern == null) {
+            return true;
+        }
+
+        // todo, other pattern
+        if (matchPattern.endsWith("*")) {
+            return key.startsWith(matchPattern.substring(0, matchPattern.length() - 1));
+        }
+        return key.startsWith(matchPattern);
     }
 
     private ScanCursor readKeysToList(ArrayList<String> keys, int walGroupIndex, byte splitIndex, short skipCount,
@@ -358,12 +371,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 }
 
                 var key = new String(keyBytes);
-                // todo * match
-                if (matchPattern != null && !key.startsWith(matchPattern)) {
+                if (!isKeyMatch(key, matchPattern)) {
                     return;
                 }
 
-                if (typeAsByte != 0) {
+                if (typeAsByte != typeAsByteIgnore) {
                     if (PersistValueMeta.isPvm(valueBytes)) {
                         var pvm = PersistValueMeta.decode(valueBytes);
                         if (!isSpTypeMatch(typeAsByte, pvm.spType)) {

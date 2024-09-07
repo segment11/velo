@@ -287,7 +287,7 @@ public class SGroup extends BaseCommand {
         }
 
         // string
-        byte typeAsByte = KeyLoader.typeAsByteString;
+        byte typeAsByte = KeyLoader.typeAsByteIgnore;
         if (type != null) {
             // only support string / hash / list / set / zset
             var isString = "string".equals(type);
@@ -307,6 +307,8 @@ public class SGroup extends BaseCommand {
                 typeAsByte = KeyLoader.typeAsByteSet;
             } else if (isZset) {
                 typeAsByte = KeyLoader.typeAsByteZSet;
+            } else {
+                typeAsByte = KeyLoader.typeAsByteString;
             }
         }
 

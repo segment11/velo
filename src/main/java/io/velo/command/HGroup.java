@@ -5,6 +5,7 @@ import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.Dict;
 import io.velo.TrainSampleJob;
+import io.velo.persist.KeyLoader;
 import io.velo.reply.*;
 import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
@@ -939,8 +940,7 @@ public class HGroup extends BaseCommand {
         int loopCount = 0;
         for (var field : set) {
             loopCount++;
-            // todo: match pattern
-            if (matchPattern != null && !field.startsWith(matchPattern)) {
+            if (!KeyLoader.isKeyMatch(field, matchPattern)) {
                 continue;
             }
 
@@ -985,8 +985,7 @@ public class HGroup extends BaseCommand {
         for (var entry : rhh.getMap().entrySet()) {
             loopCount++;
             var field = entry.getKey();
-            // todo: match pattern
-            if (matchPattern != null && !field.startsWith(matchPattern)) {
+            if (!KeyLoader.isKeyMatch(field, matchPattern)) {
                 continue;
             }
 
