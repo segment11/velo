@@ -95,29 +95,30 @@ migrating_state:ok
 
         TreeSet<Integer> slotSet = []
         TreeSet<String> hostSet = []
-        shards.each { shard ->
-            shard.multiSlotRange.list.each { slotRange ->
-                for (i in slotRange.begin..slotRange.end) {
+        shards.each { ss ->
+            ss.multiSlotRange.list.each { sr ->
+                for (i in sr.begin..sr.end) {
                     slotSet << i
                 }
             }
 
-            shard.nodes.each { node ->
+            ss.nodes.each { node ->
                 hostSet << node.host
             }
         }
         def isClusterStateOk = slotSet.size() == MultiShard.TO_CLIENT_SLOT_NUMBER
 
-        def isMigrateFail = shards.any { shard ->
-            shard.migratingSlot == -100
+        def isMigrateFail = shards.any { ss ->
+            ss.migratingSlot == Shard.FAIL_MIGRATED_SLOT
         }
-        def isMigrateOk = shards.every { shard ->
-            shard.migratingSlot == -1
+        def isMigrateOk = shards.every { ss ->
+            ss.migratingSlot == Shard.NO_MIGRATING_SLOT
         }
 
         Map<String, Object> r = [:]
         r.cluster_state = isClusterStateOk ? 'ok' : 'fail'
         r.migrating_state = isMigrateOk ? 'success' : (isMigrateFail ? 'fail' : 'doing')
+        r.migrating_slot = shards.find { ss -> ss.migratingSlot != Shard.NO_MIGRATING_SLOT }?.migratingSlot ?: Shard.NO_MIGRATING_SLOT
         r.cluster_known_nodes = hostSet.size()
         r.cluster_current_epoch = multiShard.clusterCurrentEpoch
         r.cluster_my_epoch = multiShard.clusterMyEpoch
@@ -161,7 +162,7 @@ migrating_state:ok
 //                shard.migratingSlot = -1
 //            })
 
-            shard.migratingSlot = -1
+            shard.migratingSlot = Shard.NO_MIGRATING_SLOT
             OK
         } else {
             return new ErrorReply('node id not found: ' + toNodeId)
@@ -177,8 +178,8 @@ migrating_state:ok
         def shards = multiShard.shards
 
         List<String> list = []
-        shards.each { shard ->
-            list.addAll shard.clusterNodesSlotRangeList()
+        shards.each { ss ->
+            list.addAll ss.clusterNodesSlotRangeList()
         }
 
         def lines = list.join("\r\n") + "\r\n"
@@ -197,8 +198,8 @@ migrating_state:ok
         def nodeIdFix = new String(data[2])
         def multiShard = localPersist.multiShard
         def shards = multiShard.shards
-        shards.each { shard ->
-            def selfNode = shard.nodes.find { it.mySelf }
+        shards.each { ss ->
+            def selfNode = ss.nodes.find { nn -> nn.mySelf }
             if (selfNode) {
                 selfNode.nodeIdFix = nodeIdFix
                 log.warn 'Clusterx set node id: {} for self', nodeIdFix
@@ -313,11 +314,11 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
         if (shard) {
             shard.multiSlotRange.addOneSlot(slot)
-            shard.migratingSlot = -1
+            shard.migratingSlot = Shard.NO_MIGRATING_SLOT
             shards.each { ss ->
                 if (ss != shard) {
                     ss.multiSlotRange.removeOneSlot(slot)
-                    ss.migratingSlot = -1
+                    ss.migratingSlot = Shard.NO_MIGRATING_SLOT
                 }
             }
             multiShard.updateClusterVersion(clusterVersion)
@@ -341,9 +342,9 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         def shards = multiShard.shards
 
         List<SlotRange> slotRangeList = []
-        shards.each { shard ->
-            shard.multiSlotRange.list.each {
-                slotRangeList << it
+        shards.each { ss ->
+            ss.multiSlotRange.list.each { sr ->
+                slotRangeList << sr
             }
         }
 
@@ -351,8 +352,8 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         for (i in 0..<slotRangeList.size()) {
             def slotRange = slotRangeList.get(i)
 
-            def shardHasThisSlotRange = shards.find { shard ->
-                shard.multiSlotRange.list.find { it == slotRange }
+            def shardHasThisSlotRange = shards.find { ss ->
+                ss.multiSlotRange.list.find { sr -> sr == slotRange }
             }
             def subReplies = new Reply[2 + shardHasThisSlotRange.nodes.size()]
 

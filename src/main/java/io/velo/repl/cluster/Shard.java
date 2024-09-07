@@ -32,7 +32,10 @@ public class Shard {
 
     private ArrayList<Node> nodes = new ArrayList<>();
 
-    private int migratingSlot = -1;
+    private int migratingSlot = NO_MIGRATING_SLOT;
+
+    public static final int NO_MIGRATING_SLOT = -1;
+    public static final int FAIL_MIGRATED_SLOT = -100;
 
     public Node master() {
         for (var node : nodes) {
