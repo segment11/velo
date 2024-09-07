@@ -9,11 +9,15 @@ import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
 import io.velo.repl.cluster.SlotRange
 import io.velo.reply.*
+import org.jetbrains.annotations.VisibleForTesting
 
 // act same as kvrocks clusterx commands
 @CompileStatic
 class ClusterxCommand extends BaseCommand {
-    static final String version = '1.0.0'
+
+    ClusterxCommand() {
+        super(null, null, null)
+    }
 
     ClusterxCommand(CGroup cGroup) {
         super(cGroup.cmd, cGroup.data, cGroup.socket)
@@ -43,7 +47,6 @@ class ClusterxCommand extends BaseCommand {
             return migrate()
         }
 
-        // cluster nodes
         if ('nodes' == subCmd) {
             return nodes()
         }
@@ -67,7 +70,8 @@ class ClusterxCommand extends BaseCommand {
         return ErrorReply.SYNTAX
     }
 
-    private final BulkReply OK = new BulkReply('OK'.bytes)
+    @VisibleForTesting
+    static final BulkReply OK = new BulkReply('OK'.bytes)
 
     /*
 cluster_state:fail
@@ -83,8 +87,10 @@ cluster_stats_messages_sent:0
 cluster_stats_messages_received:0
 migrating_state:ok
      */
-    private static final ErrorReply CLUSTER_DISABLED = new ErrorReply('This instance has cluster support disable')
+    @VisibleForTesting
+    static final ErrorReply CLUSTER_DISABLED = new ErrorReply('This instance has cluster support disable')
 
+    @VisibleForTesting
     Reply info() {
         if (!ConfForGlobal.clusterEnabled) {
             return CLUSTER_DISABLED
@@ -114,11 +120,14 @@ migrating_state:ok
         def isMigrateOk = shards.every { ss ->
             ss.migratingSlot == Shard.NO_MIGRATING_SLOT
         }
+        def migratingSlotShard = shards.find { ss ->
+            ss.migratingSlot != Shard.NO_MIGRATING_SLOT && ss.migratingSlot != Shard.FAIL_MIGRATED_SLOT
+        }
 
         Map<String, Object> r = [:]
         r.cluster_state = isClusterStateOk ? 'ok' : 'fail'
         r.migrating_state = isMigrateOk ? 'success' : (isMigrateFail ? 'fail' : 'doing')
-        r.migrating_slot = shards.find { ss -> ss.migratingSlot != Shard.NO_MIGRATING_SLOT }?.migratingSlot ?: Shard.NO_MIGRATING_SLOT
+        r.migrating_slot = migratingSlotShard ? migratingSlotShard.migratingSlot : Shard.NO_MIGRATING_SLOT
         r.cluster_known_nodes = hostSet.size()
         r.cluster_current_epoch = multiShard.clusterCurrentEpoch
         r.cluster_my_epoch = multiShard.clusterMyEpoch
@@ -130,6 +139,7 @@ migrating_state:ok
         new BulkReply(lines.bytes)
     }
 
+    @VisibleForTesting
     Reply migrate() {
         if (!ConfForGlobal.clusterEnabled) {
             return CLUSTER_DISABLED
@@ -169,6 +179,7 @@ migrating_state:ok
         }
     }
 
+    @VisibleForTesting
     Reply nodes() {
         if (!ConfForGlobal.clusterEnabled) {
             return CLUSTER_DISABLED
@@ -186,6 +197,7 @@ migrating_state:ok
         new BulkReply(lines.bytes)
     }
 
+    @VisibleForTesting
     Reply setnodeid() {
         if (!ConfForGlobal.clusterEnabled) {
             return CLUSTER_DISABLED
@@ -209,6 +221,7 @@ migrating_state:ok
         OK
     }
 
+    @VisibleForTesting
     Reply setnodes() {
         if (!ConfForGlobal.clusterEnabled) {
             return CLUSTER_DISABLED
@@ -290,6 +303,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         OK
     }
 
+    @VisibleForTesting
     Reply setslot() {
         if (!ConfForGlobal.clusterEnabled) {
             return CLUSTER_DISABLED
@@ -329,6 +343,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         OK
     }
 
+    @VisibleForTesting
     Reply slots() {
         if (!ConfForGlobal.clusterEnabled) {
             return CLUSTER_DISABLED
