@@ -395,7 +395,7 @@ public class LeaderSelector implements NeedCleanUp {
                     return;
                 }
 
-                if (replPair.getHostAndPort().equals(host + ":" + port)) {
+                if (replPair.getHost().equals(host) && replPair.getPort() == port) {
                     // already is slave of target host and port
                     log.debug("Repl already is slave of target host and port: {}:{}", host, port);
                     callback.accept(null);
@@ -471,9 +471,7 @@ public class LeaderSelector implements NeedCleanUp {
                 // clear old as slave catch up binlog info
                 // need fetch from the beginning, for data consistency
                 oneSlot.getMetaChunkSegmentIndex().clearMasterBinlogFileIndexAndOffset();
-
                 oneSlot.createReplPairAsSlave(host, port);
-                log.warn("Repl slave created new repl pair as slave, new master: {}:{}, slot: {}", host, port, oneSlot.slot());
 
                 oneSlot.getBinlog().moveToNextSegment();
                 // do not write binlog as slave
