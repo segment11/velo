@@ -186,6 +186,7 @@ class DictTest extends Specification {
 
     def 'test init ctx'() {
         given:
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
         def dictMap = DictMap.instance
         dictMap.initDictMap(Consts.testDir)
 
@@ -218,8 +219,8 @@ class DictTest extends Specification {
         def dictTrained = result.cacheDict().get(keyPrefix)
         dictMap.putDict(keyPrefix, dictTrained)
         then:
-        dictTrained.decompressCtx != null
-        dictTrained.ctxCompress != null
+        dictTrained.decompressCtxArray != null
+        dictTrained.ctxCompressArray != null
 
         when:
         def sampleCompressedValueBytes = dictTrained.compressByteArray(sampleValueBytes)

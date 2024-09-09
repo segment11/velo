@@ -589,7 +589,7 @@ class BaseCommandTest extends Specification {
 
         and:
         FileUtils.forceMkdir(Consts.testDir)
-
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
         def dictMap = DictMap.instance
         dictMap.initDictMap(Consts.testDir)
         if (dictMap.dictSize() != 0) {

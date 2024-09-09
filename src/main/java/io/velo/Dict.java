@@ -1,6 +1,5 @@
 package io.velo;
 
-import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdCompressCtx;
 import com.github.luben.zstd.ZstdDecompressCtx;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -13,7 +12,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.Objects;
 import java.util.Random;
@@ -108,49 +106,68 @@ public class Dict implements Serializable {
     }
 
     @VisibleForTesting
-    ZstdDecompressCtx decompressCtx;
+    ZstdDecompressCtx[] decompressCtxArray;
     @VisibleForTesting
-    ZstdCompressCtx ctxCompress;
+    ZstdCompressCtx[] ctxCompressArray;
 
     void initCtx() {
-        if (decompressCtx == null) {
-            decompressCtx = new ZstdDecompressCtx();
-            decompressCtx.loadDict(dictBytes);
-            log.info("Dict init decompress ctx, dict bytes length: {}", dictBytes.length);
+        if (decompressCtxArray == null) {
+            decompressCtxArray = new ZstdDecompressCtx[ConfForGlobal.netWorkers];
+            for (int i = 0; i < decompressCtxArray.length; i++) {
+                decompressCtxArray[i] = new ZstdDecompressCtx();
+                decompressCtxArray[i].loadDict(dictBytes);
+            }
+            log.info("Dict init decompress ctx, dict bytes length: {}, net workers: {}", dictBytes.length, decompressCtxArray.length);
         }
 
-        if (ctxCompress == null) {
-            ctxCompress = new ZstdCompressCtx();
-            ctxCompress.loadDict(dictBytes);
-            ctxCompress.setLevel(Zstd.defaultCompressionLevel());
-            log.info("Dict init compress ctx, dict bytes length: {}", dictBytes.length);
+        if (ctxCompressArray == null) {
+            ctxCompressArray = new ZstdCompressCtx[ConfForGlobal.netWorkers];
+            for (int i = 0; i < ctxCompressArray.length; i++) {
+                ctxCompressArray[i] = new ZstdCompressCtx();
+                ctxCompressArray[i].loadDict(dictBytes);
+            }
+            log.info("Dict init compress ctx, dict bytes length: {}, net workers: {}", dictBytes.length, ctxCompressArray.length);
         }
     }
 
     void closeCtx() {
-        if (decompressCtx != null) {
-            decompressCtx.close();
-            log.warn("Dict close decompress ctx, dict bytes length: {}", dictBytes.length);
-            decompressCtx = null;
+        if (decompressCtxArray != null) {
+            for (var zstdDecompressCtx : decompressCtxArray) {
+                zstdDecompressCtx.close();
+            }
+            log.warn("Dict close decompress ctx, dict bytes length: {}, net workers: {}", dictBytes.length, decompressCtxArray.length);
+            decompressCtxArray = null;
         }
 
-        if (ctxCompress != null) {
-            ctxCompress.close();
-            log.warn("Dict close compress ctx, dict bytes length: {}", dictBytes.length);
-            ctxCompress = null;
+        if (ctxCompressArray != null) {
+            for (var zstdCompressCtx : ctxCompressArray) {
+                zstdCompressCtx.close();
+            }
+            log.warn("Dict close compress ctx, dict bytes length: {}, net workers: {}", dictBytes.length, ctxCompressArray.length);
+            ctxCompressArray = null;
         }
+    }
+
+    private int getCtxIndexByCurrentThread() {
+        var currentThreadId = Thread.currentThread().threadId();
+        for (int i = 0; i < MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds.length; i++) {
+            if (currentThreadId == MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds[i]) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     public byte[] compressByteArray(byte[] src) {
-        return ctxCompress.compress(src);
+        return ctxCompressArray[getCtxIndexByCurrentThread()].compress(src);
     }
 
     public int compressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
-        return ctxCompress.compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
+        return ctxCompressArray[getCtxIndexByCurrentThread()].compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
     }
 
     public int decompressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
-        return decompressCtx.decompressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
+        return decompressCtxArray[getCtxIndexByCurrentThread()].decompressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
     }
 
     @Override

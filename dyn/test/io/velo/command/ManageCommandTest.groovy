@@ -296,6 +296,7 @@ class ManageCommandTest extends Specification {
         reply instanceof BulkReply
 
         when:
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
         // train new dict
         def data15 = new byte[15][]
         data15[1] = 'dict'.bytes
