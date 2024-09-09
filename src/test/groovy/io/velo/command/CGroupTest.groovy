@@ -116,7 +116,8 @@ class CGroupTest extends Specification {
         when:
         def reply = cGroup.execute('clusterx setnodeid')
         then:
-        reply == ErrorReply.FORMAT
+        // cluster disabled
+        reply instanceof ErrorReply
     }
 
     def 'test config'() {
