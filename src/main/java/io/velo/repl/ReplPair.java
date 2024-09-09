@@ -239,6 +239,7 @@ public class ReplPair {
         isMasterReadonly = masterReadonly;
     }
 
+    @ForMasterField
     @ForSlaveField
     private boolean isAllCaughtUp;
 

@@ -16,6 +16,14 @@ import java.util.ArrayList;
 public class MultiShard {
     public static final short TO_CLIENT_SLOT_NUMBER = 16384;
 
+    public static short asInnerSlotByToClientSlot(int toClientSlot) {
+        return (short) (toClientSlot / (TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber));
+    }
+
+    public static boolean isToClientSlotSkip(int toClientSlot) {
+        return toClientSlot % (TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber) != 0;
+    }
+
     /*
 refer to redis cluster nodes.conf
 7ce84f442ac179271dac46ce4f3f2feb73d3a0e4 :0@0 myself,master - 0 0 0 connected

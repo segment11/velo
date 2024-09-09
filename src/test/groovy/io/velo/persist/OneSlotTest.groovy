@@ -466,6 +466,12 @@ class OneSlotTest extends Specification {
         then:
         1 == 1
 
+        when:
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+        then:
+        1 == 1
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()

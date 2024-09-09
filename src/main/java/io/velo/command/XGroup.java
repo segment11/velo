@@ -1241,6 +1241,7 @@ public class XGroup extends BaseCommand {
             var fo = binlog.currentFileIndexAndOffset();
             if (fo.fileIndex() == needFetchFileIndex && fo.offset() == lastUpdatedOffset) {
                 replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(fo);
+                replPair.setAllCaughtUp(true);
                 return Repl.reply(slot, replPair, ReplType.s_catch_up, onlyReadonlyResponseContent);
             }
         }
@@ -1257,7 +1258,9 @@ public class XGroup extends BaseCommand {
 
         // all fetched
         if (readSegmentBytes == null) {
-            replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(new Binlog.FileIndexAndOffset(needFetchFileIndex, lastUpdatedOffset));
+            var fo = new Binlog.FileIndexAndOffset(needFetchFileIndex, lastUpdatedOffset);
+            replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(fo);
+            replPair.setAllCaughtUp(true);
             return Repl.reply(slot, replPair, ReplType.s_catch_up, onlyReadonlyResponseContent);
         }
 

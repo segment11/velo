@@ -93,4 +93,17 @@ public class Node {
                 (isMaster ? "master" : "slave") +
                 (isMaster ? "" : " " + followNodeId);
     }
+
+    @Override
+    public String toString() {
+        return "Node{" +
+                "isMaster=" + isMaster +
+                ", slaveIndex=" + slaveIndex +
+                ", host='" + host + '\'' +
+                ", port=" + port +
+                ", isMySelf=" + isMySelf +
+                ", followNodeId='" + followNodeId + '\'' +
+                ", nodeId='" + nodeId() + '\'' +
+                '}';
+    }
 }

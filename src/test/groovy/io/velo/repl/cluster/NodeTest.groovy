@@ -12,6 +12,7 @@ class NodeTest extends Specification {
         node.port = 6379
         node.mySelf = true
         node.followNodeId = 'xxx'
+        println node
 
         expect:
         node.master

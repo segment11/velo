@@ -9,6 +9,7 @@ import io.velo.ConfForSlot
 import io.velo.Debug
 import io.velo.TrainSampleJob
 import io.velo.persist.Chunk
+import io.velo.persist.OneSlot
 import io.velo.repl.support.JedisPoolHolder
 import io.velo.reply.*
 import io.velo.type.RedisHH
@@ -16,6 +17,7 @@ import io.velo.type.RedisHashKeys
 import io.velo.type.RedisList
 import io.velo.type.RedisZSet
 import org.apache.commons.io.FileUtils
+import org.jetbrains.annotations.VisibleForTesting
 import org.slf4j.LoggerFactory
 
 import static io.velo.TrainSampleJob.MIN_TRAIN_SAMPLE_SIZE
@@ -268,9 +270,57 @@ class ManageCommand extends BaseCommand {
         } else if (subSubCmd == 'set-not-can-read') {
             oneSlot.canRead = false
             return new BulkReply(('slot ' + slot + ' set not can read').bytes)
+        } else if (subSubCmd == 'migrate_from') {
+            return migrateFrom(oneSlot)
         }
 
         return ErrorReply.SYNTAX
+    }
+
+    @VisibleForTesting
+    Reply migrateFrom(OneSlot oneSlot) {
+        // manage slot 0 migrate_from localhost 7379 force
+        if (data.length != 6 && data.length != 7) {
+            return ErrorReply.FORMAT
+        }
+
+        def host = new String(data[4])
+        def portBytes = data[5]
+        int port
+        try {
+            port = Integer.parseInt(new String(portBytes))
+        } catch (NumberFormatException ignore) {
+            return ErrorReply.INVALID_INTEGER
+        }
+        def force = data.length == 7 && new String(data[6]) == 'force'
+
+        var replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
+        if (replPairAsSlave) {
+            if (replPairAsSlave.host == host && replPairAsSlave.port == port) {
+                log.info 'Manage migrate_from, already slave of host: {}, port: {}, slot: {}',
+                        host, port, oneSlot.slot()
+                return ClusterxCommand.OK
+            } else {
+                log.warn 'Manage migrate_from, already slave of other host: {}, port: {}, slot: {}',
+                        replPairAsSlave.host, replPairAsSlave.port, oneSlot.slot()
+                if (force) {
+                    log.warn 'Manage migrate_from, force remove exist repl pair as slave'
+                    oneSlot.removeReplPairAsSlave()
+                    oneSlot.binlog.moveToNextSegment()
+
+                    oneSlot.metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset()
+                    oneSlot.createReplPairAsSlave(host, port)
+
+                    oneSlot.dynConfig.binlogOn = false
+                    return ClusterxCommand.OK
+                } else {
+                    return new ErrorReply('Already slave of other host: ' + replPairAsSlave.host + ':' + replPairAsSlave.port)
+                }
+            }
+        } else {
+            oneSlot.createReplPairAsSlave(host, port)
+            return ClusterxCommand.OK
+        }
     }
 
     private Reply trainSampleListAndReturnRatio(String keyPrefixOrSuffixGiven, List<TrainSampleJob.TrainSampleKV> sampleToTrainList) {

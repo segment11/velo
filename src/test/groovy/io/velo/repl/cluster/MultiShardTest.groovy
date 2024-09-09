@@ -11,9 +11,21 @@ class MultiShardTest extends Specification {
         ConfForGlobal.netListenAddresses = 'localhost:7379'
         def multiShard = new MultiShard(Consts.persistDir)
 
+        expect:
+        MultiShard.isToClientSlotSkip(1)
+        !MultiShard.isToClientSlotSkip(0)
+        MultiShard.asInnerSlotByToClientSlot(0) == 0
+        MultiShard.asInnerSlotByToClientSlot(1) == 0
+
         when:
         multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7380)])
         multiShard.saveMeta()
+        multiShard.updateClusterVersion(0)
+        multiShard.updateClusterVersion(1)
+        then:
+        multiShard.clusterCurrentEpoch == 1
+
+        when:
         def multiShard2 = new MultiShard(Consts.persistDir)
         then:
         multiShard2.shards.size() == 2

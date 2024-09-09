@@ -299,12 +299,24 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         delayNeedCloseReplPairs.add(replPair);
     }
 
+    @TestOnly
+    private boolean doMockWhenCreateReplPairAsSlave = false;
+
+    public void setDoMockWhenCreateReplPairAsSlave(boolean doMockWhenCreateReplPairAsSlave) {
+        this.doMockWhenCreateReplPairAsSlave = doMockWhenCreateReplPairAsSlave;
+    }
+
     // todo, both master - master, need change equal and init as master or slave
     public ReplPair createReplPairAsSlave(String host, int port) throws IOException {
         var replPair = new ReplPair(slot, false, host, port);
         replPair.setSlaveUuid(masterUuid);
-        replPair.initAsSlave(netWorkerEventloop, requestHandler);
-        log.warn("Repl create repl pair as slave, host: {}, port: {}, slot: {}", host, port, slot);
+
+        if (doMockWhenCreateReplPairAsSlave) {
+            log.info("Repl create repl pair as slave, mock, host: {}, port: {}, slot: {}", host, port, slot);
+        } else {
+            replPair.initAsSlave(netWorkerEventloop, requestHandler);
+            log.warn("Repl create repl pair as slave, host: {}, port: {}, slot: {}", host, port, slot);
+        }
         replPairs.add(replPair);
 
         if (!isReadonly()) {

@@ -634,4 +634,69 @@ class ManageCommandTest extends Specification {
         oneSlot.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test migrate from'() {
+        given:
+        def data6 = new byte[6][]
+
+        def mGroup = new MGroup('manage', data6, null)
+        mGroup.from(BaseCommand.mockAGroup())
+        def manage = new ManageCommand(mGroup)
+        manage.from(mGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        when:
+        data6[1] = 'slot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'migrate_from'.bytes
+        data6[4] = 'localhost'.bytes
+        data6[5] = '7379'.bytes
+        def reply = manage.migrateFrom(oneSlot)
+        then:
+        reply == ClusterxCommand.OK
+
+        when:
+        data6[5] = 'a'.bytes
+        reply = manage.migrateFrom(oneSlot)
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        def data7 = new byte[7][]
+        data7[1] = 'slot'.bytes
+        data7[2] = '0'.bytes
+        data7[3] = 'migrate_from'.bytes
+        data7[4] = 'localhost'.bytes
+        data7[5] = '7379'.bytes
+        data7[6] = ''.bytes
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        manage.data = data7
+        reply = manage.migrateFrom(oneSlot)
+        then:
+        reply == ClusterxCommand.OK
+
+        when:
+        oneSlot.removeReplPairAsSlave()
+        oneSlot.createReplPairAsSlave('localhost', 7380)
+        reply = manage.migrateFrom(oneSlot)
+        then:
+        // already slave of other host:port
+        reply instanceof ErrorReply
+
+        when:
+        data7[6] = 'force'.bytes
+        reply = manage.migrateFrom(oneSlot)
+        then:
+        reply == ClusterxCommand.OK
+
+        cleanup:
+        oneSlot.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

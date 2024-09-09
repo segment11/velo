@@ -1,6 +1,9 @@
 package io.velo.command
 
 import groovy.transform.CompileStatic
+import io.activej.common.function.RunnableEx
+import io.activej.common.function.SupplierEx
+import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.ConfForGlobal
 import io.velo.repl.ReplPair
@@ -112,33 +115,88 @@ migrating_state:ok
                 hostSet << node.host
             }
         }
-        def isClusterStateOk = slotSet.size() == MultiShard.TO_CLIENT_SLOT_NUMBER
+        def isAllToClientSlotSet = slotSet.size() == MultiShard.TO_CLIENT_SLOT_NUMBER
 
         def isMigrateFail = shards.any { ss ->
-            ss.migratingSlot == Shard.FAIL_MIGRATED_SLOT
+            ss.importMigratingSlot == Shard.FAIL_MIGRATED_SLOT || ss.exportMigratingSlot == Shard.FAIL_MIGRATED_SLOT
         }
         def isMigrateOk = shards.every { ss ->
-            ss.migratingSlot == Shard.NO_MIGRATING_SLOT
+            ss.importMigratingSlot == Shard.NO_MIGRATING_SLOT && ss.exportMigratingSlot == Shard.NO_MIGRATING_SLOT
         }
-        def migratingSlotShard = shards.find { ss ->
-            ss.migratingSlot != Shard.NO_MIGRATING_SLOT && ss.migratingSlot != Shard.FAIL_MIGRATED_SLOT
+        def importMigratingSlotShard = shards.find { ss ->
+            ss.importMigratingSlot >= 0
+        }
+        def exportMigratingSlotShard = shards.find { ss ->
+            ss.exportMigratingSlot >= 0
         }
 
         Map<String, Object> r = [:]
-        r.cluster_state = isClusterStateOk ? 'ok' : 'fail'
-        r.migrating_state = isMigrateOk ? 'success' : (isMigrateFail ? 'fail' : 'doing')
-        r.migrating_slot = migratingSlotShard ? migratingSlotShard.migratingSlot : Shard.NO_MIGRATING_SLOT
+        r.cluster_state = isAllToClientSlotSet ? 'ok' : 'fail'
         r.cluster_known_nodes = hostSet.size()
         r.cluster_current_epoch = multiShard.clusterCurrentEpoch
         r.cluster_my_epoch = multiShard.clusterMyEpoch
 
-        def lines = r.collect { entry ->
-            entry.key + ':' + entry.value
-        }.join("\r\n") + "\r\n"
+        SettablePromise<Reply> finalPromise = new SettablePromise<>()
+        def asyncReply = new AsyncReply(finalPromise)
 
-        new BulkReply(lines.bytes)
+        // check if already done
+        if (exportMigratingSlotShard) {
+            // check if repl pair as master, slave is catch up
+            def exportMigratingSlot = exportMigratingSlotShard.exportMigratingSlot
+            def innerSlot = MultiShard.asInnerSlotByToClientSlot(exportMigratingSlot)
+            def oneSlot = localPersist.oneSlot(innerSlot)
+
+            oneSlot.asyncCall(SupplierEx.of {
+                def replPairAsMasterList = oneSlot.replPairAsMasterList
+                def replPairAsMaster = replPairAsMasterList.find {
+                    it.host == exportMigratingSlotShard.migratingToHost && it.port == exportMigratingSlotShard.migratingToPort
+                }
+                if (!replPairAsMaster) {
+                    log.warn 'Clusterx repl pair as master not found, wait slave connect to master, slave host: {}, slave port: {}',
+                            exportMigratingSlotShard.migratingToHost, exportMigratingSlotShard.migratingToPort
+                    return false
+                }
+
+                if (replPairAsMaster.allCaughtUp) {
+                    oneSlot.readonly = true
+                    return true
+                } else {
+                    return false
+                }
+            }).whenComplete { isMigratingDone, e ->
+                if (e) {
+                    finalPromise.set(new ErrorReply('error when check repl pair as slave: ' + e.message))
+                    return
+                }
+
+                r.migrating_state = isMigratingDone ? 'success' : 'migrating'
+                r.import_migrating_slot = Shard.NO_MIGRATING_SLOT
+                r.export_migrating_slot = exportMigratingSlot
+
+                def lines = r.collect { entry ->
+                    entry.key + ':' + entry.value
+                }.join("\r\n") + "\r\n"
+
+                finalPromise.set(new BulkReply(lines.bytes))
+            }
+        } else {
+            r.migrating_state = isMigrateOk ? 'success' : (isMigrateFail ? 'fail' : 'migrating')
+            r.import_migrating_slot = importMigratingSlotShard ? importMigratingSlotShard.importMigratingSlot : Shard.NO_MIGRATING_SLOT
+            r.export_migrating_slot = exportMigratingSlotShard ? exportMigratingSlotShard.exportMigratingSlot : Shard.NO_MIGRATING_SLOT
+
+            def lines = r.collect { entry ->
+                entry.key + ':' + entry.value
+            }.join("\r\n") + "\r\n"
+
+            finalPromise.set(new BulkReply(lines.bytes))
+        }
+
+        asyncReply
     }
 
+    // refer to segment_kvrocks_controller
+    // after call 'clusterx migrate 0 toNodeId', need call 'manage slot 0 migrate_from host port force'
+    // refer ManageCommand
     @VisibleForTesting
     Reply migrate() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -150,33 +208,51 @@ migrating_state:ok
             return ErrorReply.FORMAT
         }
 
-        def slot = (short) Integer.parseInt(new String(data[2]))
+        def toClientSlot = (short) Integer.parseInt(new String(data[2]))
         def toNodeId = new String(data[3])
 
         def multiShard = localPersist.multiShard
         def shards = multiShard.shards
 
-        def shard = shards.find { ss ->
+        def selfShard = shards.find { ss -> ss.mySelf() != null }
+        def selfNode = selfShard.mySelf()
+        if (!selfNode.master) {
+            return new ErrorReply('only master can migrate slot')
+        }
+
+        def toShard = shards.find { ss ->
             ss.nodes.find { nn ->
                 nn.nodeId() == toNodeId
             } != null
         }
 
-        if (shard) {
-            shard.migratingSlot = slot
-
-            // todo, slot repl ***
-            // mock migrate done
-//            def firstOneSlot = localPersist.currentThreadFirstOneSlot()
-//            firstOneSlot.delayRun(1000 * 10, () -> {
-//                shard.migratingSlot = -1
-//            })
-
-            shard.migratingSlot = Shard.NO_MIGRATING_SLOT
-            OK
-        } else {
+        if (!toShard) {
             return new ErrorReply('node id not found: ' + toNodeId)
         }
+
+        if (selfShard == toShard) {
+            return new ErrorReply('self shard and target shard are the same')
+        }
+
+        def toShardMasterNode = toShard.master()
+        if (!toShardMasterNode) {
+            return new ErrorReply('to shard master node not found')
+        }
+
+        if (MultiShard.isToClientSlotSkip(toClientSlot)) {
+            return OK
+        }
+
+        selfShard.migratingToHost = toShardMasterNode.host
+        selfShard.migratingToPort = toShardMasterNode.port
+        selfShard.exportMigratingSlot = toClientSlot
+        log.warn 'Clusterx set self shard export migrating slot {} to node id {}', toClientSlot, toNodeId
+
+
+        toShard.importMigratingSlot = toClientSlot
+        log.warn 'Clusterx set target shard import migrating slot {} to node id {}', toClientSlot, toNodeId
+
+        OK
     }
 
     @VisibleForTesting
@@ -314,33 +390,50 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             return ErrorReply.FORMAT
         }
 
-        def slot = (short) Integer.parseInt(new String(data[2]))
+        def toClientSlot = (short) Integer.parseInt(new String(data[2]))
         def nodeId = new String(data[4])
         def clusterVersion = Integer.parseInt(new String(data[5]))
 
         def multiShard = localPersist.multiShard
         def shards = multiShard.shards
-        def shard = shards.find { ss ->
+        def toShard = shards.find { ss ->
             ss.nodes.find { nn ->
                 nn.nodeId() == nodeId
             }
         }
 
-        if (shard) {
-            shard.multiSlotRange.addOneSlot(slot)
-            shard.migratingSlot = Shard.NO_MIGRATING_SLOT
-            shards.each { ss ->
-                if (ss != shard) {
-                    ss.multiSlotRange.removeOneSlot(slot)
-                    ss.migratingSlot = Shard.NO_MIGRATING_SLOT
-                }
-            }
-            multiShard.updateClusterVersion(clusterVersion)
-        } else {
+        if (!toShard) {
             return new ErrorReply('node id not found: ' + nodeId)
         }
 
-        OK
+        toShard.multiSlotRange.addOneSlot(toClientSlot)
+        toShard.importMigratingSlot = Shard.NO_MIGRATING_SLOT
+        shards.each { ss ->
+            if (ss != toShard) {
+                ss.multiSlotRange.removeOneSlot(toClientSlot)
+                ss.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
+            }
+        }
+        multiShard.updateClusterVersion(clusterVersion)
+
+        def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
+        def oneSlot = localPersist.oneSlot(innerSlot)
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>()
+        def asyncReply = new AsyncReply(finalPromise)
+
+        oneSlot.asyncRun(RunnableEx.of {
+            oneSlot.canRead = true
+            oneSlot.readonly = false
+        }).whenComplete { done, e ->
+            if (e) {
+                finalPromise.set(new ErrorReply('error when set slot: ' + e.message))
+                return
+            }
+            finalPromise.set(OK)
+        }
+
+        asyncReply
     }
 
     @VisibleForTesting
