@@ -51,7 +51,7 @@ class LeaderSelectorTest extends Specification {
         ConfForGlobal.zookeeperRootPath = '/velo/cluster-test'
         ConfForGlobal.netListenAddresses = testListenAddress
 
-        boolean doThisCase = io.velo.persist.Consts.checkConnectAvailable()
+        boolean doThisCase = Consts.checkConnectAvailable()
         if (!doThisCase) {
             ConfForGlobal.zookeeperConnectString = null
             println 'zookeeper not running, skip'
@@ -218,6 +218,7 @@ class LeaderSelectorTest extends Specification {
         }
         r = future.get()
         then:
+        leaderSelector.lastResetAsMasterTimeMillis > 0
         !r
 
         when:
@@ -251,6 +252,22 @@ class LeaderSelectorTest extends Specification {
         then:
         r
 
+        when:
+        leaderSelector.masterAddressLocalMocked = 'localhost:7379'
+        future = new CompletableFuture()
+        leaderSelector.resetAsMaster(false) { e ->
+            if (e != null) {
+                println e.message
+                future.complete(false)
+            } else {
+                future.complete(true)
+            }
+        }
+        r = future.get()
+        then:
+        // use mock, just return
+        r
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
@@ -268,8 +285,10 @@ class LeaderSelectorTest extends Specification {
 
         and:
         def leaderSelector = LeaderSelector.instance
+        leaderSelector.masterAddressLocalMocked = null
 
         when:
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
         oneSlot.createReplPairAsSlave('localhost', 7379)
 
         CompletableFuture<Boolean> future = new CompletableFuture()
@@ -285,6 +304,7 @@ class LeaderSelectorTest extends Specification {
         then:
         // is already slave, exception caught
         !r
+        leaderSelector.lastResetAsSlaveTimeMillis > 0
 
         when:
         future = new CompletableFuture()
@@ -301,8 +321,25 @@ class LeaderSelectorTest extends Specification {
         // is already slave, target master is same, skip
         r
 
+        when:
+        leaderSelector.masterAddressLocalMocked = 'localhost:7379'
+        future = new CompletableFuture()
+        leaderSelector.resetAsSlave(false, 'localhost', 7379) { e ->
+            if (e != null) {
+                println e.message
+                future.complete(false)
+            } else {
+                future.complete(true)
+            }
+        }
+        r = future.get()
+        then:
+        // use mock, just return
+        r
+
         // need redis-server running
         when:
+        leaderSelector.masterAddressLocalMocked = null
         boolean doThisCase = false
         def map = ConfForSlot.global.slaveCanMatchCheckValues()
         def objectMapper = new ObjectMapper()

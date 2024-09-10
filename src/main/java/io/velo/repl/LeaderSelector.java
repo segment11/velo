@@ -253,13 +253,26 @@ public class LeaderSelector implements NeedCleanUp {
         disconnect();
     }
 
-    // run in primary eventloop
+    public long getLastResetAsMasterTimeMillis() {
+        return lastResetAsMasterTimeMillis;
+    }
+
+    public long getLastResetAsSlaveTimeMillis() {
+        return lastResetAsSlaveTimeMillis;
+    }
+
+    private long lastResetAsMasterTimeMillis;
+    private long lastResetAsSlaveTimeMillis;
+
+    // run in primary eventloop, slave of is running in net-worker thread, need check, todo
     public void resetAsMaster(boolean returnExceptionIfAlreadyIsMaster, Consumer<Exception> callback) {
         if (masterAddressLocalMocked != null) {
             callback.accept(null);
 //            callback.accept(new RuntimeException("just test callback when reset as master"));
             return;
         }
+
+        lastResetAsMasterTimeMillis = System.currentTimeMillis();
 
         var localPersist = LocalPersist.getInstance();
 
@@ -368,7 +381,7 @@ public class LeaderSelector implements NeedCleanUp {
         });
     }
 
-    // run in primary eventloop
+    // run in primary eventloop, slave of is running in net-worker thread, need check, todo
     public void resetAsSlave(boolean returnExceptionIfAlreadyIsSlave, String host, int port, Consumer<Exception> callback) {
         if (masterAddressLocalMocked != null) {
             callback.accept(null);
@@ -376,26 +389,28 @@ public class LeaderSelector implements NeedCleanUp {
             return;
         }
 
+        lastResetAsSlaveTimeMillis = System.currentTimeMillis();
+
         var localPersist = LocalPersist.getInstance();
 
         // when support cluster, need to check all slots, todo
         var firstOneSlot = localPersist.oneSlots()[0];
         var pp = firstOneSlot.asyncCall(firstOneSlot::getOnlyOneReplPairAsSlave);
 
-        pp.whenComplete((replPair, e) -> {
+        pp.whenComplete((replPairAsSlave, e) -> {
             if (e != null) {
                 callback.accept(e);
                 return;
             }
 
             boolean needCloseOldReplPairAsSlave = false;
-            if (replPair != null) {
+            if (replPairAsSlave != null) {
                 if (returnExceptionIfAlreadyIsSlave) {
                     callback.accept(new IllegalStateException("Repl already is slave"));
                     return;
                 }
 
-                if (replPair.getHost().equals(host) && replPair.getPort() == port) {
+                if (replPairAsSlave.getHost().equals(host) && replPairAsSlave.getPort() == port) {
                     // already is slave of target host and port
                     log.debug("Repl already is slave of target host and port: {}:{}", host, port);
                     callback.accept(null);
@@ -406,7 +421,7 @@ public class LeaderSelector implements NeedCleanUp {
             }
 
             if (needCloseOldReplPairAsSlave) {
-                log.warn("Repl slave ready to remove old repl pair as slave, old master: {}", replPair.getHostAndPort());
+                log.warn("Repl slave ready to remove old repl pair as slave, old master: {}", replPairAsSlave.getHostAndPort());
 
                 Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
                 for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
@@ -414,7 +429,7 @@ public class LeaderSelector implements NeedCleanUp {
                     // still is a slave, need not reset readonly
                     promises[i] = oneSlot.asyncRun(() -> {
                         oneSlot.removeReplPairAsSlave();
-                        log.warn("Repl slave removed old repl pair as slave, old master: {}", replPair.getHostAndPort());
+                        log.warn("Repl slave removed old repl pair as slave, old master: {}", replPairAsSlave.getHostAndPort());
 
                         oneSlot.getBinlog().moveToNextSegment();
                     });
@@ -434,7 +449,6 @@ public class LeaderSelector implements NeedCleanUp {
         });
     }
 
-    // in primary eventloop
     private void makeSelfAsSlave(String host, int port, Consumer<Exception> callback) {
         log.warn("Repl reset self as slave begin, check new master global config first, {}", ConfForGlobal.netListenAddresses);
         try {
