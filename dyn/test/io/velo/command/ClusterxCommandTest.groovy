@@ -273,10 +273,18 @@ class ClusterxCommandTest extends Specification {
         ConfForGlobal.clusterEnabled = true
         var multiShard = localPersist.multiShard
         var shards = multiShard.shards
+        def mySelfNodeId = shards[0].nodes[0].nodeId()
         def reply = clusterx.myid()
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw) == shards[0].nodes[0].nodeId()
+        new String(((BulkReply) reply).raw) == mySelfNodeId
+
+        when:
+        shards.clear()
+        reply = clusterx.myid()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw) == mySelfNodeId
 
         cleanup:
         localPersist.cleanUp()
@@ -315,6 +323,13 @@ class ClusterxCommandTest extends Specification {
         data3[1] = 'setnodeid'.bytes
         data3[2] = 'new_node_id'.bytes
         clusterx.data = data3
+        reply = clusterx.setnodeid()
+        then:
+        reply == ClusterxCommand.OK
+        shards[0].nodes[0].nodeId() == 'new_node_id'
+
+        when:
+        shards.clear()
         reply = clusterx.setnodeid()
         then:
         reply == ClusterxCommand.OK

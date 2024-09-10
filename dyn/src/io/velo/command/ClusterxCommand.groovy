@@ -269,8 +269,15 @@ migrating_state:ok
         def multiShard = localPersist.multiShard
 
         def mySelfShard = multiShard.mySelfShard()
-        def mySelfNode = mySelfShard.mySelfNode()
+        if (mySelfShard == null) {
+            def node = new Node()
+            def hostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
+            node.host = hostAndPort.host()
+            node.port = hostAndPort.port()
+            return new BulkReply(node.nodeId().bytes)
+        }
 
+        def mySelfNode = mySelfShard.mySelfNode()
         new BulkReply(mySelfNode.nodeId().bytes)
     }
 
@@ -305,9 +312,23 @@ migrating_state:ok
         def nodeIdFix = new String(data[2])
         def multiShard = localPersist.multiShard
 
-        def mySelfNode = multiShard.mySelfShard().mySelfNode()
-        mySelfNode.nodeIdFix = nodeIdFix
+        def mySelfShard = multiShard.mySelfShard()
+        if (mySelfShard == null) {
+            def node = new Node()
+            def hostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
+            node.host = hostAndPort.host()
+            node.port = hostAndPort.port()
+            node.master = true
+            node.mySelf = true
+            node.nodeIdFix = nodeIdFix
+            multiShard.shards << new Shard(nodes: [node])
+        } else {
+            def mySelfNode = mySelfShard.mySelfNode()
+            mySelfNode.nodeIdFix = nodeIdFix
+        }
+
         log.warn 'Clusterx set node id: {} for my self', nodeIdFix
+        multiShard.saveMeta()
 
         OK
     }
