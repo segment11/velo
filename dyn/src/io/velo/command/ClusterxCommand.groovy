@@ -152,7 +152,7 @@ migrating_state:ok
                     it.host == exportMigratingSlotShard.migratingToHost && it.port == exportMigratingSlotShard.migratingToPort
                 }
                 if (!replPairAsMaster) {
-                    log.warn 'Clusterx repl pair as master not found, wait slave connect to master, slave host: {}, slave port: {}',
+                    log.debug 'Clusterx repl pair as master not found, wait slave connect to master, slave host: {}, slave port: {}',
                             exportMigratingSlotShard.migratingToHost, exportMigratingSlotShard.migratingToPort
                     return false
                 }
@@ -316,6 +316,10 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
          */
         def args = new String(data[2])
         def lines = args.readLines().collect { it.trim() }.findAll { it }
+        log.info '--- setnodes ---'
+        lines.each {
+            log.info it
+        }
 
         def clusterVersion = new String(data[3]) as int
 
