@@ -50,6 +50,10 @@ class ClusterxCommand extends BaseCommand {
             return migrate()
         }
 
+        if ('myid' == subCmd) {
+            return myid()
+        }
+
         if ('nodes' == subCmd) {
             return nodes()
         }
@@ -253,6 +257,21 @@ migrating_state:ok
         log.warn 'Clusterx set target shard import migrating slot {} to node id {}', toClientSlot, toNodeId
 
         OK
+    }
+
+    @VisibleForTesting
+    Reply myid() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        def multiShard = localPersist.multiShard
+        def shards = multiShard.shards
+
+        def selfShard = shards.find { ss -> ss.mySelf() != null }
+        def selfNode = selfShard.mySelf()
+
+        new BulkReply(selfNode.nodeId().bytes)
     }
 
     @VisibleForTesting

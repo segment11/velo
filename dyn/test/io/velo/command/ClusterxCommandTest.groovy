@@ -51,6 +51,12 @@ class ClusterxCommandTest extends Specification {
         reply == ClusterxCommand.CLUSTER_DISABLED
 
         when:
+        data2[1] = 'myid'.bytes
+        reply = clusterx.handle()
+        then:
+        reply == ClusterxCommand.CLUSTER_DISABLED
+
+        when:
         data2[1] = 'nodes'.bytes
         reply = clusterx.handle()
         then:
@@ -224,6 +230,33 @@ class ClusterxCommandTest extends Specification {
         reply = clusterx.migrate()
         then:
         reply == ErrorReply.FORMAT
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test myid'() {
+        given:
+        def data2 = new byte[2][]
+
+        def cGroup = new CGroup('cluster', data2, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when:
+        ConfForGlobal.clusterEnabled = true
+        var multiShard = localPersist.multiShard
+        var shards = multiShard.shards
+        def reply = clusterx.myid()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw) == shards[0].nodes[0].nodeId()
 
         cleanup:
         localPersist.cleanUp()
