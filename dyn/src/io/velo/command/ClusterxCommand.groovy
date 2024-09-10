@@ -6,6 +6,7 @@ import io.activej.common.function.SupplierEx
 import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.ConfForGlobal
+import io.velo.repl.LeaderSelector
 import io.velo.repl.ReplPair
 import io.velo.repl.cluster.MultiShard
 import io.velo.repl.cluster.Node
@@ -398,7 +399,53 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         }
 
         def multiShard = localPersist.multiShard
+        def oldShards = multiShard.shards
+        def oldSelfShard = oldShards.find { ss -> ss.mySelf() != null }
+        def oldSelfNode = oldSelfShard.mySelf()
+
         multiShard.refreshAllShards(shards, clusterVersion)
+
+        def selfShard = shards.find { ss -> ss.mySelf() != null }
+        def selfNode = selfShard.mySelf()
+        // check if fail over
+        // slave to master
+        if (selfNode.master && !oldSelfNode.master) {
+            SettablePromise<Reply> finalPromise = new SettablePromise<>()
+            def asyncReply = new AsyncReply(finalPromise)
+
+            def leaderSelector = LeaderSelector.instance
+            leaderSelector.resetAsMaster(false, (e) -> {
+                if (e != null) {
+                    log.error('Reset as master failed', e)
+                    finalPromise.set(new ErrorReply('error when reset as master: ' + e.message))
+                } else {
+                    log.debug('Reset as master success')
+                    finalPromise.set(OK)
+                }
+            })
+            return asyncReply
+        }
+
+        // master to slave
+        if (!selfNode.master && oldSelfNode.master) {
+            def toMasterNode = selfShard.master()
+
+            SettablePromise<Reply> finalPromise = new SettablePromise<>()
+            def asyncReply = new AsyncReply(finalPromise)
+
+            def leaderSelector = LeaderSelector.instance
+            leaderSelector.resetAsSlave(false, toMasterNode.host, toMasterNode.port, (e) -> {
+                if (e != null) {
+                    log.error('Reset as slave failed', e)
+                    finalPromise.set(new ErrorReply('error when reset as master: ' + e.message))
+                } else {
+                    log.debug('Reset as slave success')
+                    finalPromise.set(OK)
+                }
+            })
+            return asyncReply
+        }
+
         OK
     }
 

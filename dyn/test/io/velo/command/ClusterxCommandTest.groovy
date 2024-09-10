@@ -5,6 +5,7 @@ import io.velo.ConfForGlobal
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
+import io.velo.repl.LeaderSelector
 import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
 import io.velo.reply.*
@@ -115,6 +116,9 @@ class ClusterxCommandTest extends Specification {
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        def shard0 = localPersist.multiShard.shards[0]
 
         when:
         ConfForGlobal.clusterEnabled = true
@@ -123,34 +127,50 @@ class ClusterxCommandTest extends Specification {
         infoToLines((AsyncReply) reply).find { it.contains('cluster_state:fail') } != null
 
         when:
-        localPersist.multiShard.shards[0].multiSlotRange.addSingle(0, 16383)
+        shard0.multiSlotRange.addSingle(0, 16383)
         reply = clusterx.info()
         then:
         infoToLines((AsyncReply) reply).find { it.contains('cluster_state:ok') } != null
         infoToLines((AsyncReply) reply).find { it.contains('migrating_state:success') } != null
 
         when:
-        localPersist.multiShard.shards[0].exportMigratingSlot = Shard.FAIL_MIGRATED_SLOT
+        shard0.exportMigratingSlot = Shard.FAIL_MIGRATED_SLOT
         reply = clusterx.info()
         then:
         infoToLines((AsyncReply) reply).find { it.contains('migrating_state:fail') } != null
 
         when:
-        localPersist.multiShard.shards[0].exportMigratingSlot = Shard.NO_MIGRATING_SLOT
-        localPersist.multiShard.shards[0].importMigratingSlot = Shard.FAIL_MIGRATED_SLOT
+        shard0.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
+        shard0.importMigratingSlot = Shard.FAIL_MIGRATED_SLOT
         reply = clusterx.info()
         then:
         infoToLines((AsyncReply) reply).find { it.contains('migrating_state:fail') } != null
 
         when:
-        localPersist.multiShard.shards[0].exportMigratingSlot = 0
+        shard0.exportMigratingSlot = 0
         reply = clusterx.info()
         then:
         infoToLines((AsyncReply) reply).find { it.contains('migrating_slot:0') } != null
 
         when:
-        localPersist.multiShard.shards[0].exportMigratingSlot = Shard.NO_MIGRATING_SLOT
-        localPersist.multiShard.shards[0].importMigratingSlot = 0
+        shard0.migratingToHost = 'localhost'
+        shard0.migratingToPort = 7380
+        oneSlot.createIfNotExistReplPairAsMaster(11L, 'localhost', 7380)
+        reply = clusterx.info()
+        then:
+        infoToLines((AsyncReply) reply).find { it.contains('migrating_slot:0') } != null
+        infoToLines((AsyncReply) reply).find { it.contains('migrating_state:migrating') } != null
+
+        when:
+        oneSlot.replPairAsMasterList[0].allCaughtUp = true
+        reply = clusterx.info()
+        then:
+        infoToLines((AsyncReply) reply).find { it.contains('migrating_slot:0') } != null
+        infoToLines((AsyncReply) reply).find { it.contains('migrating_state:success') } != null
+
+        when:
+        shard0.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
+        shard0.importMigratingSlot = 0
         reply = clusterx.info()
         then:
         infoToLines((AsyncReply) reply).find { it.contains('migrating_slot:0') } != null
@@ -307,17 +327,36 @@ class ClusterxCommandTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        def leaderSelector = LeaderSelector.instance
+        leaderSelector.masterAddressLocalMocked = 'localhost:7379'
         def data4 = new byte[4][]
         data4[1] = 'setnodes'.bytes
         data4[2] = 'new_node_id localhost 7379 master - 0 10-20 \nnew_node_id2 localhost 7380 slave new_node_id\n'.bytes
         // cluster version
         data4[3] = '1'.bytes
         clusterx.data = data4
+        // master not change
         reply = clusterx.setnodes()
         then:
         reply == ClusterxCommand.OK
         shards[0].nodes.size() == 2
         shards[0].multiSlotRange.list.size() == 2
+
+        when:
+        // master to slave
+        data4[2] = 'new_node_id2 localhost 7380 master - 0 10-20 \nnew_node_id localhost 7379 slave new_node_id2\n'.bytes
+        reply = clusterx.setnodes()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
+
+        when:
+        // slave to master
+        data4[2] = 'new_node_id localhost 7379 master - 0 10-20 \nnew_node_id2 localhost 7380 slave new_node_id\n'.bytes
+        reply = clusterx.setnodes()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
 
         cleanup:
         localPersist.cleanUp()
