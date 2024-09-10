@@ -358,6 +358,14 @@ class ClusterxCommandTest extends Specification {
         reply instanceof AsyncReply
         ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
 
+        when:
+        // delete from cluster, reset as master
+        data4[2] = 'new_node_id2 localhost 7380 master - 0 10-20 \n'.bytes
+        reply = clusterx.setnodes()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()

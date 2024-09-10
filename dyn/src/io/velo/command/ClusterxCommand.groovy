@@ -400,11 +400,23 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
         multiShard.refreshAllShards(shards, clusterVersion)
 
+        boolean resetMySelfAsMaster = false
+        boolean resetMySelfAsSlave = false
+
         def mySelfShard = multiShard.mySelfShard()
-        def mySelfNode = mySelfShard.mySelfNode()
-        // check if fail over
-        // slave to master
-        if (mySelfNode.master && !oldSelfNode.master) {
+        if (mySelfShard == null) {
+            // delete my self node from cluster, reset as master
+            resetMySelfAsMaster = true
+        } else {
+            def mySelfNode = mySelfShard.mySelfNode()
+            if (mySelfNode.master && !oldSelfNode.master) {
+                resetMySelfAsMaster = true
+            } else if (!mySelfNode.master && oldSelfNode.master) {
+                resetMySelfAsSlave = true
+            }
+        }
+
+        if (resetMySelfAsMaster) {
             SettablePromise<Reply> finalPromise = new SettablePromise<>()
             def asyncReply = new AsyncReply(finalPromise)
 
@@ -421,8 +433,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             return asyncReply
         }
 
-        // master to slave
-        if (!mySelfNode.master && oldSelfNode.master) {
+        if (resetMySelfAsSlave) {
             def toMasterNode = mySelfShard.master()
 
             SettablePromise<Reply> finalPromise = new SettablePromise<>()
