@@ -415,9 +415,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         }
 
         def multiShard = localPersist.multiShard
-        def oldShards = multiShard.shards
-        def oldSelfShard = oldShards.find { ss -> ss.mySelfNode() != null }
-        def oldSelfNode = oldSelfShard.mySelfNode()
+        def oldMySelfShard = multiShard.mySelfShard()
 
         multiShard.refreshAllShards(shards, clusterVersion)
 
@@ -425,14 +423,15 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         boolean resetMySelfAsSlave = false
 
         def mySelfShard = multiShard.mySelfShard()
-        if (mySelfShard == null) {
+        if (mySelfShard == null || oldMySelfShard == null) {
             // delete my self node from cluster, reset as master
             resetMySelfAsMaster = true
         } else {
+            def oldMySelfNode = oldMySelfShard.mySelfNode()
             def mySelfNode = mySelfShard.mySelfNode()
-            if (mySelfNode.master && !oldSelfNode.master) {
+            if (mySelfNode.master && !oldMySelfNode.master) {
                 resetMySelfAsMaster = true
-            } else if (!mySelfNode.master && oldSelfNode.master) {
+            } else if (!mySelfNode.master && oldMySelfNode.master) {
                 resetMySelfAsSlave = true
             }
         }
