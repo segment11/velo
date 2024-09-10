@@ -65,8 +65,8 @@ public class Node {
     String host;
     int port;
     boolean isMySelf;
-    String followNodeId;
-    String nodeIdFix;
+    private String followNodeId;
+    private String nodeIdFix;
 
     private static final int NODE_ID_LENGTH = 40;
     private static final String NODE_ID_PREFIX = "velo_node_";
