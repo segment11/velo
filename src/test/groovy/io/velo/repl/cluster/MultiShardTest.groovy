@@ -26,6 +26,17 @@ class MultiShardTest extends Specification {
         multiShard.clusterCurrentEpoch == 1
 
         when:
+        multiShard.shards[0].nodes[0].mySelf = false
+        multiShard.shards[1].nodes[0].mySelf = true
+        then:
+        multiShard.mySelfShard() == multiShard.shards[1]
+
+        when:
+        multiShard.shards[1].nodes[0].mySelf = false
+        then:
+        multiShard.mySelfShard() == null
+
+        when:
         def multiShard2 = new MultiShard(Consts.persistDir)
         then:
         multiShard2.shards.size() == 2

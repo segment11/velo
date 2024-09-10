@@ -85,7 +85,7 @@ public class Shard {
         return null;
     }
 
-    public Node mySelf() {
+    public Node mySelfNode() {
         for (var node : nodes) {
             if (node.isMySelf) {
                 return node;

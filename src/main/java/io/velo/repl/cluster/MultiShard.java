@@ -68,6 +68,17 @@ vars currentEpoch 0 lastVoteEpoch 0
         }
     }
 
+    public Shard mySelfShard() {
+        for (var shard : shards) {
+            for (var node : shard.getNodes()) {
+                if (node.isMySelf()) {
+                    return shard;
+                }
+            }
+        }
+        return null;
+    }
+
     @VisibleForTesting
     synchronized void loadMeta() throws IOException {
         var metaFile = new File(persistDir, metaFileName);

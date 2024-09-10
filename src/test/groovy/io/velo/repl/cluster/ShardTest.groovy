@@ -11,7 +11,7 @@ class ShardTest extends Specification {
         expect:
         shard.master() == null
         shard.slave(0) == null
-        shard.mySelf() == null
+        shard.mySelfNode() == null
 
         when:
         shard.nodes = []
@@ -22,7 +22,7 @@ class ShardTest extends Specification {
         then:
         shard.master() != null
         shard.slave(0) == null
-        shard.mySelf() != null
+        shard.mySelfNode() != null
         shard.contains(0)
 
         when:
@@ -35,13 +35,13 @@ class ShardTest extends Specification {
         then:
         shard.slave(0) != null
         shard.slave(1) == null
-        shard.mySelf() != null
+        shard.mySelfNode() != null
         clusterNodesSlotRangeList.size() == 2
 
         when:
         shard.nodes[0].mySelf = false
         then:
-        shard.mySelf() == null
+        shard.mySelfNode() == null
 
         when:
         shard.nodes.clear()

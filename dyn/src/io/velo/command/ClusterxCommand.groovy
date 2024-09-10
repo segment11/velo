@@ -108,7 +108,7 @@ migrating_state:ok
         def shards = multiShard.shards
 
         TreeSet<Integer> slotSet = []
-        TreeSet<String> hostSet = []
+        TreeSet<String> hostWithPortSet = []
         shards.each { ss ->
             ss.multiSlotRange.list.each { sr ->
                 for (i in sr.begin..sr.end) {
@@ -117,7 +117,7 @@ migrating_state:ok
             }
 
             ss.nodes.each { node ->
-                hostSet << node.host
+                hostWithPortSet << (node.host + ':' + node.port)
             }
         }
         def isAllToClientSlotSet = slotSet.size() == MultiShard.TO_CLIENT_SLOT_NUMBER
@@ -137,7 +137,7 @@ migrating_state:ok
 
         Map<String, Object> r = [:]
         r.cluster_state = isAllToClientSlotSet ? 'ok' : 'fail'
-        r.cluster_known_nodes = hostSet.size()
+        r.cluster_known_nodes = hostWithPortSet.size()
         r.cluster_current_epoch = multiShard.clusterCurrentEpoch
         r.cluster_my_epoch = multiShard.clusterMyEpoch
 
@@ -217,14 +217,14 @@ migrating_state:ok
         def toNodeId = new String(data[3])
 
         def multiShard = localPersist.multiShard
-        def shards = multiShard.shards
 
-        def selfShard = shards.find { ss -> ss.mySelf() != null }
-        def selfNode = selfShard.mySelf()
-        if (!selfNode.master) {
+        def mySelfShard = multiShard.mySelfShard()
+        def mySelfNode = mySelfShard.mySelfNode()
+        if (!mySelfNode.master) {
             return new ErrorReply('only master can migrate slot')
         }
 
+        def shards = multiShard.shards
         def toShard = shards.find { ss ->
             ss.nodes.find { nn ->
                 nn.nodeId() == toNodeId
@@ -235,7 +235,7 @@ migrating_state:ok
             return new ErrorReply('node id not found: ' + toNodeId)
         }
 
-        if (selfShard == toShard) {
+        if (mySelfShard == toShard) {
             return new ErrorReply('self shard and target shard are the same')
         }
 
@@ -248,10 +248,10 @@ migrating_state:ok
             return OK
         }
 
-        selfShard.migratingToHost = toShardMasterNode.host
-        selfShard.migratingToPort = toShardMasterNode.port
-        selfShard.exportMigratingSlot = toClientSlot
-        log.warn 'Clusterx set self shard export migrating slot {} to node id {}', toClientSlot, toNodeId
+        mySelfShard.migratingToHost = toShardMasterNode.host
+        mySelfShard.migratingToPort = toShardMasterNode.port
+        mySelfShard.exportMigratingSlot = toClientSlot
+        log.warn 'Clusterx set my self shard export migrating slot {} to node id {}', toClientSlot, toNodeId
 
 
         toShard.importMigratingSlot = toClientSlot
@@ -267,12 +267,11 @@ migrating_state:ok
         }
 
         def multiShard = localPersist.multiShard
-        def shards = multiShard.shards
 
-        def selfShard = shards.find { ss -> ss.mySelf() != null }
-        def selfNode = selfShard.mySelf()
+        def mySelfShard = multiShard.mySelfShard()
+        def mySelfNode = mySelfShard.mySelfNode()
 
-        new BulkReply(selfNode.nodeId().bytes)
+        new BulkReply(mySelfNode.nodeId().bytes)
     }
 
     @VisibleForTesting
@@ -305,14 +304,10 @@ migrating_state:ok
 
         def nodeIdFix = new String(data[2])
         def multiShard = localPersist.multiShard
-        def shards = multiShard.shards
-        shards.each { ss ->
-            def selfNode = ss.nodes.find { nn -> nn.mySelf }
-            if (selfNode) {
-                selfNode.nodeIdFix = nodeIdFix
-                log.warn 'Clusterx set node id: {} for self', nodeIdFix
-            }
-        }
+
+        def mySelfNode = multiShard.mySelfShard().mySelfNode()
+        mySelfNode.nodeIdFix = nodeIdFix
+        log.warn 'Clusterx set node id: {} for my self', nodeIdFix
 
         OK
     }
@@ -343,7 +338,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
         def clusterVersion = new String(data[3]) as int
 
-        var selfHostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
+        def mySelfHostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
 
         ArrayList<Shard> shards = []
         lines.findAll { it.contains('master') }.each {
@@ -353,7 +348,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             node.host = arr[1]
             node.port = arr[2] as int
             node.master = true
-            node.mySelf = node.host == selfHostAndPort.host() && node.port == selfHostAndPort.port()
+            node.mySelf = node.host == mySelfHostAndPort.host() && node.port == mySelfHostAndPort.port()
 
             def shard = new Shard()
             shard.nodes << node
@@ -386,7 +381,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             node.host = arr[1]
             node.port = arr[2] as int
             node.master = false
-            node.mySelf = node.host == selfHostAndPort.host() && node.port == selfHostAndPort.port()
+            node.mySelf = node.host == mySelfHostAndPort.host() && node.port == mySelfHostAndPort.port()
             def followNodeId = arr[4]
             node.followNodeId = followNodeId
 
@@ -400,16 +395,16 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
         def multiShard = localPersist.multiShard
         def oldShards = multiShard.shards
-        def oldSelfShard = oldShards.find { ss -> ss.mySelf() != null }
-        def oldSelfNode = oldSelfShard.mySelf()
+        def oldSelfShard = oldShards.find { ss -> ss.mySelfNode() != null }
+        def oldSelfNode = oldSelfShard.mySelfNode()
 
         multiShard.refreshAllShards(shards, clusterVersion)
 
-        def selfShard = shards.find { ss -> ss.mySelf() != null }
-        def selfNode = selfShard.mySelf()
+        def mySelfShard = multiShard.mySelfShard()
+        def mySelfNode = mySelfShard.mySelfNode()
         // check if fail over
         // slave to master
-        if (selfNode.master && !oldSelfNode.master) {
+        if (mySelfNode.master && !oldSelfNode.master) {
             SettablePromise<Reply> finalPromise = new SettablePromise<>()
             def asyncReply = new AsyncReply(finalPromise)
 
@@ -427,8 +422,8 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         }
 
         // master to slave
-        if (!selfNode.master && oldSelfNode.master) {
-            def toMasterNode = selfShard.master()
+        if (!mySelfNode.master && oldSelfNode.master) {
+            def toMasterNode = mySelfShard.master()
 
             SettablePromise<Reply> finalPromise = new SettablePromise<>()
             def asyncReply = new AsyncReply(finalPromise)
