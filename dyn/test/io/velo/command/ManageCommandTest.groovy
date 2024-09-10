@@ -26,9 +26,18 @@ class ManageCommandTest extends Specification {
         def data5 = new byte[5][]
         data5[1] = 'slot'.bytes
         data5[2] = '0'.bytes
+        data5[3] = 'sub_cmd'.bytes
         def sList = _ManageCommand.parseSlots('manage', data5, 1)
         then:
         sList.size() == 1
+
+        when:
+        data5[2] = '8192'.bytes
+        data5[3] = 'migrate_from'.bytes
+        sList = _ManageCommand.parseSlots('manage', data5, 1)
+        then:
+        sList.size() == 1
+        sList[0].slot() == 0
 
         when:
         data5[2] = 'a'.bytes
@@ -691,6 +700,13 @@ class ManageCommandTest extends Specification {
 
         when:
         data7[6] = 'force'.bytes
+        reply = manage.migrateFrom(oneSlot)
+        then:
+        reply == ClusterxCommand.OK
+
+        when:
+        // skip
+        data7[2] = '1'.bytes
         reply = manage.migrateFrom(oneSlot)
         then:
         reply == ClusterxCommand.OK

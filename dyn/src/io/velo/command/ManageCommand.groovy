@@ -10,6 +10,7 @@ import io.velo.Debug
 import io.velo.TrainSampleJob
 import io.velo.persist.Chunk
 import io.velo.persist.OneSlot
+import io.velo.repl.cluster.MultiShard
 import io.velo.repl.support.JedisPoolHolder
 import io.velo.reply.*
 import io.velo.type.RedisHH
@@ -54,6 +55,13 @@ class ManageCommand extends BaseCommand {
                 slot = Short.parseShort(new String(slotBytes))
             } catch (NumberFormatException ignored) {
                 return r
+            }
+
+            def subSubCmd = new String(data[3])
+            if (subSubCmd == 'migrate_from') {
+                // given slot is to client slot, change to inner slot
+                // use can use the right event loop
+                slot = MultiShard.asInnerSlotByToClientSlot(slot)
             }
 
             r.add(new SlotWithKeyHash(slot, 0, 0L))
@@ -282,6 +290,11 @@ class ManageCommand extends BaseCommand {
         // manage slot 0 migrate_from localhost 7379 force
         if (data.length != 6 && data.length != 7) {
             return ErrorReply.FORMAT
+        }
+
+        def toClientSlot = Short.parseShort(new String(data[2]))
+        if (MultiShard.isToClientSlotSkip(toClientSlot)) {
+            return ClusterxCommand.OK
         }
 
         def host = new String(data[4])
