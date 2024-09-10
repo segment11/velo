@@ -61,6 +61,7 @@ vars currentEpoch 0 lastVoteEpoch 0
             node.host = hostAndPort.host();
             node.port = hostAndPort.port();
             node.setMySelf(true);
+            // with blank slot range
 
             shard.getNodes().add(node);
 
