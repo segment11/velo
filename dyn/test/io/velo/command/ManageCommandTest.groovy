@@ -633,6 +633,26 @@ class ManageCommandTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        data5[3] = 'migrate_from'.bytes
+        manage.data = data5
+        reply = manage.manageInOneSlot()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        data5[2] = '16384'.bytes
+        reply = manage.manageInOneSlot()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        data5[2] = '1'.bytes
+        data5[3] = 'view-metrics'.bytes
+        reply = manage.manageInOneSlot()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
         def data1 = new byte[1][]
         manage.data = data1
         reply = manage.manageInOneSlot()
@@ -665,13 +685,14 @@ class ManageCommandTest extends Specification {
         data6[3] = 'migrate_from'.bytes
         data6[4] = 'localhost'.bytes
         data6[5] = '7379'.bytes
-        def reply = manage.migrateFrom(oneSlot)
+        manage.slotWithKeyHashListParsed = manage.parseSlots('manage', data6, manage.slotNumber)
+        def reply = manage.migrateFrom()
         then:
         reply == ClusterxCommand.OK
 
         when:
         data6[5] = 'a'.bytes
-        reply = manage.migrateFrom(oneSlot)
+        reply = manage.migrateFrom()
         then:
         reply == ErrorReply.INVALID_INTEGER
 
@@ -686,33 +707,34 @@ class ManageCommandTest extends Specification {
         oneSlot.doMockWhenCreateReplPairAsSlave = true
         oneSlot.createReplPairAsSlave('localhost', 7379)
         manage.data = data7
-        reply = manage.migrateFrom(oneSlot)
+        manage.slotWithKeyHashListParsed = manage.parseSlots('manage', data7, manage.slotNumber)
+        reply = manage.migrateFrom()
         then:
         reply == ClusterxCommand.OK
 
         when:
         oneSlot.removeReplPairAsSlave()
         oneSlot.createReplPairAsSlave('localhost', 7380)
-        reply = manage.migrateFrom(oneSlot)
+        reply = manage.migrateFrom()
         then:
         // already slave of other host:port
         reply instanceof ErrorReply
 
         when:
         data7[6] = 'force'.bytes
-        reply = manage.migrateFrom(oneSlot)
+        reply = manage.migrateFrom()
         then:
         reply == ClusterxCommand.OK
 
         when:
         // skip
         data7[2] = '1'.bytes
-        reply = manage.migrateFrom(oneSlot)
+        reply = manage.migrateFrom()
         then:
         reply == ClusterxCommand.OK
 
         cleanup:
-        oneSlot.cleanUp()
+        localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
 }
