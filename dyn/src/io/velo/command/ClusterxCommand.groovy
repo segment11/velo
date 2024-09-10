@@ -163,7 +163,9 @@ migrating_state:ok
                 }
 
                 if (replPairAsMaster.allCaughtUp) {
-                    oneSlot.readonly = true
+                    if (!oneSlot.readonly) {
+                        oneSlot.readonly = true
+                    }
                     return true
                 } else {
                     return false
@@ -534,8 +536,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         def asyncReply = new AsyncReply(finalPromise)
 
         oneSlot.asyncRun(RunnableEx.of {
-            oneSlot.canRead = true
-            oneSlot.readonly = false
+            oneSlot.resetReadonlyFalseAsMaster()
         }).whenComplete { done, e ->
             if (e) {
                 finalPromise.set(new ErrorReply('error when set slot: ' + e.message))
