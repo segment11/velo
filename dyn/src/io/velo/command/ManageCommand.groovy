@@ -9,7 +9,6 @@ import io.velo.ConfForSlot
 import io.velo.Debug
 import io.velo.TrainSampleJob
 import io.velo.persist.Chunk
-import io.velo.persist.OneSlot
 import io.velo.repl.cluster.MultiShard
 import io.velo.repl.support.JedisPoolHolder
 import io.velo.reply.*
@@ -25,8 +24,6 @@ import static io.velo.TrainSampleJob.MIN_TRAIN_SAMPLE_SIZE
 
 @CompileStatic
 class ManageCommand extends BaseCommand {
-    static final String version = '1.0.1'
-
     ManageCommand() {
         super(null, null, null)
     }
@@ -42,7 +39,7 @@ class ManageCommand extends BaseCommand {
             return r
         }
 
-        def subCmd = new String(data[1])
+        def subCmd = new String(data[1]).toLowerCase()
         // manage slot 0 bucket 0 view-key-count
         if (subCmd == 'slot') {
             if (data.length < 5) {
@@ -57,7 +54,7 @@ class ManageCommand extends BaseCommand {
                 return r
             }
 
-            def subSubCmd = new String(data[3])
+            def subSubCmd = new String(data[3]).toLowerCase()
             if (subSubCmd == 'migrate_from') {
                 // given slot is to client slot, change to inner slot
                 // use can use the right event loop
@@ -73,13 +70,11 @@ class ManageCommand extends BaseCommand {
 
     @Override
     Reply handle() {
-        log.info 'Dyn manage command version: {}', version
-
         if (data.length < 2) {
             return ErrorReply.FORMAT
         }
 
-        def subCmd = new String(data[1])
+        def subCmd = new String(data[1]).toLowerCase()
 
         // cross slots
         if (subCmd == 'debug') {
@@ -118,6 +113,15 @@ class ManageCommand extends BaseCommand {
             return ErrorReply.INVALID_INTEGER
         }
 
+        def tmpSubSubCmd = new String(data[3]).toLowerCase()
+        if (tmpSubSubCmd == 'migrate_from') {
+            def toClientSlot = slot
+            if (toClientSlot >= MultiShard.TO_CLIENT_SLOT_NUMBER) {
+                return ErrorReply.INVALID_INTEGER
+            }
+            return migrateFrom()
+        }
+
         if (slot >= slotNumber) {
             return ErrorReply.INVALID_INTEGER
         }
@@ -125,7 +129,7 @@ class ManageCommand extends BaseCommand {
         int bucketIndex = -1
 
         int subSubCmdIndex = 3
-        def isInspectBucket = 'bucket' == new String(data[3])
+        def isInspectBucket = 'bucket' == new String(data[3]).toLowerCase()
         if (isInspectBucket) {
             def bucketIndexBytes = data[4]
 
@@ -144,7 +148,7 @@ class ManageCommand extends BaseCommand {
 
         def oneSlot = localPersist.oneSlot(slot)
 
-        def subSubCmd = new String(data[subSubCmdIndex])
+        def subSubCmd = new String(data[subSubCmdIndex]).toLowerCase()
         if (subSubCmd == 'view-metrics') {
             // http url: ?manage&slot&0&view-metrics
             def all = oneSlot.collect()
@@ -168,7 +172,7 @@ class ManageCommand extends BaseCommand {
             return new IntegerReply(keyCount)
         } else if (subSubCmd == 'view-bucket-keys') {
             // manage slot 0 bucket 0 view-bucket-keys [iterate]
-            def isIterate = data.length == subSubCmdIndex + 2 && new String(data[data.length - 1]) == 'iterate'
+            def isIterate = data.length == subSubCmdIndex + 2 && new String(data[data.length - 1]).toLowerCase() == 'iterate'
 
             // if not set bucket index, default 0
             if (bucketIndex == -1) {
@@ -278,15 +282,13 @@ class ManageCommand extends BaseCommand {
         } else if (subSubCmd == 'set-not-can-read') {
             oneSlot.canRead = false
             return new BulkReply(('slot ' + slot + ' set not can read').bytes)
-        } else if (subSubCmd == 'migrate_from') {
-            return migrateFrom(oneSlot)
         }
 
         return ErrorReply.SYNTAX
     }
 
     @VisibleForTesting
-    Reply migrateFrom(OneSlot oneSlot) {
+    Reply migrateFrom() {
         // manage slot 0 migrate_from localhost 7379 force
         if (data.length != 6 && data.length != 7) {
             return ErrorReply.FORMAT
@@ -305,7 +307,11 @@ class ManageCommand extends BaseCommand {
         } catch (NumberFormatException ignore) {
             return ErrorReply.INVALID_INTEGER
         }
-        def force = data.length == 7 && new String(data[6]) == 'force'
+        def force = data.length == 7 && new String(data[6]).toLowerCase() == 'force'
+
+        def innerSlot = slotWithKeyHashListParsed.first.slot()
+//        def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
+        def oneSlot = localPersist.oneSlot(innerSlot)
 
         var replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
         if (replPairAsSlave) {
@@ -373,7 +379,7 @@ class ManageCommand extends BaseCommand {
             return ErrorReply.FORMAT
         }
 
-        def subSubCmd = new String(data[2])
+        def subSubCmd = new String(data[2]).toLowerCase()
         if (subSubCmd == 'set-key-prefix-groups') {
             // manage dict set-key-prefix-groups keyPrefix1,keyPrefix2
             if (data.length != 4) {
@@ -592,7 +598,7 @@ class ManageCommand extends BaseCommand {
             return ErrorReply.FORMAT
         }
 
-        def subSubCmd = new String(data[2])
+        def subSubCmd = new String(data[2]).toLowerCase()
         if (subSubCmd == 'log-switch') {
             if (data.length != 5) {
                 return ErrorReply.FORMAT
