@@ -359,6 +359,13 @@ class ClusterxCommandTest extends Specification {
         !shard2.multiSlotRange.contains(0)
 
         when:
+        // not margin
+        data6[2] = '1'.bytes
+        reply = clusterx.setslot()
+        then:
+        reply == ClusterxCommand.OK
+
+        when:
         data6[4] = 'xxx_not_exist_node_id'.bytes
         reply = clusterx.setslot()
         then:

@@ -406,17 +406,32 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             return new ErrorReply('node id not found: ' + nodeId)
         }
 
-        toShard.multiSlotRange.addOneSlot(toClientSlot)
+        if (MultiShard.isToClientSlotSkip(toClientSlot)) {
+            // already set batch when margin
+            return OK
+        }
+
+        // set batch
+        def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
+        int toClientSlotEnd = toClientSlot + (MultiShard.TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber).intValue()
+        TreeSet<Integer> set = []
+        TreeSet<Integer> setEmpty = []
+        for (int i = toClientSlot; i < toClientSlotEnd; i++) {
+            set << i
+        }
+
+        // add
+        toShard.multiSlotRange.removeOrAddSet(setEmpty, set)
         toShard.importMigratingSlot = Shard.NO_MIGRATING_SLOT
         shards.each { ss ->
             if (ss != toShard) {
-                ss.multiSlotRange.removeOneSlot(toClientSlot)
+                // remove
+                ss.multiSlotRange.removeOrAddSet(set, setEmpty)
                 ss.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
             }
         }
         multiShard.updateClusterVersion(clusterVersion)
 
-        def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
         def oneSlot = localPersist.oneSlot(innerSlot)
 
         SettablePromise<Reply> finalPromise = new SettablePromise<>()
