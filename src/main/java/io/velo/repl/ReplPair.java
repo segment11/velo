@@ -356,7 +356,7 @@ public class ReplPair {
                 slaveConnectSocketInMaster.close();
                 log.warn("Repl pair master close slave socket, {}:{}", host, port);
             } catch (Exception e) {
-                log.error("Repl pair master close slave socket error, {}:{}", host, port, e);
+                log.error("Repl pair master close slave socket error: {}, {}:{}", e.getMessage(), host, port);
             } finally {
                 slaveConnectSocketInMaster = null;
             }
