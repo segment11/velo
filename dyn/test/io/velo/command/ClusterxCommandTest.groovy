@@ -448,7 +448,8 @@ class ClusterxCommandTest extends Specification {
         data6[4] = shard1.nodes[0].nodeId().bytes
         reply = clusterx.setslot()
         then:
-        reply == ClusterxCommand.OK
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
 
         when:
         shard1.multiSlotRange.addSingle(0, 8191)
@@ -463,11 +464,12 @@ class ClusterxCommandTest extends Specification {
         !shard1.multiSlotRange.contains(0)
 
         when:
-        // no myself node, ignore
+        // no myself node, flush
         shard0.nodes[0].mySelf = false
         reply = clusterx.setslot()
         then:
-        reply == ClusterxCommand.OK
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
 
         when:
         // not margin

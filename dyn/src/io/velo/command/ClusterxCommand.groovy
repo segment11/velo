@@ -538,18 +538,18 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             isMySelfNodeChargeThisInnerSlot = mySelfNode.nodeId() == nodeId
         }
 
-        if (!isMySelfNodeChargeThisInnerSlot) {
-            return OK
-        }
-
         def oneSlot = localPersist.oneSlot(innerSlot)
 
         SettablePromise<Reply> finalPromise = new SettablePromise<>()
         def asyncReply = new AsyncReply(finalPromise)
 
         oneSlot.asyncRun(RunnableEx.of {
-            oneSlot.removeReplPairAsSlave()
-            oneSlot.resetAsMaster()
+            if (isMySelfNodeChargeThisInnerSlot) {
+                oneSlot.removeReplPairAsSlave()
+                oneSlot.resetAsMaster()
+            } else {
+                oneSlot.flush()
+            }
         }).whenComplete { done, e ->
             if (e) {
                 finalPromise.set(new ErrorReply('error when set slot: ' + e.message))

@@ -1118,6 +1118,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public void flush() {
         checkCurrentThreadId();
 
+        log.warn("One slot flush, s={}", slot);
+
         for (var wal : walArray) {
             wal.clear(false);
         }
