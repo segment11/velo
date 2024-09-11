@@ -404,8 +404,8 @@ class ClusterxCommandTest extends Specification {
         var multiShard = localPersist.multiShard
         var shards = multiShard.shards
 
-        def shard1 = shards[0]
-        shard1.multiSlotRange.addSingle(0, 16383)
+        def shard0 = shards[0]
+        shard0.multiSlotRange.addSingle(0, 16383)
         def reply = clusterx.slots()
         then:
         reply == ErrorReply.FORMAT
@@ -431,7 +431,7 @@ class ClusterxCommandTest extends Specification {
         data6[1] = 'setslot'.bytes
         data6[2] = '0'.bytes
         data6[3] = 'node'.bytes
-        data6[4] = shard1.nodes[0].nodeId().bytes
+        data6[4] = shard0.nodes[0].nodeId().bytes
         // cluster version
         data6[5] = '2'.bytes
         clusterx.data = data6
@@ -441,17 +441,33 @@ class ClusterxCommandTest extends Specification {
         ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
 
         when:
-        def shard2 = new Shard()
-        shard2.multiSlotRange.addSingle(0, 8191)
-        shards << shard2
-        shard1.multiSlotRange.list.clear()
-        shard1.multiSlotRange.addSingle(8192, 16383)
+        // set slot not myself, ignore
+        def shard1 = new Shard()
+        shard1.nodes << new Node(nodeIdFix: 'xxx')
+        shards << shard1
+        data6[4] = shard1.nodes[0].nodeId().bytes
+        reply = clusterx.setslot()
+        then:
+        reply == ClusterxCommand.OK
+
+        when:
+        shard1.multiSlotRange.addSingle(0, 8191)
+        shard0.multiSlotRange.list.clear()
+        shard0.multiSlotRange.addSingle(8192, 16383)
+        data6[4] = shard0.nodes[0].nodeId().bytes
         reply = clusterx.setslot()
         then:
         reply instanceof AsyncReply
         ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
-        shard1.multiSlotRange.contains(0)
-        !shard2.multiSlotRange.contains(0)
+        shard0.multiSlotRange.contains(0)
+        !shard1.multiSlotRange.contains(0)
+
+        when:
+        // no myself node, ignore
+        shard0.nodes[0].mySelf = false
+        reply = clusterx.setslot()
+        then:
+        reply == ClusterxCommand.OK
 
         when:
         // not margin
