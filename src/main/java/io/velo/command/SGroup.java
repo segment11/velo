@@ -377,7 +377,7 @@ public class SGroup extends BaseCommand {
 
             leaderSelector.resetAsMaster((e) -> {
                 if (e != null) {
-                    log.error("slaveof error: {}", e.getMessage());
+                    log.error("slaveof error={}", e.getMessage());
                     finalPromise.set(new ErrorReply(e.getMessage()));
                     return;
                 }
@@ -409,7 +409,7 @@ public class SGroup extends BaseCommand {
 
         leaderSelector.resetAsSlave(host, port, (e) -> {
             if (e != null) {
-                log.error("slaveof error: {}", e.getMessage());
+                log.error("slaveof error={}", e.getMessage());
                 finalPromise.set(new ErrorReply(e.getMessage()));
                 return;
             }
@@ -828,7 +828,7 @@ public class SGroup extends BaseCommand {
         // need not wait all, can optimize
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("sdiff error: {}, isInter: {}, isUnion: {}", e.getMessage(), isInter, isUnion);
+                log.error("sdiff error={}, isInter: {}, isUnion: {}", e.getMessage(), isInter, isUnion);
                 finalPromise.setException(e);
                 return;
             }

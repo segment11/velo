@@ -42,7 +42,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     public BigStringFiles(short slot, File slotDir) throws IOException {
         this.slot = slot;
         if (ConfForGlobal.pureMemory) {
-            log.warn("Pure memory mode, big string files will not be used, slot: {}", slot);
+            log.warn("Pure memory mode, big string files will not be used, slot={}", slot);
             this.bigStringDir = null;
             this.bigStringBytesByUuidLRU = null;
             return;
@@ -51,19 +51,19 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         this.bigStringDir = new File(slotDir, BIG_STRING_DIR_NAME);
         if (!bigStringDir.exists()) {
             if (!bigStringDir.mkdirs()) {
-                throw new IOException("Create big string dir error, slot: " + slot);
+                throw new IOException("Create big string dir error, slot=" + slot);
             }
         }
 
         var maxSize = ConfForSlot.global.lruBigString.maxSize;
         final var maybeOneBigStringBytesLength = 4096;
         var lruMemoryRequireMB = maxSize * maybeOneBigStringBytesLength / 1024 / 1024;
-        log.info("LRU max size for big string: {}, maybe one big string bytes length is {}B, memory require: {}MB, slot: {}",
+        log.info("LRU max size for big string={}, maybe one big string bytes length is {}B, memory require={}MB, slot={}",
                 maxSize,
                 maybeOneBigStringBytesLength,
                 lruMemoryRequireMB,
                 slot);
-        log.info("LRU prepare, type: {}, MB: {}, slot: {}", LRUPrepareBytesStats.Type.big_string, lruMemoryRequireMB, slot);
+        log.info("LRU prepare, type={}, MB: {}, slot: {}", LRUPrepareBytesStats.Type.big_string, lruMemoryRequireMB, slot);
         LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.big_string, String.valueOf(slot), lruMemoryRequireMB, false);
 
         this.bigStringBytesByUuidLRU = new LRUMap<>(maxSize);
@@ -130,7 +130,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         try {
             return FileUtils.readFileToByteArray(file);
         } catch (IOException e) {
-            log.error("Read big string file error, uuid: " + uuid + ", slot: " + slot, e);
+            log.error("Read big string file error, uuid=" + uuid + ", slot=" + slot, e);
             return null;
         }
     }
@@ -147,7 +147,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             bigStringFilesCount++;
             return true;
         } catch (IOException e) {
-            log.error("Write big string file error, uuid: " + uuid + ", key: " + key + ", slot: " + slot, e);
+            log.error("Write big string file error, uuid=" + uuid + ", key=" + key + ", slot: " + slot, e);
             return false;
         }
     }

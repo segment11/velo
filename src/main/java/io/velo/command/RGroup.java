@@ -169,8 +169,8 @@ public class RGroup extends BaseCommand {
 
         // for debug
         if (Debug.getInstance().logRestore) {
-            log.info("key: {}", key);
-            log.info("ttl: {}", ttl);
+            log.info("key={}", key);
+            log.info("ttl={}", ttl);
         }
 
         boolean replace = false;

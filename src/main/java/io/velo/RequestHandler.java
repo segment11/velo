@@ -107,7 +107,7 @@ public class RequestHandler {
                 }
                 localTestRandomValueList.add(value);
             }
-            log.info("Local test random value list mocked, size: {}, value length: {}", localTestRandomValueListSize, localTestRandomValueLength);
+            log.info("Local test random value list mocked, size={}, value length={}", localTestRandomValueListSize, localTestRandomValueLength);
         }
 
         var requestConfig = config.getChild("request");
@@ -410,7 +410,7 @@ public class RequestHandler {
             var doLogCmd = Debug.getInstance().logCmd;
             if (doLogCmd) {
                 if (data.length == 1) {
-                    log.info("Request cmd: {}", cmd);
+                    log.info("Request cmd={}", cmd);
                 } else {
                     var sb = new StringBuilder();
                     sb.append("Request cmd: ").append(cmd).append(" ");
@@ -510,7 +510,7 @@ public class RequestHandler {
                     return ErrorReply.DICT_MISSING;
                 } catch (Exception e) {
                     increaseCmdStatArray((byte) 'e', ERROR_FOR_STAT_AS_COMMAND);
-                    log.error("Get error, key: " + new String(keyBytes), e);
+                    log.error("Get error, key=" + new String(keyBytes), e);
                     return new ErrorReply(e.getMessage());
                 }
             }
@@ -539,7 +539,7 @@ public class RequestHandler {
                     return ErrorReply.READONLY;
                 } catch (Exception e) {
                     increaseCmdStatArray((byte) 'e', ERROR_FOR_STAT_AS_COMMAND);
-                    log.error("Set error, key: " + new String(keyBytes), e);
+                    log.error("Set error, key=" + new String(keyBytes), e);
                     return new ErrorReply(e.getMessage());
                 }
 

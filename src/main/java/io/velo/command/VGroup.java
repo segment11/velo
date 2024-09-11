@@ -116,7 +116,7 @@ public class VGroup extends BaseCommand {
                 returnSetArray[finalI] = r;
             }).whenComplete((ignored, e) -> {
                 if (e != null) {
-                    log.error("Submit index job get longs ids error: " + e.getMessage());
+                    log.error("Submit index job get longs ids error=" + e.getMessage());
                     return;
                 }
 
@@ -129,7 +129,7 @@ public class VGroup extends BaseCommand {
 
         Promises.all(promises).whenComplete((ignored, e) -> {
             if (e != null) {
-                log.error("mget error: {}", e.getMessage());
+                log.error("mget error={}", e.getMessage());
                 return;
             }
 
@@ -219,7 +219,7 @@ public class VGroup extends BaseCommand {
         var mgetAsyncReply = (AsyncReply) mgetReply;
         mgetAsyncReply.getSettablePromise().whenComplete((r1, e1) -> {
             if (e1 != null) {
-                log.error("mget error: {}", e1.getMessage());
+                log.error("mget error={}", e1.getMessage());
                 finalPromise.setException(e1);
                 return;
             }
@@ -259,7 +259,7 @@ public class VGroup extends BaseCommand {
                 returnTotalCountArray[finalI] = r;
             }).whenComplete((ignored, e) -> {
                 if (e != null) {
-                    log.error("Submit index job get total count error: " + e.getMessage());
+                    log.error("Submit index job get total count error=" + e.getMessage());
                     return;
                 }
 
@@ -273,7 +273,7 @@ public class VGroup extends BaseCommand {
 
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("mget error: {}", e.getMessage());
+                log.error("mget error={}", e.getMessage());
                 return;
             }
 
@@ -328,7 +328,7 @@ public class VGroup extends BaseCommand {
                 indexHandler.putWordAndAddLongId(lowerCaseWord, longId);
             }).whenComplete((v, e) -> {
                 if (e != null) {
-                    log.error("Submit index job put word and add long id error: " + e.getMessage());
+                    log.error("Submit index job put word and add long id error=" + e.getMessage());
                     return;
                 }
 

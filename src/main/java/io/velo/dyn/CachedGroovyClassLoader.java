@@ -56,7 +56,7 @@ public class CachedGroovyClassLoader {
         if (classpath != null) {
             for (String path : classpath.split(":")) {
                 gcl.addClasspath(path);
-                log.warn("Cached groovy class loader add classpath: " + path);
+                log.warn("Cached groovy class loader add classpath=" + path);
             }
         }
     }

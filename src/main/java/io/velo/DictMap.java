@@ -53,7 +53,7 @@ public class DictMap implements NeedCleanUp {
             // check again
             var existDict2 = cacheDictBySeq.get(dict.getSeq());
             if (existDict2 != null) {
-                throw new RuntimeException("Dict seq conflict, dict seq: " + dict.getSeq());
+                throw new RuntimeException("Dict seq conflict, dict seq=" + dict.getSeq());
             }
         }
 
@@ -67,7 +67,7 @@ public class DictMap implements NeedCleanUp {
             try {
                 binlog.append(new XDict(keyPrefixOrSuffix, dict));
             } catch (IOException e) {
-                throw new RuntimeException("Append binlog error, dict key prefix: " + keyPrefixOrSuffix, e);
+                throw new RuntimeException("Append binlog error, dict key prefix=" + keyPrefixOrSuffix, e);
             }
         }
 
@@ -109,7 +109,7 @@ public class DictMap implements NeedCleanUp {
                 System.out.println("Close dict fos");
                 fos = null;
             } catch (IOException e) {
-                System.err.println("Close dict fos error, message: " + e.getMessage());
+                System.err.println("Close dict fos error, message=" + e.getMessage());
             }
         }
 
@@ -169,7 +169,7 @@ public class DictMap implements NeedCleanUp {
             }
         }
 
-        log.info("Dict map init, map size: {}, seq map size: {}, n: {}, loaded seq list: {}",
+        log.info("Dict map init, map size={}, seq map size={}, n={}, loaded seq list={}",
                 cacheDict.size(), cacheDictBySeq.size(), n, loadedSeqList);
 
         // add exists dict key prefix or suffix as train sample key prefix or suffix group, so new request values can use exist dict directly

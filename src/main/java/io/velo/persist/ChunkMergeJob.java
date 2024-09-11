@@ -42,7 +42,7 @@ public class ChunkMergeJob {
         // recycle, need spit to two part
         if (needMergeSegmentIndexList.getLast() - needMergeSegmentIndexList.getFirst() > oneSlot.chunk.halfSegmentNumber) {
             if (!needMergeSegmentIndexList.contains(0)) {
-                throw new IllegalStateException("Recycle merge chunk, s=" + slot + ", segment index need include 0, but: " + needMergeSegmentIndexList);
+                throw new IllegalStateException("Recycle merge chunk, s=" + slot + ", segment index need include 0, but=" + needMergeSegmentIndexList);
             }
 
             var onePart = new ArrayList<Integer>();
@@ -138,7 +138,7 @@ public class ChunkMergeJob {
         int firstSegmentIndex = needMergeSegmentIndexList.getFirst();
         var lastSegmentIndex = needMergeSegmentIndexList.getLast();
         if (needMergeSegmentIndexList.size() != lastSegmentIndex - firstSegmentIndex + 1) {
-            throw new IllegalStateException("Merge segments index need be continuous, but: " + needMergeSegmentIndexList);
+            throw new IllegalStateException("Merge segments index need be continuous, but=" + needMergeSegmentIndexList);
         }
 
         HashSet<Integer> skipSegmentIndexSet = new HashSet<>();

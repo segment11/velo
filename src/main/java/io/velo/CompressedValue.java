@@ -146,7 +146,7 @@ public class CompressedValue {
                 buf.put(compressedData);
                 yield buf.array();
             }
-            default -> throw new IllegalStateException("Unexpected number type: " + dictSeqOrSpType);
+            default -> throw new IllegalStateException("Unexpected number type=" + dictSeqOrSpType);
         };
     }
 
@@ -174,7 +174,7 @@ public class CompressedValue {
             case SP_TYPE_NUM_INT -> ByteBuffer.wrap(compressedData).getInt();
             case SP_TYPE_NUM_LONG -> ByteBuffer.wrap(compressedData).getLong();
             case SP_TYPE_NUM_DOUBLE -> ByteBuffer.wrap(compressedData).getDouble();
-            default -> throw new IllegalStateException("Not a number type: " + dictSeqOrSpType);
+            default -> throw new IllegalStateException("Not a number type=" + dictSeqOrSpType);
         };
     }
 
@@ -437,14 +437,14 @@ public class CompressedValue {
             }
 
             // why ? todo: check
-            log.warn("Key hash not match, key: {}, seq: {}, uncompressedLength: {}, cvEncodedLength: {}, keyHash: {}, persisted keyHash: {}",
+            log.warn("Key hash not match, key={}, seq={}, uncompressedLength={}, cvEncodedLength={}, keyHash={}, persisted keyHash={}",
                     new String(keyBytes), cv.seq, cv.uncompressedLength, cv.compressedLength, keyHash, cv.keyHash);
-            throw new IllegalStateException("Key hash not match, key: " + new String(keyBytes) +
-                    ", seq: " + cv.seq +
-                    ", uncompressedLength: " + cv.uncompressedLength +
-                    ", cvEncodedLength: " + cv.compressedLength +
-                    ", keyHash: " + keyHash +
-                    ", persisted keyHash: " + cv.keyHash);
+            throw new IllegalStateException("Key hash not match, key=" + new String(keyBytes) +
+                    ", seq=" + cv.seq +
+                    ", uncompressedLength=" + cv.uncompressedLength +
+                    ", cvEncodedLength=" + cv.compressedLength +
+                    ", keyHash=" + keyHash +
+                    ", persisted keyHash=" + cv.keyHash);
         }
 
         cv.uncompressedLength = buf.readInt();

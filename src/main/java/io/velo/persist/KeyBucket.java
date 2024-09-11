@@ -190,7 +190,7 @@ public class KeyBucket {
         var keyLength = buffer.getShort();
         // data error, need recover
         if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
-            throw new IllegalStateException("Key length error, key length: " + keyLength);
+            throw new IllegalStateException("Key length error, key length=" + keyLength);
         }
         var keyBytes = new byte[keyLength];
         buffer.get(keyBytes);
@@ -198,7 +198,7 @@ public class KeyBucket {
         var valueLength = buffer.get();
         // data error, need recover
         if (valueLength < 0) {
-            throw new IllegalStateException("Value length error, value length: " + valueLength);
+            throw new IllegalStateException("Value length error, value length=" + valueLength);
         }
         var valueBytes = new byte[valueLength];
         buffer.get(valueBytes);

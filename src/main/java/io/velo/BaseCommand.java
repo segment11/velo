@@ -430,7 +430,7 @@ public abstract class BaseCommand {
                 } else {
                     dict = dictMap.getDictBySeq(dictSeqOrSpType);
                     if (dict == null) {
-                        throw new DictMissingException("Dict not found, dict seq: " + dictSeqOrSpType);
+                        throw new DictMissingException("Dict not found, dict seq=" + dictSeqOrSpType);
                     }
                 }
             }
@@ -475,10 +475,10 @@ public abstract class BaseCommand {
             return null;
         }
         if (expectTypeString && !cv.isTypeString()) {
-            throw new TypeMismatchException("Expect type string, but got sp type: " + cv.getDictSeqOrSpType());
+            throw new TypeMismatchException("Expect type string, but got sp type=" + cv.getDictSeqOrSpType());
         }
         if (expectSpTypeArray.length > 0 && !contain(expectSpTypeArray, cv.getDictSeqOrSpType())) {
-            throw new TypeMismatchException("Expect sp type array: " + Arrays.toString(expectSpTypeArray) + ", but got sp type: " + cv.getDictSeqOrSpType());
+            throw new TypeMismatchException("Expect sp type array=" + Arrays.toString(expectSpTypeArray) + ", but got sp type=" + cv.getDictSeqOrSpType());
         }
         return getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
     }
@@ -539,7 +539,7 @@ public abstract class BaseCommand {
             ByteBuffer.wrap(newValueBytes).putDouble(doubleValue);
             set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_DOUBLE, expireAt);
         } else {
-            throw new IllegalArgumentException("Not support number type: " + value.getClass());
+            throw new IllegalArgumentException("Not support number type=" + value.getClass());
         }
     }
 
@@ -701,11 +701,11 @@ public abstract class BaseCommand {
             try {
                 oneSlot.put(key, slotWithKeyHash.bucketIndex, cv);
             } catch (SegmentOverflowException e) {
-                log.error("Set error, key: {}, message: {}", key, e.getMessage());
+                log.error("Set error, key={}, message={}", key, e.getMessage());
                 throw e;
             } catch (Exception e) {
                 var message = e.getMessage();
-                log.error("Set error, key: {}, message: {}", key, message);
+                log.error("Set error, key={}, message={}", key, message);
                 throw e;
             }
         }

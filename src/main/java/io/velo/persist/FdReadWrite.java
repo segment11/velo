@@ -44,11 +44,11 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             this.libC = libC;
             this.fd = libC.open(file.getAbsolutePath(), LocalPersist.O_DIRECT | OpenFlags.O_RDWR.value(), 00644);
             this.writeIndex = file.length();
-            log.info("Opened fd: {}, name: {}, file length: {}MB", fd, name, this.writeIndex / 1024 / 1024);
+            log.info("Opened fd={}, name={}, file length={}MB", fd, name, this.writeIndex / 1024 / 1024);
         } else {
             this.libC = null;
             this.fd = 0;
-            log.warn("Pure memory mode, not use fd, name: {}", name);
+            log.warn("Pure memory mode, not use fd, name={}", name);
         }
     }
 
@@ -327,7 +327,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             }
 
             int initMemoryMB = (int) (initMemoryN / 1024 / 1024);
-            log.info("Static memory init, type: {}, MB: {}, name: {}", StaticMemoryPrepareBytesStats.Type.fd_read_write_buffer, initMemoryMB, name);
+            log.info("Static memory init, type={}, MB: {}, name: {}", StaticMemoryPrepareBytesStats.Type.fd_read_write_buffer, initMemoryMB, name);
             StaticMemoryPrepareBytesStats.add(StaticMemoryPrepareBytesStats.Type.fd_read_write_buffer, initMemoryMB, false);
         }
     }
@@ -411,7 +411,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         var pageManager = PageManager.getInstance();
         if (oneInnerAddress != 0) {
             pageManager.freePages(oneInnerAddress, npagesOneInner);
-            System.out.println("Clean up fd read, name: " + name + ", one inner address: " + oneInnerAddress);
+            System.out.println("Clean up fd read, name=" + name + ", one inner address=" + oneInnerAddress);
 
             oneInnerAddress = 0;
             oneInnerBuffer = null;
@@ -420,7 +420,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         if (writeSegmentBatchAddress != 0) {
             var npagesWriteSegmentBatch = npagesOneInner * BATCH_ONCE_SEGMENT_COUNT_PWRITE;
             pageManager.freePages(writeSegmentBatchAddress, npagesWriteSegmentBatch);
-            System.out.println("Clean up fd write, name: " + name + ", write segment batch address: " + writeSegmentBatchAddress);
+            System.out.println("Clean up fd write, name=" + name + ", write segment batch address=" + writeSegmentBatchAddress);
 
             writeSegmentBatchAddress = 0;
             writeSegmentBatchBuffer = null;

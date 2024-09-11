@@ -96,7 +96,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     byte[] getMetaKeyBucketSplitNumberBatch(int beginBucketIndex, int bucketCount) {
         if (beginBucketIndex < 0 || beginBucketIndex >= bucketsPerSlot) {
-            throw new IllegalArgumentException("Begin bucket index out of range, slot: " + slot + ", begin bucket index: " + beginBucketIndex);
+            throw new IllegalArgumentException("Begin bucket index out of range, slot=" + slot + ", begin bucket index=" + beginBucketIndex);
         }
 
         return metaKeyBucketSplitNumber.getBatch(beginBucketIndex, bucketCount);
@@ -106,7 +106,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     @SlaveReplay
     public boolean updateMetaKeyBucketSplitNumberBatchIfChanged(int beginBucketIndex, byte[] splitNumberArray) {
         if (beginBucketIndex < 0 || beginBucketIndex >= bucketsPerSlot) {
-            throw new IllegalArgumentException("Begin bucket index out of range, slot: " + slot + ", begin bucket index: " + beginBucketIndex);
+            throw new IllegalArgumentException("Begin bucket index out of range, slot=" + slot + ", begin bucket index=" + beginBucketIndex);
         }
 
         // if not change, need not an extra ssd io
@@ -139,7 +139,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     @TestOnly
     void setMetaKeyBucketSplitNumber(int bucketIndex, byte splitNumber) {
         if (bucketIndex < 0 || bucketIndex >= bucketsPerSlot) {
-            throw new IllegalArgumentException("Bucket index out of range, slot: " + slot + ", begin bucket index: " + bucketIndex);
+            throw new IllegalArgumentException("Bucket index out of range, slot=" + slot + ", begin bucket index=" + bucketIndex);
         }
 
         metaKeyBucketSplitNumber.set(bucketIndex, splitNumber);
@@ -181,7 +181,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     public short getKeyCountInBucketIndex(int bucketIndex) {
         if (bucketIndex < 0 || bucketIndex >= bucketsPerSlot) {
-            throw new IllegalArgumentException("Bucket index out of range, slot: " + slot + ", bucket index: " + bucketIndex);
+            throw new IllegalArgumentException("Bucket index out of range, slot=" + slot + ", bucket index=" + bucketIndex);
         }
 
         return statKeyCountInBuckets.getKeyCountForBucketIndex(bucketIndex);
@@ -211,7 +211,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     @SlaveReplay
     public void updateKeyCountBatch(int walGroupIndex, int beginBucketIndex, short[] keyCountArray) {
         if (beginBucketIndex < 0 || beginBucketIndex + keyCountArray.length > bucketsPerSlot) {
-            throw new IllegalArgumentException("Begin bucket index out of range, slot: " + slot + ", begin bucket index: " + beginBucketIndex);
+            throw new IllegalArgumentException("Begin bucket index out of range, slot=" + slot + ", begin bucket index=" + beginBucketIndex);
         }
 
         statKeyCountInBuckets.setKeyCountBatch(walGroupIndex, beginBucketIndex, keyCountArray);

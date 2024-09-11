@@ -44,7 +44,7 @@ public class DynConfig {
         public void afterUpdate(String key, Object value) {
             if (SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG.equals(key)) {
                 MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections((int) value);
-                log.warn("Dyn config for global set max_connections={}, slot: {}", value, currentSlot);
+                log.warn("Dyn config for global set max_connections={}, slot={}", value, currentSlot);
             }
 
             if (TrainSampleJob.KEY_IN_DYN_CONFIG.equals(key)) {
@@ -52,12 +52,12 @@ public class DynConfig {
                 ArrayList<String> keyPrefixGroupList = new ArrayList<>(Arrays.asList(keyPrefixGroups.split(",")));
 
                 TrainSampleJob.setKeyPrefixOrSuffixGroupList(keyPrefixGroupList);
-                log.warn("Dyn config for global set dict_key_prefix_groups={}, slot: {}", value, currentSlot);
+                log.warn("Dyn config for global set dict_key_prefix_groups={}, slot={}", value, currentSlot);
             }
 
             if (BigKeyTopK.KEY_IN_DYN_CONFIG.equals(key)) {
                 oneSlot.initBigKeyTopK(Integer.parseInt(value.toString()));
-                log.warn("Global config for current slot set monitor_big_key_top_k={}, slot: {}", value, currentSlot);
+                log.warn("Global config for current slot set monitor_big_key_top_k={}, slot={}", value, currentSlot);
             }
             // todo
         }
@@ -137,12 +137,12 @@ public class DynConfig {
             FileUtils.writeByteArrayToFile(dynConfigFile, "{}".getBytes());
 
             this.data = new HashMap<>();
-            log.info("Init dyn config, data: {}, slot: {}", data, slot);
+            log.info("Init dyn config, data={}, slot={}", data, slot);
         } else {
             // read json
             var objectMapper = new ObjectMapper();
             this.data = objectMapper.readValue(dynConfigFile, HashMap.class);
-            log.info("Init dyn config, data: {}, slot: {}", data, slot);
+            log.info("Init dyn config, data={}, slot: {}", data, slot);
 
             for (var entry : data.entrySet()) {
                 afterUpdateCallback.afterUpdate(entry.getKey(), entry.getValue());

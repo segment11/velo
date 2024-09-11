@@ -113,7 +113,7 @@ public class SegmentBatch implements InSlotMetricCollector {
 
     public static int subBlockMetaPosition(int subBlockIndex) {
         if (subBlockIndex >= MAX_BLOCK_NUMBER) {
-            throw new IllegalArgumentException("Segment batch sub block index must be less than: " + MAX_BLOCK_NUMBER);
+            throw new IllegalArgumentException("Segment batch sub block index must be less than=" + MAX_BLOCK_NUMBER);
         }
 
         return 8 + 4 + subBlockIndex * (2 + 2);
@@ -217,8 +217,8 @@ public class SegmentBatch implements InSlotMetricCollector {
                 onceList.add(v);
             } else {
                 if (i >= nextNSegmentIndex.length) {
-                    log.warn("Batch next {} segment prepare is not enough, list size: {}", nextNSegmentIndex.length, list.size());
-                    throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size: " + list.size());
+                    log.warn("Batch next {} segment prepare is not enough, list size={}", nextNSegmentIndex.length, list.size());
+                    throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size=" + list.size());
                 }
 
                 result.add(compressAsSegment(onceList, nextNSegmentIndex[i], returnPvmList));
@@ -232,8 +232,8 @@ public class SegmentBatch implements InSlotMetricCollector {
 
         if (!onceList.isEmpty()) {
             if (i >= nextNSegmentIndex.length) {
-                log.warn("Batch next {} segment prepare is not enough, list size: {}", nextNSegmentIndex.length, list.size());
-                throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size: " + list.size());
+                log.warn("Batch next {} segment prepare is not enough, list size={}", nextNSegmentIndex.length, list.size());
+                throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size=" + list.size());
             }
 
             result.add(compressAsSegment(onceList, nextNSegmentIndex[i], returnPvmList));
@@ -273,7 +273,7 @@ public class SegmentBatch implements InSlotMetricCollector {
         var subBlockLength = buffer.getShort();
 
         if (subBlockOffset == 0) {
-            throw new IllegalStateException("Sub block offset is 0, pvm: " + pvm);
+            throw new IllegalStateException("Sub block offset is 0, pvm=" + pvm);
         }
 
         var decompressedBytes = new byte[chunk.chunkSegmentLength];

@@ -136,7 +136,7 @@ public class EGroup extends BaseCommand {
 
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("exists error: {}", e.getMessage());
+                log.error("exists error={}", e.getMessage());
                 finalPromise.setException(e);
                 return;
             }

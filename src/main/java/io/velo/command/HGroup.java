@@ -1060,7 +1060,7 @@ public class HGroup extends BaseCommand {
 
         var fieldCv = getCv(fieldKeyBytes, slotWithKeyHashThisField);
         if (fieldCv != null) {
-            throw new IllegalStateException("Hash field cv exists, key: " + key + ", field: " + field);
+            throw new IllegalStateException("Hash field cv exists, key=" + key + ", field: " + field);
 //            return IntegerReply.REPLY_0;
         }
 

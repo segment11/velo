@@ -30,10 +30,10 @@ public class RedisHH {
 
     public void put(String key, byte[] value) {
         if (key.length() > CompressedValue.KEY_MAX_LENGTH) {
-            throw new IllegalArgumentException("Key length too long, key length: " + key.length());
+            throw new IllegalArgumentException("Key length too long, key length=" + key.length());
         }
         if (value.length > CompressedValue.VALUE_MAX_LENGTH) {
-            throw new IllegalArgumentException("Value length too long, value length: " + value.length);
+            throw new IllegalArgumentException("Value length too long, value length=" + value.length);
         }
         map.put(key, value);
     }
@@ -175,7 +175,7 @@ public class RedisHH {
         for (int i = 0; i < size; i++) {
             int keyLength = buffer.getShort();
             if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
-                throw new IllegalStateException("Key length error, key length: " + keyLength);
+                throw new IllegalStateException("Key length error, key length=" + keyLength);
             }
 
             var keyBytes = new byte[keyLength];

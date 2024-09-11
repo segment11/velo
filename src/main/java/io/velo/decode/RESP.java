@@ -19,7 +19,7 @@ public class RESP {
         @Override
         public boolean process(byte value) {
             if (value < '0' || value > '9') {
-                throw new IllegalArgumentException("Bad byte in number: " + value);
+                throw new IllegalArgumentException("Bad byte in number=" + value);
             }
             result = result * 10 + (value - '0');
             return true;
@@ -41,10 +41,10 @@ public class RESP {
         final boolean negative = readableBytes > 0 && in.getByte(in.readerIndex()) == '-';
         final int extraOneByteForNegative = negative ? 1 : 0;
         if (readableBytes <= extraOneByteForNegative) {
-            throw new IllegalArgumentException("No number to parse: " + in.toString(CharsetUtil.US_ASCII));
+            throw new IllegalArgumentException("No number to parse=" + in.toString(CharsetUtil.US_ASCII));
         }
         if (readableBytes > POSITIVE_LONG_MAX_LENGTH + extraOneByteForNegative) {
-            throw new IllegalArgumentException("Too many characters to be a valid RESP Integer: " +
+            throw new IllegalArgumentException("Too many characters to be a valid RESP Integer=" +
                     in.toString(CharsetUtil.US_ASCII));
         }
         if (negative) {
@@ -90,7 +90,7 @@ public class RESP {
                     int number = parseRedisNumber(lineBuf);
                     bytes = new byte[number][];
                 } else {
-                    throw new IllegalArgumentException("Unexpected character: " + b);
+                    throw new IllegalArgumentException("Unexpected character=" + b);
                 }
             } else {
                 int numArgs = bytes.length;

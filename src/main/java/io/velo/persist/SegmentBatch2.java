@@ -79,8 +79,8 @@ public class SegmentBatch2 implements InSlotMetricCollector {
                 onceList.add(v);
             } else {
                 if (i >= nextNSegmentIndex.length) {
-                    log.warn("Batch next {} segment prepare is not enough, list size: {}", nextNSegmentIndex.length, list.size());
-                    throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size: " + list.size());
+                    log.warn("Batch next {} segment prepare is not enough, list size={}", nextNSegmentIndex.length, list.size());
+                    throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size=" + list.size());
                 }
 
                 result.add(compressAsSegment(onceList, nextNSegmentIndex[i], returnPvmList));
@@ -94,8 +94,8 @@ public class SegmentBatch2 implements InSlotMetricCollector {
 
         if (!onceList.isEmpty()) {
             if (i >= nextNSegmentIndex.length) {
-                log.warn("Batch next {} segment prepare is not enough, list size: {}", nextNSegmentIndex.length, list.size());
-                throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size: " + list.size());
+                log.warn("Batch next {} segment prepare is not enough, list size={}", nextNSegmentIndex.length, list.size());
+                throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size=" + list.size());
             }
 
             result.add(compressAsSegment(onceList, nextNSegmentIndex[i], returnPvmList));
@@ -183,7 +183,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     static class ForDebugCvCallback implements CvCallback {
         @Override
         public void callback(String key, CompressedValue cv, int offsetInThisSegment) {
-            System.out.println("key: " + key + ", cv: " + cv + ", offsetInThisSegment: " + offsetInThisSegment);
+            System.out.println("key=" + key + ", cv=" + cv + ", offsetInThisSegment=" + offsetInThisSegment);
         }
     }
 
@@ -211,7 +211,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             }
 
             if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
-                throw new IllegalStateException("Key length error, key length: " + keyLength);
+                throw new IllegalStateException("Key length error, key length=" + keyLength);
             }
 
             var keyBytes = new byte[keyLength];

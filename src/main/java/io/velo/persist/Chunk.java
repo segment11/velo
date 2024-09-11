@@ -133,7 +133,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
     byte[] preadForMerge(int targetSegmentIndex, int segmentCount) {
         if (segmentCount > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE) {
-            throw new IllegalArgumentException("Merge read segment count too large: " + segmentCount);
+            throw new IllegalArgumentException("Merge read segment count too large=" + segmentCount);
         }
 
         var fdIndex = targetFdIndex(targetSegmentIndex);
@@ -712,7 +712,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     @SlaveNeedReplay
     private boolean writeSegments(byte[] bytes, int segmentCount) {
 //        if (segmentCount != 1 && segmentCount != BATCH_ONCE_SEGMENT_COUNT_PWRITE) {
-//            throw new IllegalArgumentException("Write segment count not support: " + segmentCount);
+//            throw new IllegalArgumentException("Write segment count not support=" + segmentCount);
 //        }
 
         var fdIndex = targetFdIndex();
@@ -738,7 +738,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     @SlaveReplay
     private void writeSegmentsForRepl(byte[] bytes, int segmentCount) {
         if (segmentCount > REPL_ONCE_SEGMENT_COUNT_PREAD) {
-            throw new IllegalArgumentException("Write segment count not support: " + segmentCount);
+            throw new IllegalArgumentException("Write segment count not support=" + segmentCount);
         }
 
         var fdIndex = targetFdIndex();

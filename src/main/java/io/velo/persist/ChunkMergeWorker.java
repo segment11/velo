@@ -45,13 +45,13 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
         MERGED_SEGMENT_SIZE_THRESHOLD_ONCE_PERSIST = Math.max(MERGED_SEGMENT_SIZE_THRESHOLD / 32, 4);
         MERGED_CV_SIZE_THRESHOLD = MERGED_SEGMENT_SIZE_THRESHOLD * 64;
 
-        log.info("Reset chunk merge worker threshold, wal group number: {}, merged segment size threshold: {}, " +
-                        "merged segment size threshold once persist: {}, merged cv size threshold: {}",
+        log.info("Reset chunk merge worker threshold, wal group number={}, merged segment size threshold={}, " +
+                        "merged segment size threshold once persist={}, merged cv size threshold={}",
                 walGroupNumber, MERGED_SEGMENT_SIZE_THRESHOLD, MERGED_SEGMENT_SIZE_THRESHOLD_ONCE_PERSIST, MERGED_CV_SIZE_THRESHOLD);
 
         final var maybeOneMergedCvBytesLength = 200;
         var lruMemoryRequireMB = MERGED_CV_SIZE_THRESHOLD * maybeOneMergedCvBytesLength / 1024 / 1024;
-        log.info("LRU max size for chunk segment merged cv buffer: {}, maybe one merged cv bytes length is {}B, memory require: {}MB, slot: {}",
+        log.info("LRU max size for chunk segment merged cv buffer={}, maybe one merged cv bytes length is {}B, memory require={}MB, slot: {}",
                 MERGED_CV_SIZE_THRESHOLD,
                 maybeOneMergedCvBytesLength,
                 lruMemoryRequireMB,

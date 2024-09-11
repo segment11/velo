@@ -229,7 +229,7 @@ public enum ConfForSlot {
                 return;
             }
 
-            throw new IllegalArgumentException("Estimate one value length too large: " + estimateOneValueLength +
+            throw new IllegalArgumentException("Estimate one value length too large=" + estimateOneValueLength +
                     ", should be less than " + ConfForGlobal.MAX_ESTIMATE_ONE_VALUE_LENGTH);
         }
 
@@ -290,7 +290,7 @@ public enum ConfForSlot {
                 // wal init m4
                 sum += 4;
 
-                log.info("Static memory init, type: {}, MB: {}, all slots", StaticMemoryPrepareBytesStats.Type.wal_cache, sum);
+                log.info("Static memory init, type={}, MB={}, all slots", StaticMemoryPrepareBytesStats.Type.wal_cache, sum);
                 StaticMemoryPrepareBytesStats.add(StaticMemoryPrepareBytesStats.Type.wal_cache, sum, false);
             }
             Wal.doLogAfterInit();
@@ -337,7 +337,7 @@ public enum ConfForSlot {
                 return;
             }
 
-            throw new IllegalArgumentException("Estimate one value length too large: " + estimateOneValueLength +
+            throw new IllegalArgumentException("Estimate one value length too large=" + estimateOneValueLength +
                     ", should be less than " + ConfForGlobal.MAX_ESTIMATE_ONE_VALUE_LENGTH);
         }
 

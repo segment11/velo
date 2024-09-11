@@ -143,7 +143,7 @@ public class DGroup extends BaseCommand {
 
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("del error: {}", e.getMessage());
+                log.error("del error={}", e.getMessage());
                 finalPromise.setException(e);
                 return;
             }
@@ -181,7 +181,7 @@ public class DGroup extends BaseCommand {
 
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("dbsize error: {}", e.getMessage());
+                log.error("dbsize error={}", e.getMessage());
                 finalPromise.setException(e);
                 return;
             }

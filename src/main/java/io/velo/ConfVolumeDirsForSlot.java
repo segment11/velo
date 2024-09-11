@@ -28,22 +28,22 @@ public class ConfVolumeDirsForSlot {
             for (var volumeDir : volumeDirs) {
                 var parts = volumeDir.split(":");
                 if (parts.length != 2) {
-                    throw new IllegalArgumentException("Invalid volumeDirsBySlot config: " + value);
+                    throw new IllegalArgumentException("Invalid volumeDirsBySlot config=" + value);
                 }
                 var dirs = parts[0];
                 var dirFile = new File(dirs);
                 if (!dirFile.exists() || !dirFile.isDirectory()) {
-                    throw new IllegalArgumentException("Invalid dir path: " + dirs);
+                    throw new IllegalArgumentException("Invalid dir path=" + dirs);
                 }
 
                 var range = parts[1].split("-");
                 if (range.length != 2) {
-                    throw new IllegalArgumentException("Invalid volumeDirsBySlot config: " + value);
+                    throw new IllegalArgumentException("Invalid volumeDirsBySlot config=" + value);
                 }
                 var start = Integer.parseInt(range[0]);
                 var end = Integer.parseInt(range[1]);
                 if (start > end || end >= slotNumber) {
-                    throw new IllegalArgumentException("Invalid volumeDirsBySlot config: " + value);
+                    throw new IllegalArgumentException("Invalid volumeDirsBySlot config=" + value);
                 }
                 for (int i = start; i <= end; i++) {
                     volumeDirsBySlot[i] = dirs;

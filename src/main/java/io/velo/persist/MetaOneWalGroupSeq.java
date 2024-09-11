@@ -53,7 +53,7 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
         if (needRead) {
             raf.seek(0);
             raf.read(inMemoryCachedBytes);
-            log.warn("Read one wal group seq file success, file: {}, slot: {}, all capacity: {}KB",
+            log.warn("Read one wal group seq file success, file={}, slot={}, all capacity: {}KB",
                     file, slot, allCapacity / 1024);
 
             var sb = new StringBuilder();

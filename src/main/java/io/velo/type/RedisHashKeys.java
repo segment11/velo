@@ -138,7 +138,7 @@ public class RedisHashKeys {
         for (int i = 0; i < size; i++) {
             int len = buffer.getShort();
             if (len <= 0) {
-                throw new IllegalStateException("Length error, length: " + len);
+                throw new IllegalStateException("Length error, length=" + len);
             }
 
             var bytes = new byte[len];

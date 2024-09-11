@@ -62,6 +62,6 @@ public class TaskRunnable implements Runnable {
 
     public void stop() {
         isStopped = true;
-        System.out.println("Task delay stopped for net worker eventloop, net worker id: " + netWorkerId);
+        System.out.println("Task delay stopped for net worker eventloop, net worker id=" + netWorkerId);
     }
 }

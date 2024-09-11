@@ -60,12 +60,12 @@ public class FGroup extends BaseCommand {
         for (var replPairAsMaster : asMasterList) {
             var fo = replPairAsMaster.getSlaveLastCatchUpBinlogFileIndexAndOffset();
             if (fo == null) {
-                return new ErrorReply("slave not catch up: " + replPairAsMaster.getHostAndPort());
+                return new ErrorReply("slave not catch up=" + replPairAsMaster.getHostAndPort());
             }
 
             // must be equal or slave can less than a little, change here if need
             if (currentFo.fileIndex() != fo.fileIndex() || currentFo.offset() != fo.offset()) {
-                return new ErrorReply("slave not catch up: " + replPairAsMaster.getHostAndPort() + ", current: " + currentFo + ", slave: " + fo);
+                return new ErrorReply("slave not catch up=" + replPairAsMaster.getHostAndPort() + ", current=" + currentFo + ", slave=" + fo);
             }
         }
 
@@ -88,7 +88,7 @@ public class FGroup extends BaseCommand {
 
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("failover error: {}", e.getMessage());
+                log.error("failover error={}", e.getMessage());
                 finalPromise.setException(e);
                 return;
             }
@@ -121,7 +121,7 @@ public class FGroup extends BaseCommand {
 
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("flushdb error: {}", e.getMessage());
+                log.error("flushdb error={}", e.getMessage());
                 finalPromise.setException(e);
                 return;
             }

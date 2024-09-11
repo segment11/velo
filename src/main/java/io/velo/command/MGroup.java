@@ -138,7 +138,7 @@ public class MGroup extends BaseCommand {
 
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("mget error: {}", e.getMessage());
+                log.error("mget error={}", e.getMessage());
                 finalPromise.setException(e);
                 return;
             }
@@ -208,7 +208,7 @@ public class MGroup extends BaseCommand {
 
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("mset error: {}", e.getMessage());
+                log.error("mset error={}", e.getMessage());
                 finalPromise.setException(e);
                 return;
             }

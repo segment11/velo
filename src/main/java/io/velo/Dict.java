@@ -38,18 +38,18 @@ public class Dict implements Serializable {
 
     public static void resetGlobalDictBytes(byte[] dictBytes) {
         if (dictBytes.length == 0 || dictBytes.length > GLOBAL_DICT_BYTES_MAX_LENGTH) {
-            throw new IllegalStateException("Dict global dict bytes too long: " + dictBytes.length);
+            throw new IllegalStateException("Dict global dict bytes too long=" + dictBytes.length);
         }
 
         GLOBAL_ZSTD_DICT.dictBytes = dictBytes;
-        log.warn("Dict global dict bytes overwritten, dict bytes length: {}", dictBytes.length);
+        log.warn("Dict global dict bytes overwritten, dict bytes length={}", dictBytes.length);
         GLOBAL_ZSTD_DICT.closeCtx();
         GLOBAL_ZSTD_DICT.initCtx();
     }
 
     public static void initGlobalDictBytesByFile(File targetFile) {
         if (!targetFile.exists()) {
-            log.warn("Dict global dict file not exists: {}", targetFile.getAbsolutePath());
+            log.warn("Dict global dict file not exists={}", targetFile.getAbsolutePath());
             return;
         }
 
@@ -117,7 +117,7 @@ public class Dict implements Serializable {
                 decompressCtxArray[i] = new ZstdDecompressCtx();
                 decompressCtxArray[i].loadDict(dictBytes);
             }
-            log.info("Dict init decompress ctx, dict bytes length: {}, net workers: {}", dictBytes.length, decompressCtxArray.length);
+            log.info("Dict init decompress ctx, dict bytes length={}, net workers={}", dictBytes.length, decompressCtxArray.length);
         }
 
         if (ctxCompressArray == null) {
@@ -126,7 +126,7 @@ public class Dict implements Serializable {
                 ctxCompressArray[i] = new ZstdCompressCtx();
                 ctxCompressArray[i].loadDict(dictBytes);
             }
-            log.info("Dict init compress ctx, dict bytes length: {}, net workers: {}", dictBytes.length, ctxCompressArray.length);
+            log.info("Dict init compress ctx, dict bytes length={}, net workers={}", dictBytes.length, ctxCompressArray.length);
         }
     }
 
@@ -135,7 +135,7 @@ public class Dict implements Serializable {
             for (var zstdDecompressCtx : decompressCtxArray) {
                 zstdDecompressCtx.close();
             }
-            log.warn("Dict close decompress ctx, dict bytes length: {}, net workers: {}", dictBytes.length, decompressCtxArray.length);
+            log.warn("Dict close decompress ctx, dict bytes length={}, net workers={}", dictBytes.length, decompressCtxArray.length);
             decompressCtxArray = null;
         }
 
@@ -143,7 +143,7 @@ public class Dict implements Serializable {
             for (var zstdCompressCtx : ctxCompressArray) {
                 zstdCompressCtx.close();
             }
-            log.warn("Dict close compress ctx, dict bytes length: {}, net workers: {}", dictBytes.length, ctxCompressArray.length);
+            log.warn("Dict close compress ctx, dict bytes length={}, net workers={}", dictBytes.length, ctxCompressArray.length);
             ctxCompressArray = null;
         }
     }
@@ -240,7 +240,7 @@ public class Dict implements Serializable {
         var createdTime = is.readLong();
         var keyPrefixOrSuffixLength = is.readShort();
         if (keyPrefixOrSuffixLength > CompressedValue.KEY_MAX_LENGTH || keyPrefixOrSuffixLength <= 0) {
-            throw new IllegalStateException("Key prefix or suffix length error, key prefix or suffix length: " + keyPrefixOrSuffixLength);
+            throw new IllegalStateException("Key prefix or suffix length error, key prefix or suffix length=" + keyPrefixOrSuffixLength);
         }
 
         var keyPrefixOrSuffixBytes = new byte[keyPrefixOrSuffixLength];
@@ -250,7 +250,7 @@ public class Dict implements Serializable {
         is.readFully(dictBytes);
 
         if (vLength != ENCODED_HEADER_LENGTH + keyPrefixOrSuffixLength + dictBytesLength) {
-            throw new IllegalStateException("Invalid length: " + vLength);
+            throw new IllegalStateException("Invalid length=" + vLength);
         }
 
         var dict = new Dict();
@@ -279,7 +279,7 @@ public class Dict implements Serializable {
     // only create when train new dict by TrainSampleJob
     public Dict(byte[] dictBytes) {
         if (dictBytes.length > Short.MAX_VALUE) {
-            throw new IllegalArgumentException("Dict bytes too long: " + dictBytes.length);
+            throw new IllegalArgumentException("Dict bytes too long=" + dictBytes.length);
         }
 
         this.dictBytes = dictBytes;

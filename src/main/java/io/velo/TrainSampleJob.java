@@ -97,7 +97,7 @@ public class TrainSampleJob {
             assert isAddSampleOk;
 //            boolean isAddSampleOk = trainer.addSample(body);
 //            if (!isAddSampleOk) {
-//                log.warn("Train sample, w={}, train dict add sample fail, sample size: {}, add body size: {}",
+//                log.warn("Train sample, w={}, train dict add sample fail, sample size={}, add body size={}",
 //                        workerId, sampleBodyLength, body.length);
 //            }
         }
@@ -108,10 +108,10 @@ public class TrainSampleJob {
             dictBytes = trainer.trainSamples();
             var costT = System.currentTimeMillis() - beginT;
 
-            log.info("Train sample, w={} train dict ok, sample size: {}, dict size: {}, cost time: {} ms",
+            log.info("Train sample, w={} train dict ok, sample size={}, dict size={}, cost time={} ms",
                     workerId, sampleBodyLength, dictBytes.length, costT);
         } catch (ZstdException ze) {
-            log.error("Train sample, w={} train dict, sample size: {}, error: {}",
+            log.error("Train sample, w={} train dict, sample size={}, error={}",
                     workerId, sampleBodyLength, ze.getMessage());
             return null;
         }
@@ -147,7 +147,7 @@ public class TrainSampleJob {
     public TrainSampleResult train() {
         trainCount++;
         if (trainCount % 100 == 0 || Debug.getInstance().logTrainDict) {
-            log.info("Train sample, worker {} train sample list size: {}, dict size: {}, i am alive",
+            log.info("Train sample, worker {} train sample list size={}, dict size={}, i am alive",
                     workerId, sampleToTrainListCopy.size(), cacheDict.size());
         }
 
@@ -189,7 +189,7 @@ public class TrainSampleJob {
                 for (var one : list) {
                     removedSampleKVSeqList.add(one.seq());
                 }
-                log.info("Train sample, worker {} train dict ok, key prefix: {}, dict size: {}, removed sample size: {}",
+                log.info("Train sample, worker {} train dict ok, key prefix={}, dict size={}, removed sample size={}",
                         workerId, keyPrefixOrSuffix, dict.getDictBytes().length, list.size());
 
                 // need persist immediately, todo
