@@ -271,7 +271,7 @@ migrating_state:ok
         def multiShard = localPersist.multiShard
 
         def mySelfShard = multiShard.mySelfShard()
-        if (mySelfShard == null) {
+        if (!mySelfShard) {
             def node = new Node()
             def hostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
             node.host = hostAndPort.host()
@@ -315,7 +315,7 @@ migrating_state:ok
         def multiShard = localPersist.multiShard
 
         def mySelfShard = multiShard.mySelfShard()
-        if (mySelfShard == null) {
+        if (!mySelfShard) {
             def node = new Node()
             def hostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
             node.host = hostAndPort.host()
@@ -425,7 +425,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         boolean resetMySelfAsSlave = false
 
         def mySelfShard = multiShard.mySelfShard()
-        if (mySelfShard == null || oldMySelfShard == null) {
+        if (!mySelfShard || !oldMySelfShard) {
             // delete my self node from cluster, reset as master
             resetMySelfAsMaster = true
         } else {
@@ -443,7 +443,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             def asyncReply = new AsyncReply(finalPromise)
 
             def leaderSelector = LeaderSelector.instance
-            leaderSelector.resetAsMaster(false, (e) -> {
+            leaderSelector.resetAsMaster((e) -> {
                 if (e != null) {
                     log.error('Reset as master failed', e)
                     finalPromise.set(new ErrorReply('error when reset as master: ' + e.message))
@@ -462,7 +462,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             def asyncReply = new AsyncReply(finalPromise)
 
             def leaderSelector = LeaderSelector.instance
-            leaderSelector.resetAsSlave(false, toMasterNode.host, toMasterNode.port, (e) -> {
+            leaderSelector.resetAsSlave(toMasterNode.host, toMasterNode.port, (e) -> {
                 if (e != null) {
                     log.error('Reset as slave failed', e)
                     finalPromise.set(new ErrorReply('error when reset as master: ' + e.message))
@@ -530,13 +530,26 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         }
         multiShard.updateClusterVersion(clusterVersion)
 
+        // check if to node id is my self node charge
+        boolean isMySelfNodeChargeThisInnerSlot = false
+        def mySelfShard = multiShard.mySelfShard()
+        if (mySelfShard) {
+            def mySelfNode = mySelfShard.mySelfNode()
+            isMySelfNodeChargeThisInnerSlot = mySelfNode.nodeId() == nodeId
+        }
+
+        if (!isMySelfNodeChargeThisInnerSlot) {
+            return OK
+        }
+
         def oneSlot = localPersist.oneSlot(innerSlot)
 
         SettablePromise<Reply> finalPromise = new SettablePromise<>()
         def asyncReply = new AsyncReply(finalPromise)
 
         oneSlot.asyncRun(RunnableEx.of {
-            oneSlot.resetReadonlyFalseAsMaster()
+            oneSlot.removeReplPairAsSlave()
+            oneSlot.resetAsMaster()
         }).whenComplete { done, e ->
             if (e) {
                 finalPromise.set(new ErrorReply('error when set slot: ' + e.message))

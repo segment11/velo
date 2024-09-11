@@ -375,7 +375,7 @@ public class SGroup extends BaseCommand {
             SettablePromise<Reply> finalPromise = new SettablePromise<>();
             var asyncReply = new AsyncReply(finalPromise);
 
-            leaderSelector.resetAsMaster(true, (e) -> {
+            leaderSelector.resetAsMaster((e) -> {
                 if (e != null) {
                     log.error("slaveof error: {}", e.getMessage());
                     finalPromise.set(new ErrorReply(e.getMessage()));
@@ -407,7 +407,7 @@ public class SGroup extends BaseCommand {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        leaderSelector.resetAsSlave(true, host, port, (e) -> {
+        leaderSelector.resetAsSlave(host, port, (e) -> {
             if (e != null) {
                 log.error("slaveof error: {}", e.getMessage());
                 finalPromise.set(new ErrorReply(e.getMessage()));

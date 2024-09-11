@@ -264,8 +264,7 @@ public class LeaderSelector implements NeedCleanUp {
     private long lastResetAsMasterTimeMillis;
     private long lastResetAsSlaveTimeMillis;
 
-    // run in primary eventloop, slave of is running in net-worker thread, need check, todo
-    public void resetAsMaster(boolean returnExceptionIfAlreadyIsMaster, Consumer<Exception> callback) {
+    public void resetAsMaster(Consumer<Exception> callback) {
         if (masterAddressLocalMocked != null) {
             callback.accept(null);
 //            callback.accept(new RuntimeException("just test callback when reset as master"));
@@ -274,34 +273,6 @@ public class LeaderSelector implements NeedCleanUp {
 
         lastResetAsMasterTimeMillis = System.currentTimeMillis();
 
-        var localPersist = LocalPersist.getInstance();
-
-        // when support cluster, need to check all slots, todo
-        var firstOneSlot = localPersist.oneSlots()[0];
-        var pp = firstOneSlot.asyncCall(firstOneSlot::isAsSlave);
-
-        pp.whenComplete((isAsSlave, e) -> {
-            if (e != null) {
-                callback.accept(e);
-                return;
-            }
-
-            if (!isAsSlave) {
-                // already is master
-                if (returnExceptionIfAlreadyIsMaster) {
-                    callback.accept(new IllegalStateException("Repl already is master"));
-                } else {
-                    callback.accept(null);
-                }
-                return;
-            }
-
-            log.warn("Repl reset self as master, {}", ConfForGlobal.netListenAddresses);
-            resetAsMasterNextStep(callback);
-        });
-    }
-
-    private static void resetAsMasterNextStep(Consumer<Exception> callback) {
         var localPersist = LocalPersist.getInstance();
 
         Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
@@ -332,30 +303,7 @@ public class LeaderSelector implements NeedCleanUp {
                 }
 
                 oneSlot.removeReplPairAsSlave();
-
-                // reset as master
-                oneSlot.persistMergingOrMergedSegmentsButNotPersisted();
-                oneSlot.checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(false);
-                oneSlot.getMergedSegmentIndexEndLastTime();
-
-                // set binlog same as old master last updated
-                var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();
-                var lastUpdatedFileIndexAndOffset = metaChunkSegmentIndex.getMasterBinlogFileIndexAndOffset();
-                var lastUpdatedFileIndex = lastUpdatedFileIndexAndOffset.fileIndex();
-                var lastUpdatedOffset = lastUpdatedFileIndexAndOffset.offset();
-
-                var marginLastUpdatedOffset = Binlog.marginFileOffset(lastUpdatedOffset);
-
-                var binlog = oneSlot.getBinlog();
-                binlog.reopenAtFileIndexAndMarginOffset(lastUpdatedFileIndex, marginLastUpdatedOffset);
-                binlog.moveToNextSegment(true);
-
-                // clear old as slave catch up binlog info
-                // need fetch from the beginning, for data consistency
-                // when next time begin slave again
-                metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
-
-                oneSlot.resetReadonlyFalseAsMaster();
+                oneSlot.resetAsMaster();
 
                 if (oneSlot.slot() == 0) {
                     localPersist.getIndexHandlerPool().resetAsMaster();
@@ -381,8 +329,7 @@ public class LeaderSelector implements NeedCleanUp {
         });
     }
 
-    // run in primary eventloop, slave of is running in net-worker thread, need check, todo
-    public void resetAsSlave(boolean returnExceptionIfAlreadyIsSlave, String host, int port, Consumer<Exception> callback) {
+    public void resetAsSlave(String host, int port, Consumer<Exception> callback) {
         if (masterAddressLocalMocked != null) {
             callback.accept(null);
 //            callback.accept(new RuntimeException("just test callback when reset as slave"));
@@ -391,65 +338,6 @@ public class LeaderSelector implements NeedCleanUp {
 
         lastResetAsSlaveTimeMillis = System.currentTimeMillis();
 
-        var localPersist = LocalPersist.getInstance();
-
-        // when support cluster, need to check all slots, todo
-        var firstOneSlot = localPersist.oneSlots()[0];
-        var pp = firstOneSlot.asyncCall(firstOneSlot::getOnlyOneReplPairAsSlave);
-
-        pp.whenComplete((replPairAsSlave, e) -> {
-            if (e != null) {
-                callback.accept(e);
-                return;
-            }
-
-            boolean needCloseOldReplPairAsSlave = false;
-            if (replPairAsSlave != null) {
-                if (returnExceptionIfAlreadyIsSlave) {
-                    callback.accept(new IllegalStateException("Repl already is slave"));
-                    return;
-                }
-
-                if (replPairAsSlave.getHost().equals(host) && replPairAsSlave.getPort() == port) {
-                    // already is slave of target host and port
-                    log.debug("Repl already is slave of target host and port: {}:{}", host, port);
-                    callback.accept(null);
-                    return;
-                } else {
-                    needCloseOldReplPairAsSlave = true;
-                }
-            }
-
-            if (needCloseOldReplPairAsSlave) {
-                log.warn("Repl slave ready to remove old repl pair as slave, old master: {}", replPairAsSlave.getHostAndPort());
-
-                Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
-                for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
-                    var oneSlot = localPersist.oneSlot((short) i);
-                    // still is a slave, need not reset readonly
-                    promises[i] = oneSlot.asyncRun(() -> {
-                        oneSlot.removeReplPairAsSlave();
-                        log.warn("Repl slave removed old repl pair as slave, old master: {}", replPairAsSlave.getHostAndPort());
-
-                        oneSlot.getBinlog().moveToNextSegment();
-                    });
-                }
-
-                Promises.all(promises).whenComplete((r, ee) -> {
-                    if (ee != null) {
-                        callback.accept(ee);
-                        return;
-                    }
-
-                    makeSelfAsSlave(host, port, callback);
-                });
-            } else {
-                makeSelfAsSlave(host, port, callback);
-            }
-        });
-    }
-
-    private void makeSelfAsSlave(String host, int port, Consumer<Exception> callback) {
         log.warn("Repl reset self as slave begin, check new master global config first, {}", ConfForGlobal.netListenAddresses);
         try {
             var jedisPool = JedisPoolHolder.getInstance().create(host, port);
@@ -482,14 +370,17 @@ public class LeaderSelector implements NeedCleanUp {
         for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
             var oneSlot = localPersist.oneSlot((short) i);
             promises[i] = oneSlot.asyncRun(() -> {
-                // clear old as slave catch up binlog info
-                // need fetch from the beginning, for data consistency
-                oneSlot.getMetaChunkSegmentIndex().clearMasterBinlogFileIndexAndOffset();
-                oneSlot.createReplPairAsSlave(host, port);
+                var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
+                if (replPairAsSlave != null) {
+                    if (replPairAsSlave.getHost().equals(host) && replPairAsSlave.getPort() == port) {
+                        log.warn("Repl old repl pair as slave is same as new master, slot: {}", oneSlot.slot());
+                        return;
+                    } else {
+                        oneSlot.removeReplPairAsSlave();
+                    }
+                }
 
-                oneSlot.getBinlog().moveToNextSegment();
-                // do not write binlog as slave
-                oneSlot.getDynConfig().setBinlogOn(false);
+                oneSlot.resetAsSlave(host, port);
             });
         }
 

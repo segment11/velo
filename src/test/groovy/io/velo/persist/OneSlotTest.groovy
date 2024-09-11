@@ -415,10 +415,16 @@ class OneSlotTest extends Specification {
         !oneSlot.canRead
 
         when:
-        oneSlot.resetReadonlyFalseAsMaster()
-        oneSlot.resetReadonlyFalseAsMaster()
+        oneSlot.resetAsMaster()
         then:
-        1 == 1
+        oneSlot.canRead
+        !oneSlot.readonly
+
+        when:
+        oneSlot.resetAsSlave('localhost', 6379)
+        then:
+        !oneSlot.canRead
+        oneSlot.readonly
 
         when:
         // just for log

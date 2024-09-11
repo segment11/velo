@@ -1,7 +1,6 @@
 package io.velo.repl
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import io.activej.eventloop.Eventloop
 import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
 import io.velo.SocketInspector
@@ -12,7 +11,6 @@ import io.velo.persist.LocalPersistTest
 import io.velo.repl.support.JedisPoolHolder
 import spock.lang.Specification
 
-import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 class LeaderSelectorTest extends Specification {
@@ -36,8 +34,8 @@ class LeaderSelectorTest extends Specification {
         leaderSelector.masterAddressLocalMocked == testListenAddress
         leaderSelector.tryConnectAndGetMasterListenAddress() == testListenAddress
         leaderSelector.getFirstSlaveListenAddressByMasterHostAndPort('localhost', 6379, slot) == testListenAddress
-        leaderSelector.resetAsMaster(true, e -> { })
-        leaderSelector.resetAsSlave(true, '', 0, e -> { })
+        leaderSelector.resetAsMaster(e -> { })
+        leaderSelector.resetAsSlave('', 0, e -> { })
 
         when:
         leaderSelector.hasLeadershipLocalMocked = false
@@ -135,14 +133,9 @@ class LeaderSelectorTest extends Specification {
         localPersist.startIndexHandlerPool()
         Thread.sleep(1000)
 
-        def eventloopCurrent = Eventloop.builder()
-                .withCurrentThread()
-                .withIdleInterval(Duration.ofMillis(100))
-                .build()
-
         when:
-        CompletableFuture<Boolean> future = new CompletableFuture()
-        leaderSelector.resetAsMaster(true) { e ->
+        def future = new CompletableFuture()
+        leaderSelector.resetAsMaster { e ->
             if (e != null) {
                 println e.message
                 future.complete(false)
@@ -152,28 +145,13 @@ class LeaderSelectorTest extends Specification {
         }
         def r = future.get()
         then:
-        // is already master, exception caught
-        !r
-
-        when:
-        future = new CompletableFuture()
-        leaderSelector.resetAsMaster(false) { e ->
-            if (e != null) {
-                println e.message
-                future.complete(false)
-            } else {
-                future.complete(true)
-            }
-        }
-        r = future.get()
-        then:
         // is already master, skip
         r
 
         when:
         oneSlot.createReplPairAsSlave('localhost', 7379)
         future = new CompletableFuture()
-        leaderSelector.resetAsMaster(false) { e ->
+        leaderSelector.resetAsMaster { e ->
             if (e != null) {
                 println e.message
                 future.complete(false)
@@ -189,7 +167,7 @@ class LeaderSelectorTest extends Specification {
         def replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
         replPairAsSlave.masterCanNotConnect = true
         future = new CompletableFuture()
-        leaderSelector.resetAsMaster(false) { e ->
+        leaderSelector.resetAsMaster { e ->
             if (e != null) {
                 println e.message
                 future.complete(false)
@@ -208,7 +186,7 @@ class LeaderSelectorTest extends Specification {
         replPairAsSlave.masterReadonly = true
         replPairAsSlave.allCaughtUp = false
         future = new CompletableFuture()
-        leaderSelector.resetAsMaster(false) { e ->
+        leaderSelector.resetAsMaster { e ->
             if (e != null) {
                 println e.message
                 future.complete(false)
@@ -224,7 +202,7 @@ class LeaderSelectorTest extends Specification {
         when:
         replPairAsSlave.masterReadonly = false
         future = new CompletableFuture()
-        leaderSelector.resetAsMaster(false) { e ->
+        leaderSelector.resetAsMaster { e ->
             if (e != null) {
                 println e.message
                 future.complete(false)
@@ -240,7 +218,7 @@ class LeaderSelectorTest extends Specification {
         replPairAsSlave.masterReadonly = true
         replPairAsSlave.allCaughtUp = true
         future = new CompletableFuture()
-        leaderSelector.resetAsMaster(false) { e ->
+        leaderSelector.resetAsMaster { e ->
             if (e != null) {
                 println e.message
                 future.complete(false)
@@ -255,7 +233,7 @@ class LeaderSelectorTest extends Specification {
         when:
         leaderSelector.masterAddressLocalMocked = 'localhost:7379'
         future = new CompletableFuture()
-        leaderSelector.resetAsMaster(false) { e ->
+        leaderSelector.resetAsMaster { e ->
             if (e != null) {
                 println e.message
                 future.complete(false)
@@ -290,9 +268,9 @@ class LeaderSelectorTest extends Specification {
         when:
         oneSlot.doMockWhenCreateReplPairAsSlave = true
         oneSlot.createReplPairAsSlave('localhost', 7379)
-
-        CompletableFuture<Boolean> future = new CompletableFuture()
-        leaderSelector.resetAsSlave(true, 'localhost', 7379) { e ->
+        leaderSelector.masterAddressLocalMocked = 'localhost:7379'
+        def future = new CompletableFuture()
+        leaderSelector.resetAsSlave('localhost', 7379) { e ->
             if (e != null) {
                 println e.message
                 future.complete(false)
@@ -301,38 +279,6 @@ class LeaderSelectorTest extends Specification {
             }
         }
         def r = future.get()
-        then:
-        // is already slave, exception caught
-        !r
-        leaderSelector.lastResetAsSlaveTimeMillis > 0
-
-        when:
-        future = new CompletableFuture()
-        leaderSelector.resetAsSlave(false, 'localhost', 7379) { e ->
-            if (e != null) {
-                println e.message
-                future.complete(false)
-            } else {
-                future.complete(true)
-            }
-        }
-        r = future.get()
-        then:
-        // is already slave, target master is same, skip
-        r
-
-        when:
-        leaderSelector.masterAddressLocalMocked = 'localhost:7379'
-        future = new CompletableFuture()
-        leaderSelector.resetAsSlave(false, 'localhost', 7379) { e ->
-            if (e != null) {
-                println e.message
-                future.complete(false)
-            } else {
-                future.complete(true)
-            }
-        }
-        r = future.get()
         then:
         // use mock, just return
         r
@@ -361,7 +307,7 @@ class LeaderSelectorTest extends Specification {
         if (doThisCase) {
             // change master port, need close old as slave
             future = new CompletableFuture()
-            leaderSelector.resetAsSlave(false, 'localhost', 6379) { e ->
+            leaderSelector.resetAsSlave('localhost', 6379) { e ->
                 if (e != null) {
                     println e.message
                     future.complete(false)
@@ -386,7 +332,7 @@ class LeaderSelectorTest extends Specification {
                         jsonStr)
             }
             future = new CompletableFuture()
-            leaderSelector.resetAsSlave(false, 'localhost', 6379) { e ->
+            leaderSelector.resetAsSlave('localhost', 6379) { e ->
                 if (e != null) {
                     println e.message
                     future.complete(false)
@@ -401,12 +347,32 @@ class LeaderSelectorTest extends Specification {
         then:
         // json match
         r
+        leaderSelector.lastResetAsSlaveTimeMillis >= 0
+
+        when:
+        if (doThisCase) {
+            future = new CompletableFuture()
+            leaderSelector.resetAsSlave('localhost', 6379) { e ->
+                if (e != null) {
+                    println e.message
+                    future.complete(false)
+                } else {
+                    future.complete(true)
+                }
+            }
+            r = future.get()
+        } else {
+            r = true
+        }
+        then:
+        // is already slave, target master is same, skip
+        r
 
         when:
         if (doThisCase) {
             oneSlot.removeReplPairAsSlave()
             future = new CompletableFuture()
-            leaderSelector.resetAsSlave(false, 'localhost', 6379) { e ->
+            leaderSelector.resetAsSlave('localhost', 6379) { e ->
                 if (e != null) {
                     println e.message
                     future.complete(false)
@@ -426,6 +392,12 @@ class LeaderSelectorTest extends Specification {
                 'localhost:6380'
         then:
         firstSlaveListenAddress == 'localhost:6380'
+
+        when:
+        leaderSelector.masterAddressLocalMocked = 'localhost:6379'
+        firstSlaveListenAddress = leaderSelector.getFirstSlaveListenAddressByMasterHostAndPort('localhost', 6379, slot)
+        then:
+        firstSlaveListenAddress == 'localhost:6379'
 
         cleanup:
         JedisPoolHolder.instance.cleanUp()

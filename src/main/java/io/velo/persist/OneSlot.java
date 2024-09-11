@@ -307,7 +307,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     // todo, both master - master, need change equal and init as master or slave
-    public ReplPair createReplPairAsSlave(String host, int port) throws IOException {
+    public ReplPair createReplPairAsSlave(String host, int port) {
         var replPair = new ReplPair(slot, false, host, port);
         replPair.setSlaveUuid(masterUuid);
 
@@ -318,13 +318,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             log.warn("Repl create repl pair as slave, host: {}, port: {}, slot: {}", host, port, slot);
         }
         replPairs.add(replPair);
-
-        if (!isReadonly()) {
-            setReadonly(true);
-        }
-        if (isCanRead()) {
-            setCanRead(false);
-        }
         return replPair;
     }
 
@@ -339,22 +332,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 continue;
             }
 
+            log.warn("Repl remove repl pair as slave, host: {}, port: {}, slot: {}", replPair.getHost(), replPair.getPort(), slot);
             replPair.bye();
             addDelayNeedCloseReplPair(replPair);
             isSelfSlave = true;
         }
 
         return isSelfSlave;
-    }
-
-    public void resetReadonlyFalseAsMaster() throws IOException {
-        log.warn("Repl reset readonly false as master, slot: {}", slot);
-        if (isReadonly()) {
-            setReadonly(false);
-        }
-        if (!isCanRead()) {
-            setCanRead(true);
-        }
     }
 
     public ReplPair getReplPairAsMaster(long slaveUuid) {
@@ -1653,6 +1637,63 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         } else {
             mergeTargetSegments(needMergeSegmentIndexList, true);
         }
+    }
+
+    @MasterReset
+    public void resetAsMaster() throws IOException {
+        log.warn("Repl reset as master, slot: {}", slot);
+        persistMergingOrMergedSegmentsButNotPersisted();
+        checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(false);
+        getMergedSegmentIndexEndLastTime();
+
+        // set binlog same as old master last updated
+        var lastUpdatedFileIndexAndOffset = metaChunkSegmentIndex.getMasterBinlogFileIndexAndOffset();
+        var lastUpdatedFileIndex = lastUpdatedFileIndexAndOffset.fileIndex();
+        var lastUpdatedOffset = lastUpdatedFileIndexAndOffset.offset();
+
+        var marginLastUpdatedOffset = Binlog.marginFileOffset(lastUpdatedOffset);
+
+        binlog.reopenAtFileIndexAndMarginOffset(lastUpdatedFileIndex, marginLastUpdatedOffset);
+        binlog.moveToNextSegment(true);
+        log.warn("Repl reset binlog file index and offset as old master, file index: {}, offset: {}, slot: {}",
+                lastUpdatedFileIndex, marginLastUpdatedOffset, slot);
+
+        // clear old as slave catch up binlog info
+        // need fetch from the beginning, for data consistency
+        // when next time begin slave again
+        metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
+
+        if (isReadonly()) {
+            setReadonly(false);
+        }
+        if (!isCanRead()) {
+            setCanRead(true);
+        }
+        log.warn("Repl reset readonly false and can read, slot: {}", slot);
+    }
+
+    @SlaveReset
+    public void resetAsSlave(String host, int port) throws IOException {
+        // clear old as slave catch up binlog info
+        // need fetch from the beginning, for data consistency
+        metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
+        log.warn("Repl clear fetched binlog file index and offset as old slave, slot: {}", slot);
+
+        binlog.moveToNextSegment();
+
+        createReplPairAsSlave(host, port);
+
+        if (!isReadonly()) {
+            setReadonly(true);
+        }
+        if (isCanRead()) {
+            setCanRead(false);
+        }
+        log.warn("Repl reset readonly true and can not read, slot: {}", slot);
+
+        // do not write binlog as slave
+        dynConfig.setBinlogOn(false);
+        log.warn("Repl reset binlog on false as slave, slot: {}", slot);
     }
 
     private int mergeTargetSegments(ArrayList<Integer> needMergeSegmentIndexList, boolean isServerStart) {

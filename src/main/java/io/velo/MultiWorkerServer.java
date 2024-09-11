@@ -515,7 +515,7 @@ public class MultiWorkerServer extends Launcher {
 
         if (ConfForGlobal.netListenAddresses.equals(masterListenAddress)) {
             // self become master
-            leaderSelector.resetAsMaster(false, (e) -> {
+            leaderSelector.resetAsMaster((e) -> {
                 if (e != null) {
                     log.error("Reset as master failed", e);
                 } else {
@@ -532,7 +532,7 @@ public class MultiWorkerServer extends Launcher {
 
         if (!ConfForGlobal.isAsSlaveOfSlave) {
             // connect to master
-            leaderSelector.resetAsSlave(false, host, port, (e) -> {
+            leaderSelector.resetAsSlave(host, port, (e) -> {
                 if (e != null) {
                     log.error("Reset as slave failed", e);
                 } else {
@@ -549,7 +549,7 @@ public class MultiWorkerServer extends Launcher {
                 var hostSlave = arraySlave[0];
                 var portSlave = Integer.parseInt(arraySlave[1]);
 
-                leaderSelector.resetAsSlave(false, hostSlave, portSlave, (e) -> {
+                leaderSelector.resetAsSlave(hostSlave, portSlave, (e) -> {
                     if (e != null) {
                         log.error("Reset as slave failed", e);
                     } else {

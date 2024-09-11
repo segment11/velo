@@ -325,19 +325,15 @@ class ManageCommand extends BaseCommand {
                 if (force) {
                     log.warn 'Manage migrate_from, force remove exist repl pair as slave'
                     oneSlot.removeReplPairAsSlave()
-                    oneSlot.binlog.moveToNextSegment()
+                    oneSlot.resetAsSlave(host, port)
 
-                    oneSlot.metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset()
-                    oneSlot.createReplPairAsSlave(host, port)
-
-                    oneSlot.dynConfig.binlogOn = false
                     return ClusterxCommand.OK
                 } else {
                     return new ErrorReply('Already slave of other host: ' + replPairAsSlave.host + ':' + replPairAsSlave.port)
                 }
             }
         } else {
-            oneSlot.createReplPairAsSlave(host, port)
+            oneSlot.resetAsSlave(host, port)
             return ClusterxCommand.OK
         }
     }
