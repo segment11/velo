@@ -40,7 +40,7 @@ public class FileInit {
         for (int j = 0; j < batches; j++) {
             FileUtils.writeByteArrayToFile(file, oneBatchBytes, true);
         }
-        System.out.println("init write done, size: " + file.length() / 1024 / 1024 + " MB");
+        System.out.println("init write done, size=" + file.length() / 1024 / 1024 + " MB");
     }
 
 }

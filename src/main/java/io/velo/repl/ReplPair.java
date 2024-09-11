@@ -165,9 +165,9 @@ public class ReplPair {
     }
 
     public String getStatsCountForSlaveSkipFetchAsString() {
-        return "exists_wal skip fetch count: " + statsCountWhenSlaveSkipFetch[0] +
-                ", exists_chunk_segments skip fetch count: " + statsCountWhenSlaveSkipFetch[1] +
-                ", exists_key_buckets skip fetch count: " + statsCountWhenSlaveSkipFetch[2];
+        return "exists_wal skip fetch count=" + statsCountWhenSlaveSkipFetch[0] +
+                ", exists_chunk_segments skip fetch count=" + statsCountWhenSlaveSkipFetch[1] +
+                ", exists_key_buckets skip fetch count=" + statsCountWhenSlaveSkipFetch[2];
     }
 
     private final long[] statsCountForReplType = new long[ReplType.values().length];

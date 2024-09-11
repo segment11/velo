@@ -793,7 +793,7 @@ public class MultiWorkerServer extends Launcher {
                 throw new IllegalArgumentException("Slot number should be 1 or even");
             }
             ConfForGlobal.slotNumber = (short) slotNumber;
-            log.warn("Global config, slotNumber: " + ConfForGlobal.slotNumber);
+            log.warn("Global config, slotNumber=" + ConfForGlobal.slotNumber);
 
             if (ConfForGlobal.clusterEnabled) {
                 if (MultiShard.TO_CLIENT_SLOT_NUMBER % slotNumber != 0) {
@@ -816,7 +816,7 @@ public class MultiWorkerServer extends Launcher {
                 throw new IllegalArgumentException("Slot number should be multiple of net workers");
             }
             ConfForGlobal.netWorkers = (byte) netWorkers;
-            log.warn("Global config, netWorkers: " + ConfForGlobal.netWorkers);
+            log.warn("Global config, netWorkers=" + ConfForGlobal.netWorkers);
 
             int indexWorkers = config.get(ofInteger(), "indexWorkers", 1);
             if (indexWorkers > MAX_INDEX_WORKERS) {
@@ -826,7 +826,7 @@ public class MultiWorkerServer extends Launcher {
                 throw new IllegalArgumentException("Index workers should be less than cpu number");
             }
             ConfForGlobal.indexWorkers = (byte) indexWorkers;
-            log.warn("Global config, indexWorkers: " + ConfForGlobal.indexWorkers);
+            log.warn("Global config, indexWorkers=" + ConfForGlobal.indexWorkers);
 
             var dirFile = dirFile(config);
 

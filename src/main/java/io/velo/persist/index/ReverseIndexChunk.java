@@ -81,7 +81,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
             raf.seek(targetSegmentOffsetInRaf);
             var n = raf.read(bytes);
             if (n != ONE_WORD_HOLD_ONE_SEGMENT_LENGTH) {
-                throw new IllegalStateException("Index read by segment index error, expect: " + ONE_WORD_HOLD_ONE_SEGMENT_LENGTH + ", n: " + n + ", worker id: " + workerId);
+                throw new IllegalStateException("Index read by segment index error, expect=" + ONE_WORD_HOLD_ONE_SEGMENT_LENGTH + ", n=" + n + ", worker id=" + workerId);
             }
             return bytes;
         } catch (IOException e) {
@@ -91,7 +91,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
 
     void writeOneSegment(int segmentIndex, byte[] bytes) {
         if (segmentIndex >= maxSegmentNumber) {
-            throw new IllegalArgumentException("Segment index out of range: " + segmentIndex);
+            throw new IllegalArgumentException("Segment index out of range=" + segmentIndex);
         }
 
         var targetFdIndex = targetFdIndex(segmentIndex);
@@ -219,7 +219,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
 
         var segmentIndex = findOneSegmentAvailableForOneWord(lowerCaseWord);
         if (segmentIndex == -1) {
-            throw new RuntimeException("No available segment for word: " + lowerCaseWord);
+            throw new RuntimeException("No available segment for word=" + lowerCaseWord);
         }
 
         var metaOffset = segmentIndex * ONE_SEGMENT_INDEX_META_LENGTH;
@@ -300,7 +300,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
                 set.add(existLongId);
             }
             if (set.size() >= ONE_WORD_HOLD_ONE_SEGMENT_LONG_ID_COUNT) {
-                throw new RuntimeException("One word hold one segment long id count reach max: " + ONE_WORD_HOLD_ONE_SEGMENT_LONG_ID_COUNT);
+                throw new RuntimeException("One word hold one segment long id count reach max=" + ONE_WORD_HOLD_ONE_SEGMENT_LONG_ID_COUNT);
             }
             set.add(longId);
 
@@ -322,7 +322,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
     int addLongId(String lowerCaseWord, long longId) {
         var segmentIndex = wordToSegmentIndex.get(lowerCaseWord);
         if (segmentIndex == null) {
-            throw new RuntimeException("No segment index for word: " + lowerCaseWord);
+            throw new RuntimeException("No segment index for word=" + lowerCaseWord);
         }
 
         var writeIndex = writeIndexBySegmentIndexCached.get(segmentIndex);
@@ -373,7 +373,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
             raf.seek(targetSegmentOffsetInRaf);
             var n = raf.read(oneSegmentBytesForRead, 0, writeIndex);
             if (n != writeIndex) {
-                throw new IllegalStateException("Index read by write index error, expect: " + writeIndex + ", n: " + n + ", worker id: " + workerId);
+                throw new IllegalStateException("Index read by write index error, expect=" + writeIndex + ", n=" + n + ", worker id=" + workerId);
             }
 
             byteBufferForRead.position(0);

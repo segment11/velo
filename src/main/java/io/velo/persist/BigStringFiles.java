@@ -147,7 +147,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             bigStringFilesCount++;
             return true;
         } catch (IOException e) {
-            log.error("Write big string file error, uuid=" + uuid + ", key=" + key + ", slot: " + slot, e);
+            log.error("Write big string file error, uuid=" + uuid + ", key=" + key + ", slot=" + slot, e);
             return false;
         }
     }
@@ -187,7 +187,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             log.warn("Delete all big string files, slot={}", slot);
             bigStringFilesCount = 0;
         } catch (IOException e) {
-            log.error("Delete all big string files error, slot: " + slot, e);
+            log.error("Delete all big string files error, slot=" + slot, e);
         }
     }
 

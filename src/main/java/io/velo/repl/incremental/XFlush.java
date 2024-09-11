@@ -37,7 +37,7 @@ public class XFlush implements BinlogContent {
 
         var r = new XFlush();
         if (encodedLength != r.encodedLength()) {
-            throw new IllegalStateException("Invalid encoded length: " + encodedLength);
+            throw new IllegalStateException("Invalid encoded length=" + encodedLength);
         }
 
         return r;

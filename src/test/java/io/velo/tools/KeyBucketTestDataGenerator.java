@@ -82,13 +82,13 @@ public class KeyBucketTestDataGenerator implements TestDataGenerator, WalVDataGe
                 var fdReadWrite = fdReadWriteArray[splitIndex];
                 var n = fdReadWrite.writeSharedBytesForKeyBucketsInOneWalGroup(beginBucketIndex, sharedBytes);
                 if (walGroupIndex % 100 == 0) {
-                    System.out.println("Done write for wal group index: " + walGroupIndex + ", split index: " + splitIndex + ", n: " + n);
+                    System.out.println("Done write for wal group index=" + walGroupIndex + ", split index=" + splitIndex + ", n=" + n);
                 }
 
                 Arrays.fill(sharedBytes, (byte) 0);
             }
 
-            System.out.println("Done put for wal group index: " + walGroupIndex + ", v list size: " + vList.size());
+            System.out.println("Done put for wal group index=" + walGroupIndex + ", v list size=" + vList.size());
         }
 
         // clean up

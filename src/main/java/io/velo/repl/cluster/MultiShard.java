@@ -55,7 +55,7 @@ vars currentEpoch 0 lastVoteEpoch 0
             var node = new Node();
             var hostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses);
 //            if (hostAndPort == null) {
-//                throw new RuntimeException("Repl clusterx parse host and port failed: " + ConfForGlobal.netListenAddresses);
+//                throw new RuntimeException("Repl clusterx parse host and port failed=" + ConfForGlobal.netListenAddresses);
 //            }
             node.setMaster(true);
             node.host = hostAndPort.host();

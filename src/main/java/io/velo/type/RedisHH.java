@@ -182,7 +182,7 @@ public class RedisHH {
             buffer.get(keyBytes);
             var valueLength = buffer.getShort();
             if (valueLength <= 0) {
-                throw new IllegalStateException("Value length error, value length: " + valueLength);
+                throw new IllegalStateException("Value length error, value length=" + valueLength);
             }
 
             var valueBytes = new byte[valueLength];
@@ -205,7 +205,7 @@ public class RedisHH {
         } else {
             var dict = DictMap.getInstance().getDictBySeq(dictSeq);
             if (dict == null) {
-                throw new DictMissingException("Dict not found, dict seq: " + dictSeq);
+                throw new DictMissingException("Dict not found, dict seq=" + dictSeq);
             }
 
             var bodyBytes = new byte[bodyBytesLength];

@@ -67,7 +67,7 @@ public class BenchmarkFdReadWrite {
             fdReadWrite.cleanUp();
         }
 
-        System.out.println("Init int value set: " + initIntValueSet);
+        System.out.println("Init int value set=" + initIntValueSet);
     }
 
     private final Random random = new Random();

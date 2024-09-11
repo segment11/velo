@@ -45,7 +45,7 @@ public class ScanAndFlattenAndThenSetToAnotherRedis {
                         rawValue = value;
 
                         if (value.getBytes().length > Short.MAX_VALUE) {
-                            System.out.println("Type string, Key: " + key + " Value: " + value + ", Error: " + "Value is too long");
+                            System.out.println("Type string, Key=" + key + " Value=" + value + ", Error=" + "Value is too long");
                             continue;
                         }
 
@@ -86,7 +86,7 @@ public class ScanAndFlattenAndThenSetToAnotherRedis {
                             jedisTo.set(key + "_" + entry.getKey(), entry.getValue());
                         }
                     } else {
-                        System.out.println("Key: " + key + " Value: " + "Unknown type: " + keyType);
+                        System.out.println("Key=" + key + " Value=" + "Unknown type=" + keyType);
                     }
                     count++;
 
@@ -99,7 +99,7 @@ public class ScanAndFlattenAndThenSetToAnotherRedis {
                         break;
                     }
                 } catch (Exception e) {
-                    System.out.println("Key: " + key + " Value: " + rawValue + ", Error: " + e.getMessage());
+                    System.out.println("Key=" + key + " Value=" + rawValue + ", Error=" + e.getMessage());
                     throw e;
                 }
             }

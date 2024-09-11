@@ -76,12 +76,12 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         for (var ft : fromTos) {
             var fromToPair = ft.split("-");
             if (fromToPair.length != 2) {
-                throw new IllegalArgumentException("Invalid from to: " + ft);
+                throw new IllegalArgumentException("Invalid from to=" + ft);
             }
 
             var slotRange = new SlotRange(Integer.parseInt(fromToPair[0]), Integer.parseInt(fromToPair[1]));
             if (slotRange.begin > slotRange.end) {
-                throw new IllegalArgumentException("Invalid from to: " + ft);
+                throw new IllegalArgumentException("Invalid from to=" + ft);
             }
 
             r.list.add(slotRange);

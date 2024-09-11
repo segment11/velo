@@ -61,7 +61,7 @@ public class RDB {
         if ((type >= 0 && type <= 5) || (type >= 9 && type <= 21)) {
             return type;
         }
-        throw new IllegalArgumentException("Invalid object type: " + type);
+        throw new IllegalArgumentException("Invalid object type=" + type);
     }
 
     long loadObjectLen(boolean[] isEncodedArray) {

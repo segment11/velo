@@ -67,7 +67,7 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
         }
 
         if (encodedLength != x.encodedLength()) {
-            throw new IllegalStateException("Invalid encoded length: " + encodedLength);
+            throw new IllegalStateException("Invalid encoded length=" + encodedLength);
         }
         return x;
     }

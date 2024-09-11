@@ -71,7 +71,7 @@ public class XBigStrings implements BinlogContent {
         var keyLength = buffer.getShort();
 
         if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
-            throw new IllegalStateException("Key length error, key length: " + keyLength);
+            throw new IllegalStateException("Key length error, key length=" + keyLength);
         }
 
         var keyBytes = new byte[keyLength];
@@ -84,7 +84,7 @@ public class XBigStrings implements BinlogContent {
 
         var r = new XBigStrings(uuid, key, cvEncoded);
         if (encodedLength != r.encodedLength()) {
-            throw new IllegalStateException("Invalid encoded length: " + encodedLength);
+            throw new IllegalStateException("Invalid encoded length=" + encodedLength);
         }
         return r;
     }

@@ -35,7 +35,7 @@ public class TestBucketDataSkew {
             writer.write("s " + i + "\n");
             var array = bucketKeyCount[i];
             for (int j = 0; j < bucketsPerSlot; j++) {
-                writer.write("b " + j + " c: " + array[j] + "\n");
+                writer.write("b " + j + " c=" + array[j] + "\n");
             }
         }
         writer.close();

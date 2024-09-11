@@ -27,7 +27,7 @@ public interface BinlogContent {
                     return type;
                 }
             }
-            throw new IllegalArgumentException("Invalid binlog type code: " + code);
+            throw new IllegalArgumentException("Invalid binlog type code=" + code);
         }
 
         BinlogContent decodeFrom(ByteBuffer buffer) {

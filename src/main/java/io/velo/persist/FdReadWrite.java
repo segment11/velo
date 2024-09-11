@@ -429,7 +429,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         if (forReplAddress != 0) {
             var npagesRepl = npagesOneInner * REPL_ONCE_SEGMENT_COUNT_PREAD;
             pageManager.freePages(forReplAddress, npagesRepl);
-            System.out.println("Clean up fd read, name: " + name + ", for repl address: " + forReplAddress);
+            System.out.println("Clean up fd read, name=" + name + ", for repl address=" + forReplAddress);
 
             forReplAddress = 0;
             forReplBuffer = null;
@@ -438,7 +438,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         if (readForMergeBatchAddress != 0) {
             var npagesMerge = npagesOneInner * BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE;
             pageManager.freePages(readForMergeBatchAddress, npagesMerge);
-            System.out.println("Clean up fd read, name: " + name + ", read for merge batch address: " + readForMergeBatchAddress);
+            System.out.println("Clean up fd read, name=" + name + ", read for merge batch address=" + readForMergeBatchAddress);
 
             readForMergeBatchAddress = 0;
             readForMergeBatchBuffer = null;
@@ -447,7 +447,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         if (forOneWalGroupBatchAddress != 0) {
             var npagesOneWalGroup = ConfForSlot.global.confWal.oneChargeBucketNumber;
             pageManager.freePages(forOneWalGroupBatchAddress, npagesOneWalGroup);
-            System.out.println("Clean up fd read, name: " + name + ", for one wal group address: " + forOneWalGroupBatchAddress);
+            System.out.println("Clean up fd read, name=" + name + ", for one wal group address=" + forOneWalGroupBatchAddress);
 
             forOneWalGroupBatchAddress = 0;
             forOneWalGroupBatchBuffer = null;
@@ -456,9 +456,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         if (fd != 0) {
             int r = libC.close(fd);
             if (r < 0) {
-                System.err.println("Close fd error: " + libC.strerror(r) + ", name: " + name);
+                System.err.println("Close fd error=" + libC.strerror(r) + ", name=" + name);
             }
-            System.out.println("Closed fd: " + fd + ", name: " + name);
+            System.out.println("Closed fd=" + fd + ", name=" + name);
         }
     }
 
@@ -470,12 +470,12 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         if (isChunkFd) {
             // one inner index -> chunk segment index
             if (oneInnerIndex < 0 || oneInnerIndex >= ConfForSlot.global.confChunk.segmentNumberPerFd) {
-                throw new IllegalArgumentException("Segment index: " + oneInnerIndex + " must be in [0, " + ConfForSlot.global.confChunk.segmentNumberPerFd + ")");
+                throw new IllegalArgumentException("Segment index=" + oneInnerIndex + " must be in [0, " + ConfForSlot.global.confChunk.segmentNumberPerFd + ")");
             }
         } else {
             // one inner index -> bucket index
             if (oneInnerIndex < 0 || oneInnerIndex >= ConfForSlot.global.confBucket.bucketsPerSlot) {
-                throw new IllegalArgumentException("Bucket index: " + oneInnerIndex + " must be in [0, " + ConfForSlot.global.confBucket.bucketsPerSlot + ")");
+                throw new IllegalArgumentException("Bucket index=" + oneInnerIndex + " must be in [0, " + ConfForSlot.global.confBucket.bucketsPerSlot + ")");
             }
         }
     }
@@ -487,7 +487,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     private byte[] readInnerByBuffer(int oneInnerIndex, ByteBuffer buffer, boolean isRefreshLRUCache, int length) {
         checkOneInnerIndex(oneInnerIndex);
         if (length > buffer.capacity()) {
-            throw new IllegalArgumentException("Read length must be less than buffer capacity: " + buffer.capacity() + ", read length: " + length + ", name: " + name);
+            throw new IllegalArgumentException("Read length must be less than buffer capacity=" + buffer.capacity() + ", read length=" + length + ", name=" + name);
         }
 
         // for from lru cache if only read one segment
@@ -532,10 +532,10 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             readLength = (int) (writeIndex - offset);
         }
         if (readLength < 0) {
-            throw new IllegalArgumentException("Read length must be greater than 0, read length: " + readLength);
+            throw new IllegalArgumentException("Read length must be greater than 0, read length=" + readLength);
         }
         if (readLength > length) {
-            throw new IllegalArgumentException("Read length must be less than given length: " + length + ", read length: " + readLength);
+            throw new IllegalArgumentException("Read length must be less than given length=" + length + ", read length=" + readLength);
         }
 
         // clear buffer before read
@@ -552,7 +552,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
         if (n != readLength) {
             log.error("Read error, n={}, read length={}, name={}", n, readLength, name);
-            throw new RuntimeException("Read error, n: " + n + ", read length: " + readLength + ", name: " + name);
+            throw new RuntimeException("Read error, n=" + n + ", read length=" + readLength + ", name=" + name);
         }
 
         buffer.rewind();
@@ -616,7 +616,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
         if (n != capacity) {
             log.error("Write error, n={}, buffer capacity={}, name={}", n, capacity, name);
-            throw new RuntimeException("Write error, n: " + n + ", buffer capacity: " + capacity + ", name: " + name);
+            throw new RuntimeException("Write error, n=" + n + ", buffer capacity=" + capacity + ", name=" + name);
         }
 
         if (offset + capacity > writeIndex) {
@@ -654,7 +654,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
                 // readonly, use a copy will be safe, but not necessary
                 return getSharedBytesDecompressFromMemory(walGroupIndex);
             } else {
-                throw new IllegalArgumentException("Read error, key loader fd once read key buckets count invalid: " + oneInnerCount);
+                throw new IllegalArgumentException("Read error, key loader fd once read key buckets count invalid=" + oneInnerCount);
             }
         }
 
@@ -847,7 +847,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         if (libC != null) {
             var r = libC.ftruncate(fd, 0);
             if (r < 0) {
-                throw new RuntimeException("Truncate error: " + libC.strerror(r));
+                throw new RuntimeException("Truncate error=" + libC.strerror(r));
             }
             log.info("Truncate fd={}, name={}", fd, name);
 

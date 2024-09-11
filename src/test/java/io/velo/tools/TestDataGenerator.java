@@ -29,7 +29,7 @@ public interface TestDataGenerator {
     default void prepare() {
         var slotDir = slotDir();
         if (slotDir.exists()) {
-            throw new IllegalStateException("slot dir exists: " + slotDir);
+            throw new IllegalStateException("slot dir exists=" + slotDir);
         }
     }
 

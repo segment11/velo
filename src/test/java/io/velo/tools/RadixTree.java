@@ -88,7 +88,7 @@ public class RadixTree {
     public void sumIncrFromRoot(int[] nextLevelBeginIndex) {
         var sb = new StringBuilder();
         long sum = sumIncr(root, sb, nextLevelBeginIndex);
-        System.out.println(sb + ": " + sum);
+        System.out.println(sb + "=" + sum);
     }
 
     private byte[] insertRec(ByteBuffer buffer, byte[] content, Node current, boolean isIncr) {
@@ -101,7 +101,7 @@ public class RadixTree {
         buffer.reset();
         byte index = BYTE_INDEX_ARRAY[first];
         if (index == -1) {
-            throw new IllegalArgumentException("Not supported byte: " + first);
+            throw new IllegalArgumentException("Not supported byte=" + first);
         }
 
         var node = current.children[index];
@@ -346,13 +346,13 @@ public class RadixTree {
 
     public static void printByteIndex() {
         for (int i = 0; i < READABLE_BYTES.length; i++) {
-            System.out.println(i + ": " + READABLE_BYTES[i]);
+            System.out.println(i + "=" + READABLE_BYTES[i]);
         }
 
         for (int i = 0; i < BYTE_INDEX_ARRAY.length; i++) {
             byte index = BYTE_INDEX_ARRAY[i];
             if (index != -1) {
-                System.out.println(i + " index: " + index);
+                System.out.println(i + " index=" + index);
             }
         }
     }
@@ -426,11 +426,11 @@ public class RadixTree {
 //        rt.insertByStringForTest2("graph");
 
         for (int i = 0; i < 10; i++) {
-            System.out.println("incr xxx result: " + rt.incrByString("xxx"));
-            System.out.println("incr xyz result: " + rt.incrByString("xyz"));
-            System.out.println("incr xyab result: " + rt.incrByString("xyab"));
-            System.out.println("incr yab result: " + rt.incrByString("yab"));
-            System.out.println("incr ybc result: " + rt.incrByString("ybc"));
+            System.out.println("incr xxx result=" + rt.incrByString("xxx"));
+            System.out.println("incr xyz result=" + rt.incrByString("xyz"));
+            System.out.println("incr xyab result=" + rt.incrByString("xyab"));
+            System.out.println("incr yab result=" + rt.incrByString("yab"));
+            System.out.println("incr ybc result=" + rt.incrByString("ybc"));
         }
 
 //        rt.sumIncrFromRoot(new int[]{0, 1, 1});
@@ -438,23 +438,23 @@ public class RadixTree {
 
 //        System.out.println("------------");
 //        rt.print((str, content) -> {
-//            System.out.println(str + ": " + new String(content));
+//            System.out.println(str + "=" + new String(content));
 //        });
 //        System.out.println("------------");
 //
-//        System.out.println("remove cat result: " + new String(rt.removeByString("cat")));
-//        System.out.println("remove dog result: " + new String(rt.removeByString("dog")));
+//        System.out.println("remove cat result=" + new String(rt.removeByString("cat")));
+//        System.out.println("remove dog result=" + new String(rt.removeByString("dog")));
 //        byte[] dog1s = rt.removeByString("dog1");
-//        System.out.println("remove dog1 result: " + (dog1s == null ? "null" : new String(dog1s)));
+//        System.out.println("remove dog1 result=" + (dog1s == null ? "null" : new String(dog1s)));
 //
 //        System.out.println("------------");
 //        rt.print((str, content) -> {
-//            System.out.println(str + ": " + new String(content));
+//            System.out.println(str + "=" + new String(content));
 //        });
 //        System.out.println("------------");
 //
 //        var r = rt.getByString("ban}ana");
-//        System.out.println("get ban}ana result: " + new String(r));
+//        System.out.println("get ban}ana result=" + new String(r));
     }
 
     static interface PrintCallback {

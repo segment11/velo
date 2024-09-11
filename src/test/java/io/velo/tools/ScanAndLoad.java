@@ -77,14 +77,14 @@ public class ScanAndLoad {
                                         params[i + 3] = fieldList.get(i);
                                     }
                                     var trainDictResult = jedisTo.sendCommand(new ExtendProtocolCommand("manage"), params);
-                                    System.out.println("Train dict result: " + trainDictResult);
+                                    System.out.println("Train dict result=" + trainDictResult);
                                     fieldList.clear();
                                 }
                             }
                         }
                     }
                 } catch (Exception e) {
-                    System.out.println("Key: " + key + " Value: " + rawValue + ", Error: " + e.getMessage());
+                    System.out.println("Key=" + key + " Value=" + rawValue + ", Error=" + e.getMessage());
                     throw e;
                 }
             }
@@ -126,7 +126,7 @@ public class ScanAndLoad {
                         rawValue = value;
 
                         if (value.getBytes().length > Short.MAX_VALUE) {
-                            System.out.println("Type string, Key: " + key + " Value: " + value + ", Error: " + "Value is too long");
+                            System.out.println("Type string, Key=" + key + " Value=" + value + ", Error=" + "Value is too long");
                             continue;
                         }
 
@@ -135,7 +135,7 @@ public class ScanAndLoad {
                         } else {
                             var value2 = jedisTo.get(key);
                             if (!value.equals(value2)) {
-                                System.out.println("Type string, Key: " + key + " Value: " + value + ", Error: " + "Value not equal");
+                                System.out.println("Type string, Key=" + key + " Value=" + value + ", Error=" + "Value not equal");
                                 notEqualCount++;
                             }
                         }
@@ -160,12 +160,12 @@ public class ScanAndLoad {
                         } else {
                             var listValue2 = jedisTo.lrange(key, 0, -1);
                             if (listValue.size() != listValue2.size()) {
-                                System.out.println("Type list, Key: " + key + " Value: " + listValue + ", Error: " + "List size not equal");
+                                System.out.println("Type list, Key=" + key + " Value=" + listValue + ", Error=" + "List size not equal");
                                 notEqualCount++;
                             } else {
                                 for (int i = 0; i < listValue.size(); i++) {
                                     if (!listValue.get(i).equals(listValue2.get(i))) {
-                                        System.out.println("Type list, Key: " + key + " Value: " + listValue + ", Error: " + "List value not equal");
+                                        System.out.println("Type list, Key=" + key + " Value=" + listValue + ", Error=" + "List value not equal");
                                         notEqualCount++;
                                         break;
                                     }
@@ -186,12 +186,12 @@ public class ScanAndLoad {
                         } else {
                             var setValue2 = jedisTo.smembers(key);
                             if (setValue.size() != setValue2.size()) {
-                                System.out.println("Type set, Key: " + key + " Value: " + setValue + ", Error: " + "Set size not equal");
+                                System.out.println("Type set, Key=" + key + " Value=" + setValue + ", Error=" + "Set size not equal");
                                 notEqualCount++;
                             } else {
                                 for (var value : setValue) {
                                     if (!setValue2.contains(value)) {
-                                        System.out.println("Type set, Key: " + key + " Value: " + setValue + ", Error: " + "Set value not equal");
+                                        System.out.println("Type set, Key=" + key + " Value=" + setValue + ", Error=" + "Set value not equal");
                                         notEqualCount++;
                                         break;
                                     }
@@ -211,13 +211,13 @@ public class ScanAndLoad {
                         } else {
                             var zsetValue2 = jedisTo.zrangeWithScores(key, 0, -1);
                             if (zsetValue.size() != zsetValue2.size()) {
-                                System.out.println("Type zset, Key: " + key + " Value: " + zsetValue + ", Error: " + "ZSet size not equal");
+                                System.out.println("Type zset, Key=" + key + " Value=" + zsetValue + ", Error=" + "ZSet size not equal");
                                 notEqualCount++;
                             } else {
                                 for (int i = 0; i < zsetValue.size(); i++) {
                                     if (!zsetValue.get(i).getElement().equals(zsetValue2.get(i).getElement()) ||
                                             zsetValue.get(i).getScore() != zsetValue2.get(i).getScore()) {
-                                        System.out.println("Type zset, Key: " + key + " Value: " + zsetValue + ", Error: " + "ZSet value not equal");
+                                        System.out.println("Type zset, Key=" + key + " Value=" + zsetValue + ", Error=" + "ZSet value not equal");
                                         notEqualCount++;
                                         break;
                                     }
@@ -249,12 +249,12 @@ public class ScanAndLoad {
                         } else {
                             var hashValue2 = jedisTo.hgetAll(key);
                             if (hashValue.size() != hashValue2.size()) {
-                                System.out.println("Type: hash, Key: " + key + " Value: " + hashValue + ", Error: " + "Hash size not equal");
+                                System.out.println("Type: hash, Key=" + key + " Value=" + hashValue + ", Error=" + "Hash size not equal");
                                 notEqualCount++;
                             } else {
                                 for (var entry : hashValue.entrySet()) {
                                     if (!entry.getValue().equals(hashValue2.get(entry.getKey()))) {
-                                        System.out.println("Type hash, Key: " + key + " Value: " + hashValue + ", Error: " + "Hash value not equal");
+                                        System.out.println("Type hash, Key=" + key + " Value=" + hashValue + ", Error=" + "Hash value not equal");
                                         notEqualCount++;
                                         break;
                                     }
@@ -262,7 +262,7 @@ public class ScanAndLoad {
                             }
                         }
                     } else {
-                        System.out.println("Key: " + key + " Value: " + "Unknown type: " + keyType);
+                        System.out.println("Key=" + key + " Value=" + "Unknown type=" + keyType);
                     }
                     count++;
 
@@ -275,7 +275,7 @@ public class ScanAndLoad {
                         break;
                     }
                 } catch (Exception e) {
-                    System.out.println("Key: " + key + " Value: " + rawValue + ", Error: " + e.getMessage());
+                    System.out.println("Key=" + key + " Value=" + rawValue + ", Error=" + e.getMessage());
                     throw e;
                 }
             }
@@ -287,6 +287,6 @@ public class ScanAndLoad {
             result = jedis.scan(cursor);
         }
 
-        System.out.println("Processed " + count + " keys, not equal count: " + notEqualCount);
+        System.out.println("Processed " + count + " keys, not equal count=" + notEqualCount);
     }
 }

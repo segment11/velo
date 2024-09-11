@@ -41,7 +41,7 @@ public class PersistValueMeta {
     int cellCostInKeyBucket() {
         var valueLength = extendBytes != null ? extendBytes.length : ENCODED_LENGTH;
         if (valueLength > Byte.MAX_VALUE) {
-            throw new IllegalArgumentException("Persist value meta extend bytes too long: " + valueLength);
+            throw new IllegalArgumentException("Persist value meta extend bytes too long=" + valueLength);
         }
         return KeyBucket.KVMeta.calcCellCount((short) keyBytes.length, (byte) valueLength);
     }

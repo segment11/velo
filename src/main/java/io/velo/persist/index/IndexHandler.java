@@ -131,7 +131,7 @@ public class IndexHandler implements NeedCleanUp {
     @Override
     public void cleanUp() {
         threadIdProtectedForSafe = Thread.currentThread().threadId();
-        System.out.println("Index handler begin to clean up: " + workerId);
+        System.out.println("Index handler begin to clean up=" + workerId);
 
         if (metaIndexWords != null) {
             metaIndexWords.cleanUp();

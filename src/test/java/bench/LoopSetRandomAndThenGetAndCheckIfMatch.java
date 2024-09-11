@@ -48,7 +48,7 @@ public class LoopSetRandomAndThenGetAndCheckIfMatch extends Thread {
         }
         latch.await();
         var endT = System.currentTimeMillis();
-        System.out.println("cost: " + (endT - beginT) + "ms");
+        System.out.println("cost=" + (endT - beginT) + "ms");
 
         int keyValueEndNotMatchNumber = 0;
         int valueTotalNotMatchNumber = 0;
@@ -59,9 +59,9 @@ public class LoopSetRandomAndThenGetAndCheckIfMatch extends Thread {
             valueTotalNotMatchNumber += t.valueTotalNotMatchNumber;
             nullGetNumber += t.nullGetNumber;
         }
-        System.out.println("key value end not match: " + keyValueEndNotMatchNumber);
-        System.out.println("value total not match: " + valueTotalNotMatchNumber);
-        System.out.println("null get: " + nullGetNumber);
+        System.out.println("key value end not match=" + keyValueEndNotMatchNumber);
+        System.out.println("value total not match=" + valueTotalNotMatchNumber);
+        System.out.println("null get=" + nullGetNumber);
     }
 
     private String generateRandomKey(int x, boolean isNumberSeq) {
@@ -102,7 +102,7 @@ public class LoopSetRandomAndThenGetAndCheckIfMatch extends Thread {
                     var x = loopId * batchNum + i;
                     var key = generateRandomKey(x, isKeyNumberSeq);
                     if (i == 0) {
-                        System.out.println("begin with: " + key + ", loop id: " + loopId);
+                        System.out.println("begin with=" + key + ", loop id=" + loopId);
                     }
 
                     var sb = new StringBuilder();
@@ -151,14 +151,14 @@ public class LoopSetRandomAndThenGetAndCheckIfMatch extends Thread {
                         // last 20 characters
                         var last20 = value.substring(value.length() - 20);
                         if (!last20.equals(key)) {
-//                            System.out.println("value not equal, key: " + key + ", loop id: " + loopId + ", value: " + value);
+//                            System.out.println("value not equal, key=" + key + ", loop id=" + loopId + ", value=" + value);
                             keyValueEndNotMatchNumber++;
                         } else {
                             if (appendFile) {
                                 // value match
                                 if (!valueSetLine.equals(key + "=" + value)) {
-//                                System.out.println("value not match, key: " + key + ", loop id: " + loopId);
-//                                System.out.println("value set: " + valueSetLine + ", value: " + value);
+//                                System.out.println("value not match, key=" + key + ", loop id=" + loopId);
+//                                System.out.println("value set=" + valueSetLine + ", value=" + value);
                                     valueTotalNotMatchNumber++;
                                 }
                             }
@@ -168,10 +168,10 @@ public class LoopSetRandomAndThenGetAndCheckIfMatch extends Thread {
                     }
                 }
 
-                System.out.println(c + ", count,  loop id: " + loopId);
-                System.out.println(valueLength + ", value length, loop id: " + loopId);
-                System.out.println(keyValueEndNotMatchNumber + ", not match number, loop id: " + loopId);
-                System.out.println(nullGetNumber + ", null get number, loop id: " + loopId);
+                System.out.println(c + ", count,  loop id=" + loopId);
+                System.out.println(valueLength + ", value length, loop id=" + loopId);
+                System.out.println(keyValueEndNotMatchNumber + ", not match number, loop id=" + loopId);
+                System.out.println(nullGetNumber + ", null get number, loop id=" + loopId);
             }
         } catch (Exception e) {
             e.printStackTrace();

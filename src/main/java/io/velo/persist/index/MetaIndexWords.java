@@ -41,7 +41,7 @@ public class MetaIndexWords implements NeedCleanUp {
 
     void writeOneBatch(int beginOffset, byte[] bytes) {
         if (beginOffset + bytes.length > allCapacity) {
-            throw new IllegalArgumentException("Write bytes out of capacity, begin offset: " + beginOffset + ", bytes length: " + bytes.length);
+            throw new IllegalArgumentException("Write bytes out of capacity, begin offset=" + beginOffset + ", bytes length=" + bytes.length);
         }
 
         if (ConfForGlobal.pureMemory) {
@@ -379,7 +379,7 @@ public class MetaIndexWords implements NeedCleanUp {
 
         var oneWordMeta = getOneWordMeta(lowerCaseWord);
 //        if (oneWordMeta == null) {
-//            throw new IllegalStateException("Word: " + lowerCaseWord + " not exist");
+//            throw new IllegalStateException("Word=" + lowerCaseWord + " not exist");
 //        }
         var totalCount = oneWordMeta.totalCount + addCount;
         updateOneWordMetaTotalCount(oneWordMeta, totalCount);
@@ -393,8 +393,8 @@ public class MetaIndexWords implements NeedCleanUp {
                 existArr[1] += addCount;
                 return;
             } else {
-                throw new IllegalStateException("Word: " + lowerCaseWord + " already exist, but segment index not match, exist: " +
-                        existArr[0] + ", new: " + segmentIndex);
+                throw new IllegalStateException("Word=" + lowerCaseWord + " already exist, but segment index not match, exist=" +
+                        existArr[0] + ", new=" + segmentIndex);
             }
         }
 
@@ -404,14 +404,14 @@ public class MetaIndexWords implements NeedCleanUp {
 //            if (existSegmentIndex2 == segmentIndex) {
 //                return;
 //            } else {
-//                throw new IllegalStateException("Word: " + lowerCaseWord + " already exist, but segment index not match, exist: " +
-//                        existSegmentIndex2 + ", new: " + segmentIndex);
+//                throw new IllegalStateException("Word=" + lowerCaseWord + " already exist, but segment index not match, exist=" +
+//                        existSegmentIndex2 + ", new=" + segmentIndex);
 //            }
 //        }
 
         var oneWordOffsetMetaToPut = findOneWordOffsetMetaToPut(lowerCaseWord);
         if (oneWordOffsetMetaToPut == null) {
-            throw new IllegalStateException("No empty left for word: " + lowerCaseWord);
+            throw new IllegalStateException("No empty left for word=" + lowerCaseWord);
         }
 
         // add count should >= 0
@@ -432,7 +432,7 @@ public class MetaIndexWords implements NeedCleanUp {
 
             var oneWordOffsetMetaToPut = findOneWordOffsetMetaToPut(lowerCaseWord);
             if (oneWordOffsetMetaToPut == null) {
-                throw new IllegalStateException("No empty left for word: " + lowerCaseWord);
+                throw new IllegalStateException("No empty left for word=" + lowerCaseWord);
             }
             putOneWord(lowerCaseWord, oneWordOffsetMetaToPut.offset, oneWordOffsetMetaToPut.wordLength8or16or32, 0, 0);
             afterPutWordToSegmentIndex.put(lowerCaseWord, new int[]{0, 0});
@@ -483,17 +483,17 @@ public class MetaIndexWords implements NeedCleanUp {
         if (ConfForGlobal.pureMemory) {
             Arrays.fill(inMemoryCachedBytes, (byte) 0);
             inMemoryCachedByteBuffer.clear();
-            System.out.println("Index meta index words clear done, set 0 from the beginning. worker id: " + workerId);
+            System.out.println("Index meta index words clear done, set 0 from the beginning. worker id=" + workerId);
             return;
         }
 
         try {
             raf.setLength(0);
-            System.out.println("Index meta index words file truncated, worker id: " + workerId);
+            System.out.println("Index meta index words file truncated, worker id=" + workerId);
 
             Arrays.fill(inMemoryCachedBytes, (byte) 0);
             inMemoryCachedByteBuffer.clear();
-            System.out.println("Index meta index words clear done, set 0 from the beginning. worker id: " + workerId);
+            System.out.println("Index meta index words clear done, set 0 from the beginning. worker id=" + workerId);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -509,7 +509,7 @@ public class MetaIndexWords implements NeedCleanUp {
         try {
 //            raf.getFD().sync();
             raf.close();
-            System.out.println("Index meta index words file closed, worker id: " + workerId);
+            System.out.println("Index meta index words file closed, worker id=" + workerId);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

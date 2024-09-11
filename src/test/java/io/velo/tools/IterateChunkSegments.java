@@ -41,7 +41,7 @@ public class IterateChunkSegments {
         for (int i = 0; i < sumArray.length; i++) {
             sumTotal += sumArray[i];
         }
-        System.out.println("sum total: " + sumTotal);
+        System.out.println("sum total=" + sumTotal);
     }
 
     public static void iterateOneChunkFile(short slot, byte index, File chunkFile, int[] sumArray) throws IOException {
@@ -87,7 +87,7 @@ public class IterateChunkSegments {
 
             for (var one : cvList) {
                 if (cvNormalCompressedLength != 0 && one.cv.getCompressedLength() != cvNormalCompressedLength) {
-                    System.out.println("key: " + one.key + ", cv: " + one.cv);
+                    System.out.println("key=" + one.key + ", cv=" + one.cv);
                 }
             }
 

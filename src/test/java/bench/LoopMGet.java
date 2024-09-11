@@ -52,7 +52,7 @@ public class LoopMGet extends Thread {
         }
         latch.await();
         var endT = System.currentTimeMillis();
-        System.out.println("cost: " + (endT - beginT) + "ms");
+        System.out.println("cost=" + (endT - beginT) + "ms");
 
         int nullGetNumber = 0;
         long totalCostT = 0;
@@ -61,8 +61,8 @@ public class LoopMGet extends Thread {
             nullGetNumber += t.nullGetNumber;
             totalCostT += t.costT;
         }
-        System.out.println("null get: " + nullGetNumber);
-        System.out.println("total cost: " + totalCostT / 1000000 + "ms");
+        System.out.println("null get=" + nullGetNumber);
+        System.out.println("total cost=" + totalCostT / 1000000 + "ms");
     }
 
     private static String generateRandomKey(int x, boolean isKeyNumberSeq) {

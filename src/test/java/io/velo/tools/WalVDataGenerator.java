@@ -54,13 +54,13 @@ public interface WalVDataGenerator {
             list.add(keyToV(nextId(), bucketIndex, key, keyHash));
         }
         var costTime = System.currentTimeMillis() - beginTime;
-        System.out.println("Generate key list cost time: " + costTime + " ms");
+        System.out.println("Generate key list cost time=" + costTime + " ms");
 
         // group by bucket index
         var beginTime2 = System.currentTimeMillis();
         var map = list.stream().collect(Collectors.groupingBy(one -> one.bucketIndex() / oneChargeBucketNumber));
         var costTime2 = System.currentTimeMillis() - beginTime2;
-        System.out.println("Group by wal group index cost time: " + costTime2 + " ms");
+        System.out.println("Group by wal group index cost time=" + costTime2 + " ms");
 
         return map;
     }

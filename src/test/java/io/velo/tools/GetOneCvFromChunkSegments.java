@@ -32,7 +32,7 @@ public class GetOneCvFromChunkSegments {
 
         var chunkFile = new File(slotDir, "chunk-data-" + chunkFileIndex);
         if (!chunkFile.exists()) {
-            throw new IllegalStateException("Chunk file not exists: " + chunkFile);
+            throw new IllegalStateException("Chunk file not exists=" + chunkFile);
         }
 
         var raf = new RandomAccessFile(chunkFile, "r");
@@ -67,11 +67,11 @@ public class GetOneCvFromChunkSegments {
                 cvList.add(new ChunkMergeJob.CvWithKeyAndSegmentOffset(cv, key, offsetInThisSegment, segmentIndex, (byte) finalSubBlockIndex));
 
                 if (segmentOffset == offsetInThisSegment) {
-                    System.out.println("key: " + key + ", cv: " + cv);
+                    System.out.println("key=" + key + ", cv=" + cv);
                 }
 
                 if (toFindKey.equals(key)) {
-                    System.out.println("key: " + key + ", cv: " + cv);
+                    System.out.println("key=" + key + ", cv=" + cv);
                 }
             });
         }

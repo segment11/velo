@@ -70,7 +70,7 @@ public class XDict implements BinlogContent {
 
 
         if (keyPrefixLength > CompressedValue.KEY_MAX_LENGTH || keyPrefixLength <= 0) {
-            throw new IllegalStateException("Key prefix length error, key prefix length: " + keyPrefixLength);
+            throw new IllegalStateException("Key prefix length error, key prefix length=" + keyPrefixLength);
         }
 
         var keyPrefixBytes = new byte[keyPrefixLength];
@@ -87,7 +87,7 @@ public class XDict implements BinlogContent {
 
         var r = new XDict(keyPrefix, dict);
         if (encodedLength != r.encodedLength()) {
-            throw new IllegalStateException("Invalid encoded length: " + encodedLength);
+            throw new IllegalStateException("Invalid encoded length=" + encodedLength);
         }
         return r;
     }

@@ -201,8 +201,8 @@ public class KeyBucketsInOneWalGroup {
             if (!doPutResult.isPut()) {
                 // log all keys
                 log.warn("Failed keys to put={}", needAddNewList.stream().map(pvmInner -> new String(pvmInner.keyBytes)).collect(Collectors.toList()));
-                throw new BucketFullException("Bucket full, slot: " + slot + ", bucket index: " + bucketIndex +
-                        ", split index: " + splitIndex + ", key: " + new String(pvm.keyBytes));
+                throw new BucketFullException("Bucket full, slot=" + slot + ", bucket index=" + bucketIndex +
+                        ", split index=" + splitIndex + ", key=" + new String(pvm.keyBytes));
             }
 
             isUpdatedBySplitIndex[splitIndex] = true;
@@ -242,12 +242,12 @@ public class KeyBucketsInOneWalGroup {
         if (splitMultiStep > 1) {
             var newMaxSplitNumber = currentSplitNumber * splitMultiStep;
             if (newMaxSplitNumber > KeyLoader.MAX_SPLIT_NUMBER) {
-                log.warn("Bucket full, split number exceed max split number: " + KeyLoader.MAX_SPLIT_NUMBER +
-                        ", slot: " + slot + ", bucket index: " + bucketIndex);
+                log.warn("Bucket full, split number exceed max split number=" + KeyLoader.MAX_SPLIT_NUMBER +
+                        ", slot=" + slot + ", bucket index=" + bucketIndex);
                 // log all keys
                 log.warn("Failed keys to put={}", pvmListThisBucket.stream().map(pvm -> new String(pvm.keyBytes)).collect(Collectors.toList()));
-                throw new BucketFullException("Bucket full, split number exceed max split number: " + KeyLoader.MAX_SPLIT_NUMBER +
-                        ", slot: " + slot + ", bucket index: " + bucketIndex);
+                throw new BucketFullException("Bucket full, split number exceed max split number=" + KeyLoader.MAX_SPLIT_NUMBER +
+                        ", slot=" + slot + ", bucket index=" + bucketIndex);
             }
 
             if (listList.size() < newMaxSplitNumber) {

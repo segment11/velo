@@ -41,19 +41,19 @@ public class IterateKeyBuckets {
         for (int i = 0; i < sumArray.length; i++) {
             sumTotal += sumArray[i];
         }
-        System.out.println("sum total: " + sumTotal);
+        System.out.println("sum total=" + sumTotal);
 
         // get size > 100
         for (var entry : keyWithValueBytesByBucketIndex.entrySet()) {
             var bucketIndex = entry.getKey();
             var keyWithValueBytes = entry.getValue();
             if (keyWithValueBytes.size() > overSize) {
-                System.out.println("bucket index: " + bucketIndex + ", size: " + keyWithValueBytes.size() + ", keys: " + keyWithValueBytes.keySet());
+                System.out.println("bucket index=" + bucketIndex + ", size=" + keyWithValueBytes.size() + ", keys=" + keyWithValueBytes.keySet());
             }
 
             var doLog = bucketIndex == toCheckBucketIndex;
             if (doLog) {
-                System.out.println("bucket index: " + bucketIndex + ", size: " + keyWithValueBytes.size());
+                System.out.println("bucket index=" + bucketIndex + ", size=" + keyWithValueBytes.size());
             }
 
             keyWithValueBytes.forEach((key, valueBytes) -> {
@@ -61,11 +61,11 @@ public class IterateKeyBuckets {
                     var pvm = PersistValueMeta.decode(valueBytes);
                     var isNormal = pvm.length == cvNormalLength;
                     if (doLog || !isNormal) {
-                        System.out.println("key: " + key + ", pvm: " + pvm.shortString());
+                        System.out.println("key=" + key + ", pvm=" + pvm.shortString());
                     }
                 } else {
                     var cv = CompressedValue.decode(Unpooled.wrappedBuffer(valueBytes), null, 0);
-                    System.out.println("key: " + key + ", value: " + cv);
+                    System.out.println("key=" + key + ", value=" + cv);
                 }
             });
 
@@ -96,24 +96,24 @@ public class IterateKeyBuckets {
                     keyWithValueBytesByBucketIndex.put(i, map);
                 }
 
-//                System.out.println("size: " + size + ", bucket index: " + i);
+//                System.out.println("size=" + size + ", bucket index=" + i);
                 var keyBucket = new KeyBucket(slot, i, splitIndex, (byte) -1, bytes, null);
                 var splitNumberThisKeyBucket = keyBucket.getSplitNumber();
                 var splitIndexThisKeyBucket = keyBucket.getSplitIndex();
                 int finalI = i;
                 HashMap<String, byte[]> finalMap = map;
                 keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
-//                    System.out.println("key: " + new String(keyBytes) + ", key hash: " + keyHash);
+//                    System.out.println("key=" + new String(keyBytes) + ", key hash=" + keyHash);
                     var bucketIndexExpect = KeyHash.bucketIndex(keyHash, bucketsPerSlot);
                     if (bucketIndexExpect != finalI) {
-                        System.out.println("bucket index expect: " + bucketIndexExpect + ", bucket index: " + finalI);
-                        throw new IllegalStateException("bucket index expect: " + bucketIndexExpect + ", bucket index: " + finalI);
+                        System.out.println("bucket index expect=" + bucketIndexExpect + ", bucket index=" + finalI);
+                        throw new IllegalStateException("bucket index expect=" + bucketIndexExpect + ", bucket index=" + finalI);
                     }
 
                     var splitIndexExpect = KeyHash.splitIndex(keyHash, splitNumberThisKeyBucket, bucketIndexExpect);
                     if (splitIndexExpect != splitIndexThisKeyBucket) {
-                        System.out.println("split index expect: " + splitIndexExpect + ", split index: " + splitIndexThisKeyBucket);
-                        throw new IllegalStateException("split index expect: " + splitIndexExpect + ", split index: " + splitIndexThisKeyBucket);
+                        System.out.println("split index expect=" + splitIndexExpect + ", split index=" + splitIndexThisKeyBucket);
+                        throw new IllegalStateException("split index expect=" + splitIndexExpect + ", split index=" + splitIndexThisKeyBucket);
                     }
                     finalMap.put(new String(keyBytes), valueBytes);
                 });
