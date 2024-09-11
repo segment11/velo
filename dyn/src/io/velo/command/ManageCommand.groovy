@@ -9,6 +9,7 @@ import io.velo.ConfForSlot
 import io.velo.Debug
 import io.velo.TrainSampleJob
 import io.velo.persist.Chunk
+import io.velo.persist.LocalPersist
 import io.velo.repl.cluster.MultiShard
 import io.velo.repl.support.JedisPoolHolder
 import io.velo.reply.*
@@ -311,6 +312,19 @@ class ManageCommand extends BaseCommand {
 
         def innerSlot = slotWithKeyHashListParsed.first.slot()
 //        def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
+
+        // clusterx use the same thread as one slot 0
+        localPersist.oneSlot((short) 0).asyncRun(() -> {
+            def mySelfShard = LocalPersist.instance.multiShard.mySelfShard()
+            mySelfShard.importMigratingSlot = toClientSlot
+        }).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error 'Manage migrate_from, set import migrating slot={}, error={}, slot={}', toClientSlot, e.message, innerSlot
+            } else {
+                log.warn 'Manage migrate_from, set import migrating slot={}, slot={}', toClientSlot, innerSlot
+            }
+        })
+
         def oneSlot = localPersist.oneSlot(innerSlot)
 
         var replPairAsSlave = oneSlot.onlyOneReplPairAsSlave

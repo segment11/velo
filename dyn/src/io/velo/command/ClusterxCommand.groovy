@@ -122,9 +122,6 @@ migrating_state:ok
         }
         def isAllToClientSlotSet = slotSet.size() == MultiShard.TO_CLIENT_SLOT_NUMBER
 
-        def isMigrateFail = shards.any { ss ->
-            ss.importMigratingSlot == Shard.FAIL_MIGRATED_SLOT || ss.exportMigratingSlot == Shard.FAIL_MIGRATED_SLOT
-        }
         def isMigrateOk = shards.every { ss ->
             ss.importMigratingSlot == Shard.NO_MIGRATING_SLOT && ss.exportMigratingSlot == Shard.NO_MIGRATING_SLOT
         }
@@ -141,55 +138,69 @@ migrating_state:ok
         r.cluster_current_epoch = multiShard.clusterCurrentEpoch
         r.cluster_my_epoch = multiShard.clusterMyEpoch
 
+        def mySelfShard = multiShard.mySelfShard()
+        if (importMigratingSlotShard == mySelfShard) {
+            r.migrating_state = 'migrating'
+            r.import_migrating_slot = importMigratingSlotShard.importMigratingSlot
+            r.export_migrating_slot = Shard.NO_MIGRATING_SLOT
+
+            def lines = r.collect { entry ->
+                entry.key + ':' + entry.value
+            }.join("\r\n") + "\r\n"
+
+            return new BulkReply(lines.bytes)
+        }
+
+        if (exportMigratingSlotShard != mySelfShard) {
+            r.migrating_state = isMigrateOk ? 'success' : 'migrating'
+            r.import_migrating_slot = importMigratingSlotShard ? importMigratingSlotShard.importMigratingSlot : Shard.NO_MIGRATING_SLOT
+            r.export_migrating_slot = exportMigratingSlotShard ? exportMigratingSlotShard.exportMigratingSlot : Shard.NO_MIGRATING_SLOT
+
+            def lines = r.collect { entry ->
+                entry.key + ':' + entry.value
+            }.join("\r\n") + "\r\n"
+
+            return new BulkReply(lines.bytes)
+        }
+
+        // my self shard is doing export migrating slot
+        // check if already done
         SettablePromise<Reply> finalPromise = new SettablePromise<>()
         def asyncReply = new AsyncReply(finalPromise)
 
-        // check if already done
-        if (exportMigratingSlotShard) {
-            // check if repl pair as master, slave is catch up
-            def exportMigratingSlot = exportMigratingSlotShard.exportMigratingSlot
-            def innerSlot = MultiShard.asInnerSlotByToClientSlot(exportMigratingSlot)
-            def oneSlot = localPersist.oneSlot(innerSlot)
+        // check if repl pair as master, slave is catch up
+        def exportMigratingSlot = exportMigratingSlotShard.exportMigratingSlot
+        def innerSlot = MultiShard.asInnerSlotByToClientSlot(exportMigratingSlot)
+        def oneSlot = localPersist.oneSlot(innerSlot)
 
-            oneSlot.asyncCall(SupplierEx.of {
-                def replPairAsMasterList = oneSlot.replPairAsMasterList
-                def replPairAsMaster = replPairAsMasterList.find {
-                    it.host == exportMigratingSlotShard.migratingToHost && it.port == exportMigratingSlotShard.migratingToPort
-                }
-                if (!replPairAsMaster) {
-                    log.debug 'Clusterx repl pair as master not found, wait slave connect to master, slave host={}, slave port={}',
-                            exportMigratingSlotShard.migratingToHost, exportMigratingSlotShard.migratingToPort
-                    return false
-                }
-
-                if (replPairAsMaster.allCaughtUp) {
-                    if (!oneSlot.readonly) {
-                        oneSlot.readonly = true
-                    }
-                    return true
-                } else {
-                    return false
-                }
-            }).whenComplete { isMigratingDone, e ->
-                if (e) {
-                    finalPromise.set(new ErrorReply('error when check repl pair as slave: ' + e.message))
-                    return
-                }
-
-                r.migrating_state = isMigratingDone ? 'success' : 'migrating'
-                r.import_migrating_slot = Shard.NO_MIGRATING_SLOT
-                r.export_migrating_slot = exportMigratingSlot
-
-                def lines = r.collect { entry ->
-                    entry.key + ':' + entry.value
-                }.join("\r\n") + "\r\n"
-
-                finalPromise.set(new BulkReply(lines.bytes))
+        oneSlot.asyncCall(SupplierEx.of {
+            def replPairAsMasterList = oneSlot.replPairAsMasterList
+            def replPairAsMaster = replPairAsMasterList.find {
+                it.host == exportMigratingSlotShard.migratingToHost && it.port == exportMigratingSlotShard.migratingToPort
             }
-        } else {
-            r.migrating_state = isMigrateOk ? 'success' : (isMigrateFail ? 'fail' : 'migrating')
-            r.import_migrating_slot = importMigratingSlotShard ? importMigratingSlotShard.importMigratingSlot : Shard.NO_MIGRATING_SLOT
-            r.export_migrating_slot = exportMigratingSlotShard ? exportMigratingSlotShard.exportMigratingSlot : Shard.NO_MIGRATING_SLOT
+            if (!replPairAsMaster) {
+                log.debug 'Clusterx repl pair as master not found, wait slave connect to master, slave host={}, slave port={}',
+                        exportMigratingSlotShard.migratingToHost, exportMigratingSlotShard.migratingToPort
+                return 'migrating'
+            }
+
+            if (replPairAsMaster.allCaughtUp) {
+                if (!oneSlot.readonly) {
+                    oneSlot.readonly = true
+                }
+                return 'success'
+            } else {
+                return 'migrating'
+            }
+        }).whenComplete { state, e ->
+            if (e) {
+                finalPromise.set(new ErrorReply('error when check repl pair as slave: ' + e.message))
+                return
+            }
+
+            r.migrating_state = state
+            r.import_migrating_slot = Shard.NO_MIGRATING_SLOT
+            r.export_migrating_slot = exportMigratingSlot
 
             def lines = r.collect { entry ->
                 entry.key + ':' + entry.value
@@ -254,10 +265,6 @@ migrating_state:ok
         mySelfShard.migratingToPort = toShardMasterNode.port
         mySelfShard.exportMigratingSlot = toClientSlot
         log.warn 'Clusterx set my self shard export migrating slot {} to node id {}', toClientSlot, toNodeId
-
-
-        toShard.importMigratingSlot = toClientSlot
-        log.warn 'Clusterx set target shard import migrating slot {} to node id {}', toClientSlot, toNodeId
 
         OK
     }
@@ -518,10 +525,12 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         // add
         toShard.multiSlotRange.removeOrAddSet(setEmpty, set)
         toShard.importMigratingSlot = Shard.NO_MIGRATING_SLOT
+        toShard.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
         shards.each { ss ->
             if (ss != toShard) {
                 // remove
                 ss.multiSlotRange.removeOrAddSet(set, setEmpty)
+                ss.importMigratingSlot = Shard.NO_MIGRATING_SLOT
                 ss.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
             }
         }

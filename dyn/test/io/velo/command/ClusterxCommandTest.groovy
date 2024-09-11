@@ -118,62 +118,84 @@ class ClusterxCommandTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
 
-        def shard0 = localPersist.multiShard.shards[0]
+        def shards = localPersist.multiShard.shards
+        def shard0 = shards[0]
 
         when:
         ConfForGlobal.clusterEnabled = true
         def reply = clusterx.info()
         then:
-        infoToLines((AsyncReply) reply).find { it.contains('cluster_state:fail') } != null
-
-        when:
-        shard0.multiSlotRange.addSingle(0, 16383)
-        reply = clusterx.info()
-        then:
-        infoToLines((AsyncReply) reply).find { it.contains('cluster_state:ok') } != null
-        infoToLines((AsyncReply) reply).find { it.contains('migrating_state:success') } != null
-
-        when:
-        shard0.exportMigratingSlot = Shard.FAIL_MIGRATED_SLOT
-        reply = clusterx.info()
-        then:
-        infoToLines((AsyncReply) reply).find { it.contains('migrating_state:fail') } != null
+        infoToLines(reply).find { it.contains('cluster_state:fail') } != null
 
         when:
         shard0.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
-        shard0.importMigratingSlot = Shard.FAIL_MIGRATED_SLOT
+        shard0.importMigratingSlot = Shard.NO_MIGRATING_SLOT
+        shard0.multiSlotRange.addSingle(0, 16383)
         reply = clusterx.info()
         then:
-        infoToLines((AsyncReply) reply).find { it.contains('migrating_state:fail') } != null
+        infoToLines(reply).find { it.contains('cluster_state:ok') } != null
+        infoToLines(reply).find { it.contains('migrating_state:success') } != null
 
         when:
         shard0.exportMigratingSlot = 0
-        reply = clusterx.info()
-        then:
-        infoToLines((AsyncReply) reply).find { it.contains('migrating_slot:0') } != null
-
-        when:
         shard0.migratingToHost = 'localhost'
         shard0.migratingToPort = 7380
+        reply = clusterx.info()
+        then:
+        infoToLines(reply).find { it.contains('migrating_state:migrating') } != null
+        infoToLines(reply).find { it.contains('export_migrating_slot:0') } != null
+
+        when:
         oneSlot.createIfNotExistReplPairAsMaster(11L, 'localhost', 7380)
         reply = clusterx.info()
         then:
-        infoToLines((AsyncReply) reply).find { it.contains('migrating_slot:0') } != null
-        infoToLines((AsyncReply) reply).find { it.contains('migrating_state:migrating') } != null
+        infoToLines(reply).find { it.contains('migrating_state:migrating') } != null
+        infoToLines(reply).find { it.contains('export_migrating_slot:0') } != null
 
         when:
         oneSlot.replPairAsMasterList[0].allCaughtUp = true
         reply = clusterx.info()
         then:
-        infoToLines((AsyncReply) reply).find { it.contains('migrating_slot:0') } != null
-        infoToLines((AsyncReply) reply).find { it.contains('migrating_state:success') } != null
+        infoToLines(reply).find { it.contains('migrating_state:success') } != null
+        infoToLines(reply).find { it.contains('export_migrating_slot:0') } != null
 
         when:
         shard0.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
         shard0.importMigratingSlot = 0
         reply = clusterx.info()
         then:
-        infoToLines((AsyncReply) reply).find { it.contains('migrating_slot:0') } != null
+        infoToLines(reply).find { it.contains('migrating_state:migrating') } != null
+        infoToLines(reply).find { it.contains('export_migrating_slot:-1') } != null
+        infoToLines(reply).find { it.contains('import_migrating_slot:0') } != null
+
+        when:
+        shard0.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
+        shard0.importMigratingSlot = Shard.NO_MIGRATING_SLOT
+        reply = clusterx.info()
+        then:
+        infoToLines(reply).find { it.contains('migrating_state:success') } != null
+        infoToLines(reply).find { it.contains('export_migrating_slot:-1') } != null
+        infoToLines(reply).find { it.contains('import_migrating_slot:-1') } != null
+
+        when:
+        // not my self shard
+        def shard1 = new Shard()
+        shard1.importMigratingSlot = 0
+        shards << shard1
+        reply = clusterx.info()
+        then:
+        infoToLines(reply).find { it.contains('migrating_state:migrating') } != null
+        infoToLines(reply).find { it.contains('export_migrating_slot:-1') } != null
+        infoToLines(reply).find { it.contains('import_migrating_slot:0') } != null
+
+        when:
+        shard1.importMigratingSlot = Shard.NO_MIGRATING_SLOT
+        shard1.exportMigratingSlot = 0
+        reply = clusterx.info()
+        then:
+        infoToLines(reply).find { it.contains('migrating_state:migrating') } != null
+        infoToLines(reply).find { it.contains('export_migrating_slot:0') } != null
+        infoToLines(reply).find { it.contains('import_migrating_slot:-1') } != null
 
         cleanup:
         localPersist.cleanUp()
@@ -310,7 +332,7 @@ class ClusterxCommandTest extends Specification {
         var shards = multiShard.shards
         def reply = clusterx.nodes()
         then:
-        infoToLines((BulkReply) reply).find { it.contains(shards[0].nodes[0].nodeId()) } != null
+        infoToLines(reply).find { it.contains(shards[0].nodes[0].nodeId()) } != null
 
         // setnodeid
         when:

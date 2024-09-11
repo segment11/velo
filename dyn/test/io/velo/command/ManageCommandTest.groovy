@@ -679,6 +679,8 @@ class ManageCommandTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
 
+        def shards = localPersist.multiShard.shards
+
         when:
         data6[1] = 'slot'.bytes
         data6[2] = '0'.bytes
@@ -689,6 +691,7 @@ class ManageCommandTest extends Specification {
         def reply = manage.migrateFrom()
         then:
         reply == ClusterxCommand.OK
+        shards[0].importMigratingSlot == 0
 
         when:
         data6[5] = 'a'.bytes

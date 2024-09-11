@@ -60,7 +60,6 @@ public class Shard {
     private int exportMigratingSlot = NO_MIGRATING_SLOT;
 
     public static final int NO_MIGRATING_SLOT = -1;
-    public static final int FAIL_MIGRATED_SLOT = -100;
 
     // only for from shard
     private String migratingToHost;
