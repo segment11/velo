@@ -54,8 +54,8 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
             raf.seek(0);
             raf.read(inMemoryCachedBytes);
             ByteBuffer tmpBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
-            log.warn("Read meta chunk segment index file success, file={}, slot: {}, segment index: {}, " +
-                            "master binlog file index: {}, master binlog offset: {}",
+            log.warn("Read meta chunk segment index file success, file={}, slot={}, segment index={}, " +
+                            "master binlog file index={}, master binlog offset={}",
                     file, slot, tmpBuffer.getInt(0), tmpBuffer.getInt(4), tmpBuffer.getLong(8));
         }
 

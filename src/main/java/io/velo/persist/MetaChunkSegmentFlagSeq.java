@@ -72,7 +72,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
         } catch (IOException e) {
             throw new RuntimeException("Repl chunk segments from master one batch meta bytes, write file error, slot=" + slot, e);
         }
-        log.warn("Repl chunk segments from master one batch meta bytes, write file success, begin bucket index: {}, bucket count: {}, slot: {}",
+        log.warn("Repl chunk segments from master one batch meta bytes, write file success, begin bucket index={}, bucket count={}, slot={}",
                 beginBucketIndex, bucketCount, slot);
     }
 
@@ -105,14 +105,14 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
         if (needRead) {
             raf.seek(0);
             raf.read(inMemoryCachedBytes);
-            log.warn("Read meta chunk segment flag seq file success, file: {}, slot: {}, all capacity: {}KB",
+            log.warn("Read meta chunk segment flag seq file success, file={}, slot={}, all capacity={}KB",
                     file, slot, allCapacity / 1024);
         }
 
         this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
 
         var initMemoryMB = allCapacity / 1024 / 1024;
-        log.info("Static memory init, type: {}, MB: {}, slot: {}", StaticMemoryPrepareBytesStats.Type.meta_chunk_segment_flag_seq, initMemoryMB, slot);
+        log.info("Static memory init, type={}, MB={}, slot={}", StaticMemoryPrepareBytesStats.Type.meta_chunk_segment_flag_seq, initMemoryMB, slot);
         StaticMemoryPrepareBytesStats.add(StaticMemoryPrepareBytesStats.Type.meta_chunk_segment_flag_seq, initMemoryMB, true);
     }
 
@@ -219,7 +219,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
             begin = halfSegmentNumber;
             end = ConfForSlot.global.confChunk.maxSegmentNumber();
         }
-        log.info("Get merged segment index end last time, current segment index: {}, half segment number: {}, begin: {}, end: {}, slot: {}",
+        log.info("Get merged segment index end last time, current segment index={}, half segment number={}, begin={}, end={}, slot={}",
                 currentSegmentIndex, halfSegmentNumber, begin, end, slot);
 
         boolean isAllFlagInitHalf = true;

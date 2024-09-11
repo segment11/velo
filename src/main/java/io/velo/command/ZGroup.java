@@ -971,7 +971,7 @@ public class ZGroup extends BaseCommand {
         RedisZSet finalRz = rz;
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("zdiff error={}, isInter: {}, isUnion: {}", e.getMessage(), isInter, isUnion);
+                log.error("zdiff error={}, isInter={}, isUnion={}", e.getMessage(), isInter, isUnion);
                 finalPromise.setException(e);
                 return;
             }
@@ -1166,7 +1166,7 @@ public class ZGroup extends BaseCommand {
         int finalLimit = limit;
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("zintercard error: {}", e.getMessage());
+                log.error("zintercard error={}", e.getMessage());
                 finalPromise.setException(e);
                 return;
             }

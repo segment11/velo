@@ -27,7 +27,7 @@ class InfoCommand extends BaseCommand {
             return ErrorReply.FORMAT
         }
 
-        log.info 'Dyn info command version: {}', version
+        log.info 'Dyn info command version={}', version
 
         if (data.length == 2) {
             def section = new String(data[1])

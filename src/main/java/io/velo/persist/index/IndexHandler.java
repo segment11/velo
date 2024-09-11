@@ -38,10 +38,10 @@ public class IndexHandler implements NeedCleanUp {
 
     @MasterReset
     public void resetAsMaster() throws IOException {
-        log.warn("Index reset as master begin, reload meta from exists file, worker id: {}", workerId);
+        log.warn("Index reset as master begin, reload meta from exists file, worker id={}", workerId);
         metaIndexWords.reload();
         reverseIndexChunk.loadMeta();
-        log.warn("Index reset as master done, worker id: {}", workerId);
+        log.warn("Index reset as master done, worker id={}", workerId);
     }
 
     // for repl

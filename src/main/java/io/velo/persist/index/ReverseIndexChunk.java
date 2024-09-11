@@ -104,7 +104,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
             // read empty segment bytes
             if (bytes.length == 1) {
                 raf.setLength(targetSegmentOffsetInRaf);
-                log.warn("Reverse index chunk reset length as read empty, set length to {}, worker id: {}", targetSegmentOffsetInRaf, workerId);
+                log.warn("Reverse index chunk reset length as read empty, set length to {}, worker id={}", targetSegmentOffsetInRaf, workerId);
             } else {
                 raf.seek(targetSegmentOffsetInRaf);
                 raf.write(bytes);
@@ -194,7 +194,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
             segmentIndexToWord.put(segmentIndex, lowerCaseWord);
             wordToSegmentIndex.put(lowerCaseWord, segmentIndex);
         }
-        log.warn("Index reverse index chunk meta loaded, word count: {}, worker id: {}", wordToSegmentIndex.size(), workerId);
+        log.warn("Index reverse index chunk meta loaded, word count={}, worker id={}", wordToSegmentIndex.size(), workerId);
     }
 
     private int findOneSegmentAvailableForOneWord(String lowerCaseWord) {

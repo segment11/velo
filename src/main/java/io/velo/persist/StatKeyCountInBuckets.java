@@ -95,12 +95,12 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
         if (needRead) {
             raf.seek(0);
             raf.read(inMemoryCachedBytes);
-            log.warn("Read stat key count in buckets file success, file={}, slot: {}, all capacity: {}KB",
+            log.warn("Read stat key count in buckets file success, file={}, slot={}, all capacity={}KB",
                     file, slot, allCapacity / 1024);
         }
 
         this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
-        log.info("Key count in buckets: {}, slot: {}", calcKeyCount(), slot);
+        log.info("Key count in buckets={}, slot={}", calcKeyCount(), slot);
     }
 
     @Override

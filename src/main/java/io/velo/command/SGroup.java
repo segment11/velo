@@ -828,7 +828,7 @@ public class SGroup extends BaseCommand {
         // need not wait all, can optimize
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("sdiff error={}, isInter: {}, isUnion: {}", e.getMessage(), isInter, isUnion);
+                log.error("sdiff error={}, isInter={}, isUnion={}", e.getMessage(), isInter, isUnion);
                 finalPromise.setException(e);
                 return;
             }
@@ -930,7 +930,7 @@ public class SGroup extends BaseCommand {
         // need not wait all, can optimize
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("sdiffstore error: {}, isInter: {}, isUnion: {}", e.getMessage(), isInter, isUnion);
+                log.error("sdiffstore error={}, isInter={}, isUnion={}", e.getMessage(), isInter, isUnion);
                 finalPromise.setException(e);
                 return;
             }
@@ -1070,7 +1070,7 @@ public class SGroup extends BaseCommand {
         int finalLimit = limit;
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error("sintercard error: {}", e.getMessage());
+                log.error("sintercard error={}", e.getMessage());
                 finalPromise.setException(e);
                 return;
             }

@@ -60,7 +60,7 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     public MetaKeyBucketSplitNumber(short slot, File slotDir) throws IOException {
         this.allCapacity = ConfForSlot.global.confBucket.bucketsPerSlot;
         this.initialSplitNumber = ConfForSlot.global.confBucket.initialSplitNumber;
-        log.info("Meta key bucket initial split number: {}", initialSplitNumber);
+        log.info("Meta key bucket initial split number={}", initialSplitNumber);
 
         // max 512KB
         this.inMemoryCachedBytes = new byte[allCapacity];
@@ -84,7 +84,7 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
         if (needRead) {
             raf.seek(0);
             raf.read(inMemoryCachedBytes);
-            log.warn("Read meta key bucket split number file success, file: {}, slot: {}, all capacity: {}KB",
+            log.warn("Read meta key bucket split number file success, file={}, slot={}, all capacity={}KB",
                     file, slot, allCapacity / 1024);
 
             var sb = new StringBuilder();

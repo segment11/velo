@@ -63,7 +63,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
                 maybeOneBigStringBytesLength,
                 lruMemoryRequireMB,
                 slot);
-        log.info("LRU prepare, type={}, MB: {}, slot: {}", LRUPrepareBytesStats.Type.big_string, lruMemoryRequireMB, slot);
+        log.info("LRU prepare, type={}, MB={}, slot={}", LRUPrepareBytesStats.Type.big_string, lruMemoryRequireMB, slot);
         LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.big_string, String.valueOf(slot), lruMemoryRequireMB, false);
 
         this.bigStringBytesByUuidLRU = new LRUMap<>(maxSize);
@@ -123,7 +123,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     private byte[] readBigStringBytes(long uuid) {
         var file = new File(bigStringDir, String.valueOf(uuid));
         if (!file.exists()) {
-            log.warn("Big string file not exists, uuid: {}, slot: {}", uuid, slot);
+            log.warn("Big string file not exists, uuid={}, slot={}", uuid, slot);
             return null;
         }
 
@@ -184,7 +184,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
         try {
             FileUtils.cleanDirectory(bigStringDir);
-            log.warn("Delete all big string files, slot: {}", slot);
+            log.warn("Delete all big string files, slot={}", slot);
             bigStringFilesCount = 0;
         } catch (IOException e) {
             log.error("Delete all big string files error, slot: " + slot, e);

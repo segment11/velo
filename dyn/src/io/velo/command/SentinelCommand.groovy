@@ -24,7 +24,7 @@ class SentinelCommand extends BaseCommand {
 
     @Override
     Reply handle() {
-        log.info 'Dyn sentinel command version: {}', version
+        log.info 'Dyn sentinel command version={}', version
 
         if (data.length < 2) {
             return new ErrorReply('wrong number of arguments for \'sentinel\' command')

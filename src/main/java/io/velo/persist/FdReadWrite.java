@@ -327,7 +327,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             }
 
             int initMemoryMB = (int) (initMemoryN / 1024 / 1024);
-            log.info("Static memory init, type={}, MB: {}, name: {}", StaticMemoryPrepareBytesStats.Type.fd_read_write_buffer, initMemoryMB, name);
+            log.info("Static memory init, type={}, MB={}, name={}", StaticMemoryPrepareBytesStats.Type.fd_read_write_buffer, initMemoryMB, name);
             StaticMemoryPrepareBytesStats.add(StaticMemoryPrepareBytesStats.Type.fd_read_write_buffer, initMemoryMB, false);
         }
     }
@@ -368,7 +368,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
     private void initLRU(boolean isChunkFd, int oneInnerLength) {
         if (ConfForGlobal.pureMemory) {
-            log.warn("Pure memory mode, not use lru cache, name: {}", name);
+            log.warn("Pure memory mode, not use lru cache, name={}", name);
             return;
         }
 
@@ -376,9 +376,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             // tips: per fd, if one chunk has too many fd files, may OOM
             var maxSize = ConfForSlot.global.confChunk.lruPerFd.maxSize;
             var lruMemoryRequireMB = ((long) maxSize * oneInnerLength) / 1024 / 1024;
-            log.info("Chunk lru max size for one chunk fd: {}, one inner length: {}, memory require: {}MB, name: {}",
+            log.info("Chunk lru max size for one chunk fd={}, one inner length={}, memory require={}MB, name={}",
                     maxSize, oneInnerLength, lruMemoryRequireMB, name);
-            log.info("LRU prepare, type: {}, MB: {}, fd: {}", LRUPrepareBytesStats.Type.fd_chunk_data, lruMemoryRequireMB, name);
+            log.info("LRU prepare, type={}, MB={}, fd={}", LRUPrepareBytesStats.Type.fd_chunk_data, lruMemoryRequireMB, name);
             LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.fd_chunk_data, name, (int) lruMemoryRequireMB, true);
 
             if (maxSize > 0) {
@@ -392,9 +392,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             // need to compare with metrics
             final var compressRatio = 0.25;
             var lruMemoryRequireMB = ((long) maxSize * oneInnerLength) / 1024 / 1024 * compressRatio;
-            log.info("Key bucket lru max size for one key bucket fd: {}, one inner length: {}， compress ratio maybe: {}, memory require: {}MB, name: {}",
+            log.info("Key bucket lru max size for one key bucket fd={}, one inner length={}， compress ratio maybe={}, memory require={}MB, name={}",
                     maxSize, oneInnerLength, compressRatio, lruMemoryRequireMB, name);
-            log.info("LRU prepare, type: {}, MB: {}, fd: {}", LRUPrepareBytesStats.Type.fd_key_bucket, lruMemoryRequireMB, name);
+            log.info("LRU prepare, type={}, MB={}, fd={}", LRUPrepareBytesStats.Type.fd_key_bucket, lruMemoryRequireMB, name);
             LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.fd_key_bucket, name, (int) lruMemoryRequireMB, false);
 
             if (maxSize > 0) {
@@ -551,7 +551,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         readBytesTotal += n;
 
         if (n != readLength) {
-            log.error("Read error, n: {}, read length: {}, name: {}", n, readLength, name);
+            log.error("Read error, n={}, read length={}, name={}", n, readLength, name);
             throw new RuntimeException("Read error, n: " + n + ", read length: " + readLength + ", name: " + name);
         }
 
@@ -615,7 +615,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         writeBytesTotal += n;
 
         if (n != capacity) {
-            log.error("Write error, n: {}, buffer capacity: {}, name: {}", n, capacity, name);
+            log.error("Write error, n={}, buffer capacity={}, name={}", n, capacity, name);
             throw new RuntimeException("Write error, n: " + n + ", buffer capacity: " + capacity + ", name: " + name);
         }
 
@@ -849,20 +849,20 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             if (r < 0) {
                 throw new RuntimeException("Truncate error: " + libC.strerror(r));
             }
-            log.info("Truncate fd: {}, name: {}", fd, name);
+            log.info("Truncate fd={}, name={}", fd, name);
 
             if (isLRUOn) {
                 oneInnerBytesByIndexLRU.clear();
-                log.info("LRU cache clear, name: {}", name);
+                log.info("LRU cache clear, name={}", name);
             }
         } else {
-            log.warn("Pure memory mode, not use fd, name: {}", name);
+            log.warn("Pure memory mode, not use fd, name={}", name);
             if (isChunkFd) {
                 this.allBytesBySegmentIndexForOneChunkFd = new byte[allBytesBySegmentIndexForOneChunkFd.length][];
             } else {
                 this.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex = new byte[allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length][];
             }
-            log.info("Clear all bytes in memory, name: {}", name);
+            log.info("Clear all bytes in memory, name={}", name);
         }
     }
 }

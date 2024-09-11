@@ -200,7 +200,7 @@ public class KeyBucketsInOneWalGroup {
                     pvm.extendBytes != null ? pvm.extendBytes : pvm.encode(), false);
             if (!doPutResult.isPut()) {
                 // log all keys
-                log.warn("Failed keys to put: {}", needAddNewList.stream().map(pvmInner -> new String(pvmInner.keyBytes)).collect(Collectors.toList()));
+                log.warn("Failed keys to put={}", needAddNewList.stream().map(pvmInner -> new String(pvmInner.keyBytes)).collect(Collectors.toList()));
                 throw new BucketFullException("Bucket full, slot: " + slot + ", bucket index: " + bucketIndex +
                         ", split index: " + splitIndex + ", key: " + new String(pvm.keyBytes));
             }
@@ -245,7 +245,7 @@ public class KeyBucketsInOneWalGroup {
                 log.warn("Bucket full, split number exceed max split number: " + KeyLoader.MAX_SPLIT_NUMBER +
                         ", slot: " + slot + ", bucket index: " + bucketIndex);
                 // log all keys
-                log.warn("Failed keys to put: {}", pvmListThisBucket.stream().map(pvm -> new String(pvm.keyBytes)).collect(Collectors.toList()));
+                log.warn("Failed keys to put={}", pvmListThisBucket.stream().map(pvm -> new String(pvm.keyBytes)).collect(Collectors.toList()));
                 throw new BucketFullException("Bucket full, split number exceed max split number: " + KeyLoader.MAX_SPLIT_NUMBER +
                         ", slot: " + slot + ", bucket index: " + bucketIndex);
             }
@@ -398,13 +398,13 @@ public class KeyBucketsInOneWalGroup {
             needSplit = true;
             if (newKeyCountNeedThisBucket > canPutKeyCountThisBucket * KeyLoader.SPLIT_MULTI_STEP) {
                 splitMultiStep *= KeyLoader.SPLIT_MULTI_STEP;
-                log.warn("Bucket split once 2 times 1 -> 9 for slot: {}, bucket index: {}, once add key count: {}", slot, bucketIndex, newKeyCountNeedThisBucket);
+                log.warn("Bucket split once 2 times 1 -> 9 for slot={}, bucket index={}, once add key count={}", slot, bucketIndex, newKeyCountNeedThisBucket);
             }
         } else if (newCellCostNeedThisBucket > canPutKeyCountThisBucket - tolerance) {
             needSplit = true;
             if (newCellCostNeedThisBucket > canPutKeyCountThisBucket * KeyLoader.SPLIT_MULTI_STEP) {
                 splitMultiStep *= KeyLoader.SPLIT_MULTI_STEP;
-                log.warn("Bucket split once 2 times 1 -> 9 for slot: {}, bucket index: {}, once add cell cost: {}", slot, bucketIndex, newCellCostNeedThisBucket);
+                log.warn("Bucket split once 2 times 1 -> 9 for slot={}, bucket index={}, once add cell cost={}", slot, bucketIndex, newCellCostNeedThisBucket);
             }
         }
 

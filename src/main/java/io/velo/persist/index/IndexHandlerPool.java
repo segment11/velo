@@ -102,7 +102,7 @@ public class IndexHandlerPool implements NeedCleanUp {
             int finalI = i;
             affinityThreadFactory.newThread(() -> {
                 eventloop.keepAlive(true);
-                log.warn("Index worker eventloop started, will run, worker id: {}", finalI);
+                log.warn("Index worker eventloop started, will run, worker id={}", finalI);
                 eventloop.run();
             }).start();
 
@@ -136,7 +136,7 @@ public class IndexHandlerPool implements NeedCleanUp {
                 System.out.println("Index worker eventloop stopping");
             });
             eventloop.breakEventloop();
-            log.warn("Index worker eventloop stopped, worker index: {}", i);
+            log.warn("Index worker eventloop stopped, worker index={}", i);
             i++;
         }
 

@@ -51,12 +51,12 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
 
         final var maybeOneMergedCvBytesLength = 200;
         var lruMemoryRequireMB = MERGED_CV_SIZE_THRESHOLD * maybeOneMergedCvBytesLength / 1024 / 1024;
-        log.info("LRU max size for chunk segment merged cv buffer={}, maybe one merged cv bytes length is {}B, memory require={}MB, slot: {}",
+        log.info("LRU max size for chunk segment merged cv buffer={}, maybe one merged cv bytes length is {}B, memory require={}MB, slot={}",
                 MERGED_CV_SIZE_THRESHOLD,
                 maybeOneMergedCvBytesLength,
                 lruMemoryRequireMB,
                 slot);
-        log.info("LRU prepare, type: {}, MB: {}, slot: {}", LRUPrepareBytesStats.Type.chunk_segment_merged_cv_buffer, lruMemoryRequireMB, slot);
+        log.info("LRU prepare, type={}, MB={}, slot={}", LRUPrepareBytesStats.Type.chunk_segment_merged_cv_buffer, lruMemoryRequireMB, slot);
         LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.chunk_segment_merged_cv_buffer, String.valueOf(slot), lruMemoryRequireMB, false);
     }
 
@@ -156,7 +156,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
 
         var doLog = Debug.getInstance().logMerge && logMergeCount % 1000 == 0;
         if (doLog) {
-            log.info("After remove merged but not persisted, merged segment set: {}, merged cv list size: {}", mergedSegmentSet, mergedCvList.size());
+            log.info("After remove merged but not persisted, merged segment set={}, merged cv list size={}", mergedSegmentSet, mergedCvList.size());
         }
     }
 
@@ -187,7 +187,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
                 .collect(Collectors.groupingBy(one -> Wal.calWalGroupIndex(one.bucketIndex)));
 
         if (groupByWalGroupIndex.size() > MERGED_SEGMENT_SIZE_THRESHOLD_ONCE_PERSIST) {
-            log.warn("Go to persist merged cv list once, perf bad, group by wal group index size: {}", groupByWalGroupIndex.size());
+            log.warn("Go to persist merged cv list once, perf bad, group by wal group index size={}", groupByWalGroupIndex.size());
         }
 
         XOneWalGroupPersist lastXForBinlog = null;
@@ -222,7 +222,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
         }
 
         if (doLog) {
-            log.info("Compare chunk merged segment index end last time, end last time i: {}, ready to merged and persisted last i: {}",
+            log.info("Compare chunk merged segment index end last time, end last time i={}, ready to merged and persisted last i={}",
                     oneSlot.chunk.mergedSegmentIndexEndLastTime, oncePersistSegmentIndexList.getLast());
         }
 

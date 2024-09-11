@@ -21,7 +21,7 @@ class ExtendCommand extends BaseCommand {
 
     @Override
     Reply handle() {
-        log.info 'Dyn extend command version: {}', version
+        log.info 'Dyn extend command version={}', version
         return NilReply.INSTANCE
     }
 }

@@ -84,7 +84,7 @@ vars currentEpoch 0 lastVoteEpoch 0
     synchronized void loadMeta() throws IOException {
         var metaFile = new File(persistDir, metaFileName);
         if (!metaFile.exists()) {
-            log.warn("Repl clusterx meta file not found: {}", metaFile);
+            log.warn("Repl clusterx meta file not found={}", metaFile);
             return;
         }
 
@@ -96,7 +96,7 @@ vars currentEpoch 0 lastVoteEpoch 0
         shards.addAll(tmp.getShards());
         clusterMyEpoch = tmp.getClusterMyEpoch();
         clusterCurrentEpoch = tmp.getClusterCurrentEpoch();
-        log.warn("Repl clusterx meta loaded, shards size: {}", shards.size());
+        log.warn("Repl clusterx meta loaded, shards size={}", shards.size());
     }
 
     public synchronized void refreshAllShards(ArrayList<Shard> shardsNew, int clusterVersion) throws IOException {
@@ -140,6 +140,6 @@ vars currentEpoch 0 lastVoteEpoch 0
 
         var metaFile = new File(persistDir, metaFileName);
         FileUtils.writeStringToFile(metaFile, metaJson, StandardCharsets.UTF_8);
-        log.warn("Repl clusterx meta saved, shards size: {}", shards.size());
+        log.warn("Repl clusterx meta saved, shards size={}", shards.size());
     }
 }

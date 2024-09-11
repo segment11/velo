@@ -27,20 +27,20 @@ public class TestFFIPwritePread {
         var pageManager = PageManager.getInstance();
 
         var pageSize = pageManager.pageSize();
-        log.info("page size: {}", pageSize);
+        log.info("page size={}", pageSize);
         final int pages = 2;
 
         var addr = pageManager.allocatePages(pages, LocalPersist.PROTECTION);
-        log.info("addr: {}", addr);
-        log.info("addr % page size: {}", addr % pageSize);
+        log.info("addr={}", addr);
+        log.info("addr % page size={}", addr % pageSize);
 
         var buf = m.newDirectByteBuffer(addr, (int) pageSize * pages);
-        log.info("buf remaining: {}", buf.remaining());
+        log.info("buf remaining={}", buf.remaining());
 
         // read
         byte[] bytes = new byte[1024];
         buf.get(bytes);
-        log.info("bytes length: {}", bytes.length);
+        log.info("bytes length={}", bytes.length);
 
         // write
         buf.flip();
@@ -52,18 +52,18 @@ public class TestFFIPwritePread {
         buf.mark();
         byte[] valueRead = new byte[valueBytes.length];
         buf.get(valueRead);
-        log.info("value read: {}", new String(valueRead));
+        log.info("value read={}", new String(valueRead));
 
         buf.reset();
         int n = libC.pwrite(fd, buf, buf.capacity(), 0);
-        log.info("pwrite: {}", n);
+        log.info("pwrite={}", n);
 
         buf.clear();
         libC.pread(fd, buf, buf.capacity(), 0);
         buf.rewind();
         byte[] valueRead2 = new byte[valueBytes.length];
         buf.get(valueRead2);
-        log.info("pread bytes: {}", new String(valueRead2));
+        log.info("pread bytes={}", new String(valueRead2));
 
         pageManager.freePages(addr, pages);
         libC.close(fd);

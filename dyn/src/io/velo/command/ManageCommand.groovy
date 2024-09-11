@@ -316,11 +316,11 @@ class ManageCommand extends BaseCommand {
         var replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
         if (replPairAsSlave) {
             if (replPairAsSlave.host == host && replPairAsSlave.port == port) {
-                log.info 'Manage migrate_from, already slave of host: {}, port: {}, slot: {}',
+                log.info 'Manage migrate_from, already slave of host={}, port={}, slot={}',
                         host, port, oneSlot.slot()
                 return ClusterxCommand.OK
             } else {
-                log.warn 'Manage migrate_from, already slave of other host: {}, port: {}, slot: {}',
+                log.warn 'Manage migrate_from, already slave of other host={}, port={}, slot={}',
                         replPairAsSlave.host, replPairAsSlave.port, oneSlot.slot()
                 if (force) {
                     log.warn 'Manage migrate_from, force remove exist repl pair as slave'
@@ -346,7 +346,7 @@ class ManageCommand extends BaseCommand {
         // only one key prefix given, only one dict after train
         def trainSampleCacheDict = trainSampleResult.cacheDict()
         def onlyOneDict = trainSampleCacheDict.get(keyPrefixOrSuffixGiven)
-        log.warn 'Train new dict result, sample value count: {}, dict count: {}', data.length - 4, trainSampleCacheDict.size()
+        log.warn 'Train new dict result, sample value count={}, dict count={}', data.length - 4, trainSampleCacheDict.size()
         // will overwrite same key prefix dict exists
         dictMap.putDict(keyPrefixOrSuffixGiven, onlyOneDict)
 
@@ -451,7 +451,7 @@ class ManageCommand extends BaseCommand {
                 // may be null
                 JedisPoolHolder.exe(jedisPool, jedis -> {
                     def pong = jedis.ping()
-                    log.info("Manage train dict, remote redis server: {}:{} pong: {}", host, port, pong);
+                    log.info("Manage train dict, remote redis server={}:{} pong={}", host, port, pong);
                 })
 
                 JedisPoolHolder.exe(jedisPool, jedis -> {
@@ -534,7 +534,7 @@ class ManageCommand extends BaseCommand {
             def file = new File(new File(userHome), 'dict-seq-' + dictSeq + '.dat')
             try {
                 file.bytes = dict.dictBytes
-                log.info 'Output dict bytes to file: {}', file.absolutePath
+                log.info 'Output dict bytes to file={}', file.absolutePath
             } catch (IOException e) {
                 return new ErrorReply(e.message)
             }
@@ -569,7 +569,7 @@ class ManageCommand extends BaseCommand {
 
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
-                log.error 'Manage dyn-config set error: {}', e.message
+                log.error 'Manage dyn-config set error={}', e.message
                 finalPromise.exception = e
                 return
             }
@@ -612,7 +612,7 @@ class ManageCommand extends BaseCommand {
                 case 'logRestore' -> Debug.getInstance().logRestore = isOn
                 case 'bulkLoad' -> Debug.getInstance().bulkLoad = isOn
                 default -> {
-                    log.warn 'Manage unknown debug field: {}', field
+                    log.warn 'Manage unknown debug field={}', field
                 }
             }
 

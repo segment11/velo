@@ -152,7 +152,7 @@ public class MetaIndexWords implements NeedCleanUp {
         this.workerId = workerId;
         this.workerIdDir = workerIdDir;
         this.inMemoryCachedBytes = new byte[HEADER_FOR_META_LENGTH + ONE_GROUP_OFFSET * ALL_WORDS_GROUP_NUMBER];
-        log.warn("Index meta index words init size: {}KB, worker id: {}", inMemoryCachedBytes.length / 1024, workerId);
+        log.warn("Index meta index words init size={}KB, worker id={}", inMemoryCachedBytes.length / 1024, workerId);
         this.allCapacity = inMemoryCachedBytes.length;
 
         if (ConfForGlobal.pureMemory) {
@@ -180,7 +180,7 @@ public class MetaIndexWords implements NeedCleanUp {
     void reload() throws IOException {
         raf.seek(0);
         raf.read(inMemoryCachedBytes);
-        log.warn("Index read meta index words file success, worker id: {}", workerId);
+        log.warn("Index read meta index words file success, worker id={}", workerId);
 
         iterate((lowerCaseWord, wordMeta) -> {
             var arr = new int[2];
@@ -192,7 +192,7 @@ public class MetaIndexWords implements NeedCleanUp {
                 intIdForOneWord = wordMeta.intId;
             }
         });
-        log.warn("Index meta index words loaded, word count: {}, worker id: {}", afterPutWordToSegmentIndex.size(), workerId);
+        log.warn("Index meta index words loaded, word count={}, worker id={}", afterPutWordToSegmentIndex.size(), workerId);
     }
 
     @Override

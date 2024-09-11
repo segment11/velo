@@ -94,7 +94,7 @@ public class XDict implements BinlogContent {
 
     @Override
     public void apply(short slot, ReplPair replPair) {
-        log.warn("Repl slave get dict, key prefix or suffix: {}, seq: {}", keyPrefixOrSuffix, dict.getSeq());
+        log.warn("Repl slave get dict, key prefix or suffix={}, seq={}", keyPrefixOrSuffix, dict.getSeq());
         // ignore slot, need sync
         var dictMap = DictMap.getInstance();
         synchronized (dictMap) {

@@ -142,7 +142,7 @@ public class DynConfig {
             // read json
             var objectMapper = new ObjectMapper();
             this.data = objectMapper.readValue(dynConfigFile, HashMap.class);
-            log.info("Init dyn config, data={}, slot: {}", data, slot);
+            log.info("Init dyn config, data={}, slot={}", data, slot);
 
             for (var entry : data.entrySet()) {
                 afterUpdateCallback.afterUpdate(entry.getKey(), entry.getValue());
@@ -155,7 +155,7 @@ public class DynConfig {
         // write json
         var objectMapper = new ObjectMapper();
         objectMapper.writeValue(dynConfigFile, data);
-        log.info("Update dyn config, key: {}, value: {}, slot: {}", key, value, slot);
+        log.info("Update dyn config, key={}, value={}, slot={}", key, value, slot);
 
         afterUpdateCallback.afterUpdate(key, value);
     }
