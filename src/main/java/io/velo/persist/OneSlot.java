@@ -126,7 +126,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         if (!slotDir.exists()) {
             if (!slotDir.mkdirs()) {
-                throw new IOException("Create slot dir error, slot: " + slot);
+                throw new IOException("Create slot dir error, slot=" + slot);
             }
         }
 
@@ -147,11 +147,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         this.dynConfig.setBinlogOn(persistConfig.get(ofBoolean(), "binlogOn", false));
-        log.warn("Binlog on: {}", this.dynConfig.isBinlogOn());
+        log.warn("Binlog on={}", this.dynConfig.isBinlogOn());
 
         this.walGroupNumber = Wal.calcWalGroupNumber();
         this.walArray = new Wal[walGroupNumber];
-        log.info("One slot wal group number: {}, slot: {}", walGroupNumber, slot);
+        log.info("One slot wal group number={}, slot={}", walGroupNumber, slot);
 
         this.chunkMergeWorker.resetThreshold(walGroupNumber);
 
@@ -161,7 +161,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
         this.raf = new RandomAccessFile(walSharedFile, "rw");
         var lruMemoryRequireMBWriteInWal = walSharedFile.length() / 1024 / 1024;
-        log.info("LRU prepare, type: {}, MB: {}, slot: {}", LRUPrepareBytesStats.Type.kv_write_in_wal, lruMemoryRequireMBWriteInWal, slot);
+        log.info("LRU prepare, type={}, MB={}, slot={}", LRUPrepareBytesStats.Type.kv_write_in_wal, lruMemoryRequireMBWriteInWal, slot);
         LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.kv_write_in_wal, slotStr, (int) lruMemoryRequireMBWriteInWal, false);
 
         var walSharedFileShortValue = new File(slotDir, "wal-short-value.dat");
@@ -170,7 +170,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
         this.rafShortValue = new RandomAccessFile(walSharedFileShortValue, "rw");
         var lruMemoryRequireMBWriteInWal2 = walSharedFileShortValue.length() / 1024 / 1024;
-        log.info("LRU prepare, type: {}, short value, MB: {}, slot: {}", LRUPrepareBytesStats.Type.kv_write_in_wal, lruMemoryRequireMBWriteInWal2, slot);
+        log.info("LRU prepare, type={}, short value, MB={}, slot={}", LRUPrepareBytesStats.Type.kv_write_in_wal, lruMemoryRequireMBWriteInWal2, slot);
         LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.kv_write_in_wal, slotStr, (int) lruMemoryRequireMBWriteInWal2, false);
 
         long initMemoryN = 0;
@@ -181,7 +181,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         int initMemoryMB = (int) (initMemoryN / 1024 / 1024);
-        log.info("Static memory init, type: {}, MB: {}, slot: {}", StaticMemoryPrepareBytesStats.Type.wal_cache_init, initMemoryMB, slot);
+        log.info("Static memory init, type={}, MB={}, slot={}", StaticMemoryPrepareBytesStats.Type.wal_cache_init, initMemoryMB, slot);
         StaticMemoryPrepareBytesStats.add(StaticMemoryPrepareBytesStats.Type.wal_cache_init, initMemoryMB, false);
 
         initLRU(false);
@@ -221,13 +221,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var maxSizeForEachWalGroup = maxSizeForAllWalGroups / walGroupNumber;
         final var maybeOneCompressedValueEncodedLength = 200;
         var lruMemoryRequireMBReadGroupByWalGroup = maxSizeForAllWalGroups * maybeOneCompressedValueEncodedLength / 1024 / 1024;
-        log.info("LRU max size for each wal group: {}, all wal group number: {}, maybe one compressed value encoded length is {}B, memory require: {}MB, slot: {}",
+        log.info("LRU max size for each wal group={}, all wal group number={}, maybe one compressed value encoded length is {}B, memory require={}MB, slot={}",
                 maxSizeForEachWalGroup,
                 walGroupNumber,
                 maybeOneCompressedValueEncodedLength,
                 lruMemoryRequireMBReadGroupByWalGroup,
                 slot);
-        log.info("LRU prepare, type: {}, MB: {}, slot: {}", LRUPrepareBytesStats.Type.kv_read_group_by_wal_group, lruMemoryRequireMBReadGroupByWalGroup, slot);
+        log.info("LRU prepare, type={}, MB={}, slot={}", LRUPrepareBytesStats.Type.kv_read_group_by_wal_group, lruMemoryRequireMBReadGroupByWalGroup, slot);
         if (doRemoveForStats) {
             LRUPrepareBytesStats.removeOne(LRUPrepareBytesStats.Type.kv_read_group_by_wal_group, slotStr);
         }
@@ -312,10 +312,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         replPair.setSlaveUuid(masterUuid);
 
         if (doMockWhenCreateReplPairAsSlave) {
-            log.info("Repl create repl pair as slave, mock, host: {}, port: {}, slot: {}", host, port, slot);
+            log.info("Repl create repl pair as slave, mock, host={}, port={}, slot={}", host, port, slot);
         } else {
             replPair.initAsSlave(netWorkerEventloop, requestHandler);
-            log.warn("Repl create repl pair as slave, host: {}, port: {}, slot: {}", host, port, slot);
+            log.warn("Repl create repl pair as slave, host={}, port={}, slot={}", host, port, slot);
         }
         replPairs.add(replPair);
         return replPair;
@@ -332,7 +332,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 continue;
             }
 
-            log.warn("Repl remove repl pair as slave, host: {}, port: {}, slot: {}", replPair.getHost(), replPair.getPort(), slot);
+            log.warn("Repl remove repl pair as slave, host={}, port={}, slot={}", replPair.getHost(), replPair.getPort(), slot);
             replPair.bye();
             addDelayNeedCloseReplPair(replPair);
             isSelfSlave = true;
@@ -397,12 +397,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         for (var replPair1 : replPairs) {
             if (replPair1.equals(replPair)) {
-                log.warn("Repl pair as master already exists, host: {}, port: {}, slot: {}", host, port, slot);
+                log.warn("Repl pair as master already exists, host={}, port={}, slot={}", host, port, slot);
                 return replPair1;
             }
         }
 
-        log.warn("Repl create repl pair as master, host: {}, port: {}, slot: {}", host, port, slot);
+        log.warn("Repl create repl pair as master, host={}, port={}, slot={}", host, port, slot);
         replPairs.add(replPair);
         return replPair;
     }
@@ -470,7 +470,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public void submitIndexJobDone() {
         pendingSubmitIndexJobRunCount--;
         if (pendingSubmitIndexJobRunCount < 0) {
-            log.warn("Pending submit index job run count less than 0, slot: {}", OneSlot.this.slot);
+            log.warn("Pending submit index job run count less than 0, slot={}", OneSlot.this.slot);
             pendingSubmitIndexJobRunCount = 0;
         }
     }
@@ -549,7 +549,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (walGroupIndex == 0) {
             lruClearedCount++;
             if (lruClearedCount % 10 == 0) {
-                log.info("KV LRU cleared for wal group index: {}, I am alive, act normal", walGroupIndex);
+                log.info("KV LRU cleared for wal group index={}, I am alive, act normal", walGroupIndex);
             }
         }
         return n;
@@ -597,7 +597,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         // check key white list
         if (!dynConfigKeyWhiteList.contains(key)) {
-            log.warn("Update dyn config key not in white list, key: {}, slot: {}", key, slot);
+            log.warn("Update dyn config key not in white list, key={}, slot={}", key, slot);
             return false;
         }
 
@@ -606,7 +606,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return true;
             // add else if here
         } else {
-            log.warn("Update dyn config key not match, key: {}, slot: {}", key, slot);
+            log.warn("Update dyn config key not match, key={}, slot={}", key, slot);
             return false;
         }
     }
@@ -722,7 +722,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             try {
                 binlog.append(content);
             } catch (IOException e) {
-                throw new RuntimeException("Append binlog error, slot: " + slot, e);
+                throw new RuntimeException("Append binlog error, slot=" + slot, e);
             }
         }
     }
@@ -766,7 +766,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             @Override
             public void run() {
                 if (loopCount % 1000 == 0) {
-                    log.info("Task {} run, slot: {}, loop count: {}", name(), slot, loopCount);
+                    log.info("Task {} run, slot={}, loop count={}", name(), slot, loopCount);
                 }
 
                 for (var replPair : replPairs) {
@@ -783,8 +783,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                             var bytes = new byte[8];
                             ByteBuffer.wrap(bytes).putLong(toFetchBigStringUuids);
                             replPair.write(ReplType.incremental_big_string, new RawBytesContent(bytes));
-                            log.info("Repl do fetch incremental big string, to server: {}, slot: {}, uuid: {}",
-                                    replPair.getHostAndPort(), slot, toFetchBigStringUuids);
+                            log.info("Repl do fetch incremental big string, to server={}, uuid={}, slot={}",
+                                    replPair.getHostAndPort(), toFetchBigStringUuids, slot);
                         }
                     }
                 }
@@ -801,7 +801,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                             var replPair = it.next();
                             if (replPair.equals(needCloseReplPair)) {
                                 it.remove();
-                                log.warn("Remove repl pair after bye, to server: {}, slot: {}", replPair.getHostAndPort(), slot);
+                                log.warn("Remove repl pair after bye, to server={}, slot={}", replPair.getHostAndPort(), slot);
                                 break;
                             }
                         }
@@ -829,7 +829,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             public void run() {
                 // reduce log
                 if (slot == 0) {
-                    log.info("Debug task run, slot: {}, loop count: {}", slot, loopCount);
+                    log.info("Debug task run, slot={}, loop count={}", slot, loopCount);
                 }
             }
 
@@ -848,7 +848,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     private void checkCurrentThreadId() {
         var threadId = Thread.currentThread().threadId();
         if (threadId != threadIdProtectedForSafe) {
-            throw new IllegalStateException("Thread id not match, thread id: " + threadId + ", thread id protected for safe: " + threadIdProtectedForSafe);
+            throw new IllegalStateException("Thread id not match, thread id=" + threadId + ", thread id protected for safe=" + threadIdProtectedForSafe);
         }
     }
 
@@ -936,7 +936,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var pvm = PersistValueMeta.decode(valueBytes);
         var segmentBytes = getSegmentBytesByPvm(pvm);
         if (segmentBytes == null) {
-            throw new IllegalStateException("Load persisted segment bytes error, pvm: " + pvm);
+            throw new IllegalStateException("Load persisted segment bytes error, pvm=" + pvm);
         }
         if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
             segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
@@ -955,14 +955,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // skip key header or check key
         var keyLength = buf.readShort();
         if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
-            throw new IllegalStateException("Key length error, key length: " + keyLength);
+            throw new IllegalStateException("Key length error, key length=" + keyLength);
         }
 
         var keyBytesRead = new byte[keyLength];
         buf.readBytes(keyBytesRead);
 
         if (!Arrays.equals(keyBytesRead, keyBytes)) {
-            throw new IllegalStateException("Key not match, key: " + new String(keyBytes) + ", key persisted: " + new String(keyBytesRead));
+            throw new IllegalStateException("Key not match, key=" + new String(keyBytes) + ", key persisted=" + new String(keyBytesRead));
         }
 
         // set to lru cache, just target bytes
@@ -1068,7 +1068,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             var bytes = cv.getCompressedData();
             var isWriteOk = bigStringFiles.writeBigStringBytes(uuid, key, bytes);
             if (!isWriteOk) {
-                throw new RuntimeException("Write big string file error, uuid: " + uuid + ", key: " + key);
+                throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
             }
 
             // encode again
@@ -1227,12 +1227,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         checkCurrentThreadId();
 
         if (bytes.length != chunk.chunkSegmentLength * segmentCount) {
-            throw new IllegalStateException("Repl write chunk segments bytes length not match, bytes length: " + bytes.length +
-                    ", chunk segment length: " + chunk.chunkSegmentLength + ", segment count: " + segmentCount);
+            throw new IllegalStateException("Repl write chunk segments bytes length not match, bytes length=" + bytes.length +
+                    ", chunk segment length=" + chunk.chunkSegmentLength + ", segment count=" + segmentCount + ", slot=" + slot);
         }
 
         chunk.writeSegmentsFromMasterExists(bytes, beginSegmentIndex, segmentCount);
-        log.warn("Repl write chunk segments from master exists, s={}, i={}, c={}", slot, beginSegmentIndex, segmentCount);
+        log.warn("Repl write chunk segments from master exists, begin segment index={}, segment count={}, slot={}",
+                beginSegmentIndex, segmentCount, slot);
     }
 
     @Override
@@ -1243,12 +1244,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (raf != null) {
             try {
                 raf.close();
-                System.out.println("Close wal raf success, slot: " + slot);
+                System.out.println("Close wal raf success, slot=" + slot);
 
                 rafShortValue.close();
-                System.out.println("Close wal short value raf success, slot: " + slot);
+                System.out.println("Close wal short value raf success, slot=" + slot);
             } catch (IOException e) {
-                System.err.println("Close wal raf / wal short raf error, slot: " + slot);
+                System.err.println("Close wal raf / wal short raf error, slot=" + slot);
             }
         }
 
@@ -1415,7 +1416,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var needMergeSegmentIndexList = chunk.persist(walGroupIndex, list, false, xForBinlog);
         if (needMergeSegmentIndexList == null) {
-            throw new IllegalStateException("Persist error, need merge segment index list is null, slot: " + slot);
+            throw new IllegalStateException("Persist error, need merge segment index list is null, slot=" + slot);
         }
 
         if (ext != null && !ext.isEmpty()) {
@@ -1643,7 +1644,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     @MasterReset
     public void resetAsMaster() throws IOException {
-        log.warn("Repl reset as master, slot: {}", slot);
+        log.warn("Repl reset as master, slot={}", slot);
         persistMergingOrMergedSegmentsButNotPersisted();
         checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(false);
         getMergedSegmentIndexEndLastTime();
@@ -1657,7 +1658,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         binlog.reopenAtFileIndexAndMarginOffset(lastUpdatedFileIndex, marginLastUpdatedOffset);
         binlog.moveToNextSegment(true);
-        log.warn("Repl reset binlog file index and offset as old master, file index: {}, offset: {}, slot: {}",
+        log.warn("Repl reset binlog file index and offset as old master, file index={}, offset={}, slot={}",
                 lastUpdatedFileIndex, marginLastUpdatedOffset, slot);
 
         // clear old as slave catch up binlog info
@@ -1671,7 +1672,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (!isCanRead()) {
             setCanRead(true);
         }
-        log.warn("Repl reset readonly false and can read, slot: {}", slot);
+        log.warn("Repl reset readonly false and can read, slot={}", slot);
     }
 
     @SlaveReset
@@ -1679,7 +1680,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // clear old as slave catch up binlog info
         // need fetch from the beginning, for data consistency
         metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
-        log.warn("Repl clear fetched binlog file index and offset as old slave, slot: {}", slot);
+        log.warn("Repl clear fetched binlog file index and offset as old slave, slot={}", slot);
 
         binlog.moveToNextSegment();
 
@@ -1691,11 +1692,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (isCanRead()) {
             setCanRead(false);
         }
-        log.warn("Repl reset readonly true and can not read, slot: {}", slot);
+        log.warn("Repl reset readonly true and can not read, slot={}", slot);
 
         // do not write binlog as slave
         dynConfig.setBinlogOn(false);
-        log.warn("Repl reset binlog on false as slave, slot: {}", slot);
+        log.warn("Repl reset binlog on false as slave, slot={}", slot);
     }
 
     private int mergeTargetSegments(ArrayList<Integer> needMergeSegmentIndexList, boolean isServerStart) {
@@ -1707,7 +1708,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // continuous
         if (lastSegmentIndex - firstSegmentIndex + 1 == needMergeSegmentIndexList.size()) {
             var validCvCount = isServerStart ? doMergeJobWhenServerStart(needMergeSegmentIndexList) : doMergeJob(needMergeSegmentIndexList);
-            log.warn("Merge segments, is server start: {}, s={}, i={}, end i={}, valid cv count after run: {}",
+            log.warn("Merge segments, is server start={}, s={}, i={}, end i={}, valid cv count after run={}",
                     isServerStart, slot, firstSegmentIndex, lastSegmentIndex, validCvCount);
             validCvCountTotal += validCvCount;
         } else {
@@ -1721,7 +1722,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 if (segmentIndex - last != 1) {
                     if (!onceList.isEmpty()) {
                         var validCvCount = isServerStart ? doMergeJobWhenServerStart(onceList) : doMergeJob(onceList);
-                        log.warn("Merge segments, is server start: {}, once list, s={}, i={}, end i={}, valid cv count after run: {}",
+                        log.warn("Merge segments, is server start={}, once list, s={}, i={}, end i={}, valid cv count after run={}",
                                 isServerStart, slot, onceList.getFirst(), onceList.getLast(), validCvCount);
                         validCvCountTotal += validCvCount;
                         onceList.clear();
@@ -1733,7 +1734,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             if (!onceList.isEmpty()) {
                 var validCvCount = isServerStart ? doMergeJobWhenServerStart(onceList) : doMergeJob(onceList);
-                log.warn("Merge segments, is server start: {}, once list, s={}, i={}, end i={}, valid cv count after run: {}",
+                log.warn("Merge segments, is server start={}, once list, s={}, i={}, end i={}, valid cv count after run={}",
                         isServerStart, slot, onceList.getFirst(), onceList.getLast(), validCvCount);
                 validCvCountTotal += validCvCount;
             }

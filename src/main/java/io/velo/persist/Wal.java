@@ -91,23 +91,23 @@ public class Wal implements InMemoryEstimate {
             var keyLength = is.readShort();
 
             if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
-                throw new IllegalStateException("Key length error, key length: " + keyLength);
+                throw new IllegalStateException("Key length error, key length=" + keyLength);
             }
 
             var keyBytes = new byte[keyLength];
             var n = is.read(keyBytes);
             if (n != keyLength) {
-                throw new IllegalStateException("Read key bytes error, key length: " + keyLength + ", read length: " + n);
+                throw new IllegalStateException("Read key bytes error, key length=" + keyLength + ", read length=" + n);
             }
             var cvEncodedLength = is.readInt();
             var cvEncoded = new byte[cvEncodedLength];
             var n2 = is.read(cvEncoded);
             if (n2 != cvEncodedLength) {
-                throw new IllegalStateException("Read cv encoded bytes error, cv encoded length: " + cvEncodedLength + ", read length: " + n2);
+                throw new IllegalStateException("Read cv encoded bytes error, cv encoded length=" + cvEncodedLength + ", read length=" + n2);
             }
 
             if (vLength != ENCODED_HEADER_LENGTH + keyLength + cvEncodedLength) {
-                throw new IllegalStateException("Invalid length: " + vLength);
+                throw new IllegalStateException("Invalid length=" + vLength);
             }
 
             return new V(seq, bucketIndex, keyHash, expireAt, spType, new String(keyBytes), cvEncoded, false);
@@ -138,7 +138,7 @@ public class Wal implements InMemoryEstimate {
 
             // reduce log
             if (slot == 0 && groupIndex == 0) {
-                log.info("Read wal file success, slot: {}, group index: {}, value size: {}, short value size: {}, init memory n: {}KB",
+                log.info("Read wal file success, slot={}, group index={}, value size={}, short value size={}, init memory n={}KB",
                         slot, groupIndex, n1, n2, initMemoryN / 1024);
             }
         }
@@ -178,7 +178,7 @@ public class Wal implements InMemoryEstimate {
     private static final Logger log = LoggerFactory.getLogger(Wal.class);
 
     public static void doLogAfterInit() {
-        log.warn("Init wal groups, one group buffer size: {}KB, one charge bucket number: {}, wal group number: {}",
+        log.warn("Init wal groups, one group buffer size={}KB, one charge bucket number={}, wal group number={}",
                 ONE_GROUP_BUFFER_SIZE / 1024, ConfForSlot.global.confWal.oneChargeBucketNumber, calcWalGroupNumber());
     }
 
@@ -311,7 +311,7 @@ public class Wal implements InMemoryEstimate {
         }
 
         if (groupIndex % 100 == 0) {
-            log.info("Clear wal, slot: {}, group index: {}", slot, groupIndex);
+            log.info("Clear wal, slot={}, group index={}", slot, groupIndex);
         }
     }
 
@@ -327,7 +327,7 @@ public class Wal implements InMemoryEstimate {
 
         clearShortValuesCount++;
         if (clearShortValuesCount % 1000 == 0) {
-            log.info("Clear short values, slot: {}, group index: {}, count: {}", slot, groupIndex, clearShortValuesCount);
+            log.info("Clear short values, slot={}, group index={}, count={}", slot, groupIndex, clearShortValuesCount);
         }
     }
 
@@ -338,7 +338,7 @@ public class Wal implements InMemoryEstimate {
 
         clearValuesCount++;
         if (clearValuesCount % 1000 == 0) {
-            log.info("Clear values, slot: {}, group index: {}, count: {}", slot, groupIndex, clearValuesCount);
+            log.info("Clear values, slot={}, group index={}, count={}", slot, groupIndex, clearValuesCount);
         }
     }
 
@@ -424,7 +424,7 @@ public class Wal implements InMemoryEstimate {
             raf.write(v.encode());
         } catch (IOException e) {
             log.error("Write to file error", e);
-            throw new RuntimeException("Write to file error: " + e.getMessage());
+            throw new RuntimeException("Write to file error=" + e.getMessage());
         }
     }
 
@@ -520,12 +520,12 @@ public class Wal implements InMemoryEstimate {
         var oneGroupBufferSize = buffer.getInt();
 
         if (groupIndex1 != groupIndex) {
-            throw new IllegalStateException("Repl slave fetch wal group error, slot: " + slot +
-                    ", group index: " + groupIndex1 + ", expect group index: " + groupIndex);
+            throw new IllegalStateException("Repl slave fetch wal group error, group index=" +
+                    groupIndex1 + ", expect group index=" + groupIndex + ", slot=" + slot);
         }
         if (oneGroupBufferSize != ONE_GROUP_BUFFER_SIZE) {
-            throw new IllegalStateException("Repl slave fetch wal group error, slot: " + slot +
-                    ", group index: " + groupIndex1 + ", one group buffer size: " + oneGroupBufferSize + ", expect size: " + ONE_GROUP_BUFFER_SIZE);
+            throw new IllegalStateException("Repl slave fetch wal group error, group index=" +
+                    groupIndex1 + ", one group buffer size=" + oneGroupBufferSize + ", expect size=" + ONE_GROUP_BUFFER_SIZE + ", slot=" + slot);
         }
 
         writePosition = buffer.getInt();
@@ -547,8 +547,8 @@ public class Wal implements InMemoryEstimate {
         var n1 = readBytesToList(delayToKeyBucketValues, false, bytes, 16, oneGroupBufferSize);
         var n2 = readBytesToList(delayToKeyBucketShortValues, true, bytes, 16 + oneGroupBufferSize, oneGroupBufferSize);
         if (groupIndex1 % 100 == 0) {
-            log.warn("Repl slave fetch wal group success, slot: {}, group index: {}, value size: {}, short value size: {}",
-                    slot, groupIndex1, n1, n2);
+            log.warn("Repl slave fetch wal group success, group index={}, value size={}, short value size={}, slot={}",
+                    groupIndex1, n1, n2, slot);
         }
     }
 }

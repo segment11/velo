@@ -40,7 +40,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             public void handle(String key, CompressedValue shortStringCv) {
                 // for unit test
                 if (oneSlot == null) {
-                    log.warn("Short value cv expired, type: {}, slot: {}", shortStringCv.getDictSeqOrSpType(), slot);
+                    log.warn("Short value cv expired, type={}, slot={}", shortStringCv.getDictSeqOrSpType(), slot);
                     return;
                 }
 
@@ -51,7 +51,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             public void handle(String key, PersistValueMeta pvm) {
                 // for unit test
                 if (oneSlot == null) {
-                    log.warn("Cv expired, pvm: {}, slot: {}", pvm, slot);
+                    log.warn("Cv expired, pvm={}, slot={}", pvm, slot);
                     return;
                 }
 
@@ -133,7 +133,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     @SlaveReplay
     public void overwriteMetaKeyBucketSplitNumberBytesFromMasterExists(byte[] bytes) {
         metaKeyBucketSplitNumber.overwriteInMemoryCachedBytes(bytes);
-        log.warn("Repl overwrite meta key bucket split number bytes from master exists, slot: {}", slot);
+        log.warn("Repl overwrite meta key bucket split number bytes from master exists, slot={}", slot);
     }
 
     @TestOnly
@@ -204,7 +204,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     @SlaveReplay
     public void overwriteStatKeyCountInBucketsBytesFromMasterExists(byte[] bytes) {
         statKeyCountInBuckets.overwriteInMemoryCachedBytes(bytes);
-        log.warn("Repl overwrite stat key count in buckets bytes from master exists, slot: {}", slot);
+        log.warn("Repl overwrite stat key count in buckets bytes from master exists, slot={}", slot);
     }
 
     @SlaveNeedReplay
@@ -250,7 +250,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
             fdReadWriteArray[splitIndex] = fdReadWrite;
         }
-        log.info("Persist key bucket files fd opened, split number: {}, slot: {}", splitNumber, slot);
+        log.info("Persist key bucket files fd opened, split number={}, slot={}", splitNumber, slot);
     }
 
     @Override

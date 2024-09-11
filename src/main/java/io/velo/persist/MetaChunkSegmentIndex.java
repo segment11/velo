@@ -19,12 +19,14 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     private static final String META_CHUNK_SEGMENT_INDEX_FILE = "meta_chunk_segment_index.dat";
     private RandomAccessFile raf;
 
+    private final short slot;
     private final byte[] inMemoryCachedBytes;
     private final ByteBuffer inMemoryCachedByteBuffer;
 
     private static final Logger log = LoggerFactory.getLogger(MetaChunkSegmentIndex.class);
 
     public MetaChunkSegmentIndex(short slot, File slotDir) throws IOException {
+        this.slot = slot;
         // 4 bytes for chunk segment index int
         // when slave connect master, master start binlog
         // 8 bytes for master uuid long
@@ -83,7 +85,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
 
     public void clearMasterBinlogFileIndexAndOffset() {
         setMasterBinlogFileIndexAndOffset(0L, false, 0, 0L);
-        log.warn("Repl meta chunk segment index clear master binlog file index and offset done, set 0 from the beginning");
+        log.warn("Repl meta chunk segment index clear master binlog file index and offset done, set 0 from the beginning, slot={}", slot);
     }
 
     @VisibleForTesting

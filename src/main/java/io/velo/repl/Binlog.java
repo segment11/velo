@@ -99,7 +99,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         this.binlogDir = new File(slotDir, BINLOG_DIR_NAME);
         if (!binlogDir.exists()) {
             if (!binlogDir.mkdirs()) {
-                throw new IOException("Repl create binlog dir error, slot: " + slot);
+                throw new IOException("Repl create binlog dir error, slot=" + slot);
             }
         }
         this.dynConfig = dynConfig;
@@ -234,8 +234,8 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                 createAndUseNextFile();
             }
         }
-        log.warn("Repl binlog move to next segment, slot: {}, file index: {}, offset: {}",
-                slot, currentFileIndex, currentFileOffset);
+        log.warn("Repl binlog move to next segment, file index={}, offset={}, slot={}",
+                currentFileIndex, currentFileOffset, slot);
     }
 
     public void reopenAtFileIndexAndMarginOffset(int resetFileIndex, long marginOffset) throws IOException {
@@ -245,8 +245,8 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             currentFileOffset = marginOffset;
             clearByteBuffer();
 
-            log.warn("Repl binlog reopen at file index and margin offset, slot: {}, file index: {}, offset: {}",
-                    slot, currentFileIndex, currentFileOffset);
+            log.warn("Repl binlog reopen at file index and margin offset, file index={}, offset={}, slot={}",
+                    currentFileIndex, currentFileOffset, slot);
             return;
         }
 
@@ -266,8 +266,8 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         clearByteBuffer();
         raf = prevRaf;
 
-        log.warn("Repl binlog reopen at file index and margin offset, slot: {}, file index: {}, offset: {}",
-                slot, currentFileIndex, currentFileOffset);
+        log.warn("Repl binlog reopen at file index and margin offset, file index={}, offset={}, slot={}",
+                currentFileIndex, currentFileOffset, slot);
     }
 
     private static final String FILE_NAME_PREFIX = "binlog-";
@@ -327,8 +327,8 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
         var encoded = content.encodeWithType();
         if (encoded.length >= oneSegmentLength) {
-            throw new IllegalArgumentException("Repl append binlog content error, encoded length must be less than one segment length, slot: " +
-                    slot + ", encoded length: " + encoded.length);
+            throw new IllegalArgumentException("Repl append binlog content error, encoded length must be less than one segment length, slot=" +
+                    slot + ", encoded length=" + encoded.length);
         }
 
         var isCrossSegment = tempAppendSegmentBuffer.position() + encoded.length > oneSegmentLength;
@@ -371,7 +371,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
         int binlogOneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
         if (oneSegmentBytes.length > binlogOneSegmentLength) {
-            throw new IllegalArgumentException("Repl write binlog one segment bytes error, length must be less than " + binlogOneSegmentLength);
+            throw new IllegalArgumentException("Repl write binlog one segment bytes error, length must be less than " + binlogOneSegmentLength + ", slot=" + slot);
         }
 
         var oneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength;
@@ -423,7 +423,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     private void createAndUseNextFile() throws IOException {
         raf.close();
-        log.info("Repl close current binlog file as overflow, file: {}, slot: {}", fileName(), slot);
+        log.info("Repl close current binlog file as overflow, file={}, slot={}", fileName(), slot);
 
         var prevRaf = prevRafByFileIndex.remove(currentFileIndex);
         if (prevRaf != null) {
@@ -435,7 +435,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         currentFileIndex++;
         var nextFile = new File(binlogDir, fileName());
         FileUtils.touch(nextFile);
-        log.info("Repl create new binlog file, file: {}, slot: {}", nextFile.getName(), slot);
+        log.info("Repl create new binlog file, file={}, slot={}", nextFile.getName(), slot);
         raf = new RandomAccessFile(nextFile, "rw");
 
         currentFileOffset = 0;
@@ -449,13 +449,13 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             var rafRemoved = prevRafByFileIndex.remove(firstFileIndex);
             if (rafRemoved != null) {
                 rafRemoved.close();
-                log.info("Repl close binlog old raf success, slot: " + slot + ", file index: " + firstFileIndex);
+                log.info("Repl close binlog old raf success, file index=" + firstFileIndex + ", slot=" + slot);
             }
 
             if (!firstFile.delete()) {
-                log.error("Repl delete binlog file error, file: {}, slot: {}", firstFile.getName(), slot);
+                log.error("Repl delete binlog file error, file={}, slot={}", firstFile.getName(), slot);
             } else {
-                log.info("Repl delete binlog file success, file: {}, slot: {}", firstFile.getName(), slot);
+                log.info("Repl delete binlog file success, file={}, slot={}", firstFile.getName(), slot);
             }
         }
     }
@@ -467,7 +467,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     private RandomAccessFile prevRaf(int fileIndex, boolean createIfNotExists) {
         if (fileIndex < 0) {
-            throw new IllegalArgumentException("Repl read binlog prev raf, file index must be >= 0");
+            throw new IllegalArgumentException("Repl read binlog prev raf, file index must be >= 0, slot=" + slot);
         }
 
         return prevRafByFileIndex.computeIfAbsent(fileIndex, k -> {
@@ -479,7 +479,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                     try {
                         FileUtils.touch(file);
                     } catch (IOException e) {
-                        throw new RuntimeException("Repl touch new binlog file error, slot: " + slot + ", file index: " + fileIndex, e);
+                        throw new RuntimeException("Repl touch new binlog file error, file index=" + fileIndex + ", slot=" + slot, e);
                     }
                 }
             }
@@ -501,13 +501,13 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     public byte[] readPrevRafOneSegment(int fileIndex, long offset) throws IOException {
         if (fileIndex < 0) {
-            throw new IllegalArgumentException("Repl read binlog segment bytes, file index must be >= 0");
+            throw new IllegalArgumentException("Repl read binlog segment bytes, file index must be >= 0, slot=" + slot);
         }
 
         var oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
         var modGiven = offset % oneSegmentLength;
         if (modGiven != 0) {
-            throw new IllegalArgumentException("Repl read binlog segment bytes, offset must be multiple of one segment length, offset: " + offset);
+            throw new IllegalArgumentException("Repl read binlog segment bytes, offset must be multiple of one segment length, offset=" + offset + ", slot=" + slot);
         }
 
         // get from cache first, only consider current file or previous file
@@ -524,7 +524,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         if (prevRaf == null) {
             // keep max count = 10 or 100, if write too fast, may be lost some files
             // so slave will get error repl reply, then need re-fetch all exists data from master and re-catch up
-            throw new IOException("Repl read binlog segment bytes, file not exist, file index: " + fileIndex);
+            throw new IOException("Repl read binlog segment bytes, file not exist, file index=" + fileIndex + ", slot=" + slot);
         }
 
         // when?, not any binlog will cause this, other cases need to check, todo
@@ -536,7 +536,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         prevRaf.seek(offset);
         var n = prevRaf.read(bytes);
         if (n < 0) {
-            throw new IOException("Repl read binlog segment bytes error, file index: " + fileIndex + ", offset: " + offset + ", slot: " + slot);
+            throw new IOException("Repl read binlog segment bytes error, file index=" + fileIndex + ", offset=" + offset + ", slot=" + slot);
         }
         if (n < oneSegmentLength) {
             var readBytes = new byte[n];
@@ -556,7 +556,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         var oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
         var modGiven = offset % oneSegmentLength;
         if (modGiven != 0) {
-            throw new IllegalArgumentException("Repl read binlog segment bytes, offset must be multiple of one segment length, offset: " + offset);
+            throw new IllegalArgumentException("Repl read binlog segment bytes, offset must be multiple of one segment length, offset=" + offset + ", slot=" + slot);
         }
 
         // check cache
@@ -582,7 +582,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         raf.seek(offset);
         var n = raf.read(bytes);
         if (n < 0) {
-            throw new RuntimeException("Repl read binlog segment bytes error, file index: " + currentFileIndex + ", offset: " + offset + ", slot: " + slot);
+            throw new RuntimeException("Repl read binlog segment bytes error, file index=" + currentFileIndex + ", offset=" + offset + ", slot=" + slot);
         }
 
         if (n == oneSegmentLength) {
@@ -623,7 +623,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         try {
             raf.setLength(0);
         } catch (IOException e) {
-            log.error("Repl clear binlog raf error, slot: " + slot + ", file index: " + currentFileIndex, e);
+            log.error("Repl clear binlog raf error, file index=" + currentFileIndex + "slot=" + slot, e);
         }
 
         var it = prevRafByFileIndex.entrySet().iterator();
@@ -641,9 +641,9 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             }
 
             if (!file.delete()) {
-                log.error("Repl delete binlog file error, file: {}, slot: {}", file.getName(), slot);
+                log.error("Repl delete binlog file error, file={}, slot={}", file.getName(), slot);
             } else {
-                log.info("Repl delete binlog file success, file: {}, slot: {}", file.getName(), slot);
+                log.info("Repl delete binlog file success, file={}, slot={}", file.getName(), slot);
             }
         }
     }
@@ -652,9 +652,9 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     public void cleanUp() {
         try {
             raf.close();
-            System.out.println("Repl close binlog current raf success, slot: " + slot);
+            System.out.println("Repl close binlog current raf success, slot=" + slot);
         } catch (IOException e) {
-            System.err.println("Repl close binlog current raf error, slot: " + slot);
+            System.err.println("Repl close binlog current raf error, slot=" + slot);
         }
 
         for (var entry : prevRafByFileIndex.entrySet()) {
@@ -662,9 +662,9 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             var prevRaf = entry.getValue();
             try {
                 prevRaf.close();
-                System.out.println("Repl close binlog old raf success, slot: " + slot + ", file index: " + prevFileIndex);
+                System.out.println("Repl close binlog old raf success, slot=" + slot + ", file index=" + prevFileIndex);
             } catch (IOException e) {
-                System.err.println("Repl close binlog old raf error, slot: " + slot + ", file index: " + prevFileIndex);
+                System.err.println("Repl close binlog old raf error, slot=" + slot + ", file index=" + prevFileIndex);
             }
         }
     }

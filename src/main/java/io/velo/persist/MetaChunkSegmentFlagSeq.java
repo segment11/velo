@@ -55,8 +55,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
 
     public void overwriteOneBatch(byte[] bytes, int beginBucketIndex, int bucketCount) {
         if (bytes.length != bucketCount * ONE_LENGTH) {
-            throw new IllegalArgumentException("Repl chunk segments from master one batch meta bytes length not match, slot: "
-                    + slot + ", length: " + bytes.length + ", bucket count: " + bucketCount + ", one length: " + ONE_LENGTH);
+            throw new IllegalArgumentException("Repl chunk segments from master one batch meta bytes length not match, length=" +
+                    bytes.length + ", bucket count=" + bucketCount + ", one length=" + ONE_LENGTH + ", slot=" + slot);
         }
 
         var offset = beginBucketIndex * ONE_LENGTH;
@@ -70,10 +70,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
             raf.write(bytes);
             inMemoryCachedByteBuffer.position(offset).put(bytes);
         } catch (IOException e) {
-            throw new RuntimeException("Repl chunk segments from master one batch meta bytes, write file error", e);
+            throw new RuntimeException("Repl chunk segments from master one batch meta bytes, write file error, slot=" + slot, e);
         }
-        log.warn("Repl chunk segments from master one batch meta bytes, write file success, slot: {}, begin bucket index: {}, bucket count: {}",
-                slot, beginBucketIndex, bucketCount);
+        log.warn("Repl chunk segments from master one batch meta bytes, write file success, begin bucket index: {}, bucket count: {}, slot: {}",
+                beginBucketIndex, bucketCount, slot);
     }
 
     private static final Logger log = LoggerFactory.getLogger(MetaChunkSegmentFlagSeq.class);

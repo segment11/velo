@@ -179,8 +179,8 @@ public class ReplPair {
         // only log for catch up
         if (type == ReplType.catch_up || type == ReplType.s_catch_up) {
             if (statsCountForReplType[i] % 100 == 0) {
-                log.info("Repl pair stats count for repl type, alive, target host: {}, port: {}, slot: {}, stats: {}",
-                        host, port, slot, getStatsCountForReplTypeAsString());
+                log.info("Repl pair stats count for repl type, alive, target host={}, port={}, stats={}, slot={}",
+                        host, port, getStatsCountForReplTypeAsString(), slot);
             }
         }
     }
@@ -274,11 +274,11 @@ public class ReplPair {
 
         if (System.currentTimeMillis() - lastPongGetTimestamp < 1000 * 3
                 && tcpClient != null && tcpClient.isSocketConnected()) {
-            log.warn("Repl pair init as slave: already connected, target host: {}, port: {}, slot: {}", host, port, slot);
+            log.warn("Repl pair init as slave: already connected, target host={}, port={}, slot={}", host, port, slot);
         } else {
 //            if (tcpClient != null) {
 //                tcpClient.close();
-//                log.warn("Repl pair init as slave: close old connection, target host: {}, port: {}, slot: {}", host, port, slot);
+//                log.warn("Repl pair init as slave: close old connection, target host={}, port={}, slot={}", host, port, slot);
 //            }
 
             var replContent = new Hello(slaveUuid, ConfForGlobal.netListenAddresses);
@@ -354,9 +354,9 @@ public class ReplPair {
         if (slaveConnectSocketInMaster != null) {
             try {
                 slaveConnectSocketInMaster.close();
-                log.warn("Repl pair master close slave socket, {}:{}", host, port);
+                log.warn("Repl pair master close slave socket, {}:{}, slot={}", host, port, slot);
             } catch (Exception e) {
-                log.error("Repl pair master close slave socket error: {}, {}:{}", e.getMessage(), host, port);
+                log.error("Repl pair master close slave socket error={}, {}:{}, slot={}", e.getMessage(), host, port, slot);
             } finally {
                 slaveConnectSocketInMaster = null;
             }

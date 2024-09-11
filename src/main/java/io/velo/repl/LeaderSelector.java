@@ -45,14 +45,14 @@ public class LeaderSelector implements NeedCleanUp {
         }
 
         if (client != null) {
-            log.warn("Repl zookeeper client already started, connect string: {}", connectString);
+            log.warn("Repl zookeeper client already started, connect string={}", connectString);
             return true;
         }
 
         client = CuratorFrameworkFactory.newClient(connectString,
                 new ExponentialBackoffRetry(1000, 3));
         client.start();
-        log.info("Repl zookeeper client started, connect string: {}", connectString);
+        log.info("Repl zookeeper client started, connect string={}", connectString);
         return true;
     }
 
@@ -109,7 +109,7 @@ public class LeaderSelector implements NeedCleanUp {
         if (hasLeadership()) {
             isLeaderLoopCount++;
             if (isLeaderLoopCount % 100 == 0) {
-                log.info("Repl self is leader, loop count: {}", isLeaderLoopCount);
+                log.info("Repl self is leader, loop count={}", isLeaderLoopCount);
             }
 
             if (!hasLeadershipLastTry) {
@@ -173,12 +173,12 @@ public class LeaderSelector implements NeedCleanUp {
             var dataBytes = client.getData().forPath(latchPath + "/" + children.getFirst());
             var listenAddress = new String(dataBytes);
             lastGetMasterListenAddressAsSlave = listenAddress;
-            log.debug("Repl get master listen address from zookeeper: {}", listenAddress);
+            log.debug("Repl get master listen address from zookeeper={}", listenAddress);
             return listenAddress;
         } catch (Exception e) {
             lastGetMasterListenAddressAsSlave = null;
             // need not stack trace
-            log.error("Repl get master listen address from zookeeper failed: " + e.getMessage());
+            log.error("Repl get master listen address from zookeeper failed=" + e.getMessage());
             return null;
         }
     }
@@ -222,7 +222,7 @@ public class LeaderSelector implements NeedCleanUp {
             return true;
         } catch (Exception e) {
             // need not stack trace
-            log.error("Repl leader latch start failed: " + e.getMessage());
+            log.error("Repl leader latch start failed=" + e.getMessage());
             return false;
         }
     }
@@ -242,7 +242,7 @@ public class LeaderSelector implements NeedCleanUp {
                 lastStopLeaderLatchTimeMillis = System.currentTimeMillis();
             } catch (Exception e) {
                 // need not stack trace
-                System.err.println("Repl leader latch close failed: " + e.getMessage());
+                System.err.println("Repl leader latch close failed=" + e.getMessage());
             }
         }
     }
@@ -296,14 +296,14 @@ public class LeaderSelector implements NeedCleanUp {
                     }
                 } else {
                     canResetSelfAsMasterNow = true;
-                    log.warn("Repl old repl pair as slave is null, slot: {}", oneSlot.slot());
+                    log.warn("Repl old repl pair as slave is null, slot={}", oneSlot.slot());
                 }
 
                 if (!force && !canResetSelfAsMasterNow) {
-                    log.warn("Repl slave can not reset as master now, need wait current master readonly and slave all caught up, slot: {}",
+                    log.warn("Repl slave can not reset as master now, need wait current master readonly and slave all caught up, slot={}",
                             replPairAsSlave.getSlot());
                     XGroup.tryCatchUpAgainAfterSlaveTcpClientClosed(replPairAsSlave, null);
-                    throw new IllegalStateException("Repl slave can not reset as master, slot: " + replPairAsSlave.getSlot());
+                    throw new IllegalStateException("Repl slave can not reset as master, slot=" + replPairAsSlave.getSlot());
                 }
 
                 oneSlot.removeReplPairAsSlave();
@@ -348,7 +348,7 @@ public class LeaderSelector implements NeedCleanUp {
             // may be null
             var jsonStr = JedisPoolHolder.exe(jedisPool, jedis -> {
                 var pong = jedis.ping();
-                log.info("Repl slave of {}:{} pong: {}", host, port, pong);
+                log.info("Repl slave of {}:{} pong={}", host, port, pong);
                 return jedis.get(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + "," + XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD);
             });
 
@@ -358,8 +358,8 @@ public class LeaderSelector implements NeedCleanUp {
 
             if (!jsonStrLocal.equals(jsonStr)) {
                 log.warn("Repl reset self as slave begin, check new master global config fail, {}", ConfForGlobal.netListenAddresses);
-                log.info("Repl local: {}", jsonStrLocal);
-                log.info("Repl remote: {}", jsonStr);
+                log.info("Repl local={}", jsonStrLocal);
+                log.info("Repl remote={}", jsonStr);
                 callback.accept(new IllegalStateException("Repl slave can not match check values"));
             }
         } catch (Exception e) {
@@ -377,7 +377,7 @@ public class LeaderSelector implements NeedCleanUp {
                 var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
                 if (replPairAsSlave != null) {
                     if (replPairAsSlave.getHost().equals(host) && replPairAsSlave.getPort() == port) {
-                        log.warn("Repl old repl pair as slave is same as new master, slot: {}", oneSlot.slot());
+                        log.warn("Repl old repl pair as slave is same as new master, slot={}", oneSlot.slot());
                         return;
                     } else {
                         oneSlot.removeReplPairAsSlave();
@@ -415,7 +415,7 @@ public class LeaderSelector implements NeedCleanUp {
                 XGroup.X_MASTER_SWITCH_PUBLISH_CHANNEL_BYTES,
                 publishMessage.getBytes()};
         PGroup.publish(data);
-        log.warn("Repl publish master switch message: {}", publishMessage);
+        log.warn("Repl publish master switch message={}", publishMessage);
 
         // publish slave address to clients for readonly slave
         var publishMessageReadonlySlave = ConfForGlobal.zookeeperRootPath + ReplConsts.REPL_MASTER_NAME_READONLY_SLAVE_SUFFIX + " " +
@@ -425,7 +425,7 @@ public class LeaderSelector implements NeedCleanUp {
                 XGroup.X_MASTER_SWITCH_PUBLISH_CHANNEL_BYTES,
                 publishMessageReadonlySlave.getBytes()};
         PGroup.publish(dataSlave);
-        log.warn("Repl publish master switch message for readonly slave: {}", publishMessageReadonlySlave);
+        log.warn("Repl publish master switch message for readonly slave={}", publishMessageReadonlySlave);
     }
 
     public String getFirstSlaveListenAddressByMasterHostAndPort(String host, int port, short slot) {

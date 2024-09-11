@@ -115,7 +115,7 @@ public class XGroup extends BaseCommand {
             var replPairAsMaster = oneSlot.getFirstReplPairAsMaster();
 
             if (replPairAsMaster == null) {
-                log.warn("Repl master repl pair not found, maybe already closed, slot: {}", slot);
+                log.warn("Repl master repl pair not found, maybe already closed, slot={}", slot);
                 // just mock one
                 var slaveUuid = Long.parseLong(new String(data[4]));
                 replPairAsMaster = new ReplPair(slot, true, "localhost", 7379);
@@ -144,7 +144,7 @@ public class XGroup extends BaseCommand {
 
                 return new BulkReply(data4[3]);
             } catch (Exception e) {
-                log.error("Repl master handle x_repl x_catch_up error, slot: " + slot, e);
+                log.error("Repl master handle x_repl x_catch_up error, slot=" + slot, e);
                 return new ErrorReply(e.getMessage());
             }
         }
@@ -173,7 +173,7 @@ public class XGroup extends BaseCommand {
         var slot = ByteBuffer.wrap(data[1]).getShort();
         var replType = ReplType.fromCode(data[2][0]);
         if (replType == null) {
-            log.error("Repl handle error: unknown repl type code: {}", data[2][0]);
+            log.error("Repl handle error: unknown repl type code={}, slot={}", data[2][0], slot);
             return null;
         }
 
@@ -197,8 +197,8 @@ public class XGroup extends BaseCommand {
 
                 if (this.replPair == null) {
                     if (replType != error) {
-                        log.warn("Repl handle error: repl pair as slave not found, maybe closed already, slave uuid={}, repl type={}",
-                                slaveUuid, replType);
+                        log.warn("Repl handle error: repl pair as slave not found, maybe closed already, slave uuid={}, repl type={}, slot={}",
+                                slaveUuid, replType, slot);
                         return Repl.emptyReply();
                     }
                 }
@@ -217,7 +217,7 @@ public class XGroup extends BaseCommand {
 
         return switch (replType) {
             case error -> {
-                log.error("Repl handle receive error: {}", new String(contentBytes));
+                log.error("Repl handle receive error={}, slot={}", new String(contentBytes), slot);
                 yield Repl.emptyReply();
             }
             case ping -> {
@@ -256,13 +256,13 @@ public class XGroup extends BaseCommand {
             case hello -> hello(slot, contentBytes);
             case hi -> hi(slot, contentBytes);
             case test -> {
-                log.info("Repl handle test: slave uuid={}, message={}", slaveUuid, new String(contentBytes));
+                log.info("Repl handle test: slave uuid={}, message={}, slot={}", slaveUuid, new String(contentBytes), slot);
                 yield Repl.emptyReply();
             }
             case bye -> {
                 // server received bye from client
                 var netListenAddresses = new String(contentBytes);
-                log.warn("Repl master handle bye: slave uuid={}, net listen addresses={}", slaveUuid, netListenAddresses);
+                log.warn("Repl master handle bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
 
                 if (replPair == null) {
                     yield Repl.emptyReply();
@@ -274,7 +274,7 @@ public class XGroup extends BaseCommand {
             case byeBye -> {
                 // client received bye from server
                 var netListenAddresses = new String(contentBytes);
-                log.warn("Repl slave handle bye bye: slave uuid={}, net listen addresses={}", slaveUuid, netListenAddresses);
+                log.warn("Repl slave handle bye bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
 
                 oneSlot.addDelayNeedCloseReplPair(replPair);
                 yield Repl.emptyReply();
@@ -327,13 +327,13 @@ public class XGroup extends BaseCommand {
         // start binlog
         try {
             oneSlot.getDynConfig().setBinlogOn(true);
-            log.warn("Repl master start binlog, master uuid={}", replPair.getMasterUuid());
+            log.warn("Repl master start binlog, master uuid={}, slot={}", replPair.getMasterUuid(), slot);
         } catch (IOException e) {
             var errorMessage = "Repl master handle error: start binlog error";
             log.error(errorMessage, e);
-            return Repl.error(slot, replPair, errorMessage + ": " + e.getMessage());
+            return Repl.error(slot, replPair, errorMessage + "=" + e.getMessage());
         }
-        log.warn("Repl master handle hello: slave uuid={}, net listen addresses={}", slaveUuid, netListenAddresses);
+        log.warn("Repl master handle hello: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
 
         var binlog = oneSlot.getBinlog();
         var currentFileIndexAndOffset = binlog.currentFileIndexAndOffset();
@@ -373,13 +373,13 @@ public class XGroup extends BaseCommand {
 
         // should not happen
         if (slaveUuid != replPair.getSlaveUuid()) {
-            log.error("Repl slave handle error: slave uuid not match, client slave uuid={}, server hi slave uuid={}",
-                    replPair.getSlaveUuid(), slaveUuid);
+            log.error("Repl slave handle error: slave uuid not match, client slave uuid={}, server hi slave uuid={}, slot={}",
+                    replPair.getSlaveUuid(), slaveUuid, slot);
             return null;
         }
 
         replPair.setMasterUuid(masterUuid);
-        log.warn("Repl slave handle hi: slave uuid={}, master uuid={}", slaveUuid, masterUuid);
+        log.warn("Repl slave handle hi: slave uuid={}, master uuid={}, slot={}", slaveUuid, masterUuid, slot);
 
         if (slot == 0) {
             localPersist.setAsSlaveSlot0FetchedExistsAllDone(false);
@@ -388,7 +388,7 @@ public class XGroup extends BaseCommand {
         var oneSlot = localPersist.oneSlot(slot);
         // after exist all done, when catch up, XOneWalGroupSeq will update chunk segment index
         oneSlot.setMetaChunkSegmentIndexInt(currentSegmentIndex);
-        log.warn("Repl slave set meta chunk segment index, slot: {}, segment index: {}", slot, currentSegmentIndex);
+        log.warn("Repl slave set meta chunk segment index, segment index={}, slot={}", currentSegmentIndex, slot);
 
         var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();
 
@@ -404,8 +404,8 @@ public class XGroup extends BaseCommand {
                 // need not fetch exists data from master
                 // start fetch incremental data from master binlog
                 log.warn("Repl slave skip fetch exists data and start catch up from master binlog, " +
-                                "slave uuid={}, master uuid={}, last updated file index={}, offset={}",
-                        slaveUuid, masterUuid, lastUpdatedFileIndex, lastUpdatedOffset);
+                                "slave uuid={}, master uuid={}, last updated file index={}, offset={}, slot={}",
+                        slaveUuid, masterUuid, lastUpdatedFileIndex, lastUpdatedOffset, slot);
 
                 // not catch up any binlog segment yet, start from the beginning
                 if (lastUpdatedFileIndex == 0 && lastUpdatedOffset == 0) {
@@ -427,14 +427,14 @@ public class XGroup extends BaseCommand {
 
         metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, false,
                 currentFileIndex, currentOffset);
-        log.warn("Repl slave set master binlog current/latest file index and offset for incremental catch up, slot: {}, master binlog file index: {}, offset: {}",
-                slot, currentFileIndex, currentOffset);
-        log.warn("Repl slave begin fetch all exists data from master, slot: {}", slot);
+        log.warn("Repl slave set master binlog current/latest file index and offset for incremental catch up, master binlog file index={}, offset={}, slot={}",
+                currentFileIndex, currentOffset, slot);
+        log.warn("Repl slave begin fetch all exists data from master, slot={}", slot);
 
         // dict is global, only first slot do fetch
         var firstSlot = localPersist.oneSlots()[0].slot();
         if (firstSlot != slot) {
-            log.warn("Repl slave skip fetch exists dict, slot: {}", slot);
+            log.warn("Repl slave skip fetch exists dict, slot={}", slot);
             return fetchExistsBigString(slot, oneSlot);
         }
 
@@ -472,8 +472,8 @@ public class XGroup extends BaseCommand {
         var beginOffset = buffer.getInt();
 
         if (beginOffset % 1000 == 0) {
-            log.warn("Repl master fetch exists reverse index, slot: {}, is meta index words: {}, index worker id: {}, begin offset: {}",
-                    slot, isMetaIndexWords, indexWorkerId, beginOffset);
+            log.warn("Repl master fetch exists reverse index, is meta index words={}, index worker id={}, begin offset={}, slot={}",
+                    isMetaIndexWords, indexWorkerId, beginOffset, slot);
         }
 
         // always slot == 0
@@ -492,9 +492,9 @@ public class XGroup extends BaseCommand {
             }
         })).whenComplete((ignore, e) -> {
             if (e != null) {
-                var message = "Repl master read meta index words error, slot: " + slot;
+                var message = "Repl master read meta index words error, slot=" + slot;
                 log.error(message, e);
-                finalPromise.set(Repl.error(slot, replPair, message + ", error: " + e.getMessage()));
+                finalPromise.set(Repl.error(slot, replPair, message + ", error=" + e.getMessage()));
                 return;
             }
 
@@ -521,8 +521,8 @@ public class XGroup extends BaseCommand {
         var beginOffset = buffer.getInt();
 
         if (beginOffset % 1000 == 0) {
-            log.warn("Repl slave fetch exists reverse index, slot: {}, is meta index words: {}, index worker id: {}, begin offset: {}",
-                    slot, isMetaIndexWords, indexWorkerId, beginOffset);
+            log.warn("Repl slave fetch exists reverse index, is meta index words={}, index worker id={}, begin offset={}, slot={}",
+                    isMetaIndexWords, indexWorkerId, beginOffset, slot);
         }
 
         var remainingLength = buffer.remaining();
@@ -540,9 +540,9 @@ public class XGroup extends BaseCommand {
             }
         })).whenComplete((ignore, e) -> {
             if (e != null) {
-                var message = "Repl slave write meta index words / index chunk error, slot: " + slot;
+                var message = "Repl slave write meta index words / index chunk error, slot=" + slot;
                 log.error(message, e);
-                replPair.write(error, new RawBytesContent((message + ", error: " + e.getMessage()).getBytes()));
+                replPair.write(error, new RawBytesContent((message + ", error=" + e.getMessage()).getBytes()));
                 return;
             }
 
@@ -614,7 +614,7 @@ public class XGroup extends BaseCommand {
 
         var walGroupNumber = Wal.calcWalGroupNumber();
         if (groupIndex < 0 || groupIndex >= walGroupNumber) {
-            log.error("Repl master send wal exists bytes error: group index out of range, slot: {}, group index: {}",
+            log.error("Repl master send wal exists bytes error: group index out of range, slot={}, group index={}",
                     slot, groupIndex);
             return Repl.error(slot, replPair, "Repl master send wal exists bytes error: group index out of range");
         }
@@ -624,7 +624,7 @@ public class XGroup extends BaseCommand {
 
         if (lastSeqAfterPut == targetWal.getLastSeqAfterPut() && lastSeqShortValueAfterPut == targetWal.getLastSeqShortValueAfterPut()) {
             if (groupIndex % 100 == 0) {
-                log.warn("Repl master skip send wal exists bytes, slot: {}, group index: {}", slot, groupIndex);
+                log.warn("Repl master skip send wal exists bytes, group index={}, slot={}", groupIndex, slot);
             }
 
             // only reply group index, no need to send wal exists bytes
@@ -634,7 +634,7 @@ public class XGroup extends BaseCommand {
             return Repl.reply(slot, replPair, ReplType.s_exists_wal, new RawBytesContent(responseBytes));
         } else {
             if (groupIndex % 100 == 0) {
-                log.warn("Repl master will fetch exists wal, slot: {}, group index: {}", slot, groupIndex);
+                log.warn("Repl master will fetch exists wal, group index={}, slot={}", groupIndex, slot);
             }
         }
 
@@ -642,8 +642,8 @@ public class XGroup extends BaseCommand {
             var toSlaveBytes = targetWal.toSlaveExistsOneWalGroupBytes();
             return Repl.reply(slot, replPair, ReplType.s_exists_wal, new RawBytesContent(toSlaveBytes));
         } catch (IOException e) {
-            log.error("Repl master get wal exists bytes error, slot: " + slot + ", group index: " + groupIndex, e);
-            return Repl.error(slot, replPair, "Repl master get wal exists bytes error: " + e.getMessage());
+            log.error("Repl master get wal exists bytes error, slot=" + slot + ", group index=" + groupIndex, e);
+            return Repl.error(slot, replPair, "Repl master get wal exists bytes error=" + e.getMessage());
         }
     }
 
@@ -659,14 +659,14 @@ public class XGroup extends BaseCommand {
             try {
                 targetWal.fromMasterExistsOneWalGroupBytes(contentBytes);
             } catch (IOException e) {
-                log.error("Repl slave update wal exists bytes error, slot: " + slot + ", group index: " + groupIndex, e);
-                return Repl.error(slot, replPair, "Repl slave update wal exists bytes error: " + e.getMessage());
+                log.error("Repl slave update wal exists bytes error, slot=" + slot + ", group index=" + groupIndex, e);
+                return Repl.error(slot, replPair, "Repl slave update wal exists bytes error=" + e.getMessage());
             }
         } else {
             // skip
             replPair.increaseStatsCountWhenSlaveSkipFetch(s_exists_wal);
             if (groupIndex % 100 == 0) {
-                log.info("Repl slave skip update wal exists bytes, slot: {}, group index: {}", slot, groupIndex);
+                log.info("Repl slave skip update wal exists bytes, group index={}, slot={}", groupIndex, slot);
             }
         }
 
@@ -720,8 +720,8 @@ public class XGroup extends BaseCommand {
         var segmentCount = buffer.getInt();
 
         if (beginSegmentIndex % (segmentCount * 10) == 0) {
-            log.warn("Repl master fetch exists chunk segments, slot: {}, begin segment index: {}, segment count: {}",
-                    slot, beginSegmentIndex, segmentCount);
+            log.warn("Repl master fetch exists chunk segments, begin segment index={}, segment count={}, slot={}",
+                    beginSegmentIndex, segmentCount, slot);
         }
 
         var oneSlot = localPersist.oneSlot(slot);
@@ -762,8 +762,8 @@ public class XGroup extends BaseCommand {
         // segmentCount == FdReadWrite.REPL_ONCE_INNER_COUNT
 
         if (beginSegmentIndex % (segmentCount * 10) == 0) {
-            log.warn("Repl slave ready to fetch exists chunk segments, slot: {}, begin segment index: {}, segment count: {}",
-                    slot, beginSegmentIndex, segmentCount);
+            log.warn("Repl slave ready to fetch exists chunk segments, begin segment index={}, segment count={}, slot={}",
+                    beginSegmentIndex, segmentCount, slot);
         }
 
         var oneSlot = localPersist.oneSlot(slot);
@@ -821,7 +821,8 @@ public class XGroup extends BaseCommand {
 
         var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
         if (beginBucketIndex % (oneChargeBucketNumber * 100) == 0) {
-            log.warn("Repl master fetch exists key buckets, slot: {}, split index: {}, begin bucket index: {}", slot, splitIndex, beginBucketIndex);
+            log.warn("Repl master fetch exists key buckets, split index={}, begin bucket index={}, slot={}",
+                    splitIndex, beginBucketIndex, slot);
         }
 
         var oneSlot = localPersist.oneSlot(slot);
@@ -867,7 +868,8 @@ public class XGroup extends BaseCommand {
 
         var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
         if (beginBucketIndex % (oneChargeBucketNumber * 100) == 0) {
-            log.warn("Repl slave ready to fetch exists key buckets, slot: {}, split index: {}, begin bucket index: {}", slot, splitIndex, beginBucketIndex);
+            log.warn("Repl slave ready to fetch exists key buckets, split index={}, begin bucket index={}, slot={}",
+                    splitIndex, beginBucketIndex, slot);
         }
 
         if (!isSkip) {
@@ -890,7 +892,7 @@ public class XGroup extends BaseCommand {
         boolean isLastBatchInThisSplit = beginBucketIndex == ConfForSlot.global.confBucket.bucketsPerSlot - oneChargeBucketNumber;
         var isAllReceived = splitIndex == maxSplitNumber - 1 && isLastBatchInThisSplit;
         if (isAllReceived) {
-            log.warn("Repl slave fetch all key buckets done, slot: {}", slot);
+            log.warn("Repl slave fetch all key buckets done, slot={}", slot);
 
             // next step, fetch exists chunk segments
             var segmentCount = FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD;
@@ -926,7 +928,7 @@ public class XGroup extends BaseCommand {
         // ignore content bytes, send all
         var oneSlot = localPersist.oneSlot(slot);
         var bytes = oneSlot.getKeyLoader().getStatKeyCountInBucketsBytesToSlaveExists();
-        log.warn("Repl master fetch stat key count in key buckets, slot: {}", slot);
+        log.warn("Repl master fetch stat key count in key buckets, slot={}", slot);
         return Repl.reply(slot, replPair, ReplType.s_stat_key_count_in_buckets, new RawBytesContent(bytes));
     }
 
@@ -935,7 +937,7 @@ public class XGroup extends BaseCommand {
         // client received from server
         var oneSlot = localPersist.oneSlot(slot);
         oneSlot.getKeyLoader().overwriteStatKeyCountInBucketsBytesFromMasterExists(contentBytes);
-        log.warn("Repl slave fetch stat key count in key buckets done, slot: {}", slot);
+        log.warn("Repl slave fetch stat key count in key buckets done, slot={}", slot);
 
         // next step, fetch exists key buckets
         var requestBytes = new byte[1 + 4 + 8];
@@ -953,7 +955,7 @@ public class XGroup extends BaseCommand {
         // ignore content bytes, send all
         var oneSlot = localPersist.oneSlot(slot);
         var bytes = oneSlot.getKeyLoader().getMetaKeyBucketSplitNumberBytesToSlaveExists();
-        log.warn("Repl master fetch meta key bucket split number, slot: {}", slot);
+        log.warn("Repl master fetch meta key bucket split number, slot={}", slot);
         return Repl.reply(slot, replPair, ReplType.s_meta_key_bucket_split_number, new RawBytesContent(bytes));
     }
 
@@ -962,7 +964,7 @@ public class XGroup extends BaseCommand {
         // client received from server
         var oneSlot = localPersist.oneSlot(slot);
         oneSlot.getKeyLoader().overwriteMetaKeyBucketSplitNumberBytesFromMasterExists(contentBytes);
-        log.warn("Repl slave fetch meta key bucket split number done, slot: {}", slot);
+        log.warn("Repl slave fetch meta key bucket split number done, slot={}", slot);
 
         // next step, fetch exists key buckets
         return Repl.reply(slot, replPair, ReplType.stat_key_count_in_buckets, NextStepContent.INSTANCE);
@@ -1025,7 +1027,7 @@ public class XGroup extends BaseCommand {
                 sentUuidList.add(buffer.getLong());
             }
         }
-        log.warn("Repl master fetch exists big string, slave sent uuid list: {}, slot: {}", sentUuidList, slot);
+        log.warn("Repl master fetch exists big string, slave sent uuid list={}, slot={}", sentUuidList, slot);
 
         var oneSlot = localPersist.oneSlot(slot);
         var uuidListInMaster = oneSlot.getBigStringFiles().getBigStringFileUuidList();
@@ -1043,7 +1045,7 @@ public class XGroup extends BaseCommand {
         // client received from server
         // empty content means no big string, next step
         if (NextStepContent.isNextStep(contentBytes)) {
-            log.warn("Repl slave fetch all big string done, slot: {}", slot);
+            log.warn("Repl slave fetch all big string done, slot={}", slot);
             return Repl.reply(slot, replPair, ReplType.meta_key_bucket_split_number, NextStepContent.INSTANCE);
         }
 
@@ -1052,11 +1054,11 @@ public class XGroup extends BaseCommand {
         var isSendAllOnce = buffer.get() == 1;
 
         if (bigStringCount == 0) {
-            log.warn("Repl slave fetch all big string done, slot: {}", slot);
+            log.warn("Repl slave fetch all big string done, slot={}", slot);
             // next step, fetch meta key bucket split number
             return Repl.reply(slot, replPair, ReplType.meta_key_bucket_split_number, NextStepContent.INSTANCE);
         }
-        log.warn("Repl slave fetch exists big string, master sent big string count: {}, slot: {}", bigStringCount, slot);
+        log.warn("Repl slave fetch exists big string, master sent big string count={}, slot={}", bigStringCount, slot);
 
         var oneSlot = localPersist.oneSlot(slot);
         var bigStringDir = oneSlot.getBigStringDir();
@@ -1076,7 +1078,7 @@ public class XGroup extends BaseCommand {
         }
 
         if (isSendAllOnce) {
-            log.warn("Repl slave fetch all big string done, slot: {}", slot);
+            log.warn("Repl slave fetch all big string done, slot={}", slot);
             // next step, fetch meta key bucket split number
             return Repl.reply(slot, replPair, ReplType.meta_key_bucket_split_number, NextStepContent.INSTANCE);
         } else {
@@ -1112,7 +1114,7 @@ public class XGroup extends BaseCommand {
                 sentDictSeqList.add(buffer.getInt());
             }
         }
-        log.warn("Repl master fetch exists dict, slave sent dict seq list: {}, slot: {}", sentDictSeqList, slot);
+        log.warn("Repl master fetch exists dict, slave sent dict seq list={}, slot={}", sentDictSeqList, slot);
 
         var dictMap = DictMap.getInstance();
         var cacheDictCopy = dictMap.getCacheDictCopy();
@@ -1131,7 +1133,7 @@ public class XGroup extends BaseCommand {
         var oneSlot = localPersist.oneSlot(slot);
         var buffer = ByteBuffer.wrap(contentBytes);
         var dictCount = buffer.getInt();
-        log.warn("Repl slave fetch exists dict, master sent dict count: {}, slot: {}", dictCount, slot);
+        log.warn("Repl slave fetch exists dict, master sent dict count={}, slot={}", dictCount, slot);
 
         var dictMap = DictMap.getInstance();
         // decode
@@ -1145,7 +1147,7 @@ public class XGroup extends BaseCommand {
                 var dictWithKeyPrefixOrSuffix = Dict.decode(is);
 
                 if (dictWithKeyPrefixOrSuffix == null) {
-                    throw new IllegalArgumentException("Repl slave decode dict error, slot: " + slot);
+                    throw new IllegalArgumentException("Repl slave decode dict error, slot=" + slot);
                 }
 
                 var dict = dictWithKeyPrefixOrSuffix.dict();
@@ -1155,31 +1157,31 @@ public class XGroup extends BaseCommand {
                 } else {
                     dictMap.putDict(keyPrefixOrSuffix, dict);
                 }
-                log.warn("Repl slave save master exists dict: dict with key={}", dictWithKeyPrefixOrSuffix);
+                log.warn("Repl slave save master exists dict: dict with key={}, slot={}", dictWithKeyPrefixOrSuffix, slot);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
         // next step, fetch big string
-        log.warn("Repl slave fetch all dict done, slot: {}", slot);
+        log.warn("Repl slave fetch all dict done, slot={}", slot);
         return fetchExistsBigString(slot, oneSlot);
     }
 
     @VisibleForTesting
     Repl.ReplReply exists_all_done(short slot, byte[] contentBytes) {
         // server received from client
-        log.warn("Repl slave exists/meta fetch all done, slot={}, slave uuid={}, {}", slot,
-                replPair.getSlaveUuid(), replPair.getHostAndPort());
+        log.warn("Repl slave exists/meta fetch all done, slave uuid={}, {}, slot={}",
+                replPair.getSlaveUuid(), replPair.getHostAndPort(), slot);
         return Repl.reply(slot, replPair, ReplType.s_exists_all_done, NextStepContent.INSTANCE);
     }
 
     @VisibleForTesting
     Repl.ReplReply s_exists_all_done(short slot, byte[] contentBytes) {
         // client received from server
-        log.warn("Repl master reply exists/meta fetch all done, slot={}, slave uuid={}, {}", slot,
-                replPair.getSlaveUuid(), replPair.getHostAndPort());
-        log.warn("Repl slave stats count for slave skip fetch: {}, slot: {}", replPair.getStatsCountForSlaveSkipFetchAsString(), slot);
+        log.warn("Repl master reply exists/meta fetch all done, slave uuid={}, {}, slot={}",
+                replPair.getSlaveUuid(), replPair.getHostAndPort(), slot);
+        log.warn("Repl slave stats count for slave skip fetch={}, slot={}", replPair.getStatsCountForSlaveSkipFetchAsString(), slot);
 
         var oneSlot = localPersist.oneSlot(slot);
         oneSlot.setChunkSegmentIndexFromMeta();
@@ -1221,8 +1223,8 @@ public class XGroup extends BaseCommand {
 
         var binlogOneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
         if (needFetchOffset % binlogOneSegmentLength != 0) {
-            throw new IllegalArgumentException("Repl master handle error: catch up offset: " + needFetchOffset +
-                    " is not a multiple of binlog one segment length: " + binlogOneSegmentLength);
+            throw new IllegalArgumentException("Repl master handle error: catch up offset=" + needFetchOffset +
+                    " is not a multiple of binlog one segment length=" + binlogOneSegmentLength);
         }
 
         var oneSlot = localPersist.oneSlot(slot);
@@ -1252,8 +1254,8 @@ public class XGroup extends BaseCommand {
         } catch (IOException e) {
             var errorMessage = "Repl master handle error: read binlog file error";
             // need not exception stack trace
-            log.error(errorMessage + ": " + e.getMessage());
-            return Repl.error(slot, replPair, errorMessage + ": " + e.getMessage());
+            log.error(errorMessage + "=" + e.getMessage());
+            return Repl.error(slot, replPair, errorMessage + "=" + e.getMessage());
         }
 
         // all fetched
@@ -1352,7 +1354,7 @@ public class XGroup extends BaseCommand {
         try {
             oneSlot.getBinlog().writeFromMasterOneSegmentBytes(readSegmentBytes, fetchedFileIndex, fetchedOffset);
         } catch (IOException e) {
-            log.error("Repl slave write binlog from master error, slot: " + slot, e);
+            log.error("Repl slave write binlog from master error, slot=" + slot, e);
         }
 
         // update last catch up file index and offset
@@ -1365,13 +1367,13 @@ public class XGroup extends BaseCommand {
         try {
             var n = Binlog.decodeAndApply(slot, readSegmentBytes, skipBytesN, replPair);
             if (fetchedOffset == 0) {
-                log.info("Repl binlog catch up success, slot={}, slave uuid={}, {}, catch up file index={}, catch up offset={}, apply n={}",
-                        slot, replPair.getSlaveUuid(), replPair.getHostAndPort(), fetchedFileIndex, fetchedOffset, n);
+                log.info("Repl binlog catch up success, slave uuid={}, {}, catch up file index={}, catch up offset={}, apply n={}, slot={}",
+                        replPair.getSlaveUuid(), replPair.getHostAndPort(), fetchedFileIndex, fetchedOffset, n, slot);
             }
         } catch (Exception e) {
-            var errorMessage = "Repl slave handle error: decode and apply binlog error";
+            var errorMessage = "Repl slave handle error: decode and apply binlog error, slot=" + slot;
             log.error(errorMessage, e);
-            return Repl.error(slot, replPair, errorMessage + ": " + e.getMessage());
+            return Repl.error(slot, replPair, errorMessage + "=" + e.getMessage());
         }
 
         // set can read if catch up to current file, and offset not too far
@@ -1382,7 +1384,7 @@ public class XGroup extends BaseCommand {
                 try {
                     if (!oneSlot.isCanRead()) {
                         oneSlot.setCanRead(true);
-                        log.warn("Repl slave can read now as already catch up nearly to master latest, slot: {}", slot);
+                        log.warn("Repl slave can read now as already catch up nearly to master latest, slot={}", slot);
                     }
                 } catch (IOException e) {
                     throw new RuntimeException(e);
@@ -1407,8 +1409,8 @@ public class XGroup extends BaseCommand {
 
         var binlogOneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
         if (readSegmentLength != binlogOneSegmentLength) {
-            throw new IllegalStateException("Repl slave handle error: read segment length: " + readSegmentLength +
-                    " is not equal to binlog one segment length: " + binlogOneSegmentLength);
+            throw new IllegalStateException("Repl slave handle error: read segment length=" + readSegmentLength +
+                    " is not equal to binlog one segment length=" + binlogOneSegmentLength);
         }
 
         var binlogOneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength;
@@ -1423,8 +1425,8 @@ public class XGroup extends BaseCommand {
         var content = toMasterCatchUp(binlogMasterUuid, nextCatchUpFileIndex, nextCatchUpOffset, nextCatchUpOffset);
         // when catch up to next file, delay to catch up again
         if (nextCatchUpOffset == 0) {
-            log.info("Repl slave ready to catch up to next file, slot={}, slave uuid={}, {}, binlog file index={}, offset={}",
-                    slot, replPair.getSlaveUuid(), replPair.getHostAndPort(), nextCatchUpFileIndex, nextCatchUpOffset);
+            log.info("Repl slave ready to catch up to next file, slave uuid={}, {}, binlog file index={}, offset={}, slot={}",
+                    replPair.getSlaveUuid(), replPair.getHostAndPort(), nextCatchUpFileIndex, nextCatchUpOffset, slot);
 
             oneSlot.delayRun(1000, () -> {
                 replPair.write(ReplType.catch_up, content);
@@ -1461,13 +1463,13 @@ public class XGroup extends BaseCommand {
 
             var isExistsDataAllFetched = metaChunkSegmentIndex.isExistsDataAllFetched();
             if (!isExistsDataAllFetched) {
-                System.out.println("Repl slave try catch up again after slave tcp client close, but exists data not all fetched, slot: " + targetSlot);
+                System.out.println("Repl slave try catch up again after slave tcp client close, but exists data not all fetched, slot=" + targetSlot);
                 return;
             }
 
             var lastUpdatedMasterUuid = metaChunkSegmentIndex.getMasterUuid();
             if (lastUpdatedMasterUuid != replPairAsSlave.getMasterUuid()) {
-                System.out.println("Repl slave try catch up again after slave tcp client close, but master uuid not match, slot: " + targetSlot);
+                System.out.println("Repl slave try catch up again after slave tcp client close, but master uuid not match, slot=" + targetSlot);
                 return;
             }
 
@@ -1486,7 +1488,7 @@ public class XGroup extends BaseCommand {
                 try {
                     resultBytes = JedisPoolHolder.exe(jedisPool, jedis -> {
                         var pong = jedis.ping();
-                        System.out.println("Repl slave try ping after slave tcp client close, to " + replPairAsSlave.getHostAndPort() + ", pong: " + pong + ", slot: " + targetSlot);
+                        System.out.println("Repl slave try ping after slave tcp client close, to " + replPairAsSlave.getHostAndPort() + ", pong=" + pong + ", slot=" + targetSlot);
                         // get data from master
                         // refer RequestHandler.transferDataForXGroup
                         return jedis.get(
@@ -1504,13 +1506,13 @@ public class XGroup extends BaseCommand {
                         );
                     });
                 } catch (Exception e) {
-                    System.out.println("Repl slave try catch up again after slave tcp client close error: " + e.getMessage() + ", slot: " + targetSlot);
+                    System.out.println("Repl slave try catch up again after slave tcp client close error=" + e.getMessage() + ", slot=" + targetSlot);
                     replPairAsSlave.setMasterCanNotConnect(true);
                 }
             }
 
             if (resultBytes == null) {
-                System.out.println("Repl slave try catch up again after slave tcp client close, but get data from master is null, slot: " + targetSlot);
+                System.out.println("Repl slave try catch up again after slave tcp client close, but get data from master is null, slot=" + targetSlot);
                 return;
             }
 
@@ -1520,9 +1522,9 @@ public class XGroup extends BaseCommand {
                 xGroup.s_catch_up(targetSlot, resultBytes);
 
                 if (replPairAsSlave.isAllCaughtUp()) {
-                    System.out.println("Repl slave try catch up again, is all caught up!!!, slot: " + targetSlot);
+                    System.out.println("Repl slave try catch up again, is all caught up!!!, slot=" + targetSlot);
                 } else {
-                    System.out.println("Repl slave try catch up again, is not!!! all caught up!!!, slot: " + targetSlot);
+                    System.out.println("Repl slave try catch up again, is not!!! all caught up!!!, slot=" + targetSlot);
                     // todo, try to loop if not all caught up
                 }
             } catch (Exception e) {
