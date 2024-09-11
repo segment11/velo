@@ -157,7 +157,7 @@ migrating_state:ok
                     it.host == exportMigratingSlotShard.migratingToHost && it.port == exportMigratingSlotShard.migratingToPort
                 }
                 if (!replPairAsMaster) {
-                    log.debug 'Clusterx repl pair as master not found, wait slave connect to master, slave host: {}, slave port: {}',
+                    log.debug 'Clusterx repl pair as master not found, wait slave connect to master, slave host={}, slave port={}',
                             exportMigratingSlotShard.migratingToHost, exportMigratingSlotShard.migratingToPort
                     return false
                 }
@@ -329,7 +329,7 @@ migrating_state:ok
             mySelfNode.nodeIdFix = nodeIdFix
         }
 
-        log.warn 'Clusterx set node id: {} for my self', nodeIdFix
+        log.warn 'Clusterx set node id={} for my self', nodeIdFix
         multiShard.saveMeta()
 
         OK
@@ -417,15 +417,13 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         }
 
         def multiShard = localPersist.multiShard
-        def oldMySelfShard = multiShard.mySelfShard()
-
         multiShard.refreshAllShards(shards, clusterVersion)
 
         boolean resetMySelfAsMaster = false
         boolean resetMySelfAsSlave = false
 
         def mySelfShard = multiShard.mySelfShard()
-        if (!mySelfShard || !oldMySelfShard) {
+        if (!mySelfShard) {
             // delete my self node from cluster, reset as master
             resetMySelfAsMaster = true
         } else {

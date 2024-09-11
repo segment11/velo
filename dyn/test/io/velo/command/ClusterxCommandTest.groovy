@@ -350,7 +350,6 @@ class ClusterxCommandTest extends Specification {
         // cluster version
         data4[3] = '1'.bytes
         clusterx.data = data4
-        // master not change
         reply = clusterx.setnodes()
         then:
         reply instanceof AsyncReply
@@ -367,7 +366,7 @@ class ClusterxCommandTest extends Specification {
         ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
 
         when:
-        // slave to master
+        // slave to master again
         data4[2] = 'new_node_id localhost 7379 master - 0 10-20 \nnew_node_id2 localhost 7380 slave new_node_id\n'.bytes
         reply = clusterx.setnodes()
         then:
