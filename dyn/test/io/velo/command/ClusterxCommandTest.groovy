@@ -353,7 +353,8 @@ class ClusterxCommandTest extends Specification {
         // master not change
         reply = clusterx.setnodes()
         then:
-        reply == ClusterxCommand.OK
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
         shards[0].nodes.size() == 2
         shards[0].multiSlotRange.list.size() == 2
 

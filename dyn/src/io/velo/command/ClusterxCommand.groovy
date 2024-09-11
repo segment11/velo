@@ -429,11 +429,10 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             // delete my self node from cluster, reset as master
             resetMySelfAsMaster = true
         } else {
-            def oldMySelfNode = oldMySelfShard.mySelfNode()
             def mySelfNode = mySelfShard.mySelfNode()
-            if (mySelfNode.master && !oldMySelfNode.master) {
+            if (mySelfNode.master) {
                 resetMySelfAsMaster = true
-            } else if (!mySelfNode.master && oldMySelfNode.master) {
+            } else {
                 resetMySelfAsSlave = true
             }
         }
