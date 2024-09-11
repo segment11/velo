@@ -141,6 +141,7 @@ class LeaderSelectorTest extends Specification {
                 .build()
 
         when:
+        leaderSelector.resetAsMasterCount = 99
         def future = new CompletableFuture()
         leaderSelector.resetAsMaster { e ->
             if (e != null) {

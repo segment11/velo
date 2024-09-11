@@ -551,8 +551,13 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
         oneSlot.asyncRun(RunnableEx.of {
             if (isMySelfNodeChargeThisInnerSlot) {
-                oneSlot.removeReplPairAsSlave()
-                oneSlot.resetAsMaster()
+                def isSelfSlave = oneSlot.removeReplPairAsSlave()
+                if (isSelfSlave) {
+                    oneSlot.resetAsMaster()
+                } else {
+                    log.info 'Clusterx set slot {} to node id {} is my self node charge, is already master, do nothing, slot={}',
+                            toClientSlot, nodeId, innerSlot
+                }
             } else {
                 oneSlot.flush()
             }

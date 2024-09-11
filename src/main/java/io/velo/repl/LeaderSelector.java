@@ -268,6 +268,9 @@ public class LeaderSelector implements NeedCleanUp {
         resetAsMaster(false, callback);
     }
 
+    @VisibleForTesting
+    long resetAsMasterCount = 0;
+
     public void resetAsMaster(boolean force, Consumer<Exception> callback) {
         if (masterAddressLocalMocked != null) {
             callback.accept(null);
@@ -306,8 +309,16 @@ public class LeaderSelector implements NeedCleanUp {
                     throw new IllegalStateException("Repl slave can not reset as master, slot=" + replPairAsSlave.getSlot());
                 }
 
-                oneSlot.removeReplPairAsSlave();
-                oneSlot.resetAsMaster();
+                var isSelfSlave = oneSlot.removeReplPairAsSlave();
+                if (isSelfSlave) {
+                    oneSlot.resetAsMaster();
+                    resetAsMasterCount = 0;
+                } else {
+                    resetAsMasterCount++;
+                    if (resetAsMasterCount % 100 == 0) {
+                        log.info("Repl reset as master, is already master, do nothing, slot={}", oneSlot.slot());
+                    }
+                }
 
                 if (oneSlot.slot() == 0) {
                     localPersist.getIndexHandlerPool().resetAsMaster();
