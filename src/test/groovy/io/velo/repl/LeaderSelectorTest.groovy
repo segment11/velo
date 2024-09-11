@@ -1,6 +1,7 @@
 package io.velo.repl
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import io.activej.eventloop.Eventloop
 import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
 import io.velo.SocketInspector
@@ -11,6 +12,7 @@ import io.velo.persist.LocalPersistTest
 import io.velo.repl.support.JedisPoolHolder
 import spock.lang.Specification
 
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 class LeaderSelectorTest extends Specification {
@@ -133,6 +135,11 @@ class LeaderSelectorTest extends Specification {
         localPersist.startIndexHandlerPool()
         Thread.sleep(1000)
 
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+
         when:
         def future = new CompletableFuture()
         leaderSelector.resetAsMaster { e ->
@@ -213,6 +220,21 @@ class LeaderSelectorTest extends Specification {
         r = future.get()
         then:
         !r
+
+        when:
+        future = new CompletableFuture()
+        leaderSelector.resetAsMaster(true) { e ->
+            if (e != null) {
+                println e.message
+                future.complete(false)
+            } else {
+                future.complete(true)
+            }
+        }
+        r = future.get()
+        then:
+        // force, ignore master readonly or not
+        r
 
         when:
         replPairAsSlave.masterReadonly = true

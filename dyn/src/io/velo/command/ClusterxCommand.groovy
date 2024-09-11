@@ -443,7 +443,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             def asyncReply = new AsyncReply(finalPromise)
 
             def leaderSelector = LeaderSelector.instance
-            leaderSelector.resetAsMaster((e) -> {
+            leaderSelector.resetAsMaster(true, (e) -> {
                 if (e != null) {
                     log.error('Reset as master failed', e)
                     finalPromise.set(new ErrorReply('error when reset as master: ' + e.message))

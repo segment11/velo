@@ -265,6 +265,10 @@ public class LeaderSelector implements NeedCleanUp {
     private long lastResetAsSlaveTimeMillis;
 
     public void resetAsMaster(Consumer<Exception> callback) {
+        resetAsMaster(false, callback);
+    }
+
+    public void resetAsMaster(boolean force, Consumer<Exception> callback) {
         if (masterAddressLocalMocked != null) {
             callback.accept(null);
 //            callback.accept(new RuntimeException("just test callback when reset as master"));
@@ -295,7 +299,7 @@ public class LeaderSelector implements NeedCleanUp {
                     log.warn("Repl old repl pair as slave is null, slot: {}", oneSlot.slot());
                 }
 
-                if (!canResetSelfAsMasterNow) {
+                if (!force && !canResetSelfAsMasterNow) {
                     log.warn("Repl slave can not reset as master now, need wait current master readonly and slave all caught up, slot: {}",
                             replPairAsSlave.getSlot());
                     XGroup.tryCatchUpAgainAfterSlaveTcpClientClosed(replPairAsSlave, null);
