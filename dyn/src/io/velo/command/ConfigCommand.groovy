@@ -70,7 +70,7 @@ class ConfigCommand extends BaseCommand {
                 firstOneSlot.dynConfig.update(configKey, maxConnections)
             } catch (IOException e) {
                 log.error 'Global config update dyn config error', e
-                return new ErrorReply("update dyn config error: " + e.message)
+                return new ErrorReply("update dyn config error=" + e.message)
             }
             return OKReply.INSTANCE
         } else {

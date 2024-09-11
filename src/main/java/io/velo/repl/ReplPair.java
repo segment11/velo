@@ -188,7 +188,7 @@ public class ReplPair {
     public String getStatsCountForReplTypeAsString() {
         var sb = new StringBuilder();
         for (var type : ReplType.values()) {
-            sb.append(type.name()).append(": ").append(statsCountForReplType[type.ordinal()]).append(", ");
+            sb.append(type.name()).append("=").append(statsCountForReplType[type.ordinal()]).append(", ");
         }
         return sb.toString();
     }

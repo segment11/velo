@@ -413,7 +413,7 @@ public class RequestHandler {
                     log.info("Request cmd={}", cmd);
                 } else {
                     var sb = new StringBuilder();
-                    sb.append("Request cmd: ").append(cmd).append(" ");
+                    sb.append("Request cmd=").append(cmd).append(" ");
                     for (int i = 1; i < data.length; i++) {
                         sb.append(new String(data[i])).append(" ");
                     }
