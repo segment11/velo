@@ -45,7 +45,6 @@ import io.velo.persist.LocalPersist;
 import io.velo.persist.Wal;
 import io.velo.repl.LeaderSelector;
 import io.velo.repl.ReplPair;
-import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.support.JedisPoolHolder;
 import io.velo.reply.AsyncReply;
 import io.velo.reply.ErrorReply;
@@ -790,17 +789,20 @@ public class MultiWorkerServer extends Launcher {
             if (slotNumber > LocalPersist.MAX_SLOT_NUMBER) {
                 throw new IllegalArgumentException("Slot number too large, slot number should be less than " + LocalPersist.MAX_SLOT_NUMBER);
             }
-            if (slotNumber != 1 && slotNumber % 2 != 0) {
-                throw new IllegalArgumentException("Slot number should be 1 or even");
+            if (slotNumber <= 0) {
+                throw new IllegalArgumentException("Slot number should be greater than 0");
+            }
+            if (slotNumber != 1 && (slotNumber & (slotNumber - 1)) != 0) {
+                throw new IllegalArgumentException("Slot number should be 1 or power of 2");
             }
             ConfForGlobal.slotNumber = (short) slotNumber;
             log.warn("Global config, slotNumber={}", ConfForGlobal.slotNumber);
 
-            if (ConfForGlobal.clusterEnabled) {
-                if (MultiShard.TO_CLIENT_SLOT_NUMBER % slotNumber != 0) {
-                    throw new IllegalArgumentException("Slot number should be divided by " + MultiShard.TO_CLIENT_SLOT_NUMBER);
-                }
-            }
+//            if (ConfForGlobal.clusterEnabled) {
+//                if (MultiShard.TO_CLIENT_SLOT_NUMBER % slotNumber != 0) {
+//                    throw new IllegalArgumentException("Slot number should be divided by " + MultiShard.TO_CLIENT_SLOT_NUMBER);
+//                }
+//            }
 
             int netWorkers = config.get(ofInteger(), "netWorkers", 1);
             if (netWorkers > MAX_NET_WORKERS) {

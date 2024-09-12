@@ -328,10 +328,10 @@ class MultiWorkerServerTest extends Specification {
 
         when:
         exception = false
-        def config3 = Config.create()
-                .with("slotNumber", "3")
+        def config22 = Config.create()
+                .with("slotNumber", "0")
         try {
-            m1.beforeCreateHandler(c, snowFlakes1, config3)
+            m1.beforeCreateHandler(c, snowFlakes1, config22)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
@@ -340,12 +340,11 @@ class MultiWorkerServerTest extends Specification {
         exception
 
         when:
-        ConfForGlobal.clusterEnabled = true
         exception = false
-        def config33 = Config.create()
-                .with("slotNumber", "384")
+        def config3 = Config.create()
+                .with("slotNumber", "3")
         try {
-            m1.beforeCreateHandler(c, snowFlakes1, config33)
+            m1.beforeCreateHandler(c, snowFlakes1, config3)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
