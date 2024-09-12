@@ -299,7 +299,7 @@ public class MultiWorkerServer extends Launcher {
         }
 
         if (pipeline.size() == 1) {
-            return handleRequest(pipeline.get(0), socket);
+            return handleRequest(pipeline.getFirst(), socket);
         }
 
         Promise<ByteBuf>[] promiseN = new Promise[pipeline.size()];

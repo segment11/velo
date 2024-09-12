@@ -165,7 +165,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     public FileIndexAndOffset earliestFileIndexAndOffset() {
         // at least have one file, self created
         var files = listFiles();
-        var file = files.get(0);
+        var file = files.getFirst();
         return new FileIndexAndOffset(fileIndex(file), 0);
     }
 
@@ -444,7 +444,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         var files = listFiles();
         if (files.size() > ConfForSlot.global.confRepl.binlogFileKeepMaxCount) {
             // already sorted
-            var firstFile = files.get(0);
+            var firstFile = files.getFirst();
             var firstFileIndex = fileIndex(firstFile);
             var rafRemoved = prevRafByFileIndex.remove(firstFileIndex);
             if (rafRemoved != null) {

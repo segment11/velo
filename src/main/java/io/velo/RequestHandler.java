@@ -501,7 +501,7 @@ public class RequestHandler {
                 var gGroup = new GGroup(cmd, data, socket).init(this, request);
                 try {
                     var slotWithKeyHashList = request.getSlotWithKeyHashList();
-                    var bytes = gGroup.get(keyBytes, slotWithKeyHashList.get(0), true);
+                    var bytes = gGroup.get(keyBytes, slotWithKeyHashList.getFirst(), true);
                     return bytes != null ? new BulkReply(bytes) : NilReply.INSTANCE;
                 } catch (TypeMismatchException e) {
                     increaseCmdStatArray((byte) 'e', ERROR_FOR_STAT_AS_COMMAND);

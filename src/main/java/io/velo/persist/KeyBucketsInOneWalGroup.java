@@ -146,7 +146,7 @@ public class KeyBucketsInOneWalGroup {
 
             byte[] sharedBytes;
             if (isAllSharedBytes) {
-                sharedBytes = list.get(0).bytes;
+                sharedBytes = list.getFirst().bytes;
             } else {
                 sharedBytes = new byte[KeyLoader.KEY_BUCKET_ONE_COST_SIZE * oneChargeBucketNumber];
                 for (int i = 0; i < oneChargeBucketNumber; i++) {

@@ -169,7 +169,7 @@ public class SegmentBatch implements InSlotMetricCollector {
         ArrayList<SegmentCompressedBytesWithIndex> onceList = new ArrayList<>(MAX_BLOCK_NUMBER);
         int onceListBytesLength = 0;
 
-        int afterTightSegmentIndex = segments.get(0).segmentIndex;
+        int afterTightSegmentIndex = segments.getFirst().segmentIndex;
         for (var segment : segments) {
             var compressedBytes = segment.compressedBytes;
 

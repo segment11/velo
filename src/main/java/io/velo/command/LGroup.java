@@ -381,7 +381,7 @@ public class LGroup extends BaseCommand {
         }
 
         if (count == 1) {
-            return replies.get(0);
+            return replies.getFirst();
         }
 
         var arr = new Reply[replies.size()];
@@ -502,7 +502,7 @@ public class LGroup extends BaseCommand {
         int maxIndex = rl.size() - 1;
 
         if (count == 1) {
-            var pos = posList.get(0);
+            var pos = posList.getFirst();
             if (isReverse) {
                 return new IntegerReply(maxIndex - pos);
             } else {

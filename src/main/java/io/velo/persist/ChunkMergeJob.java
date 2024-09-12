@@ -326,7 +326,7 @@ public class ChunkMergeJob {
 
     private void removeOld(OneSlot oneSlot, ArrayList<CvWithKeyAndSegmentOffset> cvList, ArrayList<ValidCvCountRecord> validCvCountRecordList) {
         var dictMap = DictMap.getInstance();
-        var firstSegmentIndex = validCvCountRecordList.get(0).segmentIndex;
+        var firstSegmentIndex = validCvCountRecordList.getFirst().segmentIndex;
         ArrayList<CvWithKeyAndSegmentOffset> toRemoveCvList = new ArrayList<>(cvList.size());
 
         var groupByWalGroupIndex = cvList.stream().collect(Collectors.groupingBy(one -> one.walGroupIndex));

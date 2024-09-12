@@ -44,7 +44,7 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
             return 1;
         }
 
-        return list.get(0).begin - o.list.get(0).begin;
+        return list.getFirst().begin - o.list.getFirst().begin;
     }
 
     @Override
