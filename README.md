@@ -15,11 +15,12 @@ Velo is a redis compatible kv store, base on slot and hash buckets.
 - Pure memory mode support
 - Zstd dict based compression
 - Master slave replication
-- Auto failover, Redis sentinel compatible
+- Auto failover, Redis sentinel compatible / HAProxy support
 - Prometheus' metrics support
 - Http api support
 - LRU cache support
 - Big key monitor / Slow command monitor
+- Redis cluster support / Slot migration tools provided
 
 # Architecture
 
@@ -34,6 +35,10 @@ Velo is a redis compatible kv store, base on slot and hash buckets.
 ## Master slave replication and auto failover
 
 ![auto-failover](./doc/auto-failover.png)
+
+## HAProxy support
+
+![haproxy](./doc/haproxy/route.png)
 
 ## Hash buckets for each slot and pure memory mode
 
