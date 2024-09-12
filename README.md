@@ -40,6 +40,10 @@ Velo is a redis compatible kv store, base on slot and hash buckets.
 
 ![haproxy](./doc/haproxy/route.png)
 
+## Redis cluster support / Slot migration tools
+![slot-migration](./doc/cluster/slot-migration.png)
+
+
 ## Hash buckets for each slot and pure memory mode
 
 todo
