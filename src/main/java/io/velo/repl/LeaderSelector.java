@@ -178,7 +178,7 @@ public class LeaderSelector implements NeedCleanUp {
         } catch (Exception e) {
             lastGetMasterListenAddressAsSlave = null;
             // need not stack trace
-            log.error("Repl get master listen address from zookeeper failed=" + e.getMessage());
+            log.error("Repl get master listen address from zookeeper failed={}", e.getMessage());
             return null;
         }
     }
@@ -222,7 +222,7 @@ public class LeaderSelector implements NeedCleanUp {
             return true;
         } catch (Exception e) {
             // need not stack trace
-            log.error("Repl leader latch start failed=" + e.getMessage());
+            log.error("Repl leader latch start failed={}", e.getMessage());
             return false;
         }
     }

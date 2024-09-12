@@ -60,6 +60,7 @@ public class SocketInspector implements TcpSocket.Inspector {
                 callback.doWithSocket(socket, reply);
             } else {
                 for (var eventloop : netWorkerEventloopArray) {
+                    assert eventloop.getEventloopThread() != null;
                     if (eventloop.getEventloopThread().threadId() == threadId) {
                         eventloop.execute(() -> callback.doWithSocket(socket, reply));
                     }

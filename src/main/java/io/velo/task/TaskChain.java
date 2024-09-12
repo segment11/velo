@@ -33,7 +33,7 @@ public class TaskChain {
                 try {
                     t.run();
                 } catch (Exception e) {
-                    log.error("Task error, name=" + t.name(), e);
+                    log.error("Task error, name={}", t.name(), e);
                 }
             }
         }

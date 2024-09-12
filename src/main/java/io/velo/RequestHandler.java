@@ -510,7 +510,7 @@ public class RequestHandler {
                     return ErrorReply.DICT_MISSING;
                 } catch (Exception e) {
                     increaseCmdStatArray((byte) 'e', ERROR_FOR_STAT_AS_COMMAND);
-                    log.error("Get error, key=" + new String(keyBytes), e);
+                    log.error("Get error, key={}", new String(keyBytes), e);
                     return new ErrorReply(e.getMessage());
                 }
             }
@@ -539,7 +539,7 @@ public class RequestHandler {
                     return ErrorReply.READONLY;
                 } catch (Exception e) {
                     increaseCmdStatArray((byte) 'e', ERROR_FOR_STAT_AS_COMMAND);
-                    log.error("Set error, key=" + new String(keyBytes), e);
+                    log.error("Set error, key={}", new String(keyBytes), e);
                     return new ErrorReply(e.getMessage());
                 }
 

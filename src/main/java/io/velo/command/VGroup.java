@@ -116,7 +116,7 @@ public class VGroup extends BaseCommand {
                 returnSetArray[finalI] = r;
             }).whenComplete((ignored, e) -> {
                 if (e != null) {
-                    log.error("Submit index job get longs ids error=" + e.getMessage());
+                    log.error("Submit index job get longs ids error={}", e.getMessage());
                     return;
                 }
 
@@ -184,6 +184,7 @@ public class VGroup extends BaseCommand {
 
             mGroup.setCrossRequestWorker(isCrossRequestWorker);
             mGroup.setSlotWithKeyHashListParsed(slotWithKeyHashList);
+            assert slotWithKeyHashList != null;
             var first = slotWithKeyHashList.getFirst();
             var firstSlot = first.slot();
             int ii = firstSlot % ConfForGlobal.netWorkers;
@@ -259,7 +260,7 @@ public class VGroup extends BaseCommand {
                 returnTotalCountArray[finalI] = r;
             }).whenComplete((ignored, e) -> {
                 if (e != null) {
-                    log.error("Submit index job get total count error=" + e.getMessage());
+                    log.error("Submit index job get total count error={}", e.getMessage());
                     return;
                 }
 
@@ -328,7 +329,7 @@ public class VGroup extends BaseCommand {
                 indexHandler.putWordAndAddLongId(lowerCaseWord, longId);
             }).whenComplete((v, e) -> {
                 if (e != null) {
-                    log.error("Submit index job put word and add long id error=" + e.getMessage());
+                    log.error("Submit index job put word and add long id error={}", e.getMessage());
                     return;
                 }
 

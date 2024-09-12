@@ -240,7 +240,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
             it.remove();
             sb.append(one.segmentIndex).append(";");
 
-            // lastXForBinlog must not be null
+            assert lastXForBinlog != null;
             lastXForBinlog.putUpdatedChunkSegmentFlagWithSeq(one.segmentIndex, Chunk.Flag.merged_and_persisted.flagByte, 0L);
         }
         oneSlot.appendBinlog(lastXForBinlog);

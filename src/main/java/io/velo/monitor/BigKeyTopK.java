@@ -17,6 +17,12 @@ public class BigKeyTopK {
 
         @Override
         public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || getClass() != obj.getClass()) {
+                return false;
+            }
             var o = (BigKey) obj;
             return Arrays.equals(keyBytes, o.keyBytes);
         }
@@ -54,6 +60,7 @@ public class BigKeyTopK {
             return;
         }
 
+        assert k > 0;
         if (queue.size() == k) {
             var peek = queue.peek();
             if (peek.length < length) {

@@ -11,7 +11,7 @@ public class KeyHash {
     private static final XXHash64 xxHash64Java = XXHashFactory.fastestJavaInstance().hash64();
     private static final XXHash32 xxHash32Java = XXHashFactory.fastestJavaInstance().hash32();
 
-    private static final long seed = 0x9747b28c;
+    private static final long seed = 0x9747b28cL;
     private static final int seed32 = 0x9747b28c;
 
     private static final byte[] fixedPrefixKeyBytesForTest = "xh!".getBytes();

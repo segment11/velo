@@ -85,6 +85,10 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     private ArrayList<File> listFiles() {
         ArrayList<File> list = new ArrayList<>();
         var files = binlogDir.listFiles();
+        if (files == null) {
+            return list;
+        }
+
         for (var file : files) {
             if (file.getName().startsWith(FILE_NAME_PREFIX)) {
                 list.add(file);
@@ -449,7 +453,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             var rafRemoved = prevRafByFileIndex.remove(firstFileIndex);
             if (rafRemoved != null) {
                 rafRemoved.close();
-                log.info("Repl close binlog old raf success, file index=" + firstFileIndex + ", slot=" + slot);
+                log.info("Repl close binlog old raf success, file index={}, slot={}", firstFileIndex, slot);
             }
 
             if (!firstFile.delete()) {
@@ -623,7 +627,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         try {
             raf.setLength(0);
         } catch (IOException e) {
-            log.error("Repl clear binlog raf error, file index=" + currentFileIndex + "slot=" + slot, e);
+            log.error("Repl clear binlog raf error, file index={}, slot={}", currentFileIndex, slot, e);
         }
 
         var it = prevRafByFileIndex.entrySet().iterator();

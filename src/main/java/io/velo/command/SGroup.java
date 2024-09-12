@@ -592,7 +592,7 @@ public class SGroup extends BaseCommand {
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
-        int lengthResult = 0;
+        int lengthResult;
         var valueBytesExist = get(keyBytes, slotWithKeyHash);
         int len = offset + valueBytes.length;
         if (valueBytesExist == null) {

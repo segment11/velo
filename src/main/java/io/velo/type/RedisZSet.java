@@ -195,14 +195,13 @@ public class RedisZSet {
             sv.isAlreadyWeighted = isAlreadyWeighted;
             set.add(sv);
             memberMap.put(member, sv);
-            return true;
         } else {
             var sv = new ScoreValue(score, member);
             sv.isAlreadyWeighted = isAlreadyWeighted;
             set.add(sv);
             memberMap.put(member, sv);
-            return true;
         }
+        return true;
     }
 
     public ScoreValue get(String member) {

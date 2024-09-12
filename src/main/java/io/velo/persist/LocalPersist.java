@@ -71,7 +71,9 @@ public class LocalPersist implements NeedCleanUp {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+
         var oneSlot = new OneSlot(slot, eventloop);
+        assert eventloop.getEventloopThread() != null;
         oneSlot.threadIdProtectedForSafe = eventloop.getEventloopThread().threadId();
         this.oneSlots = new OneSlot[slot + 1];
         this.oneSlots[slot] = oneSlot;

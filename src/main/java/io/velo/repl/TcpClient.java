@@ -53,8 +53,7 @@ public class TcpClient implements NeedCleanUp {
             } catch (Exception e) {
                 // reduce log
                 if (writeErrorCount % 1000 == 0) {
-                    log.error("Could not write to server, to server=" +
-                            replPair.getHostAndPort() + ", slot=" + slot, e);
+                    log.error("Could not write to server, to server={}, slot={}", replPair.getHostAndPort(), slot, e);
                 }
                 writeErrorCount++;
                 return false;
@@ -95,7 +94,7 @@ public class TcpClient implements NeedCleanUp {
                             .decodeStream(new RequestDecoder())
                             .mapAsync(pipeline -> {
                                 if (pipeline == null) {
-                                    log.error("Repl slave request decode fail: pipeline is null, slot=" + slot);
+                                    log.error("Repl slave request decode fail: pipeline is null, slot={}", slot);
                                     return null;
                                 }
 
@@ -131,7 +130,7 @@ public class TcpClient implements NeedCleanUp {
                         sock.write(connectedCallback.call());
                     }
                 })
-                .whenException(e -> log.error("Could not connect to server, to server=" + host + ":" + port + ", slot=" + slot, e));
+                .whenException(e -> log.error("Could not connect to server, to server={}:{}, slot={}", host, port, slot, e));
     }
 
     public void close() {

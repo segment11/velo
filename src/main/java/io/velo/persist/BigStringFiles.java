@@ -69,7 +69,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         this.bigStringBytesByUuidLRU = new LRUMap<>(maxSize);
 
         var files = bigStringDir.listFiles();
-        bigStringFilesCount = files.length;
+        bigStringFilesCount = files != null ? files.length : 0;
     }
 
     @Override
@@ -93,6 +93,10 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
 
         var files = bigStringDir.listFiles();
+        if (files == null) {
+            return list;
+        }
+
         for (File file : files) {
             list.add(Long.parseLong(file.getName()));
         }
@@ -130,7 +134,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         try {
             return FileUtils.readFileToByteArray(file);
         } catch (IOException e) {
-            log.error("Read big string file error, uuid=" + uuid + ", slot=" + slot, e);
+            log.error("Read big string file error, uuid={}, slot={}", uuid, slot, e);
             return null;
         }
     }
@@ -147,7 +151,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             bigStringFilesCount++;
             return true;
         } catch (IOException e) {
-            log.error("Write big string file error, uuid=" + uuid + ", key=" + key + ", slot=" + slot, e);
+            log.error("Write big string file error, uuid={}, key={}, slot={}", uuid, key, slot, e);
             return false;
         }
     }
@@ -187,7 +191,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             log.warn("Delete all big string files, slot={}", slot);
             bigStringFilesCount = 0;
         } catch (IOException e) {
-            log.error("Delete all big string files error, slot=" + slot, e);
+            log.error("Delete all big string files error, slot={}", slot, e);
         }
     }
 

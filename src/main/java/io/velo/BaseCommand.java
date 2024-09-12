@@ -7,7 +7,6 @@ import io.velo.decode.Request;
 import io.velo.mock.ByPassGetSet;
 import io.velo.persist.LocalPersist;
 import io.velo.persist.OneSlot;
-import io.velo.persist.SegmentOverflowException;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
@@ -597,7 +596,7 @@ public abstract class BaseCommand {
             } catch (NumberFormatException ignore) {
             }
 
-            double doubleValue = 0;
+            double doubleValue;
             try {
                 doubleValue = Double.parseDouble(value);
                 setNumber(keyBytes, doubleValue, slotWithKeyHash, expireAt);
@@ -700,12 +699,8 @@ public abstract class BaseCommand {
             var oneSlot = localPersist.oneSlot(slot);
             try {
                 oneSlot.put(key, slotWithKeyHash.bucketIndex, cv);
-            } catch (SegmentOverflowException e) {
-                log.error("Set error, key={}, message={}", key, e.getMessage());
-                throw e;
             } catch (Exception e) {
-                var message = e.getMessage();
-                log.error("Set error, key={}, message={}", key, message);
+                log.error("Set error, key={}, message={}", key, e.getMessage());
                 throw e;
             }
         }

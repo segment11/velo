@@ -202,9 +202,7 @@ public class ZGroup extends BaseCommand {
             dd[3] = data[3];
 
             dd[4] = "bylex".getBytes();
-            for (int i = 4; i < data.length; i++) {
-                dd[i + 1] = data[i];
-            }
+            System.arraycopy(data, 4, dd, 5, data.length - 4);
 
             return zrange(dd);
         }
@@ -221,9 +219,7 @@ public class ZGroup extends BaseCommand {
             dd[3] = data[3];
 
             dd[4] = "byscore".getBytes();
-            for (int i = 4; i < data.length; i++) {
-                dd[i + 1] = data[i];
-            }
+            System.arraycopy(data, 4, dd, 5, data.length - 4);
 
             return zrange(dd);
         }
@@ -238,10 +234,7 @@ public class ZGroup extends BaseCommand {
             dd[1] = data[2];
             dd[2] = data[3];
             dd[3] = data[4];
-
-            for (int i = 5; i < data.length; i++) {
-                dd[i - 1] = data[i];
-            }
+            System.arraycopy(data, 5, dd, 4, data.length - 5);
 
             var dstKeyBytes = data[1];
             return zrange(dd, dstKeyBytes);
@@ -279,9 +272,7 @@ public class ZGroup extends BaseCommand {
             dd[3] = data[3];
 
             dd[4] = "rev".getBytes();
-            for (int i = 4; i < data.length; i++) {
-                dd[i + 1] = data[i];
-            }
+            System.arraycopy(data, 4, dd, 5, data.length - 4);
 
             return zrange(dd);
         }
@@ -299,9 +290,7 @@ public class ZGroup extends BaseCommand {
 
             dd[4] = "rev".getBytes();
             dd[5] = "bylex".getBytes();
-            for (int i = 4; i < data.length; i++) {
-                dd[i + 2] = data[i];
-            }
+            System.arraycopy(data, 4, dd, 6, data.length - 4);
 
             return zrange(dd);
         }
@@ -319,9 +308,7 @@ public class ZGroup extends BaseCommand {
 
             dd[4] = "rev".getBytes();
             dd[5] = "byscore".getBytes();
-            for (int i = 4; i < data.length; i++) {
-                dd[i + 2] = data[i];
-            }
+            System.arraycopy(data, 4, dd, 6, data.length - 4);
 
             return zrange(dd);
         }
@@ -769,10 +756,7 @@ public class ZGroup extends BaseCommand {
         var data2 = new byte[data.length + 1][];
         data2[0] = data[0];
         data2[1] = dstKeyBytes;
-
-        for (int i = 1; i < data.length; i++) {
-            data2[i + 1] = data[i];
-        }
+        System.arraycopy(data, 1, data2, 2, data.length - 1);
         this.data = data2;
     }
 
@@ -787,10 +771,7 @@ public class ZGroup extends BaseCommand {
         dd[1] = data[2];
         dd[2] = data[3];
         dd[3] = data[4];
-
-        for (int i = 5; i < data.length; i++) {
-            dd[i - 1] = data[i];
-        }
+        System.arraycopy(data, 5, dd, 4, data.length - 5);
 
         var dstKeyBytes = data[1];
         return zdiff(dd, isInter, isUnion, dstKeyBytes);

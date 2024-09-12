@@ -106,7 +106,7 @@ public class MultiWorkerServer extends Launcher {
     static File dirFile(Config config) {
         var dirPath = config.get(ofString(), "dir", "/tmp/velo-data");
         ConfForGlobal.dirPath = dirPath;
-        log.warn("Global config, dirPath=" + dirPath);
+        log.warn("Global config, dirPath={}", dirPath);
 
         var dirFile = new File(dirPath);
         if (!dirFile.exists()) {
@@ -366,7 +366,7 @@ public class MultiWorkerServer extends Launcher {
                 givenConfigFilePath = "/etc/" + PROPERTIES_FILE;
             }
         }
-        log.warn("Config will be loaded from=" + givenConfigFilePath);
+        log.warn("Config will be loaded from={}", givenConfigFilePath);
 
         return Config.create()
                 .with("net.listenAddresses", Config.ofValue(ofInetSocketAddress(), new InetSocketAddress(PORT)))
@@ -448,6 +448,7 @@ public class MultiWorkerServer extends Launcher {
 
         for (int i = 0; i < netWorkerEventloopArray.length; i++) {
             var netWorkerEventloop = netWorkerEventloopArray[i];
+            assert netWorkerEventloop.getEventloopThread() != null;
             netWorkerThreadIds[i] = netWorkerEventloop.getEventloopThread().threadId();
 
             // start schedule
@@ -633,28 +634,28 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.datacenterId = datacenterId;
             ConfForGlobal.machineId = machineId;
 
-            log.warn("Global config, estimateKeyNumber=" + estimateKeyNumber);
-            log.warn("Global config, estimateOneValueLength=" + estimateOneValueLength);
-            log.warn("Global config, datacenterId=" + datacenterId);
-            log.warn("Global config, machineId=" + machineId);
+            log.warn("Global config, estimateKeyNumber={}", estimateKeyNumber);
+            log.warn("Global config, estimateOneValueLength={}", estimateOneValueLength);
+            log.warn("Global config, datacenterId={}", datacenterId);
+            log.warn("Global config, machineId={}", machineId);
 
             boolean isValueSetUseCompression = config.get(ofBoolean(), "isValueSetUseCompression", true);
             boolean isOnDynTrainDictForCompression = config.get(ofBoolean(), "isOnDynTrainDictForCompression", true);
             ConfForGlobal.isValueSetUseCompression = isValueSetUseCompression;
             ConfForGlobal.isOnDynTrainDictForCompression = isOnDynTrainDictForCompression;
 
-            log.warn("Global config, isValueSetUseCompression=" + isValueSetUseCompression);
-            log.warn("Global config, isOnDynTrainDictForCompression=" + isOnDynTrainDictForCompression);
+            log.warn("Global config, isValueSetUseCompression={}", isValueSetUseCompression);
+            log.warn("Global config, isOnDynTrainDictForCompression={}", isOnDynTrainDictForCompression);
 
             ConfForGlobal.netListenAddresses = config.get(ofString(), "net.listenAddresses", "localhost:" + PORT);
             logger.info("Net listen addresses={}", ConfForGlobal.netListenAddresses);
             ConfForGlobal.eventLoopIdleMillis = config.get(ofInteger(), "eventloop.idleMillis", 10);
-            log.warn("Global config, eventLoopIdleMillis=" + ConfForGlobal.eventLoopIdleMillis);
+            log.warn("Global config, eventLoopIdleMillis={}", ConfForGlobal.eventLoopIdleMillis);
 
             ConfForGlobal.PASSWORD = config.get(ofString(), "password", null);
 
             ConfForGlobal.pureMemory = config.get(ofBoolean(), "pureMemory", false);
-            log.warn("Global config, pureMemory=" + ConfForGlobal.pureMemory);
+            log.warn("Global config, pureMemory={}", ConfForGlobal.pureMemory);
 
             if (config.getChild("zookeeperConnectString").hasValue()) {
                 ConfForGlobal.zookeeperConnectString = config.get(ofString(), "zookeeperConnectString");
@@ -663,11 +664,11 @@ public class MultiWorkerServer extends Launcher {
                 ConfForGlobal.isAsSlaveOfSlave = config.get(ofBoolean(), "isAsSlaveOfSlave", false);
                 ConfForGlobal.targetAvailableZone = config.get(ofString(), "targetAvailableZone", null);
 
-                log.warn("Global config, zookeeperConnectString=" + ConfForGlobal.zookeeperConnectString);
-                log.warn("Global config, zookeeperRootPath=" + ConfForGlobal.zookeeperRootPath);
-                log.warn("Global config, canBeLeader=" + ConfForGlobal.canBeLeader);
-                log.warn("Global config, isAsSlaveOfSlave=" + ConfForGlobal.isAsSlaveOfSlave);
-                log.warn("Global config, targetAvailableZone=" + ConfForGlobal.targetAvailableZone);
+                log.warn("Global config, zookeeperConnectString={}", ConfForGlobal.zookeeperConnectString);
+                log.warn("Global config, zookeeperRootPath={}", ConfForGlobal.zookeeperRootPath);
+                log.warn("Global config, canBeLeader={}", ConfForGlobal.canBeLeader);
+                log.warn("Global config, isAsSlaveOfSlave={}", ConfForGlobal.isAsSlaveOfSlave);
+                log.warn("Global config, targetAvailableZone={}", ConfForGlobal.targetAvailableZone);
 
                 if (!skipZookeeperConnectCheck) {
                     // check can connect
@@ -793,7 +794,7 @@ public class MultiWorkerServer extends Launcher {
                 throw new IllegalArgumentException("Slot number should be 1 or even");
             }
             ConfForGlobal.slotNumber = (short) slotNumber;
-            log.warn("Global config, slotNumber=" + ConfForGlobal.slotNumber);
+            log.warn("Global config, slotNumber={}", ConfForGlobal.slotNumber);
 
             if (ConfForGlobal.clusterEnabled) {
                 if (MultiShard.TO_CLIENT_SLOT_NUMBER % slotNumber != 0) {
@@ -816,7 +817,7 @@ public class MultiWorkerServer extends Launcher {
                 throw new IllegalArgumentException("Slot number should be multiple of net workers");
             }
             ConfForGlobal.netWorkers = (byte) netWorkers;
-            log.warn("Global config, netWorkers=" + ConfForGlobal.netWorkers);
+            log.warn("Global config, netWorkers={}", ConfForGlobal.netWorkers);
 
             int indexWorkers = config.get(ofInteger(), "indexWorkers", 1);
             if (indexWorkers > MAX_INDEX_WORKERS) {
@@ -826,7 +827,7 @@ public class MultiWorkerServer extends Launcher {
                 throw new IllegalArgumentException("Index workers should be less than cpu number");
             }
             ConfForGlobal.indexWorkers = (byte) indexWorkers;
-            log.warn("Global config, indexWorkers=" + ConfForGlobal.indexWorkers);
+            log.warn("Global config, indexWorkers={}", ConfForGlobal.indexWorkers);
 
             var dirFile = dirFile(config);
 

@@ -218,7 +218,7 @@ public class RGroup extends BaseCommand {
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         // check if key exists
-        replace = true;
+//        replace = true;
         if (!replace) {
             var cv = getCv(keyBytes, slotWithKeyHash);
             if (cv != null) {

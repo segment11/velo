@@ -242,8 +242,8 @@ public class KeyBucketsInOneWalGroup {
         if (splitMultiStep > 1) {
             var newMaxSplitNumber = currentSplitNumber * splitMultiStep;
             if (newMaxSplitNumber > KeyLoader.MAX_SPLIT_NUMBER) {
-                log.warn("Bucket full, split number exceed max split number=" + KeyLoader.MAX_SPLIT_NUMBER +
-                        ", slot=" + slot + ", bucket index=" + bucketIndex);
+                log.warn("Bucket full, split number exceed max split number=" + KeyLoader.MAX_SPLIT_NUMBER + ", slot={}, bucket index={}",
+                        slot, bucketIndex);
                 // log all keys
                 log.warn("Failed keys to put={}", pvmListThisBucket.stream().map(pvm -> new String(pvm.keyBytes)).collect(Collectors.toList()));
                 throw new BucketFullException("Bucket full, split number exceed max split number=" + KeyLoader.MAX_SPLIT_NUMBER +

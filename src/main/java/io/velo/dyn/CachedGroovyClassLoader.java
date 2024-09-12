@@ -56,7 +56,7 @@ public class CachedGroovyClassLoader {
         if (classpath != null) {
             for (String path : classpath.split(":")) {
                 gcl.addClasspath(path);
-                log.warn("Cached groovy class loader add classpath=" + path);
+                log.warn("Cached groovy class loader add classpath={}", path);
             }
         }
     }
@@ -67,7 +67,7 @@ public class CachedGroovyClassLoader {
 
     public Object eval(String scriptText, Map<String, Object> variables) {
         var clz = gcl.parseClass(scriptText);
-        Script script = null;
+        Script script;
         try {
             script = (Script) clz.getDeclaredConstructor().newInstance();
         } catch (Exception e) {
@@ -101,7 +101,7 @@ public class CachedGroovyClassLoader {
 
         private void logClassLoaded(Map<String, Class> x) {
             for (var entry : x.entrySet()) {
-                log.debug(entry.getKey() + ':' + entry.getValue());
+                log.debug("{}:{}", entry.getKey(), entry.getValue());
             }
         }
 
@@ -110,7 +110,7 @@ public class CachedGroovyClassLoader {
         }
 
         private Class<?> getFromCache(GroovyCodeSource source) {
-            Class<?> r = null;
+            Class<?> r;
             synchronized (classCache) {
                 r = classCache.entrySet().stream()
                         .filter(entry -> isFileMatchTargetClass(source.getName(), entry.getKey()))
@@ -150,9 +150,9 @@ public class CachedGroovyClassLoader {
                     r = super.parseClass(codeSource, false);
                     classLoaded.put(name, r);
                     lastModified.put(file.getAbsolutePath(), file.lastModified());
-                    log.debug("recompile - " + name);
+                    log.debug("recompile - {}", name);
                 } else {
-                    log.debug("get from cached - " + name);
+                    log.debug("get from cached - {}", name);
                 }
             } else if (scriptText != null) {
                 synchronized (classLoaded) {
@@ -161,9 +161,9 @@ public class CachedGroovyClassLoader {
                 if (r == null) {
                     r = super.parseClass(codeSource, false);
                     classLoaded.put(scriptText, r);
-                    log.debug("recompile - " + scriptText);
+                    log.debug("recompile - {}", scriptText);
                 } else {
-                    log.debug("get from cached - " + scriptText);
+                    log.debug("get from cached - {}", scriptText);
                 }
             }
             return r;

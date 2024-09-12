@@ -69,7 +69,7 @@ public class XReverseIndexPutWord implements BinlogContent {
             indexHandler.putWordAndAddLongId(lowerCaseWord, longId);
         }).whenComplete((v, e) -> {
             if (e != null) {
-                log.error("Submit index job put word and add long id error=" + e.getMessage());
+                log.error("Submit index job put word and add long id error={}", e.getMessage());
                 return;
             }
 

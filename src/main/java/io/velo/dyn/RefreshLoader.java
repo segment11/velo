@@ -29,7 +29,7 @@ public class RefreshLoader {
             return scriptTextCached.get(relativeFilePath);
         }
 
-        String scriptText = null;
+        String scriptText;
         try {
             scriptText = FileUtils.readFileToString(file, CachedGroovyClassLoader.GROOVY_FILE_ENCODING);
         } catch (IOException e) {
@@ -87,7 +87,7 @@ public class RefreshLoader {
                 refreshFileCallback.accept(file);
             }
         } catch (Exception e) {
-            log.error("fail eval - " + name, e);
+            log.error("fail eval - {}", name, e);
         }
     }
 

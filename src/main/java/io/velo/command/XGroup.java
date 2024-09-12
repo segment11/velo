@@ -144,7 +144,7 @@ public class XGroup extends BaseCommand {
 
                 return new BulkReply(data4[3]);
             } catch (Exception e) {
-                log.error("Repl master handle x_repl x_catch_up error, slot=" + slot, e);
+                log.error("Repl master handle x_repl x_catch_up error, slot={}", slot, e);
                 return new ErrorReply(e.getMessage());
             }
         }
@@ -642,7 +642,7 @@ public class XGroup extends BaseCommand {
             var toSlaveBytes = targetWal.toSlaveExistsOneWalGroupBytes();
             return Repl.reply(slot, replPair, ReplType.s_exists_wal, new RawBytesContent(toSlaveBytes));
         } catch (IOException e) {
-            log.error("Repl master get wal exists bytes error, slot=" + slot + ", group index=" + groupIndex, e);
+            log.error("Repl master get wal exists bytes error, group index={}, slot={}", groupIndex, slot, e);
             return Repl.error(slot, replPair, "Repl master get wal exists bytes error=" + e.getMessage());
         }
     }
@@ -659,7 +659,7 @@ public class XGroup extends BaseCommand {
             try {
                 targetWal.fromMasterExistsOneWalGroupBytes(contentBytes);
             } catch (IOException e) {
-                log.error("Repl slave update wal exists bytes error, slot=" + slot + ", group index=" + groupIndex, e);
+                log.error("Repl slave update wal exists bytes error, group index={}, slot={}", groupIndex, slot, e);
                 return Repl.error(slot, replPair, "Repl slave update wal exists bytes error=" + e.getMessage());
             }
         } else {
@@ -1254,7 +1254,7 @@ public class XGroup extends BaseCommand {
         } catch (IOException e) {
             var errorMessage = "Repl master handle error: read binlog file error";
             // need not exception stack trace
-            log.error(errorMessage + "=" + e.getMessage());
+            log.error("{}={}", errorMessage, e.getMessage());
             return Repl.error(slot, replPair, errorMessage + "=" + e.getMessage());
         }
 
@@ -1354,7 +1354,7 @@ public class XGroup extends BaseCommand {
         try {
             oneSlot.getBinlog().writeFromMasterOneSegmentBytes(readSegmentBytes, fetchedFileIndex, fetchedOffset);
         } catch (IOException e) {
-            log.error("Repl slave write binlog from master error, slot=" + slot, e);
+            log.error("Repl slave write binlog from master error, slot={}", slot, e);
         }
 
         // update last catch up file index and offset

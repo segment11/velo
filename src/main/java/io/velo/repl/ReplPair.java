@@ -73,7 +73,7 @@ public class ReplPair {
         if (asMaster) {
             return "ReplPair{" +
                     "slot=" + slot +
-                    ", asMaster=" + asMaster +
+                    ", asMaster=" + true +
                     ", host='" + host + '\'' +
                     ", port=" + port +
                     ", masterUuid=" + masterUuid +
@@ -84,7 +84,7 @@ public class ReplPair {
         } else {
             return "ReplPair{" +
                     "slot=" + slot +
-                    ", asMaster=" + asMaster +
+                    ", asMaster=" + false +
                     ", host='" + host + '\'' +
                     ", port=" + port +
                     ", masterUuid=" + masterUuid +

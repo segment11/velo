@@ -415,7 +415,7 @@ public class ReverseIndexChunk implements NeedCleanUp {
                 raf.write(new byte[HEADER_FOR_META_LENGTH]);
                 raf.setLength(HEADER_FOR_META_LENGTH);
 
-                log.info("Index clear reverse index chunk: worker-" + workerId + "/" + CHUNK_FILE_NAME_PREFIX + i);
+                log.info("Index clear reverse index chunk: worker-{}/{}", workerId, CHUNK_FILE_NAME_PREFIX + i);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

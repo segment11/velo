@@ -32,6 +32,8 @@ import java.util.Map;
 // need refactor to FdChunkSegments + FdKeyBuckets, todo
 public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp {
 
+    private static final int PERM = 00644;
+
     private static final Logger log = LoggerFactory.getLogger(FdReadWrite.class);
 
     public FdReadWrite(short slot, String name, LibC libC, File file) throws IOException {
@@ -42,7 +44,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
                 FileUtils.touch(file);
             }
             this.libC = libC;
-            this.fd = libC.open(file.getAbsolutePath(), LocalPersist.O_DIRECT | OpenFlags.O_RDWR.value(), 00644);
+            this.fd = libC.open(file.getAbsolutePath(), LocalPersist.O_DIRECT | OpenFlags.O_RDWR.value(), PERM);
             this.writeIndex = file.length();
             log.info("Opened fd={}, name={}, file length={}MB", fd, name, this.writeIndex / 1024 / 1024);
         } else {
@@ -372,35 +374,31 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             return;
         }
 
+        int maxSize;
         if (isChunkFd) {
             // tips: per fd, if one chunk has too many fd files, may OOM
-            var maxSize = ConfForSlot.global.confChunk.lruPerFd.maxSize;
+            maxSize = ConfForSlot.global.confChunk.lruPerFd.maxSize;
             var lruMemoryRequireMB = ((long) maxSize * oneInnerLength) / 1024 / 1024;
             log.info("Chunk lru max size for one chunk fd={}, one inner length={}, memory require={}MB, name={}",
                     maxSize, oneInnerLength, lruMemoryRequireMB, name);
             log.info("LRU prepare, type={}, MB={}, fd={}", LRUPrepareBytesStats.Type.fd_chunk_data, lruMemoryRequireMB, name);
             LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.fd_chunk_data, name, (int) lruMemoryRequireMB, true);
-
-            if (maxSize > 0) {
-                this.oneInnerBytesByIndexLRU = new LRUMap<>(maxSize);
-                this.isLRUOn = true;
-            }
         } else {
             // key bucket
             // tips: per fd, if one key loader has too many fd files as split number is big, may OOM
-            var maxSize = ConfForSlot.global.confBucket.lruPerFd.maxSize;
+            maxSize = ConfForSlot.global.confBucket.lruPerFd.maxSize;
             // need to compare with metrics
             final var compressRatio = 0.25;
-            var lruMemoryRequireMB = ((long) maxSize * oneInnerLength) / 1024 / 1024 * compressRatio;
+            var lruMemoryRequireMB = (double) ((long) maxSize * oneInnerLength) / 1024 / 1024 * compressRatio;
             log.info("Key bucket lru max size for one key bucket fd={}, one inner length={}， compress ratio maybe={}, memory require={}MB, name={}",
                     maxSize, oneInnerLength, compressRatio, lruMemoryRequireMB, name);
             log.info("LRU prepare, type={}, MB={}, fd={}", LRUPrepareBytesStats.Type.fd_key_bucket, lruMemoryRequireMB, name);
             LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.fd_key_bucket, name, (int) lruMemoryRequireMB, false);
 
-            if (maxSize > 0) {
-                this.oneInnerBytesByIndexLRU = new LRUMap<>(maxSize);
-                this.isLRUOn = true;
-            }
+        }
+        if (maxSize > 0) {
+            this.oneInnerBytesByIndexLRU = new LRUMap<>(maxSize);
+            this.isLRUOn = true;
         }
     }
 
