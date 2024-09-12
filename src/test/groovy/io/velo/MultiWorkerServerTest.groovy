@@ -514,6 +514,7 @@ class MultiWorkerServerTest extends Specification {
 
     def 'test do repl'() {
         given:
+        ConfForGlobal.slotNumber = 1
         def leaderSelector = LeaderSelector.instance
         leaderSelector.masterAddressLocalMocked = 'localhost:7379'
         ConfForGlobal.netListenAddresses = leaderSelector.masterAddressLocalMocked

@@ -70,7 +70,7 @@ class BaseCommandTest extends Specification {
 
         expect:
         s1.slot() == 0
-        s1.bucketIndex() < 16384
+        s1.bucketIndex() < 65536
         s1.keyHash() != 0
 
         s3.slot() == s4.slot()

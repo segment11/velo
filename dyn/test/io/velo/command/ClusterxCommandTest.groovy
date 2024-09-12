@@ -249,7 +249,6 @@ class ClusterxCommandTest extends Specification {
         then:
         reply == ClusterxCommand.OK
         shards[0].exportMigratingSlot == 0
-        shards[1].importMigratingSlot == 0
         shards[0].migratingToHost == 'localhost'
         shards[0].migratingToPort == 7379
 

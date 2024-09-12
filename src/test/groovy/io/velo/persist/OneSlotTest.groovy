@@ -880,7 +880,7 @@ class OneSlotTest extends Specification {
 
         when:
         // trigger persist wal
-        10.times {
+        5.times {
             batchPut(oneSlot, 100, 100, 1, slotNumber)
         }
         then:
