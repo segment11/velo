@@ -375,7 +375,7 @@ public class SGroup extends BaseCommand {
             SettablePromise<Reply> finalPromise = new SettablePromise<>();
             var asyncReply = new AsyncReply(finalPromise);
 
-            leaderSelector.resetAsMaster((e) -> {
+            leaderSelector.resetAsMaster(true, (e) -> {
                 if (e != null) {
                     log.error("slaveof error={}", e.getMessage());
                     finalPromise.set(new ErrorReply(e.getMessage()));
