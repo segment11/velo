@@ -30,11 +30,11 @@ Velo is a redis compatible kv store, base on slot and hash buckets.
 
 ## Run to complete thread safety
 
-![run-to-complete-thread-safety](./doc/run-to-complete.png)
+<img src="./doc/run-to-complete.png" width="600px">
 
 ## Master slave replication and auto failover
 
-![auto-failover](./doc/auto-failover.png)
+<img src="./doc/auto-failover.png" width="600px">
 
 ## HAProxy support
 
