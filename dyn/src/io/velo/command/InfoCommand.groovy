@@ -8,6 +8,10 @@ import io.velo.reply.Reply
 
 @CompileStatic
 class InfoCommand extends BaseCommand {
+    InfoCommand() {
+        super(null, null, null)
+    }
+
     InfoCommand(IGroup iGroup) {
         super(iGroup.cmd, iGroup.data, iGroup.socket)
     }

@@ -94,7 +94,7 @@ class ClusterxCommandTest extends Specification {
         reply == ErrorReply.SYNTAX
     }
 
-    private List<String> infoToLines(Reply reply) {
+    static List<String> infoToLines(Reply reply) {
         if (reply instanceof BulkReply) {
             return new String(((BulkReply) reply).raw).split('\n')
         } else if (reply instanceof AsyncReply) {
