@@ -205,6 +205,7 @@ public class ReplPair {
     }
 
     @ForMasterField
+    @ForSlaveField
     private Binlog.FileIndexAndOffset slaveLastCatchUpBinlogFileIndexAndOffset;
 
     public Binlog.FileIndexAndOffset getSlaveLastCatchUpBinlogFileIndexAndOffset() {
@@ -213,6 +214,17 @@ public class ReplPair {
 
     public void setSlaveLastCatchUpBinlogFileIndexAndOffset(Binlog.FileIndexAndOffset slaveLastCatchUpBinlogFileIndexAndOffset) {
         this.slaveLastCatchUpBinlogFileIndexAndOffset = slaveLastCatchUpBinlogFileIndexAndOffset;
+    }
+
+    @ForSlaveField
+    private Binlog.FileIndexAndOffset masterBinlogCurrentFileIndexAndOffset;
+
+    public Binlog.FileIndexAndOffset getMasterBinlogCurrentFileIndexAndOffset() {
+        return masterBinlogCurrentFileIndexAndOffset;
+    }
+
+    public void setMasterBinlogCurrentFileIndexAndOffset(Binlog.FileIndexAndOffset masterBinlogCurrentFileIndexAndOffset) {
+        this.masterBinlogCurrentFileIndexAndOffset = masterBinlogCurrentFileIndexAndOffset;
     }
 
     @ForMasterField

@@ -1852,10 +1852,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         if (binlog != null) {
-            var binlogOneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength;
-            var fo = binlog.currentFileIndexAndOffset();
-            var offsetFromFileIndex0 = (long) fo.fileIndex() * binlogOneFileMaxLength + fo.offset();
-            map.put("binlog_current_offset_from_the_beginning", (double) offsetFromFileIndex0);
+            map.put("binlog_current_offset_from_the_beginning", (double) binlog.currentReplOffset());
         }
 
         if (bigKeyTopK != null) {
@@ -1897,10 +1894,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 map.put("repl_as_master_repl_pair_" + i + "_slave_catch_up_last_seq", (double) replPair.getSlaveCatchUpLastSeq());
                 map.put("repl_as_master_repl_pair_" + i + "_is_link_up", (double) (replPair.isLinkUp() ? 1 : 0));
 
-                var fo = replPair.getSlaveLastCatchUpBinlogFileIndexAndOffset();
-                if (fo != null) {
-                    map.put("repl_as_master_repl_pair_" + i + "_slave_last_catch_up_binlog_file_index", (double) fo.fileIndex());
-                    map.put("repl_as_master_repl_pair_" + i + "_slave_last_catch_up_binlog_offset", (double) fo.offset());
+                var slaveFo = replPair.getSlaveLastCatchUpBinlogFileIndexAndOffset();
+                if (slaveFo != null) {
+                    map.put("repl_as_master_repl_pair_" + i + "_slave_last_catch_up_binlog_file_index", (double) slaveFo.fileIndex());
+                    map.put("repl_as_master_repl_pair_" + i + "_slave_last_catch_up_binlog_offset", (double) slaveFo.offset());
                 }
             }
         }

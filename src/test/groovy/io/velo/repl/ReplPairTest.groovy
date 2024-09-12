@@ -74,6 +74,7 @@ class ReplPairTest extends Specification {
 
         replPairAsSlave.slaveCatchUpLastSeq = 1000L
         replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset = null
+        replPairAsSlave.masterBinlogCurrentFileIndexAndOffset = null
         replPairAsSlave.increaseFetchedBytesLength(1000)
         replPairAsSlave.masterReadonly = false
         replPairAsSlave.allCaughtUp = false
@@ -91,6 +92,7 @@ class ReplPairTest extends Specification {
 
         replPairAsSlave.slaveCatchUpLastSeq == 1000L
         replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset == null
+        replPairAsSlave.masterBinlogCurrentFileIndexAndOffset == null
         replPairAsSlave.fetchedBytesLengthTotal == 1000L
         !replPairAsSlave.masterReadonly
         !replPairAsSlave.allCaughtUp

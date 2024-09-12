@@ -77,6 +77,10 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             FileIndexAndOffset that = (FileIndexAndOffset) obj;
             return fileIndex == that.fileIndex && offset == that.offset;
         }
+
+        public long asReplOffset() {
+            return (long) fileIndex * ConfForSlot.global.confRepl.binlogOneFileMaxLength + offset;
+        }
     }
 
     private static final Logger log = LoggerFactory.getLogger(Binlog.class);
@@ -164,6 +168,11 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     public FileIndexAndOffset currentFileIndexAndOffset() {
         return new FileIndexAndOffset(currentFileIndex, currentFileOffset);
+    }
+
+    public long currentReplOffset() {
+        var binlogOneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength;
+        return (long) currentFileIndex * binlogOneFileMaxLength + currentFileOffset;
     }
 
     public FileIndexAndOffset earliestFileIndexAndOffset() {

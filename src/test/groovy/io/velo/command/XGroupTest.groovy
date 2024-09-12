@@ -1204,7 +1204,7 @@ class XGroupTest extends Specification {
 
         when:
         // only readonly flag from master, mean no more binlog bytes
-        contentBytes = new byte[1]
+        contentBytes = new byte[13]
         contentBytes[0] = (byte) 1
         ByteBuffer.wrap(data4[1]).putShort((short) 0)
         data4[3] = contentBytes
@@ -1222,7 +1222,7 @@ class XGroupTest extends Specification {
         oneSlot.onlyOneReplPairAsSlave.allCaughtUp && !oneSlot.onlyOneReplPairAsSlave.masterReadonly
 
         when:
-        // skip reset readonly flag from master
+        // pong trigger slave do catch up again
         contentBytes = new byte[2]
         data4[3] = contentBytes
         r = x.handleRepl()

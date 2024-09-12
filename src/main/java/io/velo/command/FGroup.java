@@ -58,14 +58,14 @@ public class FGroup extends BaseCommand {
         // check slave catch up offset, if not catch up, can not do failover
         var currentFo = firstOneSlot.getBinlog().currentFileIndexAndOffset();
         for (var replPairAsMaster : asMasterList) {
-            var fo = replPairAsMaster.getSlaveLastCatchUpBinlogFileIndexAndOffset();
-            if (fo == null) {
+            var slaveFo = replPairAsMaster.getSlaveLastCatchUpBinlogFileIndexAndOffset();
+            if (slaveFo == null) {
                 return new ErrorReply("slave not catch up=" + replPairAsMaster.getHostAndPort());
             }
 
-            // must be equal or slave can less than a little, change here if need
-            if (currentFo.fileIndex() != fo.fileIndex() || currentFo.offset() != fo.offset()) {
-                return new ErrorReply("slave not catch up=" + replPairAsMaster.getHostAndPort() + ", current=" + currentFo + ", slave=" + fo);
+            // must be equal or slave can less than a little, change here if you need
+            if (currentFo.fileIndex() != slaveFo.fileIndex() || currentFo.offset() != slaveFo.offset()) {
+                return new ErrorReply("slave not catch up=" + replPairAsMaster.getHostAndPort() + ", current=" + currentFo + ", slave=" + slaveFo);
             }
         }
 

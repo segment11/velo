@@ -1235,14 +1235,23 @@ public class XGroup extends BaseCommand {
         }
 
         var isMasterReadonlyByte = oneSlot.isReadonly() ? (byte) 1 : (byte) 0;
-        var onlyReadonlyResponseContent = new RawBytesContent(new byte[]{isMasterReadonlyByte});
+
+        // is readonly byte + current file index + current offset
+        var onlyReadonlyResponseBytes = new byte[1 + 4 + 8];
+        var onlyReadonlyResponseBuffer = ByteBuffer.wrap(onlyReadonlyResponseBytes);
+        var onlyReadonlyResponseContent = new RawBytesContent(onlyReadonlyResponseBytes);
+
+        onlyReadonlyResponseBuffer.put(isMasterReadonlyByte);
 
         var binlog = oneSlot.getBinlog();
+        var currentFo = binlog.currentFileIndexAndOffset();
+        onlyReadonlyResponseBuffer.putInt(currentFo.fileIndex());
+        onlyReadonlyResponseBuffer.putLong(currentFo.offset());
+
         if (needFetchOffset != lastUpdatedOffset) {
             // check if slave already catch up to last binlog segment offset
-            var fo = binlog.currentFileIndexAndOffset();
-            if (fo.fileIndex() == needFetchFileIndex && fo.offset() == lastUpdatedOffset) {
-                replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(fo);
+            if (currentFo.fileIndex() == needFetchFileIndex && currentFo.offset() == lastUpdatedOffset) {
+                replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(currentFo);
                 replPair.setAllCaughtUp(true);
                 return Repl.reply(slot, replPair, ReplType.s_catch_up, onlyReadonlyResponseContent);
             }
@@ -1266,8 +1275,6 @@ public class XGroup extends BaseCommand {
             return Repl.reply(slot, replPair, ReplType.s_catch_up, onlyReadonlyResponseContent);
         }
 
-        var currentFileIndexAndOffset = binlog.currentFileIndexAndOffset();
-
         // 1 byte for readonly
         // 4 bytes for need fetch file index, 8 bytes for need fetch offset
         // 4 bytes for current file index, 8 bytes for current offset
@@ -1276,8 +1283,8 @@ public class XGroup extends BaseCommand {
         responseBuffer.put(isMasterReadonlyByte);
         responseBuffer.putInt(needFetchFileIndex);
         responseBuffer.putLong(needFetchOffset);
-        responseBuffer.putInt(currentFileIndexAndOffset.fileIndex());
-        responseBuffer.putLong(currentFileIndexAndOffset.offset());
+        responseBuffer.putInt(currentFo.fileIndex());
+        responseBuffer.putLong(currentFo.offset());
         responseBuffer.putInt(readSegmentBytes.length);
         responseBuffer.put(readSegmentBytes);
 
@@ -1314,14 +1321,22 @@ public class XGroup extends BaseCommand {
         }
 
         // master has no more binlog to catch up, delay to catch up again
-        if (contentBytes.length == 1 || contentBytes.length == 2) {
-            boolean resetMasterReadonlyByContentBytes = contentBytes.length == 1;
+        // 13 -> readonly byte + current file index + current offset
+        // 2 -> pong trigger slave begin to do catch_up again
+        if (contentBytes.length == 13 || contentBytes.length == 2) {
+            boolean resetMasterReadonlyByContentBytes = contentBytes.length == 13;
             boolean isMasterReadonly = false;
-            if (resetMasterReadonlyByContentBytes) {
-                // only 1 byte for readonly
-                isMasterReadonly = contentBytes[0] == 1;
+            if(resetMasterReadonlyByContentBytes){
+                var buffer = ByteBuffer.wrap(contentBytes);
+                isMasterReadonly = buffer.get() == 1;
+                var masterCurrentFileIndex = buffer.getInt();
+                var masterCurrentOffset = buffer.getLong();
+
                 replPair.setMasterReadonly(isMasterReadonly);
                 replPair.setAllCaughtUp(true);
+                var masterCurrentFo = new Binlog.FileIndexAndOffset(masterCurrentFileIndex, masterCurrentOffset);
+                replPair.setMasterBinlogCurrentFileIndexAndOffset(masterCurrentFo);
+                replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(masterCurrentFo);
             }
 
             if (!isMasterReadonly) {
@@ -1340,15 +1355,17 @@ public class XGroup extends BaseCommand {
         var fetchedFileIndex = buffer.getInt();
         var fetchedOffset = buffer.getLong();
 
-        var currentFileIndex = buffer.getInt();
-        var currentOffset = buffer.getLong();
+        var masterCurrentFileIndex = buffer.getInt();
+        var masterCurrentOffset = buffer.getLong();
+        var masterCurrentFo = new Binlog.FileIndexAndOffset(masterCurrentFileIndex, masterCurrentOffset);
 
         var readSegmentLength = buffer.getInt();
         var readSegmentBytes = new byte[readSegmentLength];
         buffer.get(readSegmentBytes);
 
         replPair.setMasterReadonly(isMasterReadonly);
-        replPair.setAllCaughtUp(fetchedFileIndex == currentFileIndex && currentOffset == fetchedOffset + readSegmentLength);
+        replPair.setAllCaughtUp(fetchedFileIndex == masterCurrentFileIndex && masterCurrentOffset == fetchedOffset + readSegmentLength);
+        replPair.setMasterBinlogCurrentFileIndexAndOffset(masterCurrentFo);
 
         // only when self is as slave but also as master, need to write binlog
         try {
@@ -1377,9 +1394,9 @@ public class XGroup extends BaseCommand {
         }
 
         // set can read if catch up to current file, and offset not too far
-        var isCatchUpToCurrentFile = fetchedFileIndex == currentFileIndex;
+        var isCatchUpToCurrentFile = fetchedFileIndex == masterCurrentFileIndex;
         if (isCatchUpToCurrentFile) {
-            var diffOffset = currentOffset - fetchedOffset - skipBytesN;
+            var diffOffset = masterCurrentOffset - fetchedOffset - skipBytesN;
             if (diffOffset < ConfForSlot.global.confRepl.catchUpOffsetMinDiff) {
                 try {
                     if (!oneSlot.isCanRead()) {
@@ -1392,8 +1409,10 @@ public class XGroup extends BaseCommand {
             }
         }
 
+        replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(new Binlog.FileIndexAndOffset(fetchedFileIndex, fetchedOffset + readSegmentLength));
+
         // catch up latest segment, delay to catch up again
-        var marginCurrentOffset = Binlog.marginFileOffset(currentOffset);
+        var marginCurrentOffset = Binlog.marginFileOffset(masterCurrentOffset);
         var isCatchUpOffsetInLatestSegment = isCatchUpToCurrentFile && fetchedOffset == marginCurrentOffset;
         if (isCatchUpOffsetInLatestSegment) {
             metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(binlogMasterUuid, true,

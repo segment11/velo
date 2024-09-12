@@ -19,9 +19,12 @@ class BinlogTest extends Specification {
         def bytesWithFileIndexAndOffset = new Binlog.BytesWithFileIndexAndOffset(new byte[10], 0, 0)
         println bytesWithFileIndexAndOffset
         def fileIndexAndOffset = new Binlog.FileIndexAndOffset(1, 1)
+        println fileIndexAndOffset
+        println fileIndexAndOffset.asReplOffset()
 
         expect:
         !fileIndexAndOffset.equals(null)
+        !fileIndexAndOffset.equals(new Object())
         fileIndexAndOffset != bytesWithFileIndexAndOffset
         fileIndexAndOffset == new Binlog.FileIndexAndOffset(1, 1)
         fileIndexAndOffset != new Binlog.FileIndexAndOffset(1, 0)
@@ -41,6 +44,7 @@ class BinlogTest extends Specification {
         println binlog
         println binlog.currentFileIndexAndOffset()
         println binlog.earliestFileIndexAndOffset()
+        println binlog.currentReplOffset()
         println 'in memory size estimate: ' + binlog.estimate()
 
         final File slotDir2 = new File('/tmp/velo-data/test-persist/test-slot2')
