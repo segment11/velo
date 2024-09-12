@@ -57,8 +57,11 @@ public class Repl {
         return reply(slot, replPair, ReplType.error, new RawBytesContent(errorMessage.getBytes()));
     }
 
+    private static final byte[] NULL_BYTES = "null".getBytes();
+
     public static ReplReply error(short slot, long slaveUuid, String errorMessage) {
-        return new ReplReply(slaveUuid, slot, ReplType.error, new RawBytesContent(errorMessage.getBytes()));
+        return new ReplReply(slaveUuid, slot, ReplType.error,
+                new RawBytesContent(errorMessage == null ? NULL_BYTES : errorMessage.getBytes()));
     }
 
     @TestOnly
