@@ -7,11 +7,13 @@ import io.velo.decode.Request;
 import io.velo.mock.ByPassGetSet;
 import io.velo.persist.LocalPersist;
 import io.velo.persist.OneSlot;
+import io.velo.repl.cluster.MultiShard;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.util.JedisClusterCRC16;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -309,6 +311,15 @@ public abstract class BaseCommand {
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
         var keyHash = KeyHash.hash(keyBytes);
+        var bucketIndex = Math.abs(keyHash % bucketsPerSlot);
+
+        if (ConfForGlobal.clusterEnabled) {
+            // use crc16
+            var toClientSlot = JedisClusterCRC16.getSlot(keyBytes);
+            var innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot);
+            return new SlotWithKeyHash(innerSlot, (int) bucketIndex, keyHash);
+        }
+
         final int halfSlotNumber = slotNumber / 2;
         final int x = halfSlotNumber * bucketsPerSlot;
 
@@ -329,13 +340,11 @@ public abstract class BaseCommand {
             // same slot, but not same bucket index
             var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) % halfSlotNumber);
             var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-            var bucketIndex = Math.abs(keyHash % bucketsPerSlot);
             return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash);
         }
 
         var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) % halfSlotNumber);
         var slot = keyHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-        var bucketIndex = Math.abs(keyHash % bucketsPerSlot);
         return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash);
     }
 

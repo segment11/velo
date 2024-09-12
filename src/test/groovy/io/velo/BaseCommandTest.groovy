@@ -9,9 +9,11 @@ import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
+import io.velo.repl.cluster.MultiShard
 import io.velo.reply.Reply
 import io.velo.type.RedisList
 import org.apache.commons.io.FileUtils
+import redis.clients.jedis.util.JedisClusterCRC16
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -127,6 +129,23 @@ class BaseCommandTest extends Specification {
         !c.isCrossRequestWorker
 
         c.handle() == null
+    }
+
+    def 'test slot'() {
+        given:
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = 1024
+
+        expect:
+        (0..<100).every {
+            def keyBytes = ('key:' + it).bytes
+            def slotWithKeyHash = BaseCommand.slot(keyBytes, ConfForGlobal.slotNumber)
+            slotWithKeyHash.slot() == MultiShard.asInnerSlotByToClientSlot(JedisClusterCRC16.getSlot(keyBytes))
+        }
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = 1
     }
 
     def 'test get'() {
