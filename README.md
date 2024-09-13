@@ -1,6 +1,6 @@
 # About
 
-Velo is a redis compatible kv store, base on slot and hash buckets.
+Velo (pronunciation: /vɪloʊ/) is a redis compatible kv store, base on slot and hash buckets.
 
 # Features
 
