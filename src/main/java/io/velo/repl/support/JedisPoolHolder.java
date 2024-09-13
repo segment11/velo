@@ -35,9 +35,9 @@ public class JedisPoolHolder implements NeedCleanUp {
         }
 
         var conf = new JedisPoolConfig();
-        conf.setMaxTotal(10);
-        conf.setMaxIdle(5);
-        conf.setMaxWait(Duration.ofMillis(5000));
+        conf.setMaxTotal(ConfForGlobal.jedisPoolMaxTotal);
+        conf.setMaxIdle(ConfForGlobal.jedisPoolMaxIdle);
+        conf.setMaxWait(Duration.ofMillis(ConfForGlobal.jedisPoolMaxWaitMillis));
 
         conf.setTestOnBorrow(true);
         conf.setTestOnCreate(true);

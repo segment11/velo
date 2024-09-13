@@ -42,4 +42,9 @@ public class ConfForGlobal {
     public static String targetAvailableZone;
 
     public static boolean clusterEnabled = false;
+
+    // for jedis
+    public static int jedisPoolMaxTotal = 10;
+    public static int jedisPoolMaxIdle = 5;
+    public static long jedisPoolMaxWaitMillis = 5000;
 }
