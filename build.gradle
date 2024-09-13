@@ -11,6 +11,9 @@ repositories {
     maven {
         url 'https://maven.aliyun.com/repository/public'
     }
+    maven {
+        url 'https://s01.oss.sonatype.org/content/groups/public'
+    }
     mavenCentral()
 }
 
@@ -20,7 +23,7 @@ sourceSets {
             srcDirs = ['src/main/java']
         }
         groovy {
-            srcDirs = ['dyn/src']
+            srcDirs = ['src/main/groovy', 'dyn/src', 'dyn/ctrl']
         }
         resources {
             srcDirs = ['src/main/resources']
@@ -55,6 +58,7 @@ dependencies {
     implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j2-impl', version: '2.20.0'
 
     implementation group: 'org.apache.groovy', name: 'groovy', version: '4.0.12'
+    implementation group: 'org.apache.groovy', name: 'groovy-dateutil', version: '4.0.12'
 
     implementation group: 'io.activej', name: 'activej-types', version: activejVersion
     implementation group: 'io.activej', name: 'activej-common', version: activejVersion
@@ -105,6 +109,11 @@ dependencies {
     implementation group: 'org.apache.curator', name: 'curator-recipes', version: '5.7.0'
     implementation group: 'org.apache.curator', name: 'curator-client', version: '5.7.0'
 
+    implementation group: 'org.eclipse.jetty', name: 'jetty-servlet', version: '9.4.49.v20220914'
+    implementation group: 'com.github.kevinsawicki', name: 'http-request', version: '6.0'
+    implementation group: 'io.github.segment11', name: 'segment_common', version: '1.2-SNAPSHOT'
+    implementation group: 'io.github.segment11', name: 'segmentweb', version: '1.2-SNAPSHOT'
+
     testImplementation group: 'org.openjdk.jmh', name: 'jmh-core', version: '1.35'
     testAnnotationProcessor group: 'org.openjdk.jmh', name: 'jmh-generator-annprocess', version: '1.35'
 
@@ -148,7 +157,7 @@ jar {
         attributes "Main-Class": 'io.velo.MultiWorkerServer'
         attributes "Class-Path": '. lib/' + configurations.runtimeClasspath.collect { it.name }.join(' lib/')
     }
-    exclude 'log4j2.xml', 'velo.properties'
+    exclude 'log4j2.xml', 'velo.properties', 'conf.properties'
     zip64 true
 }
 
@@ -167,7 +176,7 @@ task copyLog4j2(type: Copy) {
 }
 
 task copyConfigFile(type: Copy) {
-    from 'src/main/resources/velo.properties'
+    from 'src/main/resources/velo.properties', 'src/main/resources/conf.properties'
     into "$buildDir/libs/"
 }
 

@@ -62,6 +62,7 @@ class LeaderSelectorTest extends Specification {
         leaderSelector.connect()
         then:
         masterListenAddress == (doThisCase ? ConfForGlobal.netListenAddresses : null)
+        doThisCase ? leaderSelector.client != null : true
 
         when:
         // already started, skip, for coverage

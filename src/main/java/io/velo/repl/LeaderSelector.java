@@ -37,6 +37,10 @@ public class LeaderSelector implements NeedCleanUp {
 
     private CuratorFramework client;
 
+    public CuratorFramework getClient() {
+        return client;
+    }
+
     synchronized boolean connect() {
         var connectString = ConfForGlobal.zookeeperConnectString;
         if (connectString == null) {
