@@ -420,7 +420,7 @@ public class LeaderSelector implements NeedCleanUp {
 
     private static final byte[] PUBLISH_CMD_BYTES = "publish".getBytes();
 
-    private static void publishMasterSwitchMessage(ReplPair.HostAndPort from, ReplPair.HostAndPort to) {
+    private void publishMasterSwitchMessage(ReplPair.HostAndPort from, ReplPair.HostAndPort to) {
         // publish master address to clients
         var publishMessage = ConfForGlobal.zookeeperRootPath + " " + from.host() + " " + from.port() + " " +
                 to.host() + " " + to.port();
@@ -430,7 +430,9 @@ public class LeaderSelector implements NeedCleanUp {
                 XGroup.X_MASTER_SWITCH_PUBLISH_CHANNEL_BYTES,
                 publishMessage.getBytes()};
         PGroup.publish(data);
-        log.warn("Repl publish master switch message={}", publishMessage);
+        if (resetAsMasterCount % 100 == 0) {
+            log.warn("Repl publish master switch message={}, reset as master loop count={}", publishMessage, resetAsMasterCount);
+        }
 
         // publish slave address to clients for readonly slave
         var publishMessageReadonlySlave = ConfForGlobal.zookeeperRootPath + ReplConsts.REPL_MASTER_NAME_READONLY_SLAVE_SUFFIX + " " +
@@ -440,7 +442,9 @@ public class LeaderSelector implements NeedCleanUp {
                 XGroup.X_MASTER_SWITCH_PUBLISH_CHANNEL_BYTES,
                 publishMessageReadonlySlave.getBytes()};
         PGroup.publish(dataSlave);
-        log.warn("Repl publish master switch message for readonly slave={}", publishMessageReadonlySlave);
+        if (resetAsMasterCount % 100 == 0) {
+            log.warn("Repl publish master switch message for readonly slave={}", publishMessageReadonlySlave);
+        }
     }
 
     public String getFirstSlaveListenAddressByMasterHostAndPort(String host, int port, short slot) {
