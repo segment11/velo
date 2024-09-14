@@ -5,6 +5,7 @@ import io.activej.promise.Promise;
 import io.velo.ConfForGlobal;
 import io.velo.NeedCleanUp;
 import io.velo.repl.MasterReset;
+import io.velo.repl.SlaveReset;
 import net.openhft.affinity.AffinityStrategies;
 import net.openhft.affinity.AffinityThreadFactory;
 import org.jetbrains.annotations.TestOnly;
@@ -35,6 +36,13 @@ public class IndexHandlerPool implements NeedCleanUp {
     public void resetAsMaster() {
         for (var indexHandler : indexHandlers) {
             indexHandler.asyncRun(indexHandler::resetAsMaster);
+        }
+    }
+
+    @SlaveReset
+    public void resetAsSlave() {
+        for (var indexHandler : indexHandlers) {
+            indexHandler.asyncRun(indexHandler::resetAsSlave);
         }
     }
 

@@ -42,6 +42,13 @@ class IndexHandlerPoolTest extends Specification {
         1 == 1
 
         when:
+        pool.resetAsSlave()
+        eventloopCurrent.run()
+        Thread.sleep(200)
+        then:
+        1 == 1
+
+        when:
         pool.cleanUp()
         def pool2 = new IndexHandlerPool((byte) 1, Consts.persistDir, 3600)
         then:

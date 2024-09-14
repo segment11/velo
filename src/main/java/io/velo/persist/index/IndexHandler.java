@@ -5,6 +5,7 @@ import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
 import io.velo.NeedCleanUp;
 import io.velo.repl.MasterReset;
+import io.velo.repl.SlaveReset;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -36,12 +37,26 @@ public class IndexHandler implements NeedCleanUp {
         this.reverseIndexChunk = new ReverseIndexChunk(workerId, workerIdDir, fdPerChunk, expiredIfSecondsFromNow);
     }
 
+    @VisibleForTesting
+    boolean isMaster = false;
+
     @MasterReset
     public void resetAsMaster() throws IOException {
+        if (isMaster) {
+            return;
+        }
+
         log.warn("Index reset as master begin, reload meta from exists file, worker id={}", workerId);
         metaIndexWords.reload();
         reverseIndexChunk.loadMeta();
         log.warn("Index reset as master done, worker id={}", workerId);
+        isMaster = true;
+    }
+
+    @SlaveReset
+    public void resetAsSlave() {
+        log.warn("Index reset as slave, worker id={}", workerId);
+        isMaster = false;
     }
 
     // for repl

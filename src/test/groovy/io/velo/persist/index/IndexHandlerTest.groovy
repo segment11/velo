@@ -167,6 +167,12 @@ class IndexHandlerTest extends Specification {
 
         when:
         indexHandler.resetAsMaster()
+        indexHandler.resetAsMaster()
+        then:
+        1 == 1
+
+        when:
+        indexHandler.resetAsSlave()
         then:
         1 == 1
 
