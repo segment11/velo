@@ -119,6 +119,72 @@ class FailoverManager {
         }
     }
 
+    @VisibleForTesting
+    static final String DELAY_RESTART_CHECK_FOR_FAILED_HOST_AND_PORT_NODE_NAME_PREFIX = 'delay_restart_'
+
+    @VisibleForTesting
+    void addDelayRestartCheckForFailedHostAndPortNode(HostAndPort failHostAndPort, String clusterxNodesArgs) {
+        log.warn 'failover manager add delay restart check for failed host and port node, host and port={}:{}', failHostAndPort.host, failHostAndPort.port
+        def path = zookeeperVeloMetaBasePath + '/' + DELAY_RESTART_CHECK_FOR_FAILED_HOST_AND_PORT_NODE_NAME_PREFIX + failHostAndPort.toString()
+
+        def leaderSelector = LeaderSelector.instance
+        def client = leaderSelector.client
+        def nodeStat = client.checkExists().forPath(path)
+        if (nodeStat == null) {
+            client.create().forPath(path, clusterxNodesArgs.bytes)
+        } else {
+            client.setData().forPath(path, clusterxNodesArgs.bytes)
+        }
+    }
+
+    @VisibleForTesting
+    void checkIfServerRestartAndThenSetNodes(String nodeName) {
+        def array = nodeName.substring(DELAY_RESTART_CHECK_FOR_FAILED_HOST_AND_PORT_NODE_NAME_PREFIX.length()).split(':')
+        def hostAndPort = new HostAndPort(array[0], array[1] as int)
+        try {
+            def jedisPool = JedisPoolHolder.instance.create(hostAndPort.host, hostAndPort.port)
+            JedisPoolHolder.exe(jedisPool) { jedis ->
+                jedis.ping()
+            }
+        } catch (Exception e) {
+            log.error 'failover manager ping fail when check if server restart, error={}, host and port={}:{}',
+                    e.message, hostAndPort.host, hostAndPort.port
+            return
+        }
+
+        def leaderSelector = LeaderSelector.instance
+        def client = leaderSelector.client
+
+        try {
+            def clusterxNodesArgs = new String(client.getData().forPath(zookeeperVeloMetaBasePath + '/' + nodeName))
+            def jedisPool = JedisPoolHolder.instance.create(hostAndPort.host, hostAndPort.port)
+            String result
+            if (mockSetNodes) {
+                result = 'OK'
+            } else {
+                result = JedisPoolHolder.exe(jedisPool) { jedis ->
+                    def command = new ExtendProtocolCommand('clusterx')
+                    byte[] r = jedis.sendCommand(command, 'setnodes'.bytes, clusterxNodesArgs.bytes) as byte[]
+                    new String(r)
+                }
+            }
+
+            if ('OK' != result) {
+                log.error 'failover manager clusterx setnodes fail when check server restart ok, result={}, target host and port={}:{}',
+                        result, hostAndPort.host, hostAndPort.port
+            } else {
+                log.warn 'failover manager clusterx setnodes ok when check server restart ok, result={}, target host and port={}:{}',
+                        result, hostAndPort.host, hostAndPort.port
+                // remove this node
+                client.delete().forPath(zookeeperVeloMetaBasePath + '/' + nodeName)
+                log.warn 'failover manager remove delay restart check for failed host and port node success, host and port={}:{}', hostAndPort.host, hostAndPort.port
+            }
+        } catch (Exception e) {
+            log.error 'failover manager set nodes fail when check server restart ok, error={}, host and port={}:{}',
+                    e.message, hostAndPort.host, hostAndPort.port
+        }
+    }
+
     void checkFailover() {
         def leaderSelector = LeaderSelector.instance
         def client = leaderSelector.client
@@ -129,11 +195,17 @@ class FailoverManager {
 
         var children = client.getChildren().forPath(zookeeperVeloMetaBasePath)
 
-        for (oneClusterName in children) {
-            if (oneClusterName == ConfForGlobal.LEADER_LATCH_NODE_NAME) {
+        for (nodeName in children) {
+            if (nodeName == ConfForGlobal.LEADER_LATCH_NODE_NAME) {
                 continue
             }
 
+            if (nodeName.startsWith(DELAY_RESTART_CHECK_FOR_FAILED_HOST_AND_PORT_NODE_NAME_PREFIX)) {
+                checkIfServerRestartAndThenSetNodes(nodeName)
+                continue
+            }
+
+            def oneClusterName = nodeName
             if (skipOneClusterNameSet.contains(oneClusterName)) {
                 log.debug 'fail manager skip target cluster, name={}', oneClusterName
                 continue
@@ -369,9 +441,10 @@ class FailoverManager {
         // choose repl offset nearest slave, todo
         def targetSlaveNode = targetSlaveNodeList.getFirst()
 
-        // change master and slave
+        // change slave to master
         targetSlaveNode.master = true
         targetSlaveNode.followNodeId = null
+        // change master to slave, or delete this fail node? todo
         targetMasterNode.master = false
         targetMasterNode.followNodeId = targetSlaveNode.nodeId()
 
@@ -405,6 +478,8 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
         for (hostAndPort in allNodeHostAndPortSet) {
             if (hostAndPort == failHostAndPort) {
+                // set to zookeeper, loop check if server restart and then set nodes again
+                addDelayRestartCheckForFailedHostAndPortNode(failHostAndPort, clusterxNodesArgs)
                 continue
             }
 

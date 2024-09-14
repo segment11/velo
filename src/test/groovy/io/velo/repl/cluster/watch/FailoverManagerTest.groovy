@@ -109,7 +109,30 @@ class FailoverManagerTest extends Specification {
         then:
         true
 
+        when:
+        def clusterxNodesArgs = '''
+aaa localhost 7379 slave xxx
+bbb localhost 7380 master - 8192-16383
+xxx localhost 17379 master - 0-8191
+yyy localhost 17380 slave bbb
+'''.trim()
+        if (doThisCase) {
+            fm.addDelayRestartCheckForFailedHostAndPortNode(new HostAndPort('localhost', 7379), '')
+            fm.addDelayRestartCheckForFailedHostAndPortNode(new HostAndPort('localhost', 7379), clusterxNodesArgs)
+        }
+        then:
+        true
+
+        when:
+        if (doThisCase) {
+            fm.mockSetNodes = true
+            fm.checkIfServerRestartAndThenSetNodes(FailoverManager.DELAY_RESTART_CHECK_FOR_FAILED_HOST_AND_PORT_NODE_NAME_PREFIX + 'localhost:7379')
+        }
+        then:
+        true
+
         cleanup:
+        fm.mockSetNodes = false
         leaderSelector.cleanUp()
     }
 
@@ -163,13 +186,13 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
          */
         when:
         fm.mockSetNodes = true
-        def nodesInfoStr = '''
+        def clusterxNodesArgs = '''
 aaa localhost 7379 master - 0-8191
 bbb localhost 7380 master - 8192-16383
 xxx localhost 17379 slave aaa
 yyy localhost 17380 slave bbb
 '''.trim()
-        def lines = nodesInfoStr.readLines().collect { it.trim() }.findAll { it }
+        def lines = clusterxNodesArgs.readLines().collect { it.trim() }.findAll { it }
         fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
         then:
         true
@@ -191,12 +214,12 @@ yyy localhost 17380 slave bbb
 
         when:
         failHostAndPort.port = 7379
-        nodesInfoStr = '''
+        clusterxNodesArgs = '''
 aaa localhost 7379 master - 0-8191
 bbb localhost 7380 master - 8192-16383
 yyy localhost 17380 slave bbb
 '''.trim()
-        lines = nodesInfoStr.readLines().collect { it.trim() }.findAll { it }
+        lines = clusterxNodesArgs.readLines().collect { it.trim() }.findAll { it }
         // no slave node can be promoted
         fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
         then:
