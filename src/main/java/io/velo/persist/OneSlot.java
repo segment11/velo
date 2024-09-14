@@ -498,7 +498,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     private final int chunkSegmentLength;
-    final SnowFlake snowFlake;
+
+    private final SnowFlake snowFlake;
+
+    public SnowFlake getSnowFlake() {
+        return snowFlake;
+    }
 
     private final File slotDir;
 

@@ -13,6 +13,7 @@ import io.velo.repl.Repl;
 import io.velo.repl.ReplPair;
 import io.velo.repl.ReplType;
 import io.velo.repl.content.*;
+import io.velo.repl.incremental.XSkipApply;
 import io.velo.repl.support.JedisPoolHolder;
 import io.velo.reply.*;
 import org.apache.commons.io.FileUtils;
@@ -325,9 +326,12 @@ public class XGroup extends BaseCommand {
         }
 
         // start binlog
+        var binlog = oneSlot.getBinlog();
         try {
             oneSlot.getDynConfig().setBinlogOn(true);
             log.warn("Repl master start binlog, master uuid={}, slot={}", replPair.getMasterUuid(), slot);
+            // append a skip apply, so offset will not be 0, so the migrate tool or failover manager is easier to check if slave is all caught up
+            binlog.append(new XSkipApply(oneSlot.getSnowFlake().nextId()));
         } catch (IOException e) {
             var errorMessage = "Repl master handle error: start binlog error";
             log.error(errorMessage, e);
@@ -335,10 +339,9 @@ public class XGroup extends BaseCommand {
         }
         log.warn("Repl master handle hello: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
 
-        var binlog = oneSlot.getBinlog();
-        var currentFileIndexAndOffset = binlog.currentFileIndexAndOffset();
-        var earliestFileIndexAndOffset = binlog.earliestFileIndexAndOffset();
-        var content = new Hi(slaveUuid, oneSlot.getMasterUuid(), currentFileIndexAndOffset, earliestFileIndexAndOffset,
+        var currentFo = binlog.currentFileIndexAndOffset();
+        var earliestFo = binlog.earliestFileIndexAndOffset();
+        var content = new Hi(slaveUuid, oneSlot.getMasterUuid(), currentFo, earliestFo,
                 oneSlot.getChunk().currentSegmentIndex());
         return Repl.reply(slot, replPair, hi, content);
     }
@@ -432,6 +435,7 @@ public class XGroup extends BaseCommand {
         log.warn("Repl slave begin fetch all exists data from master, slot={}", slot);
 
         // dict is global, only first slot do fetch
+        // cluster mode, need change to the first slot, todo
         var firstSlot = localPersist.oneSlots()[0].slot();
         if (firstSlot != slot) {
             log.warn("Repl slave skip fetch exists dict, slot={}", slot);
@@ -1326,7 +1330,7 @@ public class XGroup extends BaseCommand {
         if (contentBytes.length == 13 || contentBytes.length == 2) {
             boolean resetMasterReadonlyByContentBytes = contentBytes.length == 13;
             boolean isMasterReadonly = false;
-            if(resetMasterReadonlyByContentBytes){
+            if (resetMasterReadonlyByContentBytes) {
                 var buffer = ByteBuffer.wrap(contentBytes);
                 isMasterReadonly = buffer.get() == 1;
                 var masterCurrentFileIndex = buffer.getInt();

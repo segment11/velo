@@ -85,6 +85,7 @@ class OneSlotTest extends Specification {
         expect:
         oneSlot.slot() == slot
         oneSlot1.slot() == slot
+        oneSlot.snowFlake == snowFlake
         oneSlot.masterUuid > 0
         !oneSlot.isAsSlave()
         oneSlot.getReplPairAsSlave(11L) == null

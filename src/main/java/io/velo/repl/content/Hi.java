@@ -7,16 +7,16 @@ import io.velo.repl.ReplContent;
 public class Hi implements ReplContent {
     private final long slaveUuid;
     private final long masterUuid;
-    private final Binlog.FileIndexAndOffset currentFileIndexAndOffset;
-    private final Binlog.FileIndexAndOffset earliestFileIndexAndOffset;
+    private final Binlog.FileIndexAndOffset currentFo;
+    private final Binlog.FileIndexAndOffset earliestFo;
     private final int currentSegmentIndex;
 
-    public Hi(long slaveUuid, long masterUuid, Binlog.FileIndexAndOffset currentFileIndexAndOffset,
-              Binlog.FileIndexAndOffset earliestFileIndexAndOffset, int currentSegmentIndex) {
+    public Hi(long slaveUuid, long masterUuid, Binlog.FileIndexAndOffset currentFo,
+              Binlog.FileIndexAndOffset earliestFo, int currentSegmentIndex) {
         this.slaveUuid = slaveUuid;
         this.masterUuid = masterUuid;
-        this.currentFileIndexAndOffset = currentFileIndexAndOffset;
-        this.earliestFileIndexAndOffset = earliestFileIndexAndOffset;
+        this.currentFo = currentFo;
+        this.earliestFo = earliestFo;
         this.currentSegmentIndex = currentSegmentIndex;
     }
 
@@ -24,10 +24,10 @@ public class Hi implements ReplContent {
     public void encodeTo(ByteBuf toBuf) {
         toBuf.writeLong(slaveUuid);
         toBuf.writeLong(masterUuid);
-        toBuf.writeInt(currentFileIndexAndOffset.fileIndex());
-        toBuf.writeLong(currentFileIndexAndOffset.offset());
-        toBuf.writeInt(earliestFileIndexAndOffset.fileIndex());
-        toBuf.writeLong(earliestFileIndexAndOffset.offset());
+        toBuf.writeInt(currentFo.fileIndex());
+        toBuf.writeLong(currentFo.offset());
+        toBuf.writeInt(earliestFo.fileIndex());
+        toBuf.writeLong(earliestFo.offset());
         toBuf.writeInt(currentSegmentIndex);
     }
 
