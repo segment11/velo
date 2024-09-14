@@ -274,6 +274,8 @@ public class LeaderSelector implements NeedCleanUp {
 
     @VisibleForTesting
     long resetAsMasterCount = 0;
+    @VisibleForTesting
+    long resetAsSlaveCount = 0;
 
     public void resetAsMaster(boolean force, Consumer<Exception> callback) {
         if (masterAddressLocalMocked != null) {
@@ -303,7 +305,7 @@ public class LeaderSelector implements NeedCleanUp {
                     }
                 } else {
                     canResetSelfAsMasterNow = true;
-                    log.warn("Repl old repl pair as slave is null, slot={}", oneSlot.slot());
+                    log.debug("Repl old repl pair as slave is null, slot={}", oneSlot.slot());
                 }
 
                 if (!force && !canResetSelfAsMasterNow) {
@@ -312,6 +314,8 @@ public class LeaderSelector implements NeedCleanUp {
                     XGroup.tryCatchUpAgainAfterSlaveTcpClientClosed(replPairAsSlave, null);
                     throw new IllegalStateException("Repl slave can not reset as master, slot=" + replPairAsSlave.getSlot());
                 }
+
+                resetAsSlaveCount = 0;
 
                 var isSelfSlave = oneSlot.removeReplPairAsSlave();
                 if (isSelfSlave) {
@@ -342,22 +346,15 @@ public class LeaderSelector implements NeedCleanUp {
             if (oldMasterHostAndPort == null) {
                 oldMasterHostAndPort = selfAsMasterHostAndPort;
             }
-            publishMasterSwitchMessage(oldMasterHostAndPort, selfAsMasterHostAndPort);
+            publishMasterSwitchMessage(oldMasterHostAndPort, selfAsMasterHostAndPort, true);
 
             callback.accept(null);
         });
     }
 
-    public void resetAsSlave(String host, int port, Consumer<Exception> callback) {
-        if (masterAddressLocalMocked != null) {
-            callback.accept(null);
-//            callback.accept(new RuntimeException("just test callback when reset as slave"));
-            return;
-        }
-
-        lastResetAsSlaveTimeMillis = System.currentTimeMillis();
-
-        log.warn("Repl reset self as slave begin, check new master global config first, {}", ConfForGlobal.netListenAddresses);
+    private boolean checkMasterConfigMatch(String host, int port, Consumer<Exception> callback) {
+        log.debug("Repl reset self as slave begin, check new master global config first, self={}", ConfForGlobal.netListenAddresses);
+        // sync, perf bad
         try {
             var jedisPool = JedisPoolHolder.getInstance().create(host, port);
             // may be null
@@ -372,16 +369,35 @@ public class LeaderSelector implements NeedCleanUp {
             var jsonStrLocal = objectMapper.writeValueAsString(map);
 
             if (!jsonStrLocal.equals(jsonStr)) {
-                log.warn("Repl reset self as slave begin, check new master global config fail, {}", ConfForGlobal.netListenAddresses);
+                log.warn("Repl reset self as slave begin, check new master global config fail, self={}", ConfForGlobal.netListenAddresses);
                 log.info("Repl local={}", jsonStrLocal);
                 log.info("Repl remote={}", jsonStr);
                 callback.accept(new IllegalStateException("Repl slave can not match check values"));
+                return false;
+            } else {
+                log.debug("Repl reset self as slave begin, check new master global config ok, self={}", ConfForGlobal.netListenAddresses);
+                return true;
             }
         } catch (Exception e) {
             callback.accept(e);
+            return false;
+        }
+    }
+
+    public void resetAsSlave(String host, int port, Consumer<Exception> callback) {
+        if (masterAddressLocalMocked != null) {
+            callback.accept(null);
+//            callback.accept(new RuntimeException("just test callback when reset as slave"));
             return;
         }
-        log.warn("Repl reset self as slave begin, check new master global config ok, {}", ConfForGlobal.netListenAddresses);
+
+        lastResetAsSlaveTimeMillis = System.currentTimeMillis();
+
+        var checkMasterConfigMatch = checkMasterConfigMatch(host, port, callback);
+        if (!checkMasterConfigMatch) {
+            // already callback handle with exception
+            return;
+        }
 
         var localPersist = LocalPersist.getInstance();
 
@@ -392,7 +408,7 @@ public class LeaderSelector implements NeedCleanUp {
                 var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
                 if (replPairAsSlave != null) {
                     if (replPairAsSlave.getHost().equals(host) && replPairAsSlave.getPort() == port) {
-                        log.warn("Repl old repl pair as slave is same as new master, slot={}", oneSlot.slot());
+                        log.debug("Repl old repl pair as slave is same as new master, slot={}", oneSlot.slot());
                         return;
                     } else {
                         oneSlot.removeReplPairAsSlave();
@@ -400,6 +416,13 @@ public class LeaderSelector implements NeedCleanUp {
                 }
 
                 oneSlot.resetAsSlave(host, port);
+
+                resetAsMasterCount = 0;
+                resetAsSlaveCount++;
+
+                if (oneSlot.slot() == 0) {
+                    localPersist.getIndexHandlerPool().resetAsSlave();
+                }
             });
         }
 
@@ -412,7 +435,7 @@ public class LeaderSelector implements NeedCleanUp {
             // publish switch master to clients
             var selfAsOldMasterHostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses);
             var newMasterHostAndPort = new ReplPair.HostAndPort(host, port);
-            publishMasterSwitchMessage(selfAsOldMasterHostAndPort, newMasterHostAndPort);
+            publishMasterSwitchMessage(selfAsOldMasterHostAndPort, newMasterHostAndPort, false);
 
             callback.accept(null);
         });
@@ -420,7 +443,7 @@ public class LeaderSelector implements NeedCleanUp {
 
     private static final byte[] PUBLISH_CMD_BYTES = "publish".getBytes();
 
-    private void publishMasterSwitchMessage(ReplPair.HostAndPort from, ReplPair.HostAndPort to) {
+    private void publishMasterSwitchMessage(ReplPair.HostAndPort from, ReplPair.HostAndPort to, boolean isAsMaster) {
         // publish master address to clients
         var publishMessage = ConfForGlobal.zookeeperRootPath + " " + from.host() + " " + from.port() + " " +
                 to.host() + " " + to.port();
@@ -430,7 +453,9 @@ public class LeaderSelector implements NeedCleanUp {
                 XGroup.X_MASTER_SWITCH_PUBLISH_CHANNEL_BYTES,
                 publishMessage.getBytes()};
         PGroup.publish(data);
-        if (resetAsMasterCount % 100 == 0) {
+
+        var doLog = isAsMaster ? resetAsMasterCount % 100 == 0 : resetAsSlaveCount % 100 == 0;
+        if (doLog) {
             log.warn("Repl publish master switch message={}, reset as master loop count={}", publishMessage, resetAsMasterCount);
         }
 
@@ -442,7 +467,7 @@ public class LeaderSelector implements NeedCleanUp {
                 XGroup.X_MASTER_SWITCH_PUBLISH_CHANNEL_BYTES,
                 publishMessageReadonlySlave.getBytes()};
         PGroup.publish(dataSlave);
-        if (resetAsMasterCount % 100 == 0) {
+        if (doLog) {
             log.warn("Repl publish master switch message for readonly slave={}", publishMessageReadonlySlave);
         }
     }

@@ -289,11 +289,21 @@ class LeaderSelectorTest extends Specification {
         def leaderSelector = LeaderSelector.instance
         leaderSelector.masterAddressLocalMocked = null
 
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+
         when:
         oneSlot.doMockWhenCreateReplPairAsSlave = true
         oneSlot.createReplPairAsSlave('localhost', 7379)
         leaderSelector.masterAddressLocalMocked = 'localhost:7379'
         def future = new CompletableFuture()
+        leaderSelector.resetAsSlaveCount = 99
         leaderSelector.resetAsSlave('localhost', 7379) { e ->
             if (e != null) {
                 println e.message
@@ -425,7 +435,7 @@ class LeaderSelectorTest extends Specification {
 
         cleanup:
         JedisPoolHolder.instance.cleanUp()
-        oneSlot.cleanUp()
+        localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
 }
