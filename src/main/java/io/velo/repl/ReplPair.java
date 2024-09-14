@@ -4,6 +4,7 @@ import io.activej.eventloop.Eventloop;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.velo.ConfForGlobal;
 import io.velo.RequestHandler;
+import io.velo.persist.BigStringFiles;
 import io.velo.repl.content.Hello;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -459,7 +460,7 @@ public class ReplPair {
 
     public long doingFetchBigStringUuid() {
         if (toFetchBigStringUuidList.isEmpty()) {
-            return -1;
+            return BigStringFiles.SKIP_UUID;
         }
         var first = toFetchBigStringUuidList.pollFirst();
         doFetchingBigStringUuidList.add(first);

@@ -25,6 +25,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     private static final String BIG_STRING_DIR_NAME = "big-string";
 
+    public static final int SKIP_UUID = -1;
+
     private final LRUMap<Long, byte[]> bigStringBytesByUuidLRU;
 
     private final HashMap<Long, byte[]> allBytesByUuid = new HashMap<>();

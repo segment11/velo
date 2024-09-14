@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static io.velo.persist.Chunk.NO_NEED_MERGE_SEGMENT_INDEX;
+
 public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector {
     private final short slot;
     final OneSlot oneSlot;
@@ -22,7 +24,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
     // metrics
     long mergedSegmentCount = 0;
     long mergedSegmentCostTimeTotalUs = 0;
-    int lastMergedSegmentIndex = -1;
+    int lastMergedSegmentIndex = NO_NEED_MERGE_SEGMENT_INDEX;
 
     long validCvCountTotal = 0;
     long invalidCvCountTotal = 0;
