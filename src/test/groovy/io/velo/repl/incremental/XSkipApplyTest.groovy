@@ -1,6 +1,7 @@
 package io.velo.repl.incremental
 
 import io.velo.repl.BinlogContent
+import io.velo.repl.ReplPairTest
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -25,8 +26,9 @@ class XSkipApplyTest extends Specification {
 
         when:
         final short slot = 0
-        xSkipApply.apply(slot, null)
+        def replPair = ReplPairTest.mockAsSlave()
+        xSkipApply.apply(slot, replPair)
         then:
-        1 == 1
+        replPair.slaveCatchUpLastSeq == xSkipApply.seq
     }
 }
