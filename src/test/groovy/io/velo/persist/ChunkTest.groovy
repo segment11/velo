@@ -78,7 +78,6 @@ class ChunkTest extends Specification {
         chunk.moveSegmentIndexNext(1)
         then:
         chunk.segmentIndex == 1
-        chunk.currentSegmentIndex() == 1
         chunk.targetFdIndex() == 0
         chunk.targetSegmentIndexTargetFd() == 1
 

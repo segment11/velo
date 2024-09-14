@@ -24,7 +24,16 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
     // metrics
     long mergedSegmentCount = 0;
     long mergedSegmentCostTimeTotalUs = 0;
-    int lastMergedSegmentIndex = NO_NEED_MERGE_SEGMENT_INDEX;
+
+    private int lastMergedSegmentIndex = NO_NEED_MERGE_SEGMENT_INDEX;
+
+    public int getLastMergedSegmentIndex() {
+        return lastMergedSegmentIndex;
+    }
+
+    public void setLastMergedSegmentIndex(int lastMergedSegmentIndex) {
+        this.lastMergedSegmentIndex = lastMergedSegmentIndex;
+    }
 
     long validCvCountTotal = 0;
     long invalidCvCountTotal = 0;
@@ -225,7 +234,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
 
         if (doLog) {
             log.info("Compare chunk merged segment index end last time, end last time i={}, ready to merged and persisted last i={}",
-                    oneSlot.chunk.mergedSegmentIndexEndLastTime, oncePersistSegmentIndexList.getLast());
+                    oneSlot.chunk.getMergedSegmentIndexEndLastTime(), oncePersistSegmentIndexList.getLast());
         }
 
         var sb = new StringBuilder();

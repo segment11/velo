@@ -169,10 +169,14 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
     // begin with 0
     // -1 means not init
-    int segmentIndex = -1;
+    private int segmentIndex = -1;
 
-    public int currentSegmentIndex() {
+    public int getSegmentIndex() {
         return segmentIndex;
+    }
+
+    public void setSegmentIndex(int segmentIndex) {
+        this.segmentIndex = segmentIndex;
     }
 
     @SlaveNeedReplay
@@ -316,7 +320,15 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     // with merged valid cv list together, once most pre-read 2 segments, valid cv list size ~= 400
     public final static int ONCE_PREPARE_SEGMENT_COUNT = 32;
 
-    int mergedSegmentIndexEndLastTime = NO_NEED_MERGE_SEGMENT_INDEX;
+    private int mergedSegmentIndexEndLastTime = NO_NEED_MERGE_SEGMENT_INDEX;
+
+    public int getMergedSegmentIndexEndLastTime() {
+        return mergedSegmentIndexEndLastTime;
+    }
+
+    public void setMergedSegmentIndexEndLastTime(int mergedSegmentIndexEndLastTime) {
+        this.mergedSegmentIndexEndLastTime = mergedSegmentIndexEndLastTime;
+    }
 
     @SlaveNeedReplay
     public void setMergedSegmentIndexEndLastTimeAfterSlaveCatchUp(int mergedSegmentIndexEndLastTime) {

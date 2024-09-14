@@ -1077,10 +1077,14 @@ class XGroupTest extends Specification {
         for (v in vList) {
             n += new XWalV(v).encodedLength()
         }
-        contentBytes = new byte[1 + 4 + 8 + 4 + 8 + 4 + n]
+        contentBytes = new byte[1 + 4 + 4 + 4 + 8 + 4 + 8 + 4 + n]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         // is readonly flag
         requestBuffer.put((byte) 0)
+        // chunk current segment index
+        requestBuffer.putInt(0)
+        // chunk merged segment index end last time
+        requestBuffer.putInt(0)
         // response binlog file index
         requestBuffer.putInt(0)
         // response binlog file offset
@@ -1101,9 +1105,11 @@ class XGroupTest extends Specification {
         r.isEmpty()
 
         when:
-        contentBytes = new byte[1 + 4 + 8 + 4 + 8 + 4 + binlogOneSegmentLength]
+        contentBytes = new byte[1 + 4 + 4 + 4 + 8 + 4 + 8 + 4 + binlogOneSegmentLength]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         requestBuffer.put((byte) 0)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(0)
         requestBuffer.putInt(0)
         requestBuffer.putLong(0)
         requestBuffer.putInt(0)
@@ -1124,7 +1130,7 @@ class XGroupTest extends Specification {
         oneSlot.metaChunkSegmentIndex.masterBinlogFileIndexAndOffset.offset() == binlogOneSegmentLength
 
         when:
-        requestBuffer.position(1)
+        requestBuffer.position(9)
         requestBuffer.putInt(0)
         requestBuffer.putLong(binlogOneSegmentLength)
         r = x.handleRepl()
@@ -1133,7 +1139,7 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.catch_up)
 
         when:
-        requestBuffer.position(1)
+        requestBuffer.position(9)
         requestBuffer.putInt(0)
         requestBuffer.putLong(0)
         requestBuffer.putInt(0)
@@ -1146,7 +1152,7 @@ class XGroupTest extends Specification {
         r.isEmpty()
 
         when:
-        requestBuffer.position(1)
+        requestBuffer.position(9)
         requestBuffer.putInt(0)
         requestBuffer.putLong(0)
         requestBuffer.putInt(1)
@@ -1168,7 +1174,7 @@ class XGroupTest extends Specification {
 
         when:
         def binlogOneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength
-        requestBuffer.position(1)
+        requestBuffer.position(9)
         requestBuffer.putInt(0)
         requestBuffer.putLong(binlogOneFileMaxLength - binlogOneSegmentLength)
         requestBuffer.putInt(1)
@@ -1181,7 +1187,7 @@ class XGroupTest extends Specification {
         r.isEmpty()
 
         when:
-        requestBuffer.position(1)
+        requestBuffer.position(9)
         requestBuffer.putInt(0)
         requestBuffer.putLong(0)
         requestBuffer.putInt(1)
@@ -1299,10 +1305,12 @@ class XGroupTest extends Specification {
         for (v in vList) {
             n += new XWalV(v).encodedLength()
         }
-        def contentBytes = new byte[1 + 4 + 8 + 4 + 8 + 4 + n]
+        def contentBytes = new byte[1 + 4 + 4 + 4 + 8 + 4 + 8 + 4 + n]
         def requestBuffer = ByteBuffer.wrap(contentBytes)
         // is readonly flag
         requestBuffer.put((byte) 0)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(0)
         // response binlog file index
         requestBuffer.putInt(0)
         // response binlog file offset

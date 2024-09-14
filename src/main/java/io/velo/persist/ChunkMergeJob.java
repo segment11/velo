@@ -158,7 +158,7 @@ public class ChunkMergeJob {
             }
         }
 
-        chunkMergeWorker.lastMergedSegmentIndex = lastSegmentIndex;
+        chunkMergeWorker.setLastMergedSegmentIndex(lastSegmentIndex);
 
         var allSkipped = needMergeSegmentIndexList.size() == skipSegmentIndexSet.size();
         if (allSkipped) {

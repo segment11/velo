@@ -708,12 +708,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         metaChunkSegmentIndex.set(segmentIndex);
         if (updateChunkSegmentIndex) {
-            chunk.segmentIndex = segmentIndex;
+            chunk.setSegmentIndex(segmentIndex);
         }
     }
 
     public void setChunkSegmentIndexFromMeta() {
-        chunk.segmentIndex = metaChunkSegmentIndex.get();
+        chunk.setSegmentIndex(metaChunkSegmentIndex.get());
     }
 
     private final Binlog binlog;
@@ -1191,7 +1191,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         boolean isBreak = false;
         for (int i = 0; i < ONCE_PREPARE_SEGMENT_COUNT; i++) {
             boolean canWrite = chunk.initSegmentIndexWhenFirstStart(segmentIndexLastSaved + i);
-            int currentSegmentIndex = chunk.currentSegmentIndex();
+            int currentSegmentIndex = chunk.getSegmentIndex();
             log.warn("Move segment to write, s={}, i={}", slot, currentSegmentIndex);
 
             // when restart server, set persisted flag
@@ -1211,7 +1211,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         if (!isBreak) {
-            throw new IllegalStateException("Segment can not write after reset flag, s=" + slot + ", i=" + chunk.currentSegmentIndex());
+            throw new IllegalStateException("Segment can not write after reset flag, s=" + slot + ", i=" + chunk.getSegmentIndex());
         }
     }
 
@@ -1302,7 +1302,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     // for performance, before persist wal, read some segment in same wal group and  merge immediately
     @VisibleForTesting
     BeforePersistWalExtFromMerge readSomeSegmentsBeforePersistWal(int walGroupIndex) {
-        var currentSegmentIndex = chunk.currentSegmentIndex();
+        var currentSegmentIndex = chunk.getSegmentIndex();
         var needMergeSegmentIndex = chunk.needMergeSegmentIndex(false, currentSegmentIndex);
 
         // find continuous segments those wal group index is same from need merge segment index
@@ -1477,7 +1477,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return;
         }
 
-        var currentSegmentIndex = chunk.currentSegmentIndex();
+        var currentSegmentIndex = chunk.getSegmentIndex();
         var firstMergedButNotPersisted = chunkMergeWorker.firstMergedSegmentIndex();
 
         // need persist merged segments immediately, or next time wal persist will not prepare ready
@@ -1513,7 +1513,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     @MasterReset
     public void checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(boolean isServerStart) {
-        var currentSegmentIndex = chunk.currentSegmentIndex();
+        var currentSegmentIndex = chunk.getSegmentIndex();
 
         ArrayList<Integer> needMergeSegmentIndexList = new ArrayList<>();
         // * 2 when recycled, from 0 again
@@ -1750,17 +1750,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     @MasterReset
     public void getMergedSegmentIndexEndLastTime() {
-        if (chunkMergeWorker.lastMergedSegmentIndex != NO_NEED_MERGE_SEGMENT_INDEX) {
-            chunk.mergedSegmentIndexEndLastTime = chunkMergeWorker.lastMergedSegmentIndex;
+        if (chunkMergeWorker.getLastMergedSegmentIndex() != NO_NEED_MERGE_SEGMENT_INDEX) {
+            chunk.setMergedSegmentIndexEndLastTime(chunkMergeWorker.getLastMergedSegmentIndex());
         } else {
             // todo, need check
-            chunk.mergedSegmentIndexEndLastTime = metaChunkSegmentFlagSeq.getMergedSegmentIndexEndLastTime(
-                    chunk.currentSegmentIndex(), chunk.halfSegmentNumber);
-            chunkMergeWorker.lastMergedSegmentIndex = chunk.mergedSegmentIndexEndLastTime;
+            var mergedSegmentIndexEndLastTime = metaChunkSegmentFlagSeq.getMergedSegmentIndexEndLastTime(chunk.getSegmentIndex(), chunk.halfSegmentNumber);
+            chunk.setMergedSegmentIndexEndLastTime(mergedSegmentIndexEndLastTime);
+            chunkMergeWorker.setLastMergedSegmentIndex(mergedSegmentIndexEndLastTime);
         }
 
         chunk.checkMergedSegmentIndexEndLastTimeValidAfterServerStart();
-        log.info("Get merged segment index end last time, s={}, i={}", slot, chunk.mergedSegmentIndexEndLastTime);
+        log.info("Get merged segment index end last time, s={}, i={}", slot, chunk.getMergedSegmentIndexEndLastTime());
     }
 
     @VisibleForTesting
@@ -1892,8 +1892,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             map.put("repl_as_slave_is_master_can_not_connect", (double) (replPairAsSlave.isMasterCanNotConnect() ? 1 : 0));
 
             var slaveFo = replPairAsSlave.getSlaveLastCatchUpBinlogFileIndexAndOffset();
-            map.put("repl_as_slave_last_catch_up_binlog_file_index", (double) slaveFo.fileIndex());
-            map.put("repl_as_slave_last_catch_up_binlog_offset", (double) slaveFo.offset());
+            if (slaveFo != null) {
+                map.put("repl_as_slave_last_catch_up_binlog_file_index", (double) slaveFo.fileIndex());
+                map.put("repl_as_slave_last_catch_up_binlog_offset", (double) slaveFo.offset());
+            }
 
             var masterFo = replPairAsSlave.getMasterBinlogCurrentFileIndexAndOffset();
             if (masterFo != null) {
