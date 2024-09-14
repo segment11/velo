@@ -34,19 +34,22 @@ Velo (pronunciation: /vɪloʊ/) is a redis compatible kv store, base on slot and
 
 ## Master slave replication and auto failover
 
-<img src="./doc/auto-failover.png" width="600px">
+<img src="doc/repl/slave_sync_and_catch_up.png" width="600px">
+<img src="doc/repl/auto-failover.png" width="600px">
 
 ## HAProxy support
 
-![haproxy](./doc/haproxy/route.png)
+![route](./doc/haproxy/route.png)
 
 ## Redis cluster support / Slot migration tools
 ![slot-migration](./doc/cluster/slot-migration.png)
 
 
-## Hash buckets for each slot and pure memory mode
+## Hash buckets for each slot
 
-todo
+![slot-wal-group](./doc/hash_buckets/slot-wal-group.png)
+
+Details refer to [doc/hash_buckets/README.md]()
 
 # Redis command support
 

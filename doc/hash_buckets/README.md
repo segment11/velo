@@ -1,5 +1,8 @@
 # Velo use hash buckets to store data
 
+## overview
+![slot-wal-group](./slot-wal-group.png)
+
 ## key buckets
 
 - one sharding data use a single slot
