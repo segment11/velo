@@ -360,7 +360,7 @@ public class LeaderSelector implements NeedCleanUp {
             // may be null
             var jsonStr = JedisPoolHolder.exe(jedisPool, jedis -> {
                 var pong = jedis.ping();
-                log.info("Repl slave of {}:{} pong={}", host, port, pong);
+                log.debug("Repl slave of {}:{} pong={}", host, port, pong);
                 return jedis.get(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + "," + XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD);
             });
 
