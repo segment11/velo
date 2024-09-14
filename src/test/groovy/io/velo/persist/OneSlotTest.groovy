@@ -157,6 +157,7 @@ class OneSlotTest extends Specification {
         def replPairAsSlave0 = oneSlot.createReplPairAsSlave('localhost', 6379)
         def replPairAsSlave1 = oneSlot.createReplPairAsSlave('localhost', 6379)
         replPairAsSlave0.sendBye = true
+        replPairAsSlave1.masterBinlogCurrentFileIndexAndOffset = new Binlog.FileIndexAndOffset(1, 1)
         oneSlot.doTask(0)
         then:
         oneSlot.replPairs.size() == 4
@@ -166,6 +167,7 @@ class OneSlotTest extends Specification {
         oneSlot.getReplPairAsSlave(11L) == null
         oneSlot.isAsSlave()
         oneSlot.slaveReplPairListSelfAsMaster.size() == 2
+        replPairAsSlave1.masterBinlogCurrentFileIndexAndOffset != null
 
         when:
         replPairAsMaster0.sendBye = true
@@ -242,6 +244,7 @@ class OneSlotTest extends Specification {
         oneSlot.collect()
         then:
         oneSlot.getReplPairAsMaster(11L) == null
+        replPairAsMaster1.slaveLastCatchUpBinlogFileIndexAndOffset != null
 
         when:
         replPairAsSlave0.sendBye = false

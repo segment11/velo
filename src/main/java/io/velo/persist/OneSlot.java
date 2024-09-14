@@ -1879,15 +1879,22 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var replPairAsSlave = getOnlyOneReplPairAsSlave();
         if (replPairAsSlave != null) {
-            map.put("repl_as_slave_fetched_bytes_total", (double) replPairAsSlave.getFetchedBytesLengthTotal());
-            map.put("repl_as_slave_is_link_up", (double) (replPairAsSlave.isLinkUp() ? 1 : 0));
-            map.put("repl_as_slave_is_master_readonly", (double) (replPairAsSlave.isMasterReadonly() ? 1 : 0));
             map.put("repl_as_slave_is_all_caught_up", (double) (replPairAsSlave.isAllCaughtUp() ? 1 : 0));
+            map.put("repl_as_slave_catch_up_last_seq", (double) replPairAsSlave.getSlaveCatchUpLastSeq());
+            map.put("repl_as_slave_is_link_up", (double) (replPairAsSlave.isLinkUp() ? 1 : 0));
+            map.put("repl_as_slave_fetched_bytes_total", (double) replPairAsSlave.getFetchedBytesLengthTotal());
+            map.put("repl_as_slave_is_master_readonly", (double) (replPairAsSlave.isMasterReadonly() ? 1 : 0));
             map.put("repl_as_slave_is_master_can_not_connect", (double) (replPairAsSlave.isMasterCanNotConnect() ? 1 : 0));
 
-            var fo = metaChunkSegmentIndex.getMasterBinlogFileIndexAndOffset();
-            map.put("repl_as_slave_last_catch_up_binlog_file_index", (double) fo.fileIndex());
-            map.put("repl_as_slave_last_catch_up_binlog_offset", (double) fo.offset());
+            var slaveFo = replPairAsSlave.getSlaveLastCatchUpBinlogFileIndexAndOffset();
+            map.put("repl_as_slave_last_catch_up_binlog_file_index", (double) slaveFo.fileIndex());
+            map.put("repl_as_slave_last_catch_up_binlog_offset", (double) slaveFo.offset());
+
+            var masterFo = replPairAsSlave.getMasterBinlogCurrentFileIndexAndOffset();
+            if (masterFo != null) {
+                map.put("repl_as_slave_master_binlog_current_file_index", (double) masterFo.fileIndex());
+                map.put("repl_as_slave_master_binlog_current_offset", (double) masterFo.offset());
+            }
         }
 
         var replPairAsMasterList = getReplPairAsMasterList();
@@ -1895,11 +1902,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             map.put("repl_as_master_repl_pair_size", (double) replPairAsMasterList.size());
 
             for (int i = 0; i < replPairAsMasterList.size(); i++) {
-                var replPair = replPairAsMasterList.get(i);
-                map.put("repl_as_master_repl_pair_" + i + "_slave_catch_up_last_seq", (double) replPair.getSlaveCatchUpLastSeq());
-                map.put("repl_as_master_repl_pair_" + i + "_is_link_up", (double) (replPair.isLinkUp() ? 1 : 0));
+                var replPairAsMaster = replPairAsMasterList.get(i);
+                map.put("repl_as_master_repl_pair_" + i + "_is_all_caught_up", (double) (replPairAsMaster.isAllCaughtUp() ? 1 : 0));
+                map.put("repl_as_master_repl_pair_" + i + "_is_link_up", (double) (replPairAsMaster.isLinkUp() ? 1 : 0));
+                map.put("repl_as_master_repl_pair_" + i + "_fetched_bytes_total", (double) replPairAsMaster.getFetchedBytesLengthTotal());
 
-                var slaveFo = replPair.getSlaveLastCatchUpBinlogFileIndexAndOffset();
+                var slaveFo = replPairAsMaster.getSlaveLastCatchUpBinlogFileIndexAndOffset();
                 if (slaveFo != null) {
                     map.put("repl_as_master_repl_pair_" + i + "_slave_last_catch_up_binlog_file_index", (double) slaveFo.fileIndex());
                     map.put("repl_as_master_repl_pair_" + i + "_slave_last_catch_up_binlog_offset", (double) slaveFo.offset());
