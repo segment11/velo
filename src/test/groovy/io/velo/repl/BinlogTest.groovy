@@ -191,6 +191,13 @@ class BinlogTest extends Specification {
         binlog.currentFileIndex == 2
 
         when:
+        binlog.resetCurrentFileOffset oneSegmentLength
+        def xWalV = new XWalV(vList[0])
+        binlog.append(xWalV)
+        then:
+        binlog.currentFileOffset == oneSegmentLength + xWalV.encodedLength()
+
+        when:
         exception = false
         def testBinlogContent = new BinlogContent() {
             @Override

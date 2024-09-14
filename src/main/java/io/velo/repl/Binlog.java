@@ -186,7 +186,6 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     void resetCurrentFileOffset(long offset) {
         this.currentFileOffset = offset;
         this.clearByteBuffer();
-        this.tempAppendSegmentBuffer.position((int) (offset % ConfForSlot.global.confRepl.binlogOneSegmentLength));
     }
 
     @VisibleForTesting
@@ -344,21 +343,28 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                     slot + ", encoded length=" + encoded.length);
         }
 
-        var isCrossSegment = tempAppendSegmentBuffer.position() + encoded.length > oneSegmentLength;
-        if (isCrossSegment) {
-            // need padding
-            var padding = new byte[(int) (oneSegmentLength - currentFileOffset % oneSegmentLength)];
-
-            raf.seek(currentFileOffset);
-            raf.write(padding);
-            currentFileOffset += padding.length;
-
-            tempAppendSegmentBuffer.put(padding);
+        var mod = currentFileOffset % oneSegmentLength;
+        if (mod == 0 && currentFileOffset != 0) {
             addForReadCacheSegmentBytes(currentFileIndex, currentFileOffset - oneSegmentLength, null);
             clearByteBuffer();
+        } else {
+            var currentSegmentLeft = oneSegmentLength - mod;
+            var isCrossSegment = encoded.length > currentSegmentLeft;
+            if (isCrossSegment) {
+                // need padding
+                var padding = new byte[(int) currentSegmentLeft];
 
-            if (currentFileOffset == oneFileMaxLength) {
-                createAndUseNextFile();
+                raf.seek(currentFileOffset);
+                raf.write(padding);
+                currentFileOffset += padding.length;
+
+                tempAppendSegmentBuffer.put(padding);
+                addForReadCacheSegmentBytes(currentFileIndex, currentFileOffset - oneSegmentLength, null);
+                clearByteBuffer();
+
+                if (currentFileOffset == oneFileMaxLength) {
+                    createAndUseNextFile();
+                }
             }
         }
 
