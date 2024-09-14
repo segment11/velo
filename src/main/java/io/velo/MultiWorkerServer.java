@@ -623,28 +623,20 @@ public class MultiWorkerServer extends Launcher {
         @Provides
         ConfForSlot confForSlot(Config config) {
             // global conf
-            long estimateKeyNumber = config.get(ofLong(), "estimateKeyNumber", 1_000_000L);
-            int estimateOneValueLength = config.get(ofInteger(), "estimateOneValueLength", 200);
-            ConfForGlobal.estimateKeyNumber = estimateKeyNumber;
-            ConfForGlobal.estimateOneValueLength = estimateOneValueLength;
+            ConfForGlobal.estimateKeyNumber = config.get(ofLong(), "estimateKeyNumber", 1_000_000L);
+            ConfForGlobal.estimateOneValueLength = config.get(ofInteger(), "estimateOneValueLength", 200);
+            log.warn("Global config, estimateKeyNumber={}", ConfForGlobal.estimateKeyNumber);
+            log.warn("Global config, estimateOneValueLength={}", ConfForGlobal.estimateOneValueLength);
 
-            long datacenterId = config.get(ofLong(), "datacenterId", 0L);
-            long machineId = config.get(ofLong(), "machineId", 0L);
-            ConfForGlobal.datacenterId = datacenterId;
-            ConfForGlobal.machineId = machineId;
+            ConfForGlobal.datacenterId = config.get(ofLong(), "datacenterId", 0L);
+            ConfForGlobal.machineId = config.get(ofLong(), "machineId", 0L);
+            log.warn("Global config, datacenterId={}", ConfForGlobal.datacenterId);
+            log.warn("Global config, machineId={}", ConfForGlobal.machineId);
 
-            log.warn("Global config, estimateKeyNumber={}", estimateKeyNumber);
-            log.warn("Global config, estimateOneValueLength={}", estimateOneValueLength);
-            log.warn("Global config, datacenterId={}", datacenterId);
-            log.warn("Global config, machineId={}", machineId);
-
-            boolean isValueSetUseCompression = config.get(ofBoolean(), "isValueSetUseCompression", true);
-            boolean isOnDynTrainDictForCompression = config.get(ofBoolean(), "isOnDynTrainDictForCompression", true);
-            ConfForGlobal.isValueSetUseCompression = isValueSetUseCompression;
-            ConfForGlobal.isOnDynTrainDictForCompression = isOnDynTrainDictForCompression;
-
-            log.warn("Global config, isValueSetUseCompression={}", isValueSetUseCompression);
-            log.warn("Global config, isOnDynTrainDictForCompression={}", isOnDynTrainDictForCompression);
+            ConfForGlobal.isValueSetUseCompression = config.get(ofBoolean(), "isValueSetUseCompression", true);
+            ConfForGlobal.isOnDynTrainDictForCompression = config.get(ofBoolean(), "isOnDynTrainDictForCompression", true);
+            log.warn("Global config, isValueSetUseCompression={}", ConfForGlobal.isValueSetUseCompression);
+            log.warn("Global config, isOnDynTrainDictForCompression={}", ConfForGlobal.isOnDynTrainDictForCompression);
 
             ConfForGlobal.netListenAddresses = config.get(ofString(), "net.listenAddresses", "localhost:" + PORT);
             logger.info("Net listen addresses={}", ConfForGlobal.netListenAddresses);
@@ -691,7 +683,7 @@ public class MultiWorkerServer extends Launcher {
             DictMap.TO_COMPRESS_MIN_DATA_LENGTH = config.get(ofInteger(), "toCompressMinDataLength", 64);
 
             // one slot config
-            var c = ConfForSlot.from(estimateKeyNumber);
+            var c = ConfForSlot.from(ConfForGlobal.estimateKeyNumber);
             ConfForSlot.global = c;
 
             boolean debugMode = config.get(ofBoolean(), "debugMode", false);
@@ -748,12 +740,13 @@ public class MultiWorkerServer extends Launcher {
                 c.confChunk.segmentLength = config.get(ofInteger(), "chunk.segmentLength");
             }
             c.confChunk.isSegmentUseCompression = config.get(ofBoolean(), "chunk.isSegmentUseCompression", false);
+            log.warn("Chunk segment use compression={}", c.confChunk.isSegmentUseCompression);
 
             if (config.getChild("chunk.lruPerFd.maxSize").hasValue()) {
                 c.confChunk.lruPerFd.maxSize = config.get(ofInteger(), "chunk.lruPerFd.maxSize");
             }
 
-            c.confChunk.resetByOneValueLength(estimateOneValueLength);
+            c.confChunk.resetByOneValueLength(ConfForGlobal.estimateOneValueLength);
 
             // override wal conf
             if (config.getChild("wal.oneChargeBucketNumber").hasValue()) {
@@ -770,7 +763,7 @@ public class MultiWorkerServer extends Launcher {
                 c.confWal.shortValueSizeTrigger = config.get(ofInteger(), "wal.shortValueSizeTrigger");
             }
 
-            c.confWal.resetByOneValueLength(estimateOneValueLength);
+            c.confWal.resetByOneValueLength(ConfForGlobal.estimateOneValueLength);
 
             if (config.getChild("repl.binlogForReadCacheSegmentMaxCount").hasValue()) {
                 c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount").shortValue();
