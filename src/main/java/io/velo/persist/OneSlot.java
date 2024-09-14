@@ -784,7 +784,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                         replPair.ping();
 
                         var toFetchBigStringUuids = replPair.doingFetchBigStringUuid();
-                        if (toFetchBigStringUuids != -1) {
+                        if (toFetchBigStringUuids != BigStringFiles.SKIP_UUID) {
                             var bytes = new byte[8];
                             ByteBuffer.wrap(bytes).putLong(toFetchBigStringUuids);
                             replPair.write(ReplType.incremental_big_string, new RawBytesContent(bytes));
@@ -1750,12 +1750,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     @MasterReset
     public void getMergedSegmentIndexEndLastTime() {
-        chunk.mergedSegmentIndexEndLastTime = metaChunkSegmentFlagSeq.getMergedSegmentIndexEndLastTime(
-                chunk.currentSegmentIndex(), chunk.halfSegmentNumber);
+        if (chunkMergeWorker.lastMergedSegmentIndex != NO_NEED_MERGE_SEGMENT_INDEX) {
+            chunk.mergedSegmentIndexEndLastTime = chunkMergeWorker.lastMergedSegmentIndex;
+        } else {
+            // todo, need check
+            chunk.mergedSegmentIndexEndLastTime = metaChunkSegmentFlagSeq.getMergedSegmentIndexEndLastTime(
+                    chunk.currentSegmentIndex(), chunk.halfSegmentNumber);
+            chunkMergeWorker.lastMergedSegmentIndex = chunk.mergedSegmentIndexEndLastTime;
+        }
+
         chunk.checkMergedSegmentIndexEndLastTimeValidAfterServerStart();
         log.info("Get merged segment index end last time, s={}, i={}", slot, chunk.mergedSegmentIndexEndLastTime);
-
-        chunkMergeWorker.lastMergedSegmentIndex = chunk.mergedSegmentIndexEndLastTime;
     }
 
     @VisibleForTesting

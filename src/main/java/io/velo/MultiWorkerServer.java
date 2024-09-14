@@ -440,9 +440,6 @@ public class MultiWorkerServer extends Launcher {
 
     @Override
     protected void onStart() throws Exception {
-        var localPersist = LocalPersist.getInstance();
-        localPersist.persistMergedSegmentsJobUndone();
-
         netWorkerThreadIds = new long[netWorkerEventloopArray.length];
 
         for (int i = 0; i < netWorkerEventloopArray.length; i++) {
@@ -478,6 +475,7 @@ public class MultiWorkerServer extends Launcher {
         // interval 1s
         primaryEventloop.delay(1000L, primaryScheduleRunnable);
 
+        var localPersist = LocalPersist.getInstance();
         // fix slot thread id
         int slotNumber = configInject.get(ofInteger(), "slotNumber", (int) LocalPersist.DEFAULT_SLOT_NUMBER);
         for (short slot = 0; slot < slotNumber; slot++) {
@@ -489,6 +487,9 @@ public class MultiWorkerServer extends Launcher {
 
         socketInspector.netWorkerEventloopArray = netWorkerEventloopArray;
         localPersist.setSocketInspector(socketInspector);
+
+        // recover
+        primaryEventloop.submit(localPersist::persistMergedSegmentsJobUndone);
 
         // metrics
         CollectorRegistry.defaultRegistry.register(new BufferPoolsExports());
