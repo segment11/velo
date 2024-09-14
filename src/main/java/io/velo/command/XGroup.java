@@ -335,11 +335,13 @@ public class XGroup extends BaseCommand {
 
             var currentFo = binlog.currentFileIndexAndOffset();
             var earliestFo = binlog.earliestFileIndexAndOffset();
-            var content = new Hi(slaveUuid, oneSlot.getMasterUuid(), currentFo, earliestFo,
-                    oneSlot.getChunk().getSegmentIndex());
+
+            var chunk = oneSlot.getChunk();
+            var content = new Hi(slaveUuid, oneSlot.getMasterUuid(), currentFo, earliestFo, chunk.getSegmentIndex());
 
             // append a skip apply, so offset will not be 0, so the migrate tool or failover manager is easier to check if slave is all caught up
-            binlog.append(new XSkipApply(oneSlot.getSnowFlake().nextId()));
+            var xSkipApply = new XSkipApply(oneSlot.getSnowFlake().nextId(), chunk.getSegmentIndex(), chunk.getMergedSegmentIndexEndLastTime());
+            binlog.append(xSkipApply);
             return Repl.reply(slot, replPair, hi, content);
         } catch (IOException e) {
             var errorMessage = "Repl master handle error: start binlog error";
