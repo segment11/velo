@@ -53,8 +53,12 @@ public class LeaderSelector implements NeedCleanUp {
             return true;
         }
 
-        client = CuratorFrameworkFactory.newClient(connectString,
-                new ExponentialBackoffRetry(1000, 3));
+        client = CuratorFrameworkFactory.builder().
+                connectString(connectString).
+                sessionTimeoutMs(ConfForGlobal.zookeeperSessionTimeoutMs).
+                connectionTimeoutMs(ConfForGlobal.zookeeperConnectionTimeoutMs).
+                retryPolicy(new ExponentialBackoffRetry(1000, 3)).
+                build();
         client.start();
         log.info("Repl zookeeper client started, connect string={}", connectString);
         return true;

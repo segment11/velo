@@ -658,12 +658,16 @@ public class MultiWorkerServer extends Launcher {
 
             if (config.getChild("zookeeperConnectString").hasValue()) {
                 ConfForGlobal.zookeeperConnectString = config.get(ofString(), "zookeeperConnectString");
+                ConfForGlobal.zookeeperSessionTimeoutMs = config.get(ofInteger(), "zookeeperSessionTimeoutMs", 30000);
+                ConfForGlobal.zookeeperConnectionTimeoutMs = config.get(ofInteger(), "zookeeperConnectionTimeoutMs", 10000);
                 ConfForGlobal.zookeeperRootPath = config.get(ofString(), "zookeeperRootPath", "/io/velo");
                 ConfForGlobal.canBeLeader = config.get(ofBoolean(), "canBeLeader", true);
                 ConfForGlobal.isAsSlaveOfSlave = config.get(ofBoolean(), "isAsSlaveOfSlave", false);
                 ConfForGlobal.targetAvailableZone = config.get(ofString(), "targetAvailableZone", null);
 
                 log.warn("Global config, zookeeperConnectString={}", ConfForGlobal.zookeeperConnectString);
+                log.warn("Global config, zookeeperSessionTimeoutMs={}", ConfForGlobal.zookeeperSessionTimeoutMs);
+                log.warn("Global config, zookeeperConnectionTimeoutMs={}", ConfForGlobal.zookeeperConnectionTimeoutMs);
                 log.warn("Global config, zookeeperRootPath={}", ConfForGlobal.zookeeperRootPath);
                 log.warn("Global config, canBeLeader={}", ConfForGlobal.canBeLeader);
                 log.warn("Global config, isAsSlaveOfSlave={}", ConfForGlobal.isAsSlaveOfSlave);

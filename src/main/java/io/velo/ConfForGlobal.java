@@ -29,6 +29,9 @@ public class ConfForGlobal {
 
     // for repl leader select
     public static String zookeeperConnectString;
+    public static int zookeeperSessionTimeoutMs = 30000;
+    public static int zookeeperConnectionTimeoutMs = 10000;
+
     // also as sentinel master name
     public static String zookeeperRootPath;
     public static boolean canBeLeader = true;
