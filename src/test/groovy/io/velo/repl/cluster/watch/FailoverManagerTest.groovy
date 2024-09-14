@@ -193,14 +193,28 @@ xxx localhost 17379 slave aaa
 yyy localhost 17380 slave bbb
 '''.trim()
         def lines = clusterxNodesArgs.readLines().collect { it.trim() }.findAll { it }
-        fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
+        boolean isZkListen = Consts.checkConnectAvailable()
+        if (isZkListen) {
+            ConfForGlobal.netListenAddresses = 'localhost:27379'
+
+            fm.zookeeperVeloMetaBasePath = '/velo/failover_manager'
+            ConfForGlobal.zookeeperRootPath = fm.zookeeperVeloMetaBasePath
+
+            def leaderSelector = LeaderSelector.instance
+            ConfForGlobal.zookeeperConnectString = 'localhost:2181'
+            leaderSelector.tryConnectAndGetMasterListenAddress(true)
+
+            fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
+        }
         then:
         true
 
         when:
         failHostAndPort.host = '127.0.0.1'
         // shard not find
-        fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
+        if (isZkListen) {
+            fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
+        }
         then:
         true
 
@@ -208,7 +222,9 @@ yyy localhost 17380 slave bbb
         failHostAndPort.host = 'localhost'
         failHostAndPort.port = 17379
         // slave node need not failover
-        fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
+        if (isZkListen) {
+            fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
+        }
         then:
         true
 
@@ -221,7 +237,9 @@ yyy localhost 17380 slave bbb
 '''.trim()
         lines = clusterxNodesArgs.readLines().collect { it.trim() }.findAll { it }
         // no slave node can be promoted
-        fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
+        if (isZkListen) {
+            fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
+        }
         then:
         true
     }
