@@ -311,10 +311,10 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     // need refer Wal valueSizeTrigger
-    // 64 not tight segments is enough for 1000 Wal.V persist ?, need check, todo
-    // one wal group charges 64 key buckets, 64 * 4KB = 256KB
-    // with merged valid cv list together, once read 10 segments, valid cv list may be > 1000
-    public final static int ONCE_PREPARE_SEGMENT_COUNT = 64;
+    // 32 not tight segments is enough for 400 Wal.V persist ?, need check, todo
+    // one wal group charges 32 key buckets, 32 * 4KB = 128KB
+    // with merged valid cv list together, once most pre-read 2 segments, valid cv list size ~= 400
+    public final static int ONCE_PREPARE_SEGMENT_COUNT = 32;
 
     int mergedSegmentIndexEndLastTime = NO_NEED_MERGE_SEGMENT_INDEX;
 

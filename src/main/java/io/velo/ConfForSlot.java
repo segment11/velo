@@ -122,7 +122,7 @@ public enum ConfForSlot {
     }
 
     public enum ConfChunk {
-        debugMode(4 * 1024, (byte) 2, PAGE_SIZE),
+        debugMode(8 * 1024, (byte) 2, PAGE_SIZE),
         c1m(256 * 1024, (byte) 1, PAGE_SIZE),
         c10m(512 * 1024, (byte) 2, PAGE_SIZE),
         c100m(512 * 1024, (byte) 8, PAGE_SIZE);
