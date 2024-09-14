@@ -130,7 +130,7 @@ class FailoverManager {
         var children = client.getChildren().forPath(zookeeperVeloMetaBasePath)
 
         for (oneClusterName in children) {
-            if (oneClusterName == 'leader_latch') {
+            if (oneClusterName == ConfForGlobal.LEADER_LATCH_NODE_NAME) {
                 continue
             }
 

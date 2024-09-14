@@ -37,7 +37,8 @@ public class ConfForGlobal {
 
     public static final int REPL_FAILOVER_SLAVE_WAIT_SECONDS = 5;
 
-    public static final String LEADER_LATCH_PATH = "/leader_latch";
+    public static final String LEADER_LATCH_NODE_NAME = "leader_latch";
+    public static final String LEADER_LATCH_PATH = "/" + LEADER_LATCH_NODE_NAME;
 
     public static String targetAvailableZone;
 
