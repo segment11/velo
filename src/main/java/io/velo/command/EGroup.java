@@ -6,10 +6,13 @@ import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
+import io.velo.dyn.CachedGroovyClassLoader;
+import io.velo.dyn.RefreshLoader;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.stream.Collectors;
 
 public class EGroup extends BaseCommand {
@@ -43,10 +46,28 @@ public class EGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("extend".equals(cmd)) {
+            var scriptText = RefreshLoader.getScriptText("/dyn/src/io/velo/script/ExtendCommandParseSlots.groovy");
+
+            var variables = new HashMap<String, Object>();
+            variables.put("cmd", cmd);
+            variables.put("data", data);
+            variables.put("slotNumber", slotNumber);
+
+            return (ArrayList<SlotWithKeyHash>) CachedGroovyClassLoader.getInstance().eval(scriptText, variables);
+        }
+
         return slotWithKeyHashList;
     }
 
     public Reply handle() {
+        if ("echo".equals(cmd)) {
+            if (data.length != 2) {
+                return ErrorReply.FORMAT;
+            }
+            return new BulkReply(data[1]);
+        }
+
         if ("exists".equals(cmd)) {
             return exists();
         }
@@ -63,11 +84,8 @@ public class EGroup extends BaseCommand {
             return expiretime(false);
         }
 
-        if ("echo".equals(cmd)) {
-            if (data.length != 2) {
-                return ErrorReply.FORMAT;
-            }
-            return new BulkReply(data[1]);
+        if ("extend".equals(cmd)) {
+            return extend();
         }
 
         return NilReply.INSTANCE;
@@ -240,5 +258,13 @@ public class EGroup extends BaseCommand {
         }
 
         return new IntegerReply(isMilliseconds ? expireAt : expireAt / 1000);
+    }
+
+    private Reply extend() {
+        var scriptText = RefreshLoader.getScriptText("/dyn/src/io/velo/script/ExtendCommandHandle.groovy");
+
+        var variables = new HashMap<String, Object>();
+        variables.put("eGroup", this);
+        return (Reply) CachedGroovyClassLoader.getInstance().eval(scriptText, variables);
     }
 }

@@ -1,16 +1,18 @@
-package io.velo
+package io.velo.command
 
 import groovy.transform.CompileStatic
-import io.activej.net.socket.tcp.ITcpSocket
-import io.velo.reply.NilReply
+import io.velo.BaseCommand
+import io.velo.reply.BulkReply
 import io.velo.reply.Reply
 
 @CompileStatic
 class ExtendCommand extends BaseCommand {
-    static final String version = '1.0.0'
+    ExtendCommand() {
+        super(null, null, null)
+    }
 
-    ExtendCommand(String cmd, byte[][] data, ITcpSocket socket) {
-        super(cmd, data, socket)
+    ExtendCommand(EGroup eGroup) {
+        super(eGroup.cmd, eGroup.data, eGroup.socket)
     }
 
     @Override
@@ -21,7 +23,7 @@ class ExtendCommand extends BaseCommand {
 
     @Override
     Reply handle() {
-        log.info 'Dyn extend command version={}', version
-        return NilReply.INSTANCE
+        // write your code here
+        return new BulkReply("extend command handle result xxx".bytes)
     }
 }

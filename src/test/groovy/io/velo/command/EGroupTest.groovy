@@ -3,6 +3,8 @@ package io.velo.command
 import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
 import io.velo.CompressedValue
+import io.velo.Utils
+import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
@@ -42,6 +44,13 @@ class EGroupTest extends Specification {
         sExistsList = _EGroup.parseSlots('exists', data3, slotNumber)
         then:
         sExistsList.size() == 2
+
+        when:
+        def classpath = Utils.projectPath("/dyn/src")
+        CachedGroovyClassLoader.instance.init(GroovyClassLoader.getClass().classLoader, classpath, null)
+        def sExtendList = _EGroup.parseSlots('extend', data3, slotNumber)
+        then:
+        sExtendList.size() == 0
 
         when:
         def data1 = new byte[1][]
@@ -101,6 +110,14 @@ class EGroupTest extends Specification {
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == 'a'.bytes
+
+        when:
+        def classpath = Utils.projectPath("/dyn/src")
+        CachedGroovyClassLoader.getInstance().init(GroovyClassLoader.getClass().classLoader, classpath, null)
+        eGroup.cmd = 'extend'
+        reply = eGroup.handle()
+        then:
+        reply instanceof BulkReply
 
         when:
         eGroup.cmd = 'zzz'
