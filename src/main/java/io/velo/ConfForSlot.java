@@ -359,9 +359,10 @@ public enum ConfForSlot {
         public final int binlogOneSegmentLength = 1024 * 1024;
         public final int binlogOneFileMaxLength = 512 * 1024 * 1024;
         public short binlogForReadCacheSegmentMaxCount = 100;
-        public short binlogFileKeepMaxCount = 100;
+        public short binlogFileKeepMaxCount = 10;
         // if slave catch up binlog offset is less than min diff, slave can service read
         public int catchUpOffsetMinDiff = 1024 * 1024;
+        public int catchUpIntervalMillis = 200;
 
         @Override
         public String toString() {
@@ -370,6 +371,7 @@ public enum ConfForSlot {
                     ", binlogOneFileMaxLength=" + binlogOneFileMaxLength +
                     ", binlogForReadCacheSegmentMaxCount=" + binlogForReadCacheSegmentMaxCount +
                     ", catchUpOffsetMinDiff=" + catchUpOffsetMinDiff +
+                    ", catchUpIntervalMillis=" + catchUpIntervalMillis +
                     '}';
         }
     }

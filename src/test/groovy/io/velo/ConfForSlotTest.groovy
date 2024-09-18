@@ -35,6 +35,8 @@ class ConfForSlotTest extends Specification {
         c.confRepl.binlogOneSegmentLength == 1024 * 1024
         c.confRepl.binlogOneFileMaxLength == 512 * 1024 * 1024
         c.confRepl.binlogForReadCacheSegmentMaxCount == 100
+        c.confRepl.catchUpOffsetMinDiff == 1024 * 1024
+        c.confRepl.catchUpIntervalMillis == 200
         println c.confRepl
     }
 

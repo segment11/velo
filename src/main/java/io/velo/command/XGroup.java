@@ -1308,6 +1308,8 @@ public class XGroup extends BaseCommand {
 
     @VisibleForTesting
     Repl.ReplReply s_catch_up(short slot, byte[] contentBytes) {
+        var catchUpIntervalMillis = ConfForSlot.global.confRepl.catchUpIntervalMillis;
+
         // client received from server
         replPair.setLastGetCatchUpResponseMillis(System.currentTimeMillis());
 
@@ -1326,7 +1328,7 @@ public class XGroup extends BaseCommand {
                 // use margin file offset
                 var marginLastUpdatedOffset = Binlog.marginFileOffset(lastUpdatedOffset);
                 var content = toMasterCatchUp(binlogMasterUuid, lastUpdatedFileIndex, marginLastUpdatedOffset, lastUpdatedOffset);
-                oneSlot.delayRun(1000, () -> {
+                oneSlot.delayRun(catchUpIntervalMillis, () -> {
                     replPair.write(ReplType.catch_up, content);
                 });
                 return Repl.emptyReply();
@@ -1356,7 +1358,7 @@ public class XGroup extends BaseCommand {
                 // use margin file offset
                 var marginLastUpdatedOffset = Binlog.marginFileOffset(lastUpdatedOffset);
                 var content = toMasterCatchUp(binlogMasterUuid, lastUpdatedFileIndex, marginLastUpdatedOffset, lastUpdatedOffset);
-                oneSlot.delayRun(1000, () -> {
+                oneSlot.delayRun(catchUpIntervalMillis, () -> {
                     replPair.write(ReplType.catch_up, content);
                 });
             }
@@ -1445,7 +1447,7 @@ public class XGroup extends BaseCommand {
 
             // still catch up current (latest) segment, delay
             var content = toMasterCatchUp(binlogMasterUuid, fetchedFileIndex, fetchedOffset, fetchedOffset + readSegmentLength);
-            oneSlot.delayRun(1000, () -> {
+            oneSlot.delayRun(catchUpIntervalMillis, () -> {
                 replPair.write(ReplType.catch_up, content);
             });
             return Repl.emptyReply();
@@ -1471,7 +1473,7 @@ public class XGroup extends BaseCommand {
             log.info("Repl slave ready to catch up to next file, slave uuid={}, {}, binlog file index={}, offset={}, slot={}",
                     replPair.getSlaveUuid(), replPair.getHostAndPort(), nextCatchUpFileIndex, nextCatchUpOffset, slot);
 
-            oneSlot.delayRun(1000, () -> {
+            oneSlot.delayRun(catchUpIntervalMillis, () -> {
                 replPair.write(ReplType.catch_up, content);
             });
             return Repl.emptyReply();
