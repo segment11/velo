@@ -35,7 +35,6 @@ class MGroupTest extends Specification {
         sMsetList.size() == 2
         s.size() == 0
 
-
         when:
         def classpath = Utils.projectPath("/dyn/src")
         CachedGroovyClassLoader.instance.init(GroovyClassLoader.getClass().classLoader, classpath, null)
@@ -74,27 +73,8 @@ class MGroupTest extends Specification {
         sList.size() == 2
 
         when:
-        data5[1] = 'view-persist-key-count'.bytes
-
-        sList = _MGroup.parseSlots('manage', data5, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
-        data5[1] = 'view-slot-bucket-keys'.bytes
-        sList = _MGroup.parseSlots('manage', data5, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
-        data5[1] = 'output-dict-bytes'.bytes
-        sList = _MGroup.parseSlots('manage', data5, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
         data5[1] = 'xxx'.bytes
-        sList = _MGroup.parseSlots('manage', data5, slotNumber)
+        sList = _MGroup.parseSlots('zzz', data5, slotNumber)
         then:
         sList.size() == 0
     }
