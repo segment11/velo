@@ -9,6 +9,10 @@ import io.velo.reply.*
 class ConfigCommand extends BaseCommand {
     static final String version = '1.0.0'
 
+    ConfigCommand() {
+        super(null, null, null)
+    }
+
     ConfigCommand(CGroup cGroup) {
         super(cGroup.cmd, cGroup.data, cGroup.socket)
     }
@@ -24,7 +28,8 @@ class ConfigCommand extends BaseCommand {
         log.info 'Dyn config command version={}', version
 
         if (data.length < 2) {
-            return new ErrorReply('wrong number of arguments for \'config\' command')
+            return ErrorReply.FORMAT
+//            return new ErrorReply('wrong number of arguments for \'config\' command')
         }
 
         def subCmd = new String(data[1]).toLowerCase()
@@ -87,7 +92,6 @@ class ConfigCommand extends BaseCommand {
 
         def configKey = new String(data[2]).toLowerCase()
         if ('max_connections' == configKey) {
-            def firstOneSlot = localPersist.currentThreadFirstOneSlot()
             def maxConnections = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.maxConnections
             return new BulkReply(maxConnections.toString().bytes)
         } else {
