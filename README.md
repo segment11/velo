@@ -49,7 +49,7 @@ Velo (pronunciation: /vɪloʊ/) is a redis compatible kv store, base on slot and
 
 ![slot-wal-group](./doc/hash_buckets/slot-wal-group.png)
 
-Details refer to [doc/hash_buckets/README.md]()
+Details refer to https://github.com/segment11/velo/tree/main/doc/hash_buckets
 
 # Redis command support
 
