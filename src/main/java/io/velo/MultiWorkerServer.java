@@ -207,7 +207,7 @@ public class MultiWorkerServer extends Launcher {
 
     Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
         var slotWithKeyHashList = request.getSlotWithKeyHashList();
-        if (ConfForGlobal.clusterEnabled) {
+        if (ConfForGlobal.clusterEnabled && slotWithKeyHashList != null) {
             // check if cross shards or not my shard
             var multiShardShadow = RequestHandler.getMultiShardShadow();
             var mySelfShard = multiShardShadow.getMySelfShard();
@@ -217,6 +217,10 @@ public class MultiWorkerServer extends Launcher {
             int movedToClientSlot = 0;
             for (var slotWithKeyHash : slotWithKeyHashList) {
                 var toClientSlot = slotWithKeyHash.toClientSlot();
+                if (toClientSlot == BaseCommand.SlotWithKeyHash.IGNORE_TO_CLIENT_SLOT) {
+                    continue;
+                }
+
                 var expectRequestShard = multiShardShadow.getShardBySlot(toClientSlot);
                 if (expectRequestShard == null) {
                     return Promise.of(ErrorReply.CLUSTER_SLOT_NOT_SET.buffer());

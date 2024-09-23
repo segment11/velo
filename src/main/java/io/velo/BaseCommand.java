@@ -307,8 +307,10 @@ public abstract class BaseCommand {
                     '}';
         }
 
+        public static final short IGNORE_TO_CLIENT_SLOT = -1;
+
         public SlotWithKeyHash(short slot, int bucketIndex, long keyHash) {
-            this(slot, slot, bucketIndex, keyHash);
+            this(slot, IGNORE_TO_CLIENT_SLOT, bucketIndex, keyHash);
         }
     }
 
