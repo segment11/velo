@@ -25,9 +25,9 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         return total;
     }
 
-    public boolean contains(int slot) {
+    public boolean contains(int toClientSlot) {
         for (var slotRange : list) {
-            if (slotRange.contains(slot)) {
+            if (slotRange.contains(toClientSlot)) {
                 return true;
             }
         }
@@ -167,25 +167,25 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         list.addAll(r.list);
     }
 
-    public void addOneSlot(int slot) {
-        if (contains(slot)) {
+    public void addOneSlot(int toClientSlot) {
+        if (contains(toClientSlot)) {
             return;
         }
 
         var set = toTreeSet();
-        set.add(slot);
+        set.add(toClientSlot);
         var r = fromSet(set);
         list.clear();
         list.addAll(r.list);
     }
 
-    public void removeOneSlot(int slot) {
-        if (!contains(slot)) {
+    public void removeOneSlot(int toClientSlot) {
+        if (!contains(toClientSlot)) {
             return;
         }
 
         var set = toTreeSet();
-        set.remove(slot);
+        set.remove(toClientSlot);
         var r = fromSet(set);
         list.clear();
         list.addAll(r.list);

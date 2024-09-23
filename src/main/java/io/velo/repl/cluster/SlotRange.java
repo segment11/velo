@@ -31,8 +31,8 @@ public class SlotRange implements Comparable<SlotRange> {
         this.end = end;
     }
 
-    boolean contains(int slot) {
-        return begin <= slot && slot <= end;
+    boolean contains(int toClientSlot) {
+        return begin <= toClientSlot && toClientSlot <= end;
     }
 
     int slotCount() {

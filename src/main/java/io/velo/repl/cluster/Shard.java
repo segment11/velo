@@ -93,8 +93,8 @@ public class Shard {
         return null;
     }
 
-    public boolean contains(int slot) {
-        return multiSlotRange.contains(slot);
+    public boolean contains(int toClientSlot) {
+        return multiSlotRange.contains(toClientSlot);
     }
 
     public ArrayList<String> clusterNodesSlotRangeList() {

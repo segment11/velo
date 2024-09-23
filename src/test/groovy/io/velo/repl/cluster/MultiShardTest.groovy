@@ -1,6 +1,7 @@
 package io.velo.repl.cluster
 
 import io.velo.ConfForGlobal
+import io.velo.RequestHandler
 import io.velo.persist.Consts
 import spock.lang.Specification
 
@@ -9,6 +10,7 @@ class MultiShardTest extends Specification {
         given:
         Consts.persistDir.mkdirs()
         ConfForGlobal.netListenAddresses = 'localhost:7379'
+        RequestHandler.initMultiShardShadows((byte) 1)
         def multiShard = new MultiShard(Consts.persistDir)
 
         expect:
