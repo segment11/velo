@@ -98,6 +98,8 @@ vars currentEpoch 0 lastVoteEpoch 0
         clusterMyEpoch = tmp.getClusterMyEpoch();
         clusterCurrentEpoch = tmp.getClusterCurrentEpoch();
         log.warn("Repl clusterx meta loaded, shards size={}", shards.size());
+
+        RequestHandler.updateMultiShardShadows(this);
     }
 
     public synchronized void refreshAllShards(ArrayList<Shard> shardsNew, int clusterVersion) throws IOException {

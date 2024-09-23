@@ -29,6 +29,7 @@ public class ErrorReply implements Reply {
     public static final ErrorReply READONLY = new ErrorReply("readonly");
     public static final ErrorReply NOT_SUPPORT = new ErrorReply("not support");
     public static final ErrorReply CLUSTER_SLOT_CROSS_SHARDS = new ErrorReply("cluster slot cross shards");
+    public static final ErrorReply CLUSTER_SLOT_NOT_SET = new ErrorReply("cluster slot not set");
 
     public static ErrorReply clusterMoved(int toClientSlot, String host, int port) {
         return new ErrorReply("MOVED " + toClientSlot + " " + host + ":" + port);

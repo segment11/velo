@@ -21,16 +21,6 @@ class MultiShardShadowTest extends Specification {
         m.mySelfShard == shard0
         m.getShardBySlot(0) == shard0
         m.getShardBySlot(8192) == shard1
-
-        when:
-        def exception = false
-        try {
-            m.getShardBySlot(16384)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
+        m.getShardBySlot(16384) == null
     }
 }

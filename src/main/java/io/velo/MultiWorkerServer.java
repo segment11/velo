@@ -218,6 +218,10 @@ public class MultiWorkerServer extends Launcher {
             for (var slotWithKeyHash : slotWithKeyHashList) {
                 var toClientSlot = slotWithKeyHash.toClientSlot();
                 var expectRequestShard = multiShardShadow.getShardBySlot(toClientSlot);
+                if (expectRequestShard == null) {
+                    return Promise.of(ErrorReply.CLUSTER_SLOT_NOT_SET.buffer());
+                }
+
                 if (expectRequestShard != mySelfShard) {
                     if (movedToShard == null) {
                         movedToShard = expectRequestShard;

@@ -26,6 +26,6 @@ public class MultiShardShadow {
             }
         }
 
-        throw new IllegalStateException("Cluster mode multi shards no one shard contains slot=" + toClientSlot);
+        return null;
     }
 }
