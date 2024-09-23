@@ -10,6 +10,10 @@ import io.velo.persist.KeyBucket
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.repl.LeaderSelector
+import io.velo.repl.cluster.MultiShard
+import io.velo.repl.cluster.MultiSlotRange
+import io.velo.repl.cluster.Node
+import io.velo.repl.cluster.Shard
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.NilReply
@@ -548,6 +552,93 @@ class MultiWorkerServerTest extends Specification {
 
         cleanup:
         localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test static global v'() {
+        given:
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+
+        when:
+        def i = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()
+        then:
+        i == 0
+    }
+
+    def 'test cluster slot cross shards'() {
+        given:
+        ConfForGlobal.clusterEnabled = true
+        def m = new MultiWorkerServer()
+        m.isMockHandle = true
+
+        and:
+        RequestHandler.initMultiShardShadows((byte) 1)
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        def snowFlake = new SnowFlake(1, 1)
+        def requestHandler = new RequestHandler(workerId0, netWorkers, slotNumber, snowFlake, Config.create())
+        m.requestHandlerArray = new RequestHandler[1]
+        m.requestHandlerArray[0] = requestHandler
+        m.netWorkerThreadIds = MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds
+
+        and:
+        Consts.persistDir.mkdirs()
+        ConfForGlobal.netListenAddresses = 'localhost:7379'
+        def multiShard = new MultiShard(Consts.persistDir)
+        multiShard.mySelfShard().multiSlotRange.addSingle(0, 8191)
+        def shard1 = new Shard()
+        shard1.nodes << new Node(master: true, host: 'localhost', port: 7380)
+        shard1.multiSlotRange = new MultiSlotRange(list: [])
+        shard1.multiSlotRange.addSingle(8192, 16383)
+        multiShard.shards << shard1
+
+        when:
+        RequestHandler.updateMultiShardShadows(multiShard)
+        // handle request
+        def getData2 = new byte[2][]
+        getData2[0] = 'get'.bytes
+        getData2[1] = 'key'.bytes
+        def getRequest = new Request(getData2, false, false)
+        getRequest.slotNumber = slotNumber
+        requestHandler.parseSlots(getRequest)
+        m.handleRequest(getRequest, null)
+        then:
+        1 == 1
+
+        when:
+        multiShard.shards[0].nodes[0].mySelf = false
+        multiShard.shards[1].nodes[0].mySelf = true
+        RequestHandler.updateMultiShardShadows(multiShard)
+        m.handleRequest(getRequest, null)
+        then:
+        1 == 1
+
+        when:
+        def getData5 = new byte[5][]
+        getData5[0] = 'mget'.bytes
+        for (i in 1..<5) {
+            getData5[i] = ('key:' + i).bytes
+        }
+        def getRequest2 = new Request(getData5, false, false)
+        getRequest2.slotNumber = slotNumber
+        requestHandler.parseSlots(getRequest2)
+        m.handleRequest(getRequest2, null)
+        then:
+        1 == 1
+
+        when:
+        multiShard.shards[0].multiSlotRange.list[0].end = 4095
+        def shard2 = new Shard()
+        shard2.nodes << new Node(master: true, host: 'localhost', port: 7381)
+        shard2.multiSlotRange = new MultiSlotRange(list: [])
+        shard2.multiSlotRange.addSingle(4096, 8191)
+        multiShard.shards << shard2
+        RequestHandler.updateMultiShardShadows(multiShard)
+        m.handleRequest(getRequest2, null)
+        then:
+        1 == 1
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
         Consts.persistDir.deleteDir()
     }
 }

@@ -2,6 +2,7 @@ package io.velo.repl.cluster;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.velo.ConfForGlobal;
+import io.velo.RequestHandler;
 import io.velo.repl.ReplPair;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -141,5 +142,7 @@ vars currentEpoch 0 lastVoteEpoch 0
         var metaFile = new File(persistDir, metaFileName);
         FileUtils.writeStringToFile(metaFile, metaJson, StandardCharsets.UTF_8);
         log.warn("Repl clusterx meta saved, shards size={}", shards.size());
+
+        RequestHandler.updateMultiShardShadows(this);
     }
 }

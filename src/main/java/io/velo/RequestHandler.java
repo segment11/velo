@@ -11,6 +11,8 @@ import io.velo.decode.Request;
 import io.velo.metric.SimpleGauge;
 import io.velo.persist.ReadonlyException;
 import io.velo.repl.LeaderSelector;
+import io.velo.repl.cluster.MultiShard;
+import io.velo.repl.cluster.MultiShardShadow;
 import io.velo.reply.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
@@ -122,6 +124,29 @@ public class RequestHandler {
 
         this.initCommandGroups();
         this.initMetricsCollect();
+    }
+
+    private static MultiShardShadow[] multiShardShadows;
+
+    public static void initMultiShardShadows(byte netWorkers) {
+        multiShardShadows = new MultiShardShadow[netWorkers];
+        for (int i = 0; i < netWorkers; i++) {
+            multiShardShadows[i] = new MultiShardShadow();
+        }
+    }
+
+    public static void updateMultiShardShadows(MultiShard multiShard) {
+        var mySelfShard = multiShard.mySelfShard();
+        var shards = multiShard.getShards();
+
+        for (var shardShadow : multiShardShadows) {
+            shardShadow.setMySelfShard(mySelfShard);
+            shardShadow.setShards(shards);
+        }
+    }
+
+    static MultiShardShadow getMultiShardShadow() {
+        return multiShardShadows[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()];
     }
 
     private final BaseCommand[] commandGroups = new BaseCommand[26];

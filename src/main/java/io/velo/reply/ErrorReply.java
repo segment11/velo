@@ -28,6 +28,11 @@ public class ErrorReply implements Reply {
     public static final ErrorReply INDEX_OUT_OF_RANGE = new ErrorReply("index out of range");
     public static final ErrorReply READONLY = new ErrorReply("readonly");
     public static final ErrorReply NOT_SUPPORT = new ErrorReply("not support");
+    public static final ErrorReply CLUSTER_SLOT_CROSS_SHARDS = new ErrorReply("cluster slot cross shards");
+
+    public static ErrorReply clusterMoved(int toClientSlot, String host, int port) {
+        return new ErrorReply("MOVED " + toClientSlot + " " + host + ":" + port);
+    }
 
     private final String message;
 

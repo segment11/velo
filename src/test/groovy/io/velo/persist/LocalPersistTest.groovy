@@ -3,6 +3,7 @@ package io.velo.persist
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.velo.ConfForGlobal
+import io.velo.RequestHandler
 import io.velo.SnowFlake
 import spock.lang.Specification
 
@@ -15,6 +16,8 @@ class LocalPersistTest extends Specification {
         }
 
         def localPersist = LocalPersist.instance
+
+        RequestHandler.initMultiShardShadows(netWorkers)
 
         def snowFlakes = new SnowFlake[netWorkers]
         for (int i = 0; i < netWorkers; i++) {

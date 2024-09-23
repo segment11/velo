@@ -26,6 +26,7 @@ public class SlotRange implements Comparable<SlotRange> {
     public SlotRange() {
     }
 
+    // end include
     SlotRange(int begin, int end) {
         this.begin = begin;
         this.end = end;

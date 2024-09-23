@@ -136,6 +136,9 @@ class BaseCommandTest extends Specification {
         ConfForGlobal.clusterEnabled = true
         ConfForGlobal.slotNumber = 1024
 
+        println new BaseCommand.SlotWithKeyHash((short) 0, 0, 0L)
+        println new BaseCommand.SlotWithKeyHash((short) 0, (short) 0, 0, 0L)
+
         expect:
         (0..<100).every {
             def keyBytes = ('key:' + it).bytes

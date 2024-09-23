@@ -148,26 +148,16 @@ public class Dict implements Serializable {
         }
     }
 
-    private int getCtxIndexByCurrentThread() {
-        var currentThreadId = Thread.currentThread().threadId();
-        for (int i = 0; i < MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds.length; i++) {
-            if (currentThreadId == MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds[i]) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
     public byte[] compressByteArray(byte[] src) {
-        return ctxCompressArray[getCtxIndexByCurrentThread()].compress(src);
+        return ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compress(src);
     }
 
     public int compressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
-        return ctxCompressArray[getCtxIndexByCurrentThread()].compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
+        return ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
     }
 
     public int decompressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
-        return decompressCtxArray[getCtxIndexByCurrentThread()].decompressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
+        return decompressCtxArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].decompressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
     }
 
     @Override

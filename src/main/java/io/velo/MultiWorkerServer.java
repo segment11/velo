@@ -45,6 +45,7 @@ import io.velo.persist.LocalPersist;
 import io.velo.persist.Wal;
 import io.velo.repl.LeaderSelector;
 import io.velo.repl.ReplPair;
+import io.velo.repl.cluster.Shard;
 import io.velo.repl.support.JedisPoolHolder;
 import io.velo.reply.AsyncReply;
 import io.velo.reply.ErrorReply;
@@ -56,6 +57,7 @@ import net.openhft.affinity.AffinityStrategies;
 import net.openhft.affinity.AffinityThreadFactory;
 import org.apache.commons.net.telnet.TelnetClient;
 import org.jetbrains.annotations.TestOnly;
+import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -204,9 +206,44 @@ public class MultiWorkerServer extends Launcher {
     }
 
     Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
+        var slotWithKeyHashList = request.getSlotWithKeyHashList();
+        if (ConfForGlobal.clusterEnabled) {
+            // check if cross shards or not my shard
+            var multiShardShadow = RequestHandler.getMultiShardShadow();
+            var mySelfShard = multiShardShadow.getMySelfShard();
+
+            boolean isIncludeMySelfShard = false;
+            Shard movedToShard = null;
+            int movedToClientSlot = 0;
+            for (var slotWithKeyHash : slotWithKeyHashList) {
+                var toClientSlot = slotWithKeyHash.toClientSlot();
+                var expectRequestShard = multiShardShadow.getShardBySlot(toClientSlot);
+                if (expectRequestShard != mySelfShard) {
+                    if (movedToShard == null) {
+                        movedToShard = expectRequestShard;
+                    } else {
+                        if (expectRequestShard != movedToShard) {
+                            return Promise.of(ErrorReply.CLUSTER_SLOT_CROSS_SHARDS.buffer());
+                        }
+                    }
+                } else {
+                    isIncludeMySelfShard = true;
+                }
+            }
+
+            if (movedToShard != null) {
+                if (isIncludeMySelfShard) {
+                    return Promise.of(ErrorReply.CLUSTER_SLOT_CROSS_SHARDS.buffer());
+                }
+
+                var master = movedToShard.master();
+                var movedReply = ErrorReply.clusterMoved(movedToClientSlot, master.getHost(), master.getPort());
+                return Promise.of(movedReply.buffer());
+            }
+        }
+
         // some cmd already set cross slot flag
         if (!request.isCrossRequestWorker()) {
-            var slotWithKeyHashList = request.getSlotWithKeyHashList();
             if (slotWithKeyHashList != null && slotWithKeyHashList.size() > 1 && !request.isRepl()) {
                 // check if cross threads
                 int expectRequestWorkerId = -1;
@@ -257,8 +294,15 @@ public class MultiWorkerServer extends Launcher {
         }
     }
 
+    @TestOnly
+    boolean isMockHandle = false;
+
     private Promise<ByteBuf> getByteBufPromiseByOtherEventloop(Request request, ITcpSocket socket, RequestHandler targetHandler,
                                                                Eventloop targetEventloop) {
+        if (isMockHandle) {
+            return Promise.of(ByteBuf.empty());
+        }
+
         var p = targetEventloop == null ? Promises.first(AsyncSupplier.of(() -> targetHandler.handle(request, socket))) :
                 Promise.ofFuture(targetEventloop.submit(AsyncComputation.of(() -> targetHandler.handle(request, socket))));
 
@@ -436,7 +480,8 @@ public class MultiWorkerServer extends Launcher {
         netWorkerEventloop.delay(1000L, taskRunnable);
     }
 
-    private long[] netWorkerThreadIds;
+    @VisibleForTesting
+    long[] netWorkerThreadIds;
 
     @Override
     protected void onStart() throws Exception {
@@ -836,6 +881,8 @@ public class MultiWorkerServer extends Launcher {
             var configCompress = config.getChild("compress");
             TrainSampleJob.setDictKeyPrefixEndIndex(configCompress.get(ofInteger(), "dictKeyPrefixEndIndex", 5));
 
+            RequestHandler.initMultiShardShadows((byte) netWorkers);
+
             // init local persist
             // already created when inject
             var persistDir = new File(dirFile, "persist");
@@ -891,7 +938,19 @@ public class MultiWorkerServer extends Launcher {
 
     public static class StaticGlobalV {
         public SocketInspector socketInspector;
+        // immutable
         public long[] netWorkerThreadIds;
+
+        // use this instead of ThreadLocal
+        public int getThreadLocalIndexByCurrentThread() {
+            var currentThreadId = Thread.currentThread().threadId();
+            for (int i = 0; i < MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds.length; i++) {
+                if (currentThreadId == MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds[i]) {
+                    return i;
+                }
+            }
+            return -1;
+        }
     }
 
     public static final StaticGlobalV STATIC_GLOBAL_V = new StaticGlobalV();

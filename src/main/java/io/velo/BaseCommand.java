@@ -296,14 +296,19 @@ public abstract class BaseCommand {
 
     protected static final Logger log = LoggerFactory.getLogger(BaseCommand.class);
 
-    public record SlotWithKeyHash(short slot, int bucketIndex, long keyHash) {
+    public record SlotWithKeyHash(short slot, short toClientSlot, int bucketIndex, long keyHash) {
         @Override
         public String toString() {
             return "SlotWithKeyHash{" +
                     "slot=" + slot +
+                    ", toClientSlot=" + toClientSlot +
                     ", bucketIndex=" + bucketIndex +
                     ", keyHash=" + keyHash +
                     '}';
+        }
+
+        public SlotWithKeyHash(short slot, int bucketIndex, long keyHash) {
+            this(slot, slot, bucketIndex, keyHash);
         }
     }
 
@@ -317,7 +322,7 @@ public abstract class BaseCommand {
             // use crc16
             var toClientSlot = JedisClusterCRC16.getSlot(keyBytes);
             var innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot);
-            return new SlotWithKeyHash(innerSlot, (int) bucketIndex, keyHash);
+            return new SlotWithKeyHash(innerSlot, (short) toClientSlot, (int) bucketIndex, keyHash);
         }
 
         final int halfSlotNumber = slotNumber / 2;

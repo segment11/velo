@@ -11,6 +11,7 @@ import io.velo.persist.LocalPersistTest
 import io.velo.repl.LeaderSelector
 import io.velo.repl.Repl
 import io.velo.repl.ReplType
+import io.velo.repl.cluster.MultiShard
 import io.velo.reply.*
 import spock.lang.Specification
 
@@ -467,5 +468,22 @@ class RequestHandlerTest extends Specification {
         }
         then:
         1 == 1
+    }
+
+    def 'test cluster multi shard shadows'() {
+        given:
+        Consts.persistDir.mkdirs()
+        ConfForGlobal.netListenAddresses = 'localhost:7379'
+        RequestHandler.initMultiShardShadows((byte) 2)
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+
+        when:
+        def multiShard = new MultiShard(Consts.persistDir)
+        RequestHandler.updateMultiShardShadows(multiShard)
+        then:
+        RequestHandler.getMultiShardShadow().mySelfShard == multiShard.mySelfShard()
+
+        cleanup:
+        Consts.persistDir.deleteDir()
     }
 }
