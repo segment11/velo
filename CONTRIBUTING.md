@@ -40,5 +40,3 @@ If you have any questions, please contact us using the following methods:
 
 - Email: kerry@montplex.com
 - WeChat: key232323
-
-<img src="author_wechat.png" width="300px">

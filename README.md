@@ -13,7 +13,7 @@ Velo supports redis main 5 data types:
 - set
 - zset
 
-Details refer to https://github.com/segment11/velo/tree/main/doc/redis_command_support
+Details refer to https://github.com/segment11/velo/blob/main/doc/redis_command_support.md
 
 ## Get started
 
