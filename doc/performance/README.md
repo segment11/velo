@@ -45,3 +45,15 @@ TIPS: When first run 'set' test, Velo will train a zstd dictionary, it will take
 - when cache finally hit 100%, qps ~= 50000
 - when cache hit 50%, qps ~= 20000-30000
 - 99.9% latency < 1ms, 99.99% latency ~= 2ms
+
+## Multi thread
+
+todo
+
+## Perf cpu flame graph
+
+get:
+https://github.com/segment11/velo/blob/main/doc/performance/cpu-flame-get.html
+
+set:
+https://github.com/segment11/velo/blob/main/doc/performance/cpu-flame-set.html
