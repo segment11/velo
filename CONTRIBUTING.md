@@ -6,11 +6,13 @@ Issues are used to track bugs, features, and enhancements. If you find a bug, pl
 
 ## Design documents
 
-### dict based value compression
+### Zstd dict based value compression
 
 https://github.com/segment11/velo/tree/main/doc/compress
 
-### Run to complete thread safety
+### Multi-threads support
+
+https://github.com/segment11/velo/tree/main/doc/multi_threads
 
 ### Master slave replication and auto failover
 
@@ -20,7 +22,7 @@ https://github.com/segment11/velo/tree/main/doc/repl
 
 https://github.com/segment11/velo/tree/main/doc/haproxy
 
-### Hash buckets for each slot
+### Hash buckets for each slot (data shard)
 
 https://github.com/segment11/velo/tree/main/doc/hash_buckets
 
