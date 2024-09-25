@@ -24,8 +24,8 @@
 - one file max size is 2G, so one chunk max size is 128G, usually can store one slot max 216M keys
 - one chunk file has many segments, one segment length can be 4K / 16K / 64K / 256K, depends on the value bytes size and
   compress ratio
-- one segment is compressed by zstd, use no trained dictionary, and use default zstd compression level 3
-- one segment has 1-4 sub-segments, one sub-segment has a batch of value bytes, and value bytes are compressed by zstd
+- one segment is optionally (by global config) compressed by zstd, use no trained dictionary, and use default zstd compression level 3
+- when do compress, one segment has 1-4 sub-segments, one sub-segment has a batch of value bytes, and value bytes are compressed by zstd
   using a trained dictionary
 
 ## wal groups
@@ -38,7 +38,8 @@
 - when one wal group is full, ether by key count or key + value bytes size, it will cause a flush to chunk segments
 - after chunk segments flush, the key buckets will batch update the value offset in chunk segments
 - when short value wal group is full, only update the key buckets, need not flush chunk segments
-- after key buckets update, the slot will reset the wal group, and continue to write new records
+- after key buckets update, the slot will reset the wal group, and continue to write new records, at the same time, it will clear this wal group lru cache
+- when do read, wal groups can optionally (by slot config) use lru cache for performance
 - all value bytes saved in wal groups temporarily ares already compressed by zstd using a trained dictionary
 - when restart the server, it will read all wal files to recover the slot data
 - when chunk segments flush, begin with a new file if one chunk file available segments count is less then need write
@@ -48,9 +49,9 @@
 
 - when all chunk segments files are half full, it will begin to merge chunk segments from the first file
 - when new chunk segments are written, it will merge chunk segments relative to the first file, always keep 1/3 or half
-  chunk segments are available to write new value bytes
+  chunk segments are available to write new value bytes, this means waste some disk space, but for performance
 - once a merge job only merge chunk segments those are in the same wal group, so when compare to exists keys stored
-  in key buckets it will only need read 16 or 32 key buckets, for performance
+  in key buckets it will only need read 16 or 32 key buckets (once io read), for performance
 - before write chunk segments when one wal group is full, it will pre-read 1-2 chunk segments with the same wal group
   need to merge, and compare the keys with key buckets together, so actually, the merge job is not so heavy, this is
   designed for performance / low latency
