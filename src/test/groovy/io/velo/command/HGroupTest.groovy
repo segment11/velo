@@ -1060,6 +1060,20 @@ class HGroupTest extends Specification {
         reply = hGroup.hmset()
         then:
         reply == ErrorReply.VALUE_TOO_LONG
+
+        when:
+        data4[2] = new byte[0]
+        data4[3] = 'value'.bytes
+        reply = hGroup.hmset()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        data4[2] = 'field'.bytes
+        data4[3] = new byte[0]
+        reply = hGroup.hmset()
+        then:
+        reply == ErrorReply.SYNTAX
     }
 
     def 'test hrandfield'() {
@@ -1488,6 +1502,20 @@ class HGroupTest extends Specification {
         reply = hGroup.hsetnx()
         then:
         reply == ErrorReply.VALUE_TOO_LONG
+
+        when:
+        data4[2] = new byte[0]
+        data4[3] = 'value'.bytes
+        reply = hGroup.hsetnx()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        data4[2] = 'field'.bytes
+        data4[3] = new byte[0]
+        reply = hGroup.hsetnx()
+        then:
+        reply == ErrorReply.SYNTAX
     }
 
     def 'test hvals'() {

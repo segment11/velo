@@ -684,6 +684,10 @@ public class HGroup extends BaseCommand {
                 return ErrorReply.VALUE_TOO_LONG;
             }
 
+            if (fieldBytes.length == 0 || fieldValueBytes.length == 0) {
+                return ErrorReply.SYNTAX;
+            }
+
             fieldValues.put(new String(fieldBytes), fieldValueBytes);
         }
 
@@ -1036,6 +1040,10 @@ public class HGroup extends BaseCommand {
         }
         if (fieldValueBytes.length > CompressedValue.VALUE_MAX_LENGTH) {
             return ErrorReply.VALUE_TOO_LONG;
+        }
+
+        if (fieldBytes.length == 0 || fieldValueBytes.length == 0) {
+            return ErrorReply.SYNTAX;
         }
 
         if (isUseHH(keyBytes)) {
