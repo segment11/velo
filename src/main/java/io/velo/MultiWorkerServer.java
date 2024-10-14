@@ -688,7 +688,7 @@ public class MultiWorkerServer extends Launcher {
             log.warn("Global config, machineId={}", ConfForGlobal.machineId);
 
             ConfForGlobal.isValueSetUseCompression = config.get(ofBoolean(), "isValueSetUseCompression", true);
-            ConfForGlobal.isOnDynTrainDictForCompression = config.get(ofBoolean(), "isOnDynTrainDictForCompression", true);
+            ConfForGlobal.isOnDynTrainDictForCompression = config.get(ofBoolean(), "isOnDynTrainDictForCompression", false);
             log.warn("Global config, isValueSetUseCompression={}", ConfForGlobal.isValueSetUseCompression);
             log.warn("Global config, isOnDynTrainDictForCompression={}", ConfForGlobal.isOnDynTrainDictForCompression);
 

@@ -16,7 +16,7 @@ public class ConfForGlobal {
 
     // compression
     public static boolean isValueSetUseCompression = true;
-    public static boolean isOnDynTrainDictForCompression = true;
+    public static boolean isOnDynTrainDictForCompression = false;
 
     public static String netListenAddresses;
 
