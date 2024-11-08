@@ -485,9 +485,12 @@ class KeyLoaderTest extends Specification {
         !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteZSet, CompressedValue.NULL_DICT_SEQ)
         KeyLoader.isSpTypeMatch((byte) 10, CompressedValue.NULL_DICT_SEQ)
         KeyLoader.isKeyMatch('aaa', null)
-        KeyLoader.isKeyMatch('aaa', 'a*')
-        KeyLoader.isKeyMatch('aaa', 'aa')
-        !KeyLoader.isKeyMatch('aaa', 'bb')
+        KeyLoader.isKeyMatch('aaa', 'aaa')
+        KeyLoader.isKeyMatch('aaa', 'aa*')
+        KeyLoader.isKeyMatch('aaa', '*aa')
+        KeyLoader.isKeyMatch('abc', '*b*')
+        KeyLoader.isKeyMatch('abc', 'ab*')
+        !KeyLoader.isKeyMatch('aaa', 'bbb')
 
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
@@ -534,7 +537,7 @@ class KeyLoaderTest extends Specification {
         }
         def xForBinlog = new XOneWalGroupPersist(true, false, 0)
         keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog)
-        r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:', 6)
+        r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6)
         then:
         r.keys().size() == 6
         r.keys().every { key ->

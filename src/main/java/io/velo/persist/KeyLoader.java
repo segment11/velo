@@ -327,11 +327,17 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return true;
         }
 
-        // todo, other pattern
         if (matchPattern.endsWith("*")) {
+            if (matchPattern.startsWith("*")) {
+                return key.contains(matchPattern.substring(1, matchPattern.length() - 1));
+            }
+
             return key.startsWith(matchPattern.substring(0, matchPattern.length() - 1));
+        } else if (matchPattern.startsWith("*")) {
+            return key.endsWith(matchPattern.substring(1));
+        } else {
+            return key.equals(matchPattern);
         }
-        return key.startsWith(matchPattern);
     }
 
     private ScanCursor readKeysToList(ArrayList<String> keys, int walGroupIndex, byte splitIndex, short skipCount,
