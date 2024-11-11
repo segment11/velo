@@ -2,8 +2,7 @@ package io.velo.command
 
 import io.velo.BaseCommand
 import io.velo.mock.InMemoryGetSet
-import io.velo.reply.ErrorReply
-import io.velo.reply.NilReply
+import io.velo.reply.*
 import spock.lang.Specification
 
 class AGroupTest extends Specification {
@@ -47,6 +46,12 @@ class AGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        aGroup.cmd = 'acl'
+        reply = aGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         aGroup.cmd = 'zzz'
         reply = aGroup.handle()
         then:
@@ -72,6 +77,58 @@ class AGroupTest extends Specification {
 
         when:
         def reply = aGroup.execute('append a')
+        then:
+        reply == ErrorReply.FORMAT
+    }
+
+    def 'test acl'() {
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def aGroup = new AGroup(null, null, null)
+        aGroup.byPassGetSet = inMemoryGetSet
+        aGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = aGroup.execute('acl cat')
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
+        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'keyspace'.bytes
+
+        when:
+        reply = aGroup.execute('acl cat dangerous')
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
+        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'flushdb'.bytes
+
+        when:
+        reply = aGroup.execute('acl cat dangerous_x')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = aGroup.execute('acl cat a b')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = aGroup.execute('acl cat_x')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = aGroup.execute('acl deluser')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = aGroup.execute('acl deluser a')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when:
+        reply = aGroup.execute('acl')
         then:
         reply == ErrorReply.FORMAT
     }
