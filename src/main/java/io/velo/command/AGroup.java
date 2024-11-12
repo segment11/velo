@@ -2,13 +2,12 @@ package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.BaseCommand;
+import io.velo.acl.Category;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class AGroup extends BaseCommand {
     public AGroup(String cmd, byte[][] data, ITcpSocket socket) {
@@ -44,29 +43,6 @@ public class AGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    private static final List<String> ACL_CATEGORIES = List.of(
-            "keyspace", "read", "write",
-            "set", "sortedset", "list", "hash", "string", "bitmap",
-            "hyperloglog", "geo", "stream",
-            "pubsub", "admin", "fast", "slow",
-            "blocking", "dangerous", "connection",
-            "connection", "transaction", "scripting");
-
-    private static final Map<String, List<String>> ACL_CMD_LIST_BY_CATEGORY = new HashMap<>();
-
-    static {
-        List<String> dangerousCmdList = List.of("flushdb", "acl", "showlog",
-                "debug", "role", "keys", "pfselftest",
-                "client", "bgrewriteaof", "replicaof",
-                "monitor", "restore-asking", "latency",
-                "replconf", "pfdebug", "bgsave", "sync",
-                "config", "flushall", "cluster", "info",
-                "lastsave", "slaveof", "swapdb", "module",
-                "restore", "migrate", "save", "shutdown",
-                "psync", "sort");
-        ACL_CMD_LIST_BY_CATEGORY.put("dangerous", dangerousCmdList);
-    }
-
     @VisibleForTesting
     Reply acl() {
         if (data.length < 2) {
@@ -81,18 +57,26 @@ public class AGroup extends BaseCommand {
             }
 
             var category = data.length == 3 ? new String(data[2]).toLowerCase() : null;
+            var categories = Category.values();
             if (category == null) {
-                var replies = new Reply[ACL_CATEGORIES.size()];
-                for (int i = 0; i < ACL_CATEGORIES.size(); i++) {
-                    replies[i] = new BulkReply(ACL_CATEGORIES.get(i).getBytes());
+                var replies = new Reply[categories.length];
+                for (int i = 0; i < categories.length; i++) {
+                    replies[i] = new BulkReply(categories[i].name().getBytes());
                 }
                 return new MultiBulkReply(replies);
             } else {
-                if (!ACL_CATEGORIES.contains(category)) {
+                int index = -1;
+                for (int i = 0; i < categories.length; i++) {
+                    if (categories[i].name().equals(category)) {
+                        index = i;
+                        break;
+                    }
+                }
+                if (index == -1) {
                     return ErrorReply.SYNTAX;
                 }
 
-                var cmdList = ACL_CMD_LIST_BY_CATEGORY.get(category);
+                var cmdList = Category.getCmdListByCategory(categories[index]);
                 var replies = new Reply[cmdList.size()];
                 for (int i = 0; i < cmdList.size(); i++) {
                     replies[i] = new BulkReply(cmdList.get(i).getBytes());

@@ -93,7 +93,7 @@ class AGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'keyspace'.bytes
+        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'admin'.bytes
 
         when:
         reply = aGroup.execute('acl cat dangerous')
