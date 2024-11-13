@@ -1,6 +1,8 @@
 package io.velo.command
 
 import io.velo.BaseCommand
+import io.velo.acl.AclUsers
+import io.velo.acl.U
 import io.velo.mock.InMemoryGetSet
 import io.velo.reply.*
 import spock.lang.Specification
@@ -100,7 +102,7 @@ class AGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'flushdb'.bytes
+        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'acl'.bytes
 
         when:
         reply = aGroup.execute('acl cat dangerous_x')
@@ -125,7 +127,18 @@ class AGroupTest extends Specification {
         when:
         reply = aGroup.execute('acl deluser a')
         then:
-        reply == IntegerReply.REPLY_1
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 0
+
+        when:
+        def aclUsers = AclUsers.instance
+        aclUsers.upInsert('a') {
+            it.password = U.Password.NO_PASSWORD
+        }
+        reply = aGroup.execute('acl deluser a')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 1
 
         when:
         reply = aGroup.execute('acl')

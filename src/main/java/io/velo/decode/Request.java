@@ -1,6 +1,8 @@
 package io.velo.decode;
 
 import io.velo.BaseCommand;
+import io.velo.acl.U;
+import org.jetbrains.annotations.TestOnly;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -28,6 +30,20 @@ public class Request {
         this.data = data;
         this.isHttp = isHttp;
         this.isRepl = isRepl;
+    }
+
+    private U u;
+
+    public U getU() {
+        return u;
+    }
+
+    public void setU(U u) {
+        this.u = u;
+    }
+
+    public boolean isAclCheckOk() {
+        return u.checkCmdAndKey(cmd(), data, slotWithKeyHashList);
     }
 
     private String cmd;
@@ -60,6 +76,13 @@ public class Request {
 
     public void setHttpHeaders(Map<String, String> httpHeaders) {
         this.httpHeaders = httpHeaders;
+    }
+
+    @TestOnly
+    public void removeHttpHeader(String header) {
+        if (httpHeaders != null) {
+            httpHeaders.remove(header);
+        }
     }
 
     private ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList;

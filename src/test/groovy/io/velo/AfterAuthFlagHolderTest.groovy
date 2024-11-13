@@ -7,10 +7,11 @@ class AfterAuthFlagHolderTest extends Specification {
     def 'test all'() {
         given:
         def remoteAddress = new InetSocketAddress('localhost', 46379)
-        AfterAuthFlagHolder.add(remoteAddress)
+        AfterAuthFlagHolder.add(remoteAddress, 'default')
 
         expect:
         AfterAuthFlagHolder.contains(remoteAddress)
+        AfterAuthFlagHolder.getUser(remoteAddress) == 'default'
 
         when:
         AfterAuthFlagHolder.remove(remoteAddress)

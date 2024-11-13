@@ -8,7 +8,7 @@ public class RPubSub {
 
     String pattern;
 
-    boolean check(String channel) {
+    boolean match(String channel) {
         if (pattern.equals(ALL)) {
             return true;
         }
@@ -17,5 +17,16 @@ public class RPubSub {
 
     String literal() {
         return LITERAL_PREFIX + pattern;
+    }
+
+    public static RPubSub fromLiteral(String str) {
+        if (!str.contains(LITERAL_PREFIX)) {
+            throw new IllegalArgumentException("Invalid literal: " + str);
+        }
+
+        var pattern = str.substring(1);
+        var rPubSub = new RPubSub();
+        rPubSub.pattern = pattern;
+        return rPubSub;
     }
 }

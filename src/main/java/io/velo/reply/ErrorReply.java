@@ -9,7 +9,6 @@ public class ErrorReply implements Reply {
     public static final ErrorReply KEY_TOO_LONG = new ErrorReply("key too long (max length is " + CompressedValue.KEY_MAX_LENGTH + ")");
     public static final ErrorReply VALUE_TOO_LONG = new ErrorReply("value too long (max length is " + CompressedValue.VALUE_MAX_LENGTH + ")");
     public static final ErrorReply SERVER_STOPPED = new ErrorReply("server stopped");
-    public static final ErrorReply NO_PASSWORD = new ErrorReply("server has no password");
     public static final ErrorReply AUTH_FAILED = new ErrorReply("auth failed");
     public static final ErrorReply NO_AUTH = new ErrorReply("no auth");
     public static final ErrorReply SYNTAX = new ErrorReply("syntax error");

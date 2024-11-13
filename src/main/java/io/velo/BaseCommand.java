@@ -73,16 +73,6 @@ public abstract class BaseCommand {
 //        }
 //    }
 
-    public record SlotWithKeyHashWithKeyBytes(SlotWithKeyHash slotWithKeyHash, byte[] keyBytes) {
-        @Override
-        public String toString() {
-            return "SlotWithKeyHashWithKeyBytes{" +
-                    "slotWithKeyHash=" + slotWithKeyHash +
-                    ", key=" + new String(keyBytes) +
-                    '}';
-        }
-    }
-
     // for dyn script execute
     public String getCmd() {
         return cmd;
@@ -123,6 +113,8 @@ public abstract class BaseCommand {
     }
 
     protected final DictMap dictMap = DictMap.getInstance();
+
+    protected RequestHandler requestHandler;
 
     protected byte workerId;
     protected byte netWorkers;
@@ -227,6 +219,8 @@ public abstract class BaseCommand {
     }
 
     public void from(BaseCommand other) {
+        this.requestHandler = other.requestHandler;
+
         this.netWorkers = other.netWorkers;
         this.slotNumber = other.slotNumber;
 
@@ -252,6 +246,8 @@ public abstract class BaseCommand {
     }
 
     public BaseCommand init(RequestHandler requestHandler, Request request) {
+        this.requestHandler = requestHandler;
+
         this.netWorkers = requestHandler.netWorkers;
         this.slotNumber = requestHandler.slotNumber;
 
@@ -296,7 +292,7 @@ public abstract class BaseCommand {
 
     protected static final Logger log = LoggerFactory.getLogger(BaseCommand.class);
 
-    public record SlotWithKeyHash(short slot, short toClientSlot, int bucketIndex, long keyHash) {
+    public record SlotWithKeyHash(short slot, short toClientSlot, int bucketIndex, long keyHash, String rawKey) {
         @Override
         public String toString() {
             return "SlotWithKeyHash{" +
@@ -309,8 +305,12 @@ public abstract class BaseCommand {
 
         public static final short IGNORE_TO_CLIENT_SLOT = -1;
 
+        public SlotWithKeyHash(short slot, int bucketIndex, long keyHash, String rawKey) {
+            this(slot, IGNORE_TO_CLIENT_SLOT, bucketIndex, keyHash, rawKey);
+        }
+
         public SlotWithKeyHash(short slot, int bucketIndex, long keyHash) {
-            this(slot, IGNORE_TO_CLIENT_SLOT, bucketIndex, keyHash);
+            this(slot, IGNORE_TO_CLIENT_SLOT, bucketIndex, keyHash, null);
         }
     }
 
@@ -324,7 +324,7 @@ public abstract class BaseCommand {
             // use crc16
             var toClientSlot = JedisClusterCRC16.getSlot(keyBytes);
             var innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot);
-            return new SlotWithKeyHash(innerSlot, (short) toClientSlot, (int) bucketIndex, keyHash);
+            return new SlotWithKeyHash(innerSlot, (short) toClientSlot, (int) bucketIndex, keyHash, new String(keyBytes));
         }
 
         final int halfSlotNumber = slotNumber / 2;
@@ -347,12 +347,12 @@ public abstract class BaseCommand {
             // same slot, but not same bucket index
             var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) % halfSlotNumber);
             var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-            return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash);
+            return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, new String(keyBytes));
         }
 
         var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) % halfSlotNumber);
         var slot = keyHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-        return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash);
+        return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, new String(keyBytes));
     }
 
     public SlotWithKeyHash slot(byte[] keyBytes) {

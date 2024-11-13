@@ -872,20 +872,16 @@ public class ZGroup extends BaseCommand {
             withScores = "withscores".equalsIgnoreCase(new String(dd[dd.length - 1]));
         }
 
-        ArrayList<SlotWithKeyHashWithKeyBytes> list = new ArrayList<>(numKeys);
         // begin from 2
         for (int i = 2, j = 0; i < numKeys + 2; i++, j++) {
             var keyBytes = dd[i];
             if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
                 return ErrorReply.KEY_TOO_LONG;
             }
-
-            var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-            list.add(new SlotWithKeyHashWithKeyBytes(slotWithKeyHash, dd[i]));
         }
 
-        var first = list.getFirst();
-        var rz = getRedisZSet(first.keyBytes(), first.slotWithKeyHash());
+        var first = slotWithKeyHashListParsed.getFirst();
+        var rz = getRedisZSet(first.rawKey().getBytes(), first);
         if (rz == null || rz.isEmpty()) {
             if (isInter) {
                 return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
@@ -899,10 +895,10 @@ public class ZGroup extends BaseCommand {
         }
 
         if (!isCrossRequestWorker) {
-            ArrayList<RedisZSet> otherRzList = new ArrayList<>(list.size() - 1);
-            for (int i = 1; i < list.size(); i++) {
-                var other = list.get(i);
-                var otherRz = getRedisZSet(other.keyBytes(), other.slotWithKeyHash());
+            ArrayList<RedisZSet> otherRzList = new ArrayList<>(slotWithKeyHashListParsed.size() - 1);
+            for (int i = 1; i < slotWithKeyHashListParsed.size(); i++) {
+                var other = slotWithKeyHashListParsed.get(i);
+                var otherRz = getRedisZSet(other.rawKey().getBytes(), other);
                 otherRzList.add(otherRz);
             }
             operateZset(rz, otherRzList, isInter, isUnion,
@@ -929,14 +925,12 @@ public class ZGroup extends BaseCommand {
             }
         }
 
-        ArrayList<Promise<RedisZSet>> promises = new ArrayList<>(list.size() - 1);
-        for (int i = 1; i < list.size(); i++) {
-            var other = list.get(i);
-            var otherSlotWithKeyHash = other.slotWithKeyHash();
-            var otherKeyBytes = other.keyBytes();
+        ArrayList<Promise<RedisZSet>> promises = new ArrayList<>(slotWithKeyHashListParsed.size() - 1);
+        for (int i = 1; i < slotWithKeyHashListParsed.size(); i++) {
+            var other = slotWithKeyHashListParsed.get(i);
 
-            var oneSlot = localPersist.oneSlot(otherSlotWithKeyHash.slot());
-            var p = oneSlot.asyncCall(() -> getRedisZSet(otherKeyBytes, otherSlotWithKeyHash));
+            var oneSlot = localPersist.oneSlot(other.slot());
+            var p = oneSlot.asyncCall(() -> getRedisZSet(other.rawKey().getBytes(), other));
             promises.add(p);
         }
 
@@ -957,7 +951,7 @@ public class ZGroup extends BaseCommand {
                 return;
             }
 
-            ArrayList<RedisZSet> otherRzList = new ArrayList<>(list.size() - 1);
+            ArrayList<RedisZSet> otherRzList = new ArrayList<>(slotWithKeyHashListParsed.size() - 1);
             for (var promise : promises) {
                 otherRzList.add(promise.getResult());
             }
@@ -1079,19 +1073,15 @@ public class ZGroup extends BaseCommand {
             }
         }
 
-        ArrayList<SlotWithKeyHashWithKeyBytes> list = new ArrayList<>(numKeys);
         for (int i = 2, j = 0; j < numKeys; i++, j++) {
             var keyBytes = data[i];
             if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
                 return ErrorReply.KEY_TOO_LONG;
             }
-
-            var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-            list.add(new SlotWithKeyHashWithKeyBytes(slotWithKeyHash, data[i]));
         }
 
-        var first = list.getFirst();
-        var rz = getRedisZSet(first.keyBytes(), first.slotWithKeyHash());
+        var first = slotWithKeyHashListParsed.getFirst();
+        var rz = getRedisZSet(first.rawKey().getBytes(), first);
         if (rz == null || rz.isEmpty()) {
             return IntegerReply.REPLY_0;
         }
@@ -1100,9 +1090,9 @@ public class ZGroup extends BaseCommand {
             var memberMap = rz.getMemberMap();
 
             outer:
-            for (int i = 1; i < list.size(); i++) {
-                var other = list.get(i);
-                var otherRz = getRedisZSet(other.keyBytes(), other.slotWithKeyHash());
+            for (int i = 1; i < slotWithKeyHashListParsed.size(); i++) {
+                var other = slotWithKeyHashListParsed.get(i);
+                var otherRz = getRedisZSet(other.rawKey().getBytes(), other);
                 if (otherRz == null || otherRz.size() == 0) {
                     return IntegerReply.REPLY_0;
                 }
@@ -1130,14 +1120,12 @@ public class ZGroup extends BaseCommand {
             return n == 0 ? IntegerReply.REPLY_0 : new IntegerReply(n);
         }
 
-        ArrayList<Promise<RedisZSet>> promises = new ArrayList<>(list.size() - 1);
-        for (int i = 1; i < list.size(); i++) {
-            var other = list.get(i);
-            var otherSlotWithKeyHash = other.slotWithKeyHash();
-            var otherKeyBytes = other.keyBytes();
+        ArrayList<Promise<RedisZSet>> promises = new ArrayList<>(slotWithKeyHashListParsed.size() - 1);
+        for (int i = 1; i < slotWithKeyHashListParsed.size(); i++) {
+            var other = slotWithKeyHashListParsed.get(i);
 
-            var oneSlot = localPersist.oneSlot(otherSlotWithKeyHash.slot());
-            var p = oneSlot.asyncCall(() -> getRedisZSet(otherKeyBytes, otherSlotWithKeyHash));
+            var oneSlot = localPersist.oneSlot(other.slot());
+            var p = oneSlot.asyncCall(() -> getRedisZSet(other.rawKey().getBytes(), other));
             promises.add(p);
         }
 
@@ -1152,7 +1140,7 @@ public class ZGroup extends BaseCommand {
                 return;
             }
 
-            ArrayList<RedisZSet> otherRzList = new ArrayList<>(list.size() - 1);
+            ArrayList<RedisZSet> otherRzList = new ArrayList<>(slotWithKeyHashListParsed.size() - 1);
             for (var promise : promises) {
                 otherRzList.add(promise.getResult());
             }

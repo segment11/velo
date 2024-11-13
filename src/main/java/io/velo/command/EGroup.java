@@ -120,15 +120,9 @@ public class EGroup extends BaseCommand {
             return new IntegerReply(n);
         }
 
-        ArrayList<SlotWithKeyHashWithKeyBytes> list = new ArrayList<>(data.length - 1);
-        for (int i = 1, j = 0; i < data.length; i++, j++) {
-            var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-            list.add(new SlotWithKeyHashWithKeyBytes(slotWithKeyHash, data[i]));
-        }
-
         ArrayList<Promise<ArrayList<Boolean>>> promises = new ArrayList<>();
         // group by slot
-        var groupBySlot = list.stream().collect(Collectors.groupingBy(it -> it.slotWithKeyHash().slot()));
+        var groupBySlot = slotWithKeyHashListParsed.stream().collect(Collectors.groupingBy(SlotWithKeyHash::slot));
         for (var entry : groupBySlot.entrySet()) {
             var slot = entry.getKey();
             var subList = entry.getValue();
@@ -137,11 +131,7 @@ public class EGroup extends BaseCommand {
             var p = oneSlot.asyncCall(() -> {
                 ArrayList<Boolean> valueList = new ArrayList<>();
                 for (var one : subList) {
-                    var key = new String(one.keyBytes());
-                    var bucketIndex = one.slotWithKeyHash().bucketIndex();
-                    var keyHash = one.slotWithKeyHash().keyHash();
-
-                    var isExists = exists(oneSlot.slot(), bucketIndex, key, keyHash);
+                    var isExists = exists(oneSlot.slot(), one.bucketIndex(), one.rawKey(), one.keyHash());
                     valueList.add(isExists);
                 }
                 return valueList;

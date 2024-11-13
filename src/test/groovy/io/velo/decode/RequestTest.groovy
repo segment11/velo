@@ -1,6 +1,9 @@
 package io.velo.decode
 
 import io.velo.BaseCommand
+import io.velo.acl.AclUsers
+import io.velo.acl.RCmd
+import io.velo.acl.U
 import spock.lang.Specification
 
 class RequestTest extends Specification {
@@ -13,11 +16,13 @@ class RequestTest extends Specification {
 
         def request = new Request(data3, false, false)
         request.slotNumber = 1
+        request.u = U.INIT_DEFAULT_U
 
         expect:
         request.data.length == 3
         !request.isHttp()
         !request.isRepl()
+        request.u == U.INIT_DEFAULT_U
 
         request.cmd() == 'set'
         request.cmd() == 'set'
@@ -36,6 +41,13 @@ class RequestTest extends Specification {
         request.slotWithKeyHashList = []
         then:
         request.singleSlot == Request.SLOT_CAN_HANDLE_BY_ANY_WORKER
+
+        when:
+        AclUsers.instance.upInsert('default') { u ->
+            u.addRCmd(true, RCmd.fromLiteral('+*'))
+        }
+        then:
+        request.isAclCheckOk()
 
         when:
         def dataRepl = new byte[3][]

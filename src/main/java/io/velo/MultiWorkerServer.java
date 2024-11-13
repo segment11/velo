@@ -21,6 +21,7 @@ import io.activej.launchers.initializers.Initializers;
 import io.activej.net.PrimaryServer;
 import io.activej.net.SimpleServer;
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.net.socket.tcp.TcpSocket;
 import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.reactor.nio.NioReactor;
@@ -35,6 +36,8 @@ import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.hotspot.BufferPoolsExports;
 import io.prometheus.client.hotspot.GarbageCollectorExports;
 import io.prometheus.client.hotspot.MemoryPoolsExports;
+import io.velo.acl.AclUsers;
+import io.velo.acl.U;
 import io.velo.decode.HttpHeaderBody;
 import io.velo.decode.Request;
 import io.velo.decode.RequestDecoder;
@@ -347,6 +350,10 @@ public class MultiWorkerServer extends Launcher {
         for (var request : pipeline) {
             request.setSlotNumber(slotNumber);
             requestHandlerArray[0].parseSlots(request);
+
+            var user = AfterAuthFlagHolder.getUser(((TcpSocket) socket).getRemoteAddress());
+            var u = user == null ? U.INIT_DEFAULT_U : AclUsers.getInstance().get(user);
+            request.setU(u);
         }
 
         if (pipeline.size() == 1) {
@@ -698,6 +705,9 @@ public class MultiWorkerServer extends Launcher {
             log.warn("Global config, eventLoopIdleMillis={}", ConfForGlobal.eventLoopIdleMillis);
 
             ConfForGlobal.PASSWORD = config.get(ofString(), "password", null);
+            if (ConfForGlobal.PASSWORD != null) {
+                AclUsers.getInstance().upInsert(U.DEFAULT_USER, u -> u.setPassword(U.Password.plain(ConfForGlobal.PASSWORD)));
+            }
 
             ConfForGlobal.pureMemory = config.get(ofBoolean(), "pureMemory", false);
             log.warn("Global config, pureMemory={}", ConfForGlobal.pureMemory);

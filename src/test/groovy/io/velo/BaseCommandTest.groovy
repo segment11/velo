@@ -68,8 +68,6 @@ class BaseCommandTest extends Specification {
         def k5 = 'key5{xyz}'
         def s5 = BaseCommand.slot(k5.bytes, 1)
 
-        println new BaseCommand.SlotWithKeyHashWithKeyBytes(s5, k5.bytes)
-
         expect:
         s1.slot() == 0
         s1.bucketIndex() < 65536
@@ -136,8 +134,9 @@ class BaseCommandTest extends Specification {
         ConfForGlobal.clusterEnabled = true
         ConfForGlobal.slotNumber = 1024
 
+        println new BaseCommand.SlotWithKeyHash((short) 0, (short) 0, 0, 0L, 'key1')
+        println new BaseCommand.SlotWithKeyHash((short) 0, 0, 0L, 'key1')
         println new BaseCommand.SlotWithKeyHash((short) 0, 0, 0L)
-        println new BaseCommand.SlotWithKeyHash((short) 0, (short) 0, 0, 0L)
 
         expect:
         (0..<100).every {

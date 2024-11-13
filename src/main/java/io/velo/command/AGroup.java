@@ -2,7 +2,9 @@ package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.BaseCommand;
+import io.velo.acl.AclUsers;
 import io.velo.acl.Category;
+import io.velo.decode.Request;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -25,6 +27,26 @@ public class AGroup extends BaseCommand {
             var slotWithKeyHash = slot(keyBytes, slotNumber);
             slotWithKeyHashList.add(slotWithKeyHash);
             return slotWithKeyHashList;
+        }
+
+        if ("acl".equals(cmd)) {
+            if (data.length > 2) {
+                var isDryrun = "dryrun".equalsIgnoreCase(new String(data[2]));
+                if (isDryrun) {
+                    if (data.length < 4) {
+                        return slotWithKeyHashList;
+                    }
+
+                    var dd = new byte[data.length - 3][];
+                    for (int i = 3; i < data.length; i++) {
+                        dd[i - 3] = data[i];
+                    }
+
+                    var redirectRequest = new Request(dd, false, false);
+                    requestHandler.parseSlots(redirectRequest);
+                    return redirectRequest.getSlotWithKeyHashList();
+                }
+            }
         }
 
         return slotWithKeyHashList;
@@ -94,9 +116,35 @@ public class AGroup extends BaseCommand {
                 userList.add(user);
             }
 
-            // todo
+            var aclUsers = AclUsers.getInstance();
+            int count = 0;
+            for (var user : userList) {
+                if (aclUsers.delete(user)) {
+                    count++;
+                }
+            }
+            return new IntegerReply(count);
+        } else if ("dryrun".equals(subCmd)) {
+            if (data.length < 4) {
+                return ErrorReply.SYNTAX;
+            }
 
-            return IntegerReply.REPLY_1;
+            var user = new String(data[2]);
+            var aclUsers = AclUsers.getInstance();
+            var u = aclUsers.get(user);
+            if (u == null) {
+                return new ErrorReply("no such user");
+            }
+
+            if (!u.isOn()) {
+                return ErrorReply.NO_AUTH;
+            }
+
+            var dd = new byte[data.length - 3][];
+            for (int i = 3; i < data.length; i++) {
+                dd[i - 3] = data[i];
+            }
+
         }
 
         // todo: implement other sub commands

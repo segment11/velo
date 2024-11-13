@@ -10,11 +10,28 @@ class RPubSubTest extends Specification {
 
         expect:
         one.literal() == '&myChannel*'
-        one.check('myChannel1')
+        one.match('myChannel1')
 
         when:
         one.pattern = '*'
         then:
-        one.check('yourChannel1')
+        one.match('yourChannel1')
+    }
+
+    def 'test from literal'() {
+        expect:
+        RPubSub.fromLiteral('&myChannel*').pattern == 'myChannel*'
+        RPubSub.fromLiteral('&*').pattern == '*'
+
+        when:
+        boolean exception = false
+        try {
+            RPubSub.fromLiteral('myChannel*')
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
     }
 }

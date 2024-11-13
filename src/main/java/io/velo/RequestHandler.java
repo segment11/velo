@@ -6,6 +6,8 @@ import io.activej.net.socket.tcp.TcpSocket;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.Summary;
 import io.prometheus.client.exporter.common.TextFormat;
+import io.velo.acl.AclUsers;
+import io.velo.acl.U;
 import io.velo.command.*;
 import io.velo.decode.Request;
 import io.velo.metric.SimpleGauge;
@@ -50,9 +52,6 @@ public class RequestHandler {
     @VisibleForTesting
     final SnowFlake snowFlake;
 
-    @VisibleForTesting
-    String password;
-
     @TestOnly
     final boolean localTest;
     @TestOnly
@@ -92,8 +91,6 @@ public class RequestHandler {
         this.netWorkers = netWorkers;
         this.slotNumber = slotNumber;
         this.snowFlake = snowFlake;
-
-        this.password = ConfForGlobal.PASSWORD;
 
         var toInt = ofInteger();
         this.localTest = config.get(ofBoolean(), "localTest", false);
@@ -185,7 +182,7 @@ public class RequestHandler {
     }
 
     // cross threads, need be thread safe
-    void parseSlots(@NotNull Request request) {
+    public void parseSlots(@NotNull Request request) {
         var cmd = request.cmd();
         if (cmd.equals(PING_COMMAND) || cmd.equals(QUIT_COMMAND) || cmd.equals(AUTH_COMMAND)) {
             return;
@@ -454,7 +451,7 @@ public class RequestHandler {
             InetSocketAddress remoteAddress = ((TcpSocket) socket).getRemoteAddress();
             // http basic auth
             if (request.isHttp()) {
-                if (!AfterAuthFlagHolder.contains(remoteAddress) && password != null) {
+                if (!AfterAuthFlagHolder.contains(remoteAddress) && ConfForGlobal.PASSWORD != null) {
                     var headerValue = request.getHttpHeader(HEADER_NAME_FOR_BASIC_AUTH);
                     if (headerValue == null) {
                         return ErrorReply.NO_AUTH;
@@ -463,35 +460,58 @@ public class RequestHandler {
                     // base64 decode
                     // trim "Basic " prefix
                     var auth = new String(Base64.getDecoder().decode(headerValue.substring(6)));
-                    // skip username
-                    if (!password.equals(auth.substring(auth.indexOf(':') + 1))) {
+                    var user = auth.substring(0, auth.indexOf(':'));
+                    var passwordRaw = auth.substring(auth.indexOf(':') + 1);
+
+                    var aclUsers = AclUsers.getInstance();
+                    var u = aclUsers.get(user);
+                    if (u == null) {
                         return ErrorReply.AUTH_FAILED;
                     }
 
-                    AfterAuthFlagHolder.add(remoteAddress);
+                    if (!u.isOn()) {
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    if (!u.getPassword().check(passwordRaw)) {
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    AfterAuthFlagHolder.add(remoteAddress, user);
                     // continue to handle request
                 }
             } else {
                 if (cmd.equals(AUTH_COMMAND)) {
                     increaseCmdStatArray((byte) 'a', AUTH_COMMAND);
 
-                    if (data.length != 2) {
+                    if (data.length != 2 && data.length != 3) {
                         return ErrorReply.FORMAT;
                     }
 
-                    if (password == null) {
-                        return ErrorReply.NO_PASSWORD;
-                    }
+                    var user = data.length == 3 ? new String(data[1]).toLowerCase() : U.DEFAULT_USER;
+                    var passwordRaw = new String(data[data.length - 1]);
 
-                    if (!password.equals(new String(data[1]))) {
+                    // acl check
+                    var aclUsers = AclUsers.getInstance();
+                    var u = aclUsers.get(user);
+                    if (u == null) {
                         return ErrorReply.AUTH_FAILED;
                     }
-                    AfterAuthFlagHolder.add(remoteAddress);
+
+                    if (!u.isOn()) {
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    if (!u.getPassword().check(passwordRaw)) {
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    AfterAuthFlagHolder.add(remoteAddress, user);
                     return OKReply.INSTANCE;
                 }
             }
 
-            if (password != null && !AfterAuthFlagHolder.contains(remoteAddress)) {
+            if (ConfForGlobal.PASSWORD != null && !AfterAuthFlagHolder.contains(remoteAddress)) {
                 return ErrorReply.NO_AUTH;
             }
 

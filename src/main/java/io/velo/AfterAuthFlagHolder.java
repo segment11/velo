@@ -8,10 +8,10 @@ public class AfterAuthFlagHolder {
     }
 
     // need thread safe
-    private static final ConcurrentHashMap<InetSocketAddress, Boolean> flagBySocketAddress = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<InetSocketAddress, String> flagBySocketAddress = new ConcurrentHashMap<>();
 
-    public static void add(InetSocketAddress address) {
-        flagBySocketAddress.put(address, true);
+    public static void add(InetSocketAddress address, String user) {
+        flagBySocketAddress.put(address, user);
     }
 
     public static boolean contains(InetSocketAddress address) {
@@ -20,5 +20,9 @@ public class AfterAuthFlagHolder {
 
     public static void remove(InetSocketAddress address) {
         flagBySocketAddress.remove(address);
+    }
+
+    public static String getUser(InetSocketAddress address) {
+        return flagBySocketAddress.get(address);
     }
 }

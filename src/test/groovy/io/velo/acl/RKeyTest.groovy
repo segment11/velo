@@ -10,30 +10,61 @@ class RKeyTest extends Specification {
 
         expect:
         one.literal() == '~*'
-        one.check('a', true, true)
+        one.match('a', true, true)
 
         when:
         one.type = RKey.Type.read
         one.pattern = 'a*'
         then:
         one.literal() == '%R~a*'
-        one.check('a1', true, false)
-        !one.check('a1', false, true)
-        !one.check('b1', true, false)
+        one.match('a1', true, false)
+        !one.match('a1', false, true)
+        !one.match('b1', true, false)
 
         when:
         one.type = RKey.Type.write
         then:
         one.literal() == '%W~a*'
-        one.check('a1', false, true)
-        !one.check('a1', true, false)
-        !one.check('b1', false, true)
+        one.match('a1', false, true)
+        !one.match('a1', true, false)
+        !one.match('b1', false, true)
 
         when:
         one.type = RKey.Type.read_write
         then:
         one.literal() == '%RW~a*'
-        one.check('a1', true, false)
-        one.check('a1', false, true)
+        one.match('a1', true, false)
+        one.match('a1', false, true)
+    }
+
+    def 'test from literal'() {
+        expect:
+        RKey.fromLiteral('~*').type == RKey.Type.all
+        RKey.fromLiteral('%R~a*').type == RKey.Type.read
+        RKey.fromLiteral('%W~a*').type == RKey.Type.write
+        RKey.fromLiteral('%RW~a*').type == RKey.Type.read_write
+        RKey.fromLiteral('~a*').type == RKey.Type.read_write
+
+        when:
+        boolean exception = false
+        try {
+            RKey.fromLiteral('a*')
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        try {
+            RKey.fromLiteral('test~')
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
     }
 }

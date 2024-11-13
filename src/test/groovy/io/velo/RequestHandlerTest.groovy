@@ -3,6 +3,8 @@ package io.velo
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.activej.net.socket.tcp.TcpSocket
+import io.velo.acl.AclUsers
+import io.velo.acl.U
 import io.velo.command.XGroup
 import io.velo.decode.Request
 import io.velo.persist.Consts
@@ -52,7 +54,6 @@ class RequestHandlerTest extends Specification {
         requestHandler.netWorkers == netWorkers
         requestHandler.slotNumber == slotNumber
         requestHandler.snowFlake == snowFlake
-        requestHandler.password == null
         requestHandler2.localTestRandomValueList.size() > 0
 
         when:
@@ -124,75 +125,134 @@ class RequestHandlerTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        // default user nopass
         def authData = new byte[2][]
         authData[0] = 'auth'.bytes
         authData[1] = 'password'.bytes
         def authRequest = new Request(authData, false, false)
         reply = requestHandler.handle(authRequest, socket)
         then:
-        reply == ErrorReply.NO_PASSWORD
+        reply == OKReply.INSTANCE
 
         when:
-        requestHandler.password = 'password1'
+        AclUsers.instance.upInsert('default') { u ->
+            u.password = U.Password.plain('password1')
+        }
         reply = requestHandler.handle(authRequest, socket)
         then:
         reply == ErrorReply.AUTH_FAILED
 
         when:
-        requestHandler.password = 'password'
+        AclUsers.instance.upInsert('default') { u ->
+            u.password = U.Password.plain('password')
+        }
         reply = requestHandler.handle(authRequest, socket)
         then:
         reply == OKReply.INSTANCE
 
         when:
+        def authData3 = new byte[3][]
+        authData3[0] = 'auth'.bytes
+        authData3[1] = 'test-user'.bytes
+        authData3[2] = 'password'.bytes
+        def authRequest3 = new Request(authData3, false, false)
+        reply = requestHandler.handle(authRequest3, socket)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        when:
+        AclUsers.instance.upInsert('test-user') { u ->
+            u.on = false
+            u.password = U.Password.plain('password')
+        }
+        reply = requestHandler.handle(authRequest3, socket)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        when:
+        AclUsers.instance.upInsert('test-user') { u ->
+            u.on = true
+        }
+        reply = requestHandler.handle(authRequest3, socket)
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        ConfForGlobal.PASSWORD = 'password'
         AfterAuthFlagHolder.remove(socket.remoteAddress)
         def getData1 = new byte[1][]
         getData1[0] = 'get'.bytes
         def getRequest = new Request(getData1, false, false)
+        getRequest.u = new U('test-user')
         reply = requestHandler.handle(getRequest, socket)
         then:
         reply == ErrorReply.NO_AUTH
 
         when:
-        AfterAuthFlagHolder.add(socket.remoteAddress)
+        // mock already authed
+        AfterAuthFlagHolder.add(socket.remoteAddress, 'test-user')
         reply = requestHandler.handle(getRequest, socket)
         then:
         reply == ErrorReply.FORMAT
 
         when:
-        requestHandler.password = null
+        ConfForGlobal.PASSWORD = null
         reply = requestHandler.handle(getRequest, socket)
         then:
         reply == ErrorReply.FORMAT
 
         when:
-        requestHandler.password = 'xxx'
+        AclUsers.instance.upInsert('default') { u ->
+            u.password = U.Password.plain('password')
+        }
         def socket2 = TcpSocket.wrapChannel(eventloopCurrent, SocketChannel.open(),
                 new InetSocketAddress('localhost', 46380), null)
+        ConfForGlobal.PASSWORD = 'password'
+        AfterAuthFlagHolder.remove(socket2.remoteAddress)
         def authRequestAsHttp = new Request(authData, true, false)
-        def base64Encoded = new String(Base64.getEncoder().encode('123456'.bytes))
+        def base64Encoded = new String(Base64.getEncoder().encode('default:123456'.bytes))
         authRequestAsHttp.httpHeaders = ['Authorization': 'Basic ' + base64Encoded]
         reply = requestHandler.handle(authRequestAsHttp, socket2)
         then:
         reply == ErrorReply.AUTH_FAILED
 
         when:
-        requestHandler.password = '123456'
+        AclUsers.instance.upInsert('default') { u ->
+            u.password = U.Password.plain('123456')
+        }
         reply = requestHandler.handle(authRequestAsHttp, socket2)
         then:
         reply == NilReply.INSTANCE
 
         when:
+        AclUsers.instance.delete('test-user')
+        AfterAuthFlagHolder.remove(socket2.remoteAddress)
+        def base64Encoded2 = new String(Base64.getEncoder().encode('test-user:123456'.bytes))
+        authRequestAsHttp.httpHeaders = ['Authorization': 'Basic ' + base64Encoded2]
+        reply = requestHandler.handle(authRequestAsHttp, socket2)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        when:
+        AclUsers.instance.upInsert('test-user') { u ->
+            u.on = false
+            u.password = U.Password.plain('123456')
+        }
+        reply = requestHandler.handle(authRequestAsHttp, socket2)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        when:
         // new client
         def socket3 = TcpSocket.wrapChannel(eventloopCurrent, SocketChannel.open(),
                 new InetSocketAddress('localhost', 46381), null)
-        authRequestAsHttp.httpHeaders.remove('Authorization')
+        authRequestAsHttp.removeHttpHeader('Authorization')
         reply = requestHandler.handle(authRequestAsHttp, socket3)
         then:
         reply == ErrorReply.NO_AUTH
 
         when:
-        requestHandler.password = null
+        ConfForGlobal.PASSWORD = null
         reply = requestHandler.handle(authRequestAsHttp, socket3)
         then:
         reply == NilReply.INSTANCE
