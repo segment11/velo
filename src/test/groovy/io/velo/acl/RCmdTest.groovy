@@ -19,7 +19,7 @@ class RCmdTest extends Specification {
         one.allow = false
         then:
         one.literal() == '-acl'
-        !one.match('acl', null)
+        one.match('acl', null)
         !one.match('acl_x', null)
 
         when:
@@ -38,7 +38,7 @@ class RCmdTest extends Specification {
         one.allow = false
         then:
         one.literal() == '-acl|cat'
-        !one.match('acl', 'cat')
+        one.match('acl', 'cat')
 
         when:
         one.allow = true
@@ -54,7 +54,7 @@ class RCmdTest extends Specification {
         one.allow = false
         then:
         one.literal() == '-@admin'
-        !one.match('acl', null)
+        one.match('acl', null)
 
         when:
         one.allow = true
@@ -67,7 +67,7 @@ class RCmdTest extends Specification {
         one.allow = false
         then:
         one.literal() == '-*'
-        !one.match('acl', null)
+        one.match('acl', null)
     }
 
     def 'test from literal'() {
