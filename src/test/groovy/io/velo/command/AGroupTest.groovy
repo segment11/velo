@@ -101,7 +101,7 @@ class AGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'admin'.bytes
+        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'all'.bytes
 
         when:
         reply = aGroup.execute('acl cat dangerous')
@@ -150,8 +150,7 @@ class AGroupTest extends Specification {
         when:
         reply = aGroup.execute('acl dryrun a get a')
         then:
-        reply instanceof ErrorReply
-        ((ErrorReply) reply).message == 'no such user'
+        reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
         AclUsers.instance.upInsert('a') {
@@ -160,8 +159,7 @@ class AGroupTest extends Specification {
         }
         reply = aGroup.execute('acl dryrun a get a')
         then:
-        reply instanceof ErrorReply
-        ((ErrorReply) reply).message == 'user is disabled'
+        reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
         AclUsers.instance.upInsert('a') {
@@ -169,8 +167,7 @@ class AGroupTest extends Specification {
         }
         reply = aGroup.execute('acl dryrun a get a')
         then:
-        reply instanceof ErrorReply
-        ((ErrorReply) reply).message == ErrorReply.ACL_PERMIT_LIMIT.message
+        reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
         AclUsers.instance.upInsert('a') {

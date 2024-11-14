@@ -135,11 +135,13 @@ public class AGroup extends BaseCommand {
             var aclUsers = AclUsers.getInstance();
             var u = aclUsers.get(user);
             if (u == null) {
-                return new ErrorReply("no such user");
+                log.error("Acl dryrun no such user: {}", user);
+                return ErrorReply.ACL_PERMIT_LIMIT;
             }
 
             if (!u.isOn()) {
-                return new ErrorReply("user is disabled");
+                log.error("Acl dryrun user is off: {}", user);
+                return ErrorReply.ACL_PERMIT_LIMIT;
             }
 
             var dd = new byte[data.length - 3][];
