@@ -6,6 +6,11 @@ class AclUsersTest extends Specification {
     def 'test all'() {
         given:
         def aclUsers = AclUsers.getInstance()
+        // for coverage
+        long[] testThreadIds = [0]
+        aclUsers.initByNetWorkerThreadIds(testThreadIds)
+        // for unit test
+        aclUsers.initForTest()
 
         when:
         aclUsers.upInsert('test') { u ->

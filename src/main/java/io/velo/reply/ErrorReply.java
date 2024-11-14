@@ -11,6 +11,7 @@ public class ErrorReply implements Reply {
     public static final ErrorReply SERVER_STOPPED = new ErrorReply("server stopped");
     public static final ErrorReply AUTH_FAILED = new ErrorReply("auth failed");
     public static final ErrorReply NO_AUTH = new ErrorReply("no auth");
+    public static final ErrorReply ACL_PERMIT_LIMIT = new ErrorReply("user acl permit limit");
     public static final ErrorReply SYNTAX = new ErrorReply("syntax error");
     public static final ErrorReply NOT_INTEGER = new ErrorReply("not integer");
     public static final ErrorReply NOT_FLOAT = new ErrorReply("not float");

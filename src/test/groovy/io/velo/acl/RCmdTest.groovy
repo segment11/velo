@@ -33,6 +33,7 @@ class RCmdTest extends Specification {
         !one.match('acl_x', 'cat')
         !one.match('acl', 'cat_x')
         !one.match('acl_x', 'cat_x')
+        !one.match('acl', null)
 
         when:
         one.allow = false
@@ -43,7 +44,7 @@ class RCmdTest extends Specification {
         when:
         one.allow = true
         one.type = RCmd.Type.category
-        one.category = 'admin'
+        one.category = Category.admin
         then:
         one.literal() == '+@admin'
         one.match('acl', null)
@@ -54,6 +55,13 @@ class RCmdTest extends Specification {
         one.allow = false
         then:
         one.literal() == '-@admin'
+        one.match('acl', null)
+
+        when:
+        one.allow = true
+        one.category = Category.all
+        then:
+        one.literal() == '+@all'
         one.match('acl', null)
 
         when:

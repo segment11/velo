@@ -21,6 +21,7 @@ public class SocketInspector implements TcpSocket.Inspector {
 
     volatile boolean isServerStopped = false;
 
+    @ThreadNeedLocal
     Eventloop[] netWorkerEventloopArray;
 
     final ConcurrentHashMap<InetSocketAddress, TcpSocket> socketMap = new ConcurrentHashMap<>();

@@ -6,6 +6,7 @@ import io.velo.acl.AclUsers;
 import io.velo.acl.Category;
 import io.velo.decode.Request;
 import io.velo.reply.*;
+import io.velo.util.Utils;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
@@ -38,13 +39,14 @@ public class AGroup extends BaseCommand {
                     }
 
                     var dd = new byte[data.length - 3][];
-                    for (int i = 3; i < data.length; i++) {
-                        dd[i - 3] = data[i];
-                    }
+                    System.arraycopy(data, 3, dd, 0, data.length - 3);
 
                     var redirectRequest = new Request(dd, false, false);
                     requestHandler.parseSlots(redirectRequest);
                     return redirectRequest.getSlotWithKeyHashList();
+                } else {
+                    // fix the first net worker event loop thread
+                    slotWithKeyHashList.add(new SlotWithKeyHash((short) 0, 0, 0L));
                 }
             }
         }
@@ -137,14 +139,46 @@ public class AGroup extends BaseCommand {
             }
 
             if (!u.isOn()) {
-                return ErrorReply.NO_AUTH;
+                return new ErrorReply("user is disabled");
             }
 
             var dd = new byte[data.length - 3][];
-            for (int i = 3; i < data.length; i++) {
-                dd[i - 3] = data[i];
+            System.arraycopy(data, 3, dd, 0, data.length - 3);
+
+            var redirectRequest = new Request(dd, false, false);
+            redirectRequest.setU(u);
+
+            if (!redirectRequest.isAclCheckOk()) {
+                return ErrorReply.ACL_PERMIT_LIMIT;
             }
 
+            // todo
+
+            return OKReply.INSTANCE;
+        } else if ("genpass".equals(subCmd)) {
+            if (data.length != 2 && data.length != 3) {
+                return ErrorReply.SYNTAX;
+            }
+
+            var givenNumberString = data.length == 3 ? new String(data[2]) : "256";
+            int givenNumber;
+            try {
+                givenNumber = Integer.parseInt(givenNumberString);
+            } catch (NumberFormatException e) {
+                return ErrorReply.INVALID_INTEGER;
+            }
+
+            if (givenNumber < 1 || givenNumber > 1024) {
+                return new ErrorReply("Given number must be between 1 and 1024");
+            }
+
+            int len = givenNumber / 4;
+            if (givenNumber % 4 != 0) {
+                len++;
+            }
+
+            var randomChars = Utils.generateRandomChars(len);
+            return new BulkReply(randomChars.getBytes());
         }
 
         // todo: implement other sub commands

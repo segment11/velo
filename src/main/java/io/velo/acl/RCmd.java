@@ -41,6 +41,10 @@ public class RCmd {
             return this.cmd.equals(cmd) && this.firstArg.equals(firstArg);
         } else {
             // type == Type.CATEGORY
+            if (category == Category.all) {
+                return true;
+            }
+
             var categoryList = Category.getCategoryListByCmd(cmd);
             if (categoryList == null) {
                 // velo extra commands
@@ -87,7 +91,7 @@ public class RCmd {
         } else if (str.contains("@")) {
             type = Type.category;
             var parts = str.split("@");
-            category = Category.valueOf(parts[1]);
+            category = parts[1].equals("*") ? Category.all : Category.valueOf(parts[1]);
         } else {
             type = str.contains("*") ? Type.all : Type.cmd;
             cmd = str.substring(1);

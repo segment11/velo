@@ -94,9 +94,11 @@ public class MultiWorkerServer extends Launcher {
     @Inject
     PrimaryServer primaryServer;
 
+    @ThreadNeedLocal
     @Inject
     RequestHandler[] requestHandlerArray;
 
+    @ThreadNeedLocal
     Eventloop[] netWorkerEventloopArray;
 
     @Inject
@@ -189,7 +191,7 @@ public class MultiWorkerServer extends Launcher {
             array = reply.bufferAsHttp().array();
         }
 
-        if (isError && (reply == ErrorReply.NO_AUTH || reply == ErrorReply.AUTH_FAILED)) {
+        if (isError && (reply == ErrorReply.NO_AUTH || reply == ErrorReply.AUTH_FAILED || reply == ErrorReply.ACL_PERMIT_LIMIT)) {
             // response 401
             return ByteBuf.wrapForReading(HttpHeaderBody.HEADER_401);
         }
@@ -209,6 +211,10 @@ public class MultiWorkerServer extends Launcher {
     }
 
     Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
+        if (!request.isAclCheckOk()) {
+            return Promise.of(ErrorReply.ACL_PERMIT_LIMIT.buffer());
+        }
+
         var slotWithKeyHashList = request.getSlotWithKeyHashList();
         if (ConfForGlobal.clusterEnabled && slotWithKeyHashList != null) {
             // check if cross shards or not my shard
@@ -513,6 +519,7 @@ public class MultiWorkerServer extends Launcher {
         logger.info("Net worker eventloop scheduler started");
 
         MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = netWorkerThreadIds;
+        AclUsers.getInstance().initByNetWorkerThreadIds(netWorkerThreadIds);
 
         // start primary schedule
         primaryScheduleRunnable = new PrimaryTaskRunnable(loopCount -> {

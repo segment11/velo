@@ -31,6 +31,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
 import static io.activej.config.converter.ConfigConverters.ofInteger;
 
+@ThreadNeedLocal
 public class RequestHandler {
     private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
 

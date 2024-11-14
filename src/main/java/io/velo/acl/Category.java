@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 public enum Category {
-    admin, bitmap, blocking, connection, dangerous,
+    all, admin, bitmap, blocking, connection, dangerous,
     geo, hash, hyperloglog, fast, keyspace,
     list, pubsub, read, scripting,
     set, sortedset, slow, stream, string,

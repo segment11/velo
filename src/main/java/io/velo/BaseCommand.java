@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+@ThreadNeedLocal
 public abstract class BaseCommand {
 //    protected interface IsKeyBytes {
 //        boolean isKeyBytes(int i);

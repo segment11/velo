@@ -43,6 +43,7 @@ class RequestTest extends Specification {
         request.singleSlot == Request.SLOT_CAN_HANDLE_BY_ANY_WORKER
 
         when:
+        AclUsers.instance.initForTest()
         AclUsers.instance.upInsert('default') { u ->
             u.addRCmd(true, RCmd.fromLiteral('+*'))
         }

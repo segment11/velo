@@ -125,6 +125,7 @@ class RequestHandlerTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        AclUsers.instance.initForTest()
         // default user nopass
         def authData = new byte[2][]
         authData[0] = 'auth'.bytes

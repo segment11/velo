@@ -2,6 +2,7 @@ package io.velo.command
 
 import io.velo.BaseCommand
 import io.velo.acl.AclUsers
+import io.velo.acl.RCmd
 import io.velo.acl.U
 import io.velo.mock.InMemoryGetSet
 import io.velo.reply.*
@@ -84,12 +85,17 @@ class AGroupTest extends Specification {
     }
 
     def 'test acl'() {
+        given:
         def inMemoryGetSet = new InMemoryGetSet()
 
         def aGroup = new AGroup(null, null, null)
         aGroup.byPassGetSet = inMemoryGetSet
         aGroup.from(BaseCommand.mockAGroup())
 
+        and:
+        AclUsers.instance.initForTest()
+
+        // ***** *****
         when:
         def reply = aGroup.execute('acl cat')
         then:
@@ -119,6 +125,7 @@ class AGroupTest extends Specification {
         then:
         reply == ErrorReply.SYNTAX
 
+        // ***** *****
         when:
         reply = aGroup.execute('acl deluser')
         then:
@@ -131,8 +138,7 @@ class AGroupTest extends Specification {
         ((IntegerReply) reply).integer == 0
 
         when:
-        def aclUsers = AclUsers.instance
-        aclUsers.upInsert('a') {
+        AclUsers.instance.upInsert('a') {
             it.password = U.Password.NO_PASSWORD
         }
         reply = aGroup.execute('acl deluser a')
@@ -140,6 +146,79 @@ class AGroupTest extends Specification {
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
+        // ***** *****
+        when:
+        reply = aGroup.execute('acl dryrun a get a')
+        then:
+        reply instanceof ErrorReply
+        ((ErrorReply) reply).message == 'no such user'
+
+        when:
+        AclUsers.instance.upInsert('a') {
+            it.on = false
+            it.password = U.Password.NO_PASSWORD
+        }
+        reply = aGroup.execute('acl dryrun a get a')
+        then:
+        reply instanceof ErrorReply
+        ((ErrorReply) reply).message == 'user is disabled'
+
+        when:
+        AclUsers.instance.upInsert('a') {
+            it.on = true
+        }
+        reply = aGroup.execute('acl dryrun a get a')
+        then:
+        reply instanceof ErrorReply
+        ((ErrorReply) reply).message == ErrorReply.ACL_PERMIT_LIMIT.message
+
+        when:
+        AclUsers.instance.upInsert('a') {
+            it.addRCmd(true, RCmd.fromLiteral('+get'))
+        }
+        reply = aGroup.execute('acl dryrun a get a')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = aGroup.execute('acl dryrun a')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        // ***** *****
+        when:
+        reply = aGroup.execute('acl genpass')
+        then:
+        reply instanceof BulkReply
+        ((BulkReply) reply).raw.length == 64
+
+        when:
+        reply = aGroup.execute('acl genpass 5')
+        then:
+        reply instanceof BulkReply
+        ((BulkReply) reply).raw.length == 2
+
+        when:
+        reply = aGroup.execute('acl genpass 0')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = aGroup.execute('acl genpass 1025')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = aGroup.execute('acl genpass x')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = aGroup.execute('acl genpass 1 2')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        // ***** *****
         when:
         reply = aGroup.execute('acl')
         then:
