@@ -190,7 +190,7 @@ public class RGroup extends BaseCommand {
                     }
                     idleTime = Integer.parseInt(new String(data[i + 1]));
                     if (idleTime < 0) {
-                        return new ErrorReply("IDLETIME can't be negative");
+                        return new ErrorReply("idletime can't be negative");
                     }
                 } else if (FREQ.equalsIgnoreCase(arg)) {
                     if (data.length <= i + 1) {
@@ -198,7 +198,7 @@ public class RGroup extends BaseCommand {
                     }
                     freq = Integer.parseInt(new String(data[i + 1]));
                     if (freq < 0 || freq > 255) {
-                        return new ErrorReply("FREQ must be in range 0..255");
+                        return new ErrorReply("freq must be in range 0..255");
                     }
                 }
             }
@@ -222,7 +222,7 @@ public class RGroup extends BaseCommand {
         if (!replace) {
             var cv = getCv(keyBytes, slotWithKeyHash);
             if (cv != null) {
-                return new ErrorReply("Target key name is busy");
+                return new ErrorReply("target key name is busy");
             }
         }
 

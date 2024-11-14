@@ -171,7 +171,7 @@ public class AGroup extends BaseCommand {
             }
 
             if (givenNumber < 1 || givenNumber > 1024) {
-                return new ErrorReply("Given number must be between 1 and 1024");
+                return new ErrorReply("given number must be between 1 and 1024");
             }
 
             int len = givenNumber / 4;

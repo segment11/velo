@@ -98,7 +98,7 @@ public class VGroup extends BaseCommand {
         }
 
         if (wordSet.size() > 2) {
-            return new ErrorReply("Only support 2 words query");
+            return new ErrorReply("only support 2 words query");
         }
 
         // in sequence
