@@ -2,7 +2,6 @@ package io.velo
 
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
-import io.activej.net.socket.tcp.TcpSocket
 import io.velo.acl.AclUsers
 import io.velo.acl.U
 import io.velo.command.XGroup
@@ -18,7 +17,6 @@ import io.velo.reply.*
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
-import java.nio.channels.SocketChannel
 import java.time.Duration
 
 class RequestHandlerTest extends Specification {
@@ -41,8 +39,7 @@ class RequestHandlerTest extends Specification {
                 .withCurrentThread()
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
-        def socket = TcpSocket.wrapChannel(eventloopCurrent, SocketChannel.open(),
-                new InetSocketAddress('localhost', 46379), null)
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
 
         def localPersist = LocalPersist.instance
         LocalPersistTest.prepareLocalPersist()
@@ -206,8 +203,7 @@ class RequestHandlerTest extends Specification {
         AclUsers.instance.upInsert('default') { u ->
             u.password = U.Password.plain('password')
         }
-        def socket2 = TcpSocket.wrapChannel(eventloopCurrent, SocketChannel.open(),
-                new InetSocketAddress('localhost', 46380), null)
+        def socket2 = SocketInspectorTest.mockTcpSocket(eventloopCurrent, 46380)
         ConfForGlobal.PASSWORD = 'password'
         AfterAuthFlagHolder.remove(socket2.remoteAddress)
         def authRequestAsHttp = new Request(authData, true, false)
@@ -245,8 +241,7 @@ class RequestHandlerTest extends Specification {
 
         when:
         // new client
-        def socket3 = TcpSocket.wrapChannel(eventloopCurrent, SocketChannel.open(),
-                new InetSocketAddress('localhost', 46381), null)
+        def socket3 = SocketInspectorTest.mockTcpSocket(eventloopCurrent, 46381)
         authRequestAsHttp.removeHttpHeader('Authorization')
         reply = requestHandler.handle(authRequestAsHttp, socket3)
         then:

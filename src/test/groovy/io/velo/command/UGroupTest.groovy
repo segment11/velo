@@ -1,15 +1,13 @@
 package io.velo.command
 
-import io.activej.net.socket.tcp.TcpSocket
 import io.velo.BaseCommand
 import io.velo.SocketInspector
+import io.velo.SocketInspectorTest
 import io.velo.persist.LocalPersist
 import io.velo.reply.ErrorReply
 import io.velo.reply.MultiBulkReply
 import io.velo.reply.NilReply
 import spock.lang.Specification
-
-import java.nio.channels.SocketChannel
 
 class UGroupTest extends Specification {
     def _UGroup = new UGroup(null, null, null)
@@ -54,8 +52,7 @@ class UGroupTest extends Specification {
         data4[2] = 'b'.bytes
         data4[3] = 'c'.bytes
 
-        def socket = TcpSocket.wrapChannel(null, SocketChannel.open(),
-                new InetSocketAddress('localhost', 46379), null)
+        def socket = SocketInspectorTest.mockTcpSocket()
 
         def uGroup = new UGroup('unsubscribe', data4, socket)
         uGroup.from(BaseCommand.mockAGroup())

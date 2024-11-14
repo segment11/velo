@@ -3,7 +3,6 @@ package io.velo
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.activej.inject.binding.OptionalDependency
-import io.activej.net.socket.tcp.TcpSocket
 import io.velo.decode.Request
 import io.velo.persist.Consts
 import io.velo.persist.KeyBucket
@@ -20,7 +19,6 @@ import io.velo.reply.NilReply
 import io.velo.task.TaskRunnable
 import spock.lang.Specification
 
-import java.nio.channels.SocketChannel
 import java.time.Duration
 
 class MultiWorkerServerTest extends Specification {
@@ -155,8 +153,7 @@ class MultiWorkerServerTest extends Specification {
                 .withCurrentThread()
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
-        def socket = TcpSocket.wrapChannel(eventloop0, SocketChannel.open(),
-                new InetSocketAddress('localhost', 46379), null)
+        def socket = SocketInspectorTest.mockTcpSocket(eventloop0)
         // handle request
         def getData2 = new byte[2][]
         getData2[0] = 'get'.bytes

@@ -13,11 +13,15 @@ import java.nio.channels.SocketChannel
 import java.time.Duration
 
 class SocketInspectorTest extends Specification {
+    static TcpSocket mockTcpSocket(Eventloop eventloop = null, int port = 46379) {
+        return TcpSocket.wrapChannel(eventloop, SocketChannel.open(),
+                new InetSocketAddress('localhost', port), null)
+    }
+
     def 'test connect'() {
         given:
         def inspector = new SocketInspector()
-        def socket = TcpSocket.wrapChannel(null, SocketChannel.open(),
-                new InetSocketAddress('localhost', 46379), null)
+        def socket = mockTcpSocket()
 
         when:
         inspector.onConnect(socket)
@@ -76,8 +80,7 @@ class SocketInspectorTest extends Specification {
     def 'test subscribe'() {
         given:
         def inspector = new SocketInspector()
-        def socket = TcpSocket.wrapChannel(null, SocketChannel.open(),
-                new InetSocketAddress('localhost', 46379), null)
+        def socket = mockTcpSocket()
 
         and:
         def eventloop = Eventloop.builder()

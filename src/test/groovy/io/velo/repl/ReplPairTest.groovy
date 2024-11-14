@@ -6,11 +6,7 @@ import io.activej.csp.consumer.ChannelConsumers
 import io.activej.csp.supplier.ChannelSuppliers
 import io.activej.eventloop.Eventloop
 import io.activej.net.SimpleServer
-import io.activej.net.socket.tcp.TcpSocket
-import io.velo.ConfForGlobal
-import io.velo.MultiWorkerServer
-import io.velo.RequestHandler
-import io.velo.SocketInspector
+import io.velo.*
 import io.velo.decode.RequestDecoder
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
@@ -18,7 +14,6 @@ import io.velo.persist.LocalPersistTest
 import io.velo.repl.content.RawBytesContent
 import spock.lang.Specification
 
-import java.nio.channels.SocketChannel
 import java.time.Duration
 
 class ReplPairTest extends Specification {
@@ -147,8 +142,7 @@ class ReplPairTest extends Specification {
         1 == 1
 
         when:
-        def socket = TcpSocket.wrapChannel(null, SocketChannel.open(),
-                new InetSocketAddress('localhost', 46379), null)
+        def socket = SocketInspectorTest.mockTcpSocket()
         replPairAsMaster.closeSlaveConnectSocket()
         replPairAsMaster.slaveConnectSocketInMaster = socket
         def eventloopCurrent = Eventloop.builder()

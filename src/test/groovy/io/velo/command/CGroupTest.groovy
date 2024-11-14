@@ -1,8 +1,8 @@
 package io.velo.command
 
 import io.activej.eventloop.Eventloop
-import io.activej.net.socket.tcp.TcpSocket
 import io.velo.BaseCommand
+import io.velo.SocketInspectorTest
 import io.velo.Utils
 import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
@@ -11,7 +11,6 @@ import io.velo.persist.Mock
 import io.velo.reply.*
 import spock.lang.Specification
 
-import java.nio.channels.SocketChannel
 import java.time.Duration
 
 class CGroupTest extends Specification {
@@ -82,8 +81,7 @@ class CGroupTest extends Specification {
 
     def 'test client'() {
         given:
-        def socket = TcpSocket.wrapChannel(null, SocketChannel.open(),
-                new InetSocketAddress('localhost', 46379), null)
+        def socket = SocketInspectorTest.mockTcpSocket()
 
         def cGroup = new CGroup(null, null, socket)
         cGroup.from(BaseCommand.mockAGroup())
