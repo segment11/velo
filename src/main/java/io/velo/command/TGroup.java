@@ -30,7 +30,7 @@ public class TGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
-        if ("type".equals(cmd) || "ttl".equals(cmd)) {
+        if ("ttl".equals(cmd) || "type".equals(cmd)) {
             if (data.length != 2) {
                 return slotWithKeyHashList;
             }
@@ -44,12 +44,22 @@ public class TGroup extends BaseCommand {
     }
 
     public Reply handle() {
-        if ("type".equals(cmd)) {
-            return type();
+        if ("time".equals(cmd)) {
+            var nanoTime = System.nanoTime();
+            var seconds = nanoTime / 1_000_000_000;
+            var microseconds = (nanoTime % 1_000_000_000) / 1_000;
+            return new MultiBulkReply(new Reply[]{
+                    new BulkReply(String.valueOf(seconds).getBytes()),
+                    new BulkReply(String.valueOf(microseconds).getBytes())
+            });
         }
 
         if ("ttl".equals(cmd)) {
             return ttl(false);
+        }
+
+        if ("type".equals(cmd)) {
+            return type();
         }
 
         return NilReply.INSTANCE;

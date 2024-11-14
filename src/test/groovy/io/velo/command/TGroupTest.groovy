@@ -6,6 +6,7 @@ import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Mock
 import io.velo.reply.ErrorReply
 import io.velo.reply.IntegerReply
+import io.velo.reply.MultiBulkReply
 import io.velo.reply.NilReply
 import io.velo.type.RedisHashKeys
 import spock.lang.Specification
@@ -22,14 +23,13 @@ class TGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         when:
-        def sTypeList = _TGroup.parseSlots('type', data2, slotNumber)
         def sTtlList = _TGroup.parseSlots('ttl', data2, slotNumber)
+        def sTypeList = _TGroup.parseSlots('type', data2, slotNumber)
         def sList = _TGroup.parseSlots('txxx', data2, slotNumber)
         then:
-        sTypeList.size() == 1
         sTtlList.size() == 1
+        sTypeList.size() == 1
         sList.size() == 0
-
 
         when:
         def data1 = new byte[1][]
@@ -44,7 +44,7 @@ class TGroupTest extends Specification {
         given:
         def data1 = new byte[1][]
 
-        def tGroup = new TGroup('type', data1, null)
+        def tGroup = new TGroup('ttl', data1, null)
         tGroup.from(BaseCommand.mockAGroup())
 
         when:
@@ -53,7 +53,7 @@ class TGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
-        tGroup.cmd = 'ttl'
+        tGroup.cmd = 'type'
         reply = tGroup.handle()
         then:
         reply == ErrorReply.FORMAT
@@ -63,6 +63,65 @@ class TGroupTest extends Specification {
         reply = tGroup.handle()
         then:
         reply == NilReply.INSTANCE
+
+        when:
+        tGroup.cmd = 'time'
+        reply = tGroup.handle()
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 2
+    }
+
+    def 'test ttl'() {
+        given:
+        final short slot = 0
+
+        def data2 = new byte[2][]
+        data2[1] = 'a'.bytes
+
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def tGroup = new TGroup('ttl', data2, null)
+        tGroup.byPassGetSet = inMemoryGetSet
+        tGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        tGroup.slotWithKeyHashListParsed = _TGroup.parseSlots('ttl', data2, tGroup.slotNumber)
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = tGroup.ttl(false)
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == -2
+
+        when:
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_INT
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = tGroup.ttl(false)
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == -1
+
+        when:
+        cv.expireAt = System.currentTimeMillis() + 2500
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = tGroup.ttl(false)
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 2
+
+        when:
+        reply = tGroup.ttl(true)
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer > 2000
+
+        when:
+        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        reply = tGroup.ttl(false)
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test type'() {
@@ -138,59 +197,6 @@ class TGroupTest extends Specification {
         when:
         data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
         reply = tGroup.type()
-        then:
-        reply == ErrorReply.KEY_TOO_LONG
-
-    }
-
-    def 'test ttl'() {
-        given:
-        final short slot = 0
-
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
-        def inMemoryGetSet = new InMemoryGetSet()
-
-        def tGroup = new TGroup('ttl', data2, null)
-        tGroup.byPassGetSet = inMemoryGetSet
-        tGroup.from(BaseCommand.mockAGroup())
-
-        when:
-        tGroup.slotWithKeyHashListParsed = _TGroup.parseSlots('ttl', data2, tGroup.slotNumber)
-        inMemoryGetSet.remove(slot, 'a')
-        def reply = tGroup.ttl(false)
-        then:
-        reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -2
-
-        when:
-        def cv = Mock.prepareCompressedValueList(1)[0]
-        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_INT
-        cv.expireAt = CompressedValue.NO_EXPIRE
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = tGroup.ttl(false)
-        then:
-        reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -1
-
-        when:
-        cv.expireAt = System.currentTimeMillis() + 2500
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = tGroup.ttl(false)
-        then:
-        reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
-
-        when:
-        reply = tGroup.ttl(true)
-        then:
-        reply instanceof IntegerReply
-        ((IntegerReply) reply).integer > 2000
-
-        when:
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = tGroup.ttl(false)
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
