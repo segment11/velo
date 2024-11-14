@@ -456,7 +456,7 @@ public class LeaderSelector implements NeedCleanUp {
                 PUBLISH_CMD_BYTES,
                 XGroup.X_MASTER_SWITCH_PUBLISH_CHANNEL_BYTES,
                 publishMessage.getBytes()};
-        PGroup.publish(data);
+        PGroup.publish(data, null);
 
         var doLog = isAsMaster ? resetAsMasterCount % 100 == 0 : resetAsSlaveCount % 100 == 0;
         if (doLog) {
@@ -470,7 +470,7 @@ public class LeaderSelector implements NeedCleanUp {
                 PUBLISH_CMD_BYTES,
                 XGroup.X_MASTER_SWITCH_PUBLISH_CHANNEL_BYTES,
                 publishMessageReadonlySlave.getBytes()};
-        PGroup.publish(dataSlave);
+        PGroup.publish(dataSlave, null);
         if (doLog) {
             log.warn("Repl publish master switch message for readonly slave={}", publishMessageReadonlySlave);
         }

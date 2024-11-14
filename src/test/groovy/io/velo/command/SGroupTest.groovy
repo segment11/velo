@@ -1,8 +1,9 @@
 package io.velo.command
 
 import io.activej.eventloop.Eventloop
-import io.activej.net.socket.tcp.TcpSocket
 import io.velo.*
+import io.velo.acl.AclUsers
+import io.velo.acl.RPubSub
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
 import io.velo.repl.LeaderSelector
@@ -11,7 +12,6 @@ import io.velo.reply.*
 import io.velo.type.RedisHashKeys
 import spock.lang.Specification
 
-import java.nio.channels.SocketChannel
 import java.time.Duration
 
 class SGroupTest extends Specification {
@@ -1793,8 +1793,7 @@ sunionstore
         data4[2] = 'b'.bytes
         data4[3] = 'c'.bytes
 
-        def socket = TcpSocket.wrapChannel(null, SocketChannel.open(),
-                new InetSocketAddress('localhost', 46379), null)
+        def socket = SocketInspectorTest.mockTcpSocket()
 
         def sGroup = new SGroup('subscribe', data4, socket)
         sGroup.from(BaseCommand.mockAGroup())
@@ -1805,6 +1804,23 @@ sunionstore
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 3 * 3
+
+        when:
+        AclUsers.instance.initForTest()
+        AclUsers.instance.upInsert('default') {
+            it.addRPubSub(true, RPubSub.fromLiteral('&special_channel'))
+        }
+        reply = sGroup.subscribe()
+        then:
+        reply == ErrorReply.ACL_PERMIT_LIMIT
+
+        when:
+        AclUsers.instance.upInsert('default') {
+            it.on = false
+        }
+        reply = sGroup.subscribe()
+        then:
+        reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
         def data1 = new byte[1][]

@@ -43,6 +43,9 @@ public class Request {
     }
 
     public boolean isAclCheckOk() {
+        if (!u.isOn()) {
+            return false;
+        }
         return u.checkCmdAndKey(cmd(), data, slotWithKeyHashList);
     }
 

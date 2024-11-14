@@ -1,7 +1,11 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.net.socket.tcp.TcpSocket;
+import io.velo.AfterAuthFlagHolder;
 import io.velo.BaseCommand;
+import io.velo.acl.AclUsers;
+import io.velo.acl.U;
 import io.velo.persist.LocalPersist;
 import io.velo.reply.*;
 
@@ -85,13 +89,13 @@ public class PGroup extends BaseCommand {
         }
 
         if ("publish".equals(cmd)) {
-            return publish(data);
+            return publish(data, socket);
         }
 
         return NilReply.INSTANCE;
     }
 
-    public static Reply publish(byte[][] dataGiven) {
+    public static Reply publish(byte[][] dataGiven, ITcpSocket socket) {
         if (dataGiven.length != 3) {
             return ErrorReply.FORMAT;
         }
@@ -101,6 +105,16 @@ public class PGroup extends BaseCommand {
 
         var channel = new String(dataGiven[1]);
         var message = new String(dataGiven[2]);
+
+        if (socket != null) {
+            // check acl
+            var user = AfterAuthFlagHolder.getUser(((TcpSocket) socket).getRemoteAddress());
+            var u = user == null ? U.INIT_DEFAULT_U : AclUsers.getInstance().get(user);
+            // assert u != null;
+            if (!u.isOn() || !u.checkChannels(channel)) {
+                return ErrorReply.ACL_PERMIT_LIMIT;
+            }
+        }
 
         var n = socketInInspector.subscribeSocketCount(channel);
 

@@ -2,6 +2,9 @@ package io.velo.command
 
 import io.velo.BaseCommand
 import io.velo.SocketInspector
+import io.velo.SocketInspectorTest
+import io.velo.acl.AclUsers
+import io.velo.acl.RPubSub
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.reply.ErrorReply
@@ -162,14 +165,32 @@ class PGroupTest extends Specification {
         LocalPersist.instance.socketInspector = new SocketInspector()
 
         when:
-        def reply = _PGroup.publish(data3)
+        def reply = _PGroup.publish(data3, null)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
+        def socket = SocketInspectorTest.mockTcpSocket()
+        AclUsers.instance.initForTest()
+        AclUsers.instance.upInsert('default') {
+            it.addRPubSub(true, RPubSub.fromLiteral('&special_channel'))
+        }
+        reply = _PGroup.publish(data3, socket)
+        then:
+        reply == ErrorReply.ACL_PERMIT_LIMIT
+
+        when:
+        AclUsers.instance.upInsert('default') {
+            it.on = false
+        }
+        reply = _PGroup.publish(data3, socket)
+        then:
+        reply == ErrorReply.ACL_PERMIT_LIMIT
+
+        when:
         def data1 = new byte[1][]
-        reply = _PGroup.publish(data1)
+        reply = _PGroup.publish(data1, null)
         then:
         reply == ErrorReply.FORMAT
     }
