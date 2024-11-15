@@ -18,6 +18,7 @@ class AclUsersTest extends Specification {
         }
         then:
         aclUsers.get('test').password != null
+        aclUsers.inner.users.size() > 0
 
         when:
         aclUsers.upInsert('test') { u ->
@@ -30,5 +31,12 @@ class AclUsersTest extends Specification {
         aclUsers.delete('test')
         then:
         aclUsers.get('test') == null
+
+        when:
+        List<U> users = []
+        users << new U('test1')
+        aclUsers.replaceUsers(users)
+        then:
+        aclUsers.get('test1') != null
     }
 }

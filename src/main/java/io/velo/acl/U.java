@@ -52,6 +52,10 @@ public class U {
 
     final String user;
 
+    public String getUser() {
+        return user;
+    }
+
     public U(String user) {
         this.user = user;
     }
@@ -89,7 +93,8 @@ public class U {
         var sb = new StringBuilder();
         sb.append("user ").append(user).append(" ");
         sb.append(isOn ? "on" : "off").append(" ");
-        sb.append(password.isNoPass() ? Password.NO_PASS : (ADD_PASSWORD_PREFIX + password.passwordEncoded)).append(" ");
+        // need # before password ? todo
+        sb.append(password.isNoPass() ? Password.NO_PASS : password.passwordEncoded).append(" ");
 
         for (var rCmd : rCmdList) {
             sb.append(rCmd.literal()).append(" ");
@@ -107,6 +112,47 @@ public class U {
         // remove last space
         sb.deleteCharAt(sb.length() - 1);
         return sb.toString();
+    }
+
+    public static U fromLiteral(String str) {
+        if (!str.startsWith("user")) {
+            return null;
+        }
+
+        var parts = str.split(" ");
+        if (parts.length < 4) {
+            return null;
+        }
+
+        var user = parts[1];
+        var isOn = "on".equals(parts[2]);
+        var password = parts[3];
+
+        var u = new U(user);
+        u.setOn(isOn);
+        if (Password.NO_PASS.equals(password)) {
+            u.setPassword(Password.NO_PASSWORD);
+        } else {
+            // need trim # before password ? todo
+            u.setPassword(Password.plain(password));
+        }
+
+        for (int i = 4; i < parts.length; i++) {
+            var part = parts[i];
+            if (part.startsWith("+")) {
+                u.addRCmd(false, RCmd.fromLiteral(part));
+            } else if (part.startsWith("-")) {
+                u.addRCmdDisallow(false, RCmd.fromLiteral(part));
+            } else if (part.startsWith("~") || part.startsWith("%")) {
+                u.addRKey(false, RKey.fromLiteral(part));
+            } else if (part.startsWith("&")) {
+                u.addRPubSub(false, RPubSub.fromLiteral(part));
+            } else {
+                throw new IllegalArgumentException("Invalid literal: " + part);
+            }
+        }
+
+        return u;
     }
 
     @VisibleForTesting
@@ -146,6 +192,20 @@ public class U {
             rPubSubList.clear();
         }
         rPubSubList.addAll(Arrays.asList(rPubSub));
+    }
+
+    public void mergeRulesFromAnother(U another, boolean isReset) {
+        if (isReset) {
+            rCmdList.clear();
+            rCmdDisallowList.clear();
+            rKeyList.clear();
+            rPubSubList.clear();
+        }
+
+        rCmdList.addAll(another.rCmdList);
+        rCmdDisallowList.addAll(another.rCmdDisallowList);
+        rKeyList.addAll(another.rKeyList);
+        rPubSubList.addAll(another.rPubSubList);
     }
 
     public boolean checkCmdAndKey(String cmd, byte[][] data, ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList) {

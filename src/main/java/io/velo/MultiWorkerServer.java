@@ -689,7 +689,7 @@ public class MultiWorkerServer extends Launcher {
         boolean skipZookeeperConnectCheck = false;
 
         @Provides
-        ConfForSlot confForSlot(Config config) {
+        ConfForSlot confForSlot(Config config) throws IOException {
             // global conf
             ConfForGlobal.estimateKeyNumber = config.get(ofLong(), "estimateKeyNumber", 1_000_000L);
             ConfForGlobal.estimateOneValueLength = config.get(ofInteger(), "estimateOneValueLength", 200);
@@ -752,6 +752,8 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.clusterEnabled = config.get(ofBoolean(), "clusterEnabled", false);
 
             DictMap.TO_COMPRESS_MIN_DATA_LENGTH = config.get(ofInteger(), "toCompressMinDataLength", 64);
+
+            ValkeyRawConfSupport.load();
 
             // one slot config
             var c = ConfForSlot.from(ConfForGlobal.estimateKeyNumber);

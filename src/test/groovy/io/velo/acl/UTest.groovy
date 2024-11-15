@@ -36,12 +36,12 @@ class UTest extends Specification {
         !u.password.isNoPass()
         u.password.check('123456')
         !u.password.check('1234567')
-        u.literal() == 'user kerry on >123456 +* -set %R~a* &myChannel*'
+        u.literal() == 'user kerry on 123456 +* -set %R~a* &myChannel*'
 
         when:
         u.on = false
         then:
-        u.literal() == 'user kerry off >123456 +* -set %R~a* &myChannel*'
+        u.literal() == 'user kerry off 123456 +* -set %R~a* &myChannel*'
 
         when:
         u.password = U.Password.sha256('123456')
@@ -55,6 +55,41 @@ class UTest extends Specification {
         u.password.isNoPass()
         u.password.check('123456')
         u.literal() == 'user kerry on nopass +* -set %R~a* &myChannel*'
+
+        when:
+        def u1 = U.fromLiteral('user kerry on nopass +@all -@dangerous %R~a* ~b* &myChannel*')
+        then:
+        u1.user == 'kerry'
+        u1.rCmdList.size() == 1
+        u1.rCmdDisallowList.size() == 1
+        u1.rKeyList.size() == 2
+        u1.rPubSubList.size() == 1
+
+        when:
+        def u2 = U.fromLiteral('user kerry off 123456 ~*')
+        then:
+        u2.user == 'kerry'
+
+        when:
+        def u3 = U.fromLiteral('user kerry off')
+        then:
+        u3 == null
+
+        when:
+        def u4 = U.fromLiteral('kerry on')
+        then:
+        u4 == null
+
+        when:
+        boolean exception = false
+        try {
+            U.fromLiteral('user kerry on nopass !@all')
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
 
         when:
         u.addRCmd(true, new RCmd())
@@ -77,6 +112,13 @@ class UTest extends Specification {
         u.rCmdDisallowList.size() == 2
         u.rKeyList.size() == 2
         u.rPubSubList.size() == 2
+
+        when:
+        def uRefer = new U('refer')
+        u.mergeRulesFromAnother(uRefer, false)
+        u.mergeRulesFromAnother(uRefer, true)
+        then:
+        1 == 1
     }
 
     def 'test check'() {

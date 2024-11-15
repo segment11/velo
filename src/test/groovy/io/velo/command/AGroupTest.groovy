@@ -1,12 +1,18 @@
 package io.velo.command
 
+
+import io.velo.AfterAuthFlagHolder
 import io.velo.BaseCommand
+import io.velo.SocketInspectorTest
+import io.velo.ValkeyRawConfSupport
 import io.velo.acl.AclUsers
 import io.velo.acl.RCmd
 import io.velo.acl.U
 import io.velo.mock.InMemoryGetSet
 import io.velo.reply.*
 import spock.lang.Specification
+
+import java.nio.file.Paths
 
 class AGroupTest extends Specification {
     def _AGroup = new AGroup(null, null, null)
@@ -212,6 +218,172 @@ class AGroupTest extends Specification {
 
         when:
         reply = aGroup.execute('acl genpass 1 2')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        // ***** *****
+        when:
+        reply = aGroup.execute('acl getuser a')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        reply = aGroup.execute('acl getuser b')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        reply = aGroup.execute('acl getuser')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = aGroup.execute('acl list')
+        then:
+        reply instanceof MultiBulkReply
+        // default + a
+        ((MultiBulkReply) reply).replies.length == 2
+
+        when:
+        reply = aGroup.execute('acl list a')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        // ***** *****
+        when:
+        var aclFile = Paths.get(ValkeyRawConfSupport.aclFilename).toFile();
+        if (!aclFile.exists()) {
+            aclFile.createNewFile()
+        }
+        aclFile.text = 'user default on nopass ~* +@all &*\r\n# comment'
+        reply = aGroup.execute('acl load')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        aclFile.text = 'user a on nopass ~* +@all &*'
+        reply = aGroup.execute('acl load')
+        then:
+        reply instanceof ErrorReply
+        ((ErrorReply) reply).message == 'no default user in acl file'
+
+        when:
+        aclFile.text = 'user default on'
+        reply = aGroup.execute('acl load')
+        then:
+        reply instanceof ErrorReply
+        ((ErrorReply) reply).message.contains 'parse acl file error'
+
+        when:
+        // invalid key pattern
+        aclFile.text = 'user default on nopass %~* +@all &*'
+        reply = aGroup.execute('acl load')
+        then:
+        reply instanceof ErrorReply
+        ((ErrorReply) reply).message.contains 'parse acl file error'
+
+        when:
+        aclFile.delete()
+        reply = aGroup.execute('acl load')
+        then:
+        reply == ErrorReply.NO_SUCH_FILE
+
+        when:
+        reply = aGroup.execute('acl load x')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        // ***** *****
+        when:
+        reply = aGroup.execute('acl log reset')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = aGroup.execute('acl log 1')
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 1
+
+        when:
+        reply = aGroup.execute('acl log 0')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = aGroup.execute('acl log 101')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = aGroup.execute('acl log a')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = aGroup.execute('acl log')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        // ***** *****
+        when:
+        aclFile.delete()
+        reply = aGroup.execute('acl save')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = aGroup.execute('acl save x')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        // ***** *****
+        when:
+        reply = aGroup.execute('acl setuser a reset +@all ~* &*')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = aGroup.execute('acl setuser a reset')
+        then:
+        reply == OKReply.INSTANCE
+        !AclUsers.instance.get('a').on
+
+        when:
+        reply = aGroup.execute('acl setuser a')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        // ***** *****
+        when:
+        reply = aGroup.execute('acl users')
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 2
+
+        when:
+        reply = aGroup.execute('acl users a')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        // ***** *****
+        when:
+        def socket = SocketInspectorTest.mockTcpSocket()
+        aGroup.socket = socket
+        reply = aGroup.execute('acl whoami')
+        then:
+        reply instanceof BulkReply
+        ((BulkReply) reply).raw == 'default'.bytes
+
+        when:
+        AfterAuthFlagHolder.add(socket.remoteAddress, 'a')
+        reply = aGroup.execute('acl whoami')
+        then:
+        reply instanceof BulkReply
+        ((BulkReply) reply).raw == 'a'.bytes
+
+        when:
+        reply = aGroup.execute('acl whoami x')
         then:
         reply == ErrorReply.SYNTAX
 

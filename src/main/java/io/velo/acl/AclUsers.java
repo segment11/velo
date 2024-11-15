@@ -52,6 +52,12 @@ public class AclUsers {
 
         private final List<U> users = new ArrayList<>();
 
+        // immutable
+        public List<U> getUsers() {
+            // copy better
+            return users;
+        }
+
         public U get(String user) {
             return users.stream().filter(u -> u.user.equals(user)).findFirst().orElse(null);
         }
@@ -72,7 +78,7 @@ public class AclUsers {
         }
     }
 
-    private Inner getInner() {
+    public Inner getInner() {
         var currentThreadId = Thread.currentThread().threadId();
         for (var inner : inners) {
             if (inner.expectThreadId == currentThreadId) {
@@ -101,5 +107,12 @@ public class AclUsers {
             }
         }
         return flag;
+    }
+
+    public void replaceUsers(List<U> users) {
+        for (var inner : inners) {
+            inner.users.clear();
+            inner.users.addAll(users);
+        }
     }
 }
