@@ -122,8 +122,7 @@ public class AclUsers {
     }
 
     public boolean delete(String user) {
-        var inner0 = getInner();
-        var flag = inner0.delete(user);
+        var flag = getInner().delete(user);
 
         changeUser(inner -> {
             inner.delete(user);

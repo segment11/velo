@@ -205,8 +205,7 @@ public class AGroup extends BaseCommand {
             }
 
             var aclUsers = AclUsers.getInstance();
-            var inner = aclUsers.getInner();
-            var users = inner.getUsers();
+            var users = aclUsers.getInner().getUsers();
 
             var replies = new Reply[users.size()];
             for (int i = 0; i < users.size(); i++) {
