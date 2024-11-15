@@ -39,6 +39,13 @@ class RKeyTest extends Specification {
 
     def 'test from literal'() {
         expect:
+        RKey.isRKeyLiteral('~*')
+        RKey.isRKeyLiteral('%R~a*')
+        RKey.isRKeyLiteral('%W~a*')
+        RKey.isRKeyLiteral('%RW~a*')
+        RKey.isRKeyLiteral('allkeys')
+        !RKey.isRKeyLiteral('_allkeys')
+        RKey.fromLiteral('allkeys').type == RKey.Type.all
         RKey.fromLiteral('~*').type == RKey.Type.all
         RKey.fromLiteral('%R~a*').type == RKey.Type.read
         RKey.fromLiteral('%W~a*').type == RKey.Type.write

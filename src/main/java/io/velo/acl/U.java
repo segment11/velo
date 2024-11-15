@@ -1,6 +1,9 @@
 package io.velo.acl;
 
 import io.velo.BaseCommand;
+import io.velo.reply.BulkReply;
+import io.velo.reply.MultiBulkReply;
+import io.velo.reply.Reply;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -13,7 +16,6 @@ public class U {
     public static final String DEFAULT_USER = "default";
 
     public static final String ADD_PASSWORD_PREFIX = ">";
-    public static final String REMOVE_PASSWORD_PREFIX = "-";
 
     private enum PasswordEncodedType {
         plain, sha256;
@@ -25,9 +27,18 @@ public class U {
             return NO_PASS.equals(this.passwordEncoded);
         }
 
+        @VisibleForTesting
+        boolean isResetPass() {
+            return RESET_PASS.equals(this.passwordEncoded);
+        }
+
         public boolean check(String passwordRaw) {
             if (isNoPass()) {
                 return true;
+            }
+
+            if (isResetPass()) {
+                return false;
             }
 
             if (encodeType == PasswordEncodedType.plain) {
@@ -47,7 +58,9 @@ public class U {
         }
 
         public static final String NO_PASS = "nopass";
+        public static final String RESET_PASS = "resetpass";
         public static final Password NO_PASSWORD = new Password(NO_PASS, PasswordEncodedType.plain);
+        public static final Password RESET_PASSWORD = new Password(RESET_PASS, PasswordEncodedType.plain);
     }
 
     final String user;
@@ -70,6 +83,7 @@ public class U {
         isOn = on;
     }
 
+    // more than one password, todo
     private Password password;
 
     public Password getPassword() {
@@ -94,7 +108,7 @@ public class U {
         sb.append("user ").append(user).append(" ");
         sb.append(isOn ? "on" : "off").append(" ");
         // need # before password ? todo
-        sb.append(password.isNoPass() ? Password.NO_PASS : password.passwordEncoded).append(" ");
+        sb.append(password.passwordEncoded).append(" ");
 
         for (var rCmd : rCmdList) {
             sb.append(rCmd.literal()).append(" ");
@@ -112,6 +126,64 @@ public class U {
         // remove last space
         sb.deleteCharAt(sb.length() - 1);
         return sb.toString();
+    }
+
+    // for acl getuser
+    public Reply[] toReplies() {
+        var replies = new Reply[10];
+        replies[0] = new BulkReply("flags".getBytes());
+
+        List<String> flags = new ArrayList<>();
+        flags.add(isOn ? "on" : "off");
+        if (rCmdList.stream().anyMatch(rCmd -> rCmd.type == RCmd.Type.all ||
+                (rCmd.type == RCmd.Type.category && rCmd.category == Category.all)) && rCmdDisallowList.isEmpty()) {
+            flags.add("allcommands");
+        }
+        if (rKeyList.stream().anyMatch(rKey -> rKey.type == RKey.Type.all)) {
+            flags.add("allkeys");
+        }
+        if (rPubSubList.stream().anyMatch(rPubSub -> rPubSub.pattern.equals(RPubSub.ALL))) {
+            flags.add("allchannels");
+        }
+        if (password.isNoPass()) {
+            flags.add("nopass");
+        }
+        var flagsReplies = new Reply[flags.size()];
+        for (int i = 0; i < flags.size(); i++) {
+            flagsReplies[i] = new BulkReply(flags.get(i).getBytes());
+        }
+        replies[1] = new MultiBulkReply(flagsReplies);
+
+        replies[2] = new BulkReply("passwords".getBytes());
+        var passwordsReplies = password.isNoPass() ? MultiBulkReply.EMPTY :
+                new MultiBulkReply(new Reply[]{new BulkReply(password.passwordEncoded.getBytes())});
+        replies[3] = passwordsReplies;
+
+        replies[4] = new BulkReply("commands".getBytes());
+        var commandsReplies = new Reply[rCmdList.size() + rCmdDisallowList.size()];
+        for (int i = 0; i < rCmdList.size(); i++) {
+            commandsReplies[i] = new BulkReply(rCmdList.get(i).literal().getBytes());
+        }
+        for (int i = 0; i < rCmdDisallowList.size(); i++) {
+            commandsReplies[i + rCmdList.size()] = new BulkReply(rCmdDisallowList.get(i).literal().getBytes());
+        }
+        replies[5] = new MultiBulkReply(commandsReplies);
+
+        replies[6] = new BulkReply("keys".getBytes());
+        var keysReplies = new Reply[rKeyList.size()];
+        for (int i = 0; i < rKeyList.size(); i++) {
+            keysReplies[i] = new BulkReply(rKeyList.get(i).literal().getBytes());
+        }
+        replies[7] = new MultiBulkReply(keysReplies);
+
+        replies[8] = new BulkReply("channels".getBytes());
+        var channelsReplies = new Reply[rPubSubList.size()];
+        for (int i = 0; i < rPubSubList.size(); i++) {
+            channelsReplies[i] = new BulkReply(rPubSubList.get(i).literal().getBytes());
+        }
+        replies[9] = new MultiBulkReply(channelsReplies);
+
+        return replies;
     }
 
     public static U fromLiteral(String str) {
@@ -165,6 +237,19 @@ public class U {
 
     @VisibleForTesting
     final List<RPubSub> rPubSubList = new ArrayList<>();
+
+    public void resetCmd() {
+        rCmdList.clear();
+        rCmdDisallowList.clear();
+    }
+
+    public void resetKey() {
+        rKeyList.clear();
+    }
+
+    public void resetPubSub() {
+        rPubSubList.clear();
+    }
 
     public void addRCmd(boolean clear, RCmd... rCmd) {
         if (clear) {

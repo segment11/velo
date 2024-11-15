@@ -41,7 +41,22 @@ public class RKey {
         }
     }
 
+    public static boolean isRKeyLiteral(String str) {
+        return str.startsWith(LITERAL_PREFIX)
+                || str.startsWith("%R~")
+                || str.startsWith("%W~")
+                || str.startsWith("%RW~")
+                || "allkeys".equals(str);
+    }
+
     public static RKey fromLiteral(String str) {
+        if ("allkeys".equals(str)) {
+            var rKey = new RKey();
+            rKey.type = Type.all;
+            rKey.pattern = "*";
+            return rKey;
+        }
+
         if (!str.contains(LITERAL_PREFIX)) {
             throw new IllegalArgumentException("Invalid literal: " + str);
         }

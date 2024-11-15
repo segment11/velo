@@ -198,8 +198,7 @@ public class AGroup extends BaseCommand {
                 return NilReply.INSTANCE;
             }
 
-            // todo
-            return NilReply.INSTANCE;
+            return new MultiBulkReply(u.toReplies());
         } else if ("list".equals(subCmd)) {
             if (data.length != 2) {
                 return ErrorReply.SYNTAX;
@@ -329,28 +328,49 @@ public class AGroup extends BaseCommand {
             }
 
             var user = new String(data[2]);
-            List<String> parts = new ArrayList<>();
-            for (int i = 3; i < data.length; i++) {
-                parts.add(new String(data[i]));
-            }
 
             var aclUsers = AclUsers.getInstance();
+            aclUsers.upInsert(user, u -> {
+                for (int i = 3; i < data.length; i++) {
+                    var rule = new String(data[i]);
+                    if ("on".equals(rule)) {
+                        u.setOn(true);
+                    } else if ("off".equals(rule)) {
+                        u.setOn(false);
+                    } else if ("resetkeys".equals(rule)) {
+                        u.resetKey();
+                    } else if ("resetchannels".equals(rule)) {
+                        u.resetPubSub();
+                        if (ValkeyRawConfSupport.aclPubsubDefault) {
+                            u.addRPubSub(false, RPubSub.fromLiteral("&*"));
+                        }
+                    } else if (U.Password.NO_PASS.equals(rule)) {
+                        u.setPassword(U.Password.NO_PASSWORD);
+                    } else if (U.Password.RESET_PASS.equals(rule)) {
+                        u.setPassword(U.Password.RESET_PASSWORD);
+                    } else if (rule.startsWith(U.ADD_PASSWORD_PREFIX)) {
+                        var password = rule.substring(1);
+                        u.setPassword(U.Password.plain(password));
+                    } else if ("reset".equals(rule)) {
+                        u.setOn(false);
+                        u.setPassword(U.Password.RESET_PASSWORD);
+                        u.resetKey();
+                        u.resetPubSub();
+                        if (ValkeyRawConfSupport.aclPubsubDefault) {
+                            u.addRPubSub(false, RPubSub.fromLiteral("&*"));
+                        }
+                    } else if (RCmd.isRCmdLiteral(rule)) {
+                        u.addRCmd(false, RCmd.fromLiteral(rule));
+                    } else if (RKey.isRKeyLiteral(rule)) {
+                        u.addRKey(false, RKey.fromLiteral(rule));
+                    } else if (RPubSub.isRPubSubLiteral(rule)) {
+                        u.addRPubSub(false, RPubSub.fromLiteral(rule));
+                    } else {
+                        throw new IllegalArgumentException("Invalid acl rule: " + rule);
+                    }
+                }
+            });
 
-            var isReset = parts.remove("reset");
-            var isJustReset = isReset && parts.isEmpty();
-            if (isJustReset) {
-                var uRefer = new U(user);
-                uRefer.addRCmdDisallow(true, RCmd.fromLiteral("-@all"));
-                aclUsers.upInsert(user, u -> {
-                    u.setOn(false);
-                    u.mergeRulesFromAnother(uRefer, true);
-                });
-            } else {
-                var uRefer = U.fromLiteral("user " + user + " on nopass " + String.join(" ", parts));
-                aclUsers.upInsert(user, u -> {
-                    u.mergeRulesFromAnother(uRefer, isReset);
-                });
-            }
             return OKReply.INSTANCE;
         } else if ("users".equals(subCmd)) {
             if (data.length != 2) {

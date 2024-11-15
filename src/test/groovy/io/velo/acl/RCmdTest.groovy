@@ -79,7 +79,20 @@ class RCmdTest extends Specification {
     }
 
     def 'test from literal'() {
-        given:
+        expect:
+        RCmd.isRCmdLiteral('+acl')
+        RCmd.isRCmdLiteral('-acl')
+        RCmd.isRCmdLiteral('allcommands')
+        RCmd.isRCmdLiteral('nocommands')
+        !RCmd.isRCmdLiteral('_nocommands')
+        RCmd.isAllowLiteral('+acl')
+        !RCmd.isAllowLiteral('-acl')
+        RCmd.isAllowLiteral('allcommands')
+        !RCmd.isAllowLiteral('nocommands')
+        RCmd.fromLiteral("allcommands").type == RCmd.Type.category
+        RCmd.fromLiteral("nocommands").type == RCmd.Type.category
+
+        when:
         def one = RCmd.fromLiteral('+acl')
         def two = RCmd.fromLiteral('-acl')
         def three = RCmd.fromLiteral('+acl|cat')
@@ -88,8 +101,7 @@ class RCmdTest extends Specification {
         def six = RCmd.fromLiteral('-@admin')
         def seven = RCmd.fromLiteral('+*')
         def eight = RCmd.fromLiteral('-*')
-
-        expect:
+        then:
         one.allow
         one.type == RCmd.Type.cmd
         one.cmd == 'acl'

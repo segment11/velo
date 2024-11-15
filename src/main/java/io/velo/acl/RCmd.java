@@ -72,7 +72,34 @@ public class RCmd {
         }
     }
 
+    public static boolean isAllowLiteral(String str) {
+        return str.startsWith(ALLOW_LITERAL_PREFIX) || "allcommands".equals(str);
+    }
+
+    public static boolean isRCmdLiteral(String str) {
+        return str.startsWith(ALLOW_LITERAL_PREFIX)
+                || str.startsWith(DISALLOW_LITERAL_PREFIX)
+                || "allcommands".equals(str)
+                || "nocommands".equals(str);
+    }
+
     public static RCmd fromLiteral(String str) {
+        if ("allcommands".equals(str)) {
+            var rCmd = new RCmd();
+            rCmd.allow = true;
+            rCmd.type = Type.category;
+            rCmd.category = Category.all;
+            return rCmd;
+        }
+
+        if ("nocommands".equals(str)) {
+            var rCmd = new RCmd();
+            rCmd.allow = false;
+            rCmd.type = Type.category;
+            rCmd.category = Category.all;
+            return rCmd;
+        }
+
         var allow = str.startsWith(ALLOW_LITERAL_PREFIX);
         var disallow = str.startsWith(DISALLOW_LITERAL_PREFIX);
         if (!allow && !disallow) {

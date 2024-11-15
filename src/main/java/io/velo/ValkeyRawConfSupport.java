@@ -13,6 +13,7 @@ public class ValkeyRawConfSupport {
     public static final String VALKEY_CONF_FILENAME = "redis.conf";
 
     public static String aclFilename = "acl.conf";
+    public static boolean aclPubsubDefault = true;
 
     public static void load() throws IOException {
         var file = Paths.get(VALKEY_CONF_FILENAME).toFile();
@@ -36,6 +37,8 @@ public class ValkeyRawConfSupport {
             var value = kv[1].trim();
             if ("acl-filename".equals(key)) {
                 aclFilename = value;
+            } else if ("acl-pubsub-default".equals(key)) {
+                aclPubsubDefault = Boolean.parseBoolean(value);
             }
 
             // other key-value pairs, todo

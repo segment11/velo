@@ -1,6 +1,7 @@
 package io.velo.acl
 
 import io.velo.BaseCommand
+import io.velo.reply.MultiBulkReply
 import spock.lang.Specification
 
 class UTest extends Specification {
@@ -55,6 +56,12 @@ class UTest extends Specification {
         u.password.isNoPass()
         u.password.check('123456')
         u.literal() == 'user kerry on nopass +* -set %R~a* &myChannel*'
+
+        when:
+        u.password = U.Password.RESET_PASSWORD
+        then:
+        u.password.isResetPass()
+        !u.password.check('123456')
 
         when:
         def u1 = U.fromLiteral('user kerry on nopass +@all -@dangerous %R~a* ~b* &myChannel*')
@@ -114,11 +121,55 @@ class UTest extends Specification {
         u.rPubSubList.size() == 2
 
         when:
+        u.resetCmd()
+        u.resetKey()
+        u.resetPubSub()
+        then:
+        u.rCmdList.size() == 0
+        u.rCmdDisallowList.size() == 0
+        u.rKeyList.size() == 0
+        u.rPubSubList.size() == 0
+
+        when:
         def uRefer = new U('refer')
         u.mergeRulesFromAnother(uRefer, false)
         u.mergeRulesFromAnother(uRefer, true)
         then:
         1 == 1
+    }
+
+    def 'test to replies'() {
+        given:
+        def u = new U('kerry')
+
+        when:
+        u.on = true
+        u.password = U.Password.NO_PASSWORD
+        u.addRCmd(true, RCmd.fromLiteral("+*"))
+        u.addRKey(true, RKey.fromLiteral("~*"))
+        u.addRPubSub(true, RPubSub.fromLiteral("&*"))
+        def replies = u.toReplies()
+        def sb = new StringBuilder()
+        then:
+        replies.length == 10
+        new MultiBulkReply(replies).dumpForTest(sb, 0)
+
+        when:
+        println sb.toString()
+        u.on = false
+        u.password = U.Password.plain('123456')
+        u.addRCmd(true, RCmd.fromLiteral("+@all"))
+        u.addRCmdDisallow(true, RCmd.fromLiteral("-@admin"))
+        u.addRKey(true, RKey.fromLiteral("%R~a*"))
+        u.addRPubSub(true, RPubSub.fromLiteral("&myChannel*"))
+        replies = u.toReplies()
+        sb.delete(0, sb.length())
+        then:
+        replies.length == 10
+        new MultiBulkReply(replies).dumpForTest(sb, 0)
+
+        cleanup:
+        println sb.toString()
     }
 
     def 'test check'() {

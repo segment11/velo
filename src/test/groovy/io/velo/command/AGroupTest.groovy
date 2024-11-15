@@ -99,7 +99,8 @@ class AGroupTest extends Specification {
         aGroup.from(BaseCommand.mockAGroup())
 
         and:
-        AclUsers.instance.initForTest()
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
 
         // ***** *****
         when:
@@ -144,7 +145,7 @@ class AGroupTest extends Specification {
         ((IntegerReply) reply).integer == 0
 
         when:
-        AclUsers.instance.upInsert('a') {
+        aclUsers.upInsert('a') {
             it.password = U.Password.NO_PASSWORD
         }
         reply = aGroup.execute('acl deluser a')
@@ -159,7 +160,7 @@ class AGroupTest extends Specification {
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        AclUsers.instance.upInsert('a') {
+        aclUsers.upInsert('a') {
             it.on = false
             it.password = U.Password.NO_PASSWORD
         }
@@ -168,7 +169,7 @@ class AGroupTest extends Specification {
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        AclUsers.instance.upInsert('a') {
+        aclUsers.upInsert('a') {
             it.on = true
         }
         reply = aGroup.execute('acl dryrun a get a')
@@ -176,7 +177,7 @@ class AGroupTest extends Specification {
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        AclUsers.instance.upInsert('a') {
+        aclUsers.upInsert('a') {
             it.addRCmd(true, RCmd.fromLiteral('+get'))
         }
         reply = aGroup.execute('acl dryrun a get a')
@@ -223,11 +224,14 @@ class AGroupTest extends Specification {
 
         // ***** *****
         when:
+        def sb = new StringBuilder()
         reply = aGroup.execute('acl getuser a')
         then:
-        reply == NilReply.INSTANCE
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).dumpForTest(sb, 0)
 
         when:
+        println sb.toString()
         reply = aGroup.execute('acl getuser b')
         then:
         reply == NilReply.INSTANCE
@@ -339,15 +343,27 @@ class AGroupTest extends Specification {
 
         // ***** *****
         when:
-        reply = aGroup.execute('acl setuser a reset +@all ~* &*')
+        ValkeyRawConfSupport.aclPubsubDefault = true
+        reply = aGroup.execute('acl setuser a on off resetkeys resetchannels >123456 nopass resetpass reset +@all ~* &*')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        reply = aGroup.execute('acl setuser a reset')
+        ValkeyRawConfSupport.aclPubsubDefault = false
+        reply = aGroup.execute('acl setuser a resetchannels reset')
         then:
         reply == OKReply.INSTANCE
-        !AclUsers.instance.get('a').on
+
+        when:
+        boolean exception = false
+        try {
+            aGroup.execute('acl setuser a _on')
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
 
         when:
         reply = aGroup.execute('acl setuser a')

@@ -20,8 +20,11 @@ class RPubSubTest extends Specification {
 
     def 'test from literal'() {
         expect:
+        RPubSub.isRPubSubLiteral('&myChannel*')
+        RPubSub.isRPubSubLiteral('allchannels')
+        !RPubSub.isRPubSubLiteral('_allchannels')
+        RPubSub.fromLiteral('allchannels').pattern == '*'
         RPubSub.fromLiteral('&myChannel*').pattern == 'myChannel*'
-        RPubSub.fromLiteral('&*').pattern == '*'
 
         when:
         boolean exception = false
