@@ -9,8 +9,8 @@ class MultiShardShadowTest extends Specification {
 
         when:
         def shards = new Shard[2]
-        var shard0 = new Shard()
-        var shard1 = new Shard()
+        def shard0 = new Shard()
+        def shard1 = new Shard()
         shards[0] = shard0
         shards[1] = shard1
         shard0.multiSlotRange.addSingle(0, 8191)

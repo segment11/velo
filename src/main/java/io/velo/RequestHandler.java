@@ -449,7 +449,7 @@ public class RequestHandler {
                 return OKReply.INSTANCE;
             }
 
-            InetSocketAddress remoteAddress = ((TcpSocket) socket).getRemoteAddress();
+            var remoteAddress = ((TcpSocket) socket).getRemoteAddress();
             // http basic auth
             if (request.isHttp()) {
                 if (!AfterAuthFlagHolder.contains(remoteAddress) && ConfForGlobal.PASSWORD != null) {

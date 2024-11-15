@@ -7,7 +7,7 @@ import java.nio.file.Paths
 class ValkeyRawConfSupportTest extends Specification {
     def 'test all'() {
         given:
-        var file = Paths.get(ValkeyRawConfSupport.VALKEY_CONF_FILENAME).toFile()
+        def file = Paths.get(ValkeyRawConfSupport.VALKEY_CONF_FILENAME).toFile()
         if (file.exists()) {
             file.delete()
         }

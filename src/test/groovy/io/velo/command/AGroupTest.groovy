@@ -255,7 +255,7 @@ class AGroupTest extends Specification {
 
         // ***** *****
         when:
-        var aclFile = Paths.get(ValkeyRawConfSupport.aclFilename).toFile();
+        def aclFile = Paths.get(ValkeyRawConfSupport.aclFilename).toFile()
         if (!aclFile.exists()) {
             aclFile.createNewFile()
         }
