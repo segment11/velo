@@ -1,10 +1,7 @@
 package io.velo.command
 
-
-import io.velo.AfterAuthFlagHolder
-import io.velo.BaseCommand
-import io.velo.SocketInspectorTest
-import io.velo.ValkeyRawConfSupport
+import io.activej.config.Config
+import io.velo.*
 import io.velo.acl.AclUsers
 import io.velo.acl.RCmd
 import io.velo.acl.U
@@ -40,6 +37,37 @@ class AGroupTest extends Specification {
         sAppendList = _AGroup.parseSlots('append', data1, slotNumber)
         then:
         sAppendList.size() == 0
+
+        when:
+        data3[1] = 'cat'.bytes
+        data3[2] = 'admin'.bytes
+        def sAclList = _AGroup.parseSlots('acl', data3, slotNumber)
+        then:
+        sAclList.size() == 1
+
+        when:
+        data3[1] = 'dryrun'.bytes
+        data3[2] = 'test'.bytes
+        sAclList = _AGroup.parseSlots('acl', data3, slotNumber)
+        then:
+        sAclList.size() == 0
+
+        when:
+        def snowFlake = new SnowFlake(1, 1)
+        _AGroup.requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) slotNumber, snowFlake, Config.create())
+        def data5 = new byte[5][]
+        data5[1] = 'dryrun'.bytes
+        data5[2] = 'test'.bytes
+        data5[3] = 'get'.bytes
+        data5[4] = 'a'.bytes
+        def sAclList2 = _AGroup.parseSlots('acl', data5, slotNumber)
+        then:
+        sAclList2.size() == 1
+
+        when:
+        def sAclList3 = _AGroup.parseSlots('acl', data1, slotNumber)
+        then:
+        sAclList3.size() == 0
     }
 
     def 'test handle'() {
@@ -155,6 +183,8 @@ class AGroupTest extends Specification {
 
         // ***** *****
         when:
+        def snowFlake = new SnowFlake(1, 1)
+        aGroup.requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, snowFlake, Config.create())
         reply = aGroup.execute('acl dryrun a get a')
         then:
         reply == ErrorReply.ACL_PERMIT_LIMIT
@@ -344,7 +374,7 @@ class AGroupTest extends Specification {
         // ***** *****
         when:
         ValkeyRawConfSupport.aclPubsubDefault = true
-        reply = aGroup.execute('acl setuser a on off resetkeys resetchannels >123456 nopass resetpass reset +@all ~* &*')
+        reply = aGroup.execute('acl setuser a on off resetkeys resetchannels >123456 nopass resetpass reset +@all -@admin ~* &*')
         then:
         reply == OKReply.INSTANCE
 

@@ -37,7 +37,7 @@ public class AGroup extends BaseCommand {
 
         if ("acl".equals(cmd)) {
             if (data.length > 2) {
-                var isDryrun = "dryrun".equalsIgnoreCase(new String(data[2]));
+                var isDryrun = "dryrun".equalsIgnoreCase(new String(data[1]));
                 if (isDryrun) {
                     if (data.length < 4) {
                         return slotWithKeyHashList;
@@ -47,6 +47,7 @@ public class AGroup extends BaseCommand {
                     System.arraycopy(data, 3, dd, 0, data.length - 3);
 
                     var redirectRequest = new Request(dd, false, false);
+                    redirectRequest.setSlotNumber((short) slotNumber);
                     requestHandler.parseSlots(redirectRequest);
                     return redirectRequest.getSlotWithKeyHashList();
                 } else {
@@ -359,7 +360,11 @@ public class AGroup extends BaseCommand {
                             u.addRPubSub(false, RPubSub.fromLiteral("&*"));
                         }
                     } else if (RCmd.isRCmdLiteral(rule)) {
-                        u.addRCmd(false, RCmd.fromLiteral(rule));
+                        if (RCmd.isAllowLiteral(rule)) {
+                            u.addRCmd(false, RCmd.fromLiteral(rule));
+                        } else {
+                            u.addRCmdDisallow(false, RCmd.fromLiteral(rule));
+                        }
                     } else if (RKey.isRKeyLiteral(rule)) {
                         u.addRKey(false, RKey.fromLiteral(rule));
                     } else if (RPubSub.isRPubSubLiteral(rule)) {

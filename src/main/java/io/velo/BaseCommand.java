@@ -117,6 +117,11 @@ public abstract class BaseCommand {
 
     protected RequestHandler requestHandler;
 
+    @TestOnly
+    public void setRequestHandler(RequestHandler requestHandler) {
+        this.requestHandler = requestHandler;
+    }
+
     protected byte workerId;
     protected byte netWorkers;
 

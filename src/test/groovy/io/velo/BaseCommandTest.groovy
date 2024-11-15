@@ -82,6 +82,7 @@ class BaseCommandTest extends Specification {
         data2[0] = 'get'.bytes
         data2[1] = 'key'.bytes
         def c = new SubCommand('get', data2, null)
+        c.requestHandler = null
         c.crossRequestWorker = false
         c.slotWithKeyHashListParsed = null
         c.cmd = 'get'
@@ -627,6 +628,7 @@ class BaseCommandTest extends Specification {
         dictMap.dictSize() == 0
 
         when:
+        ConfForGlobal.isOnDynTrainDictForCompression = true
         c.byPassGetSet = inMemoryGetSet
         def longValueBytes = ('aaaaabbbbbccccc' * 10).bytes
         List<String> keyList = []
