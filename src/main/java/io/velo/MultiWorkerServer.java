@@ -519,7 +519,7 @@ public class MultiWorkerServer extends Launcher {
         logger.info("Net worker eventloop scheduler started");
 
         MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = netWorkerThreadIds;
-        AclUsers.getInstance().initByNetWorkerThreadIds(netWorkerThreadIds);
+        AclUsers.getInstance().initByNetWorkerEventloopArray(netWorkerEventloopArray);
 
         // start primary schedule
         primaryScheduleRunnable = new PrimaryTaskRunnable(loopCount -> {

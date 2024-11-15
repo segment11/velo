@@ -1,5 +1,6 @@
 package io.velo.acl;
 
+import io.activej.eventloop.Eventloop;
 import io.velo.ThreadNeedLocal;
 import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
@@ -26,14 +27,18 @@ public class AclUsers {
 
     private static final Logger log = LoggerFactory.getLogger(AclUsers.class);
 
+    private Eventloop[] netWorkerEventloopArray;
     private Inner[] inners;
 
-    public void initByNetWorkerThreadIds(long[] netWorkerThreadIds) {
-        inners = new Inner[netWorkerThreadIds.length];
-        for (int i = 0; i < netWorkerThreadIds.length; i++) {
-            inners[i] = new Inner(netWorkerThreadIds[i]);
+    public void initByNetWorkerEventloopArray(Eventloop[] netWorkerEventloopArray) {
+        this.netWorkerEventloopArray = netWorkerEventloopArray;
+
+        inners = new Inner[netWorkerEventloopArray.length];
+        for (int i = 0; i < netWorkerEventloopArray.length; i++) {
+            var eventloop = netWorkerEventloopArray[i];
+            inners[i] = new Inner(eventloop.getEventloopThread().threadId());
         }
-        log.info("Acl users init by net worker thread ids: {}", netWorkerThreadIds);
+        log.info("Acl users init by net worker eventloop array");
     }
 
     @TestOnly
@@ -93,26 +98,43 @@ public class AclUsers {
         return inner == null ? null : inner.get(user);
     }
 
-    public void upInsert(String user, UpdateCallback callback) {
-        for (var inner : inners) {
-            inner.upInsert(user, callback);
+    private interface DoInTargetEventloop {
+        void doSth(Inner inner);
+    }
+
+    private void changeUser(DoInTargetEventloop doInTargetEventloop) {
+        var currentThreadId = Thread.currentThread().threadId();
+        for (int i = 0; i < inners.length; i++) {
+            var inner = inners[i];
+            if (inner.expectThreadId == currentThreadId) {
+                doInTargetEventloop.doSth(inner);
+            } else {
+                var targetEventloop = netWorkerEventloopArray[i];
+                targetEventloop.execute(() -> {
+                    doInTargetEventloop.doSth(inner);
+                });
+            }
         }
     }
 
+    public void upInsert(String user, UpdateCallback callback) {
+        changeUser(inner -> inner.upInsert(user, callback));
+    }
+
     public boolean delete(String user) {
-        boolean flag = false;
-        for (var inner : inners) {
-            if (inner.delete(user)) {
-                flag = true;
-            }
-        }
+        var inner0 = getInner();
+        var flag = inner0.delete(user);
+
+        changeUser(inner -> {
+            inner.delete(user);
+        });
         return flag;
     }
 
     public void replaceUsers(List<U> users) {
-        for (var inner : inners) {
+        changeUser(inner -> {
             inner.users.clear();
             inner.users.addAll(users);
-        }
+        });
     }
 }
