@@ -12,7 +12,10 @@ class RESPReplyTest extends Specification {
         IntegerReply.REPLY_0.buffer().asArray() == ":0\r\n".bytes
         IntegerReply.REPLY_1.buffer().asArray() == ":1\r\n".bytes
         MultiBulkReply.EMPTY.buffer().asArray() == "*0\r\n".bytes
+        MultiBulkReply.SCAN_EMPTY.replies.length == 2
         MultiBulkReply.SCAN_EMPTY.buffer().asArray() == "*2\r\n\$1\r\n0\r\n*0\r\n".bytes
+        MultiBulkReply.EMPTY.dumpForTest(new StringBuilder(), 0)
+        MultiBulkReply.SCAN_EMPTY.dumpForTest(new StringBuilder(), 1)
     }
 
     def 'test static as http'() {
@@ -23,6 +26,10 @@ class RESPReplyTest extends Specification {
         IntegerReply.REPLY_0.bufferAsHttp().asArray() == '0'.bytes
         IntegerReply.REPLY_1.bufferAsHttp().asArray() == '1'.bytes
         MultiBulkReply.EMPTY.bufferAsHttp().asArray() == '[]'.bytes
+        NilReply.INSTANCE.dumpForTest(new StringBuilder(), 0)
+        IntegerReply.REPLY_0.dumpForTest(new StringBuilder(), 0)
+        IntegerReply.REPLY_1.dumpForTest(new StringBuilder(), 0)
+        new IntegerReply(100).dumpForTest(new StringBuilder(), 0)
     }
 
     def 'test others'() {
@@ -47,6 +54,7 @@ class RESPReplyTest extends Specification {
         new BulkReply('bulk'.bytes).raw == 'bulk'.bytes
         new BulkReply('bulk'.bytes).buffer().asArray() == "\$4\r\nbulk\r\n".bytes
         new BulkReply('bulk'.bytes).bufferAsHttp().asArray() == "bulk".bytes
+        new BulkReply('bulk'.bytes).dumpForTest(new StringBuilder(), 0)
 
         new MultiBulkReply(null).buffer().asArray() == "*-1\r\n".bytes
         Reply[] replies = [

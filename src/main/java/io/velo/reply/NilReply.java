@@ -1,6 +1,7 @@
 package io.velo.reply;
 
 import io.activej.bytebuf.ByteBuf;
+import org.jetbrains.annotations.TestOnly;
 
 public class NilReply implements Reply {
     private NilReply() {
@@ -20,5 +21,12 @@ public class NilReply implements Reply {
     @Override
     public ByteBuf bufferAsHttp() {
         return ByteBuf.wrapForReading(NIL_BYTES);
+    }
+
+    @TestOnly
+    @Override
+    public boolean dumpForTest(StringBuilder sb, int nestCount) {
+        sb.append("nil");
+        return true;
     }
 }

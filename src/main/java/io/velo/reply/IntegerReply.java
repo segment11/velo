@@ -1,6 +1,7 @@
 package io.velo.reply;
 
 import io.activej.bytebuf.ByteBuf;
+import org.jetbrains.annotations.TestOnly;
 
 public class IntegerReply implements Reply {
     private static final byte[] b0 = "0".getBytes();
@@ -16,6 +17,13 @@ public class IntegerReply implements Reply {
         public ByteBuf bufferAsHttp() {
             return ByteBuf.wrapForReading(b1);
         }
+
+        @TestOnly
+        @Override
+        public boolean dumpForTest(StringBuilder sb, int nestCount) {
+            sb.append("1");
+            return true;
+        }
     };
 
     public static final Reply REPLY_0 = new Reply() {
@@ -27,6 +35,13 @@ public class IntegerReply implements Reply {
         @Override
         public ByteBuf bufferAsHttp() {
             return ByteBuf.wrapForReading(b0);
+        }
+
+        @TestOnly
+        @Override
+        public boolean dumpForTest(StringBuilder sb, int nestCount) {
+            sb.append("0");
+            return true;
         }
     };
 
@@ -67,5 +82,12 @@ public class IntegerReply implements Reply {
     @Override
     public ByteBuf bufferAsHttp() {
         return ByteBuf.wrapForReading(Long.toString(integer).getBytes());
+    }
+
+    @TestOnly
+    @Override
+    public boolean dumpForTest(StringBuilder sb, int nestCount) {
+        sb.append(integer);
+        return true;
     }
 }

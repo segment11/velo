@@ -1,6 +1,7 @@
 package io.velo.reply;
 
 import io.activej.bytebuf.ByteBuf;
+import org.jetbrains.annotations.TestOnly;
 
 public class BulkReply implements Reply {
     public byte[] getRaw() {
@@ -96,5 +97,12 @@ public class BulkReply implements Reply {
     @Override
     public ByteBuf bufferAsHttp() {
         return ByteBuf.wrapForReading(raw);
+    }
+
+    @TestOnly
+    @Override
+    public boolean dumpForTest(StringBuilder sb, int nestCount) {
+        sb.append("\"").append(new String(raw)).append("\"");
+        return true;
     }
 }
