@@ -29,6 +29,17 @@ class CompressedValueTest extends Specification {
         !CompressedValue.isTypeString(CompressedValue.SP_TYPE_HASH)
 
         CompressedValue.isTypeString(cv.dictSeqOrSpType)
+        CompressedValue.isHash(CompressedValue.SP_TYPE_HH)
+        CompressedValue.isHash(CompressedValue.SP_TYPE_HASH)
+        !CompressedValue.isHash(CompressedValue.SP_TYPE_LIST)
+        CompressedValue.isList(CompressedValue.SP_TYPE_LIST)
+        !CompressedValue.isList(CompressedValue.SP_TYPE_SET)
+        CompressedValue.isSet(CompressedValue.SP_TYPE_SET)
+        !CompressedValue.isSet(CompressedValue.SP_TYPE_ZSET)
+        CompressedValue.isZSet(CompressedValue.SP_TYPE_ZSET)
+        !CompressedValue.isZSet(CompressedValue.SP_TYPE_STREAM)
+        CompressedValue.isStream(CompressedValue.SP_TYPE_STREAM)
+        !CompressedValue.isStream(CompressedValue.SP_TYPE_HASH)
         CompressedValue.isDeleted(new byte[]{CompressedValue.SP_FLAG_DELETE_TMP})
         !CompressedValue.isDeleted(new byte[2])
         !CompressedValue.isDeleted(new byte[]{0})
@@ -44,15 +55,10 @@ class CompressedValueTest extends Specification {
         !cv.isTypeNumber()
         !cv.isBigString()
         !cv.isHash()
-        !CompressedValue.isHash(cv.dictSeqOrSpType)
         !cv.isList()
-        !CompressedValue.isList(cv.dictSeqOrSpType)
         !cv.isSet()
-        !CompressedValue.isSet(cv.dictSeqOrSpType)
         !cv.isZSet()
-        !CompressedValue.isZSet(cv.dictSeqOrSpType)
         !cv.isStream()
-        !CompressedValue.isStream(cv.dictSeqOrSpType)
         !cv.isUseDict()
 
         when:
@@ -81,6 +87,7 @@ class CompressedValueTest extends Specification {
         cv.isHash()
         !cv.isTypeString()
         !cv.isShortString()
+        !cv.isList()
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
@@ -92,21 +99,25 @@ class CompressedValueTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         then:
         cv.isList()
+        !cv.isSet()
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         then:
         cv.isSet()
+        !cv.isZSet()
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         then:
         cv.isZSet()
+        !cv.isStream()
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_STREAM
         then:
         cv.isStream()
+        !cv.isHash()
 
         when:
         cv.dictSeqOrSpType = Dict.GLOBAL_ZSTD_DICT_SEQ
