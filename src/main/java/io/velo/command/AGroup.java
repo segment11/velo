@@ -173,7 +173,7 @@ public class AGroup extends BaseCommand {
             try {
                 givenNumber = Integer.parseInt(givenNumberString);
             } catch (NumberFormatException e) {
-                return ErrorReply.INVALID_INTEGER;
+                return ErrorReply.NOT_INTEGER;
             }
 
             if (givenNumber < 1 || givenNumber > 1024) {
@@ -267,7 +267,7 @@ public class AGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(countOrReset);
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_INTEGER;
+                    return ErrorReply.NOT_INTEGER;
                 }
 
                 // limit count
