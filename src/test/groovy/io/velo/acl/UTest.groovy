@@ -8,8 +8,10 @@ class UTest extends Specification {
     def 'test base'() {
         given:
         def u = new U('kerry')
-        u.password = U.Password.plain('123456')
+        def p1 = U.Password.plain('123456')
         def p2 = U.Password.sha256('123456')
+        u.password = p1
+        u.addPassword(p2)
 
         and:
         def rCmd = new RCmd()
@@ -35,8 +37,8 @@ class UTest extends Specification {
         expect:
         u.on
         !u.password.isNoPass()
-        u.password.check('123456')
-        !u.password.check('1234567')
+        u.checkPassword('123456')
+        !u.checkPassword('1234567')
         u.literal() == 'user kerry on 123456 +* -set %R~a* &myChannel*'
 
         when:
@@ -47,21 +49,21 @@ class UTest extends Specification {
         when:
         u.password = U.Password.sha256('123456')
         then:
-        u.password.check('123456')
+        u.checkPassword('123456')
 
         when:
         u.on = true
         u.password = U.Password.NO_PASSWORD
         then:
         u.password.isNoPass()
-        u.password.check('123456')
+        u.checkPassword('123456')
         u.literal() == 'user kerry on nopass +* -set %R~a* &myChannel*'
 
         when:
-        u.password = U.Password.RESET_PASSWORD
+        u.resetPassword()
         then:
-        u.password.isResetPass()
-        !u.password.check('123456')
+        u.password == null
+        !u.checkPassword('123456')
 
         when:
         def u1 = U.fromLiteral('user kerry on nopass +@all -@dangerous %R~a* ~b* &myChannel*')
@@ -144,7 +146,8 @@ class UTest extends Specification {
 
         when:
         u.on = true
-        u.password = U.Password.NO_PASSWORD
+        u.resetPassword()
+        u.addPassword U.Password.plain('123456')
         u.addRCmd(true, RCmd.fromLiteral("+*"))
         u.addRKey(true, RKey.fromLiteral("~*"))
         u.addRPubSub(true, RPubSub.fromLiteral("&*"))
@@ -157,7 +160,9 @@ class UTest extends Specification {
         when:
         println sb.toString()
         u.on = false
-        u.password = U.Password.plain('123456')
+        u.resetPassword()
+        u.addPassword U.Password.plain('123456')
+        u.addPassword U.Password.plain('1234567')
         u.addRCmd(true, RCmd.fromLiteral("+@all"))
         u.addRCmdDisallow(true, RCmd.fromLiteral("-@admin"))
         u.addRKey(true, RKey.fromLiteral("%R~a*"))
@@ -167,6 +172,19 @@ class UTest extends Specification {
         then:
         replies.length == 10
         new MultiBulkReply(replies).dumpForTest(sb, 0)
+
+        when:
+        u.resetPassword()
+        u.addPassword U.Password.NO_PASSWORD
+        replies = u.toReplies()
+        then:
+        replies.length == 10
+
+        when:
+        u.resetPassword()
+        replies = u.toReplies()
+        then:
+        replies.length == 10
 
         cleanup:
         println sb.toString()

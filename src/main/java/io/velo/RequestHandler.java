@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.StringWriter;
-import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -474,7 +473,7 @@ public class RequestHandler {
                         return ErrorReply.AUTH_FAILED;
                     }
 
-                    if (!u.getPassword().check(passwordRaw)) {
+                    if (!u.checkPassword(passwordRaw)) {
                         return ErrorReply.AUTH_FAILED;
                     }
 
@@ -503,7 +502,7 @@ public class RequestHandler {
                         return ErrorReply.AUTH_FAILED;
                     }
 
-                    if (!u.getPassword().check(passwordRaw)) {
+                    if (!u.checkPassword(passwordRaw)) {
                         return ErrorReply.AUTH_FAILED;
                     }
 

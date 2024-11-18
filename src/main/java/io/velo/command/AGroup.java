@@ -344,16 +344,16 @@ public class AGroup extends BaseCommand {
                         if (ValkeyRawConfSupport.aclPubsubDefault) {
                             u.addRPubSub(false, RPubSub.fromLiteral("&*"));
                         }
-                    } else if (U.Password.NO_PASS.equals(rule)) {
-                        u.setPassword(U.Password.NO_PASSWORD);
-                    } else if (U.Password.RESET_PASS.equals(rule)) {
-                        u.setPassword(U.Password.RESET_PASSWORD);
+                    } else if ("nopass".equals(rule)) {
+                        u.addPassword(U.Password.NO_PASSWORD);
+                    } else if ("resetpass".equals(rule)) {
+                        u.resetPassword();
                     } else if (rule.startsWith(U.ADD_PASSWORD_PREFIX)) {
                         var password = rule.substring(1);
-                        u.setPassword(U.Password.plain(password));
+                        u.addPassword(U.Password.plain(password));
                     } else if ("reset".equals(rule)) {
                         u.setOn(false);
-                        u.setPassword(U.Password.RESET_PASSWORD);
+                        u.resetPassword();
                         u.resetKey();
                         u.resetPubSub();
                         if (ValkeyRawConfSupport.aclPubsubDefault) {

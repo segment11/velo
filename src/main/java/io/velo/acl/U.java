@@ -5,6 +5,7 @@ import io.velo.reply.BulkReply;
 import io.velo.reply.MultiBulkReply;
 import io.velo.reply.Reply;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
@@ -27,18 +28,9 @@ public class U {
             return NO_PASS.equals(this.passwordEncoded);
         }
 
-        @VisibleForTesting
-        boolean isResetPass() {
-            return RESET_PASS.equals(this.passwordEncoded);
-        }
-
-        public boolean check(String passwordRaw) {
+        boolean check(String passwordRaw) {
             if (isNoPass()) {
                 return true;
-            }
-
-            if (isResetPass()) {
-                return false;
             }
 
             if (encodeType == PasswordEncodedType.plain) {
@@ -58,9 +50,7 @@ public class U {
         }
 
         public static final String NO_PASS = "nopass";
-        public static final String RESET_PASS = "resetpass";
         public static final Password NO_PASSWORD = new Password(NO_PASS, PasswordEncodedType.plain);
-        public static final Password RESET_PASSWORD = new Password(RESET_PASS, PasswordEncodedType.plain);
     }
 
     final String user;
@@ -83,21 +73,39 @@ public class U {
         isOn = on;
     }
 
-    // more than one password, todo
-    private Password password;
+    private final List<Password> passwords = new ArrayList<>();
 
-    public Password getPassword() {
-        return password;
+    public void addPassword(Password password) {
+        passwords.add(password);
     }
 
+    public void resetPassword() {
+        passwords.clear();
+    }
+
+    public boolean checkPassword(String passwordRaw) {
+        // reset password
+        if (passwords.isEmpty()) {
+            return false;
+        }
+        return passwords.stream().anyMatch(password -> password.check(passwordRaw));
+    }
+
+    @TestOnly
     public void setPassword(Password password) {
-        this.password = password;
+        passwords.clear();
+        passwords.add(password);
+    }
+
+    @TestOnly
+    public Password getPassword() {
+        return passwords.isEmpty() ? null : passwords.getFirst();
     }
 
     public static final U INIT_DEFAULT_U = new U(DEFAULT_USER);
 
     static {
-        INIT_DEFAULT_U.setPassword(Password.NO_PASSWORD);
+        INIT_DEFAULT_U.addPassword(Password.NO_PASSWORD);
         INIT_DEFAULT_U.addRCmd(true, RCmd.fromLiteral("+*"), RCmd.fromLiteral("+@all"));
         INIT_DEFAULT_U.addRKey(true, RKey.fromLiteral("~*"));
         INIT_DEFAULT_U.addRPubSub(true, RPubSub.fromLiteral("&*"));
@@ -107,8 +115,9 @@ public class U {
         var sb = new StringBuilder();
         sb.append("user ").append(user).append(" ");
         sb.append(isOn ? "on" : "off").append(" ");
+        var firstPassword = passwords.getFirst();
         // need # before password ? todo
-        sb.append(password.passwordEncoded).append(" ");
+        sb.append(firstPassword.passwordEncoded).append(" ");
 
         for (var rCmd : rCmdList) {
             sb.append(rCmd.literal()).append(" ");
@@ -145,7 +154,7 @@ public class U {
         if (rPubSubList.stream().anyMatch(rPubSub -> rPubSub.pattern.equals(RPubSub.ALL))) {
             flags.add("allchannels");
         }
-        if (password.isNoPass()) {
+        if (passwords.stream().anyMatch(Password::isNoPass)) {
             flags.add("nopass");
         }
         var flagsReplies = new Reply[flags.size()];
@@ -155,9 +164,16 @@ public class U {
         replies[1] = new MultiBulkReply(flagsReplies);
 
         replies[2] = new BulkReply("passwords".getBytes());
-        var passwordsReplies = password.isNoPass() ? MultiBulkReply.EMPTY :
-                new MultiBulkReply(new Reply[]{new BulkReply(password.passwordEncoded.getBytes())});
-        replies[3] = passwordsReplies;
+        var isOnlyNoPass = passwords.size() == 1 && passwords.getFirst().isNoPass();
+        if (isOnlyNoPass || passwords.isEmpty()) {
+            replies[3] = MultiBulkReply.EMPTY;
+        } else {
+            var passwordsReplies = new Reply[passwords.size()];
+            for (int i = 0; i < passwords.size(); i++) {
+                passwordsReplies[i] = new BulkReply(passwords.get(i).passwordEncoded.getBytes());
+            }
+            replies[3] = new MultiBulkReply(passwordsReplies);
+        }
 
         replies[4] = new BulkReply("commands".getBytes());
         var commandsReplies = new Reply[rCmdList.size() + rCmdDisallowList.size()];
@@ -203,10 +219,10 @@ public class U {
         var u = new U(user);
         u.setOn(isOn);
         if (Password.NO_PASS.equals(password)) {
-            u.setPassword(Password.NO_PASSWORD);
+            u.addPassword(Password.NO_PASSWORD);
         } else {
             // need trim # before password ? todo
-            u.setPassword(Password.plain(password));
+            u.addPassword(Password.plain(password));
         }
 
         for (int i = 4; i < parts.length; i++) {
