@@ -3,10 +3,7 @@ package io.velo.command;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
-import io.velo.reply.BulkReply;
-import io.velo.reply.ErrorReply;
-import io.velo.reply.NilReply;
-import io.velo.reply.Reply;
+import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
@@ -36,6 +33,10 @@ public class GGroup extends BaseCommand {
     }
 
     public Reply handle() {
+        if ("getbit".equals(cmd)) {
+            return getbit();
+        }
+
         if ("getdel".equals(cmd)) {
             return getdel();
         }
@@ -53,6 +54,52 @@ public class GGroup extends BaseCommand {
         }
 
         return NilReply.INSTANCE;
+    }
+
+    @VisibleForTesting
+    Reply getbit() {
+        if (data.length != 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        var offsetBytes = data[2];
+        int offset;
+        try {
+            offset = Integer.parseInt(new String(offsetBytes));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        if (offset < 0) {
+            return ErrorReply.INVALID_INTEGER;
+        }
+
+        // max offset limit, redis is 512MB
+        // velo is 1MB
+        final int MAX_OFFSET = 1024 * 1024;
+        if (offset >= MAX_OFFSET) {
+            return ErrorReply.INVALID_INTEGER;
+        }
+
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var valueBytes = get(keyBytes, slotWithKeyHash);
+        if (valueBytes == null) {
+            return IntegerReply.REPLY_0;
+        }
+
+        int byteIndex = offset / 8;
+        int bitIndex = offset % 8;
+        if (byteIndex >= valueBytes.length) {
+            return IntegerReply.REPLY_0;
+        }
+
+        byte b = valueBytes[byteIndex];
+        int bit = (b >> bitIndex) & 1;
+        return bit == 1 ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
     }
 
     @VisibleForTesting

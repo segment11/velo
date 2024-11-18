@@ -6,6 +6,7 @@ import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Mock
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
+import io.velo.reply.IntegerReply
 import io.velo.reply.NilReply
 import spock.lang.Specification
 
@@ -22,6 +23,7 @@ class GGroupTest extends Specification {
 
         when:
         def sGetList = _GGroup.parseSlots('get', data2, slotNumber)
+        def sGetBitList = _GGroup.parseSlots('getbit', data2, slotNumber)
         def sGetDelList = _GGroup.parseSlots('getdel', data2, slotNumber)
         def sGetExList = _GGroup.parseSlots('getex', data2, slotNumber)
         def sGetRangeList = _GGroup.parseSlots('getrange', data2, slotNumber)
@@ -29,6 +31,7 @@ class GGroupTest extends Specification {
         def sList = _GGroup.parseSlots('gxxx', data2, slotNumber)
         then:
         sGetList.size() == 1
+        sGetBitList.size() == 1
         sGetDelList.size() == 1
         sGetExList.size() == 1
         sGetRangeList.size() == 1
@@ -46,11 +49,17 @@ class GGroupTest extends Specification {
         given:
         def data1 = new byte[1][]
 
-        def gGroup = new GGroup('getdel', data1, null)
+        def gGroup = new GGroup('getbit', data1, null)
         gGroup.from(BaseCommand.mockAGroup())
 
         when:
         def reply = gGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        gGroup.cmd = 'getdel'
+        reply = gGroup.handle()
         then:
         reply == ErrorReply.FORMAT
 
@@ -77,6 +86,71 @@ class GGroupTest extends Specification {
         reply = gGroup.handle()
         then:
         reply == NilReply.INSTANCE
+    }
+
+    def 'test getbit'() {
+        given:
+        final short slot = 0
+
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def gGroup = new GGroup('getbit', null, null)
+        gGroup.byPassGetSet = inMemoryGetSet
+        gGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = gGroup.execute('getbit a 0')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.compressedData = 'foobar'.bytes
+        cv.compressedLength = 6
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = gGroup.execute('getbit a 0')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        reply = gGroup.execute('getbit a 1')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when:
+        reply = gGroup.execute('getbit a 48')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        reply = gGroup.execute('getbit a ' + 1024 * 1024)
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = gGroup.execute('getbit a -1')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = gGroup.execute('getbit a _')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        def data3 = new byte[3][]
+        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        data3[2] = '0'.bytes
+        gGroup.data = data3
+        reply = gGroup.getbit()
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        reply = gGroup.execute('getbit a 0 1')
+        then:
+        reply == ErrorReply.FORMAT
     }
 
     def 'test getdel'() {

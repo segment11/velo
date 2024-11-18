@@ -17,10 +17,7 @@ import io.velo.reply.*;
 import io.velo.type.RedisHashKeys;
 import org.jetbrains.annotations.VisibleForTesting;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Random;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.regex.Pattern;
 
 import static io.velo.CompressedValue.NO_EXPIRE;
@@ -33,7 +30,7 @@ public class SGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
-        if ("set".equals(cmd) || "setex".equals(cmd) || "setrange".equals(cmd) ||
+        if ("set".equals(cmd) || "setbit".equals(cmd) || "setex".equals(cmd) || "setrange".equals(cmd) ||
                 "setnx".equals(cmd) || "strlen".equals(cmd) || "substr".equals(cmd) ||
                 "sadd".equals(cmd) || "scard".equals(cmd) ||
                 "sismember".equals(cmd) || "smembers".equals(cmd) || "smismember".equals(cmd) ||
@@ -115,6 +112,10 @@ public class SGroup extends BaseCommand {
 
         if ("set".equals(cmd)) {
             return set(data);
+        }
+
+        if ("setbit".equals(cmd)) {
+            return setbit();
         }
 
         if ("setex".equals(cmd)) {
@@ -561,6 +562,76 @@ public class SGroup extends BaseCommand {
         }
 
         return OKReply.INSTANCE;
+    }
+
+    @VisibleForTesting
+    Reply setbit() {
+        if (data.length != 4) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        var offsetBytes = data[2];
+        int offset;
+        try {
+            offset = Integer.parseInt(new String(offsetBytes));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        if (offset < 0) {
+            return ErrorReply.INVALID_INTEGER;
+        }
+
+        // max offset limit, redis is 512MB
+        // velo is 1MB
+        final int MAX_OFFSET = 1024 * 1024;
+        if (offset >= MAX_OFFSET) {
+            return ErrorReply.INVALID_INTEGER;
+        }
+
+        var bit1or0Bytes = data[3];
+        if (bit1or0Bytes.length != 1) {
+            return ErrorReply.INVALID_INTEGER;
+        }
+        var isBit1 = bit1or0Bytes[0] == '1';
+        if (!isBit1 && bit1or0Bytes[0] != '0') {
+            return ErrorReply.INVALID_INTEGER;
+        }
+
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var valueBytesExist = get(keyBytes, slotWithKeyHash);
+        byte[] valueBytesNew;
+        if (valueBytesExist == null) {
+            int len = (offset + 1) / 8;
+            if ((offset + 1) % 8 != 0) {
+                len++;
+            }
+            valueBytesNew = new byte[len];
+        } else {
+            int len = valueBytesExist.length;
+            if (len * 8 <= offset) {
+                byte[] valueBytesNewTmp = new byte[offset / 8 + 1];
+                System.arraycopy(valueBytesExist, 0, valueBytesNewTmp, 0, valueBytesExist.length);
+                valueBytesNew = valueBytesNewTmp;
+            } else {
+                valueBytesNew = valueBytesExist;
+            }
+        }
+
+        var bitSet = BitSet.valueOf(valueBytesNew);
+        var isNotChange = bitSet.get(offset) == isBit1;
+        if (isNotChange) {
+            return isBit1 ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+        } else {
+            var oldIsBit1 = bitSet.get(offset);
+            bitSet.set(offset, isBit1);
+            set(keyBytes, bitSet.toByteArray(), slotWithKeyHash);
+            return oldIsBit1 ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+        }
     }
 
     @VisibleForTesting

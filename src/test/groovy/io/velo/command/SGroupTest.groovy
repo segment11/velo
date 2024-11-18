@@ -19,6 +19,7 @@ class SGroupTest extends Specification {
 
     def singleKeyCmdList1 = '''
 set
+setbit
 setex
 setnx
 setrange
@@ -89,7 +90,7 @@ sunionstore
             _SGroup.parseSlots(it, data4, slotNumber)
         }
         then:
-        sListList1.size() == 14
+        sListList1.size() == 15
         sListList1.every { it.size() == 1 }
 
         when:
@@ -97,7 +98,7 @@ sunionstore
             _SGroup.parseSlots(it, data1, slotNumber)
         }
         then:
-        sListList11.size() == 14
+        sListList11.size() == 15
         sListList11.every { it.size() == 0 }
 
         when:
@@ -477,6 +478,83 @@ sunionstore
         reply = sGroup.set(data3)
         then:
         reply == ErrorReply.VALUE_TOO_LONG
+    }
+
+    def 'test setbit'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def sGroup = new SGroup('setbit', null, null)
+        sGroup.byPassGetSet = inMemoryGetSet
+        sGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = sGroup.execute('setbit a 0 1')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        reply = sGroup.execute('setbit a 0 1')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when:
+        reply = sGroup.execute('setbit a 0 0')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when:
+        reply = sGroup.execute('setbit a 0 0')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.compressedData = 'foobar'.bytes
+        cv.compressedLength = 6
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('setbit a 1 0')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when:
+        reply = sGroup.execute('setbit a 1 1')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        reply = sGroup.execute('setbit a 0 2')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = sGroup.execute('setbit a 0 10')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = sGroup.execute('setbit a ' + 1024 * 1024 + ' 1')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = sGroup.execute('setbit a -1 1')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = sGroup.execute('setbit a _ 1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        def data4 = new byte[4][]
+        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        sGroup.data = data4
+        reply = sGroup.setbit()
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test setex'() {

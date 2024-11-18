@@ -2,6 +2,7 @@ package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.BaseCommand;
+import io.velo.CompressedValue;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -68,6 +69,9 @@ public class BGroup extends BaseCommand {
         }
 
         var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
 
         int start;
         int end;
@@ -135,10 +139,17 @@ public class BGroup extends BaseCommand {
         }
 
         var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
         var bit1or0Bytes = data[2];
-        var isBit1 = "1".equals(new String(bit1or0Bytes));
-        if (!isBit1 && !"0".equals(new String(bit1or0Bytes))) {
-            return ErrorReply.SYNTAX;
+        if (bit1or0Bytes.length != 1) {
+            return ErrorReply.INVALID_INTEGER;
+        }
+        var isBit1 = bit1or0Bytes[0] == '1';
+        if (!isBit1 && bit1or0Bytes[0] != '0') {
+            return ErrorReply.INVALID_INTEGER;
         }
 
         int start;

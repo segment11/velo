@@ -169,6 +169,15 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('bitcount a 5 30 bit x')
         then:
         reply == ErrorReply.SYNTAX
+
+        when:
+        def data3 = new byte[3][]
+        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        data3[2] = '0'.bytes
+        bGroup.data = data3
+        reply = bGroup.bitcount()
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test bitpos'() {
@@ -258,6 +267,20 @@ class BGroupTest extends Specification {
         when:
         reply = bGroup.execute('bitpos a 2 0 -1')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = bGroup.execute('bitpos a 10 0 -1')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        def data3 = new byte[3][]
+        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        data3[2] = '0'.bytes
+        bGroup.data = data3
+        reply = bGroup.bitpos()
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
     }
 }
