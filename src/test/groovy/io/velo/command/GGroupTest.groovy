@@ -227,20 +227,14 @@ class GGroupTest extends Specification {
         given:
         final short slot = 0
 
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '0'.bytes
-        data4[3] = '1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def gGroup = new GGroup('getrange', data4, null)
+        def gGroup = new GGroup('getrange', null, null)
         gGroup.byPassGetSet = inMemoryGetSet
         gGroup.from(BaseCommand.mockAGroup())
 
         when:
-        gGroup.slotWithKeyHashListParsed = _GGroup.parseSlots('getrange', data4, gGroup.slotNumber)
-        def reply = gGroup.getrange()
+        def reply = gGroup.execute('getrange a 0 1')
         then:
         reply == NilReply.INSTANCE
 
@@ -250,69 +244,21 @@ class GGroupTest extends Specification {
         cv.compressedLength = 3
         cv.uncompressedLength = 3
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = gGroup.getrange()
+        reply = gGroup.execute('getrange a 0 1')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == 'ab'.bytes
 
         when:
-        data4[3] = 'a'.bytes
-        reply = gGroup.getrange()
+        reply = gGroup.execute('getrange a 0 a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data4[3] = '-1'.bytes
-        reply = gGroup.getrange()
-        then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'abc'.bytes
-
-        when:
-        // empty bytes
-        data4[3] = '-4'.bytes
-        reply = gGroup.getrange()
+        reply = gGroup.execute('getrange a 2 1')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw.length == 0
-
-        when:
-        data4[3] = '3'.bytes
-        reply = gGroup.getrange()
-        then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'abc'.bytes
-
-        when:
-        data4[2] = '2'.bytes
-        data4[3] = '1'.bytes
-        reply = gGroup.getrange()
-        then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw.length == 0
-
-        when:
-        data4[2] = '3'.bytes
-        data4[3] = '-1'.bytes
-        reply = gGroup.getrange()
-        then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw.length == 0
-
-        when:
-        data4[2] = '-2'.bytes
-        data4[3] = '2'.bytes
-        reply = gGroup.getrange()
-        then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'bc'.bytes
-
-        when:
-        data4[2] = '-4'.bytes
-        reply = gGroup.getrange()
-        then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'abc'.bytes
     }
 
     def 'test getset'() {

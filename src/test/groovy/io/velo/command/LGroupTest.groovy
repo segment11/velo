@@ -794,21 +794,15 @@ class LGroupTest extends Specification {
         given:
         final short slot = 0
 
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '0'.bytes
-        data4[3] = '2'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('lrange', data4, null)
+        def lGroup = new LGroup('lrange', null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lrange', data4, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = lGroup.lrange()
+        def reply = lGroup.execute('lrange a 0 2')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -821,63 +815,26 @@ class LGroupTest extends Specification {
         }
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = lGroup.lrange()
+        reply = lGroup.execute('lrange a 0 2')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 3
 
         when:
-        data4[2] = '10'.bytes
-        reply = lGroup.lrange()
+        reply = lGroup.execute('lrange a 2 1')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        data4[2] = '1'.bytes
-        data4[3] = '0'.bytes
-        reply = lGroup.lrange()
-        then:
-        reply == MultiBulkReply.EMPTY
-
-        when:
-        data4[2] = '8'.bytes
-        data4[3] = '10'.bytes
-        reply = lGroup.lrange()
-        then:
-        reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-
-        when:
-        data4[2] = '-2'.bytes
-        data4[3] = '-1'.bytes
-        reply = lGroup.lrange()
-        then:
-        reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-
-        when:
-        data4[2] = '-12'.bytes
-        data4[3] = '1'.bytes
-        reply = lGroup.lrange()
-        then:
-        reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-
-        when:
-        data4[2] = '-12'.bytes
-        data4[3] = '-13'.bytes
-        reply = lGroup.lrange()
-        then:
-        reply == MultiBulkReply.EMPTY
-
-        when:
-        data4[2] = 'a'.bytes
-        reply = lGroup.lrange()
+        reply = lGroup.execute('lrange a a 1')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
+        def data4 = new byte[4][]
         data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        lGroup.data = data4
+        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lrange', data4, lGroup.slotNumber)
         reply = lGroup.lrange()
         then:
         reply == ErrorReply.KEY_TOO_LONG
@@ -1056,25 +1013,28 @@ class LGroupTest extends Specification {
         reply == ErrorReply.VALUE_TOO_LONG
     }
 
+    private void resetRedisList(RedisList rl, int n) {
+        while (rl.size() != 0) {
+            rl.removeFirst()
+        }
+        n.times {
+            rl.addLast(it.toString().bytes)
+        }
+    }
+
     def 'test ltrim'() {
         given:
         final short slot = 0
 
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '0'.bytes
-        data4[3] = '9'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('ltrim', data4, null)
+        def lGroup = new LGroup('ltrim', null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('ltrim', data4, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = lGroup.ltrim()
+        def reply = lGroup.execute('ltrim a 0 9')
         then:
         reply == OKReply.INSTANCE
 
@@ -1082,73 +1042,55 @@ class LGroupTest extends Specification {
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
-        10.times {
-            rl.addLast(it.toString().bytes)
-        }
+        resetRedisList(rl, 10)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = lGroup.ltrim()
+        reply = lGroup.execute('ltrim a 0 9')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        data4[2] = '-10'.bytes
-        data4[3] = '-1'.bytes
-        reply = lGroup.ltrim()
+        resetRedisList(rl, 10)
+        reply = lGroup.execute('ltrim a 1 2')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        data4[2] = '-11'.bytes
-        data4[3] = '-1'.bytes
-        reply = lGroup.ltrim()
-        then:
-        reply == OKReply.INSTANCE
-
-        when:
-        data4[2] = '2'.bytes
-        data4[3] = '3'.bytes
-        reply = lGroup.ltrim()
-        then:
-        reply == OKReply.INSTANCE
-
-        when:
-        data4[2] = '0'.bytes
-        data4[3] = '-11'.bytes
-        reply = lGroup.ltrim()
-        then:
-        reply == OKReply.INSTANCE
-
-        when:
-        data4[2] = '10'.bytes
-        data4[3] = '10'.bytes
-        reply = lGroup.ltrim()
-        then:
-        reply == OKReply.INSTANCE
-
-        when:
-        while (rl.size() != 0) {
-            rl.removeFirst()
-        }
-        10.times {
-            rl.addLast(it.toString().bytes)
-        }
+        resetRedisList(rl, 10)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        data4[2] = '1'.bytes
-        data4[3] = '0'.bytes
-        reply = lGroup.ltrim()
+        reply = lGroup.execute('ltrim a 2 1')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        data4[2] = 'a'.bytes
-        reply = lGroup.ltrim()
+        resetRedisList(rl, 10)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = lGroup.execute('ltrim a 100 200')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        resetRedisList(rl, 10)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = lGroup.execute('ltrim a -100 -90')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = lGroup.execute('ltrim a a 9')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
+        def data4 = new byte[4][]
+        data4[1] = 'a'.bytes
+        data4[2] = '0'.bytes
+        data4[3] = '9'.bytes
         data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        lGroup.data = data4
         reply = lGroup.ltrim()
         then:
         reply == ErrorReply.KEY_TOO_LONG

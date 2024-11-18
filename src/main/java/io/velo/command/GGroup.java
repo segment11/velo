@@ -21,7 +21,7 @@ public class GGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
-        if ("get".equals(cmd) || "getdel".equals(cmd) || "getex".equals(cmd)
+        if ("get".equals(cmd) || "getbit".equals(cmd) || "getdel".equals(cmd) || "getex".equals(cmd)
                 || "getrange".equals(cmd) || "getset".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
@@ -162,14 +162,12 @@ public class GGroup extends BaseCommand {
         }
 
         var keyBytes = data[1];
-        var startBytes = data[2];
-        var endBytes = data[3];
 
         int start;
         int end;
         try {
-            start = Integer.parseInt(new String(startBytes));
-            end = Integer.parseInt(new String(endBytes));
+            start = Integer.parseInt(new String(data[2]));
+            end = Integer.parseInt(new String(data[3]));
         } catch (NumberFormatException e) {
             return ErrorReply.NOT_INTEGER;
         }
@@ -180,33 +178,16 @@ public class GGroup extends BaseCommand {
             return NilReply.INSTANCE;
         }
 
-        if (start < 0) {
-            start = valueBytes.length + start;
-            if (start < 0) {
-                start = 0;
-            }
-        }
-        if (end < 0) {
-            end = valueBytes.length + end;
-            if (end < 0) {
-                return BLANK_REPLY;
-            }
-        }
-        if (start >= valueBytes.length) {
-            return BLANK_REPLY;
-        }
-        if (end >= valueBytes.length) {
-            end = valueBytes.length - 1;
-        }
-        if (start > end) {
+        var startEnd = IndexStartEndReset.reset(start, end, valueBytes.length);
+        if (!startEnd.valid()) {
             return BLANK_REPLY;
         }
 
         // use utf-8 ? or use bytes
 //        var value = new String(valueBytes);
 
-        var subBytes = new byte[end - start + 1];
-        System.arraycopy(valueBytes, start, subBytes, 0, subBytes.length);
+        var subBytes = new byte[startEnd.end() - startEnd.start() + 1];
+        System.arraycopy(valueBytes, startEnd.start(), subBytes, 0, subBytes.length);
         return new BulkReply(subBytes);
     }
 

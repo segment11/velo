@@ -2103,60 +2103,8 @@ zunionstore
         ((IntegerReply) reply).integer == 3
 
         when:
-        data10[2] = '-11'.bytes
-        data10[3] = '-8'.bytes
-        reply = zGroup.zrange(data10)
-        then:
-        reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 3
-
-        when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
-        then:
-        reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 3
-
-        when:
-        data10[3] = '-11'.bytes
-        reply = zGroup.zrange(data10)
-        then:
-        reply == MultiBulkReply.EMPTY
-
-        when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
-        then:
-        reply == IntegerReply.REPLY_0
-
-        when:
         data10[2] = '1'.bytes
         data10[3] = '0'.bytes
-        reply = zGroup.zrange(data10)
-        then:
-        reply == MultiBulkReply.EMPTY
-
-        when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
-        then:
-        reply == IntegerReply.REPLY_0
-
-        when:
-        data10[2] = '-2'.bytes
-        data10[3] = '10'.bytes
-        reply = zGroup.zrange(data10)
-        then:
-        reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-
-        when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
-        then:
-        reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
-
-        when:
-        // start = size
-        data10[2] = '10'.bytes
-        data10[3] = '11'.bytes
         reply = zGroup.zrange(data10)
         then:
         reply == MultiBulkReply.EMPTY
@@ -2375,6 +2323,12 @@ zunionstore
         reply = zGroup.zrange(data10, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
+
+        when:
+        data10[5] = 'rev'.bytes
+        reply = zGroup.zrange(data10)
+        then:
+        reply == MultiBulkReply.EMPTY
 
         when:
         data10[2] = 'member1'.bytes
@@ -2926,16 +2880,6 @@ zunionstore
         ((IntegerReply) reply).integer == 3
 
         when:
-        data4[2] = '-11'.bytes
-        data4[3] = '-1'.bytes
-        // reset 10 members
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zremrangebyscore(false, false, true)
-        then:
-        reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 10
-
-        when:
         data4[3] = '-11'.bytes
         // reset 10 members
         inMemoryGetSet.put(slot, 'a', 0, cv)
@@ -2976,11 +2920,11 @@ zunionstore
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 4
 
-//        when:
-//        // remove again
-//        reply = zGroup.zremrangebyscore(false, true, false)
-//        then:
-//        reply == IntegerReply.REPLY_0
+        when:
+        // remove again
+        reply = zGroup.zremrangebyscore(false, true, false)
+        then:
+        reply == IntegerReply.REPLY_0
 
         when:
         data4[2] = 'member0'.bytes

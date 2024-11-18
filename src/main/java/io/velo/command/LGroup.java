@@ -548,18 +548,15 @@ public class LGroup extends BaseCommand {
         }
 
         var keyBytes = data[1];
-        var startBytes = data[2];
-        var stopBytes = data[3];
-
         if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
             return ErrorReply.KEY_TOO_LONG;
         }
 
         int start;
-        int stop;
+        int end;
         try {
-            start = Integer.parseInt(new String(startBytes));
-            stop = Integer.parseInt(new String(stopBytes));
+            start = Integer.parseInt(new String(data[2]));
+            end = Integer.parseInt(new String(data[3]));
         } catch (NumberFormatException e) {
             return ErrorReply.NOT_INTEGER;
         }
@@ -571,30 +568,13 @@ public class LGroup extends BaseCommand {
         }
 
         int size = rl.size();
-        if (start < 0) {
-            start = size + start;
-            if (start < 0) {
-                start = 0;
-            }
-        }
-        if (stop < 0) {
-            stop = size + stop;
-            if (stop < 0) {
-                return MultiBulkReply.EMPTY;
-            }
-        }
-        if (start >= size) {
-            return MultiBulkReply.EMPTY;
-        }
-        if (stop >= size) {
-            stop = size - 1;
-        }
-        if (start > stop) {
+        var startEnd = IndexStartEndReset.reset(start, end, size);
+        if (!startEnd.valid()) {
             return MultiBulkReply.EMPTY;
         }
 
-        var replies = new Reply[stop - start + 1];
-        for (int i = start; i <= stop; i++) {
+        var replies = new Reply[startEnd.end() - startEnd.start() + 1];
+        for (int i = startEnd.start(); i <= startEnd.end(); i++) {
             replies[i - start] = new BulkReply(rl.get(i));
         }
         return new MultiBulkReply(replies);
@@ -714,19 +694,15 @@ public class LGroup extends BaseCommand {
         }
 
         var keyBytes = data[1];
-        var startBytes = data[2];
-        var stopBytes = data[3];
-
         if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
             return ErrorReply.KEY_TOO_LONG;
         }
 
         int start;
-        int stop;
-
+        int end;
         try {
-            start = Integer.parseInt(new String(startBytes));
-            stop = Integer.parseInt(new String(stopBytes));
+            start = Integer.parseInt(new String(data[2]));
+            end = Integer.parseInt(new String(data[3]));
         } catch (NumberFormatException e) {
             return ErrorReply.NOT_INTEGER;
         }
@@ -739,24 +715,14 @@ public class LGroup extends BaseCommand {
         }
 
         int size = rl.size();
-
-        if (start < 0) {
-            start = size + start;
-        }
-        if (stop < 0) {
-            stop = size + stop;
-        }
-
-        if (start < 0) {
-            start = 0;
-        }
-        if (stop < 0) {
-            stop = 0;
-        }
-
-        if (start > size || start > stop) {
+        if (start > size || start > end) {
             removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), new String(keyBytes), slotWithKeyHash.keyHash());
             return OKReply.INSTANCE;
+        }
+
+        var startEnd = IndexStartEndReset.reset(start, end, size);
+        if (!startEnd.valid()) {
+            return ErrorReply.INVALID_INTEGER;
         }
 
         // keep index from start to stop
@@ -765,10 +731,10 @@ public class LGroup extends BaseCommand {
         int i = 0;
         while (it.hasNext()) {
             it.next();
-            if (i < start) {
+            if (i < startEnd.start()) {
                 it.remove();
             }
-            if (i > stop) {
+            if (i > startEnd.end()) {
                 it.remove();
             }
             i++;

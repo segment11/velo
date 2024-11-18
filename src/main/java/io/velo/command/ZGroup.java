@@ -1540,10 +1540,6 @@ public class ZGroup extends BaseCommand {
         if (byIndex) {
             try {
                 start = Integer.parseInt(minStr);
-            } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
-            }
-            try {
                 stop = Integer.parseInt(maxStr);
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
@@ -1562,33 +1558,16 @@ public class ZGroup extends BaseCommand {
         }
 
         if (byIndex) {
-            if (start < 0) {
-                start = size + start;
-                if (start < 0) {
-                    start = 0;
-                }
-            }
-            if (stop < 0) {
-                stop = size + stop;
-                if (stop < 0) {
-                    return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
-                }
-            }
-            if (start >= size) {
-                return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
-            }
-            if (stop >= size) {
-                stop = size - 1;
-            }
-            if (start > stop) {
+            var startEnd = IndexStartEndReset.reset(start, stop, size);
+            if (!startEnd.valid()) {
                 return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
             }
 
             // for range store
             var dstRz = new RedisZSet();
 
-            var replies = hasLimit ? new Reply[Math.min(stop - start + 1, count) * (withScores ? 2 : 1)] :
-                    new Reply[(stop - start + 1) * (withScores ? 2 : 1)];
+            var replies = hasLimit ? new Reply[Math.min(startEnd.end() - startEnd.start() + 1, count) * (withScores ? 2 : 1)] :
+                    new Reply[(startEnd.end() - startEnd.start() + 1) * (withScores ? 2 : 1)];
 
             var it = isReverse ? rz.getSet().descendingSet().iterator() : rz.getSet().iterator();
             int i = 0;
@@ -1596,7 +1575,7 @@ public class ZGroup extends BaseCommand {
             int skip = offset;
             while (it.hasNext()) {
                 var sv = it.next();
-                if (j >= start && j <= stop) {
+                if (j >= startEnd.start() && j <= startEnd.end()) {
                     if (hasLimit) {
                         if (skip > 0) {
                             skip--;
@@ -1966,19 +1945,11 @@ public class ZGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
+        var size = rz.size();
+        var startEnd = IndexStartEndReset.reset(start, stop, size);
         if (byRank) {
-            if (start < 0) {
-                start = rz.size() + start;
-                if (start < 0) {
-                    start = 0;
-                }
-            }
-
-            if (stop < 0) {
-                stop = rz.size() + stop;
-                if (stop < 0) {
-                    return IntegerReply.REPLY_0;
-                }
+            if (!startEnd.valid()) {
+                return IntegerReply.REPLY_0;
             }
         }
 
@@ -2014,7 +1985,7 @@ public class ZGroup extends BaseCommand {
                 removed++;
             } else {
                 int initRank = sv.getInitRank();
-                if (initRank < start || initRank > stop) {
+                if (initRank < startEnd.start() || initRank > startEnd.end()) {
                     continue;
                 }
 
