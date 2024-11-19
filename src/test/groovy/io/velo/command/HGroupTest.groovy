@@ -667,15 +667,15 @@ class HGroupTest extends Specification {
         LocalPersist.instance.hashSaveMemberTogether = false
         reply = hGroup.hincrby(true)
         then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw == '2.00'.bytes
+        reply instanceof DoubleReply
+        ((DoubleReply) reply).doubleValue() == 2.0d
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         reply = hGroup.hincrby(true)
         then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw == '2.00'.bytes
+        reply instanceof DoubleReply
+        ((DoubleReply) reply).doubleValue() == 2.0d
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -725,8 +725,8 @@ class HGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
         reply = hGroup.hincrby(true)
         then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw == '2.10'.bytes
+        reply instanceof DoubleReply
+        ((DoubleReply) reply).doubleValue() == 2.1d
 
         when:
         rhh.remove('field')
@@ -734,8 +734,8 @@ class HGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
         reply = hGroup.hincrby(true)
         then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw == '1.00'.bytes
+        reply instanceof DoubleReply
+        ((DoubleReply) reply).doubleValue() == 1.0d
 
         when:
         rhh.put('field', 'a'.bytes)

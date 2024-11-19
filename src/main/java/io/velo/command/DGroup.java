@@ -6,6 +6,7 @@ import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
+import io.velo.ConfForGlobal;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -296,13 +297,11 @@ public class DGroup extends BaseCommand {
         }
 
         if (isByFloat) {
-            // scale 2, todo
-            var newValue = BigDecimal.valueOf(doubleValue).setScale(2, RoundingMode.UP)
-                    .subtract(BigDecimal.valueOf(byFloat).setScale(2, RoundingMode.UP));
+            var newValue = BigDecimal.valueOf(doubleValue).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP)
+                    .subtract(BigDecimal.valueOf(byFloat).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP));
 
             setNumber(keyBytes, newValue.doubleValue(), slotWithKeyHash);
-            // double use bulk reply
-            return new BulkReply(newValue.toPlainString().getBytes());
+            return new DoubleReply(newValue);
         } else {
             long newValue = longValue - by;
             setNumber(keyBytes, newValue, slotWithKeyHash);

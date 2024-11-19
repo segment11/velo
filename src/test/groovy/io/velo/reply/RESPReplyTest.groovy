@@ -38,6 +38,8 @@ class RESPReplyTest extends Specification {
         new IntegerReply(100).integer == 100
         new IntegerReply(100).buffer().asArray() == ":100\r\n".bytes
         new IntegerReply(100).bufferAsHttp().asArray() == "100".bytes
+        new DoubleReply(new BigDecimal(1.1)).buffer().asArray() == "\$1.10\r\n".bytes
+        new DoubleReply(new BigDecimal(1.1)).bufferAsResp3().asArray() == ",1.10\r\n".bytes
         new ErrorReply('error').message == 'error'
         new ErrorReply('error').buffer().asArray() == "-ERR error\r\n".bytes
         new ErrorReply('error').bufferAsHttp().asArray() == "error".bytes

@@ -2,10 +2,7 @@ package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
-import io.velo.BaseCommand;
-import io.velo.CompressedValue;
-import io.velo.Dict;
-import io.velo.TrainSampleJob;
+import io.velo.*;
 import io.velo.persist.KeyLoader;
 import io.velo.reply.*;
 import io.velo.type.RedisHH;
@@ -534,12 +531,12 @@ public class HGroup extends BaseCommand {
 
         if (fieldValueBytes == null) {
             if (isByFloat) {
-                var newValue = BigDecimal.valueOf(byFloat).setScale(2, RoundingMode.UP);
+                var newValue = BigDecimal.valueOf(byFloat).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP);
                 var newValueBytes = newValue.toPlainString().getBytes();
                 rhh.put(field, newValueBytes);
 
                 saveRedisHH(rhh, keyBytes, slotWithKeyHash);
-                return new BulkReply(newValueBytes);
+                return new DoubleReply(newValue);
             } else {
                 var newValueBytes = String.valueOf(by).getBytes();
                 rhh.put(field, newValueBytes);
@@ -564,13 +561,13 @@ public class HGroup extends BaseCommand {
             }
 
             if (isByFloat) {
-                var newValue = BigDecimal.valueOf(doubleValue).setScale(2, RoundingMode.UP)
-                        .add(BigDecimal.valueOf(byFloat).setScale(2, RoundingMode.UP));
+                var newValue = BigDecimal.valueOf(doubleValue).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP)
+                        .add(BigDecimal.valueOf(byFloat).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP));
                 var newValueBytes = newValue.toPlainString().getBytes();
                 rhh.put(field, newValueBytes);
 
                 saveRedisHH(rhh, keyBytes, slotWithKeyHash);
-                return new BulkReply(newValueBytes);
+                return new DoubleReply(newValue);
             } else {
                 long newValue = longValue + by;
                 var newValueBytes = String.valueOf(newValue).getBytes();

@@ -23,7 +23,7 @@ public class BulkReply implements Reply {
     private static final char CR = '\r';
     private static final char LF = '\n';
 
-    private static final byte MARKER = '$';
+    public static final byte MARKER = '$';
 
     public static final byte[] CRLF = new byte[]{CR, LF};
 

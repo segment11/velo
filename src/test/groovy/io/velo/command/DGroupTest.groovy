@@ -422,8 +422,8 @@ class DGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = dGroup.decrBy(0, 1)
         then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw == '0.10'.bytes
+        reply instanceof DoubleReply
+        ((DoubleReply) reply).doubleValue() == 0.1d
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
@@ -432,7 +432,7 @@ class DGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = dGroup.decrBy(0, 1)
         then:
-        reply instanceof BulkReply
-        ((BulkReply) reply).raw == '0.10'.bytes
+        reply instanceof DoubleReply
+        ((DoubleReply) reply).doubleValue() == 0.1d
     }
 }

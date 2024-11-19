@@ -51,4 +51,7 @@ public class ConfForGlobal {
     public static int jedisPoolMaxTotal = 10;
     public static int jedisPoolMaxIdle = 5;
     public static long jedisPoolMaxWaitMillis = 5000;
+
+    // for type
+    public static int doubleScale = 2;
 }

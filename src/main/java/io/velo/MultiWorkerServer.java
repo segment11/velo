@@ -762,6 +762,10 @@ public class MultiWorkerServer extends Launcher {
                 }
             }
             ConfForGlobal.clusterEnabled = config.get(ofBoolean(), "clusterEnabled", false);
+            log.warn("Global config, clusterEnabled={}", ConfForGlobal.clusterEnabled);
+
+            ConfForGlobal.doubleScale = config.get(ofInteger(), "doubleScale", 2);
+            log.warn("Global config, doubleScale={}", ConfForGlobal.doubleScale);
 
             DictMap.TO_COMPRESS_MIN_DATA_LENGTH = config.get(ofInteger(), "toCompressMinDataLength", 64);
 
