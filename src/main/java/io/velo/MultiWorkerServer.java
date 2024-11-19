@@ -879,8 +879,8 @@ public class MultiWorkerServer extends Launcher {
                 throw new IllegalArgumentException("Net workers too large, net workers should be less than " + MAX_NET_WORKERS);
             }
             var cpuNumber = Runtime.getRuntime().availableProcessors();
-            if (netWorkers >= cpuNumber) {
-                throw new IllegalArgumentException("Net workers should be less than cpu number");
+            if (netWorkers > cpuNumber) {
+                throw new IllegalArgumentException("Net workers should be less or equal to cpu number");
             }
             if (slotNumber < netWorkers) {
                 throw new IllegalArgumentException("Net workers should <= slot number");
