@@ -6,6 +6,10 @@ import org.jetbrains.annotations.TestOnly;
 public interface Reply {
     ByteBuf buffer();
 
+    default ByteBuf bufferAsResp3() {
+        return buffer();
+    }
+
     default ByteBuf bufferAsHttp() {
         return null;
     }

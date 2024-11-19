@@ -11,16 +11,24 @@ public class NilReply implements Reply {
 
     private static final byte[] NIL = new BulkReply().buffer().asArray();
     // EOF ?
-    private static final byte[] NIL_BYTES = "".getBytes();
+    private static final byte[] NIL_HTTP_BODY_BYTES = "".getBytes();
 
     @Override
     public ByteBuf buffer() {
         return ByteBuf.wrapForReading(NIL);
     }
 
+    // resp3 null
+    private static final byte[] NULL_BYTES = "_\r\n".getBytes();
+
+    @Override
+    public ByteBuf bufferAsResp3() {
+        return ByteBuf.wrapForReading(NULL_BYTES);
+    }
+
     @Override
     public ByteBuf bufferAsHttp() {
-        return ByteBuf.wrapForReading(NIL_BYTES);
+        return ByteBuf.wrapForReading(NIL_HTTP_BODY_BYTES);
     }
 
     @TestOnly
