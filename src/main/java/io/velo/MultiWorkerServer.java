@@ -278,6 +278,8 @@ public class MultiWorkerServer extends Launcher {
             }
         }
 
+        var isResp3 = ((TcpSocket) socket).getUserData() == SocketInspector.SOCKET_USER_DATA_RESP_PROTOVER3;
+
         var firstSlot = request.getSingleSlot();
         if (firstSlot == Request.SLOT_CAN_HANDLE_BY_ANY_WORKER) {
             RequestHandler targetHandler;
@@ -293,9 +295,11 @@ public class MultiWorkerServer extends Launcher {
             }
 
             if (reply instanceof AsyncReply) {
-                return transferAsyncReply(request, (AsyncReply) reply);
+                return transferAsyncReply(request, (AsyncReply) reply, isResp3);
             } else {
-                return request.isHttp() ? Promise.of(wrapHttpResponse(reply)) : Promise.of(reply.buffer());
+                return request.isHttp() ?
+                        Promise.of(wrapHttpResponse(reply)) :
+                        Promise.of(isResp3 ? reply.bufferAsResp3() : reply.buffer());
             }
         }
 
@@ -320,6 +324,8 @@ public class MultiWorkerServer extends Launcher {
             return Promise.of(ByteBuf.empty());
         }
 
+        var isResp3 = ((TcpSocket) socket).getUserData() == SocketInspector.SOCKET_USER_DATA_RESP_PROTOVER3;
+
         var p = targetEventloop == null ? Promises.first(AsyncSupplier.of(() -> targetHandler.handle(request, socket))) :
                 Promise.ofFuture(targetEventloop.submit(AsyncComputation.of(() -> targetHandler.handle(request, socket))));
 
@@ -329,14 +335,18 @@ public class MultiWorkerServer extends Launcher {
             }
 
             if (reply instanceof AsyncReply) {
-                return transferAsyncReply(request, (AsyncReply) reply);
+                return transferAsyncReply(request, (AsyncReply) reply, isResp3);
             } else {
-                return Promise.of(request.isHttp() ? wrapHttpResponse(reply) : reply.buffer());
+                return Promise.of(
+                        request.isHttp() ?
+                                wrapHttpResponse(reply) :
+                                (isResp3 ? reply.bufferAsResp3() : reply.buffer())
+                );
             }
         });
     }
 
-    private Promise<ByteBuf> transferAsyncReply(Request request, AsyncReply reply) {
+    private Promise<ByteBuf> transferAsyncReply(Request request, AsyncReply reply, boolean isResp3) {
         var promise = reply.getSettablePromise();
         return promise.map((r, e) -> {
             if (e != null) {
@@ -344,7 +354,9 @@ public class MultiWorkerServer extends Launcher {
                 return request.isHttp() ? wrapHttpResponse(errorReply) : errorReply.buffer();
             }
 
-            return request.isHttp() ? wrapHttpResponse(r) : r.buffer();
+            return request.isHttp() ?
+                    wrapHttpResponse(r) :
+                    (isResp3 ? r.bufferAsResp3() : r.buffer());
         });
     }
 

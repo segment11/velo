@@ -19,6 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SocketInspector implements TcpSocket.Inspector {
     private static final Logger log = LoggerFactory.getLogger(SocketInspector.class);
 
+    public static final Object SOCKET_USER_DATA_RESP_PROTOVER3 = new Object();
+
     volatile boolean isServerStopped = false;
 
     @ThreadNeedLocal

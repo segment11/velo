@@ -2,8 +2,10 @@ package io.velo.command
 
 import io.velo.BaseCommand
 import io.velo.CompressedValue
+import io.velo.SocketInspectorTest
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.type.RedisHH
@@ -78,6 +80,16 @@ class HGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        def data2 = new byte[2][]
+        data2[1] = '4'.bytes
+        hGroup.cmd = 'hello'
+        hGroup.data = data2
+        reply = hGroup.handle()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        hGroup.data = data1
         hGroup.cmd = 'hexists'
         reply = hGroup.handle()
         then:
@@ -318,6 +330,42 @@ class HGroupTest extends Specification {
         reply = hGroup.hdel()
         then:
         reply == ErrorReply.KEY_TOO_LONG
+    }
+
+    def 'test hello'() {
+        given:
+        def socket = SocketInspectorTest.mockTcpSocket()
+
+        def hGroup = new HGroup('hello', null, socket)
+
+        and:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when:
+        def reply = hGroup.execute('hello 2')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = hGroup.execute('hello 3')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = hGroup.execute('hello 4')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = hGroup.execute('hello')
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 14
+
+        cleanup:
+        localPersist.cleanUp()
     }
 
     def 'test hexists'() {

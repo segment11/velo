@@ -1,6 +1,7 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.net.socket.tcp.TcpSocket;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.Dict;
@@ -19,6 +20,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Random;
+
+import static io.velo.SocketInspector.SOCKET_USER_DATA_RESP_PROTOVER3;
 
 public class HGroup extends BaseCommand {
     public HGroup(String cmd, byte[][] data, ITcpSocket socket) {
@@ -48,6 +51,10 @@ public class HGroup extends BaseCommand {
     public Reply handle() {
         if ("hdel".equals(cmd)) {
             return hdel();
+        }
+
+        if ("hello".equals(cmd)) {
+            return hello();
         }
 
         if ("hexists".equals(cmd)) {
@@ -247,6 +254,44 @@ public class HGroup extends BaseCommand {
 
         saveRedisHH(rhh, keyBytes, slotWithKeyHash);
         return new IntegerReply(removed);
+    }
+
+    @VisibleForTesting
+    Reply hello() {
+        if (data.length == 1) {
+            var replies = new Reply[14];
+            replies[0] = new BulkReply("server".getBytes());
+            replies[1] = new BulkReply("velo".getBytes());
+            replies[2] = new BulkReply("version".getBytes());
+            replies[3] = new BulkReply("1.0.0".getBytes());
+            replies[4] = new BulkReply("proto".getBytes());
+            replies[5] = new BulkReply("1".getBytes());
+            replies[6] = new BulkReply("id".getBytes());
+            replies[7] = new BulkReply("1".getBytes());
+            replies[8] = new BulkReply("mode".getBytes());
+            replies[9] = new BulkReply("standalone".getBytes());
+
+            replies[10] = new BulkReply("role".getBytes());
+            var firstOneSlot = localPersist.currentThreadFirstOneSlot();
+            var isSlave = firstOneSlot.isAsSlave();
+            replies[11] = new BulkReply(isSlave ? "slave".getBytes() : "master".getBytes());
+
+            replies[12] = new BulkReply("modules".getBytes());
+            replies[13] = MultiBulkReply.EMPTY;
+
+            return new MultiBulkReply(replies);
+        } else {
+            var protover = new String(data[1]);
+            if ("3".equals(protover)) {
+                ((TcpSocket) socket).setUserData(SOCKET_USER_DATA_RESP_PROTOVER3);
+                return OKReply.INSTANCE;
+            } else if ("2".equals(protover)) {
+                ((TcpSocket) socket).setUserData(null);
+                return OKReply.INSTANCE;
+            } else {
+                return ErrorReply.SYNTAX;
+            }
+        }
     }
 
     @VisibleForTesting
