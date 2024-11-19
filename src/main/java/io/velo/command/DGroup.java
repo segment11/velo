@@ -22,6 +22,21 @@ public class DGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
+        if ("debug".equals(cmd)) {
+            if (data.length < 3) {
+                return slotWithKeyHashList;
+            }
+            var subCmd = new String(data[1]).toLowerCase();
+            // debug object key
+            if ("object".equals(subCmd)) {
+                var keyBytes = data[2];
+                var slotWithKeyHash = slot(keyBytes, slotNumber);
+                slotWithKeyHashList.add(slotWithKeyHash);
+                return slotWithKeyHashList;
+            }
+            // add other debug sub command
+        }
+
         if ("del".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
@@ -48,6 +63,10 @@ public class DGroup extends BaseCommand {
     }
 
     public Reply handle() {
+        if ("debug".equals(cmd)) {
+            return debug();
+        }
+
         if ("del".equals(cmd)) {
             return del();
         }
@@ -74,6 +93,53 @@ public class DGroup extends BaseCommand {
                 return decrBy(by, 0);
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
+            }
+        }
+
+        return NilReply.INSTANCE;
+    }
+
+    private String wrapEncodingType(String encodingType, CompressedValue cv) {
+        return "refcount:1 encoding:" + encodingType + " serializedlength:" + cv.getCompressedLength();
+    }
+
+    @VisibleForTesting
+    Reply debug() {
+        if (data.length < 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var subCmd = new String(data[1]).toLowerCase();
+        if ("object".equals(subCmd)) {
+            var keyBytes = data[2];
+            var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+            var cv = getCv(keyBytes, slotWithKeyHash);
+            if (cv == null) {
+                return NilReply.INSTANCE;
+            }
+
+            if (cv.isTypeNumber()) {
+                if (cv.isTypeDouble()) {
+                    return new BulkReply(wrapEncodingType("embstr", cv).getBytes());
+                } else {
+                    return new BulkReply(wrapEncodingType("int", cv).getBytes());
+                }
+            } else if (cv.isHash()) {
+                return new BulkReply(wrapEncodingType("hashtable", cv).getBytes());
+            } else if (cv.isList()) {
+                return new BulkReply(wrapEncodingType("quicklist", cv).getBytes());
+            } else if (cv.isSet()) {
+                // intset
+                return new BulkReply(wrapEncodingType("hashtable", cv).getBytes());
+            } else if (cv.isZSet()) {
+                // skiplist
+                return new BulkReply(wrapEncodingType("ziplist", cv).getBytes());
+            } else if (cv.isStream()) {
+                return new BulkReply(wrapEncodingType("stream", cv).getBytes());
+            } else if (cv.isTypeString()) {
+                return new BulkReply(wrapEncodingType("embstr", cv).getBytes());
+            } else {
+                return new BulkReply(wrapEncodingType("unknown", cv).getBytes());
             }
         }
 

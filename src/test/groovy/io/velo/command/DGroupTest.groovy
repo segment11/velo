@@ -44,10 +44,18 @@ class DGroupTest extends Specification {
         sDelList.size() == 2
 
         when:
+        data3[1] = 'object'.bytes
+        def sDebugList = _DGroup.parseSlots('debug', data3, slotNumber)
+        then:
+        sDebugList.size() == 1
+
+        when:
         def data1 = new byte[1][]
+        sDebugList = _DGroup.parseSlots('debug', data1, slotNumber)
         sDecrList = _DGroup.parseSlots('decr', data1, slotNumber)
         sDelList = _DGroup.parseSlots('del', data1, slotNumber)
         then:
+        sDebugList.size() == 0
         sDecrList.size() == 0
         sDelList.size() == 0
     }
@@ -58,12 +66,18 @@ class DGroupTest extends Specification {
 
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def dGroup = new DGroup('del', data1, null)
+        def dGroup = new DGroup('debug', data1, null)
         dGroup.byPassGetSet = inMemoryGetSet
         dGroup.from(BaseCommand.mockAGroup())
 
         when:
         def reply = dGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        dGroup.cmd = 'del'
+        reply = dGroup.handle()
         then:
         reply == ErrorReply.FORMAT
 
@@ -122,6 +136,102 @@ class DGroupTest extends Specification {
         when:
         dGroup.cmd = 'zzz'
         reply = dGroup.handle()
+        then:
+        reply == NilReply.INSTANCE
+    }
+
+    def 'test debug'() {
+        given:
+        final short slot = 0
+
+        def data3 = new byte[3][]
+        data3[1] = 'object'.bytes
+        data3[2] = 'key'.bytes
+
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def dGroup = new DGroup('debug', data3, null)
+        dGroup.byPassGetSet = inMemoryGetSet
+        dGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('debug', data3, dGroup.slotNumber)
+        def reply = dGroup.debug()
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_BYTE
+        cv.compressedData = new byte[1]
+        cv.compressedLength = 1
+        inMemoryGetSet.put(slot, 'key', 0, cv)
+        reply = dGroup.debug()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw).contains(':int')
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_DOUBLE
+        cv.compressedData = new byte[8]
+        cv.compressedLength = 8
+        reply = dGroup.debug()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw).contains(':embstr')
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        reply = dGroup.debug()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw).contains(':hashtable')
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        reply = dGroup.debug()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw).contains(':quicklist')
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        reply = dGroup.debug()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw).contains(':hashtable')
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        reply = dGroup.debug()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw).contains(':ziplist')
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_STREAM
+        reply = dGroup.debug()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw).contains(':stream')
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        reply = dGroup.debug()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw).contains(':embstr')
+
+        when:
+        cv.dictSeqOrSpType = -200
+        reply = dGroup.debug()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw).contains(':unknown')
+
+        when:
+        data3[1] = '_'.bytes
+        reply = dGroup.debug()
         then:
         reply == NilReply.INSTANCE
     }

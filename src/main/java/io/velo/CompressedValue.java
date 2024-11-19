@@ -116,6 +116,14 @@ public class CompressedValue {
         return spType <= SP_TYPE_NUM_BYTE && spType >= SP_TYPE_NUM_DOUBLE;
     }
 
+    public boolean isTypeDouble() {
+        return dictSeqOrSpType == SP_TYPE_NUM_DOUBLE;
+    }
+
+    public static boolean isTypeDouble(int spType) {
+        return spType == SP_TYPE_NUM_DOUBLE;
+    }
+
     public byte[] encodeAsNumber() {
         return switch (dictSeqOrSpType) {
             case SP_TYPE_NUM_BYTE -> {

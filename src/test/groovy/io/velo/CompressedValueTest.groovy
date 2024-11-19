@@ -24,6 +24,8 @@ class CompressedValueTest extends Specification {
         CompressedValue.isTypeNumber(CompressedValue.SP_TYPE_NUM_INT)
         CompressedValue.isTypeNumber(CompressedValue.SP_TYPE_NUM_LONG)
         CompressedValue.isTypeNumber(CompressedValue.SP_TYPE_NUM_DOUBLE)
+        CompressedValue.isTypeDouble(CompressedValue.SP_TYPE_NUM_DOUBLE)
+        !CompressedValue.isTypeDouble(CompressedValue.SP_TYPE_NUM_LONG)
         !CompressedValue.isTypeNumber(CompressedValue.SP_TYPE_SHORT_STRING)
         !CompressedValue.isTypeNumber(CompressedValue.NULL_DICT_SEQ)
         !CompressedValue.isTypeString(CompressedValue.SP_TYPE_HASH)
@@ -45,6 +47,7 @@ class CompressedValueTest extends Specification {
         !CompressedValue.isDeleted(new byte[]{0})
 
         cv.isTypeNumber()
+        !cv.isTypeDouble()
         cv.isTypeString()
         cv.isShortString()
 
@@ -52,6 +55,7 @@ class CompressedValueTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
         then:
         cv.isTypeString()
+        !cv.isTypeDouble()
         !cv.isTypeNumber()
         !cv.isBigString()
         !cv.isHash()
