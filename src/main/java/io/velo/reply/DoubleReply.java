@@ -11,6 +11,8 @@ import java.math.RoundingMode;
 public class DoubleReply implements Reply {
     private static final byte DOUBLE_MARKER = ',';
 
+    // need support inf/-inf todo
+
     // already scale up
     private final BigDecimal value;
 
@@ -27,15 +29,7 @@ public class DoubleReply implements Reply {
     public ByteBuf buffer() {
         var scaled = value.setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP);
         var str = scaled.toPlainString();
-        // $+size+raw+\r\n
-        int len = 1 + str.length() + 2;
-
-        var bytes = new byte[len];
-        var bb = ByteBuf.wrapForWriting(bytes);
-        bb.writeByte(BulkReply.MARKER);
-        bb.put(str.getBytes());
-        bb.put(BulkReply.CRLF);
-        return bb;
+        return new BulkReply(str.getBytes()).buffer();
     }
 
     @Override

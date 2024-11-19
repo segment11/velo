@@ -16,6 +16,7 @@ class RESPReplyTest extends Specification {
         MultiBulkReply.SCAN_EMPTY.buffer().asArray() == "*2\r\n\$1\r\n0\r\n*0\r\n".bytes
         MultiBulkReply.EMPTY.dumpForTest(new StringBuilder(), 0)
         MultiBulkReply.SCAN_EMPTY.dumpForTest(new StringBuilder(), 1)
+        ErrorReply.clusterMoved(100, 'localhost', 6380).message == 'MOVED 100 localhost:6380'
     }
 
     def 'test static as http'() {
@@ -38,8 +39,13 @@ class RESPReplyTest extends Specification {
         new IntegerReply(100).integer == 100
         new IntegerReply(100).buffer().asArray() == ":100\r\n".bytes
         new IntegerReply(100).bufferAsHttp().asArray() == "100".bytes
-        new DoubleReply(new BigDecimal(1.1)).buffer().asArray() == "\$1.10\r\n".bytes
+        new DoubleReply(new BigDecimal(1.1)).buffer().asArray() == "\$4\r\n1.10\r\n".bytes
         new DoubleReply(new BigDecimal(1.1)).bufferAsResp3().asArray() == ",1.10\r\n".bytes
+        new DoubleReply(new BigDecimal(1.1)).doubleValue() == 1.1d
+        new BoolReply(true).buffer().asArray() == "\$4\r\ntrue\r\n".bytes
+        new BoolReply(false).buffer().asArray() == "\$5\r\nfalse\r\n".bytes
+        new BoolReply(true).bufferAsResp3().asArray() == "#t\r\n".bytes
+        new BoolReply(false).bufferAsResp3().asArray() == "#f\r\n".bytes
         new ErrorReply('error').message == 'error'
         new ErrorReply('error').buffer().asArray() == "-ERR error\r\n".bytes
         new ErrorReply('error').bufferAsHttp().asArray() == "error".bytes
