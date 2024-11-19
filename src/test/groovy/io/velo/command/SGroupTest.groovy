@@ -737,7 +737,8 @@ sunionstore
         when:
         def reply = sGroup.select()
         then:
-        reply == ErrorReply.NOT_SUPPORT
+//        reply == ErrorReply.NOT_SUPPORT
+        reply == OKReply.INSTANCE
     }
 
     def 'test sadd'() {

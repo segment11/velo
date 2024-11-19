@@ -710,7 +710,7 @@ public class SGroup extends BaseCommand {
 
     @VisibleForTesting
     Reply select() {
-        return ErrorReply.NOT_SUPPORT;
+        return OKReply.INSTANCE;
     }
 
     private RedisHashKeys getRedisSet(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {

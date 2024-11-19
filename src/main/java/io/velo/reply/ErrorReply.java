@@ -17,6 +17,7 @@ public class ErrorReply implements Reply {
     public static final ErrorReply NOT_FLOAT = new ErrorReply("not float");
     public static final ErrorReply NOT_STRING = new ErrorReply("not string");
     public static final ErrorReply INVALID_INTEGER = new ErrorReply("invalid integer");
+    public static final ErrorReply RANGE_OUT_OF_INDEX = new ErrorReply("range out of index");
     public static final ErrorReply NO_SUCH_KEY = new ErrorReply("not such key");
     public static final ErrorReply WRONG_TYPE = new ErrorReply("wrong type");
     public static final ErrorReply LIST_SIZE_TO_LONG = new ErrorReply("list size too long");

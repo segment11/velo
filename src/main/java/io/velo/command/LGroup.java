@@ -346,8 +346,11 @@ public class LGroup extends BaseCommand {
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
             }
-            if (count <= 0) {
-                return ErrorReply.INVALID_INTEGER;
+            if (count < 0) {
+                return ErrorReply.RANGE_OUT_OF_INDEX;
+            } else if (count == 0) {
+                // if cv not exists, return nil
+                return MultiBulkReply.EMPTY;
             }
         }
 
@@ -356,19 +359,14 @@ public class LGroup extends BaseCommand {
         if (rl == null) {
             return NilReply.INSTANCE;
         }
+        if (rl.size() == 0) {
+            return NilReply.INSTANCE;
+        }
 
         ArrayList<Reply> replies = new ArrayList<>();
 
-        boolean isUpdated = false;
-
         int min = Math.min(count, Math.max(1, rl.size()));
         for (int i = 0; i < min; i++) {
-            if (rl.size() == 0) {
-                replies.add(NilReply.INSTANCE);
-                continue;
-            }
-
-            isUpdated = true;
             if (popFirst) {
                 replies.add(new BulkReply(rl.removeFirst()));
             } else {
@@ -376,10 +374,7 @@ public class LGroup extends BaseCommand {
             }
         }
 
-        if (isUpdated) {
-            saveRedisList(rl, keyBytes, slotWithKeyHash);
-        }
-
+        saveRedisList(rl, keyBytes, slotWithKeyHash);
         if (count == 1) {
             return replies.getFirst();
         }

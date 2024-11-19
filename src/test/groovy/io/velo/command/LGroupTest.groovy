@@ -510,10 +510,25 @@ class LGroupTest extends Specification {
         ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == ('aaaaabbbbbccccc' * 5).bytes
 
         when:
+        // clear all
+        resetRedisList(rl, 0)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = lGroup.lpop(false)
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        data3[2] = '-1'.bytes
+        reply = lGroup.lpop(true)
+        then:
+        reply == ErrorReply.RANGE_OUT_OF_INDEX
+
+        when:
         data3[2] = '0'.bytes
         reply = lGroup.lpop(true)
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == MultiBulkReply.EMPTY
 
         when:
         data3[2] = 'a'.bytes
@@ -1013,7 +1028,7 @@ class LGroupTest extends Specification {
         reply == ErrorReply.VALUE_TOO_LONG
     }
 
-    private void resetRedisList(RedisList rl, int n) {
+    private static void resetRedisList(RedisList rl, int n) {
         while (rl.size() != 0) {
             rl.removeFirst()
         }
