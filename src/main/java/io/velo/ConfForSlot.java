@@ -98,7 +98,7 @@ public enum ConfForSlot {
     public enum ConfBucket {
         debugMode(4096, (byte) 1),
         c1m(KeyBucket.DEFAULT_BUCKETS_PER_SLOT, (byte) 1),
-        c10m(KeyBucket.MAX_BUCKETS_PER_SLOT, (byte) 1),
+        c10m(KeyBucket.MAX_BUCKETS_PER_SLOT / 2, (byte) 1),
         c100m(KeyBucket.MAX_BUCKETS_PER_SLOT, (byte) 3);
 
         ConfBucket(int bucketsPerSlot, byte initialSplitNumber) {
@@ -106,6 +106,10 @@ public enum ConfForSlot {
             this.initialSplitNumber = initialSplitNumber;
         }
 
+        /*
+        suppose memory / ssd capacity ~= 1:8
+        when 1000w key, c10m, wal will use 256MB, ssd may use 2-3GB
+         */
         public int bucketsPerSlot;
         public byte initialSplitNumber;
 
