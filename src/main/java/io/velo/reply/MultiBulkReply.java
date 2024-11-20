@@ -5,17 +5,33 @@ import io.netty.buffer.Unpooled;
 import org.jetbrains.annotations.TestOnly;
 
 public class MultiBulkReply implements Reply {
-    private static final byte[] EMPTY_BYTES = "[]".getBytes();
+    private static final byte[] EMPTY_HTTP_BODY_BYTES = "[]".getBytes();
 
-    public static final Reply EMPTY = new Reply() {
+    public static final Reply NULL = new Reply() {
+        private static final byte[] RESP3_NULL_ARRAY_BYTES = "*-1\r\n".getBytes();
+
         @Override
         public ByteBuf buffer() {
-            return emptyByteBuf.slice();
+            return ByteBuf.wrapForReading(RESP3_NULL_ARRAY_BYTES);
         }
 
         @Override
         public ByteBuf bufferAsHttp() {
-            return ByteBuf.wrapForReading(EMPTY_BYTES);
+            return ByteBuf.wrapForReading(EMPTY_HTTP_BODY_BYTES);
+        }
+    };
+
+    public static final Reply EMPTY = new Reply() {
+        private static final byte[] RESP2_EMPTY_ARRAY_BYTES = "*0\r\n".getBytes();
+
+        @Override
+        public ByteBuf buffer() {
+            return ByteBuf.wrapForReading(RESP2_EMPTY_ARRAY_BYTES);
+        }
+
+        @Override
+        public ByteBuf bufferAsHttp() {
+            return ByteBuf.wrapForReading(EMPTY_HTTP_BODY_BYTES);
         }
 
         @TestOnly
@@ -27,8 +43,6 @@ public class MultiBulkReply implements Reply {
     };
 
     public static final MultiBulkReply SCAN_EMPTY = new MultiBulkReply(new Reply[]{BulkReply.ZERO, EMPTY});
-
-    private static final ByteBuf emptyByteBuf = new MultiBulkReply(new Reply[0]).buffer();
 
     private static final byte MARKER = '*';
 
