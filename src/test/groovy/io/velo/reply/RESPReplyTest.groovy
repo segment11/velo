@@ -42,10 +42,10 @@ class RESPReplyTest extends Specification {
         new DoubleReply(new BigDecimal(1.1)).buffer().asArray() == "\$4\r\n1.10\r\n".bytes
         new DoubleReply(new BigDecimal(1.1)).bufferAsResp3().asArray() == ",1.10\r\n".bytes
         new DoubleReply(new BigDecimal(1.1)).doubleValue() == 1.1d
-        new BoolReply(true).buffer().asArray() == "\$4\r\ntrue\r\n".bytes
-        new BoolReply(false).buffer().asArray() == "\$5\r\nfalse\r\n".bytes
-        new BoolReply(true).bufferAsResp3().asArray() == "#t\r\n".bytes
-        new BoolReply(false).bufferAsResp3().asArray() == "#f\r\n".bytes
+        BoolReply.T.buffer().asArray() == "\$4\r\ntrue\r\n".bytes
+        BoolReply.F.buffer().asArray() == "\$5\r\nfalse\r\n".bytes
+        BoolReply.T.bufferAsResp3().asArray() == "#t\r\n".bytes
+        BoolReply.F.bufferAsResp3().asArray() == "#f\r\n".bytes
         new ErrorReply('error').message == 'error'
         new ErrorReply('error').buffer().asArray() == "-ERR error\r\n".bytes
         new ErrorReply('error').bufferAsHttp().asArray() == "error".bytes
