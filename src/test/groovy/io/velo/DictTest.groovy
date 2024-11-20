@@ -231,7 +231,7 @@ class DictTest extends Specification {
         sampleCompressedValueBytes.length < sampleValueBytes.length
 
         when:
-        def dst = new byte[((int) Zstd.compressBound(sampleValueBytes.length))];
+        def dst = new byte[((int) Zstd.compressBound(sampleValueBytes.length))]
         def compressedSize = dictTrained.compressByteArray(dst, 0, sampleValueBytes, 0, sampleValueBytes.length)
         then:
         compressedSize == sampleCompressedValueBytes.length

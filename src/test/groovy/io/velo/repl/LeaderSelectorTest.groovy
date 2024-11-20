@@ -359,7 +359,7 @@ class LeaderSelectorTest extends Specification {
 
         when:
         if (doThisCase) {
-            def jedisPool = JedisPoolHolder.instance.create('localhost', 6379);
+            def jedisPool = JedisPoolHolder.instance.create('localhost', 6379)
             JedisPoolHolder.exe(jedisPool) { jedis ->
                 jedis.set(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + "," +
                         XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD,

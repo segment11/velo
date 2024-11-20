@@ -130,7 +130,7 @@ class FGroupTest extends Specification {
             eventloopCurrent.run()
             Thread.sleep(1000)
         } else {
-            SettablePromise<Reply> finalPromise = new SettablePromise<>();
+            SettablePromise<Reply> finalPromise = new SettablePromise<>()
             finalPromise.set(OKReply.INSTANCE)
             reply = new AsyncReply(finalPromise)
         }

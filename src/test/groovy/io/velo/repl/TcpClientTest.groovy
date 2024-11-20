@@ -77,7 +77,7 @@ class TcpClientTest extends Specification {
                     BinaryChannelSupplier.of(ChannelSuppliers.ofSocket(socket))
                             .decodeStream(new RequestDecoder())
                             .mapAsync { pipeline ->
-                                Promise<ByteBuf>[] promiseN = new Promise[pipeline.size()];
+                                Promise<ByteBuf>[] promiseN = new Promise[pipeline.size()]
                                 for (int i = 0; i < pipeline.size(); i++) {
                                     def request = pipeline[i]
                                     println 'Mock server get request from client, data.length: ' + request.data.length
