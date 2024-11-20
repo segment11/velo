@@ -1,5 +1,6 @@
 package io.velo.command
 
+import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.SocketInspector
@@ -815,6 +816,67 @@ class LGroupTest extends Specification {
         ((IntegerReply) reply).integer == 2
 
         when:
+        BGroup.clearBlockingListPromisesForAllKeys()
+        SettablePromise<Reply> finalPromise = new SettablePromise<>()
+        BGroup.addBlockingListPromiseByKey('a', finalPromise, true)
+        reply = lGroup.lpush(true, false)
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 3
+        finalPromise.isComplete()
+
+        when:
+        BGroup.clearBlockingListPromisesForAllKeys()
+        SettablePromise<Reply> finalPromise2 = new SettablePromise<>()
+        BGroup.addBlockingListPromiseByKey('a', finalPromise2, true)
+        reply = lGroup.lpush(false, false)
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 3
+        finalPromise2.isComplete()
+
+        when:
+        BGroup.clearBlockingListPromisesForAllKeys()
+        SettablePromise<Reply> finalPromise3 = new SettablePromise<>()
+        BGroup.addBlockingListPromiseByKey('a', finalPromise3, true)
+        inMemoryGetSet.remove(slot, 'a')
+        reply = lGroup.lpush(true, false)
+        then:
+        reply == IntegerReply.REPLY_1
+        finalPromise3.isComplete()
+
+        when:
+        BGroup.clearBlockingListPromisesForAllKeys()
+        SettablePromise<Reply> finalPromise4 = new SettablePromise<>()
+        BGroup.addBlockingListPromiseByKey('a', finalPromise4, false)
+        // lpush a a b c
+        def data5 = new byte[5][]
+        data5[1] = 'a'.bytes
+        data5[2] = 'a'.bytes
+        data5[3] = 'b'.bytes
+        data5[4] = 'c'.bytes
+        lGroup.data = data5
+        reply = lGroup.lpush(true, false)
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 3
+        finalPromise4.isComplete()
+        finalPromise4.getResult() instanceof BulkReply
+        ((BulkReply) finalPromise4.getResult()).raw == 'c'.bytes
+
+        when:
+        BGroup.clearBlockingListPromisesForAllKeys()
+        SettablePromise<Reply> finalPromise5 = new SettablePromise<>()
+        BGroup.addBlockingListPromiseByKey('a', finalPromise5, true)
+        reply = lGroup.lpush(false, false)
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 3 - 1 + 3
+        finalPromise5.isComplete()
+        finalPromise5.getResult() instanceof BulkReply
+        ((BulkReply) finalPromise5.getResult()).raw == 'c'.bytes
+
+        when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         def rl = new RedisList()
@@ -823,6 +885,7 @@ class LGroupTest extends Specification {
         }
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
+        lGroup.data = data3
         reply = lGroup.lpush(true, false)
         then:
         reply == ErrorReply.LIST_SIZE_TO_LONG
