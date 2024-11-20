@@ -2,6 +2,8 @@ package io.velo.command
 
 import io.velo.BaseCommand
 import io.velo.CompressedValue
+import io.velo.SocketInspector
+import io.velo.SocketInspectorTest
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Mock
 import io.velo.reply.*
@@ -462,8 +464,9 @@ class LGroupTest extends Specification {
         data2[1] = 'a'.bytes
 
         def inMemoryGetSet = new InMemoryGetSet()
+        def socket = SocketInspectorTest.mockTcpSocket()
 
-        def lGroup = new LGroup('lpop', data2, null)
+        def lGroup = new LGroup('lpop', data2, socket)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
@@ -514,17 +517,50 @@ class LGroupTest extends Specification {
         resetRedisList(rl, 0)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
+        lGroup.data = data3
+        reply = lGroup.lpop(false)
+        then:
+        reply == MultiBulkReply.NULL
+
+        when:
+        // without count
+        lGroup.data = data2
+        reply = lGroup.lpop(true)
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        // with count
+        lGroup.data = data3
+        reply = lGroup.lpop(false)
+        then:
+        reply == MultiBulkReply.NULL
+
+        when:
+        SocketInspector.setResp3(socket)
         reply = lGroup.lpop(false)
         then:
         reply == NilReply.INSTANCE
 
         when:
+        // without count
+        lGroup.data = data2
+        reply = lGroup.lpop(true)
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
         data3[2] = '-1'.bytes
+        lGroup.data = data3
         reply = lGroup.lpop(true)
         then:
         reply == ErrorReply.RANGE_OUT_OF_INDEX
 
         when:
+        rl.addFirst('a'.bytes)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
         data3[2] = '0'.bytes
         reply = lGroup.lpop(true)
         then:

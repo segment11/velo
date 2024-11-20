@@ -1,10 +1,7 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
-import io.velo.BaseCommand;
-import io.velo.CompressedValue;
-import io.velo.Dict;
-import io.velo.TrainSampleJob;
+import io.velo.*;
 import io.velo.reply.*;
 import io.velo.type.RedisList;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -339,6 +336,7 @@ public class LGroup extends BaseCommand {
             return ErrorReply.KEY_TOO_LONG;
         }
 
+        boolean isWithCount = countBytes != null;
         int count = 1;
         if (countBytes != null) {
             try {
@@ -348,19 +346,27 @@ public class LGroup extends BaseCommand {
             }
             if (count < 0) {
                 return ErrorReply.RANGE_OUT_OF_INDEX;
-            } else if (count == 0) {
-                // if cv not exists, return nil
-                return MultiBulkReply.EMPTY;
             }
         }
 
+        var isResp3 = SocketInspector.isResp3(socket);
+
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rl = getRedisList(keyBytes, slotWithKeyHash);
-        if (rl == null) {
-            return NilReply.INSTANCE;
+        if (rl == null || rl.size() == 0) {
+            if (isWithCount) {
+                if (isResp3) {
+                    return NilReply.INSTANCE;
+                } else {
+                    return MultiBulkReply.NULL;
+                }
+            } else {
+                return NilReply.INSTANCE;
+            }
         }
-        if (rl.size() == 0) {
-            return NilReply.INSTANCE;
+
+        if (count == 0) {
+            return MultiBulkReply.EMPTY;
         }
 
         ArrayList<Reply> replies = new ArrayList<>();
