@@ -1,7 +1,6 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
-import io.activej.net.socket.tcp.TcpSocket;
 import io.velo.*;
 import io.velo.persist.KeyLoader;
 import io.velo.reply.*;
@@ -17,8 +16,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Random;
-
-import static io.velo.SocketInspector.SOCKET_USER_DATA_RESP_PROTOVER3;
 
 public class HGroup extends BaseCommand {
     public HGroup(String cmd, byte[][] data, ITcpSocket socket) {
@@ -280,10 +277,10 @@ public class HGroup extends BaseCommand {
         } else {
             var protover = new String(data[1]);
             if ("3".equals(protover)) {
-                ((TcpSocket) socket).setUserData(SOCKET_USER_DATA_RESP_PROTOVER3);
+                SocketInspector.setResp3(socket);
                 return OKReply.INSTANCE;
             } else if ("2".equals(protover)) {
-                ((TcpSocket) socket).setUserData(null);
+                SocketInspector.setResp2(socket);
                 return OKReply.INSTANCE;
             } else {
                 return ErrorReply.SYNTAX;

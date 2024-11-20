@@ -18,6 +18,21 @@ class SocketInspectorTest extends Specification {
                 new InetSocketAddress('localhost', port), null)
     }
 
+    def 'test base'() {
+        given:
+        def socket = mockTcpSocket()
+
+        when:
+        SocketInspector.setResp3(socket)
+        then:
+        SocketInspector.isResp3(socket)
+
+        when:
+        SocketInspector.setResp2(socket)
+        then:
+        !SocketInspector.isResp3(socket)
+    }
+
     def 'test connect'() {
         given:
         def inspector = new SocketInspector()

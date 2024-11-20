@@ -278,7 +278,7 @@ public class MultiWorkerServer extends Launcher {
             }
         }
 
-        var isResp3 = ((TcpSocket) socket).getUserData() == SocketInspector.SOCKET_USER_DATA_RESP_PROTOVER3;
+        var isResp3 = SocketInspector.isResp3(socket);
 
         var firstSlot = request.getSingleSlot();
         if (firstSlot == Request.SLOT_CAN_HANDLE_BY_ANY_WORKER) {
@@ -324,7 +324,7 @@ public class MultiWorkerServer extends Launcher {
             return Promise.of(ByteBuf.empty());
         }
 
-        var isResp3 = ((TcpSocket) socket).getUserData() == SocketInspector.SOCKET_USER_DATA_RESP_PROTOVER3;
+        var isResp3 = SocketInspector.isResp3(socket);
 
         var p = targetEventloop == null ? Promises.first(AsyncSupplier.of(() -> targetHandler.handle(request, socket))) :
                 Promise.ofFuture(targetEventloop.submit(AsyncComputation.of(() -> targetHandler.handle(request, socket))));

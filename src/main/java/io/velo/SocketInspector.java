@@ -19,7 +19,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SocketInspector implements TcpSocket.Inspector {
     private static final Logger log = LoggerFactory.getLogger(SocketInspector.class);
 
-    public static final Object SOCKET_USER_DATA_RESP_PROTOVER3 = new Object();
+    private static final Object SOCKET_USER_DATA_RESP_PROTOVER3 = new Object();
+
+    public static boolean isResp3(ITcpSocket socket) {
+        return ((TcpSocket) socket).getUserData() == SOCKET_USER_DATA_RESP_PROTOVER3;
+    }
+
+    public static void setResp3(ITcpSocket socket) {
+        ((TcpSocket) socket).setUserData(SOCKET_USER_DATA_RESP_PROTOVER3);
+    }
+
+    public static void setResp2(ITcpSocket socket) {
+        ((TcpSocket) socket).setUserData(null);
+    }
 
     volatile boolean isServerStopped = false;
 
