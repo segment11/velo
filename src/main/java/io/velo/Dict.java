@@ -160,6 +160,14 @@ public class Dict implements Serializable {
         return decompressCtxArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].decompressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
     }
 
+    public int compressByteBuffer(ByteBuffer dstBuffer, int dstOffset, int dstSize, ByteBuffer srcBuffer, int srcOffset, int length) {
+        return ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
+    }
+
+    public int decompressByteBuffer(ByteBuffer dstBuffer, int dstOffset, int dstSize, ByteBuffer srcBuffer, int srcOffset, int length) {
+        return decompressCtxArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].decompressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
+    }
+
     @Override
     public String toString() {
         return "Dict{" +
