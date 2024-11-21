@@ -11,6 +11,7 @@ import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import jnr.constants.platform.OpenFlags;
+import jnr.ffi.LastError;
 import jnr.posix.LibC;
 import org.apache.commons.collections4.map.LRUMap;
 import org.apache.commons.io.FileUtils;
@@ -454,7 +455,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         if (fd != 0) {
             int r = libC.close(fd);
             if (r < 0) {
-                System.err.println("Close fd error=" + libC.strerror(r) + ", name=" + name);
+                System.err.println("Close fd error=" + strerror() + ", name=" + name);
             }
             System.out.println("Closed fd=" + fd + ", name=" + name);
         }
@@ -549,8 +550,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         readBytesTotal += n;
 
         if (n != readLength) {
-            log.error("Read error, n={}, read length={}, name={}", n, readLength, name);
-            throw new RuntimeException("Read error, n=" + n + ", read length=" + readLength + ", name=" + name);
+            var strerror = strerror();
+            log.error("Read error, n={}, read length={}, name={}, error={}", n, readLength, name, strerror);
+            throw new RuntimeException("Read error, n=" + n + ", read length=" + readLength + ", name=" + name + ", error=" + strerror);
         }
 
         buffer.rewind();
@@ -613,8 +615,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         writeBytesTotal += n;
 
         if (n != capacity) {
-            log.error("Write error, n={}, buffer capacity={}, name={}", n, capacity, name);
-            throw new RuntimeException("Write error, n=" + n + ", buffer capacity=" + capacity + ", name=" + name);
+            var strerror = strerror();
+            log.error("Write error, n={}, buffer capacity={}, name={}, error={}", n, capacity, name, strerror);
+            throw new RuntimeException("Write error, n=" + n + ", buffer capacity=" + capacity + ", name=" + name + ", error=" + strerror);
         }
 
         if (offset + capacity > writeIndex) {
@@ -845,7 +848,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         if (libC != null) {
             var r = libC.ftruncate(fd, 0);
             if (r < 0) {
-                throw new RuntimeException("Truncate error=" + libC.strerror(r));
+                throw new RuntimeException("Truncate error=" + strerror());
             }
             log.info("Truncate fd={}, name={}", fd, name);
 
@@ -862,5 +865,11 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             }
             log.info("Clear all bytes in memory, name={}", name);
         }
+    }
+
+    private String strerror() {
+        var systemRuntime = jnr.ffi.Runtime.getSystemRuntime();
+        var errno = LastError.getLastError(systemRuntime);
+        return libC.strerror(errno);
     }
 }
