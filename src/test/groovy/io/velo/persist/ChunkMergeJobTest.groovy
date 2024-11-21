@@ -185,7 +185,7 @@ class ChunkMergeJobTest extends Specification {
         }
 
         def xForBinlog = new XOneWalGroupPersist(true, false, 0)
-        oneSlot.keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, returnPvmList, xForBinlog)
+        oneSlot.keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, returnPvmList, xForBinlog, null)
         println 'bucket ' + bucketIndex + ' key count: ' + oneSlot.keyLoader.getKeyCountInBucketIndex(bucketIndex)
 
         when:

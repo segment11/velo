@@ -445,7 +445,7 @@ class KeyLoaderTest extends Specification {
 
         when:
         def xForBinlog = new XOneWalGroupPersist(true, false, 0)
-        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog)
+        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog, null)
         then:
         pvmList.every {
             keyLoader.getValueByKey(0, it.keyBytes, it.keyHash).valueBytes() == it.encode()
@@ -457,7 +457,7 @@ class KeyLoaderTest extends Specification {
         def keyLoader2 = new KeyLoader(slot, ConfForSlot.global.confBucket.bucketsPerSlot, Consts.slotDir2, keyLoader.snowFlake, oneSlot)
         keyLoader2.initFds(keyLoader.libC)
         keyLoader2.initFds((byte) 1)
-        keyLoader2.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog)
+        keyLoader2.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog, null)
         then:
         1 == 1
 
@@ -536,7 +536,7 @@ class KeyLoaderTest extends Specification {
             pvmList << pvm
         }
         def xForBinlog = new XOneWalGroupPersist(true, false, 0)
-        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog)
+        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog, null)
         r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6)
         then:
         r.keys().size() == 6

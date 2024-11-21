@@ -1388,11 +1388,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var ext = readSomeSegmentsBeforePersistWal(walGroupIndex);
         var ext2 = chunkMergeWorker.getMergedButNotPersistedBeforePersistWal(walGroupIndex);
 
-        // remove those wal exist
+        KeyBucketsInOneWalGroup keyBucketsInOneWalGroup = null;
         if (ext != null) {
             var cvList = ext.cvList;
+            // remove those wal exist
             cvList.removeIf(one -> delayToKeyBucketShortValues.containsKey(one.key) || delayToKeyBucketValues.containsKey(one.key));
             if (!cvList.isEmpty()) {
+                // remove those expired or updated
+                keyBucketsInOneWalGroup = new KeyBucketsInOneWalGroup(slot, walGroupIndex, keyLoader);
+
                 for (var one : cvList) {
                     var cv = one.cv;
                     var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash(), keyLoader.bucketsPerSlot);
@@ -1400,6 +1404,18 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     if (extWalGroupIndex != walGroupIndex) {
                         throw new IllegalStateException("Wal group index not match, s=" + slot + ", wal group index=" + walGroupIndex + ", ext wal group index=" + extWalGroupIndex);
                     }
+
+                    var valueBytesWithExpireAtAndSeq = keyBucketsInOneWalGroup.getValue(bucketIndex, one.key.getBytes(), cv.getKeyHash());
+                    var isThisKeyExpired = valueBytesWithExpireAtAndSeq == null || valueBytesWithExpireAtAndSeq.isExpired();
+                    if (isThisKeyExpired) {
+                        continue;
+                    }
+
+                    var isThisKeyUpdated = valueBytesWithExpireAtAndSeq.seq() > cv.getSeq();
+                    if (isThisKeyUpdated) {
+                        continue;
+                    }
+
                     list.add(new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
                             one.key, cv.encode(), true));
                 }
@@ -1419,7 +1435,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     slot, walGroupIndex, list.size());
         }
 
-        var needMergeSegmentIndexList = chunk.persist(walGroupIndex, list, false, xForBinlog);
+        var needMergeSegmentIndexList = chunk.persist(walGroupIndex, list, false, xForBinlog, keyBucketsInOneWalGroup);
         if (needMergeSegmentIndexList == null) {
             throw new IllegalStateException("Persist error, need merge segment index list is null, slot=" + slot);
         }

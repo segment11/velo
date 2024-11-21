@@ -220,7 +220,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
             var xForBinlog = new XOneWalGroupPersist(false, false, walGroupIndex);
             // refer Chunk.ONCE_PREPARE_SEGMENT_COUNT
             // list size is not large, need not multi batch persist
-            oneSlot.chunk.persist(walGroupIndex, list, true, xForBinlog);
+            oneSlot.chunk.persist(walGroupIndex, list, true, xForBinlog, null);
 
             i++;
             var isLastEntry = groupByWalGroupIndex.size() == i;

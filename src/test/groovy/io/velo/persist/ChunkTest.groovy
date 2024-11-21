@@ -314,7 +314,7 @@ class ChunkTest extends Specification {
         when:
         def vList = Mock.prepareValueList(100)
         chunk.segmentIndex = 0
-        def r = chunk.persist(0, vList, false, xForBinlog)
+        def r = chunk.persist(0, vList, false, xForBinlog, null)
         then:
         chunk.segmentIndex == 2
         r.size() == 0
@@ -326,7 +326,7 @@ class ChunkTest extends Specification {
         }
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.Flag.init.flagByte(), blankSeqList, 0)
         chunk.segmentIndex = 0
-        r = chunk.persist(0, vList, true, xForBinlog)
+        r = chunk.persist(0, vList, true, xForBinlog, null)
         then:
         chunk.segmentIndex == 2
         r.size() == 0
@@ -359,7 +359,7 @@ class ChunkTest extends Specification {
         (1..<16).each {
             vListManyCount.addAll Mock.prepareValueList(100, it)
         }
-        chunk.persist(0, vListManyCount, false, xForBinlog)
+        chunk.persist(0, vListManyCount, false, xForBinlog, null)
         then:
         chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE
 
@@ -373,7 +373,7 @@ class ChunkTest extends Specification {
         }
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, seqList.size(), Chunk.Flag.merged_and_persisted.flagByte(), seqList, 0)
         chunk.segmentIndex = 0
-        r = chunk.persist(0, vListManyCount, false, xForBinlog)
+        r = chunk.persist(0, vListManyCount, false, xForBinlog, null)
         then:
         chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE
         r.size() == chunk.segmentIndex
@@ -382,7 +382,7 @@ class ChunkTest extends Specification {
         chunk.fdLengths[0] = 0
         chunk.mergedSegmentIndexEndLastTime = Chunk.NO_NEED_MERGE_SEGMENT_INDEX
         chunk.segmentIndex = halfSegmentNumber
-        r = chunk.persist(0, vList, false, xForBinlog)
+        r = chunk.persist(0, vList, false, xForBinlog, null)
         then:
         r.size() > 0
 
@@ -403,7 +403,7 @@ class ChunkTest extends Specification {
         }
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqListMany.size(), Chunk.Flag.init.flagByte(), blankSeqListMany, 0)
         chunk.segmentIndex = 0
-        chunk.persist(0, vListManyCount, false, xForBinlog)
+        chunk.persist(0, vListManyCount, false, xForBinlog, null)
         then:
         chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE
 

@@ -350,7 +350,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
     @SlaveNeedReplay
     // return need merge segment index array
-    public ArrayList<Integer> persist(int walGroupIndex, ArrayList<Wal.V> list, boolean isMerge, XOneWalGroupPersist xForBinlog) {
+    public ArrayList<Integer> persist(int walGroupIndex, ArrayList<Wal.V> list, boolean isMerge, XOneWalGroupPersist xForBinlog,
+                                      KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
         logMergeCount++;
         var doLog = (Debug.getInstance().logMerge && logMergeCount % 1000 == 0);
 
@@ -494,7 +495,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         persistCvCountTotal += list.size();
 
         var beginT = System.nanoTime();
-        keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, pvmList, xForBinlog);
+        keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, pvmList, xForBinlog, keyBucketsInOneWalGroupGiven);
         var costT = (System.nanoTime() - beginT) / 1000;
         updatePvmBatchCostTimeTotalUs += costT;
 

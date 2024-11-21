@@ -594,8 +594,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         }
     }
 
-    public void updatePvmListBatchAfterWriteSegments(int walGroupIndex, ArrayList<PersistValueMeta> pvmList, XOneWalGroupPersist xForBinlog) {
-        var inner = new KeyBucketsInOneWalGroup(slot, walGroupIndex, this);
+    public void updatePvmListBatchAfterWriteSegments(int walGroupIndex, ArrayList<PersistValueMeta> pvmList, XOneWalGroupPersist xForBinlog,
+                                                     KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
+        var inner = keyBucketsInOneWalGroupGiven != null ? keyBucketsInOneWalGroupGiven : new KeyBucketsInOneWalGroup(slot, walGroupIndex, this);
         xForBinlog.setBeginBucketIndex(inner.beginBucketIndex);
 
         inner.putAllPvmList(pvmList);
