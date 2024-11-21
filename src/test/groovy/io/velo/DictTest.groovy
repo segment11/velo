@@ -268,6 +268,20 @@ class DictTest extends Specification {
         then:
         afterDecompressedBytes == sampleValueBytes
 
+        when:
+        srcBuffer.position(0)
+        def dstBuffer2 = ByteBuffer.allocateDirect(1024 * 1024)
+        def now2 = System.nanoTime()
+        def xx2 = dictTrained.compressByteBuffer(dstBuffer2, 0, boundDstSize, srcBuffer, 0, sampleValueBytes.length * 10)
+        println 'compress byte buffer 1 time cost: ' + (System.nanoTime() - now2) / 1000 + 'us'
+        def sampleValueBytes10 = new byte[sampleValueBytes.length * 10]
+        def sampleValueBytesBuffer = ByteBuffer.wrap(sampleValueBytes10)
+        10.times {
+            sampleValueBytesBuffer.put(sampleValueBytes)
+        }
+        then:
+        xx2 == Zstd.compressUsingDict(sampleValueBytes10, dictTrained.dictBytes, 3).length
+
         cleanup:
         // for coverage
         dictTrained.initCtx()
