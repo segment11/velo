@@ -8,8 +8,17 @@ import org.apache.commons.io.FileUtils
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
+import java.nio.file.Paths
 
 class FdReadWriteTest extends Specification {
+    static {
+        var extendConfigFile = Paths.get('velo_extend.properties').toFile()
+        if (!extendConfigFile.exists()) {
+            extendConfigFile.createNewFile()
+            extendConfigFile.text = 'o_direct=16384'
+        }
+    }
+
     final short slot = 0
 
     def 'test write and read'() {
@@ -214,7 +223,7 @@ class FdReadWriteTest extends Specification {
             fdChunk.writeIndex = oldWriteIndex
         }
         then:
-        exception
+        ConfForGlobal.isUseDirectIO ? exception : !exception
 
         when:
         fdChunk.writeSegmentsBatchForRepl(1024, new byte[segmentLength * FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD])
@@ -366,8 +375,10 @@ class FdReadWriteTest extends Specification {
         fdChunk.cleanUp()
         fdKeyBucket.truncate()
         fdKeyBucket.cleanUp()
+        fdChunk11.initPureMemoryByteArray()
         fdChunk11.truncate()
         fdChunk11.cleanUp()
+        fdKeyBucket22.initPureMemoryByteArray()
         fdKeyBucket22.truncate()
         fdKeyBucket22.cleanUp()
         oneFile1.delete()

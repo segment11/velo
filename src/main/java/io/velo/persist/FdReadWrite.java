@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.file.Paths;
@@ -67,16 +68,24 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             if (!file.exists()) {
                 FileUtils.touch(file);
             }
-            this.libC = libC;
-            this.fd = libC.open(file.getAbsolutePath(), O_DIRECT | OpenFlags.O_RDWR.value() | OpenFlags.O_CREAT.value(), PERM);
-            if (fd < 0) {
-                throw new IOException("Open fd error=" + strerror());
-            }
             this.writeIndex = file.length();
+
+            this.libC = libC;
+            if (ConfForGlobal.isUseDirectIO) {
+                this.fd = libC.open(file.getAbsolutePath(), O_DIRECT | OpenFlags.O_RDWR.value() | OpenFlags.O_CREAT.value(), PERM);
+                if (fd < 0) {
+                    throw new IOException("Open fd error=" + strerror());
+                }
+                this.raf = null;
+            } else {
+                this.fd = 0;
+                this.raf = new RandomAccessFile(file, "rw");
+            }
             log.info("Opened fd={}, name={}, file length={}MB", fd, name, this.writeIndex / 1024 / 1024);
         } else {
             this.libC = null;
             this.fd = 0;
+            this.raf = null;
             log.warn("Pure memory mode, not use fd, name={}", name);
         }
     }
@@ -153,6 +162,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     private final LibC libC;
 
     private final int fd;
+
+    private final RandomAccessFile raf;
 
     @VisibleForTesting
     long writeIndex;
@@ -302,6 +313,21 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     // chunk fd is by relative segment index, key bucket fd is by bucket index
     private LRUMap<Integer, byte[]> oneInnerBytesByIndexLRU;
 
+    @VisibleForTesting
+    void initPureMemoryByteArray() {
+        if (isChunkFd) {
+            if (this.allBytesBySegmentIndexForOneChunkFd == null) {
+                var segmentNumberPerFd = ConfForSlot.global.confChunk.segmentNumberPerFd;
+                this.allBytesBySegmentIndexForOneChunkFd = new byte[segmentNumberPerFd][];
+            }
+        } else {
+            if (this.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex == null) {
+                var walGroupNumber = Wal.calcWalGroupNumber();
+                this.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex = new byte[walGroupNumber][];
+            }
+        }
+    }
+
     public void initByteBuffers(boolean isChunkFd) {
         var oneInnerLength = isChunkFd ? ConfForSlot.global.confChunk.segmentLength : KeyLoader.KEY_BUCKET_ONE_COST_SIZE;
         this.oneInnerLength = oneInnerLength;
@@ -310,13 +336,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         initLRU(isChunkFd, oneInnerLength);
 
         if (ConfForGlobal.pureMemory) {
-            if (isChunkFd) {
-                var segmentNumberPerFd = ConfForSlot.global.confChunk.segmentNumberPerFd;
-                this.allBytesBySegmentIndexForOneChunkFd = new byte[segmentNumberPerFd][];
-            } else {
-                var walGroupNumber = Wal.calcWalGroupNumber();
-                this.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex = new byte[walGroupNumber][];
-            }
+            initPureMemoryByteArray();
         } else {
             long initMemoryN = 0;
 
@@ -485,6 +505,15 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             }
             System.out.println("Closed fd=" + fd + ", name=" + name);
         }
+
+        if (raf != null) {
+            try {
+                raf.close();
+                System.out.println("Closed raf, name=" + name);
+            } catch (IOException e) {
+                System.err.println("Close raf error=" + e.getMessage() + ", name=" + name);
+            }
+        }
     }
 
     private interface WriteBufferPrepare {
@@ -567,7 +596,17 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         buffer.clear();
 
         var beginT = System.nanoTime();
-        var n = libC.pread(fd, buffer, readLength, offset);
+        int n;
+        if (ConfForGlobal.isUseDirectIO) {
+            n = libC.pread(fd, buffer, readLength, offset);
+        } else {
+            try {
+                raf.seek(offset);
+                n = raf.getChannel().read(buffer);
+            } catch (IOException e) {
+                throw new RuntimeException("Read error, name=" + name, e);
+            }
+        }
         var costT = (System.nanoTime() - beginT) / 1000;
 
         // stats
@@ -576,9 +615,16 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         readBytesTotal += n;
 
         if (n != readLength) {
-            var strerror = strerror();
-            log.error("Read error, n={}, read length={}, name={}, error={}", n, readLength, name, strerror);
-            throw new RuntimeException("Read error, n=" + n + ", read length=" + readLength + ", name=" + name + ", error=" + strerror);
+            if (ConfForGlobal.isUseDirectIO) {
+                var strerror = strerror();
+                log.error("Read error, n={}, read length={}, name={}, error={}", n, readLength, name, strerror);
+                throw new RuntimeException("Read error, n=" + n + ", read length=" + readLength + ", name=" + name + ", error=" + strerror);
+            } else {
+                if (n < readLength) {
+                    log.error("Read error, n={}, read length={}, name={}", n, readLength, name);
+                    throw new RuntimeException("Read error, n=" + n + ", read length=" + readLength + ", name=" + name);
+                }
+            }
         }
 
         buffer.rewind();
@@ -632,7 +678,17 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         buffer.rewind();
 
         var beginT = System.nanoTime();
-        var n = libC.pwrite(fd, buffer, capacity, offset);
+        int n;
+        if (ConfForGlobal.isUseDirectIO) {
+            n = libC.pwrite(fd, buffer, capacity, offset);
+        } else {
+            try {
+                raf.seek(offset);
+                n = raf.getChannel().write(buffer);
+            } catch (IOException e) {
+                throw new RuntimeException("Write error, name=" + name, e);
+            }
+        }
         var costT = (System.nanoTime() - beginT) / 1000;
 
         // stats
@@ -641,9 +697,14 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         writeBytesTotal += n;
 
         if (n != capacity) {
-            var strerror = strerror();
-            log.error("Write error, n={}, buffer capacity={}, name={}, error={}", n, capacity, name, strerror);
-            throw new RuntimeException("Write error, n=" + n + ", buffer capacity=" + capacity + ", name=" + name + ", error=" + strerror);
+            if (ConfForGlobal.isUseDirectIO) {
+                var strerror = strerror();
+                log.error("Write error, n={}, buffer capacity={}, name={}, error={}", n, capacity, name, strerror);
+                throw new RuntimeException("Write error, n=" + n + ", buffer capacity=" + capacity + ", name=" + name + ", error=" + strerror);
+            } else {
+                log.error("Write error, n={}, buffer capacity={}, name={}", n, capacity, name);
+                throw new RuntimeException("Write error, n=" + n + ", buffer capacity=" + capacity + ", name=" + name);
+            }
         }
 
         if (offset + capacity > writeIndex) {
@@ -871,18 +932,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     @SlaveNeedReplay
     @SlaveReplay
     public void truncate() {
-        if (libC != null) {
-            var r = libC.ftruncate(fd, 0);
-            if (r < 0) {
-                throw new RuntimeException("Truncate error=" + strerror());
-            }
-            log.info("Truncate fd={}, name={}", fd, name);
-
-            if (isLRUOn) {
-                oneInnerBytesByIndexLRU.clear();
-                log.info("LRU cache clear, name={}", name);
-            }
-        } else {
+        if (ConfForGlobal.pureMemory) {
             log.warn("Pure memory mode, not use fd, name={}", name);
             if (isChunkFd) {
                 this.allBytesBySegmentIndexForOneChunkFd = new byte[allBytesBySegmentIndexForOneChunkFd.length][];
@@ -890,6 +940,27 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
                 this.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex = new byte[allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length][];
             }
             log.info("Clear all bytes in memory, name={}", name);
+            return;
+        }
+
+        if (ConfForGlobal.isUseDirectIO) {
+            var r = libC.ftruncate(fd, 0);
+            if (r < 0) {
+                throw new RuntimeException("Truncate error=" + strerror());
+            }
+            log.info("Truncate fd={}, name={}", fd, name);
+        } else {
+            try {
+                raf.setLength(0);
+                log.info("Truncate raf, name={}", name);
+            } catch (IOException e) {
+                throw new RuntimeException("Truncate error, name=" + name, e);
+            }
+        }
+
+        if (isLRUOn) {
+            oneInnerBytesByIndexLRU.clear();
+            log.info("LRU cache clear, name={}", name);
         }
     }
 

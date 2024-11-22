@@ -723,6 +723,9 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.eventLoopIdleMillis = config.get(ofInteger(), "eventloop.idleMillis", 10);
             log.warn("Global config, eventLoopIdleMillis={}", ConfForGlobal.eventLoopIdleMillis);
 
+            ConfForGlobal.isUseDirectIO = config.get(ofBoolean(), "isUseDirectIO", false);
+            log.warn("Global config, isUseDirectIO={}", ConfForGlobal.isUseDirectIO);
+
             ConfForGlobal.PASSWORD = config.get(ofString(), "password", null);
             if (ConfForGlobal.PASSWORD != null) {
                 AclUsers.getInstance().upInsert(U.DEFAULT_USER, u -> u.setPassword(U.Password.plain(ConfForGlobal.PASSWORD)));

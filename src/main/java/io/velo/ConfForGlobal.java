@@ -19,6 +19,7 @@ public class ConfForGlobal {
     public static boolean isOnDynTrainDictForCompression = false;
 
     public static String netListenAddresses;
+    public static boolean isUseDirectIO;
 
     public static String dirPath = "/tmp/velo-data";
     public static boolean pureMemory = false;
