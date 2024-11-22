@@ -22,6 +22,9 @@ class SocketInspectorTest extends Specification {
         given:
         def socket = mockTcpSocket()
 
+        expect:
+        !SocketInspector.isResp3(null)
+
         when:
         SocketInspector.setResp3(socket)
         then:

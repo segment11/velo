@@ -51,6 +51,11 @@ class RequestTest extends Specification {
         request.isAclCheckOk()
 
         when:
+        request.u = null
+        then:
+        request.isAclCheckOk()
+
+        when:
         def dataRepl = new byte[3][]
         dataRepl[0] = new byte[8]
         dataRepl[1] = new byte[2]
