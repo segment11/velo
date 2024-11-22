@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
@@ -635,6 +636,26 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     private final int walGroupNumber;
     // index is group index
     private final Wal[] walArray;
+
+    CompletableFuture<Boolean> walLazyReadFromFile() {
+        var waitF = new CompletableFuture<Boolean>();
+        // just run once
+        new Thread(() -> {
+            log.info("Start a single thread to read wal from file, slot={}", slot);
+            try {
+                for (var wal : walArray) {
+                    wal.lazyReadFromFile();
+                }
+                waitF.complete(true);
+            } catch (IOException e) {
+                log.error("Wal lazy read from file error for slot=" + slot, e);
+                waitF.completeExceptionally(e);
+            } finally {
+                log.info("End a single thread to read wal from file, slot={}", slot);
+            }
+        }).start();
+        return waitF;
+    }
 
     public Wal getWalByBucketIndex(int bucketIndex) {
         var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);

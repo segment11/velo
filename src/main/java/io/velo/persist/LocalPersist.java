@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
 import static io.activej.config.converter.ConfigConverters.ofInteger;
@@ -105,6 +106,29 @@ public class LocalPersist implements NeedCleanUp {
         }
 
         this.multiShard = new MultiShard(persistDir);
+    }
+
+    public boolean walLazyReadFromFile() {
+        var beginT = System.currentTimeMillis();
+        CompletableFuture<Boolean>[] fArray = new CompletableFuture[oneSlots.length];
+        for (int i = 0; i < oneSlots.length; i++) {
+            var oneSlot = oneSlots[i];
+            fArray[i] = oneSlot.walLazyReadFromFile();
+        }
+
+        log.info("Wait for all slots wal read from file done");
+        CompletableFuture.allOf(fArray).join();
+        var endT = System.currentTimeMillis();
+        log.info("All slots wal read from file done, cost={}ms", endT - beginT);
+
+        var isEveryOk = true;
+        for (var f : fArray) {
+            if (f.isCompletedExceptionally()) {
+                isEveryOk = false;
+                break;
+            }
+        }
+        return isEveryOk;
     }
 
     private boolean isHashSaveMemberTogether;

@@ -57,6 +57,18 @@ class WalTest extends Specification {
         wal.lastSeqShortValueAfterPut == 0
 
         when:
+        wal.lazyReadFromFile()
+        then:
+        1 == 1
+
+        when:
+        ConfForGlobal.pureMemory = true
+        wal.lazyReadFromFile()
+        then:
+        1 == 1
+
+        when:
+        ConfForGlobal.pureMemory = false
         def vList = Mock.prepareValueList(10)
         vList.each { v ->
             def key = v.key()

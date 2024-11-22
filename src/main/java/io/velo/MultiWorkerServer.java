@@ -567,6 +567,11 @@ public class MultiWorkerServer extends Launcher {
         socketInspector.netWorkerEventloopArray = netWorkerEventloopArray;
         localPersist.setSocketInspector(socketInspector);
 
+        var isWalLazyReadOk = localPersist.walLazyReadFromFile();
+        if (!isWalLazyReadOk) {
+            throw new RuntimeException("Wal lazy read from file failed");
+        }
+
         // recover
         primaryEventloop.submit(localPersist::persistMergedSegmentsJobUndone);
 

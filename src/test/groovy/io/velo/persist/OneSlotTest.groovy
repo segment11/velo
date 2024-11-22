@@ -132,6 +132,12 @@ class OneSlotTest extends Specification {
         then:
         1 == 1
 
+        when:
+        def f = oneSlot.walLazyReadFromFile()
+        f.join()
+        then:
+        f.get()
+
         cleanup:
         oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()
         oneSlot.cleanUp()

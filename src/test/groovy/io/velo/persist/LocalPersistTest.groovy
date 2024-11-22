@@ -86,6 +86,11 @@ class LocalPersistTest extends Specification {
         then:
         exception
 
+        when:
+        def isOk = localPersist.walLazyReadFromFile()
+        then:
+        isOk
+
         cleanup:
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())

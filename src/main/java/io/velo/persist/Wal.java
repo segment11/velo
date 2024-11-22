@@ -129,18 +129,25 @@ public class Wal implements InMemoryEstimate {
 
         this.delayToKeyBucketValues = new HashMap<>();
         this.delayToKeyBucketShortValues = new HashMap<>();
+    }
 
-        if (!ConfForGlobal.pureMemory) {
-            var n1 = readWal(walSharedFile, delayToKeyBucketValues, false);
-            var n2 = readWal(walSharedFileShortValue, delayToKeyBucketShortValues, true);
-            initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketValues);
-            initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketShortValues);
-
-            // reduce log
+    void lazyReadFromFile() throws IOException {
+        if (ConfForGlobal.pureMemory) {
             if (slot == 0 && groupIndex == 0) {
-                log.info("Read wal file success, slot={}, group index={}, value size={}, short value size={}, init memory n={}KB",
-                        slot, groupIndex, n1, n2, initMemoryN / 1024);
+                log.info("Pure memory mode, skip read wal file, slot={}, group index={}", slot, groupIndex);
             }
+            return;
+        }
+
+        var n1 = readWal(walSharedFile, delayToKeyBucketValues, false);
+        var n2 = readWal(walSharedFileShortValue, delayToKeyBucketShortValues, true);
+        initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketValues);
+        initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketShortValues);
+
+        // reduce log
+        if (slot == 0 && groupIndex == 0) {
+            log.info("Read wal file success, slot={}, group index={}, value size={}, short value size={}, init memory n={}KB",
+                    slot, groupIndex, n1, n2, initMemoryN / 1024);
         }
     }
 
