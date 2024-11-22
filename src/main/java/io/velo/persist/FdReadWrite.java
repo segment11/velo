@@ -1,6 +1,7 @@
 package io.velo.persist;
 
 import com.github.luben.zstd.Zstd;
+import com.google.common.io.Files;
 import com.kenai.jffi.MemoryIO;
 import com.kenai.jffi.PageManager;
 import io.velo.ConfForGlobal;
@@ -25,6 +26,8 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -34,6 +37,26 @@ import java.util.Map;
 public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp {
 
     private static final int PERM = 00644;
+
+    public static final int O_DIRECT;
+
+    static {
+        var extendConfigFile = Paths.get("velo_extend.properties").toFile();
+        if (extendConfigFile.exists()) {
+            final String key = "o_direct";
+            try {
+                var lines = Files.readLines(extendConfigFile, Charset.defaultCharset());
+                var line = lines.stream().filter(l -> l.startsWith(key)).findFirst().orElseThrow();
+                var value = line.split("=")[1].trim();
+                O_DIRECT = Integer.parseInt(value);
+                System.out.println("Load O_DIRECT=" + O_DIRECT);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            O_DIRECT = 0x4000;
+        }
+    }
 
     private static final Logger log = LoggerFactory.getLogger(FdReadWrite.class);
 
@@ -45,7 +68,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
                 FileUtils.touch(file);
             }
             this.libC = libC;
-            this.fd = libC.open(file.getAbsolutePath(), LocalPersist.O_DIRECT | OpenFlags.O_RDWR.value(), PERM);
+            this.fd = libC.open(file.getAbsolutePath(), O_DIRECT | OpenFlags.O_RDWR.value() | OpenFlags.O_CREAT.value(), PERM);
             this.writeIndex = file.length();
             log.info("Opened fd={}, name={}, file length={}MB", fd, name, this.writeIndex / 1024 / 1024);
         } else {

@@ -38,7 +38,6 @@ class LocalPersistTest extends Specification {
         LocalPersist.PROTECTION == 7
         LocalPersist.DEFAULT_SLOT_NUMBER == 4
         LocalPersist.MAX_SLOT_NUMBER == 1024
-        LocalPersist.O_DIRECT == 040000
         localPersist.oneSlots() == null
 
         when:

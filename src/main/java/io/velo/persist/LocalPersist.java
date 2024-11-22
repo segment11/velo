@@ -43,8 +43,6 @@ public class LocalPersist implements NeedCleanUp {
 
     private final LibC libC;
 
-    public static final int O_DIRECT = 040000;
-
     public void persistMergedSegmentsJobUndone() {
         for (var oneSlot : oneSlots) {
             oneSlot.asyncRun(() -> {

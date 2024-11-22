@@ -128,6 +128,10 @@ test {
     maxHeapSize = '8G'
     // parallel = true
     forkEvery = 4
+
+    testLogging {
+        showStandardStreams = true
+    }
 }
 
 jacoco {
@@ -177,7 +181,7 @@ task copyLog4j2(type: Copy) {
 }
 
 task copyConfigFile(type: Copy) {
-    from 'src/main/resources/velo.properties', 'src/main/resources/conf.properties'
+    from 'src/main/resources/velo.properties', 'src/main/resources/velo_extend.properties', 'src/main/resources/conf.properties'
     into "$buildDir/libs/"
 }
 
@@ -186,4 +190,19 @@ task copyDependencies(type: Copy) {
     into 'build/libs/lib'
 }
 
-jar.dependsOn copyDynScript, copyLog4j2, copyConfigFile, copyDependencies
+task cBuild(type: Exec) {
+    commandLine = ['gcc', 'src/main/c/get_o_direct.c', '-o', 'build/tmp/get_o_direct']
+}
+
+task cRun(type: Exec) {
+    def output = new ByteArrayOutputStream()
+    commandLine = 'build/tmp/get_o_direct'
+    standardOutput = output
+    doLast {
+        new File('src/main/resources/velo_extend.properties').text = 'o_direct=' + output.toString().trim()
+    }
+}
+
+cRun.dependsOn cBuild
+
+jar.dependsOn copyDynScript, copyLog4j2, copyConfigFile, copyDependencies, cRun

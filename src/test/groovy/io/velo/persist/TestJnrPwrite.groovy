@@ -10,7 +10,6 @@ import spock.lang.Specification
 
 class TestJnrPwrite extends Specification {
     public static final int PROTECTION = PageManager.PROT_READ | PageManager.PROT_WRITE | PageManager.PROT_EXEC
-    private static final int O_DIRECT = 040000
 
     def 'test pwrite and pread'() {
         given:
@@ -71,7 +70,7 @@ class TestJnrPwrite extends Specification {
 
         when:
         buf.reset()
-        def fd = libC.open(filePath, O_DIRECT | OpenFlags.O_RDWR.value() | OpenFlags.O_CREAT.value(), 0600)
+        def fd = libC.open(filePath, FdReadWrite.O_DIRECT | OpenFlags.O_RDWR.value(), 0644)
         def n = libC.pwrite(fd, buf, buf.capacity(), 0)
         println 'pwrite=' + n
         if (n == -1) {
