@@ -69,6 +69,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             }
             this.libC = libC;
             this.fd = libC.open(file.getAbsolutePath(), O_DIRECT | OpenFlags.O_RDWR.value() | OpenFlags.O_CREAT.value(), PERM);
+            if (fd < 0) {
+                throw new IOException("Open fd error=" + strerror());
+            }
             this.writeIndex = file.length();
             log.info("Opened fd={}, name={}, file length={}MB", fd, name, this.writeIndex / 1024 / 1024);
         } else {

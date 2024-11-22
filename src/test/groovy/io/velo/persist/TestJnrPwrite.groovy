@@ -71,6 +71,12 @@ class TestJnrPwrite extends Specification {
         when:
         buf.reset()
         def fd = libC.open(filePath, FdReadWrite.O_DIRECT | OpenFlags.O_RDWR.value(), 0644)
+        if (fd < 0) {
+            def systemRuntime = jnr.ffi.Runtime.systemRuntime
+            def errno = LastError.getLastError(systemRuntime)
+            println 'open error=' + libC.strerror(errno)
+            throw new IOException('open failed')
+        }
         def n = libC.pwrite(fd, buf, buf.capacity(), 0)
         println 'pwrite=' + n
         if (n == -1) {
