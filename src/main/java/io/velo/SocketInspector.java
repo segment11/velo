@@ -22,6 +22,10 @@ public class SocketInspector implements TcpSocket.Inspector {
     private static final Object SOCKET_USER_DATA_RESP_PROTOVER3 = new Object();
 
     public static boolean isResp3(ITcpSocket socket) {
+        // just when do unit test
+        if (socket == null) {
+            return false;
+        }
         return ((TcpSocket) socket).getUserData() == SOCKET_USER_DATA_RESP_PROTOVER3;
     }
 

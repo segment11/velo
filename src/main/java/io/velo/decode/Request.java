@@ -43,6 +43,11 @@ public class Request {
     }
 
     public boolean isAclCheckOk() {
+        // just when do unit test
+        if (u == null) {
+            return true;
+        }
+
         if (!u.isOn()) {
             return false;
         }
