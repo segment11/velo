@@ -318,7 +318,7 @@ public class RequestHandler {
             .labelNames("command")
             .maxAgeSeconds(60)
             .ageBuckets(5)
-            .quantile(0.90, 0.05)
+            .quantile(0.99, 0.001)
             .quantile(0.999, 0.001)
             .register();
 
