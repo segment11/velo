@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 public class BenchmarkXXHash {
     private String[] keys;
 
-    @Param({"1000000", "10000000"})
+    @Param({"1000000"})
     int size = 1_000_000;
 
     @Setup
