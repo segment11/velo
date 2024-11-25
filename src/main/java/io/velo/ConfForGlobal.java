@@ -55,4 +55,7 @@ public class ConfForGlobal {
 
     // for type
     public static int doubleScale = 2;
+
+    // switch
+    public static boolean requestSummary = false;
 }

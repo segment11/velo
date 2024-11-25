@@ -775,6 +775,9 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.doubleScale = config.get(ofInteger(), "number.doubleScale", 2);
             log.warn("Global config, doubleScale={}", ConfForGlobal.doubleScale);
 
+            ConfForGlobal.requestSummary = config.get(ofBoolean(), "requestSummary", false);
+            log.warn("Global config, requestSummary={}", ConfForGlobal.requestSummary);
+
             DictMap.TO_COMPRESS_MIN_DATA_LENGTH = config.get(ofInteger(), "toCompressMinDataLength", 64);
 
             ValkeyRawConfSupport.load();

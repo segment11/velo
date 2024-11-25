@@ -243,21 +243,21 @@ public class RequestHandler {
 
     @VisibleForTesting
     int increaseCmdStatArray(byte firstByte, String cmd) {
-        var index = firstByte - 'a';
-        var stringArray = cmdStatArray[index];
-        var countArray = cmdStatCountArray[index];
-        for (int i = 0; i < stringArray.length; i++) {
-            if (stringArray[i] == null) {
-                stringArray[i] = cmd;
-                countArray[i] = 1;
-                return i;
-            }
-
-            if (stringArray[i].equals(cmd)) {
-                countArray[i]++;
-                return i;
-            }
-        }
+//        var index = firstByte - 'a';
+//        var stringArray = cmdStatArray[index];
+//        var countArray = cmdStatCountArray[index];
+//        for (int i = 0; i < stringArray.length; i++) {
+//            if (stringArray[i] == null) {
+//                stringArray[i] = cmd;
+//                countArray[i] = 1;
+//                return i;
+//            }
+//
+//            if (stringArray[i].equals(cmd)) {
+//                countArray[i]++;
+//                return i;
+//            }
+//        }
 
         return -1;
     }
@@ -421,7 +421,12 @@ public class RequestHandler {
         }
 
         var cmd = request.cmd();
-        var requestTimer = requestTimeSummary.labels(cmd).startTimer();
+
+        Summary.Timer requestTimer = null;
+
+        if (ConfForGlobal.requestSummary) {
+            requestTimer = requestTimeSummary.labels(cmd).startTimer();
+        }
         try {
             if (cmd.equals(PING_COMMAND)) {
                 increaseCmdStatArray((byte) 'p', PING_COMMAND);
@@ -617,7 +622,9 @@ public class RequestHandler {
                 return new ErrorReply(e.getMessage());
             }
         } finally {
-            requestTimer.observeDuration();
+            if (ConfForGlobal.requestSummary) {
+                requestTimer.observeDuration();
+            }
         }
     }
 
