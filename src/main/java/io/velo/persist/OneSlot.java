@@ -916,6 +916,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return valueBytesWithExpireAtAndSeq.expireAt();
     }
 
+    public int warmUp() {
+        return keyLoader.warmUp();
+    }
+
     public record BufOrCompressedValue(ByteBuf buf, CompressedValue cv) {
     }
 

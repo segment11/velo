@@ -488,6 +488,11 @@ class OneSlotTest extends Specification {
         then:
         1 == 1
 
+        when:
+        def n = oneSlot.warmUp()
+        then:
+        n >= 0
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()

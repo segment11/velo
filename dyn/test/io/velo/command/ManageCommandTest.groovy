@@ -571,6 +571,12 @@ class ManageCommandTest extends Specification {
         reply instanceof BulkReply
 
         when:
+        data4[3] = 'key-buckets-warm-up'
+        reply = manage.manageInOneSlot()
+        then:
+        reply instanceof IntegerReply
+
+        when:
         data4[3] = 'xxx'.bytes
         reply = manage.manageInOneSlot()
         then:

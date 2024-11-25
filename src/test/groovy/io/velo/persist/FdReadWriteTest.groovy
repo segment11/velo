@@ -370,6 +370,27 @@ class FdReadWriteTest extends Specification {
         then:
         fdKeyBucket.readKeyBucketsSharedBytesInOneWalGroup(oneChargeBucketNumber) == null
 
+        // warm up
+        when:
+        ConfForGlobal.pureMemory = false
+        ConfForSlot.global.confBucket.lruPerFd.maxSize = ConfForSlot.global.confBucket.bucketsPerSlot
+        fdKeyBucket = new FdReadWrite(slot, 'test2', libC, oneFile2)
+        fdKeyBucket.initByteBuffers(false)
+        def n = fdKeyBucket.warmUp()
+        then:
+        n == ConfForSlot.global.confBucket.bucketsPerSlot
+
+        when:
+        exception = false
+        try {
+            fdChunk.warmUp()
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
         cleanup:
         fdChunk.truncate()
         fdChunk.cleanUp()

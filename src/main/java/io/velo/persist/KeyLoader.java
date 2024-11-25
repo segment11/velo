@@ -488,6 +488,17 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         return keyBucket.getValueByKey(keyBytes, keyHash);
     }
 
+    int warmUp() {
+        int n = 0;
+        for (var fdReadWrite : fdReadWriteArray) {
+            if (fdReadWrite == null) {
+                continue;
+            }
+            n += fdReadWrite.warmUp();
+        }
+        return n;
+    }
+
     // not exact correct when split, just for test or debug, not public
     @TestOnly
     void putValueByKey(int bucketIndex, byte[] keyBytes, long keyHash, long expireAt, long seq, byte[] valueBytes) {

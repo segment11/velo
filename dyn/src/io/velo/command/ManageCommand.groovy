@@ -283,6 +283,9 @@ class ManageCommand extends BaseCommand {
         } else if (subSubCmd == 'set-not-can-read') {
             oneSlot.canRead = false
             return new BulkReply(('slot ' + slot + ' set not can read').bytes)
+        } else if (subSubCmd == 'key-buckets-warm-up') {
+            def n = oneSlot.warmUp()
+            return new IntegerReply(n)
         }
 
         return ErrorReply.SYNTAX

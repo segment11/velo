@@ -278,6 +278,11 @@ class KeyLoaderTest extends Specification {
         isRemoved
         keyLoader.getValueByKey(0, 'a'.bytes, 10L) == null
 
+        when:
+        def n = keyLoader.warmUp()
+        then:
+        n >= 0
+
         cleanup:
         println 'in memory size estimate: ' + keyLoader.estimate()
         keyLoader.flush()

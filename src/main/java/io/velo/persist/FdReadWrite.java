@@ -13,6 +13,7 @@ import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import jnr.constants.platform.OpenFlags;
 import jnr.ffi.LastError;
+import jnr.ffi.Runtime;
 import jnr.posix.LibC;
 import org.apache.commons.collections4.map.LRUMap;
 import org.apache.commons.io.FileUtils;
@@ -538,6 +539,56 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         return readInnerByBuffer(oneInnerIndex, buffer, isRefreshLRUCache, buffer.capacity());
     }
 
+    @TestOnly
+    public int warmUp() {
+        // only for key bucket fd
+        if (isChunkFd) {
+            throw new IllegalArgumentException("Chunk fd not support warm up");
+        }
+
+        if (oneInnerBytesByIndexLRU == null) {
+            oneInnerBytesByIndexLRU = new LRUMap<>(ConfForSlot.global.confBucket.bucketsPerSlot);
+        }
+
+        int oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
+        var walGroupNumber = Wal.calcWalGroupNumber();
+
+        int n = 0;
+        for (int i = 0; i < walGroupNumber; i++) {
+            var beginBucketIndex = i * oneChargeBucketNumber;
+            var sharedBytes = readKeyBucketsSharedBytesInOneWalGroup(beginBucketIndex);
+
+            if (sharedBytes == null) {
+                n += oneChargeBucketNumber;
+                continue;
+            }
+
+            for (int j = 0; j < oneChargeBucketNumber; j++) {
+                var bucketIndex = beginBucketIndex + j;
+                var start = oneInnerLength * j;
+                var end = start + oneInnerLength;
+
+                if (start >= sharedBytes.length) {
+                    n++;
+                    continue;
+                }
+
+                var bytes = Arrays.copyOfRange(sharedBytes, start, end);
+                var compressedBytes = Zstd.compress(bytes);
+
+                oneInnerBytesByIndexLRU.put(bucketIndex, compressedBytes);
+                n++;
+
+                if (n % 1024 == 0) {
+                    log.info("Warm up key bucket fd, name={}, bucket index={}, n={}", name, bucketIndex, n);
+                }
+            }
+        }
+
+        // n should be ConfForSlot.global.confBucket.bucketsPerSlot
+        return n;
+    }
+
     private byte[] readInnerByBuffer(int oneInnerIndex, ByteBuffer buffer, boolean isRefreshLRUCache, int length) {
         checkOneInnerIndex(oneInnerIndex);
         if (length > buffer.capacity()) {
@@ -950,11 +1001,13 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             }
             log.info("Truncate fd={}, name={}", fd, name);
         } else {
-            try {
-                raf.setLength(0);
-                log.info("Truncate raf, name={}", name);
-            } catch (IOException e) {
-                throw new RuntimeException("Truncate error, name=" + name, e);
+            if (raf != null) {
+                try {
+                    raf.setLength(0);
+                    log.info("Truncate raf, name={}", name);
+                } catch (IOException e) {
+                    throw new RuntimeException("Truncate error, name=" + name, e);
+                }
             }
         }
 
@@ -965,7 +1018,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     }
 
     private String strerror() {
-        var systemRuntime = jnr.ffi.Runtime.getSystemRuntime();
+        var systemRuntime = Runtime.getSystemRuntime();
         var errno = LastError.getLastError(systemRuntime);
         return libC.strerror(errno);
     }
