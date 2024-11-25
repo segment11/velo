@@ -191,12 +191,12 @@ task copyDependencies(type: Copy) {
 }
 
 task cBuild(type: Exec) {
-    commandLine = ['gcc', 'src/main/c/get_o_direct.c', '-o', 'build/tmp/get_o_direct']
+    commandLine = ['gcc', 'src/main/c/get_o_direct.c', '-o', 'build/get_o_direct']
 }
 
 task cRun(type: Exec) {
     def output = new ByteArrayOutputStream()
-    commandLine = 'build/tmp/get_o_direct'
+    commandLine = 'build/get_o_direct'
     standardOutput = output
     doLast {
         new File('src/main/resources/velo_extend.properties').text = 'o_direct=' + output.toString().trim()
