@@ -728,7 +728,7 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.eventLoopIdleMillis = config.get(ofInteger(), "eventloop.idleMillis", 10);
             log.warn("Global config, eventLoopIdleMillis={}", ConfForGlobal.eventLoopIdleMillis);
 
-            ConfForGlobal.isUseDirectIO = config.get(ofBoolean(), "isUseDirectIO", false);
+            ConfForGlobal.isUseDirectIO = config.get(ofBoolean(), "persist.isUseDirectIO", false);
             log.warn("Global config, isUseDirectIO={}", ConfForGlobal.isUseDirectIO);
 
             ConfForGlobal.PASSWORD = config.get(ofString(), "password", null);
@@ -772,7 +772,7 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.clusterEnabled = config.get(ofBoolean(), "clusterEnabled", false);
             log.warn("Global config, clusterEnabled={}", ConfForGlobal.clusterEnabled);
 
-            ConfForGlobal.doubleScale = config.get(ofInteger(), "doubleScale", 2);
+            ConfForGlobal.doubleScale = config.get(ofInteger(), "number.doubleScale", 2);
             log.warn("Global config, doubleScale={}", ConfForGlobal.doubleScale);
 
             DictMap.TO_COMPRESS_MIN_DATA_LENGTH = config.get(ofInteger(), "toCompressMinDataLength", 64);
@@ -787,6 +787,7 @@ public class MultiWorkerServer extends Launcher {
             if (debugMode) {
                 c.confBucket.bucketsPerSlot = ConfForSlot.ConfBucket.debugMode.bucketsPerSlot;
                 c.confBucket.initialSplitNumber = ConfForSlot.ConfBucket.debugMode.initialSplitNumber;
+                c.confBucket.lruPerFd.maxSize = ConfForSlot.ConfBucket.debugMode.bucketsPerSlot;
 
                 c.confChunk.segmentNumberPerFd = ConfForSlot.ConfChunk.debugMode.segmentNumberPerFd;
                 c.confChunk.fdPerChunk = ConfForSlot.ConfChunk.debugMode.fdPerChunk;
