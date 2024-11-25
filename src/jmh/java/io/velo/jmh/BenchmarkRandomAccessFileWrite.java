@@ -40,7 +40,7 @@ public class BenchmarkRandomAccessFileWrite {
 
         for (int i = 0; i < fileNumber; i++) {
             var file = new File(targetDir, "/test_write_jmh_" + i);
-            FileInit.append2GBFile(file, false);
+            FileInit.append2GBFile(file, true);
 
             var raf = new RandomAccessFile(file, "rw");
             rafList.add(raf);
