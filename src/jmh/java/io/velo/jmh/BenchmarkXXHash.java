@@ -42,22 +42,22 @@ public class BenchmarkXXHash {
 
     /*
 Benchmark                     (size)   Mode  Cnt  Score   Error   Units
-BenchmarkXXHash.hash32       1000000  thrpt       8.125          ops/us
-BenchmarkXXHash.hash32      10000000  thrpt       5.308          ops/us
-BenchmarkXXHash.hash32Java   1000000  thrpt       7.709          ops/us
-BenchmarkXXHash.hash32Java  10000000  thrpt       5.469          ops/us
-BenchmarkXXHash.hash64       1000000  thrpt       8.044          ops/us
-BenchmarkXXHash.hash64      10000000  thrpt       5.345          ops/us
-BenchmarkXXHash.hash64Java   1000000  thrpt       8.825          ops/us
-BenchmarkXXHash.hash64Java  10000000  thrpt       5.573          ops/us
-BenchmarkXXHash.hash32       1000000   avgt       0.123           us/op
-BenchmarkXXHash.hash32      10000000   avgt       0.187           us/op
-BenchmarkXXHash.hash32Java   1000000   avgt       0.113           us/op
-BenchmarkXXHash.hash32Java  10000000   avgt       0.181           us/op
-BenchmarkXXHash.hash64       1000000   avgt       0.123           us/op
-BenchmarkXXHash.hash64      10000000   avgt       0.188           us/op
-BenchmarkXXHash.hash64Java   1000000   avgt       0.127           us/op
-BenchmarkXXHash.hash64Java  10000000   avgt       0.181           us/op
+io.velo.jmh.BenchmarkXXHash.hash32       1000000  thrpt       8.125          ops/us
+io.velo.jmh.BenchmarkXXHash.hash32      10000000  thrpt       5.308          ops/us
+io.velo.jmh.BenchmarkXXHash.hash32Java   1000000  thrpt       7.709          ops/us
+io.velo.jmh.BenchmarkXXHash.hash32Java  10000000  thrpt       5.469          ops/us
+io.velo.jmh.BenchmarkXXHash.hash64       1000000  thrpt       8.044          ops/us
+io.velo.jmh.BenchmarkXXHash.hash64      10000000  thrpt       5.345          ops/us
+io.velo.jmh.BenchmarkXXHash.hash64Java   1000000  thrpt       8.825          ops/us
+io.velo.jmh.BenchmarkXXHash.hash64Java  10000000  thrpt       5.573          ops/us
+io.velo.jmh.BenchmarkXXHash.hash32       1000000   avgt       0.123           us/op
+io.velo.jmh.BenchmarkXXHash.hash32      10000000   avgt       0.187           us/op
+io.velo.jmh.BenchmarkXXHash.hash32Java   1000000   avgt       0.113           us/op
+io.velo.jmh.BenchmarkXXHash.hash32Java  10000000   avgt       0.181           us/op
+io.velo.jmh.BenchmarkXXHash.hash64       1000000   avgt       0.123           us/op
+io.velo.jmh.BenchmarkXXHash.hash64      10000000   avgt       0.188           us/op
+io.velo.jmh.BenchmarkXXHash.hash64Java   1000000   avgt       0.127           us/op
+io.velo.jmh.BenchmarkXXHash.hash64Java  10000000   avgt       0.181           us/op
      */
 
     @Benchmark

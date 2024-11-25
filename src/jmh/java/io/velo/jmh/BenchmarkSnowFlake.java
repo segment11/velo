@@ -19,8 +19,8 @@ public class BenchmarkSnowFlake {
 
     /*
 Benchmark                   Mode  Cnt  Score   Error   Units
-BenchmarkSnowFlake.nextId  thrpt       8.192          ops/us
-BenchmarkSnowFlake.nextId   avgt       0.244           us/op
+io.velo.jmh.BenchmarkSnowFlake.nextId  thrpt       8.192          ops/us
+io.velo.jmh.BenchmarkSnowFlake.nextId   avgt       0.244           us/op
      */
     @Benchmark
     public void nextId() {

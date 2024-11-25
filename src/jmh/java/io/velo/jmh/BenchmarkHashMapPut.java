@@ -42,15 +42,15 @@ public class BenchmarkHashMapPut {
     /*
     init capacity: 1000000
 Benchmark                  (size)                                                                                               (value)  Mode  Cnt    Score   Error  Units
-BenchmarkHashMapPut.put   1000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt        57.294          ms/op
-BenchmarkHashMapPut.put  10000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt       945.625          ms/op
+io.velo.jmh.BenchmarkHashMapPut.put   1000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt        57.294          ms/op
+io.velo.jmh.BenchmarkHashMapPut.put  10000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt       945.625          ms/op
      */
 
     /*
     init capacity: 10000000, no rehash
 Benchmark                  (size)                                                                                               (value)  Mode  Cnt    Score   Error  Units
-BenchmarkHashMapPut.put   1000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt        53.754          ms/op
-BenchmarkHashMapPut.put  10000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt       525.225          ms/op
+io.velo.jmh.BenchmarkHashMapPut.put   1000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt        53.754          ms/op
+io.velo.jmh.BenchmarkHashMapPut.put  10000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt       525.225          ms/op
      */
 
     @Benchmark
@@ -64,8 +64,8 @@ BenchmarkHashMapPut.put  10000000  value100--000000000-000000000-000000000-00000
 
 /*
 Benchmark                          (size)                                                                                               (value)  Mode  Cnt     Score   Error  Units
-BenchmarkHashMapPut.putToLRUMap   1000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt        244.653          ms/op
-BenchmarkHashMapPut.putToLRUMap  10000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt       2437.604          ms/op
+io.velo.jmh.BenchmarkHashMapPut.putToLRUMap   1000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt        244.653          ms/op
+io.velo.jmh.BenchmarkHashMapPut.putToLRUMap  10000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt       2437.604          ms/op
  */
 
     @Benchmark
@@ -79,8 +79,8 @@ BenchmarkHashMapPut.putToLRUMap  10000000  value100--000000000-000000000-0000000
 
     /*
 Benchmark                        (size)                                                                                               (value)  Mode  Cnt      Score   Error  Units
-BenchmarkHashMapPut.putToTree   1000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt         612.503          ms/op
-BenchmarkHashMapPut.putToTree  10000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt       11358.692          ms/op
+io.velo.jmh.BenchmarkHashMapPut.putToTree   1000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt         612.503          ms/op
+io.velo.jmh.BenchmarkHashMapPut.putToTree  10000000  value100--000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-000000000-  avgt       11358.692          ms/op
      */
     @Benchmark
     public void putToTree() {

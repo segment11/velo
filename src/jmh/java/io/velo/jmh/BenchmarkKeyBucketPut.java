@@ -41,10 +41,10 @@ public class BenchmarkKeyBucketPut {
 
     /*
 Benchmark                        (size)  Mode  Cnt   Score   Error  Units
-BenchmarkKeyBucketPut.put         10000  avgt        2.458          ms/op
-BenchmarkKeyBucketPut.put        100000  avgt       24.519          ms/op
-BenchmarkKeyBucketPut.putAndGet   10000  avgt        2.456          ms/op
-BenchmarkKeyBucketPut.putAndGet  100000  avgt       24.516          ms/op
+io.velo.jmh.BenchmarkKeyBucketPut.put         10000  avgt        2.458          ms/op
+io.velo.jmh.BenchmarkKeyBucketPut.put        100000  avgt       24.519          ms/op
+io.velo.jmh.BenchmarkKeyBucketPut.putAndGet   10000  avgt        2.456          ms/op
+io.velo.jmh.BenchmarkKeyBucketPut.putAndGet  100000  avgt       24.516          ms/op
      */
 
     @Benchmark
@@ -91,7 +91,7 @@ BenchmarkKeyBucketPut.putAndGet  100000  avgt       24.516          ms/op
                 .build();
         new Runner(opt).run();
 
-//        var x = new BenchmarkKeyBucketPut();
+//        var x = new io.velo.jmh.BenchmarkKeyBucketPut();
 //        x.size = 100;
 //        x.setup();
 //

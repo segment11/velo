@@ -61,28 +61,28 @@ public class BenchmarkRandomAccessFileWrite {
     /*
     Threads: 16
 Benchmark                             (fileNumber)   Mode  Cnt     Score   Error   Units
-BenchmarkRandomAccessFileWrite.write             1  thrpt       1452.945          ops/ms
-BenchmarkRandomAccessFileWrite.write             2  thrpt        706.777          ops/ms
-BenchmarkRandomAccessFileWrite.write             1   avgt          0.012           ms/op
-BenchmarkRandomAccessFileWrite.write             2   avgt          0.026           ms/op
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             1  thrpt       1452.945          ops/ms
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             2  thrpt        706.777          ops/ms
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             1   avgt          0.012           ms/op
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             2   avgt          0.026           ms/op
      */
 
     /*
     Threads: 4
 Benchmark                             (fileNumber)   Mode  Cnt     Score   Error   Units
-BenchmarkRandomAccessFileWrite.write             1  thrpt       2871.535          ops/ms
-BenchmarkRandomAccessFileWrite.write             2  thrpt       1103.567          ops/ms
-BenchmarkRandomAccessFileWrite.write             1   avgt          0.001           ms/op
-BenchmarkRandomAccessFileWrite.write             2   avgt          0.004           ms/op
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             1  thrpt       2871.535          ops/ms
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             2  thrpt       1103.567          ops/ms
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             1   avgt          0.001           ms/op
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             2   avgt          0.004           ms/op
      */
 
     /*
     Threads: 1
 Benchmark                             (fileNumber)   Mode  Cnt     Score   Error   Units
-BenchmarkRandomAccessFileWrite.write             1  thrpt       1148.828          ops/ms
-BenchmarkRandomAccessFileWrite.write             2  thrpt        553.281          ops/ms
-BenchmarkRandomAccessFileWrite.write             1   avgt          0.001           ms/op
-BenchmarkRandomAccessFileWrite.write             2   avgt          0.002           ms/op
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             1  thrpt       1148.828          ops/ms
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             2  thrpt        553.281          ops/ms
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             1   avgt          0.001           ms/op
+io.velo.jmh.BenchmarkRandomAccessFileWrite.write             2   avgt          0.002           ms/op
      */
 
     @Benchmark

@@ -2,6 +2,7 @@ plugins {
     id 'jacoco'
     id 'java'
     id 'groovy'
+    id 'me.champeau.jmh' version '0.7.2'
 }
 
 group = 'com.montplex'
@@ -115,8 +116,8 @@ dependencies {
     implementation group: 'io.github.segment11', name: 'segment_common', version: '1.2-SNAPSHOT'
     implementation group: 'io.github.segment11', name: 'segmentweb', version: '1.2-SNAPSHOT'
 
-    testImplementation group: 'org.openjdk.jmh', name: 'jmh-core', version: '1.35'
-    testAnnotationProcessor group: 'org.openjdk.jmh', name: 'jmh-generator-annprocess', version: '1.35'
+    implementation group: 'org.openjdk.jmh', name: 'jmh-core', version: '1.35'
+    implementation group: 'org.openjdk.jmh', name: 'jmh-generator-annprocess', version: '1.35'
 
     testImplementation group: 'org.openjdk.jol', name: 'jol-core', version: '0.17'
     testImplementation group: 'org.spockframework', name: 'spock-core', version: '2.3-groovy-4.0'
@@ -169,6 +170,19 @@ jar {
 tasks.withType(Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
+
+task testJar(type: Jar) {
+    archiveClassifier.set('tests')
+    from sourceSets.test.output
+    include '**/*.class'
+}
+
+task copyTestDependencies(type: Copy) {
+    from configurations.testRuntimeClasspath
+    into 'build/libs/lib'
+}
+
+testJar.dependsOn copyTestDependencies
 
 task copyDynScript(type: Copy) {
     from './dyn/src'
