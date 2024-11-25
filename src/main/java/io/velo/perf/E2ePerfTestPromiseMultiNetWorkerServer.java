@@ -1,4 +1,4 @@
-package io.velo;
+package io.velo.perf;
 
 import io.activej.bytebuf.ByteBuf;
 import io.activej.launcher.Launcher;

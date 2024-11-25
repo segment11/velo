@@ -1,4 +1,4 @@
-package io.velo;
+package io.velo.perf;
 
 import io.activej.bytebuf.ByteBuf;
 import io.activej.config.Config;
@@ -41,8 +41,8 @@ import static io.activej.launchers.initializers.Initializers.ofEventloop;
 import static io.activej.launchers.initializers.Initializers.ofPrimaryServer;
 
 public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
-    private final int PORT = 7379;
-    public static final int WORKERS = 1;
+    private final int DEFAULT_PORT = 7379;
+    private static final int DEFAULT_NET_WORKERS = 1;
 
     public static final String PROPERTIES_FILE = "velo.properties";
 
@@ -67,7 +67,7 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
 
     @Provides
     WorkerPool workerPool(WorkerPools workerPools, Config config) {
-        return workerPools.createPool(config.get(ofInteger(), "workers", WORKERS));
+        return workerPools.createPool(config.get(ofInteger(), "netWorkers", DEFAULT_NET_WORKERS));
     }
 
     @Provides
@@ -80,7 +80,7 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
     @Provides
     Config config() {
         return Config.create()
-                .with("net.listenAddresses", Config.ofValue(ofInetSocketAddress(), new InetSocketAddress(PORT)))
+                .with("net.listenAddresses", Config.ofValue(ofInetSocketAddress(), new InetSocketAddress(DEFAULT_PORT)))
                 .overrideWith(ofClassPathProperties(PROPERTIES_FILE, true))
                 .overrideWith(ofSystemProperties("velo-config"));
     }
