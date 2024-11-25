@@ -541,11 +541,7 @@ public class LGroup extends BaseCommand {
         byte[][] valueBytesArr = new byte[data.length - 2][];
         for (int i = 2; i < data.length; i++) {
             var elementValueBytes = data[i];
-            if (addFirst) {
-                valueBytesArr[i - 2] = elementValueBytes;
-            } else {
-                valueBytesArr[data.length - i - 1] = elementValueBytes;
-            }
+            valueBytesArr[i - 2] = elementValueBytes;
 
             if (elementValueBytes.length > CompressedValue.VALUE_MAX_LENGTH) {
                 return ErrorReply.VALUE_TOO_LONG;
