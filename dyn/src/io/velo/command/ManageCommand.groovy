@@ -286,6 +286,53 @@ class ManageCommand extends BaseCommand {
         } else if (subSubCmd == 'key-buckets-warm-up') {
             def n = oneSlot.warmUp()
             return new IntegerReply(n)
+        } else if (subSubCmd == 'mock-data') {
+            if (data.length != 7) {
+                return ErrorReply.FORMAT
+            }
+
+            // eg. manage slot 0 mock-data n=1000000 k=16 d=200
+            final String keyPrefix = 'key:'
+
+            int n
+            int k
+            int d
+            try {
+                n = Integer.parseInt(new String(data[4]).split('=')[1])
+                k = Integer.parseInt(new String(data[5]).split('=')[1])
+                d = Integer.parseInt(new String(data[6]).split('=')[1])
+            } catch (NumberFormatException ignored) {
+                return ErrorReply.INVALID_INTEGER
+            }
+
+            final int redisBenchmarkKeyLength = 16
+            if (k < redisBenchmarkKeyLength) {
+                return new ErrorReply('k must be greater than ' + redisBenchmarkKeyLength)
+            }
+
+            int skipN = 0
+            int putN = 0
+
+            def mockValue = 'x' * d
+            def mockValueBytes = mockValue.bytes
+
+            def beginT = System.currentTimeMillis()
+            for (int i = 0; i < n; i++) {
+                def key = keyPrefix + i.toString().padLeft(k - keyPrefix.length(), '0')
+                def keyBytes = key.bytes
+                def s = super.slot(keyBytes)
+                if (s.slot() != slot) {
+                    skipN++
+                    continue
+                }
+
+                set(keyBytes, mockValueBytes, s)
+                putN++
+            }
+            def costT = System.currentTimeMillis() - beginT
+
+            log.warn 'Manage mock-data, slot={}, putN={}, skipN={}, costT={}ms', slot, putN, skipN, costT
+            return new BulkReply(('slot ' + slot + ' mock-data, putN=' + putN + ', skipN=' + skipN + ', costT=' + costT + 'ms').bytes)
         }
 
         return ErrorReply.SYNTAX

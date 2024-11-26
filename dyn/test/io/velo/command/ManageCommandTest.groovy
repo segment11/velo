@@ -571,7 +571,7 @@ class ManageCommandTest extends Specification {
         reply instanceof BulkReply
 
         when:
-        data4[3] = 'key-buckets-warm-up'
+        data4[3] = 'key-buckets-warm-up'.bytes
         reply = manage.manageInOneSlot()
         then:
         reply instanceof IntegerReply
@@ -657,6 +657,39 @@ class ManageCommandTest extends Specification {
         reply = manage.manageInOneSlot()
         then:
         reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        def data7_ = new byte[7][]
+        data7_[1] = 'slot'.bytes
+        data7_[2] = '0'.bytes
+        data7_[3] = 'mock-data'.bytes
+        data7_[4] = 'n=100000'.bytes
+        data7_[5] = 'k=16'.bytes
+        data7_[6] = 'd=16'.bytes
+        manage.data = data7_
+        reply = manage.manageInOneSlot()
+        then:
+        reply instanceof BulkReply
+
+        when:
+        data7_[5] = 'k=xx'.bytes
+        reply = manage.manageInOneSlot()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        data7_[5] = 'k=14'.bytes
+        reply = manage.manageInOneSlot()
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        data5[2] = '0'.bytes
+        data5[3] = 'mock-data'.bytes
+        manage.data = data5
+        reply = manage.manageInOneSlot()
+        then:
+        reply == ErrorReply.FORMAT
 
         when:
         def data1 = new byte[1][]
