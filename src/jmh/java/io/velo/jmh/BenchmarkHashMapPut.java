@@ -1,6 +1,6 @@
 package io.velo.jmh;
 
-import com.fasterxml.jackson.databind.util.LRUMap;
+import org.apache.commons.collections4.map.LRUMap;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
@@ -70,7 +70,7 @@ io.velo.jmh.BenchmarkHashMapPut.putToLRUMap  10000000  value100--000000000-00000
 
     @Benchmark
     public void putToLRUMap() {
-        var map = new LRUMap<String, String>(100000, 1000000);
+        var map = new LRUMap<String, String>(size / 10);
         for (int i = 0; i < size; i++) {
             var key = keys[i];
             map.put(key, value);
