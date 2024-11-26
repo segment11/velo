@@ -325,29 +325,24 @@ class ManageCommand extends BaseCommand {
                 updateKeyBucketsAndChunkSegmentsDirectlyMinKeyNumber = n
             }
 
-            int old = Chunk.ONCE_PREPARE_SEGMENT_COUNT
-            try {
-                if (n >= updateKeyBucketsAndChunkSegmentsDirectlyMinKeyNumber && !ConfForSlot.global.confChunk.isSegmentUseCompression) {
-                    Chunk.ONCE_PREPARE_SEGMENT_COUNT = 128
+            if (n >= updateKeyBucketsAndChunkSegmentsDirectlyMinKeyNumber && !ConfForSlot.global.confChunk.isSegmentUseCompression) {
+                Chunk.ONCE_PREPARE_SEGMENT_COUNT = 128
 
-                    // s list size may be = 32 * 48 / 2 = 768
-                    def batchDone = setBigBatchKeyValues(n, keyPrefix, mockValueBytes, k, oneSlot)
-                    putN = batchDone.putN
-                    skipN = batchDone.skipN
-                    costT = batchDone.costT
+                // s list size may be = 32 * 48 / 2 = 768
+                def batchDone = setBigBatchKeyValues(n, keyPrefix, mockValueBytes, k, oneSlot)
+                putN = batchDone.putN
+                skipN = batchDone.skipN
+                costT = batchDone.costT
 
-                    def batchDone2 = setBatchKeyValues((n / 10).intValue(), keyPrefix, mockValueBytes, k, slot)
-                    putN += batchDone2.putN
-                    skipN += batchDone2.skipN
-                    costT += batchDone2.costT
-                } else {
-                    def batchDone = setBatchKeyValues(n, keyPrefix, mockValueBytes, k, slot)
-                    putN = batchDone.putN
-                    skipN = batchDone.skipN
-                    costT = batchDone.costT
-                }
-            } finally {
-                Chunk.ONCE_PREPARE_SEGMENT_COUNT = old
+                def batchDone2 = setBatchKeyValues((n / 10).intValue(), keyPrefix, mockValueBytes, k, slot)
+                putN += batchDone2.putN
+                skipN += batchDone2.skipN
+                costT += batchDone2.costT
+            } else {
+                def batchDone = setBatchKeyValues(n, keyPrefix, mockValueBytes, k, slot)
+                putN = batchDone.putN
+                skipN = batchDone.skipN
+                costT = batchDone.costT
             }
 
             return new BulkReply(('slot ' + slot + ' mock-data, putN=' + putN + ', skipN=' + skipN + ', costT=' + costT + 'ms').bytes)
