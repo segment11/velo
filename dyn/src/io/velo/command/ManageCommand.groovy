@@ -421,7 +421,7 @@ class ManageCommand extends BaseCommand {
             def xForBinlog = new XOneWalGroupPersist(true, false, 0)
             oneSlot.chunk.persist(walGroupIndex, vList, false, xForBinlog, null)
         }
-        costT = System.currentTimeMillis() - beginT
+        costT += System.currentTimeMillis() - beginT
         log.warn 'Manage mock-data, set big batch key values, slot={}, costT={}ms', oneSlot.slot(), costT
 
         new BatchDone(putN, skipN, costT)
