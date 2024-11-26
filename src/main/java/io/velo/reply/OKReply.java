@@ -9,7 +9,7 @@ public class OKReply implements Reply {
     public static final OKReply INSTANCE = new OKReply();
 
     private static final byte[] OK = new byte[]{'+', 'O', 'K', '\r', '\n'};
-    private static final byte[] OK_BYTES = "OK".getBytes();
+    private static final byte[] HTTP_BODY_BYTES = "OK".getBytes();
 
     @Override
     public ByteBuf buffer() {
@@ -18,6 +18,6 @@ public class OKReply implements Reply {
 
     @Override
     public ByteBuf bufferAsHttp() {
-        return ByteBuf.wrapForReading(OK_BYTES);
+        return ByteBuf.wrapForReading(HTTP_BODY_BYTES);
     }
 }

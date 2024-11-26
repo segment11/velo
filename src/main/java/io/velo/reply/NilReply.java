@@ -11,7 +11,7 @@ public class NilReply implements Reply {
 
     private static final byte[] NIL = new BulkReply().buffer().asArray();
     // EOF ?
-    private static final byte[] NIL_HTTP_BODY_BYTES = "".getBytes();
+    private static final byte[] HTTP_BODY_BYTES = "".getBytes();
 
     @Override
     public ByteBuf buffer() {
@@ -28,7 +28,7 @@ public class NilReply implements Reply {
 
     @Override
     public ByteBuf bufferAsHttp() {
-        return ByteBuf.wrapForReading(NIL_HTTP_BODY_BYTES);
+        return ByteBuf.wrapForReading(HTTP_BODY_BYTES);
     }
 
     @TestOnly
