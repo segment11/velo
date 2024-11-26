@@ -582,6 +582,19 @@ public class MultiWorkerServer extends Launcher {
         logger.info("Prometheus jvm hotspot metrics registered");
 
         UP_TIME = System.currentTimeMillis();
+
+        var isWarmUpWhenStart = configInject.get(ofBoolean(), "bucket.lruPerFd.isWarmUpWhenStart", false);
+        if (isWarmUpWhenStart) {
+            var oneSlots = localPersist.oneSlots();
+
+            var beginT = System.currentTimeMillis();
+            for (var oneSlot : oneSlots) {
+                var n = oneSlot.warmUp();
+                log.info("Warm up slot={}, warm up n={}", oneSlot.slot(), n);
+            }
+            var costT = System.currentTimeMillis() - beginT;
+            log.info("Warm up cost time={}ms", costT);
+        }
     }
 
     // run in primary eventloop
@@ -718,7 +731,7 @@ public class MultiWorkerServer extends Launcher {
             log.warn("Global config, datacenterId={}", ConfForGlobal.datacenterId);
             log.warn("Global config, machineId={}", ConfForGlobal.machineId);
 
-            ConfForGlobal.isValueSetUseCompression = config.get(ofBoolean(), "isValueSetUseCompression", true);
+            ConfForGlobal.isValueSetUseCompression = config.get(ofBoolean(), "isValueSetUseCompression", false);
             ConfForGlobal.isOnDynTrainDictForCompression = config.get(ofBoolean(), "isOnDynTrainDictForCompression", false);
             log.warn("Global config, isValueSetUseCompression={}", ConfForGlobal.isValueSetUseCompression);
             log.warn("Global config, isOnDynTrainDictForCompression={}", ConfForGlobal.isOnDynTrainDictForCompression);
