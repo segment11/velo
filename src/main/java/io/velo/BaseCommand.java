@@ -306,6 +306,7 @@ public abstract class BaseCommand {
                     ", toClientSlot=" + toClientSlot +
                     ", bucketIndex=" + bucketIndex +
                     ", keyHash=" + keyHash +
+                    ", rawKey='" + rawKey + '\'' +
                     '}';
         }
 
