@@ -546,6 +546,10 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             throw new IllegalArgumentException("Chunk fd not support warm up");
         }
 
+        if (ConfForGlobal.pureMemory) {
+            return 0;
+        }
+
         if (oneInnerBytesByIndexLRU == null) {
             oneInnerBytesByIndexLRU = new LRUMap<>(ConfForSlot.global.confBucket.bucketsPerSlot);
         }

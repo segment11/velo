@@ -381,6 +381,13 @@ class FdReadWriteTest extends Specification {
         n == ConfForSlot.global.confBucket.bucketsPerSlot
 
         when:
+        ConfForGlobal.pureMemory = true
+        n = fdKeyBucket.warmUp()
+        then:
+        n == 0
+
+        when:
+        ConfForGlobal.pureMemory = false
         exception = false
         try {
             fdChunk.warmUp()
