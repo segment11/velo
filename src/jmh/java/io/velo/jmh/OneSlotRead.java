@@ -43,6 +43,7 @@ public class OneSlotRead {
 
     @Setup
     public void setup() throws IOException {
+        ConfForSlot.global = ConfForSlot.c1m;
         ConfForGlobal.netListenAddresses = "localhost:7379";
 
         var localPersist = LocalPersist.getInstance();
@@ -106,7 +107,14 @@ public class OneSlotRead {
 
     @TearDown
     public void tearDown() throws IOException {
-        LocalPersist.getInstance().cleanUp();
+        var localPersist = LocalPersist.getInstance();
+        var oneSlot = localPersist.oneSlot(slot);
+        var metrics = oneSlot.collect();
+        for (var m : metrics.entrySet()) {
+            System.out.println(m);
+        }
+
+        localPersist.cleanUp();
         FileUtils.deleteDirectory(persistDir);
         System.out.println("Delete " + persistDir);
     }
