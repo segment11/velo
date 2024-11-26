@@ -1,16 +1,17 @@
 package io.velo.command
 
 import groovy.transform.CompileStatic
+import groovy.transform.TupleConstructor
 import io.activej.promise.Promise
 import io.activej.promise.Promises
 import io.activej.promise.SettablePromise
-import io.velo.BaseCommand
-import io.velo.ConfForSlot
-import io.velo.Debug
-import io.velo.TrainSampleJob
+import io.velo.*
 import io.velo.persist.Chunk
 import io.velo.persist.LocalPersist
+import io.velo.persist.OneSlot
+import io.velo.persist.Wal
 import io.velo.repl.cluster.MultiShard
+import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.repl.support.JedisPoolHolder
 import io.velo.reply.*
 import io.velo.type.RedisHH
@@ -310,32 +311,147 @@ class ManageCommand extends BaseCommand {
                 return new ErrorReply('k must be greater than ' + redisBenchmarkKeyLength)
             }
 
-            int skipN = 0
-            int putN = 0
+            int skipN
+            int putN
+            long costT
 
             def mockValue = 'x' * d
             def mockValueBytes = mockValue.bytes
 
-            def beginT = System.currentTimeMillis()
-            for (int i = 0; i < n; i++) {
-                def key = keyPrefix + i.toString().padLeft(k - keyPrefix.length(), '0')
-                def keyBytes = key.bytes
-                def s = super.slot(keyBytes)
-                if (s.slot() != slot) {
-                    skipN++
-                    continue
-                }
-
-                set(keyBytes, mockValueBytes, s)
-                putN++
+            int updateKeyBucketsAndChunkSegmentsDirectlyMinKeyNumber = 100_000_000
+            // if nn, in big batch
+            def isNN = 'nn' == new String(data[4]).split('=')[0]
+            if (isNN) {
+                updateKeyBucketsAndChunkSegmentsDirectlyMinKeyNumber = n
             }
-            def costT = System.currentTimeMillis() - beginT
 
-            log.warn 'Manage mock-data, slot={}, putN={}, skipN={}, costT={}ms', slot, putN, skipN, costT
+            int old = Chunk.ONCE_PREPARE_SEGMENT_COUNT
+            try {
+                if (n >= updateKeyBucketsAndChunkSegmentsDirectlyMinKeyNumber && !ConfForSlot.global.confChunk.isSegmentUseCompression) {
+                    Chunk.ONCE_PREPARE_SEGMENT_COUNT = 128
+
+                    // s list size may be = 32 * 48 / 2 = 768
+                    def batchDone = setBigBatchKeyValues(n, keyPrefix, mockValueBytes, k, oneSlot)
+                    putN = batchDone.putN
+                    skipN = batchDone.skipN
+                    costT = batchDone.costT
+
+                    def batchDone2 = setBatchKeyValues((n / 10).intValue(), keyPrefix, mockValueBytes, k, slot)
+                    putN += batchDone2.putN
+                    skipN += batchDone2.skipN
+                    costT += batchDone2.costT
+                } else {
+                    def batchDone = setBatchKeyValues(n, keyPrefix, mockValueBytes, k, slot)
+                    putN = batchDone.putN
+                    skipN = batchDone.skipN
+                    costT = batchDone.costT
+                }
+            } finally {
+                Chunk.ONCE_PREPARE_SEGMENT_COUNT = old
+            }
+
             return new BulkReply(('slot ' + slot + ' mock-data, putN=' + putN + ', skipN=' + skipN + ', costT=' + costT + 'ms').bytes)
         }
 
         return ErrorReply.SYNTAX
+    }
+
+    @TupleConstructor
+    private class BatchDone {
+        int putN
+        int skipN
+        long costT
+    }
+
+    private BatchDone setBigBatchKeyValues(int n, String keyPrefix, byte[] mockValueBytes, int keyLength, OneSlot oneSlot) {
+        TreeMap<Integer, List<SlotWithKeyHash>> sListGroupByBucketIndex = new TreeMap<>()
+
+        int skipN = 0
+        int putN = 0
+        def beginT = System.currentTimeMillis()
+        for (int i = 0; i < n; i++) {
+            def key = keyPrefix + i.toString().padLeft(keyLength - keyPrefix.length(), '0')
+            def keyBytes = key.bytes
+            def s = super.slot(keyBytes)
+            if (s.slot() != oneSlot.slot()) {
+                skipN++
+                continue
+            }
+
+            sListGroupByBucketIndex.computeIfAbsent(s.bucketIndex(), k -> []).add(s)
+            putN++
+        }
+        def costT = System.currentTimeMillis() - beginT
+        log.warn 'Manage mock-data, set big batch key values, group by bucket index, slot={}, putN={}, skipN={}, costT={}ms',
+                oneSlot.slot(), putN, skipN, costT
+
+        beginT = System.currentTimeMillis()
+        def walGroupNumber = Wal.calcWalGroupNumber()
+        for (walGroupIndex in 0..<walGroupNumber) {
+            List<SlotWithKeyHash> sList = []
+
+            def beginBucketIndex = walGroupIndex * ConfForSlot.global.confWal.oneChargeBucketNumber
+            for (j in 0..<ConfForSlot.global.confWal.oneChargeBucketNumber) {
+                def bucketIndex = beginBucketIndex + j
+                def sListInBucket = sListGroupByBucketIndex.get(bucketIndex)
+                if (sListInBucket != null) {
+                    sList.addAll(sListInBucket)
+                }
+            }
+
+            if (walGroupIndex % 1024 == 0) {
+                log.info 'Manage mock-data, set big batch key values, slot={}, wal group index={}, begin bucket index={}, s list size={}',
+                        oneSlot.slot(), walGroupIndex, beginBucketIndex, sList.size()
+            }
+
+            if (sList.isEmpty()) {
+                log.warn 'Manage mock-data, set big batch key values, slot={}, wal group index={}, begin bucket index={}, skip',
+                        oneSlot.slot(), walGroupIndex, beginBucketIndex
+                continue
+            }
+
+            ArrayList<Wal.V> vList = []
+            for (s in sList) {
+                def seq = oneSlot.snowFlake.nextId()
+                def cv = new CompressedValue()
+                cv.seq = seq
+                cv.keyHash = s.keyHash()
+                cv.compressedData = mockValueBytes
+                cv.compressedLength = mockValueBytes.length
+                vList.add(new Wal.V(seq, s.bucketIndex(), s.keyHash(),
+                        CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                        s.rawKey(), cv.encode(), false))
+            }
+
+            def xForBinlog = new XOneWalGroupPersist(true, false, 0)
+            oneSlot.chunk.persist(walGroupIndex, vList, false, xForBinlog, null)
+        }
+        costT = System.currentTimeMillis() - beginT
+        log.warn 'Manage mock-data, set big batch key values, slot={}, costT={}ms', oneSlot.slot(), costT
+
+        new BatchDone(putN, skipN, costT)
+    }
+
+    private BatchDone setBatchKeyValues(int n, String keyPrefix, byte[] mockValueBytes, int keyLength, int toSlot) {
+        int skipN = 0
+        int putN = 0
+        def beginT = System.currentTimeMillis()
+        for (int i = 0; i < n; i++) {
+            def key = keyPrefix + i.toString().padLeft(keyLength - keyPrefix.length(), '0')
+            def keyBytes = key.bytes
+            def s = super.slot(keyBytes)
+            if (s.slot() != toSlot) {
+                skipN++
+                continue
+            }
+
+            set(keyBytes, mockValueBytes, s)
+            putN++
+        }
+        def costT = System.currentTimeMillis() - beginT
+        log.warn 'Manage mock-data, set batch key values, slot={}, putN={}, skipN={}, costT={}ms', toSlot, putN, skipN, costT
+
+        new BatchDone(putN, skipN, costT)
     }
 
     @VisibleForTesting

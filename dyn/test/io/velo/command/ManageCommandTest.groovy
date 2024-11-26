@@ -672,6 +672,13 @@ class ManageCommandTest extends Specification {
         reply instanceof BulkReply
 
         when:
+        ConfForSlot.global.confChunk.isSegmentUseCompression = false
+        data7_[4] = 'nn=100000'.bytes
+        reply = manage.manageInOneSlot()
+        then:
+        reply instanceof BulkReply
+
+        when:
         data7_[5] = 'k=xx'.bytes
         reply = manage.manageInOneSlot()
         then:
