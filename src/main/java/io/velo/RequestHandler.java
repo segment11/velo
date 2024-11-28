@@ -11,10 +11,12 @@ import io.velo.acl.U;
 import io.velo.command.*;
 import io.velo.decode.Request;
 import io.velo.metric.SimpleGauge;
+import io.velo.persist.LocalPersist;
 import io.velo.persist.ReadonlyException;
 import io.velo.repl.LeaderSelector;
 import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.cluster.MultiShardShadow;
+import io.velo.repl.cluster.MultiSlotRange;
 import io.velo.reply.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
@@ -41,6 +43,8 @@ public class RequestHandler {
     private static final String QUIT_COMMAND = "quit";
     private static final String ERROR_FOR_STAT_AS_COMMAND = "x_error";
     private static final String READONLY_FOR_STAT_AS_COMMAND = "x_readonly";
+
+    public static final String AS_KEY_GET_SLOT_RANGE_IN_CURRENT_CONNECTION_THREAD_LOCALLY = "x_slot_range";
 
     @VisibleForTesting
     final byte workerId;
@@ -546,6 +550,43 @@ public class RequestHandler {
                         log.error("XGroup handle error", e);
                         return new ErrorReply(e.getMessage());
                     }
+                }
+
+                // for redis protocol compatible client, get slot range in current connection thread
+                // so need not post to other threads when client use this connection, for performance
+                // need change Jedis to support this feature, refer BaseCommand.calSlotInRedisClientWhenNeedBetterPerf
+                if (key.equals(AS_KEY_GET_SLOT_RANGE_IN_CURRENT_CONNECTION_THREAD_LOCALLY)) {
+                    ArrayList<Short> slots = new ArrayList<>();
+
+                    // for redis cluster crc16 slots
+                    var eachSlotChargeRedisClusterSlotNumber = MultiShard.TO_CLIENT_SLOT_NUMBER / slotNumber;
+                    var multiSlotRange = new MultiSlotRange();
+
+                    var currentThreadId = Thread.currentThread().threadId();
+                    var localPersist = LocalPersist.getInstance();
+                    var oneSlots = localPersist.oneSlots();
+                    for (var oneSlot : oneSlots) {
+                        if (oneSlot.getThreadIdProtectedForSafe() == currentThreadId) {
+                            slots.add(oneSlot.slot());
+
+                            // for redis cluster crc16 slots
+                            var toClientSlotStart = oneSlot.slot() * eachSlotChargeRedisClusterSlotNumber;
+                            var toClientSlotEnd = toClientSlotStart + eachSlotChargeRedisClusterSlotNumber - 1;
+                            multiSlotRange.addSingle(toClientSlotStart, toClientSlotEnd);
+                        }
+                    }
+
+                    // reply join slots, eg: 0,2,4/0-1024,2048-3072,4096-5120
+                    var sb = new StringBuilder();
+                    for (int i = 0; i < slots.size(); i++) {
+                        sb.append(slots.get(i));
+                        if (i != slots.size() - 1) {
+                            sb.append(",");
+                        }
+                    }
+                    sb.append("/");
+                    sb.append(multiSlotRange);
+                    return new BulkReply(sb.toString().getBytes());
                 }
 
                 var gGroup = new GGroup(cmd, data, socket).init(this, request);

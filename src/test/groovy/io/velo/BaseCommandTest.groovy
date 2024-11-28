@@ -72,8 +72,24 @@ class BaseCommandTest extends Specification {
         s1.slot() == 0
         s1.bucketIndex() < 65536
         s1.keyHash() != 0
-
         s3.slot() == s4.slot()
+
+        when:
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = 16384
+        then:
+        BaseCommand.slot(k11.bytes, 16384).slot() == JedisClusterCRC16.getSlot(k11.bytes)
+
+        when:
+        def ss1 = BaseCommand.calSlotInRedisClientWhenNeedBetterPerf(k11.bytes, 1024, ConfForSlot.global.confBucket.bucketsPerSlot)
+        def ss3 = BaseCommand.calSlotInRedisClientWhenNeedBetterPerf(k3.bytes, 1024, ConfForSlot.global.confBucket.bucketsPerSlot)
+        then:
+        ss1 > 0
+        ss3 > 0
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = 1
     }
 
     def 'test init'() {

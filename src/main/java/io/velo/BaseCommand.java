@@ -11,6 +11,7 @@ import io.velo.repl.cluster.MultiShard;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
+import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.util.JedisClusterCRC16;
@@ -321,10 +322,48 @@ public abstract class BaseCommand {
         }
     }
 
+    @VisibleForTesting
+    static long tagHash(byte[] keyBytes) {
+        int hashTagBeginIndex = -1;
+        int hashTagEndIndex = -1;
+        for (int i = 0; i < keyBytes.length; i++) {
+            if (keyBytes[i] == '{') {
+                hashTagBeginIndex = i;
+            } else if (keyBytes[i] == '}') {
+                hashTagEndIndex = i;
+            }
+        }
+
+        if (hashTagBeginIndex >= 0 && hashTagEndIndex > hashTagBeginIndex) {
+            // hash tag
+            return KeyHash.hashOffset(keyBytes, hashTagBeginIndex + 1, hashTagEndIndex - hashTagBeginIndex - 1);
+        }
+
+        return 0L;
+    }
+
+    public static short calSlotInRedisClientWhenNeedBetterPerf(byte[] keyBytes, int slotNumber, int bucketsPerSlot) {
+        final int halfSlotNumber = slotNumber / 2;
+        final int x = halfSlotNumber * bucketsPerSlot;
+
+        var tagHash = tagHash(keyBytes);
+        if (tagHash != 0L) {
+            var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) % halfSlotNumber);
+            var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
+            return (short) slot;
+        }
+
+        var keyHash = KeyHash.hash(keyBytes);
+        var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) % halfSlotNumber);
+        var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
+        return (short) slot;
+    }
+
     public static SlotWithKeyHash slot(byte[] keyBytes, int slotNumber) {
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
         var keyHash = KeyHash.hash(keyBytes);
+        // bucket index always use xxhash 64
         var bucketIndex = Math.abs(keyHash % bucketsPerSlot);
 
         if (ConfForGlobal.clusterEnabled) {
@@ -337,21 +376,8 @@ public abstract class BaseCommand {
         final int halfSlotNumber = slotNumber / 2;
         final int x = halfSlotNumber * bucketsPerSlot;
 
-        // check hash tag
-        int hashTagBeginIndex = -1;
-        int hashTagEndIndex = -1;
-        for (int i = 0; i < keyBytes.length; i++) {
-            if (keyBytes[i] == '{') {
-                hashTagBeginIndex = i;
-            } else if (keyBytes[i] == '}') {
-                hashTagEndIndex = i;
-            }
-        }
-        if (hashTagBeginIndex >= 0 && hashTagEndIndex > hashTagBeginIndex) {
-            // hash tag
-            var tagHash = KeyHash.hashOffset(keyBytes, hashTagBeginIndex + 1, hashTagEndIndex - hashTagBeginIndex - 1);
-
-            // same slot, but not same bucket index
+        var tagHash = tagHash(keyBytes);
+        if (tagHash != 0L) {
             var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) % halfSlotNumber);
             var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
             return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, new String(keyBytes));
