@@ -861,8 +861,8 @@ class LGroupTest extends Specification {
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 3
         finalPromise4.isComplete()
-        finalPromise4.getResult() instanceof BulkReply
-        ((BulkReply) finalPromise4.getResult()).raw == 'c'.bytes
+        finalPromise4.getResult() instanceof MultiBulkReply
+        ((finalPromise4.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'c'.bytes
 
         when:
         BGroup.clearBlockingListPromisesForAllKeys()
@@ -873,8 +873,8 @@ class LGroupTest extends Specification {
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 3 - 1 + 3
         finalPromise5.isComplete()
-        finalPromise5.getResult() instanceof BulkReply
-        ((BulkReply) finalPromise5.getResult()).raw == 'c'.bytes
+        finalPromise5.getResult() instanceof MultiBulkReply
+        ((finalPromise5.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]

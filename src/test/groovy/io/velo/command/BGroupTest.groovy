@@ -446,8 +446,8 @@ class BGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = bGroup.execute('blpop a 0')
         then:
-        reply instanceof BulkReply
-        (reply as BulkReply).raw == 'a'.bytes
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
         LGroup.getRedisList('a'.bytes, bGroup.slotWithKeyHashListParsed.getFirst(), bGroup) == null
 
         when:
