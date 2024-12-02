@@ -6,6 +6,7 @@ import io.activej.reactor.Reactor;
 import io.netty.buffer.Unpooled;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
+import io.velo.ConfForSlot;
 import io.velo.Debug;
 import io.velo.reply.*;
 import io.velo.type.RedisHashKeys;
@@ -13,6 +14,7 @@ import io.velo.type.RedisList;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
+import java.util.Random;
 import java.util.function.Consumer;
 
 public class RGroup extends BaseCommand {
@@ -71,6 +73,10 @@ public class RGroup extends BaseCommand {
     }
 
     public Reply handle() {
+        if ("randomkey".equals(cmd)) {
+            return randomkey();
+        }
+
         if ("rename".equals(cmd)) {
             return rename();
         }
@@ -99,6 +105,50 @@ public class RGroup extends BaseCommand {
             var lGroup = new LGroup(cmd, data, socket);
             lGroup.from(this);
             return lGroup.lpush(false, true);
+        }
+
+        return NilReply.INSTANCE;
+    }
+
+    @VisibleForTesting
+    Reply randomkey() {
+        if (data.length != 1) {
+            return ErrorReply.FORMAT;
+        }
+
+        var firstOneSlot = localPersist.currentThreadFirstOneSlot();
+
+        var random = new Random();
+        final int maxTryTimes = 10;
+        for (int i = 0; i < maxTryTimes; i++) {
+            var bucketIndex = random.nextInt(ConfForSlot.global.confBucket.bucketsPerSlot);
+            var keyCount = firstOneSlot.getKeyLoader().getKeyCountInBucketIndex(bucketIndex);
+            if (keyCount > 0) {
+                var skipN = random.nextInt(keyCount);
+                final int[] countArray = {0};
+                final byte[][] targetKeyBytesArray = new byte[1][1];
+
+                var keyBuckets = firstOneSlot.getKeyLoader().readKeyBuckets(bucketIndex);
+                for (var keyBucket : keyBuckets) {
+                    if (keyBucket == null) {
+                        continue;
+                    }
+
+                    keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+                        if (countArray[0] == skipN) {
+                            targetKeyBytesArray[0] = keyBytes;
+                            return;
+                        }
+                        countArray[0]++;
+                    });
+
+                    if (targetKeyBytesArray[0] != null) {
+                        break;
+                    }
+                }
+
+                return new BulkReply(targetKeyBytesArray[0]);
+            }
         }
 
         return NilReply.INSTANCE;

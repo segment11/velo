@@ -3,10 +3,12 @@ package io.velo.command
 import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
 import io.velo.CompressedValue
+import io.velo.ConfForSlot
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
+import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.reply.*
 import io.velo.type.RedisList
 import spock.lang.Specification
@@ -85,7 +87,16 @@ class RGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        def data2 = new byte[2][]
+        rGroup.cmd = 'randomkey'
+        rGroup.data = data2
+        reply = rGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         rGroup.cmd = 'restore'
+        rGroup.data = data1
         reply = rGroup.handle()
         then:
         reply == ErrorReply.FORMAT
@@ -101,6 +112,44 @@ class RGroupTest extends Specification {
         reply = rGroup.handle()
         then:
         reply == NilReply.INSTANCE
+    }
+
+    def 'test randomkey'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def rGroup = new RGroup(null, null, null)
+        rGroup.byPassGetSet = inMemoryGetSet
+        rGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        ConfForSlot.global = ConfForSlot.debugMode
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when:
+        def reply = rGroup.execute('randomkey')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        def oneSlot = localPersist.oneSlot(slot)
+        def keyLoader = oneSlot.keyLoader
+        for (i in 0..<ConfForSlot.global.confBucket.bucketsPerSlot) {
+            def shortValueList = Mock.prepareShortValueList(10, i)
+            def xForBinlog = new XOneWalGroupPersist(true, false, 0)
+            def walGroupIndex = (i / ConfForSlot.global.confWal.oneChargeBucketNumber).intValue()
+            keyLoader.persistShortValueListBatchInOneWalGroup(walGroupIndex, shortValueList, xForBinlog)
+        }
+        println 'done mock keys'
+        reply = rGroup.execute('randomkey')
+        then:
+        reply instanceof BulkReply
+
+        cleanup:
+        ConfForSlot.global = ConfForSlot.c1m
+        localPersist.cleanUp()
     }
 
     def 'test rename'() {
