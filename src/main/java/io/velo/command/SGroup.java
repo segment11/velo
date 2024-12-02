@@ -73,9 +73,9 @@ public class SGroup extends BaseCommand {
             if (data.length != 4) {
                 return slotWithKeyHashList;
             }
+
             var srcKeyBytes = data[1];
             var dstKeyBytes = data[2];
-
             var s1 = slot(srcKeyBytes, slotNumber);
             var s2 = slot(dstKeyBytes, slotNumber);
             slotWithKeyHashList.add(s1);

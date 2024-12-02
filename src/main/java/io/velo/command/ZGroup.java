@@ -114,7 +114,6 @@ public class ZGroup extends BaseCommand {
             // dst first, src last
             var dstKeyBytes = data[1];
             var srcKeyBytes = data[2];
-
             var s1 = slot(srcKeyBytes, slotNumber);
             var s2 = slot(dstKeyBytes, slotNumber);
             // add s1 first, important!!!
