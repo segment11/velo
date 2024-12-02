@@ -1062,6 +1062,9 @@ class OneSlotTest extends Specification {
 
         println 'lru in memory size: ' + oneSlot.inMemorySizeOfLRU()
 
+        expect:
+        oneSlot.randomKeyInLRU(0) == null
+
         when:
         def cvList = Mock.prepareCompressedValueList(100)
         for (cv in cvList) {
@@ -1072,7 +1075,7 @@ class OneSlotTest extends Specification {
         println 'lru in memory size: ' + oneSlot.inMemorySizeOfLRU()
         then:
         oneSlot.kvByWalGroupIndexLRUCountTotal() == 2 * (ConfForSlot.global.lruKeyAndCompressedValueEncoded.maxSize / Wal.calcWalGroupNumber()).intValue()
-        1 == 1
+        oneSlot.randomKeyInLRU(0) != null
 
         when:
         ConfForSlot.global.lruKeyAndCompressedValueEncoded.maxSize *= 4

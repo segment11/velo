@@ -8,6 +8,7 @@ import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.ConfForSlot;
 import io.velo.Debug;
+import io.velo.persist.Wal;
 import io.velo.reply.*;
 import io.velo.type.RedisHashKeys;
 import io.velo.type.RedisList;
@@ -122,6 +123,12 @@ public class RGroup extends BaseCommand {
         final int maxTryTimes = 10;
         for (int i = 0; i < maxTryTimes; i++) {
             var bucketIndex = random.nextInt(ConfForSlot.global.confBucket.bucketsPerSlot);
+            var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+            var keyInLRU = firstOneSlot.randomKeyInLRU(walGroupIndex);
+            if (keyInLRU != null) {
+                return new BulkReply(keyInLRU.getBytes());
+            }
+
             var keyCount = firstOneSlot.getKeyLoader().getKeyCountInBucketIndex(bucketIndex);
             if (keyCount > 0) {
                 var skipN = random.nextInt(keyCount);

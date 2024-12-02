@@ -544,6 +544,24 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     int lruClearedCount = 0;
 
+    public String randomKeyInLRU(int walGroupIndex) {
+        var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
+        if (lru == null || lru.isEmpty()) {
+            return null;
+        }
+
+        var random = new Random();
+        var skipN = random.nextInt(lru.size());
+        int count = 0;
+        for (var key : lru.keySet()) {
+            if (count == skipN) {
+                return key;
+            }
+            count++;
+        }
+        return null;
+    }
+
     int clearKvInTargetWalGroupIndexLRU(int walGroupIndex) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         if (lru == null) {
@@ -562,7 +580,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @TestOnly
-    void putKvInTargetWalGroupIndexLRU(int walGroupIndex, String key, byte[] cvEncoded) {
+    public void putKvInTargetWalGroupIndexLRU(int walGroupIndex, String key, byte[] cvEncoded) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         if (lru == null) {
             return;

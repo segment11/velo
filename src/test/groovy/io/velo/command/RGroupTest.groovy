@@ -5,9 +5,11 @@ import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.ConfForSlot
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
+import io.velo.persist.Wal
 import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.reply.*
 import io.velo.type.RedisList
@@ -139,7 +141,7 @@ class RGroupTest extends Specification {
         for (i in 0..<ConfForSlot.global.confBucket.bucketsPerSlot) {
             def shortValueList = Mock.prepareShortValueList(10, i)
             def xForBinlog = new XOneWalGroupPersist(true, false, 0)
-            def walGroupIndex = (i / ConfForSlot.global.confWal.oneChargeBucketNumber).intValue()
+            def walGroupIndex = Wal.calWalGroupIndex(i)
             keyLoader.persistShortValueListBatchInOneWalGroup(walGroupIndex, shortValueList, xForBinlog)
         }
         println 'done mock keys'
@@ -147,9 +149,21 @@ class RGroupTest extends Specification {
         then:
         reply instanceof BulkReply
 
+        when:
+        def cvList = Mock.prepareCompressedValueList(10)
+        for (walGroupIndex in 0..<Wal.calcWalGroupNumber()) {
+            for (cv in cvList) {
+                oneSlot.putKvInTargetWalGroupIndexLRU(walGroupIndex, 'key:' + cv.seq, cv.encode())
+            }
+        }
+        reply = rGroup.execute('randomkey')
+        then:
+        reply instanceof BulkReply
+
         cleanup:
         ConfForSlot.global = ConfForSlot.c1m
         localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test rename'() {
