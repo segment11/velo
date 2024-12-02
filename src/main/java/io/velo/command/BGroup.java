@@ -276,7 +276,11 @@ public class BGroup extends BaseCommand {
 
                 elementValueBytesArray[leftI] = null;
                 leftI++;
-                promise.settablePromise.set(new BulkReply(leftValueBytes));
+
+                var replies = new Reply[2];
+                replies[0] = new BulkReply(key.getBytes());
+                replies[1] = new BulkReply(leftValueBytes);
+                promise.settablePromise.set(new MultiBulkReply(replies));
             } else {
                 var index = elementValueBytesArray.length - 1 - rightI;
                 if (index < 0) {
@@ -291,7 +295,11 @@ public class BGroup extends BaseCommand {
 
                 elementValueBytesArray[index] = null;
                 rightI++;
-                promise.settablePromise.set(new BulkReply(rightValueBytes));
+
+                var replies = new Reply[2];
+                replies[0] = new BulkReply(key.getBytes());
+                replies[1] = new BulkReply(rightValueBytes);
+                promise.settablePromise.set(new MultiBulkReply(replies));
             }
         }
 
@@ -372,8 +380,12 @@ public class BGroup extends BaseCommand {
             }
         }
 
-        var valueBytes = rl.removeFirst();
+        var valueBytes = isLeft ? rl.removeFirst() : rl.removeLast();
         LGroup.saveRedisList(rl, keyBytes, slotWithKeyHash, this, dictMap);
-        return new BulkReply(valueBytes);
+
+        var replies = new Reply[2];
+        replies[0] = new BulkReply(keyBytes);
+        replies[1] = new BulkReply(valueBytes);
+        return new MultiBulkReply(replies);
     }
 }
