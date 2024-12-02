@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 
+import static io.velo.command.BGroup.MAX_TIMEOUT_SECONDS;
+
 public class LGroup extends BaseCommand {
     public LGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
@@ -19,12 +21,12 @@ public class LGroup extends BaseCommand {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
         if ("lmove".equals(cmd)) {
-            if (data.length != 5) {
+            if (data.length != 5 && data.length != 6) {
                 return slotWithKeyHashList;
             }
+
             var srcKeyBytes = data[1];
             var dstKeyBytes = data[2];
-
             var s1 = slot(srcKeyBytes, slotNumber);
             var s2 = slot(dstKeyBytes, slotNumber);
             slotWithKeyHashList.add(s1);
@@ -291,7 +293,15 @@ public class LGroup extends BaseCommand {
 
     @VisibleForTesting
     Reply lmove() {
-        if (data.length != 5) {
+        return lmove(false);
+    }
+
+    @VisibleForTesting
+    Reply lmove(boolean isBlock) {
+        if (!isBlock && data.length != 5) {
+            return ErrorReply.FORMAT;
+        }
+        if (isBlock && data.length != 6) {
             return ErrorReply.FORMAT;
         }
 
@@ -328,7 +338,23 @@ public class LGroup extends BaseCommand {
         var rGroup = new RGroup(cmd, data, socket);
         rGroup.from(this);
 
-        return rGroup.move(srcKeyBytes, srcSlotWithKeyHash, dstKeyBytes, dstSlotWithKeyHash, isSrcLeft, isDstLeft);
+        if (isBlock) {
+            var timeoutBytes = data[5];
+            int timeoutSeconds;
+            try {
+                timeoutSeconds = Integer.parseInt(new String(timeoutBytes));
+            } catch (NumberFormatException e) {
+                return ErrorReply.NOT_INTEGER;
+            }
+
+            if (timeoutSeconds > MAX_TIMEOUT_SECONDS) {
+                return new ErrorReply("timeout must be <= " + MAX_TIMEOUT_SECONDS);
+            }
+
+            return rGroup.moveBlock(srcKeyBytes, srcSlotWithKeyHash, dstKeyBytes, dstSlotWithKeyHash, isSrcLeft, isDstLeft, timeoutSeconds);
+        } else {
+            return rGroup.move(srcKeyBytes, srcSlotWithKeyHash, dstKeyBytes, dstSlotWithKeyHash, isSrcLeft, isDstLeft);
+        }
     }
 
     @VisibleForTesting
@@ -389,7 +415,7 @@ public class LGroup extends BaseCommand {
         }
 
         saveRedisList(rl, keyBytes, slotWithKeyHash, dictMap);
-        if (count == 1) {
+        if (!isWithCount) {
             return replies.getFirst();
         }
 
@@ -549,7 +575,7 @@ public class LGroup extends BaseCommand {
         }
 
         var key = new String(keyBytes);
-        var afterPopValueBytesArray = BGroup.setReplyIfBlockingListExist(key, valueBytesArr);
+        var afterPopValueBytesArray = BGroup.setReplyIfBlockingListExist(key, valueBytesArr, this);
         // no blocking for this key
         if (afterPopValueBytesArray == null) {
             return addToList(keyBytes, valueBytesArr, addFirst, false, false, null, needKeyExist);

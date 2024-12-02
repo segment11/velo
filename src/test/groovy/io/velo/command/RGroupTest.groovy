@@ -5,6 +5,7 @@ import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.type.RedisList
@@ -13,6 +14,7 @@ import spock.lang.Specification
 import java.time.Duration
 
 class RGroupTest extends Specification {
+    final short slot = 0
     def _RGroup = new RGroup(null, null, null)
 
     def 'test parse slot'() {
@@ -103,8 +105,6 @@ class RGroupTest extends Specification {
 
     def 'test rename'() {
         given:
-        final short slot = 0
-
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
@@ -173,30 +173,21 @@ class RGroupTest extends Specification {
 
     def 'test rpop'() {
         given:
-        final short slot = 0
-
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = '1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def rGroup = new RGroup('rpop', data3, null)
+        def rGroup = new RGroup(null, null, null)
         rGroup.byPassGetSet = inMemoryGetSet
         rGroup.from(BaseCommand.mockAGroup())
 
         when:
-        rGroup.slotWithKeyHashListParsed = _RGroup.parseSlots('rpop', data3, rGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = rGroup.handle()
+        def reply = rGroup.execute('rpop a')
         then:
         reply == NilReply.INSTANCE
     }
 
     def 'test rpoplpush'() {
         given:
-        final short slot = 0
-
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
@@ -279,8 +270,6 @@ class RGroupTest extends Specification {
 
     def 'test rpush and rpushx'() {
         given:
-        final short slot = 0
-
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'value'.bytes
@@ -305,5 +294,122 @@ class RGroupTest extends Specification {
         reply = rGroup.handle()
         then:
         reply == IntegerReply.REPLY_0
+    }
+
+    def 'test move block'() {
+        given:
+        def data3 = new byte[3][]
+        data3[1] = 'a'.bytes
+        data3[2] = 'value'.bytes
+
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def rGroup = new RGroup('', data3, null)
+        rGroup.byPassGetSet = inMemoryGetSet
+        rGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def s1 = BaseCommand.slot('a'.bytes, 1)
+        def s2 = BaseCommand.slot('b'.bytes, 1)
+        def reply = rGroup.moveBlock(
+                'a'.bytes, s1,
+                'b'.bytes, s2,
+                true, true, 0)
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        reply = rGroup.moveBlock(
+                'a'.bytes, s1,
+                'b'.bytes, s2,
+                true, true, 1)
+        Thread.sleep(2000)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result == NilReply.INSTANCE
+        }.result
+
+        when:
+        def rl = new RedisList()
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = rGroup.moveBlock(
+                'a'.bytes, s1,
+                'b'.bytes, s2,
+                true, true, 0)
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        reply = rGroup.moveBlock(
+                'a'.bytes, s1,
+                'b'.bytes, s2,
+                true, true, 1)
+        Thread.sleep(2000)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result == NilReply.INSTANCE
+        }.result
+
+        when:
+        rl.addFirst('1'.bytes)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = rGroup.moveBlock(
+                'a'.bytes, s1,
+                'b'.bytes, s2,
+                true, true, 0)
+        then:
+        reply instanceof BulkReply
+        ((BulkReply) reply).raw == '1'.bytes
+
+        when:
+        localPersist.cleanUp()
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        localPersist.fixSlotThreadId(s1.slot(), Thread.currentThread().threadId())
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+        Thread.sleep(100)
+        localPersist.fixSlotThreadId(s2.slot(), eventloop.eventloopThread.threadId())
+        localPersist.oneSlot(s2.slot()).netWorkerEventloop = eventloop
+        rl.addFirst('1'.bytes)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        rGroup.crossRequestWorker = true
+        reply = rGroup.moveBlock(
+                'a'.bytes, s1,
+                'b'.bytes, s2,
+                true, true, 0)
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result instanceof BulkReply && ((BulkReply) result).raw == '1'.bytes
+        }.result
+
+        cleanup:
+        eventloop.breakEventloop()
+        localPersist.cleanUp()
     }
 }

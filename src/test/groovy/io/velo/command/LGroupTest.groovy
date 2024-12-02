@@ -64,11 +64,18 @@ class LGroupTest extends Specification {
         sLmoveList.size() == 2
 
         when:
-        // wrong size
         def data6 = new byte[6][]
         data6[1] = 'a'.bytes
-        data6[2] = 'a'.bytes
+        data6[2] = 'b'.bytes
         sLmoveList = _LGroup.parseSlots('lmove', data6, slotNumber)
+        then:
+        sLmoveList.size() == 2
+
+        when:
+        def data7 = new byte[7][]
+        data7[1] = 'a'.bytes
+        data7[2] = 'b'.bytes
+        sLmoveList = _LGroup.parseSlots('lmove', data7, slotNumber)
         then:
         sLmoveList.size() == 0
     }
@@ -455,6 +462,36 @@ class LGroupTest extends Specification {
         reply = lGroup.lmove()
         then:
         reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        reply = lGroup.lmove(true)
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def data6 = new byte[6][]
+        data6[1] = 'a'.bytes
+        data6[2] = 'b'.bytes
+        data6[3] = 'left'.bytes
+        data6[4] = 'left'.bytes
+        data6[5] = '0'.bytes
+        lGroup.data = data6
+        reply = lGroup.lmove(true)
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        data6[5] = 'a'.bytes
+        reply = lGroup.lmove(true)
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        data6[5] = '3601'.bytes
+        reply = lGroup.lmove(true)
+        then:
+        reply instanceof ErrorReply
     }
 
     def 'test lpop'() {

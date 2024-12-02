@@ -30,14 +30,14 @@ class BGroupTest extends Specification {
         def bb = BGroup.setReplyIfBlockingListExist('a', elementValueBytesArray)
         then:
         settablePromise.isComplete()
-        settablePromise.getResult() instanceof BulkReply
-        (settablePromise.getResult() as BulkReply).raw == 'a'.bytes
+        settablePromise.getResult() instanceof MultiBulkReply
+        ((settablePromise.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
         bb.length == 0
 
         when:
-        var settablePromise2 = new SettablePromise<Reply>()
-        var settablePromise3 = new SettablePromise<Reply>()
-        var settablePromise4 = new SettablePromise<Reply>()
+        def settablePromise2 = new SettablePromise<Reply>()
+        def settablePromise3 = new SettablePromise<Reply>()
+        def settablePromise4 = new SettablePromise<Reply>()
         settablePromise2.set(NilReply.INSTANCE)
         BGroup.addBlockingListPromiseByKey('a', settablePromise2, true)
         BGroup.addBlockingListPromiseByKey('a', settablePromise3, false)
@@ -53,8 +53,8 @@ class BGroupTest extends Specification {
 
         when:
         BGroup.clearBlockingListPromisesForAllKeys()
-        var settablePromise33 = new SettablePromise<Reply>()
-        var settablePromise44 = new SettablePromise<Reply>()
+        def settablePromise33 = new SettablePromise<Reply>()
+        def settablePromise44 = new SettablePromise<Reply>()
         BGroup.addBlockingListPromiseByKey('a', settablePromise44, true)
         BGroup.addBlockingListPromiseByKey('a', settablePromise33, false)
         def elementValueBytesArray33 = new byte[1][]
@@ -67,8 +67,8 @@ class BGroupTest extends Specification {
 
         when:
         BGroup.clearBlockingListPromisesForAllKeys()
-        var settablePromise333 = new SettablePromise<Reply>()
-        var settablePromise444 = new SettablePromise<Reply>()
+        def settablePromise333 = new SettablePromise<Reply>()
+        def settablePromise444 = new SettablePromise<Reply>()
         BGroup.addBlockingListPromiseByKey('a', settablePromise333, true)
         BGroup.addBlockingListPromiseByKey('a', settablePromise444, true)
         def elementValueBytesArray333 = new byte[1][]
@@ -81,8 +81,8 @@ class BGroupTest extends Specification {
 
         when:
         BGroup.clearBlockingListPromisesForAllKeys()
-        var settablePromise3333 = new SettablePromise<Reply>()
-        var settablePromise4444 = new SettablePromise<Reply>()
+        def settablePromise3333 = new SettablePromise<Reply>()
+        def settablePromise4444 = new SettablePromise<Reply>()
         BGroup.addBlockingListPromiseByKey('a', settablePromise3333, false)
         BGroup.addBlockingListPromiseByKey('a', settablePromise4444, false)
         def elementValueBytesArray3333 = new byte[1][]
@@ -95,8 +95,8 @@ class BGroupTest extends Specification {
 
         when:
         BGroup.clearBlockingListPromisesForAllKeys()
-        var settablePromise5 = new SettablePromise<Reply>()
-        var settablePromise6 = new SettablePromise<Reply>()
+        def settablePromise5 = new SettablePromise<Reply>()
+        def settablePromise6 = new SettablePromise<Reply>()
         BGroup.addBlockingListPromiseByKey('a', settablePromise5, true)
         BGroup.addBlockingListPromiseByKey('a', settablePromise6, false)
         def elementValueBytesArray5 = new byte[3][]
@@ -106,10 +106,59 @@ class BGroupTest extends Specification {
         def bb5 = BGroup.setReplyIfBlockingListExist('a', elementValueBytesArray5)
         then:
         settablePromise5.isComplete()
-        (settablePromise5.getResult() as BulkReply).raw == 'a'.bytes
+        ((settablePromise5.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
         settablePromise6.isComplete()
-        (settablePromise6.getResult() as BulkReply).raw == 'c'.bytes
+        ((settablePromise6.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'c'.bytes
         bb5.length == 1
+
+        when:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        def slotForKeyB = BaseCommand.slot('b'.bytes, (short) 1)
+        def xx = new BGroup.DstKeyAndDstLeftWhenMove('b'.bytes, slotForKeyB, true)
+
+        BGroup.clearBlockingListPromisesForAllKeys()
+        def settablePromise7 = new SettablePromise<Reply>()
+        BGroup.addBlockingListPromiseByKey('a', settablePromise7, true, xx)
+        def elementValueBytesArray7 = new byte[1][]
+        elementValueBytesArray7[0] = 'a'.bytes
+        def bb7 = BGroup.setReplyIfBlockingListExist('a', elementValueBytesArray7, bGroup)
+        then:
+        settablePromise7.isComplete()
+        (settablePromise7.getResult() as BulkReply).raw == 'a'.bytes
+        bb7.length == 0
+        inMemoryGetSet.getBuf(slot, 'b'.bytes, slotForKeyB.bucketIndex(), slotForKeyB.keyHash()) != null
+
+        when:
+        BGroup.clearBlockingListPromisesForAllKeys()
+        def settablePromise8 = new SettablePromise<Reply>()
+        BGroup.addBlockingListPromiseByKey('a', settablePromise8, false, xx)
+        def elementValueBytesArray8 = new byte[1][]
+        elementValueBytesArray8[0] = 'a'.bytes
+        def bb8 = BGroup.setReplyIfBlockingListExist('a', elementValueBytesArray8, bGroup)
+        then:
+        settablePromise8.isComplete()
+        (settablePromise8.getResult() as BulkReply).raw == 'a'.bytes
+        bb8.length == 0
+        inMemoryGetSet.getBuf(slot, 'b'.bytes, slotForKeyB.bucketIndex(), slotForKeyB.keyHash()) != null
+
+        when:
+        var one = BGroup.addBlockingListPromiseByKey('a', settablePromise8, true)
+        BGroup.removeBlockingListPromiseByKey('a', one)
+        BGroup.removeBlockingListPromiseByKey('xx', one)
+        then:
+        1 == 1
+
+        cleanup:
+        localPersist.cleanUp()
     }
 
     def 'test parse slot'() {
@@ -167,6 +216,27 @@ class BGroupTest extends Specification {
         sList.size() == 0
 
         when:
+        sList = _BGroup.parseSlots('blmove', data2, slotNumber)
+        then:
+        sList.size() == 0
+
+        when:
+        sList = _BGroup.parseSlots('brpoplpush', data2, slotNumber)
+        then:
+        sList.size() == 0
+
+        when:
+        def data6 = new byte[6][]
+        data6[1] = 'a'.bytes
+        data6[2] = 'b'.bytes
+        data6[3] = 'left'.bytes
+        data6[4] = 'right'.bytes
+        data6[5] = '0'.bytes
+        sList = _BGroup.parseSlots('blmove', data6, slotNumber)
+        then:
+        sList.size() == 2
+
+        when:
         sList = _BGroup.parseSlots('blpop', data2, slotNumber)
         then:
         sList.size() == 0
@@ -216,6 +286,12 @@ class BGroupTest extends Specification {
         reply == OKReply.INSTANCE
 
         when:
+        bGroup.cmd = 'blmove'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         bGroup.cmd = 'blpop'
         reply = bGroup.handle()
         then:
@@ -226,6 +302,19 @@ class BGroupTest extends Specification {
         reply = bGroup.handle()
         then:
         reply == ErrorReply.FORMAT
+
+        when:
+        def data4 = new byte[4][]
+        data4[1] = 'a'.bytes
+        data4[2] = 'b'.bytes
+        data4[3] = '3601'.bytes
+        bGroup.cmd = 'brpoplpush'
+        bGroup.data = data4
+        bGroup.slotWithKeyHashListParsed = _BGroup.parseSlots('brpoplpush', data4, 1)
+        reply = bGroup.handle()
+        then:
+        // timeout exceeds 3600
+        reply instanceof ErrorReply
 
         when:
         bGroup.cmd = 'zzz'
