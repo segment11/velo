@@ -26,7 +26,7 @@ public class RGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
-        if ("rename".equals(cmd) || "rpoplpush".equals(cmd)) {
+        if ("rename".equals(cmd) || "renamenx".equals(cmd) || "rpoplpush".equals(cmd)) {
             if (data.length != 3) {
                 return slotWithKeyHashList;
             }
@@ -79,7 +79,11 @@ public class RGroup extends BaseCommand {
         }
 
         if ("rename".equals(cmd)) {
-            return rename();
+            return rename(false);
+        }
+
+        if ("renamenx".equals(cmd)) {
+            return rename(true);
         }
 
         if ("restore".equals(cmd)) {
@@ -162,7 +166,7 @@ public class RGroup extends BaseCommand {
     }
 
     @VisibleForTesting
-    Reply rename() {
+    Reply rename(boolean isNx) {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }
@@ -183,13 +187,18 @@ public class RGroup extends BaseCommand {
             return ErrorReply.NO_SUCH_KEY;
         }
 
-        var srcKey = new String(srcKeyBytes);
-        removeDelay(srcSlotWithKeyHash.slot(), srcSlotWithKeyHash.bucketIndex(), srcKey, srcSlotWithKeyHash.keyHash());
-
         var dstSlotWithKeyHash = slotWithKeyHashListParsed.getLast();
         if (!isCrossRequestWorker) {
+            if (isNx) {
+                var isExist = exists(dstSlotWithKeyHash.slot(), dstSlotWithKeyHash.bucketIndex(), dstSlotWithKeyHash.rawKey(), dstSlotWithKeyHash.keyHash());
+                if (isExist) {
+                    return IntegerReply.REPLY_0;
+                }
+            }
+
+            removeDelay(srcSlotWithKeyHash.slot(), srcSlotWithKeyHash.bucketIndex(), srcSlotWithKeyHash.rawKey(), srcSlotWithKeyHash.keyHash());
             setCv(dstKeyBytes, srcCv, dstSlotWithKeyHash);
-            return OKReply.INSTANCE;
+            return isNx ? IntegerReply.REPLY_1 : OKReply.INSTANCE;
         }
 
         var dstSlot = dstSlotWithKeyHash.slot();
@@ -198,9 +207,22 @@ public class RGroup extends BaseCommand {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        dstOneSlot.asyncRun(() -> {
+        dstOneSlot.asyncCall(() -> {
+            if (isNx) {
+                var isExist = exists(dstSlotWithKeyHash.slot(), dstSlotWithKeyHash.bucketIndex(), dstSlotWithKeyHash.rawKey(), dstSlotWithKeyHash.keyHash());
+                if (isExist) {
+                    finalPromise.set(IntegerReply.REPLY_0);
+                    return false;
+                }
+            }
+
             setCv(dstKeyBytes, srcCv, dstSlotWithKeyHash);
-            finalPromise.set(OKReply.INSTANCE);
+            finalPromise.set(isNx ? IntegerReply.REPLY_1 : OKReply.INSTANCE);
+            return true;
+        }).whenComplete((r, e) -> {
+            if (r) {
+                removeDelay(srcSlotWithKeyHash.slot(), srcSlotWithKeyHash.bucketIndex(), srcSlotWithKeyHash.rawKey(), srcSlotWithKeyHash.keyHash());
+            }
         });
 
         return asyncReply;

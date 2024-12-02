@@ -5,11 +5,7 @@ import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.ConfForSlot
 import io.velo.mock.InMemoryGetSet
-import io.velo.persist.Consts
-import io.velo.persist.LocalPersist
-import io.velo.persist.LocalPersistTest
-import io.velo.persist.Mock
-import io.velo.persist.Wal
+import io.velo.persist.*
 import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.reply.*
 import io.velo.type.RedisList
@@ -32,6 +28,7 @@ class RGroupTest extends Specification {
 
         when:
         def sRenameList = _RGroup.parseSlots('rename', data3, slotNumber)
+        def sRenamenxList = _RGroup.parseSlots('renamenx', data3, slotNumber)
         def sRpoplpushList = _RGroup.parseSlots('rpoplpush', data3, slotNumber)
         def sRestoreList = _RGroup.parseSlots('restore', data3, slotNumber)
         def sRpopList = _RGroup.parseSlots('rpop', data3, slotNumber)
@@ -40,6 +37,7 @@ class RGroupTest extends Specification {
         def sList = _RGroup.parseSlots('rxxx', data3, slotNumber)
         then:
         sRenameList.size() == 2
+        sRenamenxList.size() == 2
         sRpoplpushList.size() == 2
         sRestoreList.size() == 0
         sRpopList.size() == 1
@@ -89,6 +87,12 @@ class RGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        rGroup.cmd = 'renamenx'
+        reply = rGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         def data2 = new byte[2][]
         rGroup.cmd = 'randomkey'
         rGroup.data = data2
@@ -104,7 +108,25 @@ class RGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        rGroup.cmd = 'rpop'
+        reply = rGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         rGroup.cmd = 'rpoplpush'
+        reply = rGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        rGroup.cmd = 'rpush'
+        reply = rGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        rGroup.cmd = 'rpushx'
         reply = rGroup.handle()
         then:
         reply == ErrorReply.FORMAT
@@ -182,16 +204,29 @@ class RGroupTest extends Specification {
         rGroup.slotWithKeyHashListParsed = _RGroup.parseSlots('rename', data3, rGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
-        def reply = rGroup.rename()
+        def reply = rGroup.rename(false)
         then:
         reply == ErrorReply.NO_SUCH_KEY
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = rGroup.rename()
+        reply = rGroup.rename(false)
         then:
         reply == OKReply.INSTANCE
+
+        when:
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        inMemoryGetSet.put(slot, 'b', 0, cv)
+        reply = rGroup.rename(true)
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        inMemoryGetSet.remove(slot, 'b')
+        reply = rGroup.rename(true)
+        then:
+        reply == IntegerReply.REPLY_1
 
         when:
         def eventloop = Eventloop.builder()
@@ -209,7 +244,7 @@ class RGroupTest extends Specification {
 
         rGroup.crossRequestWorker = true
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = rGroup.rename()
+        reply = rGroup.rename(false)
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -218,15 +253,26 @@ class RGroupTest extends Specification {
         }.result
 
         when:
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        inMemoryGetSet.put(slot, 'b', 0, cv)
+        reply = rGroup.rename(true)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result == IntegerReply.REPLY_0
+        }.result
+
+        when:
         data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = rGroup.rename()
+        reply = rGroup.rename(false)
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
         data3[1] = 'a'.bytes
         data3[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = rGroup.rename()
+        reply = rGroup.rename(false)
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
