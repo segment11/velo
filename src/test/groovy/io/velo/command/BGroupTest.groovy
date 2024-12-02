@@ -5,6 +5,8 @@ import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.type.RedisList
@@ -424,6 +426,11 @@ class BGroupTest extends Specification {
         bGroup.byPassGetSet = inMemoryGetSet
         bGroup.from(BaseCommand.mockAGroup())
 
+        and:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
         when:
         inMemoryGetSet.remove(slot, 'a')
         def reply = bGroup.execute('blpop a 0')
@@ -465,6 +472,49 @@ class BGroupTest extends Specification {
             result == NilReply.INSTANCE
         }.result
 
+        // multi-keys
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        reply = bGroup.execute('blpop a b 0')
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result == NilReply.INSTANCE
+        }.result
+
+        when:
+        rl.addFirst('b'.bytes)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cv)
+        reply = bGroup.execute('blpop a b 0')
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result instanceof MultiBulkReply &&
+                    ((result as MultiBulkReply).replies[1] as BulkReply).raw == 'b'.bytes
+        }.result
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        reply = bGroup.execute('blpop a b 0')
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result == NilReply.INSTANCE
+        }.result
+
+        when:
+        reply = bGroup.execute('blpop a b 1')
+        Thread.sleep(2000)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result == NilReply.INSTANCE
+        }.result
+
         when:
         reply = bGroup.execute('blpop a x')
         then:
@@ -483,5 +533,8 @@ class BGroupTest extends Specification {
         reply = bGroup.blpop(true)
         then:
         reply == ErrorReply.KEY_TOO_LONG
+
+        cleanup:
+        localPersist.cleanUp()
     }
 }

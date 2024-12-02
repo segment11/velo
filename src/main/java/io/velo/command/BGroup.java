@@ -328,11 +328,13 @@ public class BGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
+        ArrayList<String> keys = new ArrayList<>();
         for (int i = 1; i < data.length - 1; i++) {
             var keyBytes = data[i];
             if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
                 return ErrorReply.KEY_TOO_LONG;
             }
+            keys.add(new String(keyBytes));
         }
 
         var timeoutBytes = data[data.length - 1];
@@ -351,28 +353,98 @@ public class BGroup extends BaseCommand {
 
         boolean isNoWait = timeoutSeconds <= 0;
 
-        // support first key in single thread
-        var keyBytes = data[1];
-        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var firstKeyBytes = data[1];
+        var firstSlotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
-        var rl = LGroup.getRedisList(keyBytes, slotWithKeyHash, this);
+        var rl = LGroup.getRedisList(firstKeyBytes, firstSlotWithKeyHash, this);
         if (rl == null || rl.size() == 0) {
+            // performance bad, get all other values
+            if (keys.size() > 1) {
+                SettablePromise<Reply> finalPromise = new SettablePromise<>();
+                var asyncReply = new AsyncReply(finalPromise);
+
+                boolean isSet = false;
+                for (int i = 1; i < keys.size(); i++) {
+                    var otherKey = keys.get(i);
+                    var otherKeyBytes = otherKey.getBytes();
+                    var otherSlotWithKeyHash = slotWithKeyHashListParsed.get(i);
+
+                    var oneSlot = localPersist.oneSlot(otherSlotWithKeyHash.slot());
+                    var p = oneSlot.asyncCall(() -> {
+                        var otherRl = LGroup.getRedisList(otherKeyBytes, otherSlotWithKeyHash, this);
+                        if (otherRl == null || otherRl.size() == 0) {
+                            return null;
+                        }
+
+                        var otherValueBytes = isLeft ? otherRl.removeFirst() : otherRl.removeLast();
+                        LGroup.saveRedisList(otherRl, otherKeyBytes, otherSlotWithKeyHash, this, dictMap);
+                        return otherValueBytes;
+                    });
+
+                    // wait until this promise complete
+                    var otherValueBytes = p.whenComplete((r, e) -> {
+                        if (e != null) {
+                            log.error("{} error={}", isLeft ? "blpop" : "brpop", e.getMessage());
+                            finalPromise.setException(e);
+                            return;
+                        }
+
+                        if (r != null) {
+                            var replies = new Reply[2];
+                            replies[0] = new BulkReply(otherKeyBytes);
+                            replies[1] = new BulkReply(r);
+                            finalPromise.set(new MultiBulkReply(replies));
+                        }
+                    }).getResult();
+
+                    if (otherValueBytes != null) {
+                        isSet = true;
+                        break;
+                    }
+                }
+
+                if (!isSet) {
+                    if (isNoWait) {
+                        finalPromise.set(NilReply.INSTANCE);
+                    } else {
+                        var one = new PromiseWithLeftOrRightAndCreatedTime(finalPromise, isLeft, System.currentTimeMillis());
+                        for (var key : keys) {
+                            blockingListPromisesByKey.computeIfAbsent(key, k -> new ArrayList<>()).add(one);
+                        }
+
+                        var reactor = Reactor.getCurrentReactor();
+                        reactor.delay(timeoutSeconds * 1000, () -> {
+                            if (!finalPromise.isComplete()) {
+                                finalPromise.set(NilReply.INSTANCE);
+                                // remove form blocking list
+                                for (var key : keys) {
+                                    blockingListPromisesByKey.get(key).remove(one);
+                                }
+                            }
+                        });
+                    }
+                }
+
+                return asyncReply;
+            }
+
+            // only one key
             if (isNoWait) {
                 return NilReply.INSTANCE;
             } else {
                 SettablePromise<Reply> finalPromise = new SettablePromise<>();
                 var asyncReply = new AsyncReply(finalPromise);
 
-                var key = new String(keyBytes);
+                var firstKey = keys.getFirst();
                 var one = new PromiseWithLeftOrRightAndCreatedTime(finalPromise, isLeft, System.currentTimeMillis());
-                blockingListPromisesByKey.computeIfAbsent(key, k -> new ArrayList<>()).add(one);
+                blockingListPromisesByKey.computeIfAbsent(firstKey, k -> new ArrayList<>()).add(one);
 
                 var reactor = Reactor.getCurrentReactor();
                 reactor.delay(timeoutSeconds * 1000, () -> {
                     if (!finalPromise.isComplete()) {
                         finalPromise.set(NilReply.INSTANCE);
                         // remove form blocking list
-                        blockingListPromisesByKey.get(key).remove(one);
+                        blockingListPromisesByKey.get(firstKey).remove(one);
                     }
                 });
 
@@ -381,10 +453,10 @@ public class BGroup extends BaseCommand {
         }
 
         var valueBytes = isLeft ? rl.removeFirst() : rl.removeLast();
-        LGroup.saveRedisList(rl, keyBytes, slotWithKeyHash, this, dictMap);
+        LGroup.saveRedisList(rl, firstKeyBytes, firstSlotWithKeyHash, this, dictMap);
 
         var replies = new Reply[2];
-        replies[0] = new BulkReply(keyBytes);
+        replies[0] = new BulkReply(firstKeyBytes);
         replies[1] = new BulkReply(valueBytes);
         return new MultiBulkReply(replies);
     }
