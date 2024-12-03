@@ -512,15 +512,15 @@ class RequestHandlerTest extends Specification {
                 def cmd = ch + i
                 requestHandler.getCmdCountStat(cmd)
 
-                requestHandler.increaseCmdStatArray(firstByte, cmd)
+                requestHandler.increaseCmdStatArray(cmd)
 
                 (1 + random.nextInt(100)).times { j ->
-                    requestHandler.increaseCmdStatArray(firstByte, cmd)
+                    requestHandler.increaseCmdStatArray(cmd)
                 }
 
                 if (i > 0) {
                     def lastCmd = ch + (i - 1)
-                    requestHandler.increaseCmdStatArray(firstByte, lastCmd)
+                    requestHandler.increaseCmdStatArray(lastCmd)
                 }
             }
         }
