@@ -393,14 +393,14 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
                         size1 += bytes.length;
                     }
                 }
-                sb.append("Pure memory, Fd chunk segments: ").append(size1).append("\n");
+                sb.append("Pure memory, Fd chunk segments, name: ").append(name).append(", size: ").append(size1).append("\n");
             } else {
                 for (var bytes : allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex) {
                     if (bytes != null) {
                         size1 += bytes.length;
                     }
                 }
-                sb.append("Pure memory, Fd key buckets: ").append(size1).append("\n");
+                sb.append("Pure memory, Fd key buckets, name: ").append(name).append(", size: ").append(size1).append("\n");
             }
             size += size1;
         } else {
@@ -413,7 +413,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             } else {
                 size1 += forOneWalGroupBatchBuffer.capacity();
             }
-            sb.append("Fd read write buffer: ").append(size1).append("\n");
+            sb.append("Fd read write buffer, name: ").append(name).append(", size: ").append(size1).append("\n");
             size += size1;
 
             if (isLRUOn) {

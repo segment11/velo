@@ -156,8 +156,10 @@ public class Wal implements InMemoryEstimate {
         // skip primitive fields
         long size1 = RamUsageEstimator.sizeOfMap(delayToKeyBucketValues);
         long size2 = RamUsageEstimator.sizeOfMap(delayToKeyBucketShortValues);
-        sb.append("Wal delay to save values: ").append(size1).append("\n");
-        sb.append("Wal delay to save short values: ").append(size2).append("\n");
+        if (groupIndex % 4096 == 0) {
+            sb.append("Wal group index: ").append(groupIndex).append(", delay to save values: ").append(size1).append("\n");
+            sb.append("Wal group index: ").append(groupIndex).append(", delay to save short values: ").append(size2).append("\n");
+        }
         return size1 + size2;
     }
 
