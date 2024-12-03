@@ -1332,7 +1332,7 @@ class HGroupTest extends Specification {
         data8[1] = 'a'.bytes
         data8[2] = '0'.bytes
         data8[3] = 'match'.bytes
-        data8[4] = 'field'.bytes
+        data8[4] = 'field*'.bytes
         data8[5] = 'count'.bytes
         data8[6] = '5'.bytes
         data8[7] = 'novalues'.bytes
@@ -1412,7 +1412,7 @@ class HGroupTest extends Specification {
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        data8[4] = 'field'.bytes
+        data8[4] = 'field*'.bytes
         data8[7] = 'novalues'.bytes
         10.times {
             if (it == 5) {
