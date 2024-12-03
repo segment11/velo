@@ -524,26 +524,36 @@ class MultiWorkerServerTest extends Specification {
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot0, Thread.currentThread().threadId())
 
+        boolean doThisCase = Consts.checkConnectAvailable()
+
         when:
-        MultiWorkerServer.doReplAfterLeaderSelect(slot0)
+        if (doThisCase) {
+            MultiWorkerServer.doReplAfterLeaderSelect(slot0)
+        }
         then:
         1 == 1
 
         when:
         leaderSelector.masterAddressLocalMocked = 'localhost:7380'
-        MultiWorkerServer.doReplAfterLeaderSelect(slot0)
+        if (doThisCase) {
+            MultiWorkerServer.doReplAfterLeaderSelect(slot0)
+        }
         then:
         1 == 1
 
         when:
         ConfForGlobal.isAsSlaveOfSlave = true
-        MultiWorkerServer.doReplAfterLeaderSelect(slot0)
+        if (doThisCase) {
+            MultiWorkerServer.doReplAfterLeaderSelect(slot0)
+        }
         then:
         1 == 1
 
         when:
         leaderSelector.masterAddressLocalMocked = null
-        MultiWorkerServer.doReplAfterLeaderSelect(slot0)
+        if (doThisCase) {
+            MultiWorkerServer.doReplAfterLeaderSelect(slot0)
+        }
         then:
         1 == 1
 
