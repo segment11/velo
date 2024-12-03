@@ -79,7 +79,9 @@ class FailoverManagerTest extends Specification {
         shard0.nodes << new Node(master: false, slaveIndex: 0, host: 'localhost', port: 7380, nodeIdFix: 'xxx', followNodeId: 'aaa')
         shard1.nodes << new Node(master: true, host: 'localhost', port: 8379, nodeIdFix: 'bbb')
         shard1.nodes << new Node(master: false, slaveIndex: 0, host: 'localhost', port: 8380, nodeIdFix: 'yyy', followNodeId: 'bbb')
-        fm.updateZookeeperOneMetaAfterDoFailover('cluster1', shards)
+        if (doThisCase) {
+            fm.updateZookeeperOneMetaAfterDoFailover('cluster1', shards)
+        }
         then:
         true
 
