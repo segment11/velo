@@ -398,6 +398,15 @@ class FdReadWriteTest extends Specification {
         then:
         exception
 
+        when:
+        ConfForGlobal.pureMemory = true
+        ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression = true
+        fdKeyBucket.initByteBuffers(false)
+        fdKeyBucket.setSharedBytesCompressToMemory(new byte[segmentLength * oneChargeBucketNumber], 0)
+        then:
+        fdKeyBucket.keyBucketSharedBytesCompressCountTotal == 1
+        fdKeyBucket.getSharedBytesDecompressFromMemory(0).length == segmentLength * oneChargeBucketNumber
+
         cleanup:
         fdChunk.truncate()
         fdChunk.cleanUp()
@@ -414,5 +423,6 @@ class FdReadWriteTest extends Specification {
         oneFile11.delete()
         oneFile22.delete()
         ConfForGlobal.pureMemory = false
+        ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression = false
     }
 }

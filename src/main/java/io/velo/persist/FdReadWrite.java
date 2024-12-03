@@ -34,6 +34,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import static io.velo.ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression;
+
 // need thread safe
 // need refactor to FdChunkSegments + FdKeyBuckets, todo
 public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp {
@@ -263,9 +265,15 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         this.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex = new byte[walGroupNumber][];
     }
 
-    private void setSharedBytesCompressToMemory(byte[] sharedBytes, int walGroupIndex) {
+    @VisibleForTesting
+    void setSharedBytesCompressToMemory(byte[] sharedBytes, int walGroupIndex) {
         if (sharedBytes == null) {
             allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex] = null;
+            return;
+        }
+
+        if (!isPureMemoryModeKeyBucketsUseCompression) {
+            allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex] = sharedBytes;
             return;
         }
 
@@ -284,10 +292,15 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         keyBucketSharedBytesAfterCompressedBytesTotal += sharedBytesCompressed.length;
     }
 
-    private byte[] getSharedBytesDecompressFromMemory(int walGroupIndex) {
+    @VisibleForTesting
+    byte[] getSharedBytesDecompressFromMemory(int walGroupIndex) {
         var compressedSharedBytes = allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex];
         if (compressedSharedBytes == null) {
             return null;
+        }
+
+        if (!isPureMemoryModeKeyBucketsUseCompression) {
+            return compressedSharedBytes;
         }
 
         // tips: one wal group may charge 32 key buckets, = 32 * 4K = 128K, decompress cost may take 200-300us

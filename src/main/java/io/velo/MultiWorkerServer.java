@@ -733,8 +733,10 @@ public class MultiWorkerServer extends Launcher {
 
             ConfForGlobal.isValueSetUseCompression = config.get(ofBoolean(), "isValueSetUseCompression", false);
             ConfForGlobal.isOnDynTrainDictForCompression = config.get(ofBoolean(), "isOnDynTrainDictForCompression", false);
+            ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression = config.get(ofBoolean(), "isPureMemoryModeKeyBucketsUseCompression", false);
             log.warn("Global config, isValueSetUseCompression={}", ConfForGlobal.isValueSetUseCompression);
             log.warn("Global config, isOnDynTrainDictForCompression={}", ConfForGlobal.isOnDynTrainDictForCompression);
+            log.warn("Global config, isPureMemoryModeKeyBucketsUseCompression={}", ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression);
 
             ConfForGlobal.netListenAddresses = config.get(ofString(), "net.listenAddresses", "localhost:" + PORT);
             logger.info("Net listen addresses={}", ConfForGlobal.netListenAddresses);
@@ -890,7 +892,10 @@ public class MultiWorkerServer extends Launcher {
                 c.lruKeyAndCompressedValueEncoded.maxSize = config.get(ofInteger(), "kv.lru.maxSize");
             }
 
-            logger.info("ConfForSlot={}", c);
+            // important, log 3 times
+            logger.info("!!!!!!ConfForSlot={}", c);
+            logger.info("!!!!!!ConfForSlot={}", c);
+            logger.info("!!!!!!ConfForSlot={}", c);
             return c;
         }
 
@@ -946,8 +951,7 @@ public class MultiWorkerServer extends Launcher {
 
             DictMap.getInstance().initDictMap(dirFile);
 
-            var configCompress = config.getChild("compress");
-            TrainSampleJob.setDictKeyPrefixEndIndex(configCompress.get(ofInteger(), "dictKeyPrefixEndIndex", 5));
+            TrainSampleJob.setDictKeyPrefixEndIndex(config.get(ofInteger(), "toTrainDictWhenKeyPrefixEndIndex", 5));
 
             RequestHandler.initMultiShardShadows((byte) netWorkers);
 
