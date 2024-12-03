@@ -303,9 +303,9 @@ public enum ConfForSlot {
         public void resetByOneValueLength(int estimateOneValueLength) {
             if (ConfForGlobal.pureMemory) {
                 // save memory in wal batch cache, todo, change here
-                this.valueSizeTrigger = 50;
-                this.shortValueSizeTrigger = 50;
-                this.oneChargeBucketNumber = 16;
+                this.valueSizeTrigger = 100;
+                this.shortValueSizeTrigger = 100;
+                this.oneChargeBucketNumber = 4;
                 resetWalStaticValues(PAGE_SIZE * oneChargeBucketNumber);
                 return;
             }
