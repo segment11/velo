@@ -191,6 +191,13 @@ public enum ConfForSlot {
             if (!isSegmentUseCompression) {
                 this.fdPerChunk = (byte) (2 * this.fdPerChunk);
             }
+            if (ConfForGlobal.pureMemory) {
+                // save memory, do merge more frequently
+                this.fdPerChunk = (byte) (this.fdPerChunk / 4);
+                if (this.fdPerChunk < 1) {
+                    this.fdPerChunk = 1;
+                }
+            }
 
             if (estimateOneValueLength <= 200) {
                 Chunk.ONCE_PREPARE_SEGMENT_COUNT_FOR_MERGE = isValueSetUseCompression1 ? 8 : 16;
@@ -303,9 +310,9 @@ public enum ConfForSlot {
         public void resetByOneValueLength(int estimateOneValueLength) {
             if (ConfForGlobal.pureMemory) {
                 // save memory in wal batch cache, todo, change here
-                this.valueSizeTrigger = 100;
-                this.shortValueSizeTrigger = 100;
-                this.oneChargeBucketNumber = 4;
+                this.valueSizeTrigger = 200;
+                this.shortValueSizeTrigger = 200;
+                this.oneChargeBucketNumber = 16;
                 resetWalStaticValues(PAGE_SIZE * oneChargeBucketNumber);
                 return;
             }
