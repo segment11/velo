@@ -13,7 +13,7 @@ class MetaOneWalGroupSeqTest extends Specification {
         ConfForGlobal.pureMemory = false
 
         def one = new MetaOneWalGroupSeq(slot, slotDir)
-        println 'in memory size estimate: ' + one.estimate()
+        println 'in memory size estimate: ' + one.estimate(new StringBuilder())
 
         when:
         one.set(0, (byte) 0, 1L)

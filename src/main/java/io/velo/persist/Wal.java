@@ -152,12 +152,13 @@ public class Wal implements InMemoryEstimate {
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
         // skip primitive fields
-        long size = 0;
-        size += RamUsageEstimator.sizeOfMap(delayToKeyBucketValues);
-        size += RamUsageEstimator.sizeOfMap(delayToKeyBucketShortValues);
-        return size;
+        long size1 = RamUsageEstimator.sizeOfMap(delayToKeyBucketValues);
+        long size2 = RamUsageEstimator.sizeOfMap(delayToKeyBucketShortValues);
+        sb.append("Wal delay to save values: ").append(size1).append("\n");
+        sb.append("Wal delay to save short values: ").append(size2).append("\n");
+        return size1 + size2;
     }
 
     @Override

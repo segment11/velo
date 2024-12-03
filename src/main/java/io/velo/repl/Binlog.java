@@ -131,12 +131,13 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
         long size = 0;
         size += tempAppendSegmentBytes.length;
         for (var one : latestAppendForReadCacheSegmentBytesSet) {
             size += one.bytes.length;
         }
+        sb.append("Binlog buffer: ").append(size).append("\n");
         return size;
     }
 

@@ -220,7 +220,12 @@ class ManageCommand extends BaseCommand {
 
             return OKReply.INSTANCE
         } else if (subSubCmd == 'view-in-memory-size-estimate') {
-            return new IntegerReply(oneSlot.estimate())
+            def sb = new StringBuilder()
+            def all = oneSlot.estimate(sb)
+            def replies = new Reply[2]
+            replies[0] = new IntegerReply(all)
+            replies[1] = new BulkReply(sb.toString().bytes)
+            return new MultiBulkReply(replies)
         } else if (subSubCmd == 'output-chunk-segment-flag-to-file') {
             // manage slot 0 output-chunk-segment-flag-to-file 0 1024
             if (data.length != 6) {

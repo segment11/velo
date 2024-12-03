@@ -69,14 +69,14 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
         long size = 0;
-        size += metaKeyBucketSplitNumber.estimate();
-        size += metaOneWalGroupSeq.estimate();
-        size += statKeyCountInBuckets.estimate();
+        size += metaKeyBucketSplitNumber.estimate(sb);
+        size += metaOneWalGroupSeq.estimate(sb);
+        size += statKeyCountInBuckets.estimate(sb);
         for (var fdReadWrite : fdReadWriteArray) {
             if (fdReadWrite != null) {
-                size += fdReadWrite.estimate();
+                size += fdReadWrite.estimate(sb);
             }
         }
         return size;

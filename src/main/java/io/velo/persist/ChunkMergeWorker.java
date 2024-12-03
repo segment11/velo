@@ -282,10 +282,11 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
         long size = 0;
         size += RamUsageEstimator.sizeOfCollection(mergedCvList);
         size += RamUsageEstimator.sizeOfCollection(mergedSegmentSet);
+        sb.append("Merge worker merged cv list / segment set: ").append(size).append("\n");
         return size;
     }
 

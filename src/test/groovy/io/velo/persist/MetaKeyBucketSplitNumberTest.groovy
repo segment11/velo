@@ -11,7 +11,7 @@ class MetaKeyBucketSplitNumberTest extends Specification {
     def 'test for repl'() {
         given:
         def one = new MetaKeyBucketSplitNumber(slot, slotDir)
-        println 'in memory size estimate: ' + one.estimate()
+        println 'in memory size estimate: ' + one.estimate(new StringBuilder())
 
         when:
         def allInMemoryCachedBytes = one.getInMemoryCachedBytes()

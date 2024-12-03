@@ -15,7 +15,7 @@ class StatKeyCountInBucketsTest extends Specification {
         given:
         def one = new StatKeyCountInBuckets(slot, slotDir)
         def two = new StatKeyCountInBuckets(slot, slotDir)
-        println 'in memory size estimate: ' + one.estimate()
+        println 'in memory size estimate: ' + one.estimate(new StringBuilder())
 
         when:
         def allInMemoryCachedBytes = one.getInMemoryCachedBytes()

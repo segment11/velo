@@ -383,34 +383,43 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
         long size = 0;
         if (ConfForGlobal.pureMemory) {
+            var size1 = 0L;
             if (isChunkFd) {
                 for (var bytes : allBytesBySegmentIndexForOneChunkFd) {
                     if (bytes != null) {
-                        size += bytes.length;
+                        size1 += bytes.length;
                     }
                 }
+                sb.append("Pure memory, Fd chunk segments: ").append(size1).append("\n");
             } else {
                 for (var bytes : allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex) {
                     if (bytes != null) {
-                        size += bytes.length;
+                        size1 += bytes.length;
                     }
                 }
+                sb.append("Pure memory, Fd key buckets: ").append(size1).append("\n");
             }
+            size += size1;
         } else {
-            size += oneInnerBuffer.capacity();
+            var size1 = 0L;
+            size1 += oneInnerBuffer.capacity();
             if (isChunkFd) {
-                size += writeSegmentBatchBuffer.capacity();
-                size += forReplBuffer.capacity();
-                size += readForMergeBatchBuffer.capacity();
+                size1 += writeSegmentBatchBuffer.capacity();
+                size1 += forReplBuffer.capacity();
+                size1 += readForMergeBatchBuffer.capacity();
             } else {
-                size += forOneWalGroupBatchBuffer.capacity();
+                size1 += forOneWalGroupBatchBuffer.capacity();
             }
+            sb.append("Fd read write buffer: ").append(size1).append("\n");
+            size += size1;
 
             if (isLRUOn) {
-                size += RamUsageEstimator.sizeOfMap(oneInnerBytesByIndexLRU);
+                var size2 = RamUsageEstimator.sizeOfMap(oneInnerBytesByIndexLRU);
+                sb.append("LRU cache: ").append(size2).append("\n");
+                size += size2;
             }
         }
         return size;

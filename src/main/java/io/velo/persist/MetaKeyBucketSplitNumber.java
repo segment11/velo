@@ -98,7 +98,8 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
+        sb.append("Meta key bucket split number: ").append(allCapacity).append("\n");
         return allCapacity;
     }
 

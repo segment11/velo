@@ -75,13 +75,13 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
         if (ConfForGlobal.pureMemory) {
             return 0;
         }
 
-        long size = 0;
-        size += RamUsageEstimator.sizeOfMap(bigStringBytesByUuidLRU);
+        long size = RamUsageEstimator.sizeOfMap(bigStringBytesByUuidLRU);
+        sb.append("Big string files: ").append(size).append("\n");
         return size;
     }
 

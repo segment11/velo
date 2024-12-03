@@ -52,7 +52,7 @@ class FdReadWriteTest extends Specification {
         def fdChunk = new FdReadWrite(slot, 'test', libC, oneFile1)
         fdChunk.initByteBuffers(true)
         println fdChunk
-        println 'in memory size estimate: ' + fdChunk.estimate()
+        println 'in memory size estimate: ' + fdChunk.estimate(new StringBuilder())
 
         def fdKeyBucket = new FdReadWrite(slot, 'test2', libC, oneFile2)
         fdKeyBucket.initByteBuffers(false)
@@ -60,7 +60,7 @@ class FdReadWriteTest extends Specification {
         fdKeyBucket.resetAllBytesByOneWalGroupIndexForKeyBucketOneSplitIndex(walGroupNumber)
         fdKeyBucket.clearAllKeyBucketsInOneWalGroupToMemory(0)
         println fdKeyBucket
-        println 'in memory size estimate: ' + fdKeyBucket.estimate()
+        println 'in memory size estimate: ' + fdKeyBucket.estimate(new StringBuilder())
 
         fdChunk.collect()
         fdKeyBucket.collect()
@@ -239,10 +239,10 @@ class FdReadWriteTest extends Specification {
         ConfForGlobal.pureMemory = true
         fdChunk = new FdReadWrite(slot, 'test', libC, oneFile1)
         fdChunk.initByteBuffers(true)
-        println 'in memory size estimate: ' + fdChunk.estimate()
+        println 'in memory size estimate: ' + fdChunk.estimate(new StringBuilder())
         fdKeyBucket = new FdReadWrite(slot, 'test2', libC, oneFile2)
         fdKeyBucket.initByteBuffers(false)
-        println 'in memory size estimate: ' + fdKeyBucket.estimate()
+        println 'in memory size estimate: ' + fdKeyBucket.estimate(new StringBuilder())
         then:
         fdChunk.isTargetSegmentIndexNullInMemory(0)
         fdChunk.clearTargetSegmentIndexInMemory(0)
@@ -257,8 +257,8 @@ class FdReadWriteTest extends Specification {
             array[i + loop] = f2
         }
         fdKeyBucket.writeSharedBytesForKeyBucketsInOneWalGroup(1 * oneChargeBucketNumber, new byte[oneChargeBucketNumber * segmentLength])
-        println 'in memory size estimate: ' + fdChunk.estimate()
-        println 'in memory size estimate: ' + fdKeyBucket.estimate()
+        println 'in memory size estimate: ' + fdChunk.estimate(new StringBuilder())
+        println 'in memory size estimate: ' + fdKeyBucket.estimate(new StringBuilder())
         then:
         !fdChunk.isTargetSegmentIndexNullInMemory(0)
         array.every { it == segmentLength }

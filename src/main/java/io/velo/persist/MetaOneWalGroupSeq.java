@@ -67,7 +67,8 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
+        sb.append("Meta one wal group seq file: ").append(allCapacity).append("\n");
         return allCapacity;
     }
 

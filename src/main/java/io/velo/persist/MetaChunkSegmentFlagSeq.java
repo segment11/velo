@@ -117,7 +117,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
+        sb.append("Meta chunk segment flag seq: ").append(allCapacity).append("\n");
         return allCapacity;
     }
 

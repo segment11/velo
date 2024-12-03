@@ -95,11 +95,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
         long size = 0;
         for (var fdReadWrite : fdReadWriteArray) {
             if (fdReadWrite != null) {
-                size += fdReadWrite.estimate();
+                size += fdReadWrite.estimate(sb);
             }
         }
         return size;

@@ -13,7 +13,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
     def 'test for repl'() {
         given:
         def one = new MetaChunkSegmentFlagSeq(slot, slotDir)
-        println 'in memory size estimate: ' + one.estimate()
+        println 'in memory size estimate: ' + one.estimate(new StringBuilder())
 
         when:
         def oneBatchBytes = one.getOneBatch(0, 1024)

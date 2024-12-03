@@ -104,7 +104,8 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
+        sb.append("Stat key count in buckets: ").append(allCapacity).append("\n");
         return allCapacity;
     }
 

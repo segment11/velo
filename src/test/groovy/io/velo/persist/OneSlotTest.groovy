@@ -566,7 +566,7 @@ class OneSlotTest extends Specification {
         def localPersist = LocalPersist.instance
 //        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
-        println 'in memory size estimate: ' + oneSlot.estimate()
+        println 'in memory size estimate: ' + oneSlot.estimate(new StringBuilder())
 
         and:
         def key = 'key'
@@ -622,7 +622,7 @@ class OneSlotTest extends Specification {
         2.times {
             oneSlot.get(firstKey.bytes, sFirstKey.bucketIndex(), sFirstKey.keyHash())
         }
-        println 'in memory size estimate: ' + oneSlot.estimate()
+        println 'in memory size estimate: ' + oneSlot.estimate(new StringBuilder())
         then:
         oneSlot.getExpireAt(firstKey.bytes, sFirstKey.bucketIndex(), sFirstKey.keyHash()) != null
 

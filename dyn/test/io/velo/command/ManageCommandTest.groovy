@@ -544,7 +544,7 @@ class ManageCommandTest extends Specification {
         data4[3] = 'view-in-memory-size-estimate'.bytes
         reply = manage.manageInOneSlot()
         then:
-        reply instanceof IntegerReply
+        reply instanceof MultiBulkReply
 
         when:
         data4[3] = 'set-readonly'.bytes

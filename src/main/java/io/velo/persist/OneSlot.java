@@ -202,17 +202,19 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @Override
-    public long estimate() {
+    public long estimate(StringBuilder sb) {
         long size = 0;
-        size += inMemorySizeOfLRU();
-        size += keyLoader.estimate();
-        size += chunk.estimate();
-        size += bigStringFiles.estimate();
-        size += metaChunkSegmentFlagSeq.estimate();
-        size += chunkMergeWorker.estimate();
-        size += binlog.estimate();
+        long size1 = inMemorySizeOfLRU();
+        sb.append("One slot lru: ").append(size1).append("\n");
+        size += size1;
+        size += keyLoader.estimate(sb);
+        size += chunk.estimate(sb);
+        size += bigStringFiles.estimate(sb);
+        size += metaChunkSegmentFlagSeq.estimate(sb);
+        size += chunkMergeWorker.estimate(sb);
+        size += binlog.estimate(sb);
         for (var wal : walArray) {
-            size += wal.estimate();
+            size += wal.estimate(sb);
         }
         return size;
     }

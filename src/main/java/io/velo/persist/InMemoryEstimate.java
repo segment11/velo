@@ -1,5 +1,5 @@
 package io.velo.persist;
 
 public interface InMemoryEstimate {
-    long estimate();
+    long estimate(StringBuilder sb);
 }

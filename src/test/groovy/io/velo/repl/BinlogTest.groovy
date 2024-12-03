@@ -45,7 +45,7 @@ class BinlogTest extends Specification {
         println binlog.currentFileIndexAndOffset()
         println binlog.earliestFileIndexAndOffset()
         println binlog.currentReplOffset()
-        println 'in memory size estimate: ' + binlog.estimate()
+        println 'in memory size estimate: ' + binlog.estimate(new StringBuilder())
 
         final File slotDir2 = new File('/tmp/velo-data/test-persist/test-slot2')
         if (!slotDir2.exists()) {
@@ -361,7 +361,7 @@ class BinlogTest extends Specification {
         1 == 1
 
         cleanup:
-        println 'in memory size estimate: ' + binlog.estimate()
+        println 'in memory size estimate: ' + binlog.estimate(new StringBuilder())
         binlog.truncateAll()
         binlog.cleanUp()
         Consts.slotDir.deleteDir()
