@@ -154,7 +154,7 @@ sunionstore
         sGroup.cmd = 'select'
         reply = sGroup.handle()
         then:
-        reply == ErrorReply.NOT_SUPPORT
+        reply == OKReply.INSTANCE
 
         when:
         sGroup.cmd = 'subscribe'
