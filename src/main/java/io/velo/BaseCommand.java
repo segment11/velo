@@ -320,6 +320,8 @@ public abstract class BaseCommand {
         public SlotWithKeyHash(short slot, int bucketIndex, long keyHash) {
             this(slot, IGNORE_TO_CLIENT_SLOT, bucketIndex, keyHash, null);
         }
+
+        public static final SlotWithKeyHash TO_FIX_FIRST_SLOT = new SlotWithKeyHash((short) 0, 0, 0L, null);
     }
 
     @VisibleForTesting

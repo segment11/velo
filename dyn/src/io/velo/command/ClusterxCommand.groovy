@@ -30,8 +30,7 @@ class ClusterxCommand extends BaseCommand {
     @Override
     ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> list = []
-        // fix the first net worker event loop thread
-        list << new SlotWithKeyHash((short) 0, 0, 0L)
+        list << SlotWithKeyHash.TO_FIX_FIRST_SLOT
         list
     }
 
