@@ -36,7 +36,7 @@ class AclUsersTest extends Specification {
             u.password = U.Password.plain('123456')
         }
         then:
-        aclUsers.get('test').password != null
+        aclUsers.get('test').firstPassword != null
         aclUsers.inner.users.size() > 0
 
         when:
@@ -44,7 +44,7 @@ class AclUsersTest extends Specification {
             u.password = U.Password.NO_PASSWORD
         }
         then:
-        aclUsers.get('test').password.isNoPass()
+        aclUsers.get('test').firstPassword.isNoPass()
 
         when:
         aclUsers.delete('test')

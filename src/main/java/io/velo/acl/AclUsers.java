@@ -22,7 +22,7 @@ public class AclUsers {
     }
 
     public interface UpdateCallback {
-        void doUpdate(U u);
+        void doUpdate(U u) throws AclInvalidRuleException;
     }
 
     private static final Logger log = LoggerFactory.getLogger(AclUsers.class);
@@ -118,22 +118,30 @@ public class AclUsers {
     }
 
     public void upInsert(String user, UpdateCallback callback) {
-        changeUser(inner -> inner.upInsert(user, callback));
+        var inner = getInner();
+        inner.upInsert(user, callback);
+
+        changeUser(inner2 -> inner2.upInsert(user, callback));
     }
 
     public boolean delete(String user) {
-        var flag = getInner().delete(user);
+        var inner = getInner();
+        var flag = inner.delete(user);
 
-        changeUser(inner -> {
-            inner.delete(user);
+        changeUser(inner2 -> {
+            inner2.delete(user);
         });
         return flag;
     }
 
     public void replaceUsers(List<U> users) {
-        changeUser(inner -> {
-            inner.users.clear();
-            inner.users.addAll(users);
+        var inner = getInner();
+        inner.users.clear();
+        inner.users.addAll(users);
+
+        changeUser(inner2 -> {
+            inner2.users.clear();
+            inner2.users.addAll(users);
         });
     }
 }

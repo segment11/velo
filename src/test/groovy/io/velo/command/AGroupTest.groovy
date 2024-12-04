@@ -379,6 +379,31 @@ class AGroupTest extends Specification {
         reply == OKReply.INSTANCE
 
         when:
+        reply = aGroup.execute('acl setuser a <123456')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = aGroup.execute('acl setuser a #34344e4d60c2b6d639b7bd22e18f2b0b91bc34bf0ac5f9952744435093cfb4e6')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = aGroup.execute('acl setuser a !34344e4d60c2b6d639b7bd22e18f2b0b91bc34bf0ac5f9952744435093cfb4e6')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = aGroup.execute('acl setuser a #111')
+        then:
+        reply == ErrorReply.ACL_SETUSER_RULE_INVALID
+
+        when:
+        reply = aGroup.execute('acl setuser a !111')
+        then:
+        reply == ErrorReply.ACL_SETUSER_RULE_INVALID
+
+        when:
         ValkeyRawConfSupport.aclPubsubDefault = false
         reply = aGroup.execute('acl setuser a resetchannels reset')
         then:
@@ -396,9 +421,14 @@ class AGroupTest extends Specification {
         exception
 
         when:
-        reply = aGroup.execute('acl setuser a')
+        reply = aGroup.execute('acl setuser')
         then:
         reply == ErrorReply.SYNTAX
+
+        when:
+        reply = aGroup.execute('acl setuser a')
+        then:
+        reply == OKReply.INSTANCE
 
         // ***** *****
         when:

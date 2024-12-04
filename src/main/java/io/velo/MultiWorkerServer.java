@@ -211,8 +211,13 @@ public class MultiWorkerServer extends Launcher {
     }
 
     Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
-        if (!request.isAclCheckOk()) {
-            return Promise.of(ErrorReply.ACL_PERMIT_LIMIT.buffer());
+        var isAclCheckOk = request.isAclCheckOk();
+        if (!isAclCheckOk.asBoolean()) {
+            return Promise.of(
+                    isAclCheckOk.isKeyFail() ?
+                            ErrorReply.ACL_PERMIT_KEY_LIMIT.buffer()
+                            : ErrorReply.ACL_PERMIT_LIMIT.buffer()
+            );
         }
 
         var slotWithKeyHashList = request.getSlotWithKeyHashList();

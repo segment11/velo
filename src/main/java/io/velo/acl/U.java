@@ -12,14 +12,20 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static io.velo.acl.U.CheckCmdAndKeyResult.FALSE_WHEN_CHECK_CMD;
+import static io.velo.acl.U.CheckCmdAndKeyResult.FALSE_WHEN_CHECK_KEY;
+
 // acl user
 public class U {
     public static final String DEFAULT_USER = "default";
 
     public static final String ADD_PASSWORD_PREFIX = ">";
+    public static final String REMOVE_PASSWORD_PREFIX = "<";
+    public static final String ADD_HASH_PASSWORD_PREFIX = "#";
+    public static final String REMOVE_HASH_PASSWORD_PREFIX = "!";
 
     private enum PasswordEncodedType {
-        plain, sha256;
+        plain, sha256Hex;
     }
 
     public record Password(String passwordEncoded, PasswordEncodedType encodeType) {
@@ -36,17 +42,32 @@ public class U {
             if (encodeType == PasswordEncodedType.plain) {
                 return this.passwordEncoded.equals(passwordRaw);
             } else {
-                var bytes = DigestUtils.sha256(passwordRaw);
-                return this.passwordEncoded.equals(new String(bytes));
+                return this.passwordEncoded.equals(DigestUtils.sha256Hex(passwordRaw));
             }
         }
 
-        public static Password plain(String password) {
-            return new Password(password, PasswordEncodedType.plain);
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || getClass() != obj.getClass()) {
+                return false;
+            }
+            var password = (Password) obj;
+            return passwordEncoded.equals(password.passwordEncoded) && encodeType == password.encodeType;
         }
 
-        public static Password sha256(String passwordRaw) {
-            return new Password(new String(DigestUtils.sha256(passwordRaw)), PasswordEncodedType.sha256);
+        public static Password plain(String passwordRaw) {
+            return new Password(passwordRaw, PasswordEncodedType.plain);
+        }
+
+        public static Password sha256Hex(String passwordRaw) {
+            return new Password(DigestUtils.sha256Hex(passwordRaw), PasswordEncodedType.sha256Hex);
+        }
+
+        public static Password sha256HexEncoded(String passwordSha256Hex) {
+            return new Password(passwordSha256Hex, PasswordEncodedType.sha256Hex);
         }
 
         public static final String NO_PASS = "nopass";
@@ -63,7 +84,8 @@ public class U {
         this.user = user;
     }
 
-    private boolean isOn = true;
+    // new user default off
+    private boolean isOn = false;
 
     public boolean isOn() {
         return isOn;
@@ -73,10 +95,18 @@ public class U {
         isOn = on;
     }
 
-    private final List<Password> passwords = new ArrayList<>();
+    private final ArrayList<Password> passwords = new ArrayList<>();
 
     public void addPassword(Password password) {
+        // check duplicate
+        if (passwords.stream().anyMatch(p -> p.equals(password))) {
+            return;
+        }
         passwords.add(password);
+    }
+
+    public void removePassword(Password password) {
+        passwords.stream().filter(p -> p.equals(password)).findFirst().ifPresent(passwords::remove);
     }
 
     public void resetPassword() {
@@ -98,13 +128,14 @@ public class U {
     }
 
     @TestOnly
-    public Password getPassword() {
+    public Password getFirstPassword() {
         return passwords.isEmpty() ? null : passwords.getFirst();
     }
 
     public static final U INIT_DEFAULT_U = new U(DEFAULT_USER);
 
     static {
+        INIT_DEFAULT_U.setOn(true);
         INIT_DEFAULT_U.addPassword(Password.NO_PASSWORD);
         INIT_DEFAULT_U.addRCmd(true, RCmd.fromLiteral("+*"), RCmd.fromLiteral("+@all"));
         INIT_DEFAULT_U.addRKey(true, RKey.fromLiteral("~*"));
@@ -115,7 +146,7 @@ public class U {
         var sb = new StringBuilder();
         sb.append("user ").append(user).append(" ");
         sb.append(isOn ? "on" : "off").append(" ");
-        var firstPassword = passwords.getFirst();
+        var firstPassword = getFirstPassword();
         // need # before password ? todo
         sb.append(firstPassword.passwordEncoded).append(" ");
 
@@ -309,34 +340,56 @@ public class U {
         rPubSubList.addAll(another.rPubSubList);
     }
 
-    public boolean checkCmdAndKey(String cmd, byte[][] data, ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList) {
+    public record CheckCmdAndKeyResult(boolean isOk, boolean isKeyFail) {
+        public boolean asBoolean() {
+            return isOk;
+        }
+
+        public static final CheckCmdAndKeyResult FALSE_WHEN_CHECK_CMD = new CheckCmdAndKeyResult(false, false);
+        public static final CheckCmdAndKeyResult FALSE_WHEN_CHECK_KEY = new CheckCmdAndKeyResult(false, true);
+        public static final CheckCmdAndKeyResult TRUE = new CheckCmdAndKeyResult(true, false);
+    }
+
+    public CheckCmdAndKeyResult checkCmdAndKey(String cmd, byte[][] data, ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList) {
         if (rCmdList.isEmpty()) {
-            return false;
+            return FALSE_WHEN_CHECK_CMD;
         }
 
         var firstArg = data.length > 1 ? new String(data[1]).toLowerCase() : null;
         var isAllowCmdAnyOk = rCmdList.stream().anyMatch(rCmd -> rCmd.match(cmd, firstArg));
         if (!isAllowCmdAnyOk) {
-            return false;
+            return FALSE_WHEN_CHECK_CMD;
         }
 
         var isDisallowCmdEveryOk = rCmdDisallowList.stream().noneMatch(rCmd -> rCmd.match(cmd, firstArg));
         if (!isDisallowCmdEveryOk) {
-            return false;
+            return FALSE_WHEN_CHECK_CMD;
         }
 
-        if (slotWithKeyHashList != null) {
+        if (slotWithKeyHashList != null && !slotWithKeyHashList.isEmpty()) {
+            if (rKeyList.isEmpty()) {
+                // skip check, just use to fix event loop
+                if (slotWithKeyHashList.size() == 1 && slotWithKeyHashList.getFirst() == BaseCommand.SlotWithKeyHash.TO_FIX_FIRST_SLOT) {
+                    return CheckCmdAndKeyResult.TRUE;
+                }
+                return FALSE_WHEN_CHECK_KEY;
+            }
+
             for (var slotWithKeyHash : slotWithKeyHashList) {
+                if (slotWithKeyHash == BaseCommand.SlotWithKeyHash.TO_FIX_FIRST_SLOT) {
+                    continue;
+                }
+
                 for (var rKey : rKeyList) {
                     // todo, cmd read / write, need to check
                     if (!rKey.match(slotWithKeyHash.rawKey(), true, true)) {
-                        return false;
+                        return FALSE_WHEN_CHECK_KEY;
                     }
                 }
             }
         }
 
-        return true;
+        return CheckCmdAndKeyResult.TRUE;
     }
 
     public boolean checkChannels(String... channels) {

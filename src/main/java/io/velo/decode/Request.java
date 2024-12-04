@@ -1,6 +1,7 @@
 package io.velo.decode;
 
 import io.velo.BaseCommand;
+import io.velo.RequestHandler;
 import io.velo.acl.U;
 import org.jetbrains.annotations.TestOnly;
 
@@ -42,14 +43,18 @@ public class Request {
         this.u = u;
     }
 
-    public boolean isAclCheckOk() {
+    public U.CheckCmdAndKeyResult isAclCheckOk() {
         // just when do unit test
         if (u == null) {
-            return true;
+            return U.CheckCmdAndKeyResult.TRUE;
+        }
+
+        if (RequestHandler.AUTH_COMMAND.equals(cmd())) {
+            return U.CheckCmdAndKeyResult.TRUE;
         }
 
         if (!u.isOn()) {
-            return false;
+            return U.CheckCmdAndKeyResult.FALSE_WHEN_CHECK_CMD;
         }
         return u.checkCmdAndKey(cmd(), data, slotWithKeyHashList);
     }

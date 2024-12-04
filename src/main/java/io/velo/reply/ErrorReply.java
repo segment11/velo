@@ -9,9 +9,11 @@ public class ErrorReply implements Reply {
     public static final ErrorReply KEY_TOO_LONG = new ErrorReply("key too long (max length is " + CompressedValue.KEY_MAX_LENGTH + ")");
     public static final ErrorReply VALUE_TOO_LONG = new ErrorReply("value too long (max length is " + CompressedValue.VALUE_MAX_LENGTH + ")");
     public static final ErrorReply SERVER_STOPPED = new ErrorReply("server stopped");
-    public static final ErrorReply AUTH_FAILED = new ErrorReply("auth failed");
+    public static final ErrorReply AUTH_FAILED = new ErrorReply("auth failed !WRONGPASS!");
     public static final ErrorReply NO_AUTH = new ErrorReply("no auth");
-    public static final ErrorReply ACL_PERMIT_LIMIT = new ErrorReply("user acl permit limit");
+    public static final ErrorReply ACL_PERMIT_LIMIT = new ErrorReply("user acl permit limit !NOPERM!");
+    public static final ErrorReply ACL_PERMIT_KEY_LIMIT = new ErrorReply("user acl permit limit !NOPERM! !key!");
+    public static final ErrorReply ACL_SETUSER_RULE_INVALID = new ErrorReply("!Error in ACL SETUSER modifier!");
     public static final ErrorReply SYNTAX = new ErrorReply("syntax error");
     public static final ErrorReply NOT_INTEGER = new ErrorReply("not integer");
     public static final ErrorReply NOT_FLOAT = new ErrorReply("not float");

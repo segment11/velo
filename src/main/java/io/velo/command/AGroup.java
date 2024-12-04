@@ -51,8 +51,7 @@ public class AGroup extends BaseCommand {
                     requestHandler.parseSlots(redirectRequest);
                     return redirectRequest.getSlotWithKeyHashList();
                 } else {
-                    // fix the first net worker event loop thread
-                    slotWithKeyHashList.add(new SlotWithKeyHash((short) 0, 0, 0L));
+                    slotWithKeyHashList.add(SlotWithKeyHash.TO_FIX_FIRST_SLOT);
                 }
             }
         }
@@ -156,8 +155,9 @@ public class AGroup extends BaseCommand {
             var redirectRequest = new Request(dd, false, false);
             redirectRequest.setU(u);
 
-            if (!redirectRequest.isAclCheckOk()) {
-                return ErrorReply.ACL_PERMIT_LIMIT;
+            var isAclCheckOk = redirectRequest.isAclCheckOk();
+            if (!isAclCheckOk.asBoolean()) {
+                return isAclCheckOk.isKeyFail() ? ErrorReply.ACL_PERMIT_KEY_LIMIT : ErrorReply.ACL_PERMIT_LIMIT;
             }
 
             // todo
@@ -323,59 +323,79 @@ public class AGroup extends BaseCommand {
                 return new ErrorReply("write acl file error: " + e.getMessage());
             }
         } else if ("setuser".equals(subCmd)) {
-            if (data.length < 4) {
+            if (data.length < 3) {
                 return ErrorReply.SYNTAX;
             }
 
             var user = new String(data[2]);
 
             var aclUsers = AclUsers.getInstance();
-            aclUsers.upInsert(user, u -> {
-                for (int i = 3; i < data.length; i++) {
-                    var rule = new String(data[i]);
-                    if ("on".equals(rule)) {
-                        u.setOn(true);
-                    } else if ("off".equals(rule)) {
-                        u.setOn(false);
-                    } else if ("resetkeys".equals(rule)) {
-                        u.resetKey();
-                    } else if ("resetchannels".equals(rule)) {
-                        u.resetPubSub();
-                        if (ValkeyRawConfSupport.aclPubsubDefault) {
-                            u.addRPubSub(false, RPubSub.fromLiteral("&*"));
-                        }
-                    } else if ("nopass".equals(rule)) {
-                        u.addPassword(U.Password.NO_PASSWORD);
-                    } else if ("resetpass".equals(rule)) {
-                        u.resetPassword();
-                    } else if (rule.startsWith(U.ADD_PASSWORD_PREFIX)) {
-                        var password = rule.substring(1);
-                        u.addPassword(U.Password.plain(password));
-                    } else if ("reset".equals(rule)) {
-                        u.setOn(false);
-                        u.resetPassword();
-                        u.resetKey();
-                        u.resetPubSub();
-                        if (ValkeyRawConfSupport.aclPubsubDefault) {
-                            u.addRPubSub(false, RPubSub.fromLiteral("&*"));
-                        }
-                    } else if (RCmd.isRCmdLiteral(rule)) {
-                        if (RCmd.isAllowLiteral(rule)) {
-                            u.addRCmd(false, RCmd.fromLiteral(rule));
-                        } else {
-                            u.addRCmdDisallow(false, RCmd.fromLiteral(rule));
-                        }
-                    } else if (RKey.isRKeyLiteral(rule)) {
-                        u.addRKey(false, RKey.fromLiteral(rule));
-                    } else if (RPubSub.isRPubSubLiteral(rule)) {
-                        u.addRPubSub(false, RPubSub.fromLiteral(rule));
-                    } else {
-                        throw new IllegalArgumentException("Invalid acl rule: " + rule);
-                    }
-                }
-            });
 
-            return OKReply.INSTANCE;
+            try {
+                aclUsers.upInsert(user, u -> {
+                    for (int i = 3; i < data.length; i++) {
+                        var rule = new String(data[i]);
+                        if ("on".equals(rule)) {
+                            u.setOn(true);
+                        } else if ("off".equals(rule)) {
+                            u.setOn(false);
+                        } else if ("resetkeys".equals(rule)) {
+                            u.resetKey();
+                        } else if ("resetchannels".equals(rule)) {
+                            u.resetPubSub();
+                            if (ValkeyRawConfSupport.aclPubsubDefault) {
+                                u.addRPubSub(false, RPubSub.fromLiteral("&*"));
+                            }
+                        } else if ("nopass".equals(rule)) {
+                            u.addPassword(U.Password.NO_PASSWORD);
+                        } else if ("resetpass".equals(rule)) {
+                            u.resetPassword();
+                        } else if (rule.startsWith(U.ADD_PASSWORD_PREFIX)) {
+                            var password = rule.substring(1);
+                            u.addPassword(U.Password.plain(password));
+                        } else if (rule.startsWith(U.REMOVE_PASSWORD_PREFIX)) {
+                            var password = rule.substring(1);
+                            u.removePassword(U.Password.plain(password));
+                        } else if (rule.startsWith(U.ADD_HASH_PASSWORD_PREFIX)) {
+                            var passwordSha256Hex = rule.substring(1);
+                            if (passwordSha256Hex.length() != 64) {
+                                throw new AclInvalidRuleException("Invalid sha256 hex password: " + passwordSha256Hex);
+                            }
+                            u.addPassword(U.Password.sha256HexEncoded(passwordSha256Hex));
+                        } else if (rule.startsWith(U.REMOVE_HASH_PASSWORD_PREFIX)) {
+                            var passwordSha256Hex = rule.substring(1);
+                            if (passwordSha256Hex.length() != 64) {
+                                throw new AclInvalidRuleException("Invalid sha256 hex password: " + passwordSha256Hex);
+                            }
+                            u.removePassword(U.Password.sha256HexEncoded(passwordSha256Hex));
+                        } else if ("reset".equals(rule)) {
+                            u.setOn(false);
+                            u.resetPassword();
+                            u.resetKey();
+                            u.resetPubSub();
+                            if (ValkeyRawConfSupport.aclPubsubDefault) {
+                                u.addRPubSub(false, RPubSub.fromLiteral("&*"));
+                            }
+                        } else if (RCmd.isRCmdLiteral(rule)) {
+                            if (RCmd.isAllowLiteral(rule)) {
+                                u.addRCmd(false, RCmd.fromLiteral(rule));
+                            } else {
+                                u.addRCmdDisallow(false, RCmd.fromLiteral(rule));
+                            }
+                        } else if (RKey.isRKeyLiteral(rule)) {
+                            u.addRKey(false, RKey.fromLiteral(rule));
+                        } else if (RPubSub.isRPubSubLiteral(rule)) {
+                            u.addRPubSub(false, RPubSub.fromLiteral(rule));
+                        } else {
+                            throw new IllegalArgumentException("Invalid acl rule: " + rule);
+                        }
+                    }
+                });
+                return OKReply.INSTANCE;
+            } catch (AclInvalidRuleException e) {
+                log.error("Set user error: {}", e.getMessage());
+                return ErrorReply.ACL_SETUSER_RULE_INVALID;
+            }
         } else if ("users".equals(subCmd)) {
             if (data.length != 2) {
                 return ErrorReply.SYNTAX;

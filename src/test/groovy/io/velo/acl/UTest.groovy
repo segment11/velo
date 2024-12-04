@@ -8,10 +8,17 @@ class UTest extends Specification {
     def 'test base'() {
         given:
         def u = new U('kerry')
+        u.on = true
         def p1 = U.Password.plain('123456')
-        def p2 = U.Password.sha256('123456')
+        def p2 = U.Password.sha256Hex('123456')
+        def p11 = U.Password.plain('1234567')
+        def p22 = U.Password.sha256HexEncoded('34344e4d60c2b6d639b7bd22e18f2b0b91bc34bf0ac5f9952744435093cfb4e6')
         u.password = p1
         u.addPassword(p2)
+        u.addPassword(p2)
+        u.addPassword(p11)
+        u.removePassword(p11)
+        u.addPassword(p22)
 
         and:
         def rCmd = new RCmd()
@@ -36,10 +43,17 @@ class UTest extends Specification {
 
         expect:
         u.on
-        !u.password.isNoPass()
+        !u.firstPassword.isNoPass()
         u.checkPassword('123456')
         !u.checkPassword('1234567')
+        u.checkPassword('passwd4')
         u.literal() == 'user kerry on 123456 +* -set %R~a* &myChannel*'
+        p1.equals(p1)
+        !p1.equals(p11)
+        !p1.equals(p2)
+        !p1.equals(null)
+        !p1.equals(u)
+        p1.equals(U.Password.plain('123456'))
 
         when:
         u.on = false
@@ -47,7 +61,7 @@ class UTest extends Specification {
         u.literal() == 'user kerry off 123456 +* -set %R~a* &myChannel*'
 
         when:
-        u.password = U.Password.sha256('123456')
+        u.password = U.Password.sha256Hex('123456')
         then:
         u.checkPassword('123456')
 
@@ -55,14 +69,14 @@ class UTest extends Specification {
         u.on = true
         u.password = U.Password.NO_PASSWORD
         then:
-        u.password.isNoPass()
+        u.firstPassword.isNoPass()
         u.checkPassword('123456')
         u.literal() == 'user kerry on nopass +* -set %R~a* &myChannel*'
 
         when:
         u.resetPassword()
         then:
-        u.password == null
+        u.firstPassword == null
         !u.checkPassword('123456')
 
         when:
@@ -254,10 +268,20 @@ class UTest extends Specification {
 
         when:
         dataGet[1] = 'other_key'.bytes
-        def slotWithKeyHashList2 = [BaseCommand.slot('other_key'.bytes, (short) 1)]
+        def slotWithKeyHashList2 = [BaseCommand.SlotWithKeyHash.TO_FIX_FIRST_SLOT, BaseCommand.slot('other_key'.bytes, (short) 1)]
         then:
         !u.checkCmdAndKey('get', dataGet, slotWithKeyHashList2)
         !u.checkChannels('my_channel1')
+
+        when:
+        u.rKeyList.clear()
+        then:
+        !u.checkCmdAndKey('get', dataGet, slotWithKeyHashList)
+
+        when:
+        def slotWithKeyHashList11 = [BaseCommand.SlotWithKeyHash.TO_FIX_FIRST_SLOT]
+        then:
+        u.checkCmdAndKey('get', dataGet, slotWithKeyHashList11)
 
         when:
         def rPubSub = new RPubSub()

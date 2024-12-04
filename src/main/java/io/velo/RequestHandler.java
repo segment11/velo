@@ -37,7 +37,7 @@ public class RequestHandler {
     private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
 
     private static final String PING_COMMAND = "ping";
-    private static final String AUTH_COMMAND = "auth";
+    public static final String AUTH_COMMAND = "auth";
     private static final String GET_COMMAND = "get";
     private static final String SET_COMMAND = "set";
     private static final String QUIT_COMMAND = "quit";
