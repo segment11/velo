@@ -107,6 +107,8 @@ dependencies {
 
     implementation group: 'org.apache.lucene', name: 'lucene-core', version: '9.11.1'
 
+    implementation group: 'org.rocksdb', name: 'rocksdbjni', version: '9.7.3'
+
     implementation group: 'org.apache.curator', name: 'curator-framework', version: '5.7.0'
     implementation group: 'org.apache.curator', name: 'curator-recipes', version: '5.7.0'
     implementation group: 'org.apache.curator', name: 'curator-client', version: '5.7.0'

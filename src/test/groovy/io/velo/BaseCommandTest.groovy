@@ -703,4 +703,31 @@ class BaseCommandTest extends Specification {
         dictMap.cleanUp()
         Consts.testDir.deleteDir()
     }
+
+    def 'test key analysis'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.startIndexHandlerPool()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        and:
+        def s = BaseCommand.slot('a'.bytes, (short) 1)
+        def c = new SubCommand('set', null, null)
+        c.from(BaseCommand.mockAGroup())
+
+        when:
+        c.set('a'.bytes, 'a'.bytes, s)
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = 1
+        c.setCv('a'.bytes, cv, s)
+        c.remove(slot, s.bucketIndex(), 'a', s.keyHash())
+        c.removeDelay(slot, s.bucketIndex(), 'a', s.keyHash())
+        Thread.sleep(1000)
+        then:
+        1 == 1
+
+        cleanup:
+        localPersist.cleanUp()
+    }
 }

@@ -14,6 +14,7 @@ class IndexHandlerPoolTest extends Specification {
         when:
         pool.start()
         then:
+        pool.keyAnalysisHandler != null
         pool.indexHandlers.length == 2
         pool.getIndexHandler((byte) 0) != null
         pool.getChunkMaxSegmentNumber() > 0

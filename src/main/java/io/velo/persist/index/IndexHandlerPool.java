@@ -10,6 +10,7 @@ import net.openhft.affinity.AffinityStrategies;
 import net.openhft.affinity.AffinityThreadFactory;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
+import org.rocksdb.RocksDBException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +23,12 @@ public class IndexHandlerPool implements NeedCleanUp {
 
     @VisibleForTesting
     final IndexHandler[] indexHandlers;
+
+    private final KeyAnalysisHandler keyAnalysisHandler;
+
+    public KeyAnalysisHandler getKeyAnalysisHandler() {
+        return keyAnalysisHandler;
+    }
 
     @TestOnly
     public IndexHandler getIndexHandler(byte workerId) {
@@ -51,6 +58,7 @@ public class IndexHandlerPool implements NeedCleanUp {
     private static final Logger log = LoggerFactory.getLogger(IndexHandlerPool.class);
 
     private static final String INDEX_DIR_NAME = "reverse-index";
+    private static final String KEYS_FOR_ANALYSIS = "keys-for-analysis";
 
     public IndexHandlerPool(byte indexWorkers, File persistDir, int expiredIfSecondsFromNow) throws IOException {
         var eachIndexHandlerChunkFdNumber = getEachIndexHandlerChunkFdNumber(indexWorkers);
@@ -83,6 +91,20 @@ public class IndexHandlerPool implements NeedCleanUp {
                 }
             }
             indexHandler.initChunk((byte) eachIndexHandlerChunkFdNumber, workerIdDir, expiredIfSecondsFromNow);
+        }
+
+        var keysDir = new File(persistDir, KEYS_FOR_ANALYSIS);
+        if (!keysDir.exists()) {
+            boolean isOk = keysDir.mkdirs();
+            if (!isOk) {
+                throw new RuntimeException("Create dir " + keysDir.getAbsolutePath() + " failed");
+            }
+        }
+
+        try {
+            this.keyAnalysisHandler = new KeyAnalysisHandler(keysDir, workerEventloopArray[0]);
+        } catch (RocksDBException e) {
+            throw new RuntimeException("Create rocksdb for key analysis failed");
         }
     }
 
@@ -151,5 +173,7 @@ public class IndexHandlerPool implements NeedCleanUp {
         for (var indexHandler : indexHandlers) {
             indexHandler.cleanUp();
         }
+
+        keyAnalysisHandler.cleanUp();
     }
 }

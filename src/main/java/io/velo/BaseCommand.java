@@ -609,6 +609,11 @@ public abstract class BaseCommand {
                 var slot = slotWithKeyHash.slot();
 
                 putToOneSlot(slot, dstKey, slotWithKeyHash, cv);
+
+                var indexHandlerPool = localPersist.getIndexHandlerPool();
+                if (indexHandlerPool != null) {
+                    indexHandlerPool.getKeyAnalysisHandler().addKey(slotWithKeyHash.rawKey);
+                }
             } else {
                 set(keyBytes, cv.getCompressedData(), slotWithKeyHash, 0, cv.getExpireAt());
             }
@@ -741,6 +746,11 @@ public abstract class BaseCommand {
                 compressStats.compressedTotalLength += valueBytes.length;
             }
         }
+
+        var indexHandlerPool = localPersist.getIndexHandlerPool();
+        if (indexHandlerPool != null) {
+            indexHandlerPool.getKeyAnalysisHandler().addKey(key);
+        }
     }
 
     private void putToOneSlot(short slot, String key, @NotNull SlotWithKeyHash slotWithKeyHash, CompressedValue cv) {
@@ -762,6 +772,11 @@ public abstract class BaseCommand {
             return byPassGetSet.remove(slot, key);
         }
 
+        var indexHandlerPool = localPersist.getIndexHandlerPool();
+        if (indexHandlerPool != null) {
+            indexHandlerPool.getKeyAnalysisHandler().removeKey(key);
+        }
+
         var oneSlot = localPersist.oneSlot(slot);
         return oneSlot.remove(key, bucketIndex, keyHash);
     }
@@ -770,6 +785,11 @@ public abstract class BaseCommand {
         if (byPassGetSet != null) {
             byPassGetSet.remove(slot, key);
             return;
+        }
+
+        var indexHandlerPool = localPersist.getIndexHandlerPool();
+        if (indexHandlerPool != null) {
+            indexHandlerPool.getKeyAnalysisHandler().removeKey(key);
         }
 
         var oneSlot = localPersist.oneSlot(slot);
