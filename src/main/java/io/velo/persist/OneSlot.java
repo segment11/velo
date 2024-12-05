@@ -465,6 +465,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         for (var handler : handlersRegisteredList) {
             handler.handleWhenCvExpiredOrDeleted(key, shortStringCv, pvm);
         }
+
+        var indexHandlerPool = LocalPersist.getInstance().getIndexHandlerPool();
+        if (indexHandlerPool != null) {
+            indexHandlerPool.getKeyAnalysisHandler().removeKey(key);
+        }
     }
 
     @VisibleForTesting
