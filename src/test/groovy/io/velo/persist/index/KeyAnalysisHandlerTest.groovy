@@ -26,11 +26,11 @@ class KeyAnalysisHandlerTest extends Specification {
 
         when:
         10.times {
-            keyAnalysisHandler.addKey('key:' + (it.toString().padLeft(12, '0')))
+            keyAnalysisHandler.addKey('key:' + (it.toString().padLeft(12, '0')), 10)
         }
         keyAnalysisHandler.removeKey('key:000000000000')
         keyAnalysisHandler.removeKey('key:000000000001')
-        Thread.sleep(100)
+        Thread.sleep(2000)
         def metricsMap = keyAnalysisHandler.collect()
         then:
         metricsMap['key_analysis_add_count'] == 10
@@ -48,6 +48,7 @@ class KeyAnalysisHandlerTest extends Specification {
 
         cleanup:
         keyAnalysisHandler.cleanUp()
+        Thread.sleep(2000)
         eventloop.breakEventloop()
     }
 }

@@ -612,7 +612,7 @@ public abstract class BaseCommand {
 
                 var indexHandlerPool = localPersist.getIndexHandlerPool();
                 if (indexHandlerPool != null) {
-                    indexHandlerPool.getKeyAnalysisHandler().addKey(slotWithKeyHash.rawKey);
+                    indexHandlerPool.getKeyAnalysisHandler().addKey(slotWithKeyHash.rawKey, cv.getUncompressedLength());
                 }
             } else {
                 set(keyBytes, cv.getCompressedData(), slotWithKeyHash, 0, cv.getExpireAt());
@@ -749,7 +749,7 @@ public abstract class BaseCommand {
 
         var indexHandlerPool = localPersist.getIndexHandlerPool();
         if (indexHandlerPool != null) {
-            indexHandlerPool.getKeyAnalysisHandler().addKey(key);
+            indexHandlerPool.getKeyAnalysisHandler().addKey(key, valueBytes.length);
         }
     }
 

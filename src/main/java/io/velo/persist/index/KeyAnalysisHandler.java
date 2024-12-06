@@ -10,20 +10,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-public class KeyAnalysisHandler implements InSlotMetricCollector, NeedCleanUp {
+public class KeyAnalysisHandler implements Runnable, InSlotMetricCollector, NeedCleanUp {
+    public interface InnerTask {
+        void run(int loopCount);
+    }
+
     private final Eventloop eventloop;
+    // null when do unit test
+    private final InnerTask innerTask;
     private final RocksDB db;
 
-    private static final byte[] NO_VALUE_BYTES = new byte[1];
-
-    private final AtomicLong addCount = new AtomicLong();
-    private final AtomicLong removeCount = new AtomicLong();
+    private long addCount = 0;
+    private long removeCount = 0;
 
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisHandler.class);
 
@@ -34,31 +38,24 @@ public class KeyAnalysisHandler implements InSlotMetricCollector, NeedCleanUp {
         var options = new Options().setCreateIfMissing(true);
         this.db = RocksDB.open(options, keysDir.getAbsolutePath());
         log.warn("Key analysis handler started, keysDir={}", keysDir.getAbsolutePath());
+
+        this.innerTask = new KeyAnalysisTask(db);
+        eventloop.delay(1000, this);
     }
 
-    public void addKey(String key) {
-        var f = eventloop.submit(() -> {
-            db.put(key.getBytes(), NO_VALUE_BYTES);
-        });
-        f.whenComplete((v, e) -> {
-            if (e != null) {
-                log.error("Error in addKey, key={}", key, e);
-            } else {
-                addCount.incrementAndGet();
-            }
+    public void addKey(String key, int valueLengthAsInt) {
+        var bytes = new byte[4];
+        ByteBuffer.wrap(bytes).putInt(valueLengthAsInt);
+        eventloop.submit(() -> {
+            db.put(key.getBytes(), bytes);
+            addCount++;
         });
     }
 
     public void removeKey(String key) {
-        var f = eventloop.submit(() -> {
+        eventloop.submit(() -> {
             db.delete(key.getBytes());
-        });
-        f.whenComplete((v, e) -> {
-            if (e != null) {
-                log.error("Error in removeKey, key={}", key, e);
-            } else {
-                removeCount.incrementAndGet();
-            }
+            removeCount++;
         });
     }
 
@@ -84,18 +81,39 @@ public class KeyAnalysisHandler implements InSlotMetricCollector, NeedCleanUp {
         });
     }
 
+    private volatile boolean isStopped = false;
+
+    private int loopCount = 0;
+
+    @Override
+    public void run() {
+        loopCount++;
+        if (innerTask != null) {
+            innerTask.run(loopCount);
+        }
+
+        if (isStopped) {
+            return;
+        }
+
+        eventloop.delay(1000L, this);
+    }
+
     @Override
     public Map<String, Double> collect() {
         var map = new HashMap<String, Double>();
 
-        map.put("key_analysis_add_count", (double) addCount.get());
-        map.put("key_analysis_remove_count", (double) removeCount.get());
+        map.put("key_analysis_add_count", (double) addCount);
+        map.put("key_analysis_remove_count", (double) removeCount);
 
         return map;
     }
 
     @Override
     public void cleanUp() {
+        isStopped = true;
+        System.out.println("Key analysis handler scheduler stopped");
+
         db.close();
         System.out.println("Close key analysis db");
     }
