@@ -2,7 +2,8 @@ package io.velo.persist.index;
 
 import io.activej.eventloop.Eventloop;
 import io.velo.NeedCleanUp;
-import io.velo.metric.InSlotMetricCollector;
+import io.velo.metric.SimpleGauge;
+import org.jetbrains.annotations.VisibleForTesting;
 import org.rocksdb.CompressionType;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
@@ -13,11 +14,11 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
-public class KeyAnalysisHandler implements Runnable, InSlotMetricCollector, NeedCleanUp {
+public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     public interface InnerTask {
         void run(int loopCount);
     }
@@ -28,6 +29,7 @@ public class KeyAnalysisHandler implements Runnable, InSlotMetricCollector, Need
     private final RocksDB db;
 
     private long addCount = 0;
+    private long addValueLengthTotal = 0;
     private long removeCount = 0;
 
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisHandler.class);
@@ -51,6 +53,8 @@ public class KeyAnalysisHandler implements Runnable, InSlotMetricCollector, Need
 
         this.innerTask = new KeyAnalysisTask(db);
         eventloop.delay(1000, this);
+
+        this.initMetricsCollect();
     }
 
     public void addKey(String key, int valueLengthAsInt) {
@@ -59,6 +63,7 @@ public class KeyAnalysisHandler implements Runnable, InSlotMetricCollector, Need
         eventloop.submit(() -> {
             db.put(key.getBytes(), bytes);
             addCount++;
+            addValueLengthTotal += valueLengthAsInt;
         });
     }
 
@@ -109,14 +114,28 @@ public class KeyAnalysisHandler implements Runnable, InSlotMetricCollector, Need
         eventloop.delay(1000L, this);
     }
 
-    @Override
-    public Map<String, Double> collect() {
-        var map = new HashMap<String, Double>();
+    @VisibleForTesting
+    final static SimpleGauge keyAnalysisGauge = new SimpleGauge("keys", "Key analysis metrics.");
 
-        map.put("key_analysis_add_count", (double) addCount);
-        map.put("key_analysis_remove_count", (double) removeCount);
+    static {
+        keyAnalysisGauge.register();
+    }
 
-        return map;
+    private void initMetricsCollect() {
+        // only first slot show global metrics
+        keyAnalysisGauge.addRawGetter(() -> {
+            var labelValues = List.of("-1");
+
+            var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
+
+            map.put("key_analysis_add_count", new SimpleGauge.ValueWithLabelValues((double) addCount, labelValues));
+            map.put("key_analysis_remove_count", new SimpleGauge.ValueWithLabelValues((double) removeCount, labelValues));
+
+            var addValueLengthAvg = (double) addValueLengthTotal / addCount;
+            map.put("key_analysis_add_value_length_avg", new SimpleGauge.ValueWithLabelValues(addValueLengthAvg, labelValues));
+
+            return map;
+        });
     }
 
     @Override

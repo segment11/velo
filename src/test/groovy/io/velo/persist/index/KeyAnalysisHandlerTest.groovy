@@ -31,10 +31,13 @@ class KeyAnalysisHandlerTest extends Specification {
         keyAnalysisHandler.removeKey('key:000000000000')
         keyAnalysisHandler.removeKey('key:000000000001')
         Thread.sleep(2000)
-        def metricsMap = keyAnalysisHandler.collect()
+        def metrics = KeyAnalysisHandler.keyAnalysisGauge.collect()
+        def samples = metrics[0].samples
         then:
-        metricsMap['key_analysis_add_count'] == 10
-        metricsMap['key_analysis_remove_count'] == 2
+        samples.size() == 3
+        samples.find { it.name == 'key_analysis_add_count' }.value == 10
+        samples.find { it.name == 'key_analysis_remove_count' }.value == 2
+        samples.find { it.name == 'key_analysis_add_value_length_avg' }.value == 10
 
         when:
         int iterateKeyCount = 0
