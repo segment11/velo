@@ -30,7 +30,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
     private long addCount = 0;
     private long addValueLengthTotal = 0;
-    private long removeCount = 0;
+    private long removeOrExpireCount = 0;
 
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisHandler.class);
 
@@ -70,7 +70,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     public void removeKey(String key) {
         eventloop.submit(() -> {
             db.delete(key.getBytes());
-            removeCount++;
+            removeOrExpireCount++;
         });
     }
 
@@ -131,10 +131,12 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
 
             map.put("key_analysis_add_count", new SimpleGauge.ValueWithLabelValues((double) addCount, labelValues));
-            map.put("key_analysis_remove_count", new SimpleGauge.ValueWithLabelValues((double) removeCount, labelValues));
+            map.put("key_analysis_remove_or_expire_count", new SimpleGauge.ValueWithLabelValues((double) removeOrExpireCount, labelValues));
 
-            var addValueLengthAvg = (double) addValueLengthTotal / addCount;
-            map.put("key_analysis_add_value_length_avg", new SimpleGauge.ValueWithLabelValues(addValueLengthAvg, labelValues));
+            if (addCount > 0) {
+                var addValueLengthAvg = (double) addValueLengthTotal / addCount;
+                map.put("key_analysis_add_value_length_avg", new SimpleGauge.ValueWithLabelValues(addValueLengthAvg, labelValues));
+            }
 
             return map;
         });
