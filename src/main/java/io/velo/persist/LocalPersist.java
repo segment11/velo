@@ -142,7 +142,14 @@ public class LocalPersist implements NeedCleanUp {
         isHashSaveMemberTogether = hashSaveMemberTogether;
     }
 
+    private boolean isDebugMode = false;
+
+    public boolean isDebugMode() {
+        return isDebugMode;
+    }
+
     public void debugMode() {
+        isDebugMode = true;
         for (var oneSlot : oneSlots) {
             oneSlot.debugMode();
         }

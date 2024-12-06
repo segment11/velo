@@ -3,6 +3,7 @@ package io.velo.persist.index;
 import io.activej.eventloop.Eventloop;
 import io.velo.NeedCleanUp;
 import io.velo.metric.InSlotMetricCollector;
+import org.rocksdb.CompressionType;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -35,7 +36,16 @@ public class KeyAnalysisHandler implements Runnable, InSlotMetricCollector, Need
         this.eventloop = eventloop;
 
         RocksDB.loadLibrary();
-        var options = new Options().setCreateIfMissing(true);
+
+        // 100 million keys, use one more cpu vcore, cost about 3GB total file size, and less than 1GB memory
+        // refer to TestRocksDBConfig.groovy
+        var options = new Options()
+                .setCreateIfMissing(true)
+                .setCompressionType(CompressionType.NO_COMPRESSION)
+                .setNumLevels(2)
+                .setLevelZeroFileNumCompactionTrigger(8)
+                .setMaxOpenFiles(64)
+                .setMaxBackgroundJobs(4);
         this.db = RocksDB.open(options, keysDir.getAbsolutePath());
         log.warn("Key analysis handler started, keysDir={}", keysDir.getAbsolutePath());
 
