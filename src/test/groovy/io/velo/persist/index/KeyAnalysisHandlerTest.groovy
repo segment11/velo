@@ -41,8 +41,8 @@ class KeyAnalysisHandlerTest extends Specification {
 
         when:
         int iterateKeyCount = 0
-        def f = keyAnalysisHandler.iterateKeys(null, 10, { bb ->
-            println new String(bb)
+        def f = keyAnalysisHandler.iterateKeys(null, 10, { bb, valueLength ->
+            println new String(bb) + ': ' + valueLength
             iterateKeyCount++
         })
         f.get()

@@ -16,7 +16,7 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     public interface InnerTask {
@@ -74,7 +74,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         });
     }
 
-    public CompletableFuture<Void> iterateKeys(byte[] beginKeyBytes, int batchSize, Consumer<byte[]> consumer) {
+    public CompletableFuture<Void> iterateKeys(byte[] beginKeyBytes, int batchSize, BiConsumer<byte[], Integer> consumer) {
         return eventloop.submit(() -> {
             var iterator = db.newIterator();
             if (beginKeyBytes != null) {
@@ -89,7 +89,9 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
             int count = 0;
             while (iterator.isValid() && count < batchSize) {
                 var keyBytes = iterator.key();
-                consumer.accept(keyBytes);
+                var valueBytes = iterator.value();
+                var valueLengthAsInt = ByteBuffer.wrap(valueBytes).getInt();
+                consumer.accept(keyBytes, valueLengthAsInt);
                 iterator.next();
                 count++;
             }
