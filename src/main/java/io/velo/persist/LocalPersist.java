@@ -106,7 +106,10 @@ public class LocalPersist implements NeedCleanUp {
         }
 
         this.multiShard = new MultiShard(persistDir);
+        initSlotsAgainAfterMultiShardLoadedOrChanged();
+    }
 
+    public void initSlotsAgainAfterMultiShardLoadedOrChanged() {
         for (var oneSlot : oneSlots) {
             oneSlot.initMetricsCollect();
 

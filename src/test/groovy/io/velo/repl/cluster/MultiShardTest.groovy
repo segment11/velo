@@ -3,12 +3,17 @@ package io.velo.repl.cluster
 import io.velo.ConfForGlobal
 import io.velo.RequestHandler
 import io.velo.persist.Consts
+import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import spock.lang.Specification
 
 class MultiShardTest extends Specification {
     def 'test all'() {
         given:
-        Consts.persistDir.mkdirs()
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+
+        and:
         ConfForGlobal.netListenAddresses = 'localhost:7379'
         RequestHandler.initMultiShardShadows((byte) 1)
         def multiShard = new MultiShard(Consts.persistDir)
@@ -70,6 +75,7 @@ class MultiShardTest extends Specification {
         multiShard.firstToClientSlot() == 0
 
         cleanup:
+        localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
 }

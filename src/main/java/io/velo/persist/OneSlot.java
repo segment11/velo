@@ -1878,6 +1878,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
                 return map;
             });
+        } else {
+            globalGauge.clearRawGetterList();
         }
     }
 

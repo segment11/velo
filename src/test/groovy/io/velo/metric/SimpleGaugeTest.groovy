@@ -34,5 +34,10 @@ class SimpleGaugeTest extends Specification {
         mfsList.size() == 1
         mfsList[0].name == 'test'
         mfsList[0].samples.size() == 4
+
+        when:
+        g.clearRawGetterList()
+        then:
+        g.rawGetterList.size() == 0
     }
 }

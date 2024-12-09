@@ -1,6 +1,7 @@
 package io.velo.metric;
 
 import io.prometheus.client.Collector;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -17,12 +18,17 @@ public class SimpleGauge extends Collector {
 
     private final ArrayList<RawGetter> rawGetterList = new ArrayList<>();
 
+    @TestOnly
     public ArrayList<RawGetter> getRawGetterList() {
         return rawGetterList;
     }
 
     public void addRawGetter(RawGetter rawGetter) {
         rawGetterList.add(rawGetter);
+    }
+
+    public void clearRawGetterList() {
+        rawGetterList.clear();
     }
 
     private final Map<String, ValueWithLabelValues> gauges = new HashMap<>();
