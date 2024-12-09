@@ -113,9 +113,11 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
             iterator.seek(lastIterateKeyBytes);
             if (!iterator.isValid()) {
                 iterator.seekToFirst();
+                log.warn("Key analysis task iterator seek to {} failed, seek to first again.", new String(lastIterateKeyBytes));
             }
         } else {
             iterator.seekToFirst();
+            log.warn("Key analysis task iterator seek to first again.");
         }
 
         Map<String, Integer> prefixCounts = new HashMap<>();
@@ -169,6 +171,13 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
         }
         log.info("Key analysis task top {} iterate from {} to {}, iterate count: {}, prefix counts:\n{}",
                 maxDoSaveTopKCount, fromKey, new String(lastIterateKeyBytes), count, sb);
+
+        if (count < onceIterateKeyCount) {
+            // start first again
+            lastIterateKeyBytes = null;
+            log.warn("Key analysis task iterate start from first again.");
+            doMyTaskSkipTimes = 10;
+        }
     }
 
     public static <V extends Comparable<? super V>> List<Map.Entry<String, V>> sortMapByValues(Map<String, V> map) {
