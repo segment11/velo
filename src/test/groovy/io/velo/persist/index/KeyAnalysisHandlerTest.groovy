@@ -1,5 +1,6 @@
 package io.velo.persist.index
 
+import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.velo.persist.Consts
 import spock.lang.Specification
@@ -22,7 +23,10 @@ class KeyAnalysisHandlerTest extends Specification {
             eventloop.run()
         }
 
-        def keyAnalysisHandler = new KeyAnalysisHandler(keyDir, eventloop)
+        def keyAnalysisHandler = new KeyAnalysisHandler(keyDir, eventloop, Config.create())
+
+        expect:
+        keyAnalysisHandler.topKPrefixCounts.get().size() == 0
 
         when:
         10.times {
@@ -36,7 +40,7 @@ class KeyAnalysisHandlerTest extends Specification {
         then:
         samples.size() == 3
         samples.find { it.name == 'key_analysis_add_count' }.value == 10
-        samples.find { it.name == 'key_analysis_remove_count' }.value == 2
+        samples.find { it.name == 'key_analysis_remove_or_expire_count' }.value == 2
         samples.find { it.name == 'key_analysis_add_value_length_avg' }.value == 10
 
         when:

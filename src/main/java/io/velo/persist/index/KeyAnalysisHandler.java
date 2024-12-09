@@ -1,8 +1,11 @@
 package io.velo.persist.index;
 
+import io.activej.async.callback.AsyncComputation;
+import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.velo.NeedCleanUp;
 import io.velo.metric.SimpleGauge;
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.rocksdb.CompressionType;
 import org.rocksdb.Options;
@@ -15,6 +18,7 @@ import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 
@@ -24,17 +28,24 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     }
 
     private final Eventloop eventloop;
-    // null when do unit test
-    private final InnerTask innerTask;
-    private final RocksDB db;
 
-    private long addCount = 0;
-    private long addValueLengthTotal = 0;
-    private long removeOrExpireCount = 0;
+    // null when do unit test
+    private final KeyAnalysisTask innerTask;
+    @VisibleForTesting
+    final RocksDB db;
+
+    @TestOnly
+    public KeyAnalysisTask getInnerTask() {
+        return innerTask;
+    }
+
+    long addCount = 0;
+    long addValueLengthTotal = 0;
+    long removeOrExpireCount = 0;
 
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisHandler.class);
 
-    public KeyAnalysisHandler(File keysDir, Eventloop eventloop) throws RocksDBException {
+    public KeyAnalysisHandler(File keysDir, Eventloop eventloop, Config persistConfig) throws RocksDBException {
         this.eventloop = eventloop;
 
         RocksDB.loadLibrary();
@@ -51,7 +62,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         this.db = RocksDB.open(options, keysDir.getAbsolutePath());
         log.warn("Key analysis handler started, keysDir={}", keysDir.getAbsolutePath());
 
-        this.innerTask = new KeyAnalysisTask(db);
+        this.innerTask = new KeyAnalysisTask(this, db, persistConfig);
         eventloop.delay(1000, this);
 
         this.initMetricsCollect();
@@ -114,6 +125,11 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         }
 
         eventloop.delay(1000L, this);
+    }
+
+    public CompletableFuture<Map<String, Integer>> getTopKPrefixCounts() {
+        // use a copy one
+        return eventloop.submit(AsyncComputation.of(() -> new HashMap<>(innerTask.topKPrefixCounts)));
     }
 
     @VisibleForTesting

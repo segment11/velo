@@ -57,7 +57,6 @@ class LocalPersistTest extends Specification {
         localPersist.startIndexHandlerPool()
         localPersist.asSlaveFirstSlotFetchedExistsAllDone = true
         then:
-        localPersist.reverseIndexExpiredIfSecondsFromNow == 3600 * 24 * 7
         localPersist.indexHandlerPool != null
         localPersist.asSlaveFirstSlotFetchedExistsAllDone
 

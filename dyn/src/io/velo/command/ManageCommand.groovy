@@ -806,8 +806,39 @@ class ManageCommand extends BaseCommand {
             def keyBytes = data[3]
             def slotWithKeyHash = slot(keyBytes)
             return new BulkReply(slotWithKeyHash.toString().bytes)
+        } else if (subSubCmd == 'key-analysis') {
+            if (data.length != 4) {
+                return ErrorReply.FORMAT
+            }
+            // todo
+            // data[3] == prefix-count-top-k
+
+            def f = localPersist.indexHandlerPool.keyAnalysisHandler.topKPrefixCounts
+
+            SettablePromise<Reply> finalPromise = new SettablePromise<>()
+            def asyncReply = new AsyncReply(finalPromise)
+
+            f.whenComplete { r, e ->
+                if (e) {
+                    finalPromise.set new ErrorReply(e.message)
+                    return
+                }
+
+                if (r.isEmpty()) {
+                    finalPromise.set MultiBulkReply.EMPTY
+                    return
+                }
+
+                def replies = new Reply[r.size()]
+                r.eachWithIndex { entry, i ->
+                    replies[i] = new BulkReply((entry.key + ': ' + entry.value).bytes)
+                }
+                finalPromise.set(new MultiBulkReply(replies))
+            }
+            return asyncReply
         }
 
         return ErrorReply.SYNTAX
     }
+
 }

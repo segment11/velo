@@ -177,11 +177,37 @@ class ManageCommandTest extends Specification {
         reply == OKReply.INSTANCE
 
         when:
+        data5[2] = 'key-analysis'.bytes
+        reply = manage.debug()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         data4[2] = 'log-switch'.bytes
         manage.data = data4
         reply = manage.debug()
         then:
         reply == ErrorReply.FORMAT
+
+        when:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.startIndexHandlerPool()
+        data4[2] = 'key-analysis'.bytes
+        reply = manage.debug()
+        Thread.sleep(100)
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.getResult() == MultiBulkReply.EMPTY
+
+        when:
+        localPersist.indexHandlerPool.keyAnalysisHandler.innerTask.addTopKPrefixCount('test:', 0)
+        reply = manage.debug()
+        Thread.sleep(100)
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.getResult() instanceof MultiBulkReply
+        ((MultiBulkReply) ((AsyncReply) reply).settablePromise.getResult()).replies.length == 1
 
         when:
         data4[2] = 'xxx'.bytes
@@ -195,6 +221,10 @@ class ManageCommandTest extends Specification {
         reply = manage.debug()
         then:
         reply == ErrorReply.FORMAT
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test dyn-config'() {

@@ -319,7 +319,7 @@ public class VGroup extends BaseCommand {
         }
 
         set(keyBytes, valueBytes, slotWithKeyHash, CompressedValue.NULL_DICT_SEQ,
-                System.currentTimeMillis() + 1000L * localPersist.getReverseIndexExpiredIfSecondsFromNow());
+                System.currentTimeMillis() + 1000L * localPersist.getIndexHandlerPool().getReverseIndexExpiredIfSecondsFromNow());
 
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
         // async or wait ?

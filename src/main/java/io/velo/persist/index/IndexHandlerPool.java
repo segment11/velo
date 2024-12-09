@@ -1,5 +1,6 @@
 package io.velo.persist.index;
 
+import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
 import io.velo.ConfForGlobal;
@@ -18,6 +19,8 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.function.Consumer;
+
+import static io.activej.config.converter.ConfigConverters.ofInteger;
 
 public class IndexHandlerPool implements NeedCleanUp {
 
@@ -60,7 +63,16 @@ public class IndexHandlerPool implements NeedCleanUp {
     private static final String INDEX_DIR_NAME = "reverse-index";
     private static final String KEYS_FOR_ANALYSIS = "keys-for-analysis";
 
-    public IndexHandlerPool(byte indexWorkers, File persistDir, int expiredIfSecondsFromNow) throws IOException {
+    private final int reverseIndexExpiredIfSecondsFromNow;
+
+    public int getReverseIndexExpiredIfSecondsFromNow() {
+        return reverseIndexExpiredIfSecondsFromNow;
+    }
+
+    public IndexHandlerPool(byte indexWorkers, File persistDir, Config persistConfig) throws IOException {
+        // default 7 days
+        reverseIndexExpiredIfSecondsFromNow = persistConfig.get(ofInteger(), "reverseIndexExpiredIfSecondsFromNow", 3600 * 24 * 7);
+
         var eachIndexHandlerChunkFdNumber = getEachIndexHandlerChunkFdNumber(indexWorkers);
 
         var indexDir = new File(persistDir, INDEX_DIR_NAME);
@@ -90,7 +102,7 @@ public class IndexHandlerPool implements NeedCleanUp {
                     throw new RuntimeException("Create dir " + workerIdDir.getAbsolutePath() + " failed");
                 }
             }
-            indexHandler.initChunk((byte) eachIndexHandlerChunkFdNumber, workerIdDir, expiredIfSecondsFromNow);
+            indexHandler.initChunk((byte) eachIndexHandlerChunkFdNumber, workerIdDir, reverseIndexExpiredIfSecondsFromNow);
         }
 
         var keysDir = new File(persistDir, KEYS_FOR_ANALYSIS);
@@ -102,7 +114,7 @@ public class IndexHandlerPool implements NeedCleanUp {
         }
 
         try {
-            this.keyAnalysisHandler = new KeyAnalysisHandler(keysDir, workerEventloopArray[0]);
+            this.keyAnalysisHandler = new KeyAnalysisHandler(keysDir, workerEventloopArray[0], persistConfig);
         } catch (RocksDBException e) {
             throw new RuntimeException("Create rocksdb for key analysis failed");
         }
