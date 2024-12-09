@@ -42,7 +42,23 @@ class ClusterxCommand extends BaseCommand {
 
         def subCmd = new String(data[1]).toLowerCase()
 
-        if ("info" == subCmd) {
+        if ('addslots' == subCmd) {
+            return addslots(false, false)
+        }
+
+        if ('addslotsrange' == subCmd) {
+            return addslots(true, false)
+        }
+
+        if ('delslots' == subCmd) {
+            return addslots(false, true)
+        }
+
+        if ('delslotsrange' == subCmd) {
+            return addslots(true, true)
+        }
+
+        if ('info' == subCmd) {
             return info()
         }
 
@@ -96,6 +112,78 @@ migrating_state:ok
      */
     @VisibleForTesting
     static final ErrorReply CLUSTER_DISABLED = new ErrorReply('This instance has cluster support disable')
+
+
+    @VisibleForTesting
+    Reply addslots(boolean isRange, boolean isDelete) {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        if (isRange) {
+            if (data.length < 4 || data.length % 2 != 0) {
+                return ErrorReply.FORMAT
+            }
+        } else {
+            if (data.length < 3) {
+                return ErrorReply.FORMAT
+            }
+        }
+
+        TreeSet<Integer> toClientSlots = []
+        if (isRange) {
+            for (int i = 2; i < data.length - 1; i += 2) {
+                def begin = Integer.parseInt(new String(data[i]))
+                def end = Integer.parseInt(new String(data[i + 1]))
+                for (slot in begin..end) {
+                    toClientSlots << slot
+                }
+            }
+        } else {
+            for (i in 2..data.length - 1) {
+                toClientSlots << Integer.parseInt(new String(data[i]))
+            }
+        }
+
+        def multiShard = localPersist.multiShard
+
+        def mySelfShard = multiShard.mySelfShard()
+        def mySelfNode = mySelfShard.mySelfNode()
+        if (!mySelfNode.master) {
+            return new ErrorReply('only master can add slots')
+        }
+
+        if (isDelete) {
+            for (slot in toClientSlots) {
+                if (!mySelfShard.multiSlotRange.contains(slot)) {
+                    return new ErrorReply("slot ${slot} is not in my range, node: ${mySelfNode.nodeId()}")
+                }
+            }
+
+            TreeSet<Integer> add = []
+            mySelfShard.multiSlotRange.removeOrAddSet(toClientSlots, add)
+
+            log.warn 'Cluster delete slots success, slots: {}, node: {}', toClientSlots, mySelfNode.nodeId()
+            multiShard.saveMeta()
+            return OK
+        }
+
+        for (ss in multiShard.shards) {
+            for (slot in toClientSlots) {
+                if (ss.multiSlotRange.contains(slot)) {
+                    return new ErrorReply("slot ${slot} is already busy, node: ${ss.master().nodeId()}")
+                }
+            }
+        }
+
+        for (toClientSlot in toClientSlots) {
+            mySelfShard.multiSlotRange.addOneSlot(toClientSlot)
+        }
+
+        log.warn 'Cluster add slots success, slots: {}, node: {}', toClientSlots, mySelfNode.nodeId()
+        multiShard.saveMeta()
+        OK
+    }
 
     @VisibleForTesting
     Reply info() {

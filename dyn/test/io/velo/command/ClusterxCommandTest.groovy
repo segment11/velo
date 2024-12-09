@@ -39,8 +39,32 @@ class ClusterxCommandTest extends Specification {
 
         when:
         def data2 = new byte[2][]
-        data2[1] = 'info'.bytes
+        data2[1] = 'addslots'.bytes
         clusterx.data = data2
+        reply = clusterx.handle()
+        then:
+        reply == ClusterxCommand.CLUSTER_DISABLED
+
+        when:
+        data2[1] = 'addslotsrange'.bytes
+        reply = clusterx.handle()
+        then:
+        reply == ClusterxCommand.CLUSTER_DISABLED
+
+        when:
+        data2[1] = 'delslots'.bytes
+        reply = clusterx.handle()
+        then:
+        reply == ClusterxCommand.CLUSTER_DISABLED
+
+        when:
+        data2[1] = 'delslotsrange'.bytes
+        reply = clusterx.handle()
+        then:
+        reply == ClusterxCommand.CLUSTER_DISABLED
+
+        when:
+        data2[1] = 'info'.bytes
         reply = clusterx.handle()
         then:
         reply == ClusterxCommand.CLUSTER_DISABLED
@@ -102,6 +126,75 @@ class ClusterxCommandTest extends Specification {
         } else {
             throw new RuntimeException("reply type error: ${reply.getClass()}")
         }
+    }
+
+    def 'test addslots'() {
+        given:
+        def cGroup = new CGroup('cluster', null, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+
+        when:
+        ConfForGlobal.clusterEnabled = true
+        def reply = clusterx.execute('cluster addslots')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = clusterx.execute('cluster addslots 0 1')
+        then:
+        reply == ClusterxCommand.OK
+
+        when:
+        reply = clusterx.execute('cluster addslotsrange 10 20')
+        then:
+        reply == ClusterxCommand.OK
+
+        when:
+        reply = clusterx.execute('cluster addslotsrange 10 20 30')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = clusterx.execute('cluster addslotsrange 10')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = clusterx.execute('cluster addslots 0 1')
+        then:
+        reply instanceof ErrorReply
+        ((ErrorReply) reply).message.contains('busy')
+
+        when:
+        reply = clusterx.execute('cluster delslots 0 1')
+        then:
+        reply == ClusterxCommand.OK
+
+        when:
+        reply = clusterx.execute('cluster delslotsrange 0 1')
+        then:
+        reply instanceof ErrorReply
+        ((ErrorReply) reply).message.contains('not in my range')
+
+        when:
+        def multiShard = localPersist.multiShard
+        multiShard.shards[0].multiSlotRange.list.clear()
+        // my self
+        multiShard.shards[0].nodes[0].master = false
+        multiShard.shards[0].nodes << new Node(master: true, host: 'localhost', port: 7380)
+        reply = clusterx.execute('cluster addslots 0 1')
+        then:
+        reply instanceof ErrorReply
+        ((ErrorReply) reply).message.contains('only master can')
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test info'() {
