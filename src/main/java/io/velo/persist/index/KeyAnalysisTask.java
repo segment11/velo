@@ -84,7 +84,7 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
             return;
         }
 
-        // do busy, can do target job
+        // not busy now, can do target job
         continueBeBusyCount = 0;
         doMyTask();
     }
