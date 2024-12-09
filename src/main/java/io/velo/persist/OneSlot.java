@@ -188,17 +188,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         initLRU(false);
 
         this.keyLoader = new KeyLoader(slot, ConfForSlot.global.confBucket.bucketsPerSlot, slotDir, snowFlake, this);
-
         this.binlog = new Binlog(slot, slotDir, dynConfig);
-        // only set slot 0, binlog, if current instance do not include slot 0, need change here
-        if (this.slot == 0) {
-            DictMap.getInstance().setBinlog(this.binlog);
-        }
-
         initBigKeyTopK(10);
 
         this.initTasks();
-        this.initMetricsCollect();
     }
 
     @Override
@@ -879,7 +872,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             @Override
             public void run() {
                 // reduce log
-                if (slot == 0) {
+                if (slot == LocalPersist.getInstance().firstOneSlot().slot) {
                     log.info("Debug task run, slot={}, loop count={}", slot, loopCount);
                 }
             }
@@ -1836,9 +1829,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         globalGauge.register();
     }
 
-    private void initMetricsCollect() {
+    void initMetricsCollect() {
         // only first slot show global metrics
-        if (slot == 0) {
+        if (slot == LocalPersist.getInstance().firstOneSlot().slot) {
             globalGauge.addRawGetter(() -> {
                 // global use slot -1
                 var labelValues = List.of("-1");

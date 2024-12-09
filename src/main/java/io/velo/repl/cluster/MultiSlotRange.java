@@ -15,6 +15,7 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         this.list = list;
     }
 
+    // already sorted
     private ArrayList<SlotRange> list = new ArrayList<>();
 
     public int slotCount() {

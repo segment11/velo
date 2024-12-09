@@ -50,6 +50,25 @@ class MultiShardTest extends Specification {
         multiShard2.clusterCurrentEpoch == 1
         multiShard2.clusterMyEpoch > 0
 
+        when:
+        multiShard.shards.clear()
+        multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7380)])
+        then:
+        multiShard.firstToClientSlot() == null
+
+        when:
+        multiShard.shards[0].multiSlotRange.addSingle(1024, 2047)
+        then:
+        multiShard.firstToClientSlot() == 1024
+
+        when:
+        multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7381)])
+        multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7382)])
+        multiShard.shards[1].multiSlotRange.addSingle(2048, 3071)
+        multiShard.shards[2].multiSlotRange.addSingle(0, 1023)
+        then:
+        multiShard.firstToClientSlot() == 0
+
         cleanup:
         Consts.persistDir.deleteDir()
     }

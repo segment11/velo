@@ -388,8 +388,8 @@ public class XGroup extends BaseCommand {
         replPair.setMasterUuid(masterUuid);
         log.warn("Repl slave handle hi: slave uuid={}, master uuid={}, slot={}", slaveUuid, masterUuid, slot);
 
-        if (slot == 0) {
-            localPersist.setAsSlaveSlot0FetchedExistsAllDone(false);
+        if (slot == localPersist.firstOneSlot().slot()) {
+            localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(false);
         }
 
         var oneSlot = localPersist.oneSlot(slot);
@@ -484,7 +484,7 @@ public class XGroup extends BaseCommand {
                     isMetaIndexWords, indexWorkerId, beginOffset, slot);
         }
 
-        // always slot == 0
+        // always slot == the first slot
         var oneSlot = localPersist.oneSlot(slot);
         var readBytesArray = new byte[1][];
 
@@ -537,7 +537,7 @@ public class XGroup extends BaseCommand {
         var bytes = new byte[remainingLength];
         buffer.get(bytes);
 
-        // always slot == 0
+        // always the first slot
         var oneSlot = localPersist.oneSlot(slot);
 
         oneSlot.submitIndexToTargetWorkerJobRun(indexWorkerId, (indexHandler -> {
@@ -680,10 +680,10 @@ public class XGroup extends BaseCommand {
 
         var walGroupNumber = Wal.calcWalGroupNumber();
         if (groupIndex == walGroupNumber - 1) {
-            if (slot != 0) {
+            if (slot != localPersist.firstOneSlot().slot()) {
                 return Repl.reply(slot, replPair, exists_all_done, NextStepContent.INSTANCE);
             } else {
-                // only slot 0 fetch exists reverse index data
+                // only the first slot fetch exists reverse index data
                 var requestBytes = new byte[1 + 1 + 4];
                 var requestBuffer = ByteBuffer.wrap(requestBytes);
                 requestBuffer.put(reverseIndexByteAsForMetaIndexWords);
@@ -1205,8 +1205,8 @@ public class XGroup extends BaseCommand {
         metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(binlogMasterUuid, true,
                 lastUpdatedFileIndex, lastUpdatedOffset);
 
-        if (slot == 0) {
-            localPersist.setAsSlaveSlot0FetchedExistsAllDone(true);
+        if (slot == localPersist.firstOneSlot().slot()) {
+            localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(true);
         }
 
         // begin incremental data catch up
@@ -1322,9 +1322,9 @@ public class XGroup extends BaseCommand {
         var lastUpdatedFileIndex = lastUpdatedFileIndexAndOffset.fileIndex();
         var lastUpdatedOffset = lastUpdatedFileIndexAndOffset.offset();
 
-        if (slot != 0) {
-            // wait slot0 fetched exists all done
-            if (!localPersist.isAsSlaveSlot0FetchedExistsAllDone()) {
+        if (slot != localPersist.firstOneSlot().slot()) {
+            // wait the first slot fetched exists all done
+            if (!localPersist.isAsSlaveFirstSlotFetchedExistsAllDone()) {
                 // use margin file offset
                 var marginLastUpdatedOffset = Binlog.marginFileOffset(lastUpdatedOffset);
                 var content = toMasterCatchUp(binlogMasterUuid, lastUpdatedFileIndex, marginLastUpdatedOffset, lastUpdatedOffset);

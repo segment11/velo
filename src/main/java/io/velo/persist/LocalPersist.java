@@ -106,6 +106,16 @@ public class LocalPersist implements NeedCleanUp {
         }
 
         this.multiShard = new MultiShard(persistDir);
+
+        for (var oneSlot : oneSlots) {
+            oneSlot.initMetricsCollect();
+
+            // set dict map binlog same as the first slot binlog
+            if (oneSlot.slot() == firstOneSlot().slot()) {
+                DictMap.getInstance().setBinlog(oneSlot.getBinlog());
+                log.warn("Set dict map binlog to slot={}", oneSlot.slot());
+            }
+        }
     }
 
     public boolean walLazyReadFromFile() {
@@ -169,6 +179,25 @@ public class LocalPersist implements NeedCleanUp {
         throw new IllegalStateException("No one slot for current thread");
     }
 
+    public OneSlot firstOneSlot() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return oneSlots[0];
+        }
+
+        var firstToClientSlot = multiShard.firstToClientSlot();
+        if (firstToClientSlot == null) {
+            return null;
+        }
+
+        var slot = MultiShard.asInnerSlotByToClientSlot(firstToClientSlot);
+        for (var oneSlot : oneSlots) {
+            if (oneSlot.slot() == slot) {
+                return oneSlot;
+            }
+        }
+        return null;
+    }
+
     private IndexHandlerPool indexHandlerPool;
 
     public IndexHandlerPool getIndexHandlerPool() {
@@ -189,14 +218,14 @@ public class LocalPersist implements NeedCleanUp {
         this.indexHandlerPool.start();
     }
 
-    private volatile boolean isAsSlaveSlot0FetchedExistsAllDone = false;
+    private volatile boolean isAsSlaveFirstSlotFetchedExistsAllDone = false;
 
-    public boolean isAsSlaveSlot0FetchedExistsAllDone() {
-        return isAsSlaveSlot0FetchedExistsAllDone;
+    public boolean isAsSlaveFirstSlotFetchedExistsAllDone() {
+        return isAsSlaveFirstSlotFetchedExistsAllDone;
     }
 
-    public void setAsSlaveSlot0FetchedExistsAllDone(boolean asSlaveSlot0FetchedExistsAllDone) {
-        isAsSlaveSlot0FetchedExistsAllDone = asSlaveSlot0FetchedExistsAllDone;
+    public void setAsSlaveFirstSlotFetchedExistsAllDone(boolean asSlaveFirstSlotFetchedExistsAllDone) {
+        isAsSlaveFirstSlotFetchedExistsAllDone = asSlaveFirstSlotFetchedExistsAllDone;
     }
 
     private MultiShard multiShard;

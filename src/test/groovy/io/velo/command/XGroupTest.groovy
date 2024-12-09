@@ -1201,7 +1201,7 @@ class XGroupTest extends Specification {
 
         when:
         // not slot 0 catch up, wait slot 0
-        localPersist.asSlaveSlot0FetchedExistsAllDone = false
+        localPersist.asSlaveFirstSlotFetchedExistsAllDone = false
         // slot 1
         ByteBuffer.wrap(data4[1]).putShort((short) 1)
         r = x.handleRepl()

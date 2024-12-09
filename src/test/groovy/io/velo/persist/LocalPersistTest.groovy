@@ -5,6 +5,8 @@ import io.activej.eventloop.Eventloop
 import io.velo.ConfForGlobal
 import io.velo.RequestHandler
 import io.velo.SnowFlake
+import io.velo.repl.cluster.Node
+import io.velo.repl.cluster.Shard
 import spock.lang.Specification
 
 import java.time.Duration
@@ -28,6 +30,7 @@ class LocalPersistTest extends Specification {
     }
 
     final short slot = 0
+    final short slot1 = 1
 
     def 'test all'() {
         given:
@@ -52,11 +55,11 @@ class LocalPersistTest extends Specification {
 
         when:
         localPersist.startIndexHandlerPool()
-        localPersist.asSlaveSlot0FetchedExistsAllDone = true
+        localPersist.asSlaveFirstSlotFetchedExistsAllDone = true
         then:
         localPersist.reverseIndexExpiredIfSecondsFromNow == 3600 * 24 * 7
         localPersist.indexHandlerPool != null
-        localPersist.asSlaveSlot0FetchedExistsAllDone
+        localPersist.asSlaveFirstSlotFetchedExistsAllDone
 
         cleanup:
         Thread.sleep(100)
@@ -70,14 +73,31 @@ class LocalPersistTest extends Specification {
 
         when:
         prepareLocalPersist((byte) 1, (short) 2)
-        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId(slot1, Thread.currentThread().threadId())
         then:
         localPersist.oneSlots().length == 2
         localPersist.currentThreadFirstOneSlot() == localPersist.oneSlots()[1]
 
         when:
+        ConfForGlobal.clusterEnabled = false
+        then:
+        localPersist.firstOneSlot() == localPersist.oneSlots()[0]
+
+        when:
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 2
+        localPersist.multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7380)])
+        then:
+        localPersist.firstOneSlot() == null
+
+        when:
+        localPersist.multiShard.shards[0].multiSlotRange.addSingle(8192, 16383)
+        then:
+        localPersist.firstOneSlot() == localPersist.oneSlots()[1]
+
+        when:
         boolean exception = false
-        localPersist.fixSlotThreadId((short) 1, -1L)
+        localPersist.fixSlotThreadId(slot1, -1L)
         try {
             localPersist.currentThreadFirstOneSlot()
         } catch (IllegalStateException e) {
@@ -93,8 +113,10 @@ class LocalPersistTest extends Specification {
         isOk
 
         cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = (short) 1
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId(slot1, Thread.currentThread().threadId())
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }

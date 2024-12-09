@@ -147,4 +147,20 @@ vars currentEpoch 0 lastVoteEpoch 0
 
         RequestHandler.updateMultiShardShadows(this);
     }
+
+    public Integer firstToClientSlot() {
+        Integer min = null;
+        for (var shard : shards) {
+            var list = shard.getMultiSlotRange().getList();
+            if (list.isEmpty()) {
+                continue;
+            }
+
+            var firstSlot = list.getFirst().getBegin();
+            if (min == null || firstSlot < min) {
+                min = firstSlot;
+            }
+        }
+        return min;
+    }
 }
