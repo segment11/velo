@@ -43,7 +43,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     long addValueLengthTotal = 0;
     long removeOrExpireCount = 0;
 
-    private static final long loopIntervalMillis = 10000L;
+    static final long LOOP_INTERVAL_MILLIS = 10000L;
 
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisHandler.class);
 
@@ -65,7 +65,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         log.warn("Key analysis handler started, keysDir={}", keysDir.getAbsolutePath());
 
         this.innerTask = new KeyAnalysisTask(this, db, persistConfig);
-        eventloop.delay(loopIntervalMillis, this);
+        eventloop.delay(LOOP_INTERVAL_MILLIS, this);
 
         this.initMetricsCollect();
     }
@@ -126,7 +126,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
             return;
         }
 
-        eventloop.delay(loopIntervalMillis, this);
+        eventloop.delay(LOOP_INTERVAL_MILLIS, this);
     }
 
     public CompletableFuture<Map<String, Integer>> getTopKPrefixCounts() {

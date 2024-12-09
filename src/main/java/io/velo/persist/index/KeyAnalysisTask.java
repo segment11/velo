@@ -175,8 +175,9 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
         if (count < onceIterateKeyCount) {
             // start first again
             lastIterateKeyBytes = null;
-            log.warn("Key analysis task iterate start from first again.");
-            doMyTaskSkipTimes = 10;
+            log.warn("Key analysis task will iterate start from first again after 6 hours.");
+            // skip next 6 hours
+            doMyTaskSkipTimes = (int) ((6 * 3600 * 1000) / KeyAnalysisHandler.LOOP_INTERVAL_MILLIS);
         }
     }
 
