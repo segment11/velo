@@ -207,17 +207,8 @@ public class LocalPersist implements NeedCleanUp {
         return indexHandlerPool;
     }
 
-    private int reverseIndexExpiredIfSecondsFromNow = 3600 * 24 * 7;
-
-    public int getReverseIndexExpiredIfSecondsFromNow() {
-        return reverseIndexExpiredIfSecondsFromNow;
-    }
-
     public void startIndexHandlerPool() throws IOException {
-        // default 7 days
-        reverseIndexExpiredIfSecondsFromNow = persistConfig.get(ofInteger(), "reverseIndexExpiredIfSecondsFromNow", 3600 * 24 * 7);
-
-        this.indexHandlerPool = new IndexHandlerPool(ConfForGlobal.indexWorkers, persistDir, reverseIndexExpiredIfSecondsFromNow);
+        this.indexHandlerPool = new IndexHandlerPool(ConfForGlobal.indexWorkers, persistDir, persistConfig);
         this.indexHandlerPool.start();
     }
 
