@@ -43,6 +43,8 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     long addValueLengthTotal = 0;
     long removeOrExpireCount = 0;
 
+    private static final long loopIntervalMillis = 10000L;
+
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisHandler.class);
 
     public KeyAnalysisHandler(File keysDir, Eventloop eventloop, Config persistConfig) throws RocksDBException {
@@ -63,7 +65,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         log.warn("Key analysis handler started, keysDir={}", keysDir.getAbsolutePath());
 
         this.innerTask = new KeyAnalysisTask(this, db, persistConfig);
-        eventloop.delay(1000, this);
+        eventloop.delay(loopIntervalMillis, this);
 
         this.initMetricsCollect();
     }
@@ -124,7 +126,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
             return;
         }
 
-        eventloop.delay(1000L, this);
+        eventloop.delay(loopIntervalMillis, this);
     }
 
     public CompletableFuture<Map<String, Integer>> getTopKPrefixCounts() {

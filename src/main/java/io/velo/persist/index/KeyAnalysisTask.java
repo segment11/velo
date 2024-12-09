@@ -56,11 +56,11 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
     @Override
     public void run(int loopCount) {
-        if (loopCount % 100 == 0) {
+        if (loopCount % 10 == 0) {
             log.info("Key analysis task loop count: {}", loopCount);
         }
 
-        var addCountIncreasedLastSecond = handler.addCount - handlerAddCountLastSecond;
+        var addCountIncreasedLast10Second = handler.addCount - handlerAddCountLastSecond;
         handlerAddCountLastSecond = handler.addCount;
 
         boolean isNotBusy = false;
@@ -70,7 +70,7 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
         }
 
         if (isNotBusy) {
-            if (addCountIncreasedLastSecond > notBusyAddCountIncreasedLastSecond) {
+            if (addCountIncreasedLast10Second > notBusyAddCountIncreasedLastSecond) {
                 isNotBusy = false;
             }
         }
@@ -78,7 +78,7 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
         if (!isNotBusy) {
             continueBeBusyCount++;
-            if (continueBeBusyCount % 100 == 0) {
+            if (continueBeBusyCount % 10 == 0) {
                 log.info("Key analysis task continue be busy {} times", continueBeBusyCount);
             }
             return;
@@ -99,7 +99,15 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
     }
 
     @VisibleForTesting
+    int doMyTaskSkipTimes = 0;
+
+    @VisibleForTesting
     void doMyTask() {
+        if (doMyTaskSkipTimes > 0) {
+            doMyTaskSkipTimes--;
+            return;
+        }
+
         var iterator = db.newIterator();
         if (lastIterateKeyBytes != null) {
             iterator.seek(lastIterateKeyBytes);
@@ -111,6 +119,8 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
         }
 
         Map<String, Integer> prefixCounts = new HashMap<>();
+
+        String fromKey = null;
 
         int count = 0;
         while (iterator.isValid() && count < onceIterateKeyCount) {
@@ -128,9 +138,18 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
             iterator.next();
             count++;
+            if (count == 1) {
+                fromKey = key;
+            }
         }
         lastIterateKeyBytes = iterator.key();
 
+        if (prefixCounts.isEmpty()) {
+            doMyTaskSkipTimes = 2;
+            return;
+        }
+
+        doMyTaskSkipTimes = 0;
         var sortedPrefixCounts = sortMapByValues(prefixCounts);
 
         // for performance
@@ -148,7 +167,8 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
                 innerLoopCount++;
             }
         }
-        log.info("Key analysis task top {} prefix counts:\n{}", maxDoSaveTopKCount, sb);
+        log.info("Key analysis task top {} iterate from {} to {}, iterate count: {}, prefix counts:\n{}",
+                maxDoSaveTopKCount, fromKey, new String(lastIterateKeyBytes), count, sb);
     }
 
     public static <V extends Comparable<? super V>> List<Map.Entry<String, V>> sortMapByValues(Map<String, V> map) {

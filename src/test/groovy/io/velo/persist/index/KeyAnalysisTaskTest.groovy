@@ -82,6 +82,9 @@ class KeyAnalysisTaskTest extends Specification {
         }
         keyAnalysisHandler.db.write(new WriteOptions(), wb)
         println 'done write batch, count 20000'
+        keyAnalysisTask2.doMyTaskSkipTimes = 1
+        // skip one time
+        keyAnalysisTask2.run(3)
         keyAnalysisTask2.run(3)
         then:
         keyAnalysisTask2.topKPrefixCounts.size() > 0
