@@ -410,7 +410,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             });
 
             if (countArray[0] <= 0) {
-                return new ScanCursor(slot, (short) walGroupIndex, returnSkipCount[0], splitIndex);
+                return new ScanCursor(slot, walGroupIndex, returnSkipCount[0], splitIndex);
             }
         }
         return null;

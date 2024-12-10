@@ -80,7 +80,7 @@ sunionstore
 
         when:
         def data2 = new byte[2][]
-        data2[1] = new ScanCursor((short) 1, (short) 1, (short) 4, (byte) 1).toLong().toString().bytes
+        data2[1] = new ScanCursor((short) 1, 1, (short) 4, (byte) 1).toLong().toString().bytes
         def sScanList2 = _SGroup.parseSlots('scan', data2, slotNumber)
         then:
         sScanList2.size() == 1
@@ -178,7 +178,7 @@ sunionstore
     def 'test scan'() {
         given:
         def data8 = new byte[8][]
-        data8[1] = new ScanCursor((short) 0, (short) 0, (short) 0, (byte) 0).toLong().toString().bytes
+        data8[1] = new ScanCursor((short) 0, 0, (short) 0, (byte) 0).toLong().toString().bytes
         data8[2] = 'match'.bytes
         data8[3] = 'key:'.bytes
         data8[4] = 'count'.bytes
@@ -265,7 +265,7 @@ sunionstore
 
         when:
         def data7 = new byte[7][]
-        data7[1] = new ScanCursor((short) 0, (short) 0, (short) 0, (byte) 0).toLong().toString().bytes
+        data7[1] = new ScanCursor((short) 0, 0, (short) 0, (byte) 0).toLong().toString().bytes
         data7[2] = 'match'.bytes
         data7[3] = 'key:'.bytes
         data7[4] = 'count'.bytes
