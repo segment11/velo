@@ -50,8 +50,8 @@ class WalTest extends Specification {
         println 'in memory size estimate: ' + wal.estimate(new StringBuilder())
 
         expect:
-        Wal.calWalGroupIndex(0) == 0
-        Wal.calWalGroupIndex(ConfForSlot.global.confWal.oneChargeBucketNumber) == 1
+        Wal.calcWalGroupIndex(0) == 0
+        Wal.calcWalGroupIndex(ConfForSlot.global.confWal.oneChargeBucketNumber) == 1
         Wal.calcWalGroupNumber() == 4096 / 32
         wal.lastSeqAfterPut == 0
         wal.lastSeqShortValueAfterPut == 0

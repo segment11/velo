@@ -201,7 +201,7 @@ public class Wal implements InMemoryEstimate {
     private final short slot;
     final int groupIndex;
 
-    public static int calWalGroupIndex(int bucketIndex) {
+    public static int calcWalGroupIndex(int bucketIndex) {
         return bucketIndex / ConfForSlot.global.confWal.oneChargeBucketNumber;
     }
 

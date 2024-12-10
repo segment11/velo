@@ -676,7 +676,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     public Wal getWalByBucketIndex(int bucketIndex) {
-        var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         return walArray[walGroupIndex];
     }
 
@@ -914,7 +914,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         // from lru cache
-        var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         var cvEncodedBytesFromLRU = lru.get(key);
         if (cvEncodedBytesFromLRU != null) {
@@ -958,7 +958,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         // from lru cache
-        var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         var cvEncodedBytesFromLRU = lru.get(key);
         if (cvEncodedBytesFromLRU != null) {
@@ -1023,7 +1023,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     byte[] getFromWal(String key, int bucketIndex) {
         checkCurrentThreadId();
 
-        var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
         return targetWal.get(key);
     }
@@ -1060,7 +1060,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public void removeDelay(String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
-        var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
         var putResult = targetWal.removeDelay(key, bucketIndex, keyHash);
 
@@ -1092,7 +1092,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             throw new ReadonlyException();
         }
 
-        var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
 
         byte[] cvEncoded;
@@ -1443,7 +1443,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 for (var one : cvList) {
                     var cv = one.cv;
                     var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash(), keyLoader.bucketsPerSlot);
-                    var extWalGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+                    var extWalGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
                     if (extWalGroupIndex != walGroupIndex) {
                         throw new IllegalStateException("Wal group index not match, s=" + slot + ", wal group index=" + walGroupIndex + ", ext wal group index=" + extWalGroupIndex);
                     }

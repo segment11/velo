@@ -219,7 +219,7 @@ public class ChunkMergeJob {
         // calc bucket index and wal group index
         for (var one : cvList) {
             one.bucketIndex = KeyHash.bucketIndex(one.cv.getKeyHash(), ConfForSlot.global.confBucket.bucketsPerSlot);
-            one.walGroupIndex = Wal.calWalGroupIndex(one.bucketIndex);
+            one.walGroupIndex = Wal.calcWalGroupIndex(one.bucketIndex);
         }
         // compare to current wal or persist value meta in key buckets, remove those deleted or expired
         removeOld(oneSlot, cvList, validCvCountRecordList);

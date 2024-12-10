@@ -142,7 +142,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
             var key = one.key;
             var bucketIndex = one.bucketIndex;
 
-            var calWalGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+            var calWalGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
             if (calWalGroupIndex != walGroupIndex) {
                 continue;
             }
@@ -162,7 +162,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
     }
 
     void removeMergedButNotPersistedAfterPersistWal(ArrayList<Integer> segmentIndexList, int walGroupIndex) {
-        mergedCvList.removeIf(one -> Wal.calWalGroupIndex(one.bucketIndex) == walGroupIndex);
+        mergedCvList.removeIf(one -> Wal.calcWalGroupIndex(one.bucketIndex) == walGroupIndex);
         mergedSegmentSet.removeIf(one -> segmentIndexList.contains(one.segmentIndex));
 
         var doLog = Debug.getInstance().logMerge && logMergeCount % 1000 == 0;
@@ -195,7 +195,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
 
         var groupByWalGroupIndex = mergedCvList.stream()
                 .filter(one -> oncePersistSegmentIndexList.contains(one.segmentIndex))
-                .collect(Collectors.groupingBy(one -> Wal.calWalGroupIndex(one.bucketIndex)));
+                .collect(Collectors.groupingBy(one -> Wal.calcWalGroupIndex(one.bucketIndex)));
 
         if (groupByWalGroupIndex.size() > MERGED_SEGMENT_SIZE_THRESHOLD_ONCE_PERSIST) {
             log.warn("Go to persist merged cv list once, perf bad, group by wal group index size={}", groupByWalGroupIndex.size());

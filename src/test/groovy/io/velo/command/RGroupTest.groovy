@@ -163,7 +163,7 @@ class RGroupTest extends Specification {
         for (i in 0..<ConfForSlot.global.confBucket.bucketsPerSlot) {
             def shortValueList = Mock.prepareShortValueList(10, i)
             def xForBinlog = new XOneWalGroupPersist(true, false, 0)
-            def walGroupIndex = Wal.calWalGroupIndex(i)
+            def walGroupIndex = Wal.calcWalGroupIndex(i)
             keyLoader.persistShortValueListBatchInOneWalGroup(walGroupIndex, shortValueList, xForBinlog)
         }
         println 'done mock keys'

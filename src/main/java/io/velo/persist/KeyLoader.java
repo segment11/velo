@@ -148,13 +148,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     private MetaOneWalGroupSeq metaOneWalGroupSeq;
 
     public long getMetaOneWalGroupSeq(byte splitIndex, int bucketIndex) {
-        var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         return metaOneWalGroupSeq.get(walGroupIndex, splitIndex);
     }
 
     @SlaveReplay
     public void setMetaOneWalGroupSeq(byte splitIndex, int bucketIndex, long seq) {
-        var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         metaOneWalGroupSeq.set(walGroupIndex, splitIndex, seq);
     }
 

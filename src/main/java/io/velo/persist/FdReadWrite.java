@@ -814,7 +814,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         if (!isChunkFd) {
             // read shared bytes for one wal group
             // oneInnerIndex -> beginBucketIndex
-            var walGroupIndex = Wal.calWalGroupIndex(oneInnerIndex);
+            var walGroupIndex = Wal.calcWalGroupIndex(oneInnerIndex);
             if (oneInnerCount == 1 || oneInnerCount == ConfForSlot.global.confWal.oneChargeBucketNumber) {
                 // readonly, use a copy will be safe, but not necessary
                 return getSharedBytesDecompressFromMemory(walGroupIndex);
@@ -873,7 +873,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
     @TestOnly
     public void clearOneKeyBucketToMemory(int bucketIndex) {
-        var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var sharedBytes = getSharedBytesDecompressFromMemory(walGroupIndex);
         if (sharedBytes == null) {
             return;
@@ -888,7 +888,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
     @TestOnly
     public void clearKeyBucketsToMemory(int bucketIndex) {
-        var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         clearAllKeyBucketsInOneWalGroupToMemory(walGroupIndex);
     }
 
@@ -929,7 +929,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         for (int i = 0; i < oneInnerCount; i++) {
             var targetOneInnerIndex = beginOneInnerIndex + i;
             if (!isChunkFd) {
-                var walGroupIndex = Wal.calWalGroupIndex(targetOneInnerIndex);
+                var walGroupIndex = Wal.calcWalGroupIndex(targetOneInnerIndex);
                 var oneWalGroupSharedBytesLength = oneChargeBucketNumber * oneInnerLength;
                 var sharedBytes = getSharedBytesDecompressFromMemory(walGroupIndex);
                 if (sharedBytes == null) {
@@ -998,7 +998,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         }
 
         if (ConfForGlobal.pureMemory) {
-            var walGroupIndex = Wal.calWalGroupIndex(bucketIndex);
+            var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
             setSharedBytesCompressToMemory(sharedBytes, walGroupIndex);
             return sharedBytes.length;
         }
