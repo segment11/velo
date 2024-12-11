@@ -18,7 +18,7 @@ def n = 10_000_000
     def key = "key:" + it.toString().padLeft(12, '0')
     def keyHash = KeyHash.hash(key.bytes)
 
-    def bucketIndex = Math.abs(keyHash % ConfForSlot.global.confBucket.bucketsPerSlot)
+    def bucketIndex = Math.abs(keyHash & (ConfForSlot.global.confBucket.bucketsPerSlot - 1))
     bucketIndex
 }.each { bucketIndex, list ->
     println "bucket index: $bucketIndex, size: ${list.size()}"
