@@ -350,13 +350,13 @@ public abstract class BaseCommand {
 
         var tagHash = tagHash(keyBytes);
         if (tagHash != 0L) {
-            var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) % halfSlotNumber);
+            var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) & (halfSlotNumber - 1));
             var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
             return (short) slot;
         }
 
         var keyHash = KeyHash.hash(keyBytes);
-        var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) % halfSlotNumber);
+        var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) & (halfSlotNumber - 1));
         var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
         return (short) slot;
     }
@@ -366,7 +366,7 @@ public abstract class BaseCommand {
 
         var keyHash = KeyHash.hash(keyBytes);
         // bucket index always use xxhash 64
-        var bucketIndex = Math.abs(keyHash % bucketsPerSlot);
+        var bucketIndex = Math.abs(keyHash & (bucketsPerSlot - 1));
 
         if (ConfForGlobal.clusterEnabled) {
             // use crc16
@@ -380,12 +380,12 @@ public abstract class BaseCommand {
 
         var tagHash = tagHash(keyBytes);
         if (tagHash != 0L) {
-            var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) % halfSlotNumber);
+            var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) & (halfSlotNumber - 1));
             var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
             return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, new String(keyBytes));
         }
 
-        var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) % halfSlotNumber);
+        var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) & (halfSlotNumber - 1));
         var slot = keyHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
         return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, new String(keyBytes));
     }
