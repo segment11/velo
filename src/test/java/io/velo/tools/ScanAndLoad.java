@@ -3,6 +3,9 @@ package io.velo.tools;
 import io.velo.CompressedValue;
 import io.velo.DictMap;
 import io.velo.repl.support.ExtendProtocolCommand;
+import io.velo.type.RedisHashKeys;
+import io.velo.type.RedisList;
+import io.velo.type.RedisZSet;
 import org.apache.commons.lang3.StringUtils;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.Jedis;
@@ -16,8 +19,7 @@ import java.util.stream.Collectors;
 
 public class ScanAndLoad {
     public static void main(String[] args) {
-//        setOneKeyValue();
-//        scanAndLoad(false, 0);
+//        setOneKeyValue("car:tboxsimTocarid:", -1);
 
         try {
             scanAndLoad(false, -1);
@@ -25,17 +27,30 @@ public class ScanAndLoad {
             e.printStackTrace();
             System.out.println("Last visited key=" + lastVisitedKey + ", type=" + lastVisitedKeyType + ", value=" + lastVisitedValue);
         }
+
 //        scanAndTrainHashFieldDicts();
     }
 
-    private static void setOneKeyValue() {
+    private static void setOneKeyValue(String givenKey, int selectDb) {
         var jedis = new Jedis("localhost", 6379);
 
         var jedisClientConfig = DefaultJedisClientConfig.builder().timeoutMillis(20000).build();
         var jedisTo = new Jedis("localhost", 7379, jedisClientConfig);
 
-        final String key = "system:configParamsName:long_rent";
-        jedisTo.set(key, jedis.get(key));
+        if (selectDb != -1) {
+            jedis.select(selectDb);
+            var keyType = jedis.type(givenKey);
+            setOne(keyType, givenKey, jedis, jedisTo, false);
+        } else {
+            for (int i = 0; i < 16; i++) {
+                jedis.select(i);
+                if (jedis.exists(givenKey)) {
+                    System.out.println("Key exists in db " + i);
+                    var keyType = jedis.type(givenKey);
+                    setOne(keyType, givenKey, jedis, jedisTo, false);
+                }
+            }
+        }
 
         jedis.close();
         jedisTo.close();
@@ -127,12 +142,15 @@ public class ScanAndLoad {
         jedisTo.close();
     }
 
+    private static long notEqualCount = 0;
+
     private static void scanAndLoad(int selectDb, Jedis jedis, Jedis jedisTo, boolean doCompare, int maxCount) {
+        jedis.select(selectDb);
+
         var scanParams = new ScanParams().count(1000);
         var result = jedis.scan("0", scanParams);
 
         long count = 0;
-        long notEqualCount = 0;
 
         String cursor = "";
         boolean finished = false;
@@ -149,151 +167,7 @@ public class ScanAndLoad {
 
                 Object rawValue = null;
                 try {
-                    if (keyType.equals("string")) {
-                        var value = jedis.get(key);
-                        rawValue = value;
-                        lastVisitedValue = value;
-
-                        if (value.getBytes().length > CompressedValue.VALUE_MAX_LENGTH) {
-                            System.out.println("Type string, Key=" + key + " Value=" + value + ", Error=" + "Value is too long");
-                            continue;
-                        }
-
-                        if (!doCompare) {
-                            jedisTo.set(key, value);
-                        } else {
-                            var value2 = jedisTo.get(key);
-                            if (!value.equals(value2)) {
-                                System.out.println("Type string, Key=" + key + " Value=" + value + ", Error=" + "Value not equal");
-                                notEqualCount++;
-                            }
-                        }
-                    } else if (keyType.equals("list")) {
-                        var listValue = jedis.lrange(key, 0, -1);
-                        rawValue = listValue;
-                        lastVisitedValue = listValue;
-
-                        if (!doCompare) {
-                            final int batchSize = 100;
-                            for (int i = 0; i < listValue.size(); i += batchSize) {
-                                var batch = listValue.subList(i, Math.min(i + batchSize, listValue.size()));
-                                jedisTo.lpush(key, batch.toArray(new String[0]));
-                            }
-                        } else {
-                            var listValue2 = jedisTo.lrange(key, 0, -1);
-                            if (listValue.size() != listValue2.size()) {
-                                System.out.println("Type list, Key=" + key + " Value=" + listValue + ", Error=" + "List size not equal");
-                                notEqualCount++;
-                            } else {
-                                for (int i = 0; i < listValue.size(); i++) {
-                                    if (!listValue.get(i).equals(listValue2.get(i))) {
-                                        System.out.println("Type list, Key=" + key + " Value=" + listValue + ", Error=" + "List value not equal");
-                                        notEqualCount++;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    } else if (keyType.equals("set")) {
-                        var setValue = jedis.smembers(key);
-                        rawValue = setValue;
-                        lastVisitedValue = setValue;
-
-                        if (!doCompare) {
-                            var setArray = setValue.toArray();
-                            String[] values = new String[setValue.size()];
-                            for (int i = 0; i < values.length; i++) {
-                                values[i] = setArray[i].toString();
-                            }
-
-                            final int batchSize = 100;
-                            for (int i = 0; i < values.length; i += batchSize) {
-                                var batch = Arrays.copyOfRange(values, i, Math.min(i + batchSize, values.length));
-                                jedisTo.sadd(key, batch);
-                            }
-                        } else {
-                            var setValue2 = jedisTo.smembers(key);
-                            if (setValue.size() != setValue2.size()) {
-                                System.out.println("Type set, Key=" + key + " Value=" + setValue + ", Error=" + "Set size not equal");
-                                notEqualCount++;
-                            } else {
-                                for (var value : setValue) {
-                                    if (!setValue2.contains(value)) {
-                                        System.out.println("Type set, Key=" + key + " Value=" + setValue + ", Error=" + "Set value not equal");
-                                        notEqualCount++;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    } else if (keyType.equals("zset")) {
-                        var zsetValue = jedis.zrangeWithScores(key, 0, -1);
-                        rawValue = zsetValue;
-                        lastVisitedValue = zsetValue;
-
-                        if (!doCompare) {
-                            Map<String, Double> scoreMembers = new HashMap<>();
-                            for (var value : zsetValue) {
-                                scoreMembers.put(value.getElement(), value.getScore());
-                            }
-
-                            final int batchSize = 100;
-                            for (int i = 0; i < scoreMembers.size(); i += batchSize) {
-                                var batch = scoreMembers.entrySet().stream().skip(i).limit(batchSize).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-                                jedisTo.zadd(key, batch);
-                            }
-                        } else {
-                            var zsetValue2 = jedisTo.zrangeWithScores(key, 0, -1);
-                            if (zsetValue.size() != zsetValue2.size()) {
-                                System.out.println("Type zset, Key=" + key + " Value=" + zsetValue + ", Error=" + "ZSet size not equal");
-                                notEqualCount++;
-                            } else {
-                                for (int i = 0; i < zsetValue.size(); i++) {
-                                    if (!zsetValue.get(i).getElement().equals(zsetValue2.get(i).getElement()) ||
-                                            zsetValue.get(i).getScore() != zsetValue2.get(i).getScore()) {
-                                        System.out.println("Type zset, Key=" + key + " Value=" + zsetValue + ", Error=" + "ZSet value not equal");
-                                        notEqualCount++;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    } else if (keyType.equals("hash")) {
-                        var hashValue = jedis.hgetAll(key);
-                        rawValue = hashValue;
-                        lastVisitedValue = hashValue;
-
-                        if (!doCompare) {
-                            var filterMap = new HashMap<String, String>();
-                            for (var entry : hashValue.entrySet()) {
-                                if (!StringUtils.isEmpty(entry.getValue())) {
-                                    filterMap.put(entry.getKey(), entry.getValue());
-                                }
-                            }
-
-                            final int batchSize = 100;
-                            for (int i = 0; i < filterMap.size(); i += batchSize) {
-                                var batch = filterMap.entrySet().stream().skip(i).limit(batchSize).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-                                jedisTo.hmset(key, batch);
-                            }
-                        } else {
-                            var hashValue2 = jedisTo.hgetAll(key);
-                            if (hashValue.size() != hashValue2.size()) {
-                                System.out.println("Type: hash, Key=" + key + " Value=" + hashValue + ", Error=" + "Hash size not equal");
-                                notEqualCount++;
-                            } else {
-                                for (var entry : hashValue.entrySet()) {
-                                    if (!entry.getValue().equals(hashValue2.get(entry.getKey()))) {
-                                        System.out.println("Type hash, Key=" + key + " Value=" + hashValue + ", Error=" + "Hash value not equal");
-                                        notEqualCount++;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        System.out.println("Key=" + key + " Value=" + "Unknown type=" + keyType);
-                    }
+                    rawValue = setOne(keyType, key, jedis, jedisTo, doCompare);
                     count++;
 
                     if (count % 100 == 0) {
@@ -318,5 +192,218 @@ public class ScanAndLoad {
         }
 
         System.out.println("Processed " + count + " keys, not equal count=" + notEqualCount + ", select db=" + selectDb);
+    }
+
+    private static Object setOne(String keyType, String key, Jedis jedis, Jedis jedisTo, boolean doCompare) {
+        Object rawValue = null;
+        if (keyType.equals("string")) {
+            var value = jedis.get(key);
+            rawValue = value;
+            lastVisitedValue = value;
+
+            if (key.length() > CompressedValue.KEY_MAX_LENGTH) {
+                System.out.println("Key=" + key + " Value=" + value + ", Error=" + "Key is too long");
+                return rawValue;
+            }
+
+            if (value.getBytes().length > CompressedValue.VALUE_MAX_LENGTH) {
+                System.out.println("Type string, Key=" + key + " Value=" + value + ", Error=" + "Value is too long");
+                return rawValue;
+            }
+
+            if (!doCompare) {
+                jedisTo.set(key, value);
+            } else {
+                var value2 = jedisTo.get(key);
+                if (!value.equals(value2)) {
+                    System.out.println("Type string, Key=" + key + " Value=" + value + ", Error=" + "Value not equal");
+                    notEqualCount++;
+                }
+            }
+        } else if (keyType.equals("list")) {
+            var listLength = jedis.llen(key);
+            if (listLength > RedisList.LIST_MAX_SIZE) {
+                System.out.println("Key=" + key + " Value=" + listLength + ", Error=" + "List size is too big");
+                return rawValue;
+            }
+
+            var listValue = jedis.lrange(key, 0, -1);
+            rawValue = listValue;
+            lastVisitedValue = listValue;
+
+            if (!doCompare) {
+                jedisTo.del(key);
+
+                final int batchSize = 1000;
+                for (int i = 0; i < listValue.size(); i += batchSize) {
+                    var batch = listValue.subList(i, Math.min(i + batchSize, listValue.size()));
+                    jedisTo.lpush(key, batch.toArray(new String[0]));
+
+                    if (batch.size() == batchSize) {
+                        System.out.println("Pushed " + batch.size() + " elements while total size=" + listValue.size() + " to list " + key);
+                    }
+                }
+            } else {
+                var listValue2 = jedisTo.lrange(key, 0, -1);
+                if (listValue.size() != listValue2.size()) {
+                    System.out.println("Type list, Key=" + key + " Value=" + listValue + ", Error=" + "List size not equal");
+                    notEqualCount++;
+                } else {
+                    for (int i = 0; i < listValue.size(); i++) {
+                        if (!listValue.get(i).equals(listValue2.get(i))) {
+                            System.out.println("Type list, Key=" + key + " Value=" + listValue + ", Error=" + "List value not equal");
+                            notEqualCount++;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else if (keyType.equals("set")) {
+            var setLength = jedis.scard(key);
+            if (setLength > RedisHashKeys.SET_MEMBER_MAX_LENGTH) {
+                System.out.println("Key=" + key + " Value=" + setLength + ", Error=" + "Set size is too big");
+                return rawValue;
+            }
+
+            var setValue = jedis.smembers(key);
+            rawValue = setValue;
+            lastVisitedValue = setValue;
+
+            if (!doCompare) {
+                jedisTo.del(key);
+
+                var setArray = setValue.toArray();
+                String[] values = new String[setValue.size()];
+                for (int i = 0; i < values.length; i++) {
+                    values[i] = setArray[i].toString();
+                }
+
+                final int batchSize = 1000;
+                for (int i = 0; i < values.length; i += batchSize) {
+                    var batch = Arrays.copyOfRange(values, i, Math.min(i + batchSize, values.length));
+                    jedisTo.sadd(key, batch);
+
+                    if (batch.length == batchSize) {
+                        System.out.println("Pushed " + batch.length + " elements while total size=" + values.length + " to set " + key);
+                    }
+                }
+            } else {
+                var setValue2 = jedisTo.smembers(key);
+                if (setValue.size() != setValue2.size()) {
+                    System.out.println("Type set, Key=" + key + " Value=" + setValue + ", Error=" + "Set size not equal");
+                    notEqualCount++;
+                } else {
+                    for (var value : setValue) {
+                        if (!setValue2.contains(value)) {
+                            System.out.println("Type set, Key=" + key + " Value=" + setValue + ", Error=" + "Set value not equal");
+                            notEqualCount++;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else if (keyType.equals("zset")) {
+            var zsetLength = jedis.zcard(key);
+            if (zsetLength > RedisZSet.ZSET_MAX_SIZE) {
+                System.out.println("Key=" + key + " Value=" + zsetLength + ", Error=" + "Zset size is too big");
+                return rawValue;
+            }
+
+            var zsetValue = jedis.zrangeWithScores(key, 0, -1);
+            rawValue = zsetValue;
+            lastVisitedValue = zsetValue;
+
+            if (!doCompare) {
+                jedisTo.del(key);
+
+                Map<String, Double> scoreMembers = new HashMap<>();
+                for (var value : zsetValue) {
+                    scoreMembers.put(value.getElement(), value.getScore());
+                }
+
+                final int batchSize = 1000;
+                for (int i = 0; i < scoreMembers.size(); i += batchSize) {
+                    var batch = scoreMembers.entrySet().stream().skip(i).limit(batchSize).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    jedisTo.zadd(key, batch);
+
+                    if (batch.size() == batchSize) {
+                        System.out.println("Pushed " + batch.size() + " elements while total size=" + scoreMembers.size() + " to zset " + key);
+                    }
+                }
+            } else {
+                var zsetValue2 = jedisTo.zrangeWithScores(key, 0, -1);
+                if (zsetValue.size() != zsetValue2.size()) {
+                    System.out.println("Type zset, Key=" + key + " Value=" + zsetValue + ", Error=" + "ZSet size not equal");
+                    notEqualCount++;
+                } else {
+                    for (int i = 0; i < zsetValue.size(); i++) {
+                        if (!zsetValue.get(i).getElement().equals(zsetValue2.get(i).getElement()) ||
+                                zsetValue.get(i).getScore() != zsetValue2.get(i).getScore()) {
+                            System.out.println("Type zset, Key=" + key + " Value=" + zsetValue + ", Error=" + "ZSet value not equal");
+                            notEqualCount++;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else if (keyType.equals("hash")) {
+            var hashLength = jedis.hlen(key);
+            if (hashLength > RedisHashKeys.HASH_MAX_SIZE) {
+                System.out.println("Hash key=" + key + " length=" + hashLength + " is too long, skip it");
+                return rawValue;
+            }
+
+            var hashValue = jedis.hgetAll(key);
+            rawValue = hashValue;
+            lastVisitedValue = hashValue;
+
+            if (!doCompare) {
+                jedisTo.del(key);
+
+                var filterMap = new HashMap<String, String>();
+                for (var entry : hashValue.entrySet()) {
+                    if (!StringUtils.isEmpty(entry.getValue())) {
+                        if (entry.getKey().length() > CompressedValue.KEY_MAX_LENGTH) {
+                            System.out.println("Hash key=" + key + " field=" + entry.getKey() + " is too long, skip it");
+                            continue;
+                        }
+
+                        if (entry.getValue().length() > CompressedValue.VALUE_MAX_LENGTH) {
+                            System.out.println("Hash key=" + key + " field=" + entry.getKey() + " value=" + entry.getValue() + " is too long, skip it");
+                            continue;
+                        }
+
+                        filterMap.put(entry.getKey(), entry.getValue());
+                    }
+                }
+
+                final int batchSize = 1000;
+                for (int i = 0; i < filterMap.size(); i += batchSize) {
+                    var batch = filterMap.entrySet().stream().skip(i).limit(batchSize).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    jedisTo.hmset(key, batch);
+
+                    if (batch.size() == batchSize) {
+                        System.out.println("Pushed " + batch.size() + " elements while total size=" + filterMap.size() + " to hash " + key);
+                    }
+                }
+            } else {
+                var hashValue2 = jedisTo.hgetAll(key);
+                if (hashValue.size() != hashValue2.size()) {
+                    System.out.println("Type: hash, Key=" + key + " Value=" + hashValue + ", Error=" + "Hash size not equal");
+                    notEqualCount++;
+                } else {
+                    for (var entry : hashValue.entrySet()) {
+                        if (!entry.getValue().equals(hashValue2.get(entry.getKey()))) {
+                            System.out.println("Type hash, Key=" + key + " Value=" + hashValue + ", Error=" + "Hash value not equal");
+                            notEqualCount++;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            System.out.println("Key=" + key + " Value=" + "Unknown type=" + keyType);
+        }
+        return rawValue;
     }
 }
