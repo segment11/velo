@@ -160,7 +160,7 @@ class RedisHHTest extends Specification {
 
         when:
         buffer.putShort(RedisHH.HEADER_LENGTH, (short) 1)
-        buffer.putShort(RedisHH.HEADER_LENGTH + 2 + 1, (short) (CompressedValue.VALUE_MAX_LENGTH + 1))
+        buffer.putInt(RedisHH.HEADER_LENGTH + 2 + 1, CompressedValue.VALUE_MAX_LENGTH + 1)
         boolean exception2 = false
         try {
             RedisHH.decode(encoded, false)
@@ -172,7 +172,7 @@ class RedisHHTest extends Specification {
         exception2
 
         when:
-        buffer.putShort(RedisHH.HEADER_LENGTH + 2 + 1, (short) -1)
+        buffer.putInt(RedisHH.HEADER_LENGTH + 2 + 1, -1)
         exception2 = false
         try {
             RedisHH.decode(encoded, false)
@@ -254,10 +254,25 @@ class RedisHHTest extends Specification {
         def encoded4 = rh4.encode()
         then:
         // uuid length is 36
-        encoded4.length == RedisHH.HEADER_LENGTH + 5 * (2 + 6 + 2 + 36)
+        encoded4.length == RedisHH.HEADER_LENGTH + 5 * (2 + 6 + 4 + 36)
 
         cleanup:
         dictMap.cleanUp()
         Consts.testDir.deleteDir()
+    }
+
+    def 'test charset encode'() {
+        given:
+        def rh = new RedisHH()
+        def keyBytes = '你好'.bytes
+        def bytes = '你好我也好'.bytes
+        rh.put(new String(keyBytes), bytes)
+
+        when:
+        def encoded = rh.encode()
+        def rh2 = RedisHH.decode(encoded)
+        then:
+        rh2.size() == 1
+        rh2.get(new String(keyBytes)) == bytes
     }
 }

@@ -64,7 +64,7 @@ public class RedisHH {
             // key / value length use 2 bytes
             var key = entry.getKey();
             var value = entry.getValue();
-            bodyBytesLength += 2 + key.length() + 2 + value.length;
+            bodyBytesLength += 2 + key.getBytes().length + 4 + value.length;
         }
 
         short size = (short) map.size();
@@ -79,9 +79,9 @@ public class RedisHH {
         for (var entry : map.entrySet()) {
             var key = entry.getKey();
             var value = entry.getValue();
-            buffer.putShort((short) key.length());
+            buffer.putShort((short) key.getBytes().length);
             buffer.put(key.getBytes());
-            buffer.putShort((short) value.length);
+            buffer.putInt(value.length);
             buffer.put(value);
         }
 
@@ -180,8 +180,8 @@ public class RedisHH {
 
             var keyBytes = new byte[keyLength];
             buffer.get(keyBytes);
-            var valueLength = buffer.getShort();
-            if (valueLength <= 0) {
+            var valueLength = buffer.getInt();
+            if (valueLength > CompressedValue.VALUE_MAX_LENGTH || valueLength <= 0) {
                 throw new IllegalStateException("Value length error, value length=" + valueLength);
             }
 
