@@ -31,7 +31,6 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisTask.class);
 
-
     public KeyAnalysisTask(KeyAnalysisHandler handler, RocksDB db, Config persistConfig) {
         this.handler = handler;
         this.db = db;
