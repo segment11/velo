@@ -79,11 +79,6 @@ import static io.activej.launchers.initializers.Initializers.ofPrimaryServer;
 import static org.slf4j.LoggerFactory.getLogger;
 
 public class MultiWorkerServer extends Launcher {
-//    static {
-//        ApplicationSettings.set(ServerSocketSettings.class, "receiveBufferSize", MemSize.kilobytes(64));
-//        ApplicationSettings.set(SocketSettings.class, "receiveBufferSize", MemSize.kilobytes(64));
-//    }
-
     public static final String PROPERTIES_FILE = "velo.properties";
 
     public static long UP_TIME;
