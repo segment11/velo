@@ -15,7 +15,7 @@ public class ConfForGlobal {
     public static String PASSWORD;
 
     // compression
-    public static boolean isValueSetUseCompression = false;
+    public static boolean isValueSetUseCompression = true;
     public static boolean isOnDynTrainDictForCompression = false;
     public static boolean isPureMemoryModeKeyBucketsUseCompression = false;
 

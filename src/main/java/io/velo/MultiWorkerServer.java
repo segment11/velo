@@ -731,7 +731,7 @@ public class MultiWorkerServer extends Launcher {
             log.warn("Global config, datacenterId={}", ConfForGlobal.datacenterId);
             log.warn("Global config, machineId={}", ConfForGlobal.machineId);
 
-            ConfForGlobal.isValueSetUseCompression = config.get(ofBoolean(), "isValueSetUseCompression", false);
+            ConfForGlobal.isValueSetUseCompression = config.get(ofBoolean(), "isValueSetUseCompression", true);
             ConfForGlobal.isOnDynTrainDictForCompression = config.get(ofBoolean(), "isOnDynTrainDictForCompression", false);
             ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression = config.get(ofBoolean(), "isPureMemoryModeKeyBucketsUseCompression", false);
             log.warn("Global config, isValueSetUseCompression={}", ConfForGlobal.isValueSetUseCompression);

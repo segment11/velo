@@ -662,27 +662,29 @@ public abstract class BaseCommand {
         }
 
         var key = new String(keyBytes);
+        var preferDoCompress = valueBytes.length >= DictMap.TO_COMPRESS_MIN_DATA_LENGTH;
+        var preferDoCompressUseSelfDict = valueBytes.length >= DictMap.TO_COMPRESS_USE_SELF_DICT_MIN_DATA_LENGTH;
 
         Dict dict = null;
         boolean isTypeString = CompressedValue.isTypeString(spType);
-        if (isTypeString && ConfForGlobal.isValueSetUseCompression && valueBytes.length >= DictMap.TO_COMPRESS_MIN_DATA_LENGTH) {
+        if (isTypeString && ConfForGlobal.isValueSetUseCompression && preferDoCompress) {
             // use global dict first
             if (Dict.GLOBAL_ZSTD_DICT.hasDictBytes()) {
                 dict = Dict.GLOBAL_ZSTD_DICT;
             } else {
+                // use trained dict if key prefix or suffix match
                 var keyPrefixOrSuffix = TrainSampleJob.keyPrefixOrSuffixGroup(key);
                 dict = dictMap.getDict(keyPrefixOrSuffix);
 
-                if (dict == null) {
+                if (dict == null && preferDoCompressUseSelfDict) {
+                    // use self dict
                     dict = Dict.SELF_ZSTD_DICT;
                 }
             }
         }
 
         var slot = slotWithKeyHash.slot;
-        if (ConfForGlobal.isValueSetUseCompression &&
-                valueBytes.length >= DictMap.TO_COMPRESS_MIN_DATA_LENGTH &&
-                dict != null) {
+        if (ConfForGlobal.isValueSetUseCompression && preferDoCompress && dict != null) {
             var beginT = System.nanoTime();
             // dict may be null
             var cv = CompressedValue.compress(valueBytes, dict);
@@ -731,7 +733,7 @@ public abstract class BaseCommand {
             if (ConfForGlobal.isValueSetUseCompression && ConfForGlobal.isOnDynTrainDictForCompression) {
                 // add train sample list
                 if (sampleToTrainList.size() < trainSampleListMaxSize) {
-                    if (valueBytes.length >= DictMap.TO_COMPRESS_MIN_DATA_LENGTH) {
+                    if (preferDoCompress) {
                         var kv = new TrainSampleJob.TrainSampleKV(key, null, cvRaw.getSeq(), valueBytes);
                         sampleToTrainList.add(kv);
                     }

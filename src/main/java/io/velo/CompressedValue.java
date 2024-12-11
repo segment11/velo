@@ -281,7 +281,6 @@ public class CompressedValue {
     }
 
     public boolean isIgnoreCompression(byte[] data) {
-        // length equals, maybe compressed, todo, check compressed data first n bytes
         if (compressedData.length != data.length) {
             return false;
         }
