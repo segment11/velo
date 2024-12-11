@@ -1,5 +1,6 @@
 package io.velo.tools;
 
+import io.velo.CompressedValue;
 import io.velo.DictMap;
 import io.velo.repl.support.ExtendProtocolCommand;
 import org.apache.commons.lang3.StringUtils;
@@ -8,8 +9,10 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.params.ScanParams;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class ScanAndLoad {
     public static void main(String[] args) {
@@ -116,6 +119,15 @@ public class ScanAndLoad {
         var jedisClientConfig = DefaultJedisClientConfig.builder().timeoutMillis(20000).build();
         var jedisTo = new Jedis("localhost", 7379, jedisClientConfig);
 
+        for (int i = 0; i < 16; i++) {
+            scanAndLoad(i, jedis, jedisTo, doCompare, maxCount);
+        }
+
+        jedis.close();
+        jedisTo.close();
+    }
+
+    private static void scanAndLoad(int selectDb, Jedis jedis, Jedis jedisTo, boolean doCompare, int maxCount) {
         var scanParams = new ScanParams().count(1000);
         var result = jedis.scan("0", scanParams);
 
@@ -142,7 +154,7 @@ public class ScanAndLoad {
                         rawValue = value;
                         lastVisitedValue = value;
 
-                        if (value.getBytes().length > Short.MAX_VALUE) {
+                        if (value.getBytes().length > CompressedValue.VALUE_MAX_LENGTH) {
                             System.out.println("Type string, Key=" + key + " Value=" + value + ", Error=" + "Value is too long");
                             continue;
                         }
@@ -162,7 +174,11 @@ public class ScanAndLoad {
                         lastVisitedValue = listValue;
 
                         if (!doCompare) {
-                            jedisTo.lpush(key, listValue.toArray(new String[0]));
+                            final int batchSize = 100;
+                            for (int i = 0; i < listValue.size(); i += batchSize) {
+                                var batch = listValue.subList(i, Math.min(i + batchSize, listValue.size()));
+                                jedisTo.lpush(key, batch.toArray(new String[0]));
+                            }
                         } else {
                             var listValue2 = jedisTo.lrange(key, 0, -1);
                             if (listValue.size() != listValue2.size()) {
@@ -189,7 +205,12 @@ public class ScanAndLoad {
                             for (int i = 0; i < values.length; i++) {
                                 values[i] = setArray[i].toString();
                             }
-                            jedisTo.sadd(key, values);
+
+                            final int batchSize = 100;
+                            for (int i = 0; i < values.length; i += batchSize) {
+                                var batch = Arrays.copyOfRange(values, i, Math.min(i + batchSize, values.length));
+                                jedisTo.sadd(key, batch);
+                            }
                         } else {
                             var setValue2 = jedisTo.smembers(key);
                             if (setValue.size() != setValue2.size()) {
@@ -215,7 +236,12 @@ public class ScanAndLoad {
                             for (var value : zsetValue) {
                                 scoreMembers.put(value.getElement(), value.getScore());
                             }
-                            jedisTo.zadd(key, scoreMembers);
+
+                            final int batchSize = 100;
+                            for (int i = 0; i < scoreMembers.size(); i += batchSize) {
+                                var batch = scoreMembers.entrySet().stream().skip(i).limit(batchSize).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                                jedisTo.zadd(key, batch);
+                            }
                         } else {
                             var zsetValue2 = jedisTo.zrangeWithScores(key, 0, -1);
                             if (zsetValue.size() != zsetValue2.size()) {
@@ -244,7 +270,12 @@ public class ScanAndLoad {
                                     filterMap.put(entry.getKey(), entry.getValue());
                                 }
                             }
-                            jedisTo.hmset(key, filterMap);
+
+                            final int batchSize = 100;
+                            for (int i = 0; i < filterMap.size(); i += batchSize) {
+                                var batch = filterMap.entrySet().stream().skip(i).limit(batchSize).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                                jedisTo.hmset(key, batch);
+                            }
                         } else {
                             var hashValue2 = jedisTo.hgetAll(key);
                             if (hashValue.size() != hashValue2.size()) {
@@ -286,9 +317,6 @@ public class ScanAndLoad {
             result = jedis.scan(cursor);
         }
 
-        jedis.close();
-        jedisTo.close();
-
-        System.out.println("Processed " + count + " keys, not equal count=" + notEqualCount);
+        System.out.println("Processed " + count + " keys, not equal count=" + notEqualCount + ", select db=" + selectDb);
     }
 }

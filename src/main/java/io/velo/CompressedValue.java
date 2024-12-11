@@ -39,7 +39,7 @@ public class CompressedValue {
     public static final short KEY_MAX_LENGTH = 256;
     // change here to limit value size
     // 8KB data compress should <= 4KB can store in one PAGE_SIZE
-    public static final short VALUE_MAX_LENGTH = Short.MAX_VALUE;
+    public static final int VALUE_MAX_LENGTH = 65536;
 
     // seq long + expireAt long + dictSeq int + keyHash long + uncompressedLength int + cvEncodedLength int
     public static final int VALUE_HEADER_LENGTH = 8 + 8 + 4 + 8 + 4 + 4;
