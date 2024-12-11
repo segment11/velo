@@ -90,7 +90,7 @@ class Mock {
         n.times {
             def key = 'key:' + it.toString().padLeft(12, '0')
             def keyHash = KeyHash.hash(key.bytes)
-            def bucketIndex = (int) Math.abs((keyHash % bucketsPerSlot).intValue())
+            def bucketIndex = (int) Math.abs((keyHash & (bucketsPerSlot - 1)).intValue())
             def subList = keyHashByBucketIndex[bucketIndex]
             if (subList == null) {
                 subList = []

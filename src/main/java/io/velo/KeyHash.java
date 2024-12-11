@@ -31,7 +31,7 @@ public class KeyHash {
                 var rawKeyHash = xxHash64Java.hash(rawKey.getBytes(), 0, rawKey.length(), seed);
 
                 var expectedBucketIndex = Integer.parseInt(key.substring(fixedPrefixKeyBytesForTest.length, index_));
-                var mod = rawKeyHash % bucketsPerSlot;
+                var mod = rawKeyHash & (bucketsPerSlot - 1);
                 if (mod == expectedBucketIndex) {
                     return rawKeyHash;
                 }
@@ -69,6 +69,6 @@ public class KeyHash {
     }
 
     public static int bucketIndex(long keyHash, int bucketsPerSlot) {
-        return Math.abs((int) (keyHash % bucketsPerSlot));
+        return Math.abs((int) (keyHash & (bucketsPerSlot - 1)));
     }
 }
