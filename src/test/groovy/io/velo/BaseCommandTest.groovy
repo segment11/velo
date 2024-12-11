@@ -483,7 +483,7 @@ class BaseCommandTest extends Specification {
         inMemoryGetSet.getBuf(slot, key.bytes, sKey.bucketIndex(), sKey.keyHash()).cv().encodedLength() == cv.encodedLength()
 
         when:
-        def longValueBytes = ('aaaaabbbbbccccc' * 10).bytes
+        def longValueBytes = ('aaaaabbbbbccccc' * 20).bytes
         c.byPassGetSet = inMemoryGetSet
         cv.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
         cv.uncompressedLength = longValueBytes.length
