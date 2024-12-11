@@ -6,9 +6,9 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.prometheus.client.Gauge;
 import io.velo.command.XGroup;
-import io.velo.repl.ReplPair;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,22 +19,47 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SocketInspector implements TcpSocket.Inspector {
     private static final Logger log = LoggerFactory.getLogger(SocketInspector.class);
 
-    private static final Object SOCKET_USER_DATA_RESP_PROTOVER3 = new Object();
+    @TestOnly
+    public static void clearUserData(ITcpSocket socket) {
+        ((TcpSocket) socket).setUserData(null);
+    }
 
     public static boolean isResp3(ITcpSocket socket) {
         // just when do unit test
         if (socket == null) {
             return false;
         }
-        return ((TcpSocket) socket).getUserData() == SOCKET_USER_DATA_RESP_PROTOVER3;
+
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        return veloUserData != null && veloUserData.isResp3;
     }
 
-    public static void setResp3(ITcpSocket socket) {
-        ((TcpSocket) socket).setUserData(SOCKET_USER_DATA_RESP_PROTOVER3);
+    public static void setResp3(ITcpSocket socket, boolean isResp3) {
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        if (veloUserData == null) {
+            veloUserData = new VeloUserDataInSocket();
+            ((TcpSocket) socket).setUserData(veloUserData);
+        }
+        veloUserData.isResp3 = isResp3;
     }
 
-    public static void setResp2(ITcpSocket socket) {
-        ((TcpSocket) socket).setUserData(null);
+    public static void setAuthUser(ITcpSocket socket, String authUser) {
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        if (veloUserData == null) {
+            veloUserData = new VeloUserDataInSocket();
+            ((TcpSocket) socket).setUserData(veloUserData);
+        }
+        veloUserData.authUser = authUser;
+    }
+
+    public static String getAuthUser(ITcpSocket socket) {
+        // just when do unit test
+        if (socket == null) {
+            return null;
+        }
+
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        return veloUserData == null ? null : veloUserData.authUser;
     }
 
     volatile boolean isServerStopped = false;
@@ -115,12 +140,12 @@ public class SocketInspector implements TcpSocket.Inspector {
             return;
         }
 
-        var userData = socket.getUserData();
-        if (userData instanceof ReplPair replPair) {
+        var veloUserData = (VeloUserDataInSocket) socket.getUserData();
+        if (veloUserData != null && veloUserData.replPairAsSlaveInTcpClient != null) {
             // this socket is a slave connection master
             // need not check max connections
             var remoteAddress = socket.getRemoteAddress();
-            log.info("Inspector on repl connect, remote address={}, slot={}", remoteAddress, replPair.getSlot());
+            log.info("Inspector on repl connect, remote address={}, slot={}", remoteAddress, veloUserData.replPairAsSlaveInTcpClient.getSlot());
             return;
         }
 
@@ -176,8 +201,9 @@ public class SocketInspector implements TcpSocket.Inspector {
     public void onDisconnect(TcpSocket socket) {
         var remoteAddress = socket.getRemoteAddress();
 
-        var userData = socket.getUserData();
-        if (userData instanceof ReplPair replPair) {
+        var veloUserData = (VeloUserDataInSocket) socket.getUserData();
+        if (veloUserData != null && veloUserData.replPairAsSlaveInTcpClient != null) {
+            var replPair = veloUserData.replPairAsSlaveInTcpClient;
             log.info("Inspector on repl disconnect, remote address={}, slot={}", remoteAddress, replPair.getSlot());
             replPair.setDisconnectTimeMillis(System.currentTimeMillis());
             XGroup.tryCatchUpAgainAfterSlaveTcpClientClosed(replPair, null);
@@ -185,7 +211,6 @@ public class SocketInspector implements TcpSocket.Inspector {
         }
 
         log.info("Inspector on disconnect, remote address={}", remoteAddress);
-        AfterAuthFlagHolder.remove(remoteAddress);
         socketMap.remove(remoteAddress);
 
         // remove from subscribe by channel

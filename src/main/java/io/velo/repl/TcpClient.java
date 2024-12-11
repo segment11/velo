@@ -7,10 +7,7 @@ import io.activej.csp.supplier.ChannelSuppliers;
 import io.activej.eventloop.Eventloop;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.activej.promise.Promise;
-import io.velo.ConfForGlobal;
-import io.velo.MultiWorkerServer;
-import io.velo.NeedCleanUp;
-import io.velo.RequestHandler;
+import io.velo.*;
 import io.velo.command.XGroup;
 import io.velo.decode.RequestDecoder;
 import io.velo.repl.content.Ping;
@@ -84,7 +81,7 @@ public class TcpClient implements NeedCleanUp {
                 .whenResult(socket -> {
                     log.info("Connected to server at {}:{}, slot={}", host, port, slot);
 
-                    socket.setUserData(replPair);
+                    socket.setUserData(new VeloUserDataInSocket(replPair));
                     socket.setInspector(MultiWorkerServer.STATIC_GLOBAL_V.socketInspector);
                     MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.onConnect(socket);
 

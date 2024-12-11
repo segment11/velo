@@ -21,7 +21,6 @@ import io.activej.launchers.initializers.Initializers;
 import io.activej.net.PrimaryServer;
 import io.activej.net.SimpleServer;
 import io.activej.net.socket.tcp.ITcpSocket;
-import io.activej.net.socket.tcp.TcpSocket;
 import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.reactor.nio.NioReactor;
@@ -365,12 +364,11 @@ public class MultiWorkerServer extends Launcher {
             return Promise.of(null);
         }
 
+        var u = BaseCommand.getAuthU(socket);
+
         for (var request : pipeline) {
             request.setSlotNumber(slotNumber);
             requestHandlerArray[0].parseSlots(request);
-
-            var user = AfterAuthFlagHolder.getUser(((TcpSocket) socket).getRemoteAddress());
-            var u = user == null ? U.INIT_DEFAULT_U : AclUsers.getInstance().get(user);
             request.setU(u);
         }
 

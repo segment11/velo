@@ -1,11 +1,7 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
-import io.activej.net.socket.tcp.TcpSocket;
-import io.velo.AfterAuthFlagHolder;
 import io.velo.BaseCommand;
-import io.velo.acl.AclUsers;
-import io.velo.acl.U;
 import io.velo.persist.LocalPersist;
 import io.velo.reply.*;
 
@@ -108,9 +104,7 @@ public class PGroup extends BaseCommand {
 
         if (socket != null) {
             // check acl
-            var user = AfterAuthFlagHolder.getUser(((TcpSocket) socket).getRemoteAddress());
-            var u = user == null ? U.INIT_DEFAULT_U : AclUsers.getInstance().get(user);
-            // assert u != null;
+            var u = BaseCommand.getAuthU(socket);
             if (!u.isOn() || !u.checkChannels(channel)) {
                 return ErrorReply.ACL_PERMIT_LIMIT;
             }

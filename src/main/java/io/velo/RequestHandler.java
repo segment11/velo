@@ -2,7 +2,6 @@ package io.velo;
 
 import io.activej.config.Config;
 import io.activej.net.socket.tcp.ITcpSocket;
-import io.activej.net.socket.tcp.TcpSocket;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.Summary;
 import io.prometheus.client.exporter.common.TextFormat;
@@ -414,10 +413,9 @@ public class RequestHandler {
                 return OKReply.INSTANCE;
             }
 
-            var remoteAddress = ((TcpSocket) socket).getRemoteAddress();
             // http basic auth
             if (request.isHttp()) {
-                if (!AfterAuthFlagHolder.contains(remoteAddress) && ConfForGlobal.PASSWORD != null) {
+                if (SocketInspector.getAuthUser(socket) == null && ConfForGlobal.PASSWORD != null) {
                     var headerValue = request.getHttpHeader(HEADER_NAME_FOR_BASIC_AUTH);
                     if (headerValue == null) {
                         return ErrorReply.NO_AUTH;
@@ -443,7 +441,7 @@ public class RequestHandler {
                         return ErrorReply.AUTH_FAILED;
                     }
 
-                    AfterAuthFlagHolder.add(remoteAddress, user);
+                    SocketInspector.setAuthUser(socket, user);
                     // continue to handle request
                 }
             } else {
@@ -472,12 +470,12 @@ public class RequestHandler {
                         return ErrorReply.AUTH_FAILED;
                     }
 
-                    AfterAuthFlagHolder.add(remoteAddress, user);
+                    SocketInspector.setAuthUser(socket, user);
                     return OKReply.INSTANCE;
                 }
             }
 
-            if (ConfForGlobal.PASSWORD != null && !AfterAuthFlagHolder.contains(remoteAddress)) {
+            if (SocketInspector.getAuthUser(socket) == null && ConfForGlobal.PASSWORD != null) {
                 return ErrorReply.NO_AUTH;
             }
 

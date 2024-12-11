@@ -3,6 +3,9 @@ package io.velo
 import com.github.luben.zstd.Zstd
 import io.activej.config.Config
 import io.activej.net.socket.tcp.ITcpSocket
+import io.velo.acl.AclUsers
+import io.velo.acl.U
+import io.velo.command.AGroup
 import io.velo.decode.Request
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Consts
@@ -86,6 +89,24 @@ class BaseCommandTest extends Specification {
         then:
         ss1 > 0
         ss3 > 0
+
+        when:
+        def socket = SocketInspectorTest.mockTcpSocket()
+        then:
+        BaseCommand.getAuthU(socket) == U.INIT_DEFAULT_U
+
+        when:
+        def veloUserData = new VeloUserDataInSocket()
+        socket.userData = veloUserData
+        veloUserData.authUser = 'test-user'
+        AclUsers.instance.initForTest()
+        then:
+        BaseCommand.getAuthU(socket) == null
+
+        when:
+        def aGroup = new AGroup(null, null, socket)
+        then:
+        aGroup.getAuthU() == null
 
         cleanup:
         ConfForGlobal.clusterEnabled = false

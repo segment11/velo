@@ -24,16 +24,30 @@ class SocketInspectorTest extends Specification {
 
         expect:
         !SocketInspector.isResp3(null)
+        !SocketInspector.isResp3(socket)
+        SocketInspector.getAuthUser(null) == null
+        SocketInspector.getAuthUser(socket) == null
 
         when:
-        SocketInspector.setResp3(socket)
+        SocketInspector.clearUserData(socket)
+        SocketInspector.setResp3(socket, true)
+        SocketInspector.setResp3(socket, true)
         then:
         SocketInspector.isResp3(socket)
 
         when:
-        SocketInspector.setResp2(socket)
+        SocketInspector.clearUserData(socket)
+        SocketInspector.setResp3(socket, false)
+        SocketInspector.setResp3(socket, false)
         then:
         !SocketInspector.isResp3(socket)
+
+        when:
+        SocketInspector.clearUserData(socket)
+        SocketInspector.setAuthUser(socket, 'default')
+        SocketInspector.setAuthUser(socket, 'default')
+        then:
+        SocketInspector.getAuthUser(socket) == 'default'
     }
 
     def 'test connect'() {
@@ -58,7 +72,7 @@ class SocketInspectorTest extends Specification {
 
         when:
         XGroup.skipTryCatchUpAgainAfterSlaveTcpClientClosed = true
-        socket.userData = ReplPairTest.mockAsSlave()
+        socket.userData = new VeloUserDataInSocket(ReplPairTest.mockAsSlave())
         inspector.onConnect(socket)
         inspector.onDisconnect(socket)
         then:

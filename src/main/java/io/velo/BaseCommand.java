@@ -2,6 +2,8 @@ package io.velo;
 
 import com.github.luben.zstd.Zstd;
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.velo.acl.AclUsers;
+import io.velo.acl.U;
 import io.velo.command.AGroup;
 import io.velo.decode.Request;
 import io.velo.mock.ByPassGetSet;
@@ -112,6 +114,15 @@ public abstract class BaseCommand {
         this.cmd = cmd;
         this.data = data;
         this.socket = socket;
+    }
+
+    public static @NotNull U getAuthU(ITcpSocket socket0) {
+        var authUser = SocketInspector.getAuthUser(socket0);
+        return authUser == null ? U.INIT_DEFAULT_U : AclUsers.getInstance().get(authUser);
+    }
+
+    protected @NotNull U getAuthU() {
+        return getAuthU(socket);
     }
 
     protected final DictMap dictMap = DictMap.getInstance();

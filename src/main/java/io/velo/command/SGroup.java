@@ -1,13 +1,13 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
-import io.activej.net.socket.tcp.TcpSocket;
 import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
-import io.velo.*;
-import io.velo.acl.AclUsers;
-import io.velo.acl.U;
+import io.velo.BaseCommand;
+import io.velo.CompressedValue;
+import io.velo.Dict;
+import io.velo.TrainSampleJob;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.persist.KeyLoader;
@@ -1454,9 +1454,7 @@ public class SGroup extends BaseCommand {
         }
 
         // check acl
-        var user = AfterAuthFlagHolder.getUser(((TcpSocket) socket).getRemoteAddress());
-        var u = user == null ? U.INIT_DEFAULT_U : AclUsers.getInstance().get(user);
-        // assert u != null;
+        var u = getAuthU();
         if (!u.isOn()) {
             return ErrorReply.ACL_PERMIT_LIMIT;
         }

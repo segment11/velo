@@ -277,10 +277,10 @@ public class HGroup extends BaseCommand {
         } else {
             var protover = new String(data[1]);
             if ("3".equals(protover)) {
-                SocketInspector.setResp3(socket);
+                SocketInspector.setResp3(socket, true);
                 return OKReply.INSTANCE;
             } else if ("2".equals(protover)) {
-                SocketInspector.setResp2(socket);
+                SocketInspector.setResp3(socket, false);
                 return OKReply.INSTANCE;
             } else {
                 return ErrorReply.SYNTAX;

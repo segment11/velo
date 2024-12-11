@@ -1,8 +1,6 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
-import io.activej.net.socket.tcp.TcpSocket;
-import io.velo.AfterAuthFlagHolder;
 import io.velo.BaseCommand;
 import io.velo.ValkeyRawConfSupport;
 import io.velo.acl.*;
@@ -414,8 +412,8 @@ public class AGroup extends BaseCommand {
                 return ErrorReply.SYNTAX;
             }
 
-            var user = AfterAuthFlagHolder.getUser(((TcpSocket) socket).getRemoteAddress());
-            return new BulkReply(user == null ? U.INIT_DEFAULT_U.getUser().getBytes() : user.getBytes());
+            var u = getAuthU();
+            return new BulkReply(u.getUser().getBytes());
         }
 
         return ErrorReply.SYNTAX;

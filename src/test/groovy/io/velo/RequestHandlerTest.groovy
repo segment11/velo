@@ -98,6 +98,7 @@ class RequestHandlerTest extends Specification {
 
         when:
         requestHandler.isStopped = false
+        ConfForGlobal.requestSummary = true
         then:
         requestList.every {
             requestHandler.handle(it, socket) == NilReply.INSTANCE
@@ -177,7 +178,7 @@ class RequestHandlerTest extends Specification {
 
         when:
         ConfForGlobal.PASSWORD = 'password'
-        AfterAuthFlagHolder.remove(socket.remoteAddress)
+        SocketInspector.clearUserData(socket)
         def getData1 = new byte[1][]
         getData1[0] = 'get'.bytes
         def getRequest = new Request(getData1, false, false)
@@ -188,7 +189,7 @@ class RequestHandlerTest extends Specification {
 
         when:
         // mock already authed
-        AfterAuthFlagHolder.add(socket.remoteAddress, 'test-user')
+        SocketInspector.setAuthUser(socket, 'test-user')
         reply = requestHandler.handle(getRequest, socket)
         then:
         reply == ErrorReply.FORMAT
@@ -205,7 +206,7 @@ class RequestHandlerTest extends Specification {
         }
         def socket2 = SocketInspectorTest.mockTcpSocket(eventloopCurrent, 46380)
         ConfForGlobal.PASSWORD = 'password'
-        AfterAuthFlagHolder.remove(socket2.remoteAddress)
+        SocketInspector.clearUserData(socket2)
         def authRequestAsHttp = new Request(authData, true, false)
         def base64Encoded = new String(Base64.getEncoder().encode('default:123456'.bytes))
         authRequestAsHttp.httpHeaders = ['Authorization': 'Basic ' + base64Encoded]
@@ -223,7 +224,7 @@ class RequestHandlerTest extends Specification {
 
         when:
         AclUsers.instance.delete('test-user')
-        AfterAuthFlagHolder.remove(socket2.remoteAddress)
+        SocketInspector.clearUserData(socket2)
         def base64Encoded2 = new String(Base64.getEncoder().encode('test-user:123456'.bytes))
         authRequestAsHttp.httpHeaders = ['Authorization': 'Basic ' + base64Encoded2]
         reply = requestHandler.handle(authRequestAsHttp, socket2)

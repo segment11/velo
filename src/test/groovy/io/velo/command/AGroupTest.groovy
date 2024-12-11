@@ -452,7 +452,7 @@ class AGroupTest extends Specification {
         ((BulkReply) reply).raw == 'default'.bytes
 
         when:
-        AfterAuthFlagHolder.add(socket.remoteAddress, 'a')
+        SocketInspector.setAuthUser(socket, 'a')
         reply = aGroup.execute('acl whoami')
         then:
         reply instanceof BulkReply
