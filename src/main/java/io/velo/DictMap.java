@@ -16,6 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class DictMap implements NeedCleanUp {
     public static int TO_COMPRESS_MIN_DATA_LENGTH = 64;
+    public static int TO_COMPRESS_USE_SELF_DICT_MIN_DATA_LENGTH = 256;
+
     // singleton
     private static final DictMap instance = new DictMap();
 
