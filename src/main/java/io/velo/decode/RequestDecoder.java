@@ -98,6 +98,13 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                 if (data == null) {
                     return null;
                 }
+
+                // not parse all, need wait next buffer from client
+                for (var bb : data) {
+                    if (bb == null) {
+                        return null;
+                    }
+                }
             }
         }
 
