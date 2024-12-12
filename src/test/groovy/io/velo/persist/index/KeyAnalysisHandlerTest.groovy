@@ -24,9 +24,15 @@ class KeyAnalysisHandlerTest extends Specification {
         }
 
         def keyAnalysisHandler = new KeyAnalysisHandler(keyDir, eventloop, Config.create())
+        def innerTask = keyAnalysisHandler.innerTask
 
         expect:
         keyAnalysisHandler.topKPrefixCounts.get().size() == 0
+
+        when:
+        keyAnalysisHandler.resetInnerTask(Config.create())
+        then:
+        keyAnalysisHandler.innerTask != innerTask
 
         when:
         10.times {

@@ -2,6 +2,7 @@ package io.velo.command
 
 import groovy.transform.CompileStatic
 import groovy.transform.TupleConstructor
+import io.activej.config.Config
 import io.activej.promise.Promise
 import io.activej.promise.Promises
 import io.activej.promise.SettablePromise
@@ -91,6 +92,10 @@ class ManageCommand extends BaseCommand {
         // cross slots
         if (subCmd == 'dict') {
             return dict()
+        }
+
+        if (subCmd == 'index') {
+            return manageIndex()
         }
 
         // given slot
@@ -548,6 +553,41 @@ class ManageCommand extends BaseCommand {
 
         def ratio = totalCompressedBytes / totalBytes
         return new BulkReply(ratio.toString().bytes)
+    }
+
+    Reply manageIndex() {
+        if (data.length < 3) {
+            return ErrorReply.FORMAT
+        }
+
+        def subSubCmd = new String(data[2]).toLowerCase()
+        if (subSubCmd == 'reload-key-analysis-task') {
+            // manage index reload-key-analysis-task notBusyBeginTime=00:00:00.0 notBusyEndTime=23:59:59.0
+            Map<String, String> map = [:]
+            for (int i = 3; i < data.length; i++) {
+                def arg = new String(data[i])
+                def arr = arg.split('=')
+                if (arr.length != 2) {
+                    return ErrorReply.SYNTAX
+                }
+
+                map[arr[0]] = arr[1]
+            }
+
+            if (!map) {
+                return new ErrorReply('No config given')
+            }
+
+            def config = Config.ofMap(map)
+            def persistConfig = Config.create()
+                    .with('keyAnalysis', config)
+
+            localPersist.indexHandlerPool.keyAnalysisHandler.resetInnerTask(persistConfig)
+            log.warn 'Manage index reload-key-analysis-task, items: {}', map
+            return OKReply.INSTANCE
+        }
+
+        return ErrorReply.SYNTAX
     }
 
     Reply dict() {

@@ -93,6 +93,12 @@ class ManageCommandTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        data2[1] = 'index'.bytes
+        reply = manage.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         data2[1] = 'slot'.bytes
         reply = manage.handle()
         then:
@@ -458,7 +464,44 @@ class ManageCommandTest extends Specification {
         dictMap.cleanUp()
     }
 
-    def 'manage in on slot'() {
+    def 'test manage index'() {
+        given:
+        def mGroup = new MGroup('manage', null, null)
+        mGroup.from(BaseCommand.mockAGroup())
+        def manage = new ManageCommand(mGroup)
+        manage.from(mGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.startIndexHandlerPool()
+
+        when:
+        def reply = manage.execute('manage index xxx')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = manage.execute('manage index reload-key-analysis-task')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = manage.execute('manage index reload-key-analysis-task aaa')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = manage.execute('manage index reload-key-analysis-task notBusyBeginTime=00:00:00.0 notBusyEndTime=23:59:59.0')
+        then:
+        reply == OKReply.INSTANCE
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test manage in on slot'() {
         given:
         def data5 = new byte[5][]
 

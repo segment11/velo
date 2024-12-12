@@ -28,15 +28,19 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     }
 
     private final Eventloop eventloop;
-
-    // null when do unit test
-    private final KeyAnalysisTask innerTask;
     @VisibleForTesting
     final RocksDB db;
+
+    // null when do unit test
+    private KeyAnalysisTask innerTask;
 
     @TestOnly
     public KeyAnalysisTask getInnerTask() {
         return innerTask;
+    }
+
+    public void resetInnerTask(Config persistConfig) {
+        this.innerTask = new KeyAnalysisTask(this, db, persistConfig);
     }
 
     long addCount = 0;
