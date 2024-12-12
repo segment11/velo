@@ -211,6 +211,11 @@ class BGroupTest extends Specification {
         sList.size() == 3
 
         when:
+        def sBfList = _BGroup.parseSlots('bf.add', data2, slotNumber)
+        then:
+        sBfList.size() == 1
+
+        when:
         sList = _BGroup.parseSlots('bgsave', data2, slotNumber)
         then:
         sList.size() == 0
@@ -275,6 +280,12 @@ class BGroupTest extends Specification {
 
         when:
         bGroup.cmd = 'bitpos'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        bGroup.cmd = 'bf.add'
         reply = bGroup.handle()
         then:
         reply == ErrorReply.FORMAT
@@ -505,6 +516,38 @@ class BGroupTest extends Specification {
         reply = bGroup.bitpos()
         then:
         reply == ErrorReply.KEY_TOO_LONG
+    }
+
+    def 'test bf add'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = bGroup.execute('bf.add a item0')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when:
+        reply = bGroup.execute('bf.add a item1')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when:
+        reply = bGroup.execute('bf.add a item1')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        def cv = new CompressedValue()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = bGroup.execute('bf.add a item1')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test blpop'() {

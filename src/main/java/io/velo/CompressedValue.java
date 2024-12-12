@@ -34,6 +34,7 @@ public class CompressedValue {
     public static final int SP_TYPE_SET = -4096;
     public static final int SP_TYPE_ZSET = -8192;
     public static final int SP_TYPE_STREAM = -16384;
+    public static final int SP_TYPE_BLOOM_BITMAP = -200;
 
     // change here to limit key size
     public static final short KEY_MAX_LENGTH = 256;
@@ -230,6 +231,14 @@ public class CompressedValue {
 
     public static boolean isStream(int spType) {
         return spType == SP_TYPE_STREAM;
+    }
+
+    public boolean isBloomFilter() {
+        return dictSeqOrSpType == SP_TYPE_BLOOM_BITMAP;
+    }
+
+    public static boolean isBloomFilter(int spType) {
+        return spType == SP_TYPE_BLOOM_BITMAP;
     }
 
     @Override

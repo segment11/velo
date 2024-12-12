@@ -7,6 +7,7 @@ import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.persist.LocalPersist;
 import io.velo.reply.*;
+import io.velo.type.RedisBF;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -23,7 +24,7 @@ public class BGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
         if ("bitcount".equals(cmd) || "bitfield".equals(cmd) || "bitfield_ro".equals(cmd) ||
-                "bitpos".equals(cmd)) {
+                "bitpos".equals(cmd) || cmd.startsWith("bf.")) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
@@ -89,6 +90,10 @@ public class BGroup extends BaseCommand {
 
         if ("bitpos".equals(cmd)) {
             return bitpos();
+        }
+
+        if (cmd.startsWith("bf.")) {
+            return bf();
         }
 
         if ("bgsave".equals(cmd)) {
@@ -277,6 +282,50 @@ public class BGroup extends BaseCommand {
         }
 
         return new IntegerReply(pos);
+    }
+
+    @VisibleForTesting
+    Reply bf() {
+        // bf.***
+        var bfCmdSuffix = cmd.substring(3);
+        if ("add".equals(bfCmdSuffix)) {
+            return bfAdd();
+        }
+
+        return ErrorReply.SYNTAX;
+    }
+
+    private Reply bfAdd() {
+        if (data.length != 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        var itemBytes = data[2];
+        var item = new String(itemBytes);
+
+        var s = slotWithKeyHashListParsed.getFirst();
+
+        RedisBF redisBF;
+
+        var cv = getCv(keyBytes, s);
+        if (cv == null) {
+            redisBF = new RedisBF(true);
+        } else {
+            if (!cv.isBloomFilter()) {
+                return ErrorReply.WRONG_TYPE;
+            }
+
+            redisBF = RedisBF.decode(cv.getCompressedData());
+        }
+
+        var isPut = redisBF.put(item);
+        if (isPut) {
+            var encoded = redisBF.encode();
+            set(keyBytes, encoded, s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+        }
+
+        return isPut ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
     }
 
     public record DstKeyAndDstLeftWhenMove(byte[] dstKeyBytes, SlotWithKeyHash dstSlotWithKeyHash, boolean dstLeft) {
