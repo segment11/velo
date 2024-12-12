@@ -113,10 +113,12 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
             if (!iterator.isValid()) {
                 iterator.seekToFirst();
                 log.warn("Key analysis task iterator seek to {} failed, seek to first again.", new String(lastIterateKeyBytes));
+                topKPrefixCounts.clear();
             }
         } else {
             iterator.seekToFirst();
             log.warn("Key analysis task iterator seek to first again.");
+            topKPrefixCounts.clear();
         }
 
         Map<String, Integer> prefixCounts = new HashMap<>();
@@ -154,22 +156,26 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
         var sortedPrefixCounts = sortMapByValues(prefixCounts);
 
         // for performance
-        final int maxDoSaveTopKCount = 100;
+        final int maxDoLogCountInOneBatch = 100;
+        // cost little memory
+        final int maxTmpSaveTopKSize = 1000;
 
-        topKPrefixCounts.clear();
         var sb = new StringBuilder();
         int innerLoopCount = 0;
         for (var entry : sortedPrefixCounts) {
             if (entry.getValue() >= doLogByKeyPrefixCountIfBiggerThan) {
-                if (innerLoopCount < maxDoSaveTopKCount) {
+                if (innerLoopCount < maxDoLogCountInOneBatch) {
                     sb.append(entry.getKey()).append(":").append(entry.getValue()).append("\n");
+                }
+
+                if (topKPrefixCounts.size() < maxTmpSaveTopKSize) {
                     topKPrefixCounts.put(entry.getKey(), entry.getValue());
                 }
                 innerLoopCount++;
             }
         }
-        log.info("Key analysis task top {} iterate from {} to {}, iterate count: {}, prefix counts:\n{}",
-                maxDoSaveTopKCount, fromKey, new String(lastIterateKeyBytes), count, sb);
+        log.info("Key analysis task one batch iterate from {} to {}, iterate count: {}, tmp save top k size: {}, counts group by prefix:\n{}",
+                fromKey, new String(lastIterateKeyBytes), count, topKPrefixCounts.size(), sb);
 
         if (count < onceIterateKeyCount) {
             // start first again
