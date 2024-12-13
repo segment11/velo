@@ -16,11 +16,15 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
+
+import static io.activej.config.converter.ConfigConverters.ofInteger;
 
 public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     public interface InnerTask {
@@ -56,6 +60,8 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
         RocksDB.loadLibrary();
 
+        var keyMatchPrefixLength = persistConfig.get(ofInteger(), "keyAnalysis.keyMatchPrefixLength", 3);
+
         // 100 million keys, use one more cpu vcore, cost about 3GB total file size, and less than 1GB memory
         // refer to TestRocksDBConfig.groovy
         var options = new Options()
@@ -64,7 +70,8 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                 .setNumLevels(2)
                 .setLevelZeroFileNumCompactionTrigger(8)
                 .setMaxOpenFiles(64)
-                .setMaxBackgroundJobs(4);
+                .setMaxBackgroundJobs(4)
+                .useFixedLengthPrefixExtractor(keyMatchPrefixLength);
         this.db = RocksDB.open(options, keysDir.getAbsolutePath());
         log.warn("Key analysis handler started, keysDir={}", keysDir.getAbsolutePath());
 
@@ -113,6 +120,29 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                 count++;
             }
         });
+    }
+
+    public CompletableFuture<ArrayList<String>> prefixMatch(String prefix, Pattern pattern, int maxCount) {
+        return eventloop.submit(AsyncComputation.of(() -> {
+            var result = new ArrayList<String>();
+            var iterator = db.newIterator();
+            iterator.seek(prefix.getBytes());
+
+            while (iterator.isValid() && result.size() < maxCount) {
+                var keyBytes = iterator.key();
+                var key = new String(keyBytes);
+                if (key.startsWith(prefix)) {
+                    if (pattern.matcher(key).matches()) {
+                        result.add(key);
+                    }
+                } else {
+                    break;
+                }
+                iterator.next();
+            }
+
+            return result;
+        }));
     }
 
     private volatile boolean isStopped = false;

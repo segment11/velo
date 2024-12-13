@@ -31,6 +31,7 @@ class KeyAnalysisHandlerTest extends Specification {
 
         when:
         keyAnalysisHandler.resetInnerTask(Config.create())
+        keyAnalysisHandler.run()
         then:
         keyAnalysisHandler.innerTask != innerTask
 
@@ -58,6 +59,25 @@ class KeyAnalysisHandlerTest extends Specification {
         f.get()
         then:
         iterateKeyCount == 8
+
+        when:
+        def pattern2 = ~/key:.+/
+        def f2 = keyAnalysisHandler.prefixMatch('key:', pattern2, 10)
+        def keyList = f2.get()
+        then:
+        keyList.size() == 8
+
+        when:
+        def f3 = keyAnalysisHandler.prefixMatch('key:', pattern2, 5)
+        def keyList3 = f3.get()
+        then:
+        keyList3.size() == 5
+
+        when:
+        def f4 = keyAnalysisHandler.prefixMatch('key:000000000002', pattern2, 5)
+        def keyList4 = f4.get()
+        then:
+        keyList4.size() == 1
 
         cleanup:
         keyAnalysisHandler.cleanUp()

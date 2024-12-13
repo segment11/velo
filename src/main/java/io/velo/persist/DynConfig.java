@@ -23,7 +23,7 @@ public class DynConfig {
 
     private final HashMap<String, Object> data;
 
-    private Object get(String key) {
+    public Object get(String key) {
         return data.get(key);
     }
 
