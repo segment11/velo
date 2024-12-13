@@ -3,7 +3,6 @@ package io.velo.type;
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnel;
 import com.google.common.hash.Funnels;
-import org.jetbrains.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -26,12 +25,19 @@ public class RedisBF {
 
     private static final Funnel<CharSequence> STRING_FUNNEL = Funnels.stringFunnel(Charset.defaultCharset());
 
-    @VisibleForTesting
-    double fpp;
-    @VisibleForTesting
-    byte expansion;
-    @VisibleForTesting
-    boolean isNoScaling;
+    private double fpp;
+
+    private byte expansion;
+
+    private boolean isNoScaling;
+
+    public byte getExpansion() {
+        return expansion;
+    }
+
+    public boolean isNoScaling() {
+        return isNoScaling;
+    }
 
     private static final byte MAX_LIST_SIZE = 4;
     private final ArrayList<One> list = new ArrayList<>();
@@ -65,6 +71,11 @@ public class RedisBF {
 
     public int listSize() {
         return list.size();
+    }
+
+    public int memoryAllocatedEstimate() {
+        // todo
+        return 0;
     }
 
     public boolean mightContain(String item) {

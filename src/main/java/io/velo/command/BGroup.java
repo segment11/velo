@@ -288,26 +288,55 @@ public class BGroup extends BaseCommand {
     Reply bf() {
         // bf.***
         var bfCmdSuffix = cmd.substring(3);
+
         if ("add".equals(bfCmdSuffix)) {
-            return bfAdd();
+            return bfAdd(false);
+        }
+
+        if ("card".equals(bfCmdSuffix)) {
+            return bfCard();
+        }
+
+        if ("exists".equals(bfCmdSuffix)) {
+            return bfExists(false);
+        }
+
+        if ("info".equals(bfCmdSuffix)) {
+            return bfInfo();
+        }
+
+        if ("madd".equals(bfCmdSuffix)) {
+            return bfAdd(true);
+        }
+
+        if ("mexists".equals(bfCmdSuffix)) {
+            return bfExists(true);
         }
 
         return ErrorReply.SYNTAX;
     }
 
-    private Reply bfAdd() {
-        if (data.length != 3) {
-            return ErrorReply.FORMAT;
+    private Reply bfAdd(boolean isMulti) {
+        if (isMulti) {
+            if (data.length < 3) {
+                return ErrorReply.FORMAT;
+            }
+        } else {
+            if (data.length != 3) {
+                return ErrorReply.FORMAT;
+            }
         }
 
         var keyBytes = data[1];
-        var itemBytes = data[2];
-        var item = new String(itemBytes);
+        ArrayList<String> items = new ArrayList<>(data.length - 2);
+        for (int i = 2; i < data.length; i++) {
+            var itemBytes = data[i];
+            var item = new String(itemBytes);
+            items.add(item);
+        }
 
         var s = slotWithKeyHashListParsed.getFirst();
-
         RedisBF redisBF;
-
         var cv = getCv(keyBytes, s);
         if (cv == null) {
             redisBF = new RedisBF(true);
@@ -315,17 +344,162 @@ public class BGroup extends BaseCommand {
             if (!cv.isBloomFilter()) {
                 return ErrorReply.WRONG_TYPE;
             }
-
             redisBF = RedisBF.decode(cv.getCompressedData());
         }
 
-        var isPut = redisBF.put(item);
+        ArrayList<Boolean> isPutList = new ArrayList<>(items.size());
+        for (var item : items) {
+            var isPutInner = redisBF.put(item);
+            isPutList.add(isPutInner);
+        }
+
+        var isPut = isPutList.stream().anyMatch(x -> x);
         if (isPut) {
             var encoded = redisBF.encode();
             set(keyBytes, encoded, s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
         }
 
-        return isPut ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+        if (isMulti) {
+            var replies = new Reply[isPutList.size()];
+            for (int i = 0; i < isPutList.size(); i++) {
+                replies[i] = isPutList.get(i) ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+            }
+            return new MultiBulkReply(replies);
+        } else {
+            return isPut ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+        }
+    }
+
+    private Reply bfCard() {
+        if (data.length != 2) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+
+        var s = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(keyBytes, s);
+        if (cv == null) {
+            return IntegerReply.REPLY_0;
+        }
+        if (!cv.isBloomFilter()) {
+            return ErrorReply.WRONG_TYPE;
+        }
+
+        var redisBF = RedisBF.decode(cv.getCompressedData());
+        return new IntegerReply(redisBF.itemInserted());
+    }
+
+    private Reply bfExists(boolean isMulti) {
+        if (isMulti) {
+            if (data.length < 3) {
+                return ErrorReply.FORMAT;
+            }
+        } else {
+            if (data.length != 3) {
+                return ErrorReply.FORMAT;
+            }
+        }
+
+        var keyBytes = data[1];
+        ArrayList<String> items = new ArrayList<>(data.length - 2);
+        for (int i = 2; i < data.length; i++) {
+            var itemBytes = data[i];
+            var item = new String(itemBytes);
+            items.add(item);
+        }
+
+        var s = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(keyBytes, s);
+        if (cv == null) {
+            if (isMulti) {
+                var replies = new Reply[items.size()];
+                for (int i = 0; i < items.size(); i++) {
+                    replies[i] = IntegerReply.REPLY_0;
+                }
+                return new MultiBulkReply(replies);
+            } else {
+                return IntegerReply.REPLY_0;
+            }
+        }
+        if (!cv.isBloomFilter()) {
+            return ErrorReply.WRONG_TYPE;
+        }
+
+        var redisBF = RedisBF.decode(cv.getCompressedData());
+
+        ArrayList<Boolean> isExistsList = new ArrayList<>(items.size());
+        for (var item : items) {
+            var isExists = redisBF.mightContain(item);
+            isExistsList.add(isExists);
+        }
+
+        if (isMulti) {
+            var replies = new Reply[isExistsList.size()];
+            for (int i = 0; i < isExistsList.size(); i++) {
+                replies[i] = isExistsList.get(i) ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+            }
+            return new MultiBulkReply(replies);
+        } else {
+            return isExistsList.getFirst() ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+        }
+    }
+
+    private Reply bfInfo() {
+        if (data.length != 2 && data.length != 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+
+        var s = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(keyBytes, s);
+        if (cv == null) {
+            return MultiBulkReply.EMPTY;
+        }
+        if (!cv.isBloomFilter()) {
+            return ErrorReply.WRONG_TYPE;
+        }
+
+        var redisBF = RedisBF.decode(cv.getCompressedData());
+
+        var field = data.length == 3 ? new String(data[2]).toLowerCase() : null;
+        if (field == null) {
+            return new MultiBulkReply(new Reply[]{
+                    new BulkReply("Capacity".getBytes()),
+                    new IntegerReply(redisBF.capacity()),
+                    new BulkReply("Size".getBytes()),
+                    new IntegerReply(redisBF.memoryAllocatedEstimate()),
+                    new BulkReply("Number of filters".getBytes()),
+                    new IntegerReply(redisBF.listSize()),
+                    new BulkReply("Number of items inserted".getBytes()),
+                    new IntegerReply(redisBF.itemInserted()),
+                    new BulkReply("Expansion rate".getBytes()),
+                    new IntegerReply(redisBF.getExpansion())
+            });
+        } else {
+            var replies = new Reply[1];
+            switch (field) {
+                case "capacity":
+                    replies[0] = new IntegerReply(redisBF.capacity());
+                    break;
+                case "size":
+                    replies[0] = new IntegerReply(redisBF.memoryAllocatedEstimate());
+                    break;
+                case "filters":
+                    replies[0] = new IntegerReply(redisBF.listSize());
+                    break;
+                case "items":
+                    replies[0] = new IntegerReply(redisBF.itemInserted());
+                    break;
+                case "expansion":
+                    replies[0] = new IntegerReply(redisBF.getExpansion());
+                    break;
+                default:
+                    return ErrorReply.SYNTAX;
+            }
+            return new MultiBulkReply(replies);
+        }
     }
 
     public record DstKeyAndDstLeftWhenMove(byte[] dstKeyBytes, SlotWithKeyHash dstSlotWithKeyHash, boolean dstLeft) {

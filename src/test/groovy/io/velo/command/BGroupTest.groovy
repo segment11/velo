@@ -291,6 +291,36 @@ class BGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        bGroup.cmd = 'bf.madd'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        bGroup.cmd = 'bf.card'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        bGroup.cmd = 'bf.exists'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        bGroup.cmd = 'bf.mexists'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        bGroup.cmd = 'bf.info'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         bGroup.cmd = 'bgsave'
         reply = bGroup.handle()
         then:
@@ -533,9 +563,25 @@ class BGroupTest extends Specification {
         reply == IntegerReply.REPLY_1
 
         when:
+        inMemoryGetSet.remove(slot, 'b')
+        def reply2 = bGroup.execute('bf.madd b item0 item1')
+        then:
+        reply2 instanceof MultiBulkReply
+        (reply2 as MultiBulkReply).replies.length == 2
+        (reply2 as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
+        (reply2 as MultiBulkReply).replies[1] == IntegerReply.REPLY_1
+
+        when:
         reply = bGroup.execute('bf.add a item1')
         then:
         reply == IntegerReply.REPLY_1
+
+        when:
+        reply2 = bGroup.execute('bf.madd b item3')
+        then:
+        reply2 instanceof MultiBulkReply
+        (reply2 as MultiBulkReply).replies.length == 1
+        (reply2 as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
 
         when:
         reply = bGroup.execute('bf.add a item1')
@@ -543,9 +589,150 @@ class BGroupTest extends Specification {
         reply == IntegerReply.REPLY_0
 
         when:
+        reply2 = bGroup.execute('bf.madd b item0 item1')
+        then:
+        reply2 instanceof MultiBulkReply
+        (reply2 as MultiBulkReply).replies.length == 2
+        (reply2 as MultiBulkReply).replies[0] == IntegerReply.REPLY_0
+        (reply2 as MultiBulkReply).replies[1] == IntegerReply.REPLY_0
+
+        when:
         def cv = new CompressedValue()
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = bGroup.execute('bf.add a item1')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+    }
+
+    def 'test bf card'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = bGroup.execute('bf.card a')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        bGroup.execute('bf.add a item0')
+        reply = bGroup.execute('bf.card a')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when:
+        def cv = new CompressedValue()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = bGroup.execute('bf.card a')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+    }
+
+    def 'test bf exist'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = bGroup.execute('bf.exists a item0')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        inMemoryGetSet.remove(slot, 'b')
+        def reply2 = bGroup.execute('bf.mexists b item0 item1')
+        then:
+        reply2 instanceof MultiBulkReply
+        (reply2 as MultiBulkReply).replies.length == 2
+        (reply2 as MultiBulkReply).replies[0] == IntegerReply.REPLY_0
+        (reply2 as MultiBulkReply).replies[1] == IntegerReply.REPLY_0
+
+        when:
+        bGroup.execute('bf.add a item0')
+        reply = bGroup.execute('bf.exists a item0')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when:
+        bGroup.execute('bf.madd b item0 item1')
+        reply2 = bGroup.execute('bf.mexists b item0 item1')
+        then:
+        reply2 instanceof MultiBulkReply
+        (reply2 as MultiBulkReply).replies.length == 2
+        (reply2 as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
+        (reply2 as MultiBulkReply).replies[1] == IntegerReply.REPLY_1
+
+        when:
+        reply = bGroup.execute('bf.exists a item1')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        reply2 = bGroup.execute('bf.mexists a item2')
+        then:
+        reply2 instanceof MultiBulkReply
+        (reply2 as MultiBulkReply).replies.length == 1
+        (reply2 as MultiBulkReply).replies[0] == IntegerReply.REPLY_0
+
+        when:
+        def cv = new CompressedValue()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = bGroup.execute('bf.exists a item0')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+    }
+
+    def 'test bf info'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = bGroup.execute('bf.info a')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        reply = bGroup.execute('bf.info a capacity')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        bGroup.execute('bf.add a item0')
+        reply = bGroup.execute('bf.info a')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 10
+
+        when:
+        reply = bGroup.execute('bf.info a capacity')
+        reply = bGroup.execute('bf.info a size')
+        reply = bGroup.execute('bf.info a filters')
+        reply = bGroup.execute('bf.info a items')
+        reply = bGroup.execute('bf.info a expansion')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+
+        when:
+        reply = bGroup.execute('bf.info a xxx')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        def cv = new CompressedValue()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = bGroup.execute('bf.info a')
         then:
         reply == ErrorReply.WRONG_TYPE
     }

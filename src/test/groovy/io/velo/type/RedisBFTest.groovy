@@ -66,6 +66,9 @@ class RedisBFTest extends Specification {
     def 'test encode'() {
         given:
         def redisBF = new RedisBF(true)
+        println redisBF.expansion
+        println redisBF.noScaling
+        println redisBF.memoryAllocatedEstimate()
 
         when:
         items200.each {
