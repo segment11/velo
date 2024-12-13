@@ -321,6 +321,24 @@ class BGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        bGroup.cmd = 'bf.insert'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        bGroup.cmd = 'bf.reserve'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        bGroup.cmd = 'bf.xxx'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
         bGroup.cmd = 'bgsave'
         reply = bGroup.handle()
         then:
@@ -735,6 +753,126 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('bf.info a')
         then:
         reply == ErrorReply.WRONG_TYPE
+    }
+
+    def 'test bf insert'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = bGroup.execute('bf.insert a nocreate items item0')
+        then:
+        reply == ErrorReply.BF_NOT_EXISTS
+
+        when:
+        reply = bGroup.execute('bf.insert a capacity 1000 error 0.01 expansion 2 nonscaling items item0 item1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
+        (reply as MultiBulkReply).replies[1] == IntegerReply.REPLY_1
+
+        when:
+        reply = bGroup.execute('bf.insert a capacity 1000 items item0 item1')
+        then:
+        reply == ErrorReply.BF_ALREADY_EXISTS
+
+        when:
+        reply = bGroup.execute('bf.insert a items item0')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_0
+
+        when:
+        reply = bGroup.execute('bf.insert a capacity 100 items')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = bGroup.execute('bf.insert a error 0.01 capacity')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = bGroup.execute('bf.insert a capacity 100 error')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = bGroup.execute('bf.insert a capacity 100 error 0')
+        then:
+        // error should > 0 and < 1
+        reply instanceof ErrorReply
+
+        when:
+        reply = bGroup.execute('bf.insert a capacity 100 error 1')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = bGroup.execute('bf.insert a capacity 100 expansion')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = bGroup.execute('bf.insert a capacity 100 expansion 11')
+        then:
+        // expansion should <= 10
+        reply instanceof ErrorReply
+
+        when:
+        def cv = new CompressedValue()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = bGroup.execute('bf.insert a items item0')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+    }
+
+    def 'test bf reserve'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = bGroup.execute('bf.reserve a 0.01 1000 expansion 2 nonscaling')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = bGroup.execute('bf.reserve a 0.01 1000')
+        then:
+        reply == ErrorReply.BF_ALREADY_EXISTS
+
+        when:
+        reply = bGroup.execute('bf.reserve a 0.01 1000 expansion')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = bGroup.execute('bf.reserve a 0.01 1000 expansion 11')
+        then:
+        // expansion should <= 10
+        reply instanceof ErrorReply
+
+        when:
+        reply = bGroup.execute('bf.reserve a 0 1000')
+        then:
+        // error should > 0 and < 1
+        reply instanceof ErrorReply
+
+        when:
+        reply = bGroup.execute('bf.reserve a 1 1000')
+        then:
+        // error should > 0 and < 1
+        reply instanceof ErrorReply
     }
 
     def 'test blpop'() {

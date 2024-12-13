@@ -14,6 +14,8 @@ public class ErrorReply implements Reply {
     public static final ErrorReply ACL_PERMIT_LIMIT = new ErrorReply("user acl permit limit !NOPERM!");
     public static final ErrorReply ACL_PERMIT_KEY_LIMIT = new ErrorReply("user acl permit limit !NOPERM! !key!");
     public static final ErrorReply ACL_SETUSER_RULE_INVALID = new ErrorReply("!Error in ACL SETUSER modifier!");
+    public static final ErrorReply BF_ALREADY_EXISTS = new ErrorReply("bloom filter already exists");
+    public static final ErrorReply BF_NOT_EXISTS = new ErrorReply("bloom filter not exists");
     public static final ErrorReply SYNTAX = new ErrorReply("syntax error");
     public static final ErrorReply NOT_INTEGER = new ErrorReply("not integer");
     public static final ErrorReply NOT_FLOAT = new ErrorReply("not float");

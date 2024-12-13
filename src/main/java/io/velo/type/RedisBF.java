@@ -19,9 +19,10 @@ public class RedisBF {
         }
     }
 
-    private static final int DEFAULT_CAPACITY = 100;
-    private static final double DEFAULT_FPP = 0.01;
-    private static final byte DEFAULT_EXPANSION = 2;
+    public static final int DEFAULT_CAPACITY = 100;
+    public static final double DEFAULT_FPP = 0.01;
+    public static final byte DEFAULT_EXPANSION = 2;
+    public static final byte MAX_EXPANSION = 10;
 
     private static final Funnel<CharSequence> STRING_FUNNEL = Funnels.stringFunnel(Charset.defaultCharset());
 
@@ -29,14 +30,14 @@ public class RedisBF {
 
     private byte expansion;
 
-    private boolean isNoScaling;
+    private boolean nonScaling;
 
     public byte getExpansion() {
         return expansion;
     }
 
-    public boolean isNoScaling() {
-        return isNoScaling;
+    public boolean isNonScaling() {
+        return nonScaling;
     }
 
     private static final byte MAX_LIST_SIZE = 4;
@@ -49,10 +50,10 @@ public class RedisBF {
         this(DEFAULT_CAPACITY, DEFAULT_FPP, DEFAULT_EXPANSION, false);
     }
 
-    public RedisBF(int initCapacity, double initFpp, byte expansion, boolean isNoScaling) {
+    public RedisBF(int initCapacity, double initFpp, byte initExpansion, boolean nonScaling) {
         this.fpp = initFpp;
-        this.expansion = expansion;
-        this.isNoScaling = isNoScaling;
+        this.expansion = initExpansion;
+        this.nonScaling = nonScaling;
 
         // add first one
         var one = new One();
@@ -107,7 +108,7 @@ public class RedisBF {
         }
 
         // need expansion
-        if (isNoScaling) {
+        if (nonScaling) {
             throw new RuntimeException("BF sub filter can not be expanded");
         }
 
@@ -149,7 +150,7 @@ public class RedisBF {
         var buffer = ByteBuffer.wrap(bytes);
 
         buffer.put(expansion);
-        buffer.put((byte) (isNoScaling ? 1 : 0));
+        buffer.put((byte) (nonScaling ? 1 : 0));
         buffer.putDouble(fpp);
         buffer.putInt(list.size());
         for (int i = 0; i < list.size(); i++) {
@@ -169,7 +170,7 @@ public class RedisBF {
 
         var r = new RedisBF();
         r.expansion = buffer.get();
-        r.isNoScaling = buffer.get() != 0;
+        r.nonScaling = buffer.get() != 0;
         r.fpp = buffer.getDouble();
         var listSize = buffer.getInt();
         for (int i = 0; i < listSize; i++) {

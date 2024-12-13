@@ -67,7 +67,7 @@ class RedisBFTest extends Specification {
         given:
         def redisBF = new RedisBF(true)
         println redisBF.expansion
-        println redisBF.noScaling
+        println redisBF.nonScaling
         println redisBF.memoryAllocatedEstimate()
 
         when:

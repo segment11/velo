@@ -305,12 +305,20 @@ public class BGroup extends BaseCommand {
             return bfInfo();
         }
 
+        if ("insert".equals(bfCmdSuffix)) {
+            return bfInsert();
+        }
+
         if ("madd".equals(bfCmdSuffix)) {
             return bfAdd(true);
         }
 
         if ("mexists".equals(bfCmdSuffix)) {
             return bfExists(true);
+        }
+
+        if ("reserve".equalsIgnoreCase(bfCmdSuffix)) {
+            return bfReserve();
         }
 
         return ErrorReply.SYNTAX;
@@ -500,6 +508,162 @@ public class BGroup extends BaseCommand {
             }
             return new MultiBulkReply(replies);
         }
+    }
+
+    private Reply bfInsert() {
+        if (data.length < 4) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+
+        var initCapacity = RedisBF.DEFAULT_CAPACITY;
+        var initFpp = RedisBF.DEFAULT_FPP;
+        var initExpansion = RedisBF.DEFAULT_EXPANSION;
+        boolean noCreate = false;
+        boolean nonScaling = false;
+
+        boolean needCreateNew = false;
+
+        ArrayList<String> items = new ArrayList<>();
+        for (int i = 2; i < data.length; i++) {
+            var arg = new String(data[i]);
+
+            if ("ITEMS".equalsIgnoreCase(arg)) {
+                if (data.length <= i + 1) {
+                    return ErrorReply.SYNTAX;
+                }
+
+                for (int j = i + 1; j < data.length; j++) {
+                    var itemBytes = data[j];
+                    var item = new String(itemBytes);
+                    items.add(item);
+                }
+                break;
+            }
+
+            if ("CAPACITY".equalsIgnoreCase(arg)) {
+                if (data.length <= i + 1) {
+                    return ErrorReply.SYNTAX;
+                }
+                initCapacity = Integer.parseInt(new String(data[i + 1]));
+                needCreateNew = true;
+            }
+
+            if ("ERROR".equalsIgnoreCase(arg)) {
+                if (data.length <= i + 1) {
+                    return ErrorReply.SYNTAX;
+                }
+                initFpp = Double.parseDouble(new String(data[i + 1]));
+                if (initFpp <= 0 || initFpp >= 1) {
+                    return new ErrorReply("error must be > 0 and < 1");
+                }
+                needCreateNew = true;
+            }
+
+            if ("EXPANSION".equalsIgnoreCase(arg)) {
+                if (data.length <= i + 1) {
+                    return ErrorReply.SYNTAX;
+                }
+                initExpansion = Byte.parseByte(new String(data[i + 1]));
+                if (initExpansion > RedisBF.MAX_EXPANSION) {
+                    return new ErrorReply("expansion too large");
+                }
+                needCreateNew = true;
+            }
+
+            if ("NOCREATE".equalsIgnoreCase(arg)) {
+                noCreate = true;
+            }
+
+            if ("NONSCALING".equalsIgnoreCase(arg)) {
+                nonScaling = true;
+                needCreateNew = true;
+            }
+        }
+
+        var key = new String(keyBytes);
+        var s = slotWithKeyHashListParsed.getFirst();
+        var isExists = exists(s.slot(), s.bucketIndex(), key, s.keyHash());
+
+        RedisBF redisBF;
+        if (isExists) {
+            if (needCreateNew) {
+                return ErrorReply.BF_ALREADY_EXISTS;
+            }
+            var cv = getCv(keyBytes, s);
+            if (!cv.isBloomFilter()) {
+                return ErrorReply.WRONG_TYPE;
+            }
+            redisBF = RedisBF.decode(cv.getCompressedData());
+        } else {
+            if (noCreate) {
+                return ErrorReply.BF_NOT_EXISTS;
+            }
+            redisBF = new RedisBF(initCapacity, initFpp, initExpansion, nonScaling);
+        }
+
+        boolean isPut = false;
+        var replies = new Reply[items.size()];
+        for (int i = 0; i < items.size(); i++) {
+            var item = items.get(i);
+            var isPutInner = redisBF.put(item);
+            replies[i] = isPutInner ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+            isPut |= isPutInner;
+        }
+
+        if (isPut) {
+            set(keyBytes, redisBF.encode(), s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+        }
+
+        return new MultiBulkReply(replies);
+    }
+
+    private Reply bfReserve() {
+        if (data.length < 4) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        var initExpansion = RedisBF.DEFAULT_EXPANSION;
+        boolean nonScaling = false;
+
+        var initFpp = Double.parseDouble(new String(data[2]));
+        if (initFpp <= 0 || initFpp >= 1) {
+            return new ErrorReply("error must be > 0 and < 1");
+        }
+
+        var initCapacity = Integer.parseInt(new String(data[3]));
+
+        for (int i = 4; i < data.length; i++) {
+            var arg = new String(data[i]);
+
+            if ("EXPANSION".equalsIgnoreCase(arg)) {
+                if (data.length <= i + 1) {
+                    return ErrorReply.SYNTAX;
+                }
+                initExpansion = Byte.parseByte(new String(data[i + 1]));
+                if (initExpansion > RedisBF.MAX_EXPANSION) {
+                    return new ErrorReply("expansion too large");
+                }
+            }
+
+            if ("NONSCALING".equalsIgnoreCase(arg)) {
+                nonScaling = true;
+            }
+        }
+
+        var key = new String(keyBytes);
+        var s = slotWithKeyHashListParsed.getFirst();
+        var isExists = exists(s.slot(), s.bucketIndex(), key, s.keyHash());
+
+        if (isExists) {
+            return ErrorReply.BF_ALREADY_EXISTS;
+        }
+
+        var redisBF = new RedisBF(initCapacity, initFpp, initExpansion, nonScaling);
+        set(keyBytes, redisBF.encode(), s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+        return OKReply.INSTANCE;
     }
 
     public record DstKeyAndDstLeftWhenMove(byte[] dstKeyBytes, SlotWithKeyHash dstSlotWithKeyHash, boolean dstLeft) {
