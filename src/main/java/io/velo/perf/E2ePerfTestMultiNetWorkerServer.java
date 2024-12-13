@@ -169,6 +169,16 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
         awaitShutdown();
     }
 
+    /*
+    start server:
+    java -Xmx2g -Xms2g -XX:+UseZGC -XX:+ZGenerational -Dvelo-e2e-test-netWorkers=2 -cp velo-1.0.0.jar io.velo.perf.E2ePerfTestMultiNetWorkerServer
+    run benchmark
+    redis-benchmark -p 7379 -r 1000000 -n 10000000 -c 2 -d 200 -t set --threads 1 -P 10
+    result:
+    60w+ qps
+    p999 0.2ms
+    p9999 1ms
+     */
     public static void main(String[] args) throws Exception {
         Launcher launcher = new E2ePerfTestMultiNetWorkerServer() {
             @Override
