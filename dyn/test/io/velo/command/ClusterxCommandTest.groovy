@@ -100,6 +100,12 @@ class ClusterxCommandTest extends Specification {
         reply == ClusterxCommand.CLUSTER_DISABLED
 
         when:
+        data2[1] = 'slaves'.bytes
+        reply = clusterx.handle()
+        then:
+        reply == ClusterxCommand.CLUSTER_DISABLED
+
+        when:
         data2[1] = 'setnodeid'.bytes
         reply = clusterx.handle()
         then:

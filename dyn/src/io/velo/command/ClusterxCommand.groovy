@@ -79,7 +79,7 @@ class ClusterxCommand extends BaseCommand {
             return nodes()
         }
 
-        if ('replicas' == subCmd) {
+        if ('replicas' == subCmd || 'slaves' == subCmd) {
             return replicas()
         }
 
