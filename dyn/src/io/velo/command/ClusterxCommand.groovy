@@ -79,6 +79,10 @@ class ClusterxCommand extends BaseCommand {
             return nodes()
         }
 
+        if ('replicas' == subCmd) {
+            return replicas()
+        }
+
         if ('setnodeid' == subCmd) {
             return setnodeid()
         }
@@ -409,6 +413,43 @@ migrating_state:ok
 
         def lines = list.join("\r\n") + "\r\n"
         new BulkReply(lines.bytes)
+    }
+
+    @VisibleForTesting
+    Reply replicas() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        if (data.length != 3) {
+            return ErrorReply.FORMAT
+        }
+
+        def nodeId = new String(data[2])
+
+        def multiShard = localPersist.multiShard
+        def shards = multiShard.shards
+
+        def shard = shards.find { ss ->
+            ss.master().nodeId() == nodeId
+        }
+        if (!shard) {
+            return new ErrorReply('master node id not found: ' + nodeId)
+        }
+
+        def replicaNodes = shard.nodes.findAll { !it.master }
+        if (!replicaNodes) {
+            return MultiBulkReply.EMPTY
+        }
+
+        def allSlotRange = shards.multiSlotRange.list.collect { it.toString() }.join(' ')
+
+        def replies = new Reply[replicaNodes.size()]
+        for (int i = 0; i < replicaNodes.size(); i++) {
+            def str = replicaNodes[i].nodeInfoPrefix() + ' - ' + allSlotRange
+            replies[i] = new BulkReply(str.bytes)
+        }
+        new MultiBulkReply(replies)
     }
 
     @VisibleForTesting

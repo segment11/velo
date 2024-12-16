@@ -87,7 +87,7 @@ public class Node {
         return Utils.rightPad(nodeIdShort, "0", NODE_ID_LENGTH);
     }
 
-    String nodeInfoPrefix() {
+    public String nodeInfoPrefix() {
         return nodeId() + " " + host + ":" + port + " " +
                 (isMySelf ? "myself," : "") +
                 (isMaster ? "master" : "slave") +

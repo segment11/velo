@@ -94,6 +94,12 @@ class ClusterxCommandTest extends Specification {
         reply == ClusterxCommand.CLUSTER_DISABLED
 
         when:
+        data2[1] = 'replicas'.bytes
+        reply = clusterx.handle()
+        then:
+        reply == ClusterxCommand.CLUSTER_DISABLED
+
+        when:
         data2[1] = 'setnodeid'.bytes
         reply = clusterx.handle()
         then:
@@ -516,6 +522,62 @@ class ClusterxCommandTest extends Specification {
         then:
         reply instanceof AsyncReply
         ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test replicas'() {
+        given:
+        def cGroup = new CGroup('cluster', null, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        and:
+        ConfForGlobal.clusterEnabled = true
+        var multiShard = localPersist.multiShard
+        var shards = multiShard.shards
+
+        def shard0 = shards[0]
+        shard0.multiSlotRange.addSingle(0, 16383)
+
+        when:
+        def data3 = new byte[3][]
+        data3[1] = 'replicas'.bytes
+        data3[2] = shard0.nodes[0].nodeId().bytes
+        clusterx.data = data3
+        def reply = clusterx.replicas()
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        shard0.nodes << new Node(nodeIdFix: 'xxx', master: false, slaveIndex: 0, followNodeId: shard0.nodes[0].nodeId())
+        reply = clusterx.replicas()
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        new String(((BulkReply) (reply as MultiBulkReply).replies[0]).raw).startsWith shard0.nodes[1].nodeId()
+
+        when:
+        data3[2] = 'xxx'.bytes
+        reply = clusterx.replicas()
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains 'master node id not found'
+
+        when:
+        def data1 = new byte[1][]
+        clusterx.data = data1
+        reply = clusterx.replicas()
+        then:
+        reply == ErrorReply.FORMAT
 
         cleanup:
         localPersist.cleanUp()
