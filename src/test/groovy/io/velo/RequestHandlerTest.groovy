@@ -4,6 +4,7 @@ import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.velo.acl.AclUsers
 import io.velo.acl.U
+import io.velo.command.AGroup
 import io.velo.command.XGroup
 import io.velo.decode.Request
 import io.velo.persist.Consts
@@ -52,6 +53,7 @@ class RequestHandlerTest extends Specification {
         requestHandler.slotNumber == slotNumber
         requestHandler.snowFlake == snowFlake
         requestHandler2.localTestRandomValueList.size() > 0
+        requestHandler.getA_ZGroupCommand('a'.bytes[0]) instanceof AGroup
 
         when:
         def requestList = ('a'..'z').collect {

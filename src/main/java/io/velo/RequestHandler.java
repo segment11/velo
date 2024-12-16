@@ -184,6 +184,10 @@ public class RequestHandler {
         }
     }
 
+    public BaseCommand getA_ZGroupCommand(byte firstByte) {
+        return commandGroups[firstByte - 'a'];
+    }
+
     // cross threads, need be thread safe
     public void parseSlots(@NotNull Request request) {
         var cmd = request.cmd();
