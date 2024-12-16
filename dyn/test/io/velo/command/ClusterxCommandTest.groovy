@@ -70,6 +70,12 @@ class ClusterxCommandTest extends Specification {
         reply == ClusterxCommand.CLUSTER_DISABLED
 
         when:
+        data2[1] = 'keyslot'.bytes
+        reply = clusterx.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         data2[1] = 'migrate'.bytes
         reply = clusterx.handle()
         then:
@@ -293,6 +299,22 @@ class ClusterxCommandTest extends Specification {
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+    }
+
+    def 'test keyslot'() {
+        given:
+        def data3 = new byte[3][]
+        data3[2] = 'somekey'.bytes
+
+        def cGroup = new CGroup('cluster', data3, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        when:
+        def reply = clusterx.keyslot()
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 11058
     }
 
     def 'test migrate'() {

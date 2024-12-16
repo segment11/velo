@@ -14,6 +14,7 @@ import io.velo.repl.cluster.Shard
 import io.velo.repl.cluster.SlotRange
 import io.velo.reply.*
 import org.jetbrains.annotations.VisibleForTesting
+import redis.clients.jedis.util.JedisClusterCRC16
 
 // act same as kvrocks clusterx commands
 @CompileStatic
@@ -60,6 +61,10 @@ class ClusterxCommand extends BaseCommand {
 
         if ('info' == subCmd) {
             return info()
+        }
+
+        if ('keyslot' == subCmd) {
+            return keyslot()
         }
 
         if ('migrate' == subCmd) {
@@ -297,6 +302,17 @@ migrating_state:ok
         }
 
         asyncReply
+    }
+
+    @VisibleForTesting
+    Reply keyslot() {
+        if (data.length != 3) {
+            return ErrorReply.FORMAT
+        }
+
+        def keyBytes = data[2]
+        var toClientSlot = JedisClusterCRC16.getSlot(keyBytes)
+        new IntegerReply(toClientSlot)
     }
 
     // refer to segment_kvrocks_controller
