@@ -86,6 +86,12 @@ public class RGroup extends BaseCommand {
             return rename(true);
         }
 
+        if ("replicaof".equals(cmd)) {
+            var sGroup = new SGroup(cmd, data, socket);
+            sGroup.from(this);
+            return sGroup.slaveof();
+        }
+
         if ("restore".equals(cmd)) {
             return restore();
         }

@@ -101,8 +101,14 @@ class RGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
-        rGroup.cmd = 'restore'
+        rGroup.cmd = 'replicaof'
         rGroup.data = data1
+        reply = rGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        rGroup.cmd = 'restore'
         reply = rGroup.handle()
         then:
         reply == ErrorReply.FORMAT
