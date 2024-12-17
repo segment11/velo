@@ -4,10 +4,7 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
-import io.velo.BaseCommand;
-import io.velo.CompressedValue;
-import io.velo.Dict;
-import io.velo.TrainSampleJob;
+import io.velo.*;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.persist.KeyLoader;
@@ -15,10 +12,13 @@ import io.velo.persist.ScanCursor;
 import io.velo.repl.LeaderSelector;
 import io.velo.reply.*;
 import io.velo.type.RedisHashKeys;
+import io.velo.type.RedisList;
+import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static io.velo.CompressedValue.NO_EXPIRE;
 
@@ -34,6 +34,7 @@ public class SGroup extends BaseCommand {
                 "setnx".equals(cmd) || "strlen".equals(cmd) || "substr".equals(cmd) ||
                 "sadd".equals(cmd) || "scard".equals(cmd) ||
                 "sismember".equals(cmd) || "smembers".equals(cmd) || "smismember".equals(cmd) ||
+                "sort".equals(cmd) || "sort_ro".equals(cmd) ||
                 "spop".equals(cmd) || "srandmember".equals(cmd) || "srem".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
@@ -207,6 +208,14 @@ public class SGroup extends BaseCommand {
 
         if ("smove".equals(cmd)) {
             return smove();
+        }
+
+        if ("sort".equals(cmd)) {
+            return sort(true);
+        }
+
+        if ("sort_ro".equals(cmd)) {
+            return sort(false);
         }
 
         if ("spop".equals(cmd)) {
@@ -721,10 +730,10 @@ public class SGroup extends BaseCommand {
         return RedisHashKeys.decode(encodedBytes);
     }
 
-    private void saveRedisSet(RedisHashKeys rhk, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
+    private static void saveRedisSet(RedisHashKeys rhk, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
         var key = new String(keyBytes);
         if (rhk.size() == 0) {
-            removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());
+            baseCommand.removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());
             return;
         }
 
@@ -733,7 +742,11 @@ public class SGroup extends BaseCommand {
         if (preferDict == null) {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
-        set(keyBytes, rhk.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_SET);
+        baseCommand.set(keyBytes, rhk.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_SET);
+    }
+
+    private void saveRedisSet(RedisHashKeys rhk, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
+        saveRedisSet(rhk, keyBytes, slotWithKeyHash, this, dictMap);
     }
 
     @VisibleForTesting
@@ -1250,6 +1263,316 @@ public class SGroup extends BaseCommand {
             replies[i] = isMember ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
         }
         return new MultiBulkReply(replies);
+    }
+
+    @VisibleForTesting
+    Reply sort(boolean canDoStore) {
+        if (data.length < 2) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        String byPattern = null;
+        int offset = 0;
+        int count = -1;
+        ArrayList<String> getPatternList = new ArrayList<>();
+        boolean isAsc = true;
+        boolean isAlpha = false;
+        byte[] dstKeyBytes = null;
+
+        for (int i = 2; i < data.length; i++) {
+            var arg = new String(data[i]).toUpperCase();
+            switch (arg) {
+                case "BY":
+                    if (i + 1 >= data.length) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    byPattern = new String(data[i + 1]);
+                    i += 1;
+                    continue;
+                case "LIMIT":
+                    if (i + 2 >= data.length) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    try {
+                        offset = Integer.parseInt(new String(data[i + 1]));
+                        count = Integer.parseInt(new String(data[i + 2]));
+                    } catch (NumberFormatException ignore) {
+                        return ErrorReply.NOT_INTEGER;
+                    }
+                    i += 2;
+                    continue;
+                case "GET":
+                    if (i + 1 >= data.length) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    getPatternList.add(new String(data[i + 1]));
+                    i += 1;
+                    continue;
+                case "DESC":
+                    isAsc = false;
+                    continue;
+                case "ALPHA":
+                    isAlpha = true;
+                    continue;
+                case "STORE":
+                    if (i + 1 >= data.length) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    dstKeyBytes = data[i + 1];
+                    i += 1;
+                    continue;
+                default:
+                    return ErrorReply.SYNTAX;
+            }
+        }
+
+        if (offset < 0) {
+            return new ErrorReply("offset must >= 0");
+        }
+
+        if (!canDoStore && dstKeyBytes != null) {
+            return new ErrorReply("sort_ro not support store");
+        }
+        var isStore = dstKeyBytes != null;
+
+        if (byPattern != null) {
+            return new ErrorReply("sort by pattern not support yet");
+        }
+
+        var s = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(keyBytes, s);
+        if (cv == null) {
+            return isStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+        }
+
+        if (!cv.isList() && !cv.isSet() && !cv.isZSet()) {
+            return ErrorReply.WRONG_TYPE;
+        }
+
+        var encodedBytes = getValueBytesByCv(cv, keyBytes, s);
+        if (cv.isList()) {
+            var rl = RedisList.decode(encodedBytes);
+            var list = rl.getList();
+            if (count <= 0) {
+                count = list.size();
+            }
+
+            if (isAlpha) {
+                boolean finalIsAsc = isAsc;
+                list.sort((o1, o2) -> {
+                    var r = new String(o1).compareTo(new String(o2));
+                    return finalIsAsc ? r : -r;
+                });
+            } else {
+                try {
+                    boolean finalIsAsc1 = isAsc;
+                    list.sort((o1, o2) -> {
+                        long l = Long.parseLong(new String(o1)) - Long.parseLong(new String(o2));
+                        var r = l > 0 ? 1 : l < 0 ? -1 : 0;
+                        return finalIsAsc1 ? r : -r;
+                    });
+                } catch (NumberFormatException ignore) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+            }
+
+            // offset and count
+            List<byte[]> subList = offset >= list.size() ? Collections.emptyList() :
+                    list.subList(offset, Math.min(offset + count, list.size()));
+
+            if (isStore) {
+                var dstSlotWithKeyHash = slot(dstKeyBytes);
+                var dstRl = new RedisList();
+                for (var e : subList) {
+                    dstRl.addLast(e);
+                }
+
+                var targetOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
+                byte[] finalDstKeyBytes = dstKeyBytes;
+                var subListSize = subList.size();
+
+                SettablePromise<Reply> finalPromise = new SettablePromise<>();
+                var asyncReply = new AsyncReply(finalPromise);
+
+                var p = targetOneSlot.asyncRun(() -> {
+                    LGroup.saveRedisList(dstRl, finalDstKeyBytes, dstSlotWithKeyHash, this, dictMap);
+                });
+
+                p.whenComplete((v, t) -> {
+                    if (t != null) {
+                        finalPromise.setException(t);
+                    } else {
+                        finalPromise.set(new IntegerReply(subListSize));
+                    }
+                });
+
+                return asyncReply;
+            } else {
+                return new MultiBulkReply(subList.stream().map(BulkReply::new).toArray(Reply[]::new));
+            }
+        } else if (cv.isSet()) {
+            var rhk = RedisHashKeys.decode(encodedBytes);
+            var set = rhk.getSet();
+            if (count <= 0) {
+                count = set.size();
+            }
+
+            ArrayList<String> subList = new ArrayList<>();
+            if (!isAlpha) {
+                TreeSet<Long> sortedByLong;
+                try {
+                    sortedByLong = set.stream().map(Long::parseLong).collect(Collectors.toCollection(TreeSet::new));
+                } catch (NumberFormatException ignore) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+
+                // offset and count
+                var it = isAsc ? sortedByLong.iterator() : sortedByLong.descendingIterator();
+                int c = 0;
+                while (it.hasNext()) {
+                    if (c >= count) {
+                        break;
+                    }
+                    var e = it.next();
+                    if (offset <= 0) {
+                        subList.add(e.toString());
+                        offset--;
+                        c++;
+                    } else {
+                        offset--;
+                    }
+                }
+            } else {
+                // already sorted
+                var it = isAsc ? set.iterator() : set.descendingIterator();
+                int c = 0;
+                while (it.hasNext()) {
+                    if (c >= count) {
+                        break;
+                    }
+                    var e = it.next();
+                    if (offset <= 0) {
+                        subList.add(e);
+                        offset--;
+                        c++;
+                    } else {
+                        offset--;
+                    }
+                }
+            }
+
+            if (isStore) {
+                var dstSlotWithKeyHash = slot(dstKeyBytes);
+                var dstRhk = new RedisHashKeys();
+                for (var e : subList) {
+                    dstRhk.add(e);
+                }
+
+                var targetOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
+                byte[] finalDstKeyBytes = dstKeyBytes;
+                var subListSize = subList.size();
+
+                SettablePromise<Reply> finalPromise = new SettablePromise<>();
+                var asyncReply = new AsyncReply(finalPromise);
+
+                var p = targetOneSlot.asyncRun(() -> {
+                    saveRedisSet(dstRhk, finalDstKeyBytes, dstSlotWithKeyHash, this, dictMap);
+                });
+
+                p.whenComplete((v, t) -> {
+                    if (t != null) {
+                        finalPromise.setException(t);
+                    } else {
+                        finalPromise.set(new IntegerReply(subListSize));
+                    }
+                });
+
+                return asyncReply;
+            } else {
+                return subList.isEmpty() ? MultiBulkReply.EMPTY : new MultiBulkReply(subList.stream().map(x -> new BulkReply(x.getBytes())).toArray(Reply[]::new));
+            }
+        } else {
+            var rz = RedisZSet.decode(encodedBytes);
+            var set = rz.getSet();
+            if (count <= 0) {
+                count = set.size();
+            }
+
+            ArrayList<String> subList = new ArrayList<>();
+            if (!isAlpha) {
+                // already sorted by score
+                // offset and count
+                var it = isAsc ? set.iterator() : set.descendingIterator();
+                int c = 0;
+                while (it.hasNext()) {
+                    if (c >= count) {
+                        break;
+                    }
+                    var e = it.next();
+                    if (offset <= 0) {
+                        subList.add(e.member());
+                        offset--;
+                        c++;
+                    } else {
+                        offset--;
+                    }
+                }
+            } else {
+                var sortedList = set.stream().map(RedisZSet.ScoreValue::member).sorted().collect(Collectors.toCollection(TreeSet::new));
+                var it = isAsc ? sortedList.iterator() : sortedList.descendingIterator();
+                int c = 0;
+                while (it.hasNext()) {
+                    if (c >= count) {
+                        break;
+                    }
+                    var e = it.next();
+                    if (offset <= 0) {
+                        subList.add(e);
+                        offset--;
+                        c++;
+                    } else {
+                        offset--;
+                    }
+                }
+            }
+
+            if (isStore) {
+                var dstSlotWithKeyHash = slot(dstKeyBytes);
+                var dstRz = new RedisZSet();
+                for (var e : subList) {
+                    var sv = rz.get(e);
+                    dstRz.add(sv.score(), sv.member());
+                }
+
+                var targetOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
+                byte[] finalDstKeyBytes = dstKeyBytes;
+                var subListSize = subList.size();
+
+                SettablePromise<Reply> finalPromise = new SettablePromise<>();
+                var asyncReply = new AsyncReply(finalPromise);
+
+                var p = targetOneSlot.asyncRun(() -> {
+                    ZGroup.saveRedisZSet(dstRz, finalDstKeyBytes, dstSlotWithKeyHash, this, dictMap);
+                });
+
+                p.whenComplete((v, t) -> {
+                    if (t != null) {
+                        finalPromise.setException(t);
+                    } else {
+                        finalPromise.set(new IntegerReply(subListSize));
+                    }
+                });
+
+                return asyncReply;
+            } else {
+                return subList.isEmpty() ? MultiBulkReply.EMPTY : new MultiBulkReply(subList.stream().map(x -> new BulkReply(x.getBytes())).toArray(Reply[]::new));
+            }
+        }
     }
 
     @VisibleForTesting

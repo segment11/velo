@@ -4,10 +4,7 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
-import io.velo.BaseCommand;
-import io.velo.CompressedValue;
-import io.velo.Dict;
-import io.velo.TrainSampleJob;
+import io.velo.*;
 import io.velo.reply.*;
 import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.TestOnly;
@@ -340,10 +337,10 @@ public class ZGroup extends BaseCommand {
         return RedisZSet.decode(encodedBytes);
     }
 
-    private void saveRedisZSet(RedisZSet rz, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
+    static void saveRedisZSet(RedisZSet rz, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
         var key = new String(keyBytes);
         if (rz.isEmpty()) {
-            removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());
+            baseCommand.removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());
             return;
         }
 
@@ -352,7 +349,11 @@ public class ZGroup extends BaseCommand {
         if (preferDict == null) {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
-        set(keyBytes, rz.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_ZSET);
+        baseCommand.set(keyBytes, rz.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_ZSET);
+    }
+
+    private void saveRedisZSet(RedisZSet rz, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
+        saveRedisZSet(rz, keyBytes, slotWithKeyHash, this, dictMap);
     }
 
     private record Member(double score, String e) {

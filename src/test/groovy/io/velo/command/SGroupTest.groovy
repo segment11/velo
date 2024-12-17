@@ -4,12 +4,15 @@ import io.activej.eventloop.Eventloop
 import io.velo.*
 import io.velo.acl.AclUsers
 import io.velo.acl.RPubSub
+import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
 import io.velo.repl.LeaderSelector
 import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.reply.*
 import io.velo.type.RedisHashKeys
+import io.velo.type.RedisList
+import io.velo.type.RedisZSet
 import spock.lang.Specification
 
 import java.time.Duration
@@ -30,6 +33,8 @@ scard
 sismember
 smembers
 smismember
+sort
+sort_ro
 spop
 srandmember
 srem
@@ -90,7 +95,7 @@ sunionstore
             _SGroup.parseSlots(it, data4, slotNumber)
         }
         then:
-        sListList1.size() == 15
+        sListList1.size() == 17
         sListList1.every { it.size() == 1 }
 
         when:
@@ -98,7 +103,7 @@ sunionstore
             _SGroup.parseSlots(it, data1, slotNumber)
         }
         then:
-        sListList11.size() == 15
+        sListList11.size() == 17
         sListList11.every { it.size() == 0 }
 
         when:
@@ -292,6 +297,21 @@ sunionstore
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+    }
+
+    def 'test sentinel'() {
+        given:
+        def sGroup = new SGroup(null, null, null)
+
+        and:
+        def loader = CachedGroovyClassLoader.instance
+        def classpath = Utils.projectPath('/dyn/src')
+        loader.init(GroovyClassLoader.getClass().classLoader, classpath, null)
+
+        when:
+        def reply = sGroup.execute('sentinel zzz')
+        then:
+        reply == ErrorReply.SYNTAX
     }
 
     def 'test set'() {
@@ -1579,6 +1599,193 @@ sunionstore
         reply = sGroup.smismember()
         then:
         reply == ErrorReply.KEY_TOO_LONG
+    }
+
+    def 'test sort'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def sGroup = new SGroup('sort', null, null)
+        sGroup.byPassGetSet = inMemoryGetSet
+        sGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = sGroup.execute('sort a')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        reply = sGroup.execute('sort a by weight_* desc alpha limit 0 1 get #')
+        then:
+        // sort by pattern not support yet
+        reply instanceof ErrorReply
+
+        when:
+        reply = sGroup.execute('sort a by')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = sGroup.execute('sort a limit')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = sGroup.execute('sort a get')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = sGroup.execute('sort a store')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = sGroup.execute('sort a xxx')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = sGroup.execute('sort a limit a 10')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = sGroup.execute('sort a limit 0 a')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = sGroup.execute('sort a limit -1 10')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def rhk = new RedisHashKeys()
+        10.times {
+            rhk.add(String.valueOf(it))
+        }
+        cv.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a limit 1 10')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 9
+
+        when:
+        reply = sGroup.execute('sort a limit 1 5 alpha')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 5
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rl = new RedisList()
+        10.times {
+            rl.addLast(String.valueOf(it).bytes)
+        }
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a limit 1 10')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 9
+
+        when:
+        reply = sGroup.execute('sort a limit 1 5 alpha')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 5
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rz = new RedisZSet()
+        10.times {
+            rz.add(it, String.valueOf(it))
+        }
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a limit 1 10')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 9
+
+        when:
+        reply = sGroup.execute('sort a limit 1 5 alpha')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 5
+
+        when:
+        // test store
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        inMemoryGetSet.remove(slot, 'a')
+        def reply2 = sGroup.execute('sort a store dst')
+        then:
+        reply2 == IntegerReply.REPLY_0
+
+        when:
+        reply2 = sGroup.execute('sort_ro a store dst')
+        then:
+        // sort_ro not support store
+        reply2 instanceof ErrorReply
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        cv.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply2 = sGroup.execute('sort a store dst')
+        then:
+        reply2 instanceof AsyncReply
+        ((AsyncReply) reply2).settablePromise.whenResult { result ->
+            result instanceof IntegerReply && (result as IntegerReply).integer == 10
+        }.result
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply2 = sGroup.execute('sort a store dst')
+        then:
+        reply2 instanceof AsyncReply
+        ((AsyncReply) reply2).settablePromise.whenResult { result ->
+            result instanceof IntegerReply && (result as IntegerReply).integer == 10
+        }.result
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply2 = sGroup.execute('sort a store dst')
+        then:
+        reply2 instanceof AsyncReply
+        ((AsyncReply) reply2).settablePromise.whenResult { result ->
+            result instanceof IntegerReply && (result as IntegerReply).integer == 10
+        }.result
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply2 = sGroup.execute('sort a store dst')
+        then:
+        reply2 == ErrorReply.WRONG_TYPE
+
+        when:
+        def data2 = new byte[2][]
+        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        sGroup.data = data2
+        reply = sGroup.sort(false)
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test smove'() {

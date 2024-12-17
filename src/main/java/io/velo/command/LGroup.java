@@ -216,8 +216,7 @@ public class LGroup extends BaseCommand {
         return RedisList.decode(encodedBytes);
     }
 
-
-    public static void saveRedisList(RedisList rl, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
+    static void saveRedisList(RedisList rl, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
         var key = new String(keyBytes);
         if (rl.size() == 0) {
             baseCommand.removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());
