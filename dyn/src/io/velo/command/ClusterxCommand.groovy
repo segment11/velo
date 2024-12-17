@@ -92,6 +92,10 @@ class ClusterxCommand extends BaseCommand {
             return replicas()
         }
 
+        if ('replicate' == subCmd) {
+            return new ErrorReply('use clusterx setnodes instead')
+        }
+
         if ('reset' == subCmd) {
             return reset()
         }
