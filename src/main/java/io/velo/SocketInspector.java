@@ -43,6 +43,25 @@ public class SocketInspector implements TcpSocket.Inspector {
         veloUserData.isResp3 = isResp3;
     }
 
+    public static boolean isConnectionReadonly(ITcpSocket socket) {
+        // just when do unit test
+        if (socket == null) {
+            return false;
+        }
+
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        return veloUserData != null && veloUserData.isConnectionReadonly;
+    }
+
+    public static void setConnectionReadonly(ITcpSocket socket, boolean isConnectionReadonly) {
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        if (veloUserData == null) {
+            veloUserData = new VeloUserDataInSocket();
+            ((TcpSocket) socket).setUserData(veloUserData);
+        }
+        veloUserData.isConnectionReadonly = isConnectionReadonly;
+    }
+
     public static void setAuthUser(ITcpSocket socket, String authUser) {
         var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
         if (veloUserData == null) {

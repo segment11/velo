@@ -4,10 +4,7 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.SettablePromise;
 import io.activej.reactor.Reactor;
 import io.netty.buffer.Unpooled;
-import io.velo.BaseCommand;
-import io.velo.CompressedValue;
-import io.velo.ConfForSlot;
-import io.velo.Debug;
+import io.velo.*;
 import io.velo.persist.Wal;
 import io.velo.reply.*;
 import io.velo.type.RedisHashKeys;
@@ -76,6 +73,16 @@ public class RGroup extends BaseCommand {
     public Reply handle() {
         if ("randomkey".equals(cmd)) {
             return randomkey();
+        }
+
+        if ("readonly".equals(cmd)) {
+            SocketInspector.setConnectionReadonly(socket, true);
+            return OKReply.INSTANCE;
+        }
+
+        if ("readwrite".equals(cmd)) {
+            SocketInspector.setConnectionReadonly(socket, false);
+            return OKReply.INSTANCE;
         }
 
         if ("rename".equals(cmd)) {

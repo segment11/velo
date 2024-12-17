@@ -36,6 +36,7 @@ import io.prometheus.client.hotspot.BufferPoolsExports;
 import io.prometheus.client.hotspot.GarbageCollectorExports;
 import io.prometheus.client.hotspot.MemoryPoolsExports;
 import io.velo.acl.AclUsers;
+import io.velo.acl.Category;
 import io.velo.acl.U;
 import io.velo.decode.HttpHeaderBody;
 import io.velo.decode.Request;
@@ -212,6 +213,10 @@ public class MultiWorkerServer extends Launcher {
                             ErrorReply.ACL_PERMIT_KEY_LIMIT.buffer()
                             : ErrorReply.ACL_PERMIT_LIMIT.buffer()
             );
+        }
+
+        if (SocketInspector.isConnectionReadonly(socket) && Category.isWriteCmd(request.cmd())) {
+            return Promise.of(ErrorReply.READONLY.buffer());
         }
 
         var slotWithKeyHashList = request.getSlotWithKeyHashList();

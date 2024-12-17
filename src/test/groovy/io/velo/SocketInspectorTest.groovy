@@ -25,6 +25,8 @@ class SocketInspectorTest extends Specification {
         expect:
         !SocketInspector.isResp3(null)
         !SocketInspector.isResp3(socket)
+        !SocketInspector.isConnectionReadonly(null)
+        !SocketInspector.isConnectionReadonly(socket)
         SocketInspector.getAuthUser(null) == null
         SocketInspector.getAuthUser(socket) == null
 
@@ -41,6 +43,20 @@ class SocketInspectorTest extends Specification {
         SocketInspector.setResp3(socket, false)
         then:
         !SocketInspector.isResp3(socket)
+
+        when:
+        SocketInspector.clearUserData(socket)
+        SocketInspector.setConnectionReadonly(socket, true)
+        SocketInspector.setConnectionReadonly(socket, true)
+        then:
+        SocketInspector.isConnectionReadonly(socket)
+
+        when:
+        SocketInspector.clearUserData(socket)
+        SocketInspector.setConnectionReadonly(socket, false)
+        SocketInspector.setConnectionReadonly(socket, false)
+        then:
+        !SocketInspector.isConnectionReadonly(socket)
 
         when:
         SocketInspector.clearUserData(socket)

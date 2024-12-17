@@ -7,6 +7,8 @@ public class VeloUserDataInSocket {
 
     boolean isResp3 = false;
 
+    boolean isConnectionReadonly = false;
+
     ReplPair replPairAsSlaveInTcpClient = null;
 
     public VeloUserDataInSocket() {

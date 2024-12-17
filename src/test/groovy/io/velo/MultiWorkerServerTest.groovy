@@ -3,6 +3,7 @@ package io.velo
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.activej.inject.binding.OptionalDependency
+import io.velo.acl.U
 import io.velo.decode.Request
 import io.velo.persist.Consts
 import io.velo.persist.KeyBucket
@@ -181,6 +182,25 @@ class MultiWorkerServerTest extends Specification {
         eventloopCurrent.run()
         then:
         p != null
+
+        when:
+        SocketInspector.setConnectionReadonly(socket, true)
+        p = m.handleRequest(copyRequest, socket)
+        eventloopCurrent.run()
+        then:
+        p.whenResult { reply ->
+            reply.toString().contains('readonly')
+        }.result
+
+        when:
+        copyRequest.u = new U('test')
+        copyRequest.u.on = false
+        p = m.handleRequest(copyRequest, socket)
+        eventloopCurrent.run()
+        then:
+        p.whenResult { reply ->
+            reply.toString().contains('permit limit')
+        }.result
 
         when:
         def mgetData6 = new byte[6][]

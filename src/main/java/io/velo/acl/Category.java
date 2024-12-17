@@ -1,9 +1,6 @@
 package io.velo.acl;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public enum Category {
     all, admin, bitmap, blocking, connection, dangerous,
@@ -14,6 +11,12 @@ public enum Category {
 
     private static final Map<Category, List<String>> CMD_LIST_BY_CATEGORY = new HashMap<>();
     private static final Map<String, List<Category>> CATEGORY_LIST_BY_CMD = new HashMap<>();
+
+    private static final HashSet<String> writeCmdSet = new HashSet<>();
+
+    public static boolean isWriteCmd(String cmd) {
+        return writeCmdSet.contains(cmd);
+    }
 
     static {
         List<String> adminCmdList = List.of(
@@ -844,6 +847,8 @@ public enum Category {
             var categories = CATEGORY_LIST_BY_CMD.computeIfAbsent(cmd, k -> new ArrayList<>());
             categories.add(write);
         }
+
+        writeCmdSet.addAll(writeCmdList);
     }
 
     public static List<String> getCmdListByCategory(Category category) {

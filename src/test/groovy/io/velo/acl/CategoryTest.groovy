@@ -7,5 +7,6 @@ class CategoryTest extends Specification {
         expect:
         Category.getCmdListByCategory(Category.dangerous).size() > 0
         Category.getCategoryListByCmd('acl').size() > 0
+        Category.isWriteCmd('set')
     }
 }

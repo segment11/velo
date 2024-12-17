@@ -4,6 +4,7 @@ import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.ConfForSlot
+import io.velo.SocketInspectorTest
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
 import io.velo.repl.incremental.XOneWalGroupPersist
@@ -77,12 +78,25 @@ class RGroupTest extends Specification {
     def 'test handle'() {
         given:
         def data1 = new byte[1][]
+        def socket = SocketInspectorTest.mockTcpSocket()
 
-        def rGroup = new RGroup('rename', data1, null)
+        def rGroup = new RGroup('readonly', data1, socket)
         rGroup.from(BaseCommand.mockAGroup())
 
         when:
         def reply = rGroup.handle()
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        rGroup.cmd = 'readwrite'
+        reply = rGroup.handle()
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        rGroup.cmd = 'rename'
+        reply = rGroup.handle()
         then:
         reply == ErrorReply.FORMAT
 
