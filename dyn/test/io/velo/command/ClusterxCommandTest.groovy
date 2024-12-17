@@ -9,6 +9,7 @@ import io.velo.repl.LeaderSelector
 import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
 import io.velo.reply.*
+import org.apache.commons.codec.digest.DigestUtils
 import spock.lang.Specification
 
 class ClusterxCommandTest extends Specification {
@@ -39,95 +40,43 @@ class ClusterxCommandTest extends Specification {
 
         when:
         def data2 = new byte[2][]
-        data2[1] = 'addslots'.bytes
         clusterx.data = data2
-        reply = clusterx.handle()
+        def subCmdList = '''
+addslots
+addslotsrange
+delslots
+delslotsrange
+info
+migrate
+meet
+myid
+myshardid
+nodes
+replicas
+reset
+saveconfig
+slaves
+setnodeid
+setnodes
+setslot
+shards
+slots
+'''.readLines().collect { it.trim() }.findAll { it }
         then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'addslotsrange'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'delslots'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'delslotsrange'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'info'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
+        subCmdList.every {
+            data2[1] = it.bytes
+            def r = clusterx.handle() == ClusterxCommand.CLUSTER_DISABLED
+            if (!r) {
+                println it + '!!!'
+            }
+            r
+        }
 
         when:
         data2[1] = 'keyslot'.bytes
         reply = clusterx.handle()
         then:
         reply == ErrorReply.FORMAT
-
-        when:
-        data2[1] = 'migrate'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'myid'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'nodes'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'replicas'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'slaves'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'setnodeid'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'setnodes'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'setslot'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
-
-        when:
-        data2[1] = 'slots'.bytes
-        reply = clusterx.handle()
-        then:
-        reply == ClusterxCommand.CLUSTER_DISABLED
 
         when:
         data2[1] = 'zzz'.bytes
@@ -404,7 +353,45 @@ class ClusterxCommandTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
-    def 'test myid'() {
+    def 'test meet'() {
+        given:
+        def cGroup = new CGroup('cluster', null, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        when:
+        ConfForGlobal.clusterEnabled = true
+        def reply = clusterx.execute('cluster meet 127.0.0.1 6379')
+        then:
+        reply == ClusterxCommand.OK
+
+        when:
+        reply = clusterx.execute('cluster meet 127.0.0.1 -1')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = clusterx.execute('cluster meet 127.0.0.1 65536')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = clusterx.execute('cluster meet 127.0.0.1 aaa')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = clusterx.execute('cluster meet aaa 6379')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = clusterx.execute('cluster meet 127.0.0.1')
+        then:
+        reply == ErrorReply.FORMAT
+    }
+
+    def 'test myid and myshardid and saveconfig and shards and reset'() {
         given:
         def data2 = new byte[2][]
 
@@ -428,11 +415,64 @@ class ClusterxCommandTest extends Specification {
         new String(((BulkReply) reply).raw) == mySelfNodeId
 
         when:
+        def reply2 = clusterx.myshardid()
+        then:
+        reply2 instanceof BulkReply
+        new String(((BulkReply) reply2).raw) == DigestUtils.sha256Hex('shard_0')
+
+        when:
         shards.clear()
         reply = clusterx.myid()
         then:
         reply instanceof BulkReply
         new String(((BulkReply) reply).raw) == mySelfNodeId
+
+        when:
+        reply2 = clusterx.myshardid()
+        then:
+        reply2 instanceof ErrorReply
+        (reply2 as ErrorReply).message == 'not in cluster'
+
+        when:
+        def reply3 = clusterx.saveconfig()
+        then:
+        reply3 == ClusterxCommand.OK
+
+        when:
+        shards << new Shard()
+        shards[0].nodes << new Node(master: true, host: 'localhost', port: 6379)
+        shards[0].nodes << new Node(master: false, host: 'localhost', port: 6380)
+        def reply4 = clusterx.shards()
+        then:
+        reply4 == MultiBulkReply.EMPTY
+
+        when:
+        shards[0].multiSlotRange.addSingle(0, 16383)
+        def sb = new StringBuilder()
+        reply4 = clusterx.shards()
+        then:
+        reply4 instanceof MultiBulkReply
+        ((MultiBulkReply) reply4).dumpForTest(sb, 0)
+
+        when:
+        println sb.toString()
+        def reply5 = clusterx.reset()
+        then:
+        reply5 == ClusterxCommand.OK
+
+        when:
+        def data3 = new byte[3][]
+        data3[2] = 'hard'.bytes
+        clusterx.data = data3
+        reply5 = clusterx.reset()
+        then:
+        reply5 == ClusterxCommand.OK
+
+        when:
+        data3[2] = 'soft'.bytes
+        reply5 = clusterx.reset()
+        then:
+        reply5 == ClusterxCommand.OK
 
         cleanup:
         localPersist.cleanUp()

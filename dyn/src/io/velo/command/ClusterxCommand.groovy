@@ -13,6 +13,7 @@ import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
 import io.velo.repl.cluster.SlotRange
 import io.velo.reply.*
+import org.apache.commons.codec.digest.DigestUtils
 import org.jetbrains.annotations.VisibleForTesting
 import redis.clients.jedis.util.JedisClusterCRC16
 
@@ -71,8 +72,16 @@ class ClusterxCommand extends BaseCommand {
             return migrate()
         }
 
+        if ('meet' == subCmd) {
+            return meet()
+        }
+
         if ('myid' == subCmd) {
             return myid()
+        }
+
+        if ('myshardid' == subCmd) {
+            return myshardid()
         }
 
         if ('nodes' == subCmd) {
@@ -81,6 +90,14 @@ class ClusterxCommand extends BaseCommand {
 
         if ('replicas' == subCmd || 'slaves' == subCmd) {
             return replicas()
+        }
+
+        if ('reset' == subCmd) {
+            return reset()
+        }
+
+        if ('saveconfig' == subCmd) {
+            return saveconfig()
         }
 
         if ('setnodeid' == subCmd) {
@@ -93,6 +110,10 @@ class ClusterxCommand extends BaseCommand {
 
         if ('setslot' == subCmd) {
             return setslot()
+        }
+
+        if ('shards' == subCmd) {
+            return shards()
         }
 
         if ('slots' == subCmd) {
@@ -377,6 +398,35 @@ migrating_state:ok
     }
 
     @VisibleForTesting
+    Reply meet() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        if (data.length != 4) {
+            return ErrorReply.FORMAT
+        }
+
+        def host = new String(data[2])
+        def matcher = SGroup.IPv4_PATTERN.matcher(host)
+        if (!matcher.matches()) {
+            return ErrorReply.SYNTAX
+        }
+
+        int port
+        try {
+            port = Integer.parseInt(new String(data[3]))
+        } catch (NumberFormatException ignored) {
+            return ErrorReply.NOT_INTEGER
+        }
+        if (port < 0 || port > 65535) {
+            return ErrorReply.INVALID_INTEGER
+        }
+
+        OK
+    }
+
+    @VisibleForTesting
     Reply myid() {
         if (!ConfForGlobal.clusterEnabled) {
             return CLUSTER_DISABLED
@@ -391,10 +441,29 @@ migrating_state:ok
             node.host = hostAndPort.host()
             node.port = hostAndPort.port()
             return new BulkReply(node.nodeId().bytes)
+            // return new ErrorReply('not in cluster')
         }
 
         def mySelfNode = mySelfShard.mySelfNode()
         new BulkReply(mySelfNode.nodeId().bytes)
+    }
+
+    @VisibleForTesting
+    Reply myshardid() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        def multiShard = localPersist.multiShard
+
+        def mySelfShard = multiShard.mySelfShard()
+        if (!mySelfShard) {
+            return new ErrorReply('not in cluster')
+        }
+
+        def shardIndex = multiShard.shards.indexOf(mySelfShard)
+        def shardId = DigestUtils.sha256Hex("shard_${shardIndex}")
+        new BulkReply(shardId.bytes)
     }
 
     @VisibleForTesting
@@ -450,6 +519,32 @@ migrating_state:ok
             replies[i] = new BulkReply(str.bytes)
         }
         new MultiBulkReply(replies)
+    }
+
+    @VisibleForTesting
+    Reply reset() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        def isHard = data.length == 3 && 'hard' == new String(data[2]).toLowerCase()
+
+        def multiShard = localPersist.multiShard
+        multiShard.reset(isHard)
+
+        OK
+    }
+
+    @VisibleForTesting
+    Reply saveconfig() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        def multiShard = localPersist.multiShard
+        multiShard.saveMeta()
+
+        OK
     }
 
     @VisibleForTesting
@@ -714,6 +809,63 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         }
 
         asyncReply
+    }
+
+    @VisibleForTesting
+    Reply shards() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        def multiShard = localPersist.multiShard
+        def shards = multiShard.shards.findAll { !it.multiSlotRange.list.isEmpty() }
+        if (!shards) {
+            return MultiBulkReply.EMPTY
+        }
+
+        def replies = new Reply[shards.size()]
+
+        for (i in 0..<shards.size()) {
+            def subReplies = new Reply[4]
+            replies[i] = new MultiBulkReply(subReplies)
+
+            subReplies[0] = new BulkReply('slots'.bytes)
+
+            def shard = shards.get(i)
+            def slotRangeSubReplies = new Reply[shard.multiSlotRange.list.size() * 2]
+            subReplies[1] = new MultiBulkReply(slotRangeSubReplies)
+            shard.multiSlotRange.list.eachWithIndex { sr, j ->
+                slotRangeSubReplies[j * 2] = new IntegerReply(sr.begin)
+                slotRangeSubReplies[j * 2 + 1] = new IntegerReply(sr.end)
+            }
+
+            subReplies[2] = new BulkReply('nodes'.bytes)
+
+            def nodeSubReplies = new Reply[shard.nodes.size()]
+            subReplies[3] = new MultiBulkReply(nodeSubReplies)
+            shard.nodes.eachWithIndex { nn, j ->
+                def nodeDetailReplies = new Reply[14]
+                nodeDetailReplies[0] = new BulkReply('id'.bytes)
+                nodeDetailReplies[1] = new BulkReply(nn.nodeId().bytes)
+                nodeDetailReplies[2] = new BulkReply('port'.bytes)
+                nodeDetailReplies[3] = new IntegerReply(nn.getPort())
+                nodeDetailReplies[4] = new BulkReply('ip'.bytes)
+                nodeDetailReplies[5] = new BulkReply(nn.host.bytes)
+                nodeDetailReplies[6] = new BulkReply('endpoint'.bytes)
+                nodeDetailReplies[7] = new BulkReply(nn.host.bytes)
+                nodeDetailReplies[8] = new BulkReply('role'.bytes)
+                nodeDetailReplies[9] = new BulkReply((nn.master ? 'master' : 'slave').bytes)
+                nodeDetailReplies[10] = new BulkReply('replication-offset'.bytes)
+                // todo
+                nodeDetailReplies[11] = new IntegerReply(0)
+                nodeDetailReplies[12] = new BulkReply('health'.bytes)
+                nodeDetailReplies[13] = new BulkReply('online'.bytes)
+
+                nodeSubReplies[j] = new MultiBulkReply(nodeDetailReplies)
+            }
+        }
+
+        new MultiBulkReply(replies)
     }
 
     @VisibleForTesting

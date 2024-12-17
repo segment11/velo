@@ -49,6 +49,16 @@ vars currentEpoch 0 lastVoteEpoch 0
         addMySelfIfNeed();
     }
 
+    public void reset(boolean isResetEpoch) throws IOException {
+        shards.clear();
+        addMySelfIfNeed();
+
+        if (isResetEpoch) {
+            clusterMyEpoch = 0;
+            clusterCurrentEpoch = 0;
+        }
+    }
+
     private void addMySelfIfNeed() throws IOException {
         if (shards.isEmpty()) {
             var shard = new Shard();

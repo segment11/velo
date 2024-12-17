@@ -358,7 +358,7 @@ public class SGroup extends BaseCommand {
                     "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
                     "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
 
-    private static final Pattern IPv4_PATTERN = Pattern.compile(IPV4_REGEX);
+    public static final Pattern IPv4_PATTERN = Pattern.compile(IPV4_REGEX);
 
     @VisibleForTesting
     Reply slaveof() {
@@ -366,12 +366,11 @@ public class SGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var hostBytes = data[1];
-        var portBytes = data[2];
+        var host = new String(data[1]);
 
         var leaderSelector = LeaderSelector.getInstance();
 
-        var isNoOne = "no".equalsIgnoreCase(new String(hostBytes));
+        var isNoOne = "no".equalsIgnoreCase(host);
         if (isNoOne) {
             SettablePromise<Reply> finalPromise = new SettablePromise<>();
             var asyncReply = new AsyncReply(finalPromise);
@@ -389,7 +388,6 @@ public class SGroup extends BaseCommand {
             return asyncReply;
         }
 
-        var host = new String(hostBytes);
         var matcher = IPv4_PATTERN.matcher(host);
         if (!matcher.matches()) {
             return ErrorReply.SYNTAX;
@@ -397,7 +395,7 @@ public class SGroup extends BaseCommand {
 
         int port;
         try {
-            port = Integer.parseInt(new String(portBytes));
+            port = Integer.parseInt(new String(data[2]));
         } catch (NumberFormatException e) {
             return ErrorReply.NOT_INTEGER;
         }

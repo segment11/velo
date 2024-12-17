@@ -74,6 +74,13 @@ class MultiShardTest extends Specification {
         then:
         multiShard.firstToClientSlot() == 0
 
+        when:
+        multiShard.reset(false)
+        multiShard.reset(true)
+        then:
+        multiShard.clusterMyEpoch == 0
+        multiShard.clusterCurrentEpoch == 0
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
