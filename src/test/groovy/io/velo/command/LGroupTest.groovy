@@ -84,11 +84,17 @@ class LGroupTest extends Specification {
         given:
         def data1 = new byte[1][]
 
-        def lGroup = new LGroup('lindex', data1, null)
+        def lGroup = new LGroup('lastsave', data1, null)
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
         def reply = lGroup.handle()
+        then:
+        reply instanceof IntegerReply
+
+        when:
+        lGroup.cmd = 'lindex'
+        reply = lGroup.handle()
         then:
         reply == ErrorReply.FORMAT
 

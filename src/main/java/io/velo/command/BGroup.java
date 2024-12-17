@@ -83,6 +83,8 @@ public class BGroup extends BaseCommand {
         return slotWithKeyHashList;
     }
 
+    public static long lastBgSaveMillis = 0;
+
     public Reply handle() {
         if ("bitcount".equals(cmd)) {
             return bitcount();
@@ -98,6 +100,7 @@ public class BGroup extends BaseCommand {
 
         if ("bgsave".equals(cmd)) {
             // pure memory need to flush to disk, todo
+            lastBgSaveMillis = System.currentTimeMillis();
             return OKReply.INSTANCE;
         }
 

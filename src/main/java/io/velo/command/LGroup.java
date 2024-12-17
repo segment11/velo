@@ -52,6 +52,10 @@ public class LGroup extends BaseCommand {
     }
 
     public Reply handle() {
+        if ("lastsave".equals(cmd)) {
+            return new IntegerReply(BGroup.lastBgSaveMillis);
+        }
+
         if ("lindex".equals(cmd)) {
             return lindex();
         }

@@ -159,7 +159,8 @@ public class SGroup extends BaseCommand {
         }
 
         if ("save".equals(cmd)) {
-            // already saved when handle request
+            // pure memory need to flush to disk, todo
+            BGroup.lastBgSaveMillis = System.currentTimeMillis();
             return OKReply.INSTANCE;
         }
 
