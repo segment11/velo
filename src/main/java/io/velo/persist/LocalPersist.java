@@ -8,6 +8,7 @@ import io.velo.persist.index.IndexHandlerPool;
 import io.velo.repl.cluster.MultiShard;
 import jnr.ffi.LibraryLoader;
 import jnr.posix.LibC;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +18,6 @@ import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
-import static io.activej.config.converter.ConfigConverters.ofInteger;
 
 public class LocalPersist implements NeedCleanUp {
     public static final int PAGE_SIZE = (int) PageManager.getInstance().pageSize();
@@ -110,11 +110,13 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     public void initSlotsAgainAfterMultiShardLoadedOrChanged() {
+        var firstOneSlot = firstOneSlot();
+
         for (var oneSlot : oneSlots) {
             oneSlot.initMetricsCollect();
 
             // set dict map binlog same as the first slot binlog
-            if (oneSlot.slot() == firstOneSlot().slot()) {
+            if (firstOneSlot != null && oneSlot.slot() == firstOneSlot.slot()) {
                 DictMap.getInstance().setBinlog(oneSlot.getBinlog());
                 log.warn("Set dict map binlog to slot={}", oneSlot.slot());
             }
@@ -182,7 +184,7 @@ public class LocalPersist implements NeedCleanUp {
         throw new IllegalStateException("No one slot for current thread");
     }
 
-    public OneSlot firstOneSlot() {
+    public @Nullable OneSlot firstOneSlot() {
         if (!ConfForGlobal.clusterEnabled) {
             return oneSlots[0];
         }

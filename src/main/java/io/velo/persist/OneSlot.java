@@ -872,7 +872,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             @Override
             public void run() {
                 // reduce log
-                if (slot == LocalPersist.getInstance().firstOneSlot().slot) {
+                var firstOneSlot = LocalPersist.getInstance().firstOneSlot();
+                if (firstOneSlot != null && slot == firstOneSlot.slot) {
                     log.info("Debug task run, slot={}, loop count={}", slot, loopCount);
                 }
             }
@@ -1831,7 +1832,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     void initMetricsCollect() {
         // only first slot show global metrics
-        if (slot == LocalPersist.getInstance().firstOneSlot().slot) {
+        var firstOneSlot = LocalPersist.getInstance().firstOneSlot();
+        if (firstOneSlot != null && slot == firstOneSlot.slot) {
             globalGauge.addRawGetter(() -> {
                 // global use slot -1
                 var labelValues = List.of("-1");
