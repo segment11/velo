@@ -7,20 +7,22 @@ import org.jetbrains.annotations.VisibleForTesting;
 import static io.velo.CompressedValue.NO_EXPIRE;
 
 public class PersistValueMeta {
-    // 2 bytes for 0 if not special type + type int + segment sub block index byte
+    // 2 bytes for 0 means not a compress value (number or short string), 4 bytes for type int + segment sub block index byte (short)
     // + length int + segment index int + segment offset int
-    // may add type or other metadata in the future
+    // may other metadata in the future
     @VisibleForTesting
     static final int ENCODED_LENGTH = 2 + 4 + 2 + 4 + 4 + 4;
 
     // CompressedValue encoded length is much more than PersistValueMeta encoded length
     public static boolean isPvm(byte[] bytes) {
         // short string encoded
-        // first byte is type, < 0 means special type
+        // first byte is type, < 0 means number byte or short string
         return bytes[0] >= 0 && (bytes.length == ENCODED_LENGTH);
     }
 
+    // for scan filter, need not read chunk segment
     int spType = CompressedValue.NULL_DICT_SEQ;
+    // if segment can be compressed, one chunk segment includes 1-4 compressed block(segment)s
     byte subBlockIndex;
     public int length;
     int segmentIndex;
