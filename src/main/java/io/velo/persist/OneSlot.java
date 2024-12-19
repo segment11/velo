@@ -662,17 +662,22 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var waitF = new CompletableFuture<Boolean>();
         // just run once
         new Thread(() -> {
-            log.info("Start a single thread to read wal from file, slot={}", slot);
+            log.info("Start a single thread to read wal from file or load saved file when pure memory, slot={}", slot);
             try {
                 for (var wal : walArray) {
                     wal.lazyReadFromFile();
                 }
+
+                if (ConfForGlobal.pureMemory) {
+                    loadFromLastSavedFileWhenPureMemory();
+                }
+
                 waitF.complete(true);
             } catch (IOException e) {
-                log.error("Wal lazy read from file error for slot=" + slot, e);
+                log.error("Wal lazy read from file or load saved file when pure memory error for slot=" + slot, e);
                 waitF.completeExceptionally(e);
             } finally {
-                log.info("End a single thread to read wal from file, slot={}", slot);
+                log.info("End a single thread to read wal from file or load saved file when pure memory, slot={}", slot);
             }
         }).start();
         return waitF;
