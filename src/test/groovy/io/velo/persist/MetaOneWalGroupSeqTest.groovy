@@ -29,6 +29,23 @@ class MetaOneWalGroupSeqTest extends Specification {
         one2.get(0, (byte) 0) == 1L
 
         when:
+        one2.overwriteInMemoryCachedBytes(new byte[one2.allCapacity])
+        then:
+        one2.get(0, (byte) 0) == 0L
+        one2.getInMemoryCachedBytes().length == one2.allCapacity
+
+        when:
+        boolean exception = false
+        try {
+            one2.overwriteInMemoryCachedBytes(new byte[one2.allCapacity + 1])
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
         one2.clear()
         one2.cleanUp()
         ConfForGlobal.pureMemory = true

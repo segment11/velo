@@ -103,6 +103,11 @@ public class SGroup extends BaseCommand {
     }
 
     public Reply handle() {
+        if ("save".equals(cmd)) {
+            BGroup.lastBgSaveMillis = System.currentTimeMillis();
+            return save();
+        }
+
         if ("scan".equals(cmd)) {
             return scan();
         }
@@ -157,12 +162,6 @@ public class SGroup extends BaseCommand {
 
         if ("select".equals(cmd)) {
             return select();
-        }
-
-        if ("save".equals(cmd)) {
-            // pure memory need to flush to disk, todo
-            BGroup.lastBgSaveMillis = System.currentTimeMillis();
-            return OKReply.INSTANCE;
         }
 
         // set group
@@ -247,6 +246,34 @@ public class SGroup extends BaseCommand {
         }
 
         return NilReply.INSTANCE;
+    }
+
+    @VisibleForTesting
+    Reply save() {
+        if (!ConfForGlobal.pureMemory) {
+            return OKReply.INSTANCE;
+        }
+
+        Promise<Void>[] promises = new Promise[slotNumber];
+        for (int i = 0; i < slotNumber; i++) {
+            var oneSlot = localPersist.oneSlot((short) i);
+            promises[i] = oneSlot.asyncRun(oneSlot::writeToSavedFileWhenPureMemory);
+        }
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        Promises.all(promises).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error("save error={}", e.getMessage());
+                finalPromise.setException(e);
+                return;
+            }
+
+            finalPromise.set(OKReply.INSTANCE);
+        });
+
+        return asyncReply;
     }
 
     @VisibleForTesting

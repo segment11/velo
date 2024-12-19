@@ -144,6 +144,40 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test save and load'() {
+        given:
+        ConfForGlobal.pureMemory = true
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        when:
+        def cvList = Mock.prepareCompressedValueList(2)
+        def cvAsShortValue = cvList[0]
+        def cv = cvList[1]
+        cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        cv.compressedData = new byte[100]
+        cv.compressedLength = 100
+        100.times {
+            def keyForShortValue = "key:$it"
+            def key = "key:${it + 10000}"
+            def sKeyForShortValue = BaseCommand.slot(keyForShortValue.bytes, slotNumber)
+            def sKey = BaseCommand.slot(key.bytes, slotNumber)
+            oneSlot.put(keyForShortValue, sKeyForShortValue.bucketIndex(), cvAsShortValue)
+            oneSlot.put(key, sKey.bucketIndex(), cv)
+        }
+        oneSlot.writeToSavedFileWhenPureMemory()
+        oneSlot.loadFromLastSavedFileWhenPureMemory()
+        then:
+        oneSlot.allKeyCount == 200
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.pureMemory = false
+    }
+
     def 'test repl pair'() {
         given:
         def snowFlake = new SnowFlake(1, 1)

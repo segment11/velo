@@ -5,6 +5,7 @@ import io.activej.promise.SettablePromise;
 import io.activej.reactor.Reactor;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
+import io.velo.ConfForGlobal;
 import io.velo.persist.LocalPersist;
 import io.velo.reply.*;
 import io.velo.type.RedisBF;
@@ -99,8 +100,13 @@ public class BGroup extends BaseCommand {
         }
 
         if ("bgsave".equals(cmd)) {
-            // pure memory need to flush to disk, todo
             lastBgSaveMillis = System.currentTimeMillis();
+            if (ConfForGlobal.pureMemory) {
+                for (var oneSlot : localPersist.oneSlots()) {
+                    oneSlot.asyncRun(oneSlot::writeToSavedFileWhenPureMemory);
+                }
+            }
+
             return OKReply.INSTANCE;
         }
 

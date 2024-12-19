@@ -9,10 +9,7 @@ import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
@@ -244,21 +241,36 @@ public class Wal implements InMemoryEstimate {
 
         var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
 
-        var bufferBytes = new byte[ONE_GROUP_BUFFER_SIZE];
+        var readBytes = new byte[ONE_GROUP_BUFFER_SIZE];
         fromWalFile.seek(targetGroupBeginOffset);
-        int readN = fromWalFile.read(bufferBytes);
+        int readN = fromWalFile.read(readBytes);
         if (readN == -1) {
             return 0;
         }
 
-        return readBytesToList(toMap, isShortValue, bufferBytes, 0, ONE_GROUP_BUFFER_SIZE);
+        return readBytesToList(toMap, isShortValue, readBytes, 0, ONE_GROUP_BUFFER_SIZE);
     }
 
-    private int readBytesToList(HashMap<String, V> toMap, boolean isShortValue, byte[] bufferBytes, int offset, int length) throws IOException {
+    int readFromSavedBytes(byte[] readBytes, boolean isShortValue) throws IOException {
+        return readBytesToList(isShortValue ? delayToKeyBucketShortValues : delayToKeyBucketValues, isShortValue, readBytes, 0, readBytes.length);
+    }
+
+    byte[] writeToSavedBytes(boolean isShortValue) throws IOException {
+        var map = isShortValue ? delayToKeyBucketShortValues : delayToKeyBucketValues;
+
+        var bos = new ByteArrayOutputStream();
+        for (var entry : map.entrySet()) {
+            var encoded = entry.getValue().encode();
+            bos.write(encoded);
+        }
+        return bos.toByteArray();
+    }
+
+    private int readBytesToList(HashMap<String, V> toMap, boolean isShortValue, byte[] readBytes, int offset, int length) throws IOException {
         int n = 0;
         int position = 0;
         long lastSeq = 0;
-        var is = new DataInputStream(new ByteArrayInputStream(bufferBytes, offset, length));
+        var is = new DataInputStream(new ByteArrayInputStream(readBytes, offset, length));
         while (true) {
             var v = V.decode(is);
             if (v == null) {

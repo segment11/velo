@@ -25,14 +25,13 @@ import jnr.posix.LibC;
 import org.apache.commons.collections4.map.LRUMap;
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.util.RamUsageEstimator;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -42,7 +41,7 @@ import static io.activej.config.converter.ConfigConverters.ofBoolean;
 import static io.velo.persist.Chunk.*;
 import static io.velo.persist.FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE;
 
-public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, HandlerWhenCvExpiredOrDeleted {
+public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, CanSaveAndLoad, HandlerWhenCvExpiredOrDeleted {
     @TestOnly
     public OneSlot(short slot, File slotDir, KeyLoader keyLoader, Wal wal) throws IOException {
         this.slot = slot;
@@ -70,6 +69,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         this.binlog = null;
         this.bigKeyTopK = null;
+        this.saveFileNameWhenPureMemory = "slot_" + slot + "_saved.dat";
     }
 
     // only for local persist one slot array
@@ -104,6 +104,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         this.binlog = null;
         this.bigKeyTopK = null;
+        this.saveFileNameWhenPureMemory = "slot_" + slot + "_saved.dat";
 
         this.netWorkerEventloop = eventloop;
     }
@@ -190,6 +191,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.keyLoader = new KeyLoader(slot, ConfForSlot.global.confBucket.bucketsPerSlot, slotDir, snowFlake, this);
         this.binlog = new Binlog(slot, slotDir, dynConfig);
         initBigKeyTopK(10);
+
+        this.saveFileNameWhenPureMemory = "slot_" + slot + "_saved.dat";
 
         this.initTasks();
     }
@@ -786,6 +789,111 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     public void monitorBigKeyByValueLength(byte[] keyBytes, int valueBytesLength) {
         bigKeyTopK.add(keyBytes, valueBytesLength);
+    }
+
+    private final String saveFileNameWhenPureMemory;
+
+    enum SaveBytesType {
+        wal(1), key_loader(2), chunk(3), big_strings(4);
+
+        final int i;
+
+        SaveBytesType(int i) {
+            this.i = i;
+        }
+    }
+
+    void loadFromLastSavedFileWhenPureMemory() throws IOException {
+        var lastSavedFile = new File(slotDir, saveFileNameWhenPureMemory);
+        if (!lastSavedFile.exists()) {
+            return;
+        }
+
+        try (var is = new DataInputStream(new FileInputStream(lastSavedFile))) {
+            loadFromLastSavedFileWhenPureMemory(is);
+        }
+    }
+
+    @Override
+    public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
+        var bytesType = is.readInt();
+        while (bytesType != 0) {
+            if (bytesType == SaveBytesType.wal.i) {
+                // wal group index int, is short value byte, read bytes length int
+                var walGroupIndex = is.readInt();
+                var isShortValue = is.readBoolean();
+                var readBytesLength = is.readInt();
+                var readBytes = new byte[readBytesLength];
+                is.readFully(readBytes);
+                int n = walArray[walGroupIndex].readFromSavedBytes(readBytes, isShortValue);
+                if (walGroupIndex == 0) {
+                    log.info("Read wal group 0, n={}, is short value={}", n, isShortValue);
+                }
+            } else if (bytesType == SaveBytesType.key_loader.i) {
+                this.keyLoader.loadFromLastSavedFileWhenPureMemory(is);
+            } else if (bytesType == SaveBytesType.chunk.i) {
+                this.chunk.loadFromLastSavedFileWhenPureMemory(is);
+            } else if (bytesType == SaveBytesType.big_strings.i) {
+                this.bigStringFiles.loadFromLastSavedFileWhenPureMemory(is);
+            } else {
+                throw new IllegalStateException("Unexpected value: " + bytesType);
+            }
+
+            if (is.available() < 4) {
+                bytesType = 0;
+            } else {
+                bytesType = is.readInt();
+            }
+        }
+    }
+
+    public void writeToSavedFileWhenPureMemory() throws IOException {
+        var lastSavedFile = new File(slotDir, saveFileNameWhenPureMemory);
+        if (!lastSavedFile.exists()) {
+            FileUtils.touch(lastSavedFile);
+        }
+
+        try (var os = new DataOutputStream(new FileOutputStream(lastSavedFile))) {
+            writeToSavedFileWhenPureMemory(os);
+        }
+    }
+
+    @Override
+    public void writeToSavedFileWhenPureMemory(@NotNull DataOutputStream os) throws IOException {
+        for (var wal : walArray) {
+            if (wal.getKeyCount() == 0) {
+                continue;
+            }
+
+            var shortValues = wal.delayToKeyBucketShortValues;
+            if (!shortValues.isEmpty()) {
+                os.writeInt(SaveBytesType.wal.i);
+                os.writeInt(wal.groupIndex);
+                os.writeBoolean(true);
+                var writeBytes = wal.writeToSavedBytes(true);
+                os.writeInt(writeBytes.length);
+                os.write(writeBytes);
+            }
+
+            var values = wal.delayToKeyBucketValues;
+            if (!values.isEmpty()) {
+                os.writeInt(SaveBytesType.wal.i);
+                os.writeInt(wal.groupIndex);
+                os.writeBoolean(false);
+                var writeBytes = wal.writeToSavedBytes(false);
+                os.writeInt(writeBytes.length);
+                os.write(writeBytes);
+            }
+        }
+
+        os.writeInt(SaveBytesType.key_loader.i);
+        keyLoader.writeToSavedFileWhenPureMemory(os);
+
+        os.writeInt(SaveBytesType.chunk.i);
+        chunk.writeToSavedFileWhenPureMemory(os);
+
+        os.writeInt(SaveBytesType.big_strings.i);
+        bigStringFiles.writeToSavedFileWhenPureMemory(os);
     }
 
     private final TaskChain taskChain = new TaskChain();

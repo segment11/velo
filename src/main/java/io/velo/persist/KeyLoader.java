@@ -7,16 +7,19 @@ import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import io.velo.repl.incremental.XOneWalGroupPersist;
 import jnr.posix.LibC;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp {
+public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, CanSaveAndLoad {
     private static final int PAGE_NUMBER_PER_BUCKET = 1;
     public static final int KEY_BUCKET_ONE_COST_SIZE = PAGE_NUMBER_PER_BUCKET * LocalPersist.PAGE_SIZE;
 
@@ -88,6 +91,77 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     final SnowFlake snowFlake;
 
     private final OneSlot oneSlot;
+
+    @Override
+    public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
+        var metaKeyBucketSplitNumberBytes = new byte[this.metaKeyBucketSplitNumber.allCapacity];
+        is.readFully(metaKeyBucketSplitNumberBytes);
+        this.metaKeyBucketSplitNumber.overwriteInMemoryCachedBytes(metaKeyBucketSplitNumberBytes);
+
+        var metaOneWalGroupSeqBytes = new byte[this.metaOneWalGroupSeq.allCapacity];
+        is.readFully(metaOneWalGroupSeqBytes);
+        this.metaOneWalGroupSeq.overwriteInMemoryCachedBytes(metaOneWalGroupSeqBytes);
+
+        var statKeyCountInBucketsBytes = new byte[this.statKeyCountInBuckets.allCapacity];
+        is.readFully(statKeyCountInBucketsBytes);
+        this.statKeyCountInBuckets.overwriteInMemoryCachedBytes(statKeyCountInBucketsBytes);
+
+        // fd read write
+        var fdCount = is.readInt();
+        for (int i = 0; i < fdCount; i++) {
+            var fdIndex = is.readInt();
+            var walGroupCount = is.readInt();
+            var fd = fdReadWriteArray[fdIndex];
+            for (int j = 0; j < walGroupCount; j++) {
+                var walGroupIndex = is.readInt();
+                var readBytesLength = is.readInt();
+                var readBytes = new byte[readBytesLength];
+                is.readFully(readBytes);
+                fd.setSharedBytesFromLastSavedFileToMemory(readBytes, walGroupIndex);
+            }
+        }
+    }
+
+    @Override
+    public void writeToSavedFileWhenPureMemory(@NotNull DataOutputStream os) throws IOException {
+        os.write(metaKeyBucketSplitNumber.getInMemoryCachedBytes());
+        os.write(metaOneWalGroupSeq.getInMemoryCachedBytes());
+        os.write(statKeyCountInBuckets.getInMemoryCachedBytes());
+
+        int fdCount = 0;
+        for (var fdReadWrite : fdReadWriteArray) {
+            if (fdReadWrite != null) {
+                fdCount++;
+            }
+        }
+
+        os.writeInt(fdCount);
+        for (int fdIndex = 0; fdIndex < fdReadWriteArray.length; fdIndex++) {
+            var fdReadWrite = fdReadWriteArray[fdIndex];
+            if (fdReadWrite == null) {
+                continue;
+            }
+
+            os.writeInt(fdIndex);
+            int walGroupCount = 0;
+            for (int walGroupIndex = 0; walGroupIndex < fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length; walGroupIndex++) {
+                var sharedBytes = fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex];
+                if (sharedBytes != null) {
+                    walGroupCount++;
+                }
+            }
+            os.writeInt(walGroupCount);
+
+            for (int walGroupIndex = 0; walGroupIndex < fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length; walGroupIndex++) {
+                var sharedBytes = fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex];
+                if (sharedBytes != null) {
+                    os.writeInt(walGroupIndex);
+                    os.writeInt(sharedBytes.length);
+                    os.write(sharedBytes);
+                }
+            }
+        }
+    }
 
     final KeyBucket.CvExpiredOrDeletedCallBack cvExpiredOrDeletedCallBack;
 

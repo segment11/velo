@@ -427,6 +427,36 @@ class ChunkTest extends Specification {
         Consts.slotDir.deleteDir()
     }
 
+    def 'test save and load'() {
+        given:
+        ConfForGlobal.pureMemory = true
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def chunk = oneSlot.chunk
+
+        when:
+        chunk.segmentIndex = 1
+        chunk.mergedSegmentIndexEndLastTime = 100
+        chunk.fdReadWriteArray[0].setSegmentBytesFromLastSavedFileToMemory(new byte[chunk.chunkSegmentLength], 1)
+        def bos = new ByteArrayOutputStream()
+        def os = new DataOutputStream(bos)
+        chunk.writeToSavedFileWhenPureMemory(os)
+        def bis = new ByteArrayInputStream(bos.toByteArray())
+        def is = new DataInputStream(bis)
+        chunk.loadFromLastSavedFileWhenPureMemory(is)
+        then:
+        chunk.segmentIndex == 1
+        chunk.mergedSegmentIndexEndLastTime == 100
+        !chunk.fdReadWriteArray[0].isTargetSegmentIndexNullInMemory(1)
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.pureMemory = false
+    }
+
     def 'test repl'() {
         given:
         LocalPersistTest.prepareLocalPersist()

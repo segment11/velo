@@ -256,9 +256,13 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     // when pure memory mode, need to store all bytes in memory
     // for chunk, already compressed, refer to SegmentBatch
     // first index is relative segment index in target chunk fd, !!!important, relative segment index
-    private byte[][] allBytesBySegmentIndexForOneChunkFd;
+    byte[][] allBytesBySegmentIndexForOneChunkFd;
     // for key bucket, compressed, need compress before set here and decompress after read from here
-    private byte[][] allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex;
+    byte[][] allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex;
+
+    void setSegmentBytesFromLastSavedFileToMemory(byte[] segmentBytes, int segmentIndex) {
+        allBytesBySegmentIndexForOneChunkFd[segmentIndex] = segmentBytes;
+    }
 
     @TestOnly
     void resetAllBytesByOneWalGroupIndexForKeyBucketOneSplitIndex(int walGroupNumber) {
@@ -290,6 +294,10 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         keyBucketSharedBytesCompressCountTotal++;
         keyBucketSharedBytesBeforeCompressedBytesTotal += sharedBytes.length;
         keyBucketSharedBytesAfterCompressedBytesTotal += sharedBytesCompressed.length;
+    }
+
+    void setSharedBytesFromLastSavedFileToMemory(byte[] sharedBytes, int walGroupIndex) {
+        allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex] = sharedBytes;
     }
 
     @VisibleForTesting

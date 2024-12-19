@@ -407,6 +407,17 @@ class FdReadWriteTest extends Specification {
         fdKeyBucket.keyBucketSharedBytesCompressCountTotal == 1
         fdKeyBucket.getSharedBytesDecompressFromMemory(0).length == segmentLength * oneChargeBucketNumber
 
+        when:
+        fdChunk.setSegmentBytesFromLastSavedFileToMemory(new byte[segmentLength], 0)
+        then:
+        !fdChunk.isTargetSegmentIndexNullInMemory(0)
+
+        when:
+        ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression = false
+        fdKeyBucket.setSharedBytesFromLastSavedFileToMemory(new byte[segmentLength * oneChargeBucketNumber], 0)
+        then:
+        fdKeyBucket.getSharedBytesDecompressFromMemory(0).length == segmentLength * oneChargeBucketNumber
+
         cleanup:
         fdChunk.truncate()
         fdChunk.cleanUp()

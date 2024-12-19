@@ -6,10 +6,13 @@ import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import io.velo.repl.incremental.XOneWalGroupPersist;
 import jnr.posix.LibC;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -18,7 +21,7 @@ import java.util.*;
 import static io.velo.persist.FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE;
 import static io.velo.persist.FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD;
 
-public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp {
+public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, CanSaveAndLoad {
     private final int segmentNumberPerFd;
     private final byte fdPerChunk;
     final int maxSegmentIndex;
@@ -127,6 +130,68 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         if (fdReadWriteArray != null) {
             for (var fdReadWrite : fdReadWriteArray) {
                 fdReadWrite.cleanUp();
+            }
+        }
+    }
+
+    @Override
+    public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
+        segmentIndex = is.readInt();
+        mergedSegmentIndexEndLastTime = is.readInt();
+
+        // fd read write
+        var fdCount = is.readInt();
+        for (int i = 0; i < fdCount; i++) {
+            var fdIndex = is.readInt();
+            var segmentCount = is.readInt();
+            var fd = fdReadWriteArray[fdIndex];
+            for (int j = 0; j < segmentCount; j++) {
+                var inMemorySegmentIndex = is.readInt();
+                var readBytesLength = is.readInt();
+                var readBytes = new byte[readBytesLength];
+                is.readFully(readBytes);
+                fd.setSegmentBytesFromLastSavedFileToMemory(readBytes, inMemorySegmentIndex);
+                fdLengths[fdIndex] = chunkSegmentLength * inMemorySegmentIndex;
+            }
+        }
+    }
+
+    @Override
+    public void writeToSavedFileWhenPureMemory(@NotNull DataOutputStream os) throws IOException {
+        os.writeInt(segmentIndex);
+        os.writeInt(mergedSegmentIndexEndLastTime);
+
+        int fdCount = 0;
+        for (var fdReadWrite : fdReadWriteArray) {
+            if (fdReadWrite != null) {
+                fdCount++;
+            }
+        }
+
+        os.writeInt(fdCount);
+        for (int fdIndex = 0; fdIndex < fdReadWriteArray.length; fdIndex++) {
+            var fdReadWrite = fdReadWriteArray[fdIndex];
+            if (fdReadWrite == null) {
+                continue;
+            }
+
+            os.writeInt(fdIndex);
+            int segmentCount = 0;
+            for (int inMemorySegmentIndex = 0; inMemorySegmentIndex < fdReadWrite.allBytesBySegmentIndexForOneChunkFd.length; inMemorySegmentIndex++) {
+                var segmentBytes = fdReadWrite.allBytesBySegmentIndexForOneChunkFd[inMemorySegmentIndex];
+                if (segmentBytes != null) {
+                    segmentCount++;
+                }
+            }
+            os.writeInt(segmentCount);
+
+            for (int inMemorySegmentIndex = 0; inMemorySegmentIndex < fdReadWrite.allBytesBySegmentIndexForOneChunkFd.length; inMemorySegmentIndex++) {
+                var segmentBytes = fdReadWrite.allBytesBySegmentIndexForOneChunkFd[inMemorySegmentIndex];
+                if (segmentBytes != null) {
+                    os.writeInt(inMemorySegmentIndex);
+                    os.writeInt(segmentBytes.length);
+                    os.write(segmentBytes);
+                }
             }
         }
     }

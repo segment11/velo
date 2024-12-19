@@ -86,6 +86,16 @@ class BigStringFilesTest extends Specification {
         then:
         1 == 1
 
+        when:
+        def bos = new ByteArrayOutputStream()
+        def os = new DataOutputStream(bos)
+        bigStringFiles.writeToSavedFileWhenPureMemory(os)
+        def bis = new ByteArrayInputStream(bos.toByteArray())
+        def is = new DataInputStream(bis)
+        bigStringFiles.loadFromLastSavedFileWhenPureMemory(is)
+        then:
+        bigStringFiles.bigStringFileUuidList.size() == 1
+
         cleanup:
         bigStringFiles.deleteAllBigStringFiles()
         ConfForGlobal.pureMemory = false

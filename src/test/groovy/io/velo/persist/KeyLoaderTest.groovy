@@ -220,8 +220,32 @@ class KeyLoaderTest extends Specification {
         Consts.slotDir.deleteDir()
     }
 
+    def 'test save and load'() {
+        given:
+        ConfForGlobal.pureMemory = true
+        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
+        def keyLoader = prepareKeyLoader()
+
+        when:
+        keyLoader.fdReadWriteArray[0].setSharedBytesFromLastSavedFileToMemory(new byte[1024], 1)
+        def bos = new ByteArrayOutputStream()
+        def os = new DataOutputStream(bos)
+        keyLoader.writeToSavedFileWhenPureMemory(os)
+        def bis = new ByteArrayInputStream(bos.toByteArray())
+        def is = new DataInputStream(bis)
+        keyLoader.loadFromLastSavedFileWhenPureMemory(is)
+        then:
+        keyLoader.fdReadWriteArray[0].allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[1].length == 1024
+
+        cleanup:
+        keyLoader.flush()
+        keyLoader.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
+
     def 'test repl'() {
         given:
+        ConfForGlobal.pureMemory = false
         ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
         def keyLoader = prepareKeyLoader()
 

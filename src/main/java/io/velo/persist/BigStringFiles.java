@@ -9,9 +9,12 @@ import io.velo.repl.SlaveReplay;
 import org.apache.commons.collections4.map.LRUMap;
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.util.RamUsageEstimator;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -19,7 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, HandlerWhenCvExpiredOrDeleted {
+public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, CanSaveAndLoad, HandlerWhenCvExpiredOrDeleted {
     private final short slot;
     final File bigStringDir;
 
@@ -83,6 +86,31 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         long size = RamUsageEstimator.sizeOfMap(bigStringBytesByUuidLRU);
         sb.append("Big string files: ").append(size).append("\n");
         return size;
+    }
+
+    @Override
+    public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
+        // count int
+        bigStringFilesCount = is.readInt();
+        for (int i = 0; i < bigStringFilesCount; i++) {
+            // uuid long, bytes length int
+            var uuid = is.readLong();
+            var bytesLength = is.readInt();
+            var bytes = new byte[bytesLength];
+            is.readFully(bytes);
+            allBytesByUuid.put(uuid, bytes);
+        }
+    }
+
+    @Override
+    public void writeToSavedFileWhenPureMemory(@NotNull DataOutputStream os) throws IOException {
+        os.writeInt(allBytesByUuid.size());
+        for (var entry : allBytesByUuid.entrySet()) {
+            os.writeLong(entry.getKey());
+            var bytes = entry.getValue();
+            os.writeInt(bytes.length);
+            os.write(bytes);
+        }
     }
 
     public List<Long> getBigStringFileUuidList() {

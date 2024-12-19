@@ -140,6 +140,22 @@ class WalTest extends Specification {
         then:
         n == 0
 
+        when:
+        def n1 = wal.readFromSavedBytes(new byte[4], true)
+        def n11 = wal.readFromSavedBytes(new byte[4], false)
+        then:
+        n1 == 0
+        n11 == 0
+
+        when:
+        def bytes1 = wal.writeToSavedBytes(true)
+        def bytes11 = wal.writeToSavedBytes(false)
+        n1 = wal.readFromSavedBytes(bytes1, true)
+        n11 = wal.readFromSavedBytes(bytes11, false)
+        then:
+        n1 == 10
+        n11 == 0
+
         // repl
         // repl export exists batch to slave
         when:

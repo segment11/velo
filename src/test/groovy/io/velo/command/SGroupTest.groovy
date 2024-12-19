@@ -151,11 +151,14 @@ sunionstore
 
         when:
         sGroup.cmd = 'save'
+        def data2 = new byte[2][]
+        sGroup.data = data2
         reply = sGroup.handle()
         then:
         reply == OKReply.INSTANCE
 
         when:
+        sGroup.data = data1
         sGroup.cmd = 'select'
         reply = sGroup.handle()
         then:
@@ -178,6 +181,36 @@ sunionstore
         reply = sGroup.handle()
         then:
         reply == NilReply.INSTANCE
+    }
+
+    def 'test save'() {
+        given:
+        def data1 = new byte[1][]
+        def sGroup = new SGroup('save', data1, null)
+        sGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        ConfForGlobal.pureMemory = false
+        def reply = sGroup.save()
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        ConfForGlobal.pureMemory = true
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        reply = sGroup.save()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result == OKReply.INSTANCE
+        }.result
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.pureMemory = false
     }
 
     def 'test scan'() {

@@ -19,7 +19,6 @@ import java.util.Arrays;
 public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     private static final String META_KEY_BUCKET_SPLIT_NUMBER_FILE = "meta_key_bucket_split_number.dat";
 
-    @VisibleForTesting
     final int allCapacity;
     private final byte initialSplitNumber;
     private RandomAccessFile raf;
