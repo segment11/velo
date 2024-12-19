@@ -161,11 +161,7 @@ public class CompressedValue {
 
     // not seq, may have a problem
     public byte[] encodeAsShortString() {
-        var buf = ByteBuffer.allocate(1 + 8 + compressedData.length);
-        buf.put((byte) SP_TYPE_SHORT_STRING);
-        buf.putLong(seq);
-        buf.put(compressedData);
-        return buf.array();
+        return encodeAsShortString(seq, compressedData);
     }
 
     public static byte[] encodeAsShortString(long seq, byte[] data) {
