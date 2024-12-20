@@ -814,8 +814,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return;
         }
 
+        var fileLength = lastSavedFile.length();
         try (var is = new DataInputStream(new FileInputStream(lastSavedFile))) {
+            var beginT = System.currentTimeMillis();
             loadFromLastSavedFileWhenPureMemory(is);
+            var costT = System.currentTimeMillis() - beginT;
+            log.info("Load from last saved file when pure memory, slot={}, cost={} ms, file length={} KB",
+                    slot, costT, fileLength / 1024);
         }
     }
 
@@ -867,8 +872,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         try (var os = new DataOutputStream(new FileOutputStream(lastSavedFile))) {
+            var beginT = System.currentTimeMillis();
             writeToSavedFileWhenPureMemory(os);
+            var costT = System.currentTimeMillis() - beginT;
+            log.info("Write to saved file when pure memory, slot={}, cost={} ms", slot, costT);
         }
+
+        var fileLength = lastSavedFile.length();
+        log.info("Saved file length={} KB", fileLength / 1024);
     }
 
     @Override
