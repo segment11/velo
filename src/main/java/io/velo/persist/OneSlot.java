@@ -1245,7 +1245,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         putCountTotal++;
-        ttlTotalInSecond += (cv.getExpireAt() - System.currentTimeMillis()) / 1000;
+        if (!cv.noExpire()) {
+            ttlTotalInSecond += (cv.getExpireAt() - System.currentTimeMillis()) / 1000;
+        }
 
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
