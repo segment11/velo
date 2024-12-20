@@ -32,10 +32,12 @@ class InfoCommand extends BaseCommand {
         if (data.length == 2) {
             def section = new String(data[1])
 
-            if ('replication' == section) {
+            if ('keyspace' == section) {
+                return keyspace()
+            } else if ('replication' == section) {
                 return replication()
             } else {
-                return new BulkReply(''.bytes)
+                return ErrorReply.SYNTAX
             }
         } else {
             // todo
@@ -43,7 +45,30 @@ class InfoCommand extends BaseCommand {
         }
     }
 
-    Reply replication() {
+    private Reply keyspace() {
+        localPersist.doSthInSlots(oneSlot -> {
+            def n1 = oneSlot.getAllKeyCount()
+            def n2 = oneSlot.getAvgTtlInSecond().longValue()
+            return new Tuple2<Long, Long>(n1, n2)
+        }, resultList -> {
+            long keysTotal = 0
+            long avgTtlTotal = 0
+            for (one in resultList) {
+                Tuple2<Long, Long> tuple2 = one as Tuple2<Long, Long>
+                keysTotal += tuple2.v1
+                avgTtlTotal += tuple2.v2
+            }
+            def avgTtlFinal = (avgTtlTotal / resultList.size()).longValue()
+
+            def content = """
+# Keyspace
+db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
+"""
+            return new BulkReply(content.trim().bytes)
+        })
+    }
+
+    private Reply replication() {
         def firstOneSlot = localPersist.currentThreadFirstOneSlot()
 
         LinkedList<Tuple2<String, Object>> list = []

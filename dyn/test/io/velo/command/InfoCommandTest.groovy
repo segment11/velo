@@ -5,6 +5,7 @@ import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.repl.Binlog
+import io.velo.reply.AsyncReply
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import spock.lang.Specification
@@ -45,11 +46,36 @@ class InfoCommandTest extends Specification {
 
         when:
         def data2 = new byte[2][]
-        data2[1] = 'info'.bytes
+        data2[1] = 'zzz'.bytes
         infoCommand.data = data2
         reply = infoCommand.handle()
         then:
-        reply instanceof BulkReply
+        reply == ErrorReply.SYNTAX
+    }
+
+    def 'test keyspace'() {
+        given:
+        def iGroup = new IGroup('info', null, null)
+        iGroup.from(BaseCommand.mockAGroup())
+        def infoCommand = new InfoCommand(iGroup)
+
+        and:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when:
+        def reply = infoCommand.execute('info keyspace')
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result instanceof BulkReply
+                    && new String((result as BulkReply).raw).contains('keys:0')
+        }.result
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test replication'() {

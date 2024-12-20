@@ -91,6 +91,7 @@ class OneSlotTest extends Specification {
         oneSlot.getReplPairAsSlave(11L) == null
         oneSlot.getOnlyOneReplPairAsSlave() == null
         oneSlot.firstReplPairAsMaster == null
+        oneSlot.avgTtlInSecond == 0
 
         when:
         def persistConfig2 = Config.create().with('volumeDirsBySlot',
@@ -131,6 +132,12 @@ class OneSlotTest extends Specification {
         oneSlot.handleWhenCvExpiredOrDeleted('', null, null)
         then:
         1 == 1
+
+        when:
+        oneSlot.ttlTotalInSecond = 100
+        oneSlot.putCountTotal = 1
+        then:
+        oneSlot.avgTtlInSecond == 100
 
         when:
         def f = oneSlot.walLazyReadFromFile()

@@ -1221,6 +1221,19 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         put(key, bucketIndex, cv, false);
     }
 
+    @VisibleForTesting
+    long ttlTotalInSecond = 0;
+    @VisibleForTesting
+    long putCountTotal = 0;
+
+    public double getAvgTtlInSecond() {
+        if (putCountTotal == 0) {
+            return 0;
+        }
+
+        return (double) ttlTotalInSecond / putCountTotal;
+    }
+
     @SlaveNeedReplay
     // thread safe, same slot, same event loop
     public void put(String key, int bucketIndex, CompressedValue cv, boolean isFromMerge) {
@@ -1230,6 +1243,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (isReadonly()) {
             throw new ReadonlyException();
         }
+
+        putCountTotal++;
+        ttlTotalInSecond += (cv.getExpireAt() - System.currentTimeMillis()) / 1000;
 
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
@@ -2124,6 +2140,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         map.put("slot_pending_submit_index_job_count", (double) pendingSubmitIndexJobRunCount);
+
+        map.put("slot_avg_ttl_in_second", getAvgTtlInSecond());
 
         return map;
     }
