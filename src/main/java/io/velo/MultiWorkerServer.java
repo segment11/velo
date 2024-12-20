@@ -689,11 +689,20 @@ public class MultiWorkerServer extends Launcher {
                 });
             }
 
+            var localPersist = LocalPersist.getInstance();
+            if (ConfForGlobal.pureMemory) {
+                // save slots data
+                log.warn("Save slots data to file before exit when pure memory mode.");
+                for (var oneSlot : localPersist.oneSlots()) {
+                    oneSlot.writeToSavedFileWhenPureMemory();
+                }
+            }
+
             LeaderSelector.getInstance().cleanUp();
             JedisPoolHolder.getInstance().cleanUp();
 
             // close local persist
-            LocalPersist.getInstance().cleanUp();
+            localPersist.cleanUp();
             DictMap.getInstance().cleanUp();
 
             for (var netWorkerEventloop : netWorkerEventloopArray) {
