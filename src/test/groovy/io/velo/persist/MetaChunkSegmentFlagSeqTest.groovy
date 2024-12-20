@@ -74,6 +74,24 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         segmentFlag2.segmentSeq() == 1L
         segmentFlag2.walGroupIndex() == 0
 
+        when:
+        one2.overwriteInMemoryCachedBytes(new byte[one2.allCapacity])
+        def segmentFlag3 = one.getSegmentMergeFlag(3)
+        then:
+        segmentFlag3.segmentSeq() == 0L
+        one2.getInMemoryCachedBytes().length == one2.allCapacity
+
+        when:
+        boolean exception = false
+        try {
+            one2.overwriteInMemoryCachedBytes(new byte[one2.allCapacity + 1])
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
         cleanup:
         ConfForGlobal.pureMemory = false
         one.clear()

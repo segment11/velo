@@ -21,14 +21,14 @@ import java.util.TreeSet;
 
 public class MetaIndexWords implements NeedCleanUp {
     private static final String META_INDEX_WORDS_FILE = "meta_index_words.dat";
-    private RandomAccessFile raf;
 
     private final byte workerId;
     private final File workerIdDir;
-    @VisibleForTesting
+
     final int allCapacity;
     private final byte[] inMemoryCachedBytes;
     private final ByteBuffer inMemoryCachedByteBuffer;
+    private RandomAccessFile raf;
 
     // for repl
     byte[] readOneBatch(int beginOffset, int length) {

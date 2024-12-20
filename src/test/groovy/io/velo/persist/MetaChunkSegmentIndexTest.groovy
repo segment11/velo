@@ -84,6 +84,23 @@ class MetaChunkSegmentIndexTest extends Specification {
         then:
         one2.isExistsDataAllFetched()
 
+        when:
+        one2.overwriteInMemoryCachedBytes(new byte[one2.allCapacity])
+        then:
+        one2.get() == 0
+        one2.getInMemoryCachedBytes().length == one2.allCapacity
+
+        when:
+        boolean exception = false
+        try {
+            one2.overwriteInMemoryCachedBytes(new byte[one2.allCapacity + 1])
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
         cleanup:
         ConfForGlobal.pureMemory = false
         one.cleanUp()

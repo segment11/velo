@@ -26,7 +26,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
 
     private final short slot;
     private final int maxSegmentNumber;
-    private final int allCapacity;
+
+    final int allCapacity;
+    private final byte[] inMemoryCachedBytes;
+    private final ByteBuffer inMemoryCachedByteBuffer;
     private RandomAccessFile raf;
 
     private static void fillSegmentFlagInit(byte[] innerBytes) {
@@ -43,8 +46,21 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
-    private final byte[] inMemoryCachedBytes;
-    private final ByteBuffer inMemoryCachedByteBuffer;
+    // for save and load
+    // readonly
+    byte[] getInMemoryCachedBytes() {
+        // usually more than 10M, do not copy
+        return inMemoryCachedBytes;
+    }
+
+    // for save and load
+    void overwriteInMemoryCachedBytes(byte[] bytes) {
+        if (bytes.length != inMemoryCachedBytes.length) {
+            throw new IllegalArgumentException("Meta chunk segment flag seq, bytes length not match");
+        }
+
+        inMemoryCachedByteBuffer.position(0).put(bytes);
+    }
 
     public byte[] getOneBatch(int beginBucketIndex, int bucketCount) {
         var dst = new byte[bucketCount * ONE_LENGTH];

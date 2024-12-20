@@ -18,19 +18,21 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
     private static final String META_ONE_WAL_GROUP_SEQ_FILE = "meta_one_wal_group_seq.dat";
 
     private final int walGroupNumber;
+
     final int allCapacity;
+    private final byte[] inMemoryCachedBytes;
+    private final ByteBuffer inMemoryCachedByteBuffer;
     private RandomAccessFile raf;
 
-    private final byte[] inMemoryCachedBytes;
-
-    private final ByteBuffer inMemoryCachedByteBuffer;
-
+    // for save and load
+    // readonly
     byte[] getInMemoryCachedBytes() {
         var dst = new byte[inMemoryCachedBytes.length];
         inMemoryCachedByteBuffer.position(0).get(dst);
         return dst;
     }
 
+    // for save and load
     void overwriteInMemoryCachedBytes(byte[] bytes) {
         if (bytes.length != inMemoryCachedBytes.length) {
             throw new IllegalArgumentException("Meta one wal group seq, bytes length not match");

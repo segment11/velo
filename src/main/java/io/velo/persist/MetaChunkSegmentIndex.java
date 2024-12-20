@@ -17,23 +17,42 @@ import java.nio.ByteBuffer;
 
 public class MetaChunkSegmentIndex implements NeedCleanUp {
     private static final String META_CHUNK_SEGMENT_INDEX_FILE = "meta_chunk_segment_index.dat";
-    private RandomAccessFile raf;
 
     private final short slot;
+
+    // 4 bytes for chunk segment index int
+    // when slave connect master, master start binlog
+    // 8 bytes for master uuid long
+    // 4 bytes for target master exists data all fetched done flag int
+    // 4 bytes for master binlog file index int
+    // 8 bytes for master binlog offset long
+    final int allCapacity = 4 + 8 + 4 + 4 + 8;
     private final byte[] inMemoryCachedBytes;
     private final ByteBuffer inMemoryCachedByteBuffer;
+    private RandomAccessFile raf;
+
+    // for save and load
+    // readonly
+    byte[] getInMemoryCachedBytes() {
+        var dst = new byte[inMemoryCachedBytes.length];
+        inMemoryCachedByteBuffer.position(0).get(dst);
+        return dst;
+    }
+
+    // for save and load
+    void overwriteInMemoryCachedBytes(byte[] bytes) {
+        if (bytes.length != inMemoryCachedBytes.length) {
+            throw new IllegalArgumentException("Meta chunk segment index, bytes length not match");
+        }
+
+        inMemoryCachedByteBuffer.position(0).put(bytes);
+    }
 
     private static final Logger log = LoggerFactory.getLogger(MetaChunkSegmentIndex.class);
 
     public MetaChunkSegmentIndex(short slot, File slotDir) throws IOException {
         this.slot = slot;
-        // 4 bytes for chunk segment index int
-        // when slave connect master, master start binlog
-        // 8 bytes for master uuid long
-        // 4 bytes for target master exists data all fetched done flag int
-        // 4 bytes for master binlog file index int
-        // 8 bytes for master binlog offset long
-        this.inMemoryCachedBytes = new byte[4 + 8 + 4 + 4 + 8];
+        this.inMemoryCachedBytes = new byte[allCapacity];
 
         if (ConfForGlobal.pureMemory) {
             this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
@@ -91,22 +110,19 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     @VisibleForTesting
     void setAll(int segmentIndex, long masterUuid, boolean isExistsDataAllFetched,
                 int masterBinlogFileIndex, long masterBinlogOffset) {
-        if (ConfForGlobal.pureMemory) {
-            this.inMemoryCachedByteBuffer.putInt(0, segmentIndex);
-            this.inMemoryCachedByteBuffer.putLong(4, masterUuid);
-            this.inMemoryCachedByteBuffer.putInt(12, isExistsDataAllFetched ? 1 : 0);
-            this.inMemoryCachedByteBuffer.putInt(16, masterBinlogFileIndex);
-            this.inMemoryCachedByteBuffer.putLong(20, masterBinlogOffset);
-            return;
-        }
-
-        var updatedBytes = new byte[4 + 8 + 4 + 4 + 8];
+        var updatedBytes = new byte[allCapacity];
         ByteBuffer updatedBuffer = ByteBuffer.wrap(updatedBytes);
         updatedBuffer.putInt(segmentIndex);
         updatedBuffer.putLong(masterUuid);
         updatedBuffer.putInt(isExistsDataAllFetched ? 1 : 0);
         updatedBuffer.putInt(masterBinlogFileIndex);
         updatedBuffer.putLong(masterBinlogOffset);
+
+        if (ConfForGlobal.pureMemory) {
+            this.inMemoryCachedByteBuffer.position(0).put(updatedBytes);
+            return;
+        }
+
         try {
             raf.seek(0);
             raf.write(updatedBytes);

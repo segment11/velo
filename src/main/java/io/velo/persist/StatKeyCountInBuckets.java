@@ -5,7 +5,6 @@ import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
 import io.velo.repl.SlaveReplay;
 import org.apache.commons.io.FileUtils;
-import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,19 +20,11 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     public static final int ONE_LENGTH = 2;
 
     private final int bucketsPerSlot;
-    final int allCapacity;
-    private RandomAccessFile raf;
 
+    final int allCapacity;
     private final byte[] inMemoryCachedBytes;
     private final ByteBuffer inMemoryCachedByteBuffer;
-
-    private final int[] keyCountInOneWalGroup;
-
-    public int getKeyCountForOneWalGroup(int walGroupIndex) {
-        return keyCountInOneWalGroup[walGroupIndex];
-    }
-
-    private long totalKeyCountCached;
+    private RandomAccessFile raf;
 
     @SlaveReplay
     byte[] getInMemoryCachedBytes() {
@@ -63,6 +54,14 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
             throw new RuntimeException("Repl stat key count in buckets, write file error", e);
         }
     }
+
+    private final int[] keyCountInOneWalGroup;
+
+    public int getKeyCountForOneWalGroup(int walGroupIndex) {
+        return keyCountInOneWalGroup[walGroupIndex];
+    }
+
+    private long totalKeyCountCached;
 
     private static final Logger log = LoggerFactory.getLogger(StatKeyCountInBuckets.class);
 

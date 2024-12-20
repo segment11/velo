@@ -799,7 +799,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     private final String saveFileNameWhenPureMemory;
 
     enum SaveBytesType {
-        wal(1), key_loader(2), chunk(3), big_strings(4);
+        wal(1), key_loader(2), chunk(3), big_strings(4), meta_chunk_segment_index(5), meta_chunk_segment_flag_seq(6);
 
         final int i;
 
@@ -840,6 +840,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 this.chunk.loadFromLastSavedFileWhenPureMemory(is);
             } else if (bytesType == SaveBytesType.big_strings.i) {
                 this.bigStringFiles.loadFromLastSavedFileWhenPureMemory(is);
+            } else if (bytesType == SaveBytesType.meta_chunk_segment_index.i) {
+                var metaBytes = new byte[this.metaChunkSegmentIndex.allCapacity];
+                is.readFully(metaBytes);
+                this.metaChunkSegmentIndex.overwriteInMemoryCachedBytes(metaBytes);
+            } else if (bytesType == SaveBytesType.meta_chunk_segment_flag_seq.i) {
+                var metaBytes = new byte[this.metaChunkSegmentFlagSeq.allCapacity];
+                is.readFully(metaBytes);
+                this.metaChunkSegmentFlagSeq.overwriteInMemoryCachedBytes(metaBytes);
             } else {
                 throw new IllegalStateException("Unexpected value: " + bytesType);
             }
@@ -899,6 +907,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         os.writeInt(SaveBytesType.big_strings.i);
         bigStringFiles.writeToSavedFileWhenPureMemory(os);
+
+        os.writeInt(SaveBytesType.meta_chunk_segment_index.i);
+        os.write(metaChunkSegmentIndex.getInMemoryCachedBytes());
+
+        os.writeInt(SaveBytesType.meta_chunk_segment_flag_seq.i);
+        os.write(metaChunkSegmentFlagSeq.getInMemoryCachedBytes());
     }
 
     private final TaskChain taskChain = new TaskChain();

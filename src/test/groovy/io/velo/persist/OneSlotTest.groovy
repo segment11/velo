@@ -167,6 +167,7 @@ class OneSlotTest extends Specification {
             oneSlot.put(keyForShortValue, sKeyForShortValue.bucketIndex(), cvAsShortValue)
             oneSlot.put(key, sKey.bucketIndex(), cv)
         }
+        oneSlot.loadFromLastSavedFileWhenPureMemory()
         oneSlot.writeToSavedFileWhenPureMemory()
         oneSlot.loadFromLastSavedFileWhenPureMemory()
         then:
