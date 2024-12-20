@@ -16,6 +16,7 @@ import io.velo.type.RedisList;
 import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.VisibleForTesting;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -254,26 +255,14 @@ public class SGroup extends BaseCommand {
             return OKReply.INSTANCE;
         }
 
-        Promise<Void>[] promises = new Promise[slotNumber];
-        for (int i = 0; i < slotNumber; i++) {
-            var oneSlot = localPersist.oneSlot((short) i);
-            promises[i] = oneSlot.asyncRun(oneSlot::writeToSavedFileWhenPureMemory);
-        }
-
-        SettablePromise<Reply> finalPromise = new SettablePromise<>();
-        var asyncReply = new AsyncReply(finalPromise);
-
-        Promises.all(promises).whenComplete((r, e) -> {
-            if (e != null) {
-                log.error("save error={}", e.getMessage());
-                finalPromise.setException(e);
-                return;
+        return localPersist.doSthInSlots(oneSlot -> {
+            try {
+                oneSlot.writeToSavedFileWhenPureMemory();
+                return true;
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-
-            finalPromise.set(OKReply.INSTANCE);
-        });
-
-        return asyncReply;
+        }, resultList -> OKReply.INSTANCE);
     }
 
     @VisibleForTesting

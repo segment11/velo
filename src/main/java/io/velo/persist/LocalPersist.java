@@ -3,9 +3,14 @@ package io.velo.persist;
 import com.kenai.jffi.PageManager;
 import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
+import io.activej.promise.Promise;
+import io.activej.promise.Promises;
+import io.activej.promise.SettablePromise;
 import io.velo.*;
 import io.velo.persist.index.IndexHandlerPool;
 import io.velo.repl.cluster.MultiShard;
+import io.velo.reply.AsyncReply;
+import io.velo.reply.Reply;
 import jnr.ffi.LibraryLoader;
 import jnr.posix.LibC;
 import org.jetbrains.annotations.Nullable;
@@ -15,7 +20,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
 
@@ -63,6 +70,34 @@ public class LocalPersist implements NeedCleanUp {
 
     public OneSlot oneSlot(short slot) {
         return oneSlots[slot];
+    }
+
+    public <R> AsyncReply doSthInSlots(Function<OneSlot, R> fnApplyOneSlot, Function<ArrayList<R>, Reply> fn) {
+        Promise<R>[] promises = new Promise[oneSlots.length];
+        for (int i = 0; i < oneSlots.length; i++) {
+            var oneSlot = oneSlots[i];
+            promises[i] = oneSlot.asyncCall(() -> fnApplyOneSlot.apply(oneSlot));
+        }
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        Promises.all(promises).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error("async all error={}", e.getMessage());
+                finalPromise.setException(e);
+                return;
+            }
+
+            ArrayList<R> resultList = new ArrayList<>();
+            for (var p : promises) {
+                resultList.add(p.getResult());
+            }
+
+            finalPromise.set(fn.apply(resultList));
+        });
+
+        return asyncReply;
     }
 
     @TestOnly

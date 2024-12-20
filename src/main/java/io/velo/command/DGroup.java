@@ -7,6 +7,7 @@ import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
+import io.velo.persist.OneSlot;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -228,31 +229,10 @@ public class DGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        Promise<Long>[] promises = new Promise[slotNumber];
-        for (int i = 0; i < slotNumber; i++) {
-            var oneSlot = localPersist.oneSlot((short) i);
-            promises[i] = oneSlot.asyncCall(oneSlot::getAllKeyCount);
-        }
-
-        SettablePromise<Reply> finalPromise = new SettablePromise<>();
-        var asyncReply = new AsyncReply(finalPromise);
-
-        Promises.all(promises).whenComplete((r, e) -> {
-            if (e != null) {
-                log.error("dbsize error={}", e.getMessage());
-                finalPromise.setException(e);
-                return;
-            }
-
-            long n = 0;
-            for (var p : promises) {
-                n += p.getResult();
-            }
-
-            finalPromise.set(new IntegerReply(n));
+        return localPersist.doSthInSlots(OneSlot::getAllKeyCount, resultList -> {
+            long n = resultList.stream().mapToLong(Long::valueOf).sum();
+            return new IntegerReply(n);
         });
-
-        return asyncReply;
     }
 
     @VisibleForTesting

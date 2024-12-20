@@ -1,15 +1,16 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
-import io.activej.promise.Promise;
-import io.activej.promise.Promises;
-import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.ConfForGlobal;
 import io.velo.repl.LeaderSelector;
-import io.velo.reply.*;
+import io.velo.reply.ErrorReply;
+import io.velo.reply.NilReply;
+import io.velo.reply.OKReply;
+import io.velo.reply.Reply;
 import org.jetbrains.annotations.VisibleForTesting;
 
+import java.io.IOException;
 import java.util.ArrayList;
 
 public class FGroup extends BaseCommand {
@@ -69,10 +70,8 @@ public class FGroup extends BaseCommand {
             }
         }
 
-        Promise<Void>[] promises = new Promise[slotNumber];
-        for (int i = 0; i < slotNumber; i++) {
-            var oneSlot = localPersist.oneSlot((short) i);
-            promises[i] = oneSlot.asyncRun(() -> {
+        return localPersist.doSthInSlots(oneSlot -> {
+            try {
                 oneSlot.setReadonly(true);
                 oneSlot.getDynConfig().setBinlogOn(false);
 
@@ -80,27 +79,17 @@ public class FGroup extends BaseCommand {
                 for (var replPairAsMaster : replPairAsMasterList) {
                     replPairAsMaster.closeSlaveConnectSocket();
                 }
-            });
-        }
-
-        SettablePromise<Reply> finalPromise = new SettablePromise<>();
-        var asyncReply = new AsyncReply(finalPromise);
-
-        Promises.all(promises).whenComplete((r, e) -> {
-            if (e != null) {
-                log.error("failover error={}", e.getMessage());
-                finalPromise.setException(e);
-                return;
+                return true;
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-
+        }, resultList -> {
             LeaderSelector.getInstance().stopLeaderLatch();
             log.warn("Repl leader latch stopped");
             // later self will start leader latch again and make self as slave
 
-            finalPromise.set(OKReply.INSTANCE);
+            return OKReply.INSTANCE;
         });
-
-        return asyncReply;
     }
 
     @VisibleForTesting
@@ -110,25 +99,9 @@ public class FGroup extends BaseCommand {
             return OKReply.INSTANCE;
         }
 
-        Promise<Void>[] promises = new Promise[slotNumber];
-        for (int i = 0; i < slotNumber; i++) {
-            var oneSlot = localPersist.oneSlot((short) i);
-            promises[i] = oneSlot.asyncRun(oneSlot::flush);
-        }
-
-        SettablePromise<Reply> finalPromise = new SettablePromise<>();
-        var asyncReply = new AsyncReply(finalPromise);
-
-        Promises.all(promises).whenComplete((r, e) -> {
-            if (e != null) {
-                log.error("flushdb error={}", e.getMessage());
-                finalPromise.setException(e);
-                return;
-            }
-
-            finalPromise.set(OKReply.INSTANCE);
-        });
-
-        return asyncReply;
+        return localPersist.doSthInSlots(oneSlot -> {
+            oneSlot.flush();
+            return true;
+        }, resultList -> OKReply.INSTANCE);
     }
 }
