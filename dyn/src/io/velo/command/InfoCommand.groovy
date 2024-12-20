@@ -60,11 +60,10 @@ class InfoCommand extends BaseCommand {
             }
             def avgTtlFinal = (avgTtlTotal / resultList.size()).longValue()
 
-            def content = """
-# Keyspace
+            def content = """# Keyspace
 db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
 """
-            return new BulkReply(content.trim().bytes)
+            return new BulkReply(content.bytes)
         })
     }
 
