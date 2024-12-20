@@ -3,7 +3,7 @@ package io.velo.persist
 import io.velo.CompressedValue
 import io.velo.KeyHash
 import io.velo.SnowFlake
-import io.velo.type.RedisHH
+import org.jetbrains.annotations.NotNull
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -371,12 +371,12 @@ class KeyBucketTest extends Specification {
         when:
         keyBucket.cvExpiredOrDeletedCallBack = new KeyBucket.CvExpiredOrDeletedCallBack() {
             @Override
-            void handle(String key, CompressedValue shortStringCv) {
+            void handle(@NotNull String key, @NotNull CompressedValue shortStringCv) {
                 println key + ' with short string cv expired'
             }
 
             @Override
-            void handle(String key, PersistValueMeta pvm) {
+            void handle(@NotNull String key, @NotNull PersistValueMeta pvm) {
                 println key + ' with pvm expired'
             }
         }

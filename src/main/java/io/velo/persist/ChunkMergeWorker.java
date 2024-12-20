@@ -40,7 +40,10 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
 
     private static final Logger log = LoggerFactory.getLogger(ChunkMergeWorker.class);
 
-    record CvWithKeyAndBucketIndexAndSegmentIndex(CompressedValue cv, String key, int bucketIndex, int segmentIndex) {
+    record CvWithKeyAndBucketIndexAndSegmentIndex(@NotNull CompressedValue cv,
+                                                  @NotNull String key,
+                                                  int bucketIndex,
+                                                  int segmentIndex) {
     }
 
     // for better latency, because group by wal group, if wal groups is too large, need multi batch persist
@@ -73,7 +76,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
 
     private final List<CvWithKeyAndBucketIndexAndSegmentIndex> mergedCvList = new ArrayList<>(MERGED_CV_SIZE_THRESHOLD);
 
-    void addMergedCv(CvWithKeyAndBucketIndexAndSegmentIndex cvWithKeyAndBucketIndexAndSegmentIndex) {
+    void addMergedCv(@NotNull CvWithKeyAndBucketIndexAndSegmentIndex cvWithKeyAndBucketIndexAndSegmentIndex) {
         mergedCvList.add(cvWithKeyAndBucketIndexAndSegmentIndex);
     }
 
@@ -161,7 +164,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
         return new OneSlot.BeforePersistWalExt2FromMerge(segmentIndexList, vList);
     }
 
-    void removeMergedButNotPersistedAfterPersistWal(ArrayList<Integer> segmentIndexList, int walGroupIndex) {
+    void removeMergedButNotPersistedAfterPersistWal(@NotNull ArrayList<Integer> segmentIndexList, int walGroupIndex) {
         mergedCvList.removeIf(one -> Wal.calcWalGroupIndex(one.bucketIndex) == walGroupIndex);
         mergedSegmentSet.removeIf(one -> segmentIndexList.contains(one.segmentIndex));
 
@@ -171,7 +174,7 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
         }
     }
 
-    void persistAllMergedCvListInTargetSegmentIndexList(ArrayList<Integer> targetSegmentIndexList) {
+    void persistAllMergedCvListInTargetSegmentIndexList(@NotNull ArrayList<Integer> targetSegmentIndexList) {
         while (mergedSegmentSet.stream().anyMatch(one -> targetSegmentIndexList.contains(one.segmentIndex))) {
             persistFIFOMergedCvList();
         }
@@ -276,13 +279,13 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
 
     long logMergeCount = 0;
 
-    public ChunkMergeWorker(short slot, OneSlot oneSlot) {
+    public ChunkMergeWorker(short slot, @NotNull OneSlot oneSlot) {
         this.slot = slot;
         this.oneSlot = oneSlot;
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         long size = 0;
         size += RamUsageEstimator.sizeOfCollection(mergedCvList);
         size += RamUsageEstimator.sizeOfCollection(mergedSegmentSet);

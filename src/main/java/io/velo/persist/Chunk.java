@@ -7,6 +7,7 @@ import io.velo.repl.SlaveReplay;
 import io.velo.repl.incremental.XOneWalGroupPersist;
 import jnr.posix.LibC;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,8 +74,10 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     @VisibleForTesting
     FdReadWrite[] fdReadWriteArray;
 
-    public Chunk(short slot, File slotDir, OneSlot oneSlot,
-                 SnowFlake snowFlake, KeyLoader keyLoader) {
+    public Chunk(short slot, @NotNull File slotDir,
+                 @NullableOnlyTest OneSlot oneSlot,
+                 @NullableOnlyTest SnowFlake snowFlake,
+                 @NullableOnlyTest KeyLoader keyLoader) {
         var confChunk = ConfForSlot.global.confChunk;
         this.segmentNumberPerFd = confChunk.segmentNumberPerFd;
         this.fdPerChunk = confChunk.fdPerChunk;
@@ -98,7 +101,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         long size = 0;
         for (var fdReadWrite : fdReadWriteArray) {
             if (fdReadWrite != null) {
@@ -415,8 +418,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
     @SlaveNeedReplay
     // return need merge segment index array
-    public ArrayList<Integer> persist(int walGroupIndex, ArrayList<Wal.V> list, boolean isMerge, XOneWalGroupPersist xForBinlog,
-                                      KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
+    public ArrayList<Integer> persist(int walGroupIndex,
+                                      @NotNull ArrayList<Wal.V> list,
+                                      boolean isMerge,
+                                      @NotNull XOneWalGroupPersist xForBinlog,
+                                      @Nullable KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
         logMergeCount++;
         var doLog = (Debug.getInstance().logMerge && logMergeCount % 1000 == 0);
 
@@ -598,7 +604,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     @VisibleForTesting
-    void updateLastMergedSegmentIndexEnd(ArrayList<Integer> needMergeSegmentIndexList) {
+    void updateLastMergedSegmentIndexEnd(@NotNull ArrayList<Integer> needMergeSegmentIndexList) {
         TreeSet<Integer> sorted = new TreeSet<>(needMergeSegmentIndexList);
 
         // recycle, need spit to two part
@@ -671,7 +677,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     @VisibleForTesting
-    void checkNeedMergeSegmentIndexListContinuous(TreeSet<Integer> sortedSet) {
+    void checkNeedMergeSegmentIndexListContinuous(@NotNull TreeSet<Integer> sortedSet) {
         if (sortedSet.size() == 1) {
             return;
         }

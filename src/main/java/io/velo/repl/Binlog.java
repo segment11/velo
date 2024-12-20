@@ -102,7 +102,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         return list;
     }
 
-    public Binlog(short slot, File slotDir, DynConfig dynConfig) throws IOException {
+    public Binlog(short slot, @NotNull File slotDir, @NotNull DynConfig dynConfig) throws IOException {
         this.slot = slot;
         this.binlogDir = new File(slotDir, BINLOG_DIR_NAME);
         if (!binlogDir.exists()) {
@@ -131,7 +131,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         long size = 0;
         size += tempAppendSegmentBytes.length;
         for (var one : latestAppendForReadCacheSegmentBytesSet) {
@@ -330,7 +330,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         return (int) (fileOffset - fileOffset % oneSegmentLength);
     }
 
-    public void append(BinlogContent content) throws IOException {
+    public void append(@NotNull BinlogContent content) throws IOException {
         if (!dynConfig.isBinlogOn()) {
             return;
         }
@@ -614,7 +614,10 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
-    public static int decodeAndApply(short slot, byte[] oneSegmentBytes, int skipBytesN, ReplPair replPair) {
+    public static int decodeAndApply(short slot,
+                                     byte[] oneSegmentBytes,
+                                     int skipBytesN,
+                                     @NotNull ReplPair replPair) {
         var byteBuffer = ByteBuffer.wrap(oneSegmentBytes);
         byteBuffer.position(skipBytesN);
 

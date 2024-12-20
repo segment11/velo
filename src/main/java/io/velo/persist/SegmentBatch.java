@@ -4,6 +4,7 @@ import com.github.luben.zstd.Zstd;
 import io.velo.ConfForSlot;
 import io.velo.SnowFlake;
 import io.velo.metric.InSlotMetricCollector;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +41,7 @@ public class SegmentBatch implements InSlotMetricCollector {
 
     private static final Logger log = LoggerFactory.getLogger(SegmentBatch.class);
 
-    public SegmentBatch(short slot, SnowFlake snowFlake) {
+    public SegmentBatch(short slot, @NotNull SnowFlake snowFlake) {
         this.chunkSegmentLength = ConfForSlot.global.confChunk.segmentLength;
         this.slot = slot;
 
@@ -119,7 +120,9 @@ public class SegmentBatch implements InSlotMetricCollector {
         return 8 + 4 + subBlockIndex * (2 + 2);
     }
 
-    private SegmentTightBytesWithLengthAndSegmentIndex tightSegments(int afterTightSegmentIndex, ArrayList<SegmentCompressedBytesWithIndex> onceList, ArrayList<PersistValueMeta> returnPvmList) {
+    private SegmentTightBytesWithLengthAndSegmentIndex tightSegments(int afterTightSegmentIndex,
+                                                                     @NotNull ArrayList<SegmentCompressedBytesWithIndex> onceList,
+                                                                     @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         for (int j = 0; j < onceList.size(); j++) {
             var subBlockIndex = (byte) j;
             var s = onceList.get(j);
@@ -161,7 +164,8 @@ public class SegmentBatch implements InSlotMetricCollector {
         return new SegmentTightBytesWithLengthAndSegmentIndex(tightBytesWithLength, afterTightSegmentIndex, (byte) onceList.size(), segmentSeq);
     }
 
-    private ArrayList<SegmentTightBytesWithLengthAndSegmentIndex> tight(ArrayList<SegmentCompressedBytesWithIndex> segments, ArrayList<PersistValueMeta> returnPvmList) {
+    private ArrayList<SegmentTightBytesWithLengthAndSegmentIndex> tight(@NotNull ArrayList<SegmentCompressedBytesWithIndex> segments,
+                                                                        @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         beforeTightSegmentCountTotal += segments.size();
 
         ArrayList<SegmentTightBytesWithLengthAndSegmentIndex> r = new ArrayList<>(segments.size());
@@ -193,7 +197,9 @@ public class SegmentBatch implements InSlotMetricCollector {
         return r;
     }
 
-    ArrayList<SegmentBatch2.SegmentBytesWithIndex> split(ArrayList<Wal.V> list, int[] nextNSegmentIndex, ArrayList<PersistValueMeta> returnPvmList) {
+    ArrayList<SegmentBatch2.SegmentBytesWithIndex> split(@NotNull ArrayList<Wal.V> list,
+                                                         int[] nextNSegmentIndex,
+                                                         @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         var r = splitAndTight(list, nextNSegmentIndex, returnPvmList);
         ArrayList<SegmentBatch2.SegmentBytesWithIndex> returnList = new ArrayList<>(r.size());
         for (var one : r) {
@@ -203,7 +209,9 @@ public class SegmentBatch implements InSlotMetricCollector {
     }
 
     @VisibleForTesting
-    ArrayList<SegmentTightBytesWithLengthAndSegmentIndex> splitAndTight(ArrayList<Wal.V> list, int[] nextNSegmentIndex, ArrayList<PersistValueMeta> returnPvmList) {
+    ArrayList<SegmentTightBytesWithLengthAndSegmentIndex> splitAndTight(@NotNull ArrayList<Wal.V> list,
+                                                                        int[] nextNSegmentIndex,
+                                                                        @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         ArrayList<SegmentCompressedBytesWithIndex> result = new ArrayList<>(100);
         ArrayList<Wal.V> onceList = new ArrayList<>(100);
 
@@ -242,7 +250,9 @@ public class SegmentBatch implements InSlotMetricCollector {
         return tight(result, returnPvmList);
     }
 
-    private SegmentCompressedBytesWithIndex compressAsSegment(ArrayList<Wal.V> list, int segmentIndex, ArrayList<PersistValueMeta> returnPvmList) {
+    private SegmentCompressedBytesWithIndex compressAsSegment(@NotNull ArrayList<Wal.V> list,
+                                                              int segmentIndex,
+                                                              @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         batchCountTotal++;
         batchKvCountTotal += list.size();
 
@@ -266,7 +276,10 @@ public class SegmentBatch implements InSlotMetricCollector {
         return new SegmentCompressedBytesWithIndex(compressedBytes, segmentIndex, segmentSeq);
     }
 
-    static byte[] decompressSegmentBytesFromOneSubBlock(short slot, byte[] tightBytesWithLength, PersistValueMeta pvm, Chunk chunk) {
+    static byte[] decompressSegmentBytesFromOneSubBlock(short slot,
+                                                        byte[] tightBytesWithLength,
+                                                        @NotNull PersistValueMeta pvm,
+                                                        @NotNull Chunk chunk) {
         var buffer = ByteBuffer.wrap(tightBytesWithLength);
         buffer.position(subBlockMetaPosition(pvm.subBlockIndex));
         var subBlockOffset = buffer.getShort();

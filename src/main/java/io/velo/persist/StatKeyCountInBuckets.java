@@ -5,6 +5,7 @@ import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
 import io.velo.repl.SlaveReplay;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,7 +66,7 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(StatKeyCountInBuckets.class);
 
-    public StatKeyCountInBuckets(short slot, File slotDir) throws IOException {
+    public StatKeyCountInBuckets(short slot, @NotNull File slotDir) throws IOException {
         this.bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
         this.allCapacity = bucketsPerSlot * ONE_LENGTH;
 
@@ -102,7 +103,7 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         sb.append("Stat key count in buckets: ").append(allCapacity).append("\n");
         return allCapacity;
     }
@@ -130,7 +131,10 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
         updateKeyCountForTargetWalGroup(walGroupIndex, totalKeyCountInTargetWalGroup);
     }
 
-    static void writeToRaf(int offset, byte[] tmpBytes, ByteBuffer inMemoryCachedByteBuffer, RandomAccessFile raf) {
+    static void writeToRaf(int offset,
+                           byte[] tmpBytes,
+                           @NotNull ByteBuffer inMemoryCachedByteBuffer,
+                           @NotNull RandomAccessFile raf) {
         if (ConfForGlobal.pureMemory) {
             inMemoryCachedByteBuffer.put(offset, tmpBytes);
             return;

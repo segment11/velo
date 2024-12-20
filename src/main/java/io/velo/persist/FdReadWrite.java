@@ -64,7 +64,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
     private static final Logger log = LoggerFactory.getLogger(FdReadWrite.class);
 
-    public FdReadWrite(short slot, String name, LibC libC, File file) throws IOException {
+    public FdReadWrite(short slot, String name, @NotNull LibC libC, @NotNull File file) throws IOException {
         this.slot = slot;
         this.name = name;
         if (!ConfForGlobal.pureMemory) {
@@ -404,7 +404,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         long size = 0;
         if (ConfForGlobal.pureMemory) {
             var size1 = 0L;
@@ -565,7 +565,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         }
     }
 
-    private byte[] readInnerByBuffer(int oneInnerIndex, ByteBuffer buffer, boolean isRefreshLRUCache) {
+    private byte[] readInnerByBuffer(int oneInnerIndex, @NotNull ByteBuffer buffer, boolean isRefreshLRUCache) {
         return readInnerByBuffer(oneInnerIndex, buffer, isRefreshLRUCache, buffer.capacity());
     }
 
@@ -623,7 +623,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         return n;
     }
 
-    private byte[] readInnerByBuffer(int oneInnerIndex, ByteBuffer buffer, boolean isRefreshLRUCache, int length) {
+    private byte[] readInnerByBuffer(int oneInnerIndex, @NotNull ByteBuffer buffer, boolean isRefreshLRUCache, int length) {
         checkOneInnerIndex(oneInnerIndex);
         if (length > buffer.capacity()) {
             throw new IllegalArgumentException("Read length must be less than buffer capacity=" + buffer.capacity() + ", read length=" + length + ", name=" + name);
@@ -740,7 +740,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         return bytesRead;
     }
 
-    private int writeInnerByBuffer(int oneInnerIndex, ByteBuffer buffer, @NotNull WriteBufferPrepare prepare, boolean isRefreshLRUCache) {
+    private int writeInnerByBuffer(int oneInnerIndex, @NotNull ByteBuffer buffer, @NotNull WriteBufferPrepare prepare, boolean isRefreshLRUCache) {
         checkOneInnerIndex(oneInnerIndex);
 
         int capacity = buffer.capacity();

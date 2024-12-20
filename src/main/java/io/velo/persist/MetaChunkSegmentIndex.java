@@ -6,6 +6,7 @@ import io.velo.repl.Binlog;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +51,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(MetaChunkSegmentIndex.class);
 
-    public MetaChunkSegmentIndex(short slot, File slotDir) throws IOException {
+    public MetaChunkSegmentIndex(short slot, @NotNull File slotDir) throws IOException {
         this.slot = slot;
         this.inMemoryCachedBytes = new byte[allCapacity];
 

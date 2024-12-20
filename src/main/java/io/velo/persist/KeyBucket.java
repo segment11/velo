@@ -3,6 +3,7 @@ package io.velo.persist;
 import io.netty.buffer.Unpooled;
 import io.velo.CompressedValue;
 import io.velo.SnowFlake;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -106,11 +107,11 @@ public class KeyBucket {
         this.lastUpdateSplitNumber = 0;
     }
 
-    public KeyBucket(short slot, int bucketIndex, byte splitIndex, byte splitNumber, @Nullable byte[] bytes, SnowFlake snowFlake) {
+    public KeyBucket(short slot, int bucketIndex, byte splitIndex, byte splitNumber, @Nullable byte[] bytes, @NotNull SnowFlake snowFlake) {
         this(slot, bucketIndex, splitIndex, splitNumber, bytes, 0, snowFlake);
     }
 
-    public KeyBucket(short slot, int bucketIndex, byte splitIndex, byte splitNumber, @Nullable byte[] sharedBytes, int position, SnowFlake snowFlake) {
+    public KeyBucket(short slot, int bucketIndex, byte splitIndex, byte splitNumber, @Nullable byte[] sharedBytes, int position, @NotNull SnowFlake snowFlake) {
         this.slot = slot;
         this.bucketIndex = bucketIndex;
         this.splitIndex = splitIndex;
@@ -165,7 +166,7 @@ public class KeyBucket {
         void call(long keyHash, long expireAt, long seq, byte[] keyBytes, byte[] valueBytes);
     }
 
-    public void iterate(IterateCallBack callBack) {
+    public void iterate(@NotNull IterateCallBack callBack) {
         for (int cellIndex = 0; cellIndex < capacity; cellIndex++) {
             int metaIndex = metaIndex(cellIndex);
             var cellHashValue = buffer.getLong(metaIndex);
@@ -262,9 +263,9 @@ public class KeyBucket {
     }
 
     public interface CvExpiredOrDeletedCallBack {
-        void handle(String key, CompressedValue shortStringCv);
+        void handle(@NotNull String key, @NotNull CompressedValue shortStringCv);
 
-        void handle(String key, PersistValueMeta cv);
+        void handle(@NotNull String key, @NotNull PersistValueMeta cv);
     }
 
     CvExpiredOrDeletedCallBack cvExpiredOrDeletedCallBack;
@@ -274,7 +275,7 @@ public class KeyBucket {
         clearOneExpiredOrDeleted(i, null);
     }
 
-    private void clearOneExpiredOrDeleted(int i, KeyBytesAndValueBytes kvBytesAlreadyGet) {
+    private void clearOneExpiredOrDeleted(int i, @Nullable KeyBytesAndValueBytes kvBytesAlreadyGet) {
         if (i >= capacity) {
             throw new IllegalArgumentException("i >= capacity");
         }

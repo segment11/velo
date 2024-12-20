@@ -4,6 +4,7 @@ import io.velo.ConfForGlobal;
 import io.velo.NeedCleanUp;
 import io.velo.repl.SlaveNeedReplay;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +44,7 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(MetaOneWalGroupSeq.class);
 
-    public MetaOneWalGroupSeq(short slot, File slotDir) throws IOException {
+    public MetaOneWalGroupSeq(short slot, @NotNull File slotDir) throws IOException {
         this.walGroupNumber = Wal.calcWalGroupNumber();
         // 8 bytes long seq for each one wal group, each split index
         this.allCapacity = 8 * walGroupNumber * KeyLoader.MAX_SPLIT_NUMBER;
@@ -83,7 +84,7 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         sb.append("Meta one wal group seq file: ").append(allCapacity).append("\n");
         return allCapacity;
     }

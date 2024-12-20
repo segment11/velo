@@ -1,5 +1,7 @@
 package io.velo.persist;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.ArrayList;
 
 public class LRUPrepareBytesStats {
@@ -15,11 +17,11 @@ public class LRUPrepareBytesStats {
 
     static ArrayList<One> list = new ArrayList<>();
 
-    static void add(Type type, String key, int lruMemoryRequireMB, boolean isExact) {
+    static void add(@NotNull Type type, @NotNull String key, int lruMemoryRequireMB, boolean isExact) {
         list.add(new One(type, key, lruMemoryRequireMB, isExact));
     }
 
-    static void removeOne(Type type, String key) {
+    static void removeOne(@NotNull Type type, @NotNull String key) {
         list.removeIf(one -> one.type == type && one.key.equals(key));
     }
 
@@ -27,7 +29,7 @@ public class LRUPrepareBytesStats {
         return list.stream().mapToInt(one -> one.lruMemoryRequireMB).sum();
     }
 
-    static int sum(Type type) {
+    static int sum(@NotNull Type type) {
         return list.stream().filter(one -> one.type == type).mapToInt(one -> one.lruMemoryRequireMB).sum();
     }
 }

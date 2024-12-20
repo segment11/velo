@@ -7,6 +7,7 @@ import io.velo.StaticMemoryPrepareBytesStats;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,7 +95,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(MetaChunkSegmentFlagSeq.class);
 
-    public MetaChunkSegmentFlagSeq(short slot, File slotDir) throws IOException {
+    public MetaChunkSegmentFlagSeq(short slot, @NotNull File slotDir) throws IOException {
         this.slot = slot;
         this.maxSegmentNumber = ConfForSlot.global.confChunk.maxSegmentNumber();
         this.allCapacity = maxSegmentNumber * ONE_LENGTH;
@@ -133,7 +134,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         sb.append("Meta chunk segment flag seq: ").append(allCapacity).append("\n");
         return allCapacity;
     }
@@ -143,7 +144,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
     }
 
     // performance critical
-    int[] iterateAndFindThoseNeedToMerge(int beginSegmentIndex, int nextSegmentCount, int targetWalGroupIndex, Chunk chunk) {
+    int[] iterateAndFindThoseNeedToMerge(int beginSegmentIndex, int nextSegmentCount, int targetWalGroupIndex, @NotNull Chunk chunk) {
         var findSegmentIndexWithSegmentCount = new int[]{Chunk.NO_NEED_MERGE_SEGMENT_INDEX, 0};
 
         // only find 2 segments at most, or once write too many segments for this batch
@@ -190,7 +191,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
         return findSegmentIndexWithSegmentCount;
     }
 
-    public void iterateRange(int beginSegmentIndex, int segmentCount, IterateCallBack callBack) {
+    public void iterateRange(int beginSegmentIndex, int segmentCount, @NotNull IterateCallBack callBack) {
         var end = Math.min(beginSegmentIndex + segmentCount, maxSegmentNumber);
         for (int segmentIndex = beginSegmentIndex; segmentIndex < end; segmentIndex++) {
             var offset = segmentIndex * ONE_LENGTH;
@@ -203,7 +204,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
-    public void iterateAll(IterateCallBack callBack) {
+    public void iterateAll(@NotNull IterateCallBack callBack) {
         for (int segmentIndex = 0; segmentIndex < ConfForSlot.global.confChunk.maxSegmentNumber(); segmentIndex++) {
             var offset = segmentIndex * ONE_LENGTH;
 
@@ -283,7 +284,11 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
         StatKeyCountInBuckets.writeToRaf(offset, bytes, inMemoryCachedByteBuffer, raf);
     }
 
-    public void setSegmentMergeFlagBatch(int beginSegmentIndex, int segmentCount, byte flagByte, List<Long> segmentSeqList, int walGroupIndex) {
+    public void setSegmentMergeFlagBatch(int beginSegmentIndex,
+                                         int segmentCount,
+                                         byte flagByte,
+                                         @NotNull List<Long> segmentSeqList,
+                                         int walGroupIndex) {
         var offset = beginSegmentIndex * ONE_LENGTH;
 
         var bytes = new byte[segmentCount * ONE_LENGTH];

@@ -3,6 +3,7 @@ package io.velo.persist;
 import io.velo.CompressedValue;
 import io.velo.ConfForSlot;
 import io.velo.KeyHash;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +15,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class KeyBucketsInOneWalGroup {
-    public KeyBucketsInOneWalGroup(short slot, int groupIndex, KeyLoader keyLoader) {
+    public KeyBucketsInOneWalGroup(short slot, int groupIndex, @NotNull KeyLoader keyLoader) {
         this.slot = slot;
         this.keyLoader = keyLoader;
 
@@ -173,9 +174,10 @@ public class KeyBucketsInOneWalGroup {
     final boolean[] isUpdatedBySplitIndex = new boolean[KeyLoader.MAX_SPLIT_NUMBER];
 
     @VisibleForTesting
-    void putPvmListToTargetBucketAfterClearAllIfSplit(List<PersistValueMeta> needAddNewList,
-                                                      List<PersistValueMeta> needUpdateList,
-                                                      List<PersistValueMeta> needDeleteList, Integer bucketIndex) {
+    void putPvmListToTargetBucketAfterClearAllIfSplit(@NotNull List<PersistValueMeta> needAddNewList,
+                                                      @NotNull List<PersistValueMeta> needUpdateList,
+                                                      @NotNull List<PersistValueMeta> needDeleteList,
+                                                      Integer bucketIndex) {
         int relativeBucketIndex = bucketIndex - beginBucketIndex;
         // if split, current split number is new split number
         var currentSplitNumber = splitNumberTmp[relativeBucketIndex];
@@ -229,7 +231,7 @@ public class KeyBucketsInOneWalGroup {
     }
 
     @VisibleForTesting
-    void putPvmListToTargetBucket(List<PersistValueMeta> pvmListThisBucket, Integer bucketIndex) {
+    void putPvmListToTargetBucket(@NotNull List<PersistValueMeta> pvmListThisBucket, Integer bucketIndex) {
         int relativeBucketIndex = bucketIndex - beginBucketIndex;
         var currentSplitNumber = splitNumberTmp[relativeBucketIndex];
 
@@ -303,8 +305,12 @@ public class KeyBucketsInOneWalGroup {
     }
 
     @VisibleForTesting
-    int checkIfNeedSplit(List<PersistValueMeta> pvmListThisBucket, List<PersistValueMeta> needAddNewList, List<PersistValueMeta> needUpdateList,
-                         List<PersistValueMeta> needDeleteList, int bucketIndex, byte currentSplitNumber) {
+    int checkIfNeedSplit(@NotNull List<PersistValueMeta> pvmListThisBucket,
+                         @NotNull List<PersistValueMeta> needAddNewList,
+                         @NotNull List<PersistValueMeta> needUpdateList,
+                         @NotNull List<PersistValueMeta> needDeleteList,
+                         int bucketIndex,
+                         byte currentSplitNumber) {
         var relativeBucketIndex = bucketIndex - beginBucketIndex;
 
         int currentTotalKeyCountThisBucket = 0;
@@ -440,7 +446,7 @@ public class KeyBucketsInOneWalGroup {
         }
     }
 
-    void putAllPvmList(ArrayList<PersistValueMeta> pvmList) {
+    void putAllPvmList(@NotNull ArrayList<PersistValueMeta> pvmList) {
         // group by bucket index
         var pvmListGroupByBucketIndex = pvmList.stream().collect(Collectors.groupingBy(pvm -> pvm.bucketIndex));
         for (var entry : pvmListGroupByBucketIndex.entrySet()) {
@@ -451,7 +457,7 @@ public class KeyBucketsInOneWalGroup {
         }
     }
 
-    void putAll(Collection<Wal.V> shortValueList) {
+    void putAll(@NotNull Collection<Wal.V> shortValueList) {
         var pvmList = new ArrayList<PersistValueMeta>();
         for (var v : shortValueList) {
             pvmList.add(transferWalV(v));
@@ -460,7 +466,7 @@ public class KeyBucketsInOneWalGroup {
     }
 
     @VisibleForTesting
-    static PersistValueMeta transferWalV(Wal.V v) {
+    static PersistValueMeta transferWalV(@NotNull Wal.V v) {
         var pvm = new PersistValueMeta();
         pvm.expireAt = v.expireAt();
         pvm.seq = v.seq();

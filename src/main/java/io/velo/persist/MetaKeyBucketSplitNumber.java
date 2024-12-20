@@ -5,6 +5,7 @@ import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
 import io.velo.repl.SlaveReplay;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -55,7 +56,7 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(MetaKeyBucketSplitNumber.class);
 
-    public MetaKeyBucketSplitNumber(short slot, File slotDir) throws IOException {
+    public MetaKeyBucketSplitNumber(short slot, @NotNull File slotDir) throws IOException {
         this.allCapacity = ConfForSlot.global.confBucket.bucketsPerSlot;
         this.initialSplitNumber = ConfForSlot.global.confBucket.initialSplitNumber;
         log.info("Meta key bucket initial split number={}", initialSplitNumber);
@@ -96,7 +97,7 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         sb.append("Meta key bucket split number: ").append(allCapacity).append("\n");
         return allCapacity;
     }

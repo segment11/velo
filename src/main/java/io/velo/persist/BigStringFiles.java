@@ -3,6 +3,7 @@ package io.velo.persist;
 import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
+import io.velo.NullableOnlyTest;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
@@ -10,6 +11,7 @@ import org.apache.commons.collections4.map.LRUMap;
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +46,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     private static final Logger log = LoggerFactory.getLogger(BigStringFiles.class);
 
-    public BigStringFiles(short slot, File slotDir) throws IOException {
+    public BigStringFiles(short slot, @NullableOnlyTest File slotDir) throws IOException {
         this.slot = slot;
         if (ConfForGlobal.pureMemory) {
             log.warn("Pure memory mode, big string files will not be used, slot={}", slot);
@@ -78,7 +80,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         if (ConfForGlobal.pureMemory) {
             return 0;
         }
@@ -169,7 +171,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
     }
 
-    public boolean writeBigStringBytes(long uuid, String key, byte[] bytes) {
+    public boolean writeBigStringBytes(long uuid, @NotNull String key, byte[] bytes) {
         if (ConfForGlobal.pureMemory) {
             allBytesByUuid.put(uuid, bytes);
             return true;
@@ -226,7 +228,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     }
 
     @Override
-    public void handleWhenCvExpiredOrDeleted(String key, CompressedValue shortStringCv, PersistValueMeta pvm) {
+    public void handleWhenCvExpiredOrDeleted(@NotNull String key, @Nullable CompressedValue shortStringCv, @Nullable PersistValueMeta pvm) {
         if (shortStringCv == null) {
             return;
         }

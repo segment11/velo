@@ -4,6 +4,8 @@ import io.velo.*;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import org.apache.lucene.util.RamUsageEstimator;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -111,13 +113,15 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
-    record PutResult(boolean needPersist, boolean isValueShort, V needPutV, int offset) {
+    record PutResult(boolean needPersist, boolean isValueShort, @Nullable V needPutV, int offset) {
     }
 
     long initMemoryN = 0;
 
-    public Wal(short slot, int groupIndex, RandomAccessFile walSharedFile, RandomAccessFile walSharedFileShortValue,
-               SnowFlake snowFlake) throws IOException {
+    public Wal(short slot, int groupIndex,
+               @NullableOnlyTest RandomAccessFile walSharedFile,
+               @NullableOnlyTest RandomAccessFile walSharedFileShortValue,
+               @NotNull SnowFlake snowFlake) throws IOException {
         this.slot = slot;
         this.groupIndex = groupIndex;
         this.walSharedFile = walSharedFile;
@@ -149,7 +153,7 @@ public class Wal implements InMemoryEstimate {
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         // skip primitive fields
         long size1 = RamUsageEstimator.sizeOfMap(delayToKeyBucketValues);
         long size2 = RamUsageEstimator.sizeOfMap(delayToKeyBucketShortValues);
@@ -233,7 +237,7 @@ public class Wal implements InMemoryEstimate {
     }
 
     @VisibleForTesting
-    int readWal(RandomAccessFile fromWalFile, HashMap<String, V> toMap, boolean isShortValue) throws IOException {
+    int readWal(@NullableOnlyTest RandomAccessFile fromWalFile, @NotNull HashMap<String, V> toMap, boolean isShortValue) throws IOException {
         // for unit test
         if (fromWalFile == null) {
             return 0;
@@ -266,7 +270,7 @@ public class Wal implements InMemoryEstimate {
         return bos.toByteArray();
     }
 
-    private int readBytesToList(HashMap<String, V> toMap, boolean isShortValue, byte[] readBytes, int offset, int length) throws IOException {
+    private int readBytesToList(@NotNull HashMap<String, V> toMap, boolean isShortValue, byte[] readBytes, int offset, int length) throws IOException {
         int n = 0;
         int position = 0;
         long lastSeq = 0;
@@ -364,7 +368,7 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
-    byte[] get(String key) {
+    byte[] get(@NotNull String key) {
         var vShort = delayToKeyBucketShortValues.get(key);
         var v = delayToKeyBucketValues.get(key);
         if (vShort == null && v == null) {
@@ -386,7 +390,7 @@ public class Wal implements InMemoryEstimate {
         return v.cvEncoded;
     }
 
-    PutResult removeDelay(String key, int bucketIndex, long keyHash) {
+    PutResult removeDelay(@NotNull String key, int bucketIndex, long keyHash) {
         byte[] encoded = {CompressedValue.SP_FLAG_DELETE_TMP};
         var v = new V(snowFlake.nextId(), bucketIndex, keyHash, CompressedValue.EXPIRE_NOW,
                 CompressedValue.NULL_DICT_SEQ, key, encoded, false);
@@ -395,7 +399,7 @@ public class Wal implements InMemoryEstimate {
     }
 
     @VisibleForTesting
-    boolean exists(String key) {
+    boolean exists(@NotNull String key) {
         var vShort = delayToKeyBucketShortValues.get(key);
         if (vShort != null) {
             // already removed
@@ -412,7 +416,7 @@ public class Wal implements InMemoryEstimate {
 
     // slave catch up master binlog, replay wal, need update write position, be careful
     @SlaveReplay
-    public void putFromX(V v, boolean isValueShort, int offset) {
+    public void putFromX(@NotNull V v, boolean isValueShort, int offset) {
         if (!ConfForGlobal.pureMemory) {
             var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
             putVToFile(v, isValueShort, offset, targetGroupBeginOffset);
@@ -439,7 +443,7 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
-    private void putVToFile(V v, boolean isValueShort, int offset, int targetGroupBeginOffset) {
+    private void putVToFile(@NotNull V v, boolean isValueShort, int offset, int targetGroupBeginOffset) {
         var raf = isValueShort ? walSharedFileShortValue : walSharedFile;
         try {
             raf.seek(targetGroupBeginOffset + offset);
@@ -451,7 +455,7 @@ public class Wal implements InMemoryEstimate {
     }
 
     // return need persist
-    PutResult put(boolean isValueShort, String key, V v) {
+    PutResult put(boolean isValueShort, @NotNull String key, @NotNull V v) {
         var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
         var offset = isValueShort ? writePositionShortValue : writePosition;
 

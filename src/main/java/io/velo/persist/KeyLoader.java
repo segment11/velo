@@ -8,6 +8,7 @@ import io.velo.repl.SlaveReplay;
 import io.velo.repl.incremental.XOneWalGroupPersist;
 import jnr.posix.LibC;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -28,11 +29,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     static final int MAX_KEY_BUCKET_COUNT_PER_FD = 2 * 1024 * 1024 / 4;
 
     @TestOnly
-    KeyLoader(short slot, int bucketsPerSlot, File slotDir, SnowFlake snowFlake) {
+    KeyLoader(short slot, int bucketsPerSlot, @NotNull File slotDir, @NotNull SnowFlake snowFlake) {
         this(slot, bucketsPerSlot, slotDir, snowFlake, null);
     }
 
-    public KeyLoader(short slot, int bucketsPerSlot, File slotDir, SnowFlake snowFlake, OneSlot oneSlot) {
+    public KeyLoader(short slot, int bucketsPerSlot, @NotNull File slotDir, @NotNull SnowFlake snowFlake, @Nullable OneSlot oneSlot) {
         this.slot = slot;
         this.bucketsPerSlot = bucketsPerSlot;
         this.slotDir = slotDir;
@@ -40,7 +41,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         this.oneSlot = oneSlot;
         this.cvExpiredOrDeletedCallBack = new KeyBucket.CvExpiredOrDeletedCallBack() {
             @Override
-            public void handle(String key, CompressedValue shortStringCv) {
+            public void handle(@NotNull String key, @NotNull CompressedValue shortStringCv) {
                 // for unit test
                 if (oneSlot == null) {
                     log.warn("Short value cv expired, type={}, slot={}", shortStringCv.getDictSeqOrSpType(), slot);
@@ -51,7 +52,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             }
 
             @Override
-            public void handle(String key, PersistValueMeta pvm) {
+            public void handle(@NotNull String key, @NotNull PersistValueMeta pvm) {
                 // for unit test
                 if (oneSlot == null) {
                     log.warn("Cv expired, pvm={}, slot={}", pvm, slot);
@@ -72,7 +73,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         long size = 0;
         size += metaKeyBucketSplitNumber.estimate(sb);
         size += metaOneWalGroupSeq.estimate(sb);
@@ -396,7 +397,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         return true;
     }
 
-    public static boolean isKeyMatch(String key, String matchPattern) {
+    public static boolean isKeyMatch(@NotNull String key, @Nullable String matchPattern) {
         if (matchPattern == null) {
             return true;
         }
@@ -414,8 +415,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         }
     }
 
-    private ScanCursor readKeysToList(ArrayList<String> keys, int walGroupIndex, byte splitIndex, short skipCount,
-                                      byte typeAsByte, String matchPattern, int[] countArray) {
+    private ScanCursor readKeysToList(@NotNull ArrayList<String> keys,
+                                      int walGroupIndex,
+                                      byte splitIndex,
+                                      short skipCount,
+                                      byte typeAsByte,
+                                      @Nullable String matchPattern,
+                                      int[] countArray) {
         var keyCountThisWalGroup = statKeyCountInBuckets.getKeyCountForOneWalGroup(walGroupIndex);
         if (keyCountThisWalGroup == 0) {
             return null;
@@ -490,11 +496,15 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         return null;
     }
 
-    public record ScanCursorWithReturnKeys(ScanCursor scanCursor, ArrayList<String> keys) {
+    public record ScanCursorWithReturnKeys(@NotNull ScanCursor scanCursor, @NotNull ArrayList<String> keys) {
     }
 
-    public ScanCursorWithReturnKeys scan(int walGroupIndex, byte splitIndex, short skipCount,
-                                         byte typeAsByte, String matchPattern, int count) {
+    public ScanCursorWithReturnKeys scan(int walGroupIndex,
+                                         byte splitIndex,
+                                         short skipCount,
+                                         byte typeAsByte,
+                                         @Nullable String matchPattern,
+                                         int count) {
         ArrayList<String> keys = new ArrayList<>(count);
 
         var walGroupNumber = Wal.calcWalGroupNumber();
@@ -634,7 +644,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     @TestOnly
-    private void updateKeyBucketInner(int bucketIndex, KeyBucket keyBucket, boolean isRefreshLRUCache) {
+    private void updateKeyBucketInner(int bucketIndex, @NotNull KeyBucket keyBucket, boolean isRefreshLRUCache) {
         var bytes = keyBucket.encode(true);
         var splitIndex = keyBucket.splitIndex;
 
@@ -655,7 +665,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         return fdReadWrite.readKeyBucketsSharedBytesInOneWalGroup(beginBucketIndex);
     }
 
-    private void doAfterPutAll(int walGroupIndex, XOneWalGroupPersist xForBinlog, KeyBucketsInOneWalGroup inner) {
+    private void doAfterPutAll(int walGroupIndex, @NotNull XOneWalGroupPersist xForBinlog, @NotNull KeyBucketsInOneWalGroup inner) {
         updateKeyCountBatch(walGroupIndex, inner.beginBucketIndex, inner.keyCountForStatsTmp);
         xForBinlog.setKeyCountForStatsTmp(inner.keyCountForStatsTmp);
 
@@ -679,16 +689,21 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         }
     }
 
-    public void updatePvmListBatchAfterWriteSegments(int walGroupIndex, ArrayList<PersistValueMeta> pvmList, XOneWalGroupPersist xForBinlog,
-                                                     KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
-        var inner = keyBucketsInOneWalGroupGiven != null ? keyBucketsInOneWalGroupGiven : new KeyBucketsInOneWalGroup(slot, walGroupIndex, this);
+    public void updatePvmListBatchAfterWriteSegments(int walGroupIndex,
+                                                     @NotNull ArrayList<PersistValueMeta> pvmList,
+                                                     @NotNull XOneWalGroupPersist xForBinlog,
+                                                     @Nullable KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
+        var inner = keyBucketsInOneWalGroupGiven != null ? keyBucketsInOneWalGroupGiven :
+                new KeyBucketsInOneWalGroup(slot, walGroupIndex, this);
         xForBinlog.setBeginBucketIndex(inner.beginBucketIndex);
 
         inner.putAllPvmList(pvmList);
         doAfterPutAll(walGroupIndex, xForBinlog, inner);
     }
 
-    public void persistShortValueListBatchInOneWalGroup(int walGroupIndex, Collection<Wal.V> shortValueList, XOneWalGroupPersist xForBinlog) {
+    public void persistShortValueListBatchInOneWalGroup(int walGroupIndex,
+                                                        @NotNull Collection<Wal.V> shortValueList,
+                                                        @NotNull XOneWalGroupPersist xForBinlog) {
         var inner = new KeyBucketsInOneWalGroup(slot, walGroupIndex, this);
         xForBinlog.setBeginBucketIndex(inner.beginBucketIndex);
 

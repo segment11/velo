@@ -1,5 +1,7 @@
 package io.velo.persist;
 
+import org.jetbrains.annotations.NotNull;
+
 public interface InMemoryEstimate {
-    long estimate(StringBuilder sb);
+    long estimate(@NotNull StringBuilder sb);
 }

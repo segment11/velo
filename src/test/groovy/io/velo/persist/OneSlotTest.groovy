@@ -8,6 +8,8 @@ import io.velo.monitor.BigKeyTopK
 import io.velo.repl.Binlog
 import io.velo.repl.ReplPairTest
 import io.velo.repl.incremental.XWalV
+import org.jetbrains.annotations.NotNull
+import org.jetbrains.annotations.Nullable
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -125,7 +127,7 @@ class OneSlotTest extends Specification {
         oneSlot.handleWhenCvExpiredOrDeleted('', null, null)
         oneSlot.handlersRegisteredList << new HandlerWhenCvExpiredOrDeleted() {
             @Override
-            void handleWhenCvExpiredOrDeleted(String key, CompressedValue shortStringCv, PersistValueMeta pvm) {
+            void handleWhenCvExpiredOrDeleted(@NotNull String key, @Nullable CompressedValue shortStringCv, @Nullable PersistValueMeta pvm) {
                 println "test handle when cv expired or deleted, key: $key, cv: $shortStringCv, pvm: $pvm"
             }
         }

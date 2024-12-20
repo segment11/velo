@@ -6,6 +6,7 @@ import io.velo.ConfForSlot;
 import io.velo.KeyHash;
 import io.velo.SnowFlake;
 import io.velo.metric.InSlotMetricCollector;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -65,7 +66,9 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         }
     }
 
-    ArrayList<SegmentBytesWithIndex> split(ArrayList<Wal.V> list, int[] nextNSegmentIndex, ArrayList<PersistValueMeta> returnPvmList) {
+    ArrayList<SegmentBytesWithIndex> split(@NotNull ArrayList<Wal.V> list,
+                                           int[] nextNSegmentIndex,
+                                           @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         ArrayList<SegmentBytesWithIndex> result = new ArrayList<>(100);
         ArrayList<Wal.V> onceList = new ArrayList<>(100);
 
@@ -104,7 +107,9 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         return result;
     }
 
-    private SegmentBytesWithIndex compressAsSegment(ArrayList<Wal.V> list, int segmentIndex, ArrayList<PersistValueMeta> returnPvmList) {
+    private SegmentBytesWithIndex compressAsSegment(@NotNull ArrayList<Wal.V> list,
+                                                    int segmentIndex,
+                                                    @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         batchCountTotal++;
         batchKvCountTotal += list.size();
 
@@ -119,7 +124,12 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         return new SegmentBytesWithIndex(copyBytes, segmentIndex, segmentSeq);
     }
 
-    static void encodeToBuffer(ArrayList<Wal.V> list, ByteBuffer buffer, ArrayList<PersistValueMeta> returnPvmList, short slot, int segmentIndex, long segmentSeq) {
+    static void encodeToBuffer(@NotNull ArrayList<Wal.V> list,
+                               @NotNull ByteBuffer buffer,
+                               @NotNull ArrayList<PersistValueMeta> returnPvmList,
+                               short slot,
+                               int segmentIndex,
+                               long segmentSeq) {
         // only use key bytes hash to calculate crc
         var crcCalBytes = new byte[8 * list.size()];
         var crcCalBuffer = ByteBuffer.wrap(crcCalBytes);
@@ -176,22 +186,22 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     }
 
     public interface CvCallback {
-        void callback(String key, CompressedValue cv, int offsetInThisSegment);
+        void callback(@NotNull String key, @NotNull CompressedValue cv, int offsetInThisSegment);
     }
 
     @TestOnly
     static class ForDebugCvCallback implements CvCallback {
         @Override
-        public void callback(String key, CompressedValue cv, int offsetInThisSegment) {
+        public void callback(@NotNull String key, @NotNull CompressedValue cv, int offsetInThisSegment) {
             System.out.println("key=" + key + ", cv=" + cv + ", offsetInThisSegment=" + offsetInThisSegment);
         }
     }
 
-    public static void iterateFromSegmentBytes(byte[] segmentBytes, CvCallback cvCallback) {
+    public static void iterateFromSegmentBytes(byte[] segmentBytes, @NotNull CvCallback cvCallback) {
         iterateFromSegmentBytes(segmentBytes, 0, segmentBytes.length, cvCallback);
     }
 
-    public static void iterateFromSegmentBytes(byte[] segmentBytes, int offset, int length, CvCallback cvCallback) {
+    public static void iterateFromSegmentBytes(byte[] segmentBytes, int offset, int length, @NotNull CvCallback cvCallback) {
         var buf = Unpooled.wrappedBuffer(segmentBytes, offset, length).slice();
         // for crc check
         var segmentSeq = buf.readLong();

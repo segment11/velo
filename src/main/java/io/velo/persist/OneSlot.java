@@ -26,6 +26,7 @@ import org.apache.commons.collections4.map.LRUMap;
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -109,7 +110,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.netWorkerEventloop = eventloop;
     }
 
-    public OneSlot(short slot, short slotNumber, SnowFlake snowFlake, File persistDir, Config persistConfig) throws IOException {
+    public OneSlot(short slot, short slotNumber,
+                   @NotNull SnowFlake snowFlake,
+                   @NotNull File persistDir,
+                   @NotNull Config persistConfig) throws IOException {
         this.chunkSegmentLength = ConfForSlot.global.confChunk.segmentLength;
 
         this.slot = slot;
@@ -198,7 +202,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @Override
-    public long estimate(StringBuilder sb) {
+    public long estimate(@NotNull StringBuilder sb) {
         long size = 0;
         long size1 = inMemorySizeOfLRU();
         sb.append("One slot lru: ").append(size1).append("\n");
@@ -249,11 +253,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private static final Logger log = LoggerFactory.getLogger(OneSlot.class);
 
+    private final long masterUuid;
+
     public long getMasterUuid() {
         return masterUuid;
     }
-
-    private final long masterUuid;
 
     @VisibleForTesting
     final ArrayList<ReplPair> replPairs = new ArrayList<>();
@@ -276,7 +280,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return isAsSlave;
     }
 
-    public ArrayList<ReplPair> getSlaveReplPairListSelfAsMaster() {
+    public @NotNull ArrayList<ReplPair> getSlaveReplPairListSelfAsMaster() {
         ArrayList<ReplPair> list = new ArrayList<>();
         for (var replPair : replPairs) {
             if (replPair.isSendBye()) {
@@ -293,7 +297,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     final LinkedList<ReplPair> delayNeedCloseReplPairs = new LinkedList<>();
 
-    public void addDelayNeedCloseReplPair(ReplPair replPair) {
+    public void addDelayNeedCloseReplPair(@NotNull ReplPair replPair) {
         replPair.setPutToDelayListToRemoveTimeMillis(System.currentTimeMillis());
         delayNeedCloseReplPairs.add(replPair);
     }
@@ -306,7 +310,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     // todo, both master - master, need change equal and init as master or slave
-    public ReplPair createReplPairAsSlave(String host, int port) {
+    public ReplPair createReplPairAsSlave(@NotNull String host, int port) {
         var replPair = new ReplPair(slot, false, host, port);
         replPair.setSlaveUuid(masterUuid);
 
@@ -340,17 +344,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return isSelfSlave;
     }
 
-    public ReplPair getReplPairAsMaster(long slaveUuid) {
+    public @Nullable ReplPair getReplPairAsMaster(long slaveUuid) {
         var list = getReplPairAsMasterList();
         return list.stream().filter(one -> one.getSlaveUuid() == slaveUuid).findFirst().orElse(null);
     }
 
-    public ReplPair getFirstReplPairAsMaster() {
+    public @Nullable ReplPair getFirstReplPairAsMaster() {
         var list = getReplPairAsMasterList();
         return list.isEmpty() ? null : list.getFirst();
     }
 
-    public ArrayList<ReplPair> getReplPairAsMasterList() {
+    public @NotNull ArrayList<ReplPair> getReplPairAsMasterList() {
         ArrayList<ReplPair> list = new ArrayList<>();
         for (var replPair : replPairs) {
             if (replPair.isSendBye()) {
@@ -366,7 +370,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return list;
     }
 
-    public ReplPair getReplPairAsSlave(long slaveUuid) {
+    public @Nullable ReplPair getReplPairAsSlave(long slaveUuid) {
         for (var replPair : replPairs) {
             if (replPair.isSendBye()) {
                 continue;
@@ -385,11 +389,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return null;
     }
 
-    public ReplPair getOnlyOneReplPairAsSlave() {
+    public @Nullable ReplPair getOnlyOneReplPairAsSlave() {
         return getReplPairAsSlave(masterUuid);
     }
 
-    public ReplPair createIfNotExistReplPairAsMaster(long slaveUuid, String host, int port) {
+    public @NotNull ReplPair createIfNotExistReplPairAsMaster(long slaveUuid, String host, int port) {
         var replPair = new ReplPair(slot, true, host, port);
         replPair.setSlaveUuid(slaveUuid);
         replPair.setMasterUuid(masterUuid);
@@ -412,13 +416,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private Eventloop netWorkerEventloop;
 
-    public void setRequestHandler(RequestHandler requestHandler) {
+    public void setRequestHandler(@NotNull RequestHandler requestHandler) {
         this.requestHandler = requestHandler;
     }
 
     private RequestHandler requestHandler;
 
-    public Promise<Void> asyncRun(RunnableEx runnableEx) {
+    public Promise<Void> asyncRun(@NotNull RunnableEx runnableEx) {
         var threadId = Thread.currentThread().threadId();
         if (threadId == threadIdProtectedForSafe) {
             try {
@@ -432,7 +436,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return Promise.ofFuture(netWorkerEventloop.submit(runnableEx));
     }
 
-    public <T> Promise<T> asyncCall(SupplierEx<T> supplierEx) {
+    public <T> Promise<T> asyncCall(@NotNull SupplierEx<T> supplierEx) {
         var threadId = Thread.currentThread().threadId();
         if (threadId == threadIdProtectedForSafe) {
             try {
@@ -445,7 +449,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return Promise.ofFuture(netWorkerEventloop.submit(AsyncComputation.of(supplierEx)));
     }
 
-    public void delayRun(int millis, Runnable runnable) {
+    public void delayRun(int millis, @NotNull Runnable runnable) {
         // for unit test
         if (netWorkerEventloop == null) {
             return;
@@ -457,7 +461,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     final ArrayList<HandlerWhenCvExpiredOrDeleted> handlersRegisteredList = new ArrayList<>();
 
     @Override
-    public void handleWhenCvExpiredOrDeleted(String key, CompressedValue shortStringCv, PersistValueMeta pvm) {
+    public void handleWhenCvExpiredOrDeleted(@NotNull String key, @Nullable CompressedValue shortStringCv, @Nullable PersistValueMeta pvm) {
         for (var handler : handlersRegisteredList) {
             handler.handleWhenCvExpiredOrDeleted(key, shortStringCv, pvm);
         }
@@ -479,13 +483,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    public Promise<Void> submitIndexToTargetWorkerJobRun(byte indexWorkerId, Consumer<IndexHandler> consumer) {
+    public Promise<Void> submitIndexToTargetWorkerJobRun(byte indexWorkerId, @NotNull Consumer<IndexHandler> consumer) {
         var indexHandlerPool = LocalPersist.getInstance().getIndexHandlerPool();
         return indexHandlerPool.run(indexWorkerId, consumer);
     }
 
     // when complete, need call submitIndexJobDone
-    public Promise<Void> submitIndexJobRun(String lowerCaseWord, Consumer<IndexHandler> consumer) {
+    public Promise<Void> submitIndexJobRun(@NotNull String lowerCaseWord, @NotNull Consumer<IndexHandler> consumer) {
         pendingSubmitIndexJobRunCount++;
 
         var indexHandlerPool = LocalPersist.getInstance().getIndexHandlerPool();
@@ -583,7 +587,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @TestOnly
-    public void putKvInTargetWalGroupIndexLRU(int walGroupIndex, String key, byte[] cvEncoded) {
+    public void putKvInTargetWalGroupIndexLRU(int walGroupIndex, @NotNull String key, byte[] cvEncoded) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         if (lru == null) {
             return;
@@ -615,7 +619,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         dynConfigKeyWhiteList.add("testKey2");
     }
 
-    public boolean updateDynConfig(String key, String valueString) throws IOException {
+    public boolean updateDynConfig(@NotNull String key, @NotNull String valueString) throws IOException {
         if (BigKeyTopK.KEY_IN_DYN_CONFIG.equals(key)) {
             var k = Integer.parseInt(valueString);
             dynConfig.update(key, k);
@@ -769,7 +773,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return binlog;
     }
 
-    public void appendBinlog(BinlogContent content) {
+    public void appendBinlog(@NotNull BinlogContent content) {
         if (binlog != null) {
             try {
                 binlog.append(content);
@@ -1077,7 +1081,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return keyLoader.warmUp();
     }
 
-    public record BufOrCompressedValue(ByteBuf buf, CompressedValue cv) {
+    public record BufOrCompressedValue(@Nullable ByteBuf buf, @Nullable CompressedValue cv) {
     }
 
     public BufOrCompressedValue get(byte[] keyBytes, int bucketIndex, long keyHash) {
@@ -1159,7 +1163,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return new BufOrCompressedValue(null, cv);
     }
 
-    byte[] getFromWal(String key, int bucketIndex) {
+    byte[] getFromWal(@NotNull String key, int bucketIndex) {
         checkCurrentThreadId();
 
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
@@ -1167,11 +1171,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return targetWal.get(key);
     }
 
-    private byte[] getSegmentBytesByPvm(PersistValueMeta pvm) {
+    private byte[] getSegmentBytesByPvm(@NotNull PersistValueMeta pvm) {
         return chunk.preadOneSegment(pvm.segmentIndex);
     }
 
-    public boolean exists(String key, int bucketIndex, long keyHash) {
+    public boolean exists(@NotNull String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
         var cvEncodedFromWal = getFromWal(key, bucketIndex);
@@ -1184,7 +1188,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return valueBytesWithExpireAtAndSeq != null && !valueBytesWithExpireAtAndSeq.isExpired();
     }
 
-    public boolean remove(String key, int bucketIndex, long keyHash) {
+    public boolean remove(@NotNull String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
         if (exists(key, bucketIndex, keyHash)) {
@@ -1196,7 +1200,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @SlaveNeedReplay
-    public void removeDelay(String key, int bucketIndex, long keyHash) {
+    public void removeDelay(@NotNull String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
@@ -1217,7 +1221,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return threadIdProtectedForSafe;
     }
 
-    public void put(String key, int bucketIndex, CompressedValue cv) {
+    public void put(@NotNull String key, int bucketIndex, @NotNull CompressedValue cv) {
         put(key, bucketIndex, cv, false);
     }
 
@@ -1236,7 +1240,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     @SlaveNeedReplay
     // thread safe, same slot, same event loop
-    public void put(String key, int bucketIndex, CompressedValue cv, boolean isFromMerge) {
+    public void put(@NotNull String key, int bucketIndex, @NotNull CompressedValue cv, boolean isFromMerge) {
         checkCurrentThreadId();
 
         // before put check for better performance, todo
@@ -1299,7 +1303,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @SlaveNeedReplay
-    private void doPersist(int walGroupIndex, String key, Wal.PutResult putResult) {
+    private void doPersist(int walGroupIndex, @NotNull String key, @NotNull Wal.PutResult putResult) {
         var targetWal = walArray[walGroupIndex];
         persistWal(putResult.isValueShort(), targetWal);
 
@@ -1369,7 +1373,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         appendBinlog(new XFlush());
     }
 
-    void initFds(LibC libC) throws IOException {
+    void initFds(@NotNull LibC libC) throws IOException {
         this.libC = libC;
         this.keyLoader.initFds(libC);
 
@@ -1488,15 +1492,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @VisibleForTesting
-    record BeforePersistWalExtFromMerge(ArrayList<Integer> segmentIndexList,
-                                        ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList) {
+    record BeforePersistWalExtFromMerge(@NotNull ArrayList<Integer> segmentIndexList,
+                                        @NotNull ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList) {
         boolean isEmpty() {
             return segmentIndexList.isEmpty();
         }
     }
 
-    record BeforePersistWalExt2FromMerge(ArrayList<Integer> segmentIndexList,
-                                         ArrayList<Wal.V> vList) {
+    record BeforePersistWalExt2FromMerge(@NotNull ArrayList<Integer> segmentIndexList,
+                                         @NotNull ArrayList<Wal.V> vList) {
     }
 
     // for performance, before persist wal, read some segment in same wal group and  merge immediately
@@ -1570,7 +1574,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     long logMergeCount = 0;
 
     @SlaveNeedReplay
-    void persistWal(boolean isShortValue, Wal targetWal) {
+    void persistWal(boolean isShortValue, @NotNull Wal targetWal) {
         var walGroupIndex = targetWal.groupIndex;
         var xForBinlog = new XOneWalGroupPersist(isShortValue, true, walGroupIndex);
         if (isShortValue) {
@@ -1819,7 +1823,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    void setSegmentMergeFlagBatch(int beginSegmentIndex, int segmentCount, byte flagByte, List<Long> segmentSeqList, int walGroupIndex) {
+    void setSegmentMergeFlagBatch(int beginSegmentIndex,
+                                  int segmentCount,
+                                  byte flagByte,
+                                  @NotNull List<Long> segmentSeqList,
+                                  int walGroupIndex) {
         checkBeginSegmentIndex(beginSegmentIndex, segmentCount);
         metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(beginSegmentIndex, segmentCount, flagByte, segmentSeqList, walGroupIndex);
 
@@ -1834,13 +1842,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @VisibleForTesting
-    int doMergeJob(ArrayList<Integer> needMergeSegmentIndexList) {
+    int doMergeJob(@NotNull ArrayList<Integer> needMergeSegmentIndexList) {
         var job = new ChunkMergeJob(slot, needMergeSegmentIndexList, chunkMergeWorker, snowFlake);
         return job.run();
     }
 
     @VisibleForTesting
-    int doMergeJobWhenServerStart(ArrayList<Integer> needMergeSegmentIndexList) {
+    int doMergeJobWhenServerStart(@NotNull ArrayList<Integer> needMergeSegmentIndexList) {
         var job = new ChunkMergeJob(slot, needMergeSegmentIndexList, chunkMergeWorker, snowFlake);
         return job.run();
     }
@@ -1897,7 +1905,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @SlaveReset
-    public void resetAsSlave(String host, int port) throws IOException {
+    public void resetAsSlave(@NotNull String host, int port) throws IOException {
         // clear old as slave catch up binlog info
         // need fetch from the beginning, for data consistency
         metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
@@ -1920,7 +1928,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         log.warn("Repl reset binlog on false as slave, slot={}", slot);
     }
 
-    private int mergeTargetSegments(ArrayList<Integer> needMergeSegmentIndexList, boolean isServerStart) {
+    private int mergeTargetSegments(@NotNull ArrayList<Integer> needMergeSegmentIndexList, boolean isServerStart) {
         int validCvCountTotal = 0;
 
         var firstSegmentIndex = needMergeSegmentIndexList.getFirst();

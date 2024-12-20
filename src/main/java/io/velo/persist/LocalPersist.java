@@ -13,6 +13,7 @@ import io.velo.reply.AsyncReply;
 import io.velo.reply.Reply;
 import jnr.ffi.LibraryLoader;
 import jnr.posix.LibC;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
@@ -30,6 +31,7 @@ public class LocalPersist implements NeedCleanUp {
     public static final int PAGE_SIZE = (int) PageManager.getInstance().pageSize();
     public static final int PROTECTION = PageManager.PROT_READ | PageManager.PROT_WRITE | PageManager.PROT_EXEC;
     public static final short DEFAULT_SLOT_NUMBER = 4;
+
     // 16384, todo
     // 1024 slots, one slot max 100 million keys, 100 million * 1024 = 102.4 billion keys
     // one slot cost 50-100GB, all cost will be 50-100TB
@@ -72,7 +74,7 @@ public class LocalPersist implements NeedCleanUp {
         return oneSlots[slot];
     }
 
-    public <R> AsyncReply doSthInSlots(Function<OneSlot, R> fnApplyOneSlot, Function<ArrayList<R>, Reply> fn) {
+    public <R> AsyncReply doSthInSlots(@NotNull Function<OneSlot, R> fnApplyOneSlot, @NotNull Function<ArrayList<R>, Reply> fn) {
         Promise<R>[] promises = new Promise[oneSlots.length];
         for (int i = 0; i < oneSlots.length; i++) {
             var oneSlot = oneSlots[i];
@@ -101,7 +103,7 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     @TestOnly
-    public void addOneSlot(short slot, Eventloop eventloop) {
+    public void addOneSlot(short slot, @NotNull Eventloop eventloop) {
         try {
             Thread.sleep(100);
         } catch (InterruptedException e) {
@@ -115,6 +117,7 @@ public class LocalPersist implements NeedCleanUp {
         this.oneSlots[slot] = oneSlot;
     }
 
+    @TestOnly
     public void addOneSlotForTest2(short slot) {
         var oneSlot = new OneSlot(slot);
         this.oneSlots = new OneSlot[slot + 1];
@@ -124,7 +127,10 @@ public class LocalPersist implements NeedCleanUp {
     private File persistDir;
     private Config persistConfig;
 
-    public void initSlots(byte netWorkers, short slotNumber, SnowFlake[] snowFlakes, File persistDir, Config persistConfig) throws IOException {
+    public void initSlots(byte netWorkers, short slotNumber,
+                          @NotNull SnowFlake[] snowFlakes,
+                          @NotNull File persistDir,
+                          @NotNull Config persistConfig) throws IOException {
         this.persistDir = persistDir;
         this.persistConfig = persistConfig;
         ConfVolumeDirsForSlot.initFromConfig(persistConfig, slotNumber);
@@ -271,7 +277,7 @@ public class LocalPersist implements NeedCleanUp {
         return socketInspector;
     }
 
-    public void setSocketInspector(SocketInspector socketInspector) {
+    public void setSocketInspector(@Nullable SocketInspector socketInspector) {
         this.socketInspector = socketInspector;
     }
 

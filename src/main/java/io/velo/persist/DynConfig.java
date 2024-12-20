@@ -6,6 +6,7 @@ import io.velo.SocketInspector;
 import io.velo.TrainSampleJob;
 import io.velo.monitor.BigKeyTopK;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,12 +24,12 @@ public class DynConfig {
 
     private final HashMap<String, Object> data;
 
-    public Object get(String key) {
+    public Object get(@NotNull String key) {
         return data.get(key);
     }
 
     public interface AfterUpdateCallback {
-        void afterUpdate(String key, Object value);
+        void afterUpdate(@NotNull String key, @NotNull Object value);
     }
 
     private static class AfterUpdateCallbackInner implements AfterUpdateCallback {
@@ -41,7 +42,7 @@ public class DynConfig {
         }
 
         @Override
-        public void afterUpdate(String key, Object value) {
+        public void afterUpdate(@NotNull String key, @NotNull Object value) {
             if (SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG.equals(key)) {
                 MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections((int) value);
                 log.warn("Dyn config for global set max_connections={}, slot={}", value, currentSlot);
@@ -127,7 +128,7 @@ public class DynConfig {
         update("binlogOn", binlogOn);
     }
 
-    public DynConfig(short slot, File dynConfigFile, OneSlot oneSlot) throws IOException {
+    public DynConfig(short slot, @NotNull File dynConfigFile, @NotNull OneSlot oneSlot) throws IOException {
         this.slot = slot;
         this.dynConfigFile = dynConfigFile;
         this.afterUpdateCallback = new AfterUpdateCallbackInner(slot, oneSlot);
@@ -150,7 +151,7 @@ public class DynConfig {
         }
     }
 
-    public void update(String key, Object value) throws IOException {
+    public void update(@NotNull String key, @NotNull Object value) throws IOException {
         data.put(key, value);
         // write json
         var objectMapper = new ObjectMapper();
