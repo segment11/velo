@@ -109,6 +109,6 @@ class SentinelCommand extends BaseCommand {
             }
         }
 
-        ErrorReply.NOT_SUPPORT
+        ErrorReply.SYNTAX
     }
 }
