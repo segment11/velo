@@ -7,6 +7,7 @@ import io.velo.RequestHandler
 import io.velo.SnowFlake
 import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
+import io.velo.reply.IntegerReply
 import spock.lang.Specification
 
 import java.time.Duration
@@ -150,14 +151,19 @@ class LocalPersistTest extends Specification {
         given:
         byte netWorkers = 1
         short slotNumber = 1
-        def localPersist = LocalPersist.instance
+
+        ConfForGlobal.netListenAddresses = 'localhost:7379'
+        RequestHandler.initMultiShardShadows(netWorkers)
 
         def snowFlakes = new SnowFlake[netWorkers]
         for (int i = 0; i < netWorkers; i++) {
             snowFlakes[i] = new SnowFlake(i + 1, 1)
         }
+
+        def localPersist = LocalPersist.instance
         localPersist.initSlots(netWorkers, slotNumber, snowFlakes, Consts.persistDir,
                 Config.create().with('isHashSaveMemberTogether', 'true'))
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
 
         expect:
         localPersist.isHashSaveMemberTogether
@@ -167,6 +173,17 @@ class LocalPersistTest extends Specification {
         localPersist.hashSaveMemberTogether = false
         then:
         !localPersist.isHashSaveMemberTogether
+
+        when:
+        def reply = localPersist.doSthInSlots(oneSlot -> {
+            return 1L
+        }, (ArrayList<Long> resultList) -> {
+            def sum = resultList.sum() as long
+            return new IntegerReply(sum)
+        })
+        then:
+        reply.settablePromise.getResult() instanceof IntegerReply
+        (reply.settablePromise.getResult() as IntegerReply).integer == 1L
 
         cleanup:
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
