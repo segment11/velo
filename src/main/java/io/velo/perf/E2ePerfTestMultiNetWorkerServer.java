@@ -52,6 +52,8 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
     int netWorkers;
     Eventloop[] netWorkerEventloopArray;
     HashMap<String, byte[]>[] inMemoryLocalData;
+    HashMap<String, byte[]>[] inMemoryThreadLocalData;
+    long[] threadIdArray;
 
     public static final String PROPERTIES_FILE = "velo-e2e-test.properties";
 
@@ -84,8 +86,10 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
         netWorkerEventloopArray = new Eventloop[netWorkersGiven];
 
         inMemoryLocalData = new HashMap[netWorkersGiven];
+        inMemoryThreadLocalData = new HashMap[netWorkersGiven];
         for (int i = 0; i < netWorkersGiven; i++) {
             inMemoryLocalData[i] = new HashMap<>();
+            inMemoryThreadLocalData[i] = new HashMap<>();
         }
 
         return workerPools.createPool(netWorkersGiven);
@@ -171,16 +175,46 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
 
     /*
     start server:
-    java -Xmx2g -Xms2g -XX:+UseZGC -XX:+ZGenerational -Dvelo-e2e-test-netWorkers=2 -cp velo-1.0.0.jar io.velo.perf.E2ePerfTestMultiNetWorkerServer
+    java -Xmx2g -Xms2g -XX:+UseZGC -XX:+ZGenerational -Dvelo-e2e-test-netWorkers=2 -DuseThreadLocalMap=true -cp velo-1.0.0.jar io.velo.perf.E2ePerfTestMultiNetWorkerServer
     run benchmark
     redis-benchmark -p 7379 -r 1000000 -n 10000000 -c 2 -d 200 -t set --threads 1 -P 10
     result:
     60w+ qps
     p999 0.2ms
     p9999 1ms
+    TIPS:
+    when -DuseThreadLocalMap=true, the performance is better than -DuseThreadLocalMap=false
      */
     public static void main(String[] args) throws Exception {
         Launcher launcher = new E2ePerfTestMultiNetWorkerServer() {
+            private static final boolean isUseThreadLocalMap;
+
+            static {
+                isUseThreadLocalMap = "true".equals(System.getProperty("useThreadLocalMap"));
+                System.out.println("use thread local map: " + isUseThreadLocalMap);
+            }
+
+            @Override
+            protected void onStart() throws Exception {
+                threadIdArray = new long[netWorkerEventloopArray.length];
+
+                for (int i = 0; i < netWorkerEventloopArray.length; i++) {
+                    var netWorkerEventloop = netWorkerEventloopArray[i];
+                    assert netWorkerEventloop.getEventloopThread() != null;
+                    threadIdArray[i] = netWorkerEventloop.getEventloopThread().threadId();
+                }
+            }
+
+            HashMap<String, byte[]> threadLocalMap() {
+                var threadId = Thread.currentThread().threadId();
+                for (int i = 0; i < threadIdArray.length; i++) {
+                    if (threadId == threadIdArray[i]) {
+                        return inMemoryThreadLocalData[i];
+                    }
+                }
+                throw new IllegalStateException("thread local map not found");
+            }
+
             @Override
             Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
                 var cmd = request.cmd();
@@ -191,6 +225,13 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
                 if (cmd.equals("set")) {
                     var keyBytes = request.getData()[1];
                     var s = BaseCommand.slot(keyBytes, netWorkers);
+
+                    if (isUseThreadLocalMap) {
+                        var map0 = threadLocalMap();
+                        map0.put(new String(keyBytes), request.getData()[2]);
+                        return Promise.of(OKReply.INSTANCE.buffer());
+                    }
+
                     var map = inMemoryLocalData[s.slot()];
 
                     var targetEventloop = netWorkerEventloopArray[s.slot()];
@@ -209,6 +250,13 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
                 if (cmd.equals("get")) {
                     var keyBytes = request.getData()[1];
                     var s = BaseCommand.slot(keyBytes, netWorkers);
+
+                    if (isUseThreadLocalMap) {
+                        var map0 = threadLocalMap();
+                        var value = map0.get(new String(keyBytes));
+                        return Promise.of(value == null ? NilReply.INSTANCE.buffer() : new BulkReply(value).buffer());
+                    }
+
                     var map = inMemoryLocalData[s.slot()];
 
                     var targetEventloop = netWorkerEventloopArray[s.slot()];
