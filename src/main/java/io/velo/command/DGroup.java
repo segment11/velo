@@ -161,22 +161,16 @@ public class DGroup extends BaseCommand {
                 if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
                     return ErrorReply.KEY_TOO_LONG;
                 }
-                var key = new String(keyBytes);
 
-                var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-                var slot = slotWithKeyHash.slot();
-                var bucketIndex = slotWithKeyHash.bucketIndex();
-                var keyHash = slotWithKeyHash.keyHash();
-
+                var s = slotWithKeyHashListParsed.get(j);
                 // remove delay, perf better
-                var isRemoved = remove(slot, bucketIndex, key, keyHash);
+                var isRemoved = remove(s.slot(), s.bucketIndex(), new String(keyBytes), s.keyHash(), s.keyHash32());
                 if (isRemoved) {
                     n++;
                 }
             }
             return new IntegerReply(n);
         }
-
 
         ArrayList<Promise<ArrayList<Boolean>>> promises = new ArrayList<>();
         // group by slot
@@ -188,8 +182,8 @@ public class DGroup extends BaseCommand {
             var oneSlot = localPersist.oneSlot(slot);
             var p = oneSlot.asyncCall(() -> {
                 ArrayList<Boolean> valueList = new ArrayList<>();
-                for (var one : subList) {
-                    var isRemoved = remove(oneSlot.slot(), one.bucketIndex(), one.rawKey(), one.keyHash());
+                for (var s : subList) {
+                    var isRemoved = remove(oneSlot.slot(), s.bucketIndex(), s.rawKey(), s.keyHash(), s.keyHash32());
                     valueList.add(isRemoved);
                 }
                 return valueList;

@@ -593,7 +593,7 @@ public class BGroup extends BaseCommand {
 
         var key = new String(keyBytes);
         var s = slotWithKeyHashListParsed.getFirst();
-        var isExists = exists(s.slot(), s.bucketIndex(), key, s.keyHash());
+        var isExists = exists(s.slot(), s.bucketIndex(), key, s.keyHash(), s.keyHash32());
 
         RedisBF redisBF;
         if (isExists) {
@@ -664,7 +664,7 @@ public class BGroup extends BaseCommand {
 
         var key = new String(keyBytes);
         var s = slotWithKeyHashListParsed.getFirst();
-        var isExists = exists(s.slot(), s.bucketIndex(), key, s.keyHash());
+        var isExists = exists(s.slot(), s.bucketIndex(), key, s.keyHash(), s.keyHash32());
 
         if (isExists) {
             return ErrorReply.BF_ALREADY_EXISTS;

@@ -60,7 +60,7 @@ public class XGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
-        slotWithKeyHashList.add(new SlotWithKeyHash(slot, 0, 0L));
+        slotWithKeyHashList.add(new SlotWithKeyHash(slot, 0, 0L, 0));
         return slotWithKeyHashList;
     }
 

@@ -24,6 +24,7 @@ public class ConfForGlobal {
 
     public static String dirPath = "/tmp/velo-data";
     public static boolean pureMemory = false;
+    public static boolean pureMemoryV2 = false;
     public static short slotNumber = 1;
     public static byte netWorkers = 1;
     public static byte indexWorkers = 1;

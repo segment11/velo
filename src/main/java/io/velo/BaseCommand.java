@@ -310,7 +310,8 @@ public abstract class BaseCommand {
 
     protected static final Logger log = LoggerFactory.getLogger(BaseCommand.class);
 
-    public record SlotWithKeyHash(short slot, short toClientSlot, int bucketIndex, long keyHash, String rawKey) {
+    public record SlotWithKeyHash(short slot, short toClientSlot, int bucketIndex,
+                                  long keyHash, int keyHash32, String rawKey) {
         @Override
         public String toString() {
             return "SlotWithKeyHash{" +
@@ -324,15 +325,15 @@ public abstract class BaseCommand {
 
         public static final short IGNORE_TO_CLIENT_SLOT = -1;
 
-        public SlotWithKeyHash(short slot, int bucketIndex, long keyHash, String rawKey) {
-            this(slot, IGNORE_TO_CLIENT_SLOT, bucketIndex, keyHash, rawKey);
+        public SlotWithKeyHash(short slot, int bucketIndex, long keyHash, int keyHash32, String rawKey) {
+            this(slot, IGNORE_TO_CLIENT_SLOT, bucketIndex, keyHash, keyHash32, rawKey);
         }
 
-        public SlotWithKeyHash(short slot, int bucketIndex, long keyHash) {
-            this(slot, IGNORE_TO_CLIENT_SLOT, bucketIndex, keyHash, null);
+        public SlotWithKeyHash(short slot, int bucketIndex, long keyHash, int keyHash32) {
+            this(slot, IGNORE_TO_CLIENT_SLOT, bucketIndex, keyHash, keyHash32, null);
         }
 
-        public static final SlotWithKeyHash TO_FIX_FIRST_SLOT = new SlotWithKeyHash((short) 0, 0, 0L, null);
+        public static final SlotWithKeyHash TO_FIX_FIRST_SLOT = new SlotWithKeyHash((short) 0, 0, 0L, 0, null);
     }
 
     @VisibleForTesting
@@ -376,6 +377,7 @@ public abstract class BaseCommand {
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
         var keyHash = KeyHash.hash(keyBytes);
+        var keyHash32 = KeyHash.hash32(keyBytes);
         // bucket index always use xxhash 64
         var bucketIndex = Math.abs(keyHash & (bucketsPerSlot - 1));
 
@@ -383,7 +385,7 @@ public abstract class BaseCommand {
             // use crc16
             var toClientSlot = JedisClusterCRC16.getSlot(keyBytes);
             var innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot);
-            return new SlotWithKeyHash(innerSlot, (short) toClientSlot, (int) bucketIndex, keyHash, new String(keyBytes));
+            return new SlotWithKeyHash(innerSlot, (short) toClientSlot, (int) bucketIndex, keyHash, keyHash32, new String(keyBytes));
         }
 
         final int halfSlotNumber = slotNumber / 2;
@@ -393,12 +395,12 @@ public abstract class BaseCommand {
         if (tagHash != 0L) {
             var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) & (halfSlotNumber - 1));
             var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-            return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, new String(keyBytes));
+            return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, keyHash32, new String(keyBytes));
         }
 
         var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) & (halfSlotNumber - 1));
         var slot = keyHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-        return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, new String(keyBytes));
+        return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, keyHash32, new String(keyBytes));
     }
 
     public SlotWithKeyHash slot(byte[] keyBytes) {
@@ -412,29 +414,29 @@ public abstract class BaseCommand {
         this.byPassGetSet = byPassGetSet;
     }
 
-    public Long getExpireAt(byte[] keyBytes, @NotNull SlotWithKeyHash slotWithKeyHash) {
+    public Long getExpireAt(byte[] keyBytes, @NotNull SlotWithKeyHash s) {
         if (byPassGetSet != null) {
-            var cv = getCv(keyBytes, slotWithKeyHash);
+            var cv = getCv(keyBytes, s);
             if (cv == null) {
                 return null;
             }
             return cv.getExpireAt();
         } else {
-            var slot = slotWithKeyHash.slot();
+            var slot = s.slot();
             var oneSlot = localPersist.oneSlot(slot);
-            return oneSlot.getExpireAt(keyBytes, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
+            return oneSlot.getExpireAt(keyBytes, s.bucketIndex, s.keyHash, s.keyHash32);
         }
     }
 
-    public CompressedValue getCv(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
-        var slot = slotWithKeyHash.slot();
+    public CompressedValue getCv(byte[] keyBytes, SlotWithKeyHash s) {
+        var slot = s.slot();
 
         OneSlot.BufOrCompressedValue bufOrCompressedValue;
         if (byPassGetSet != null) {
-            bufOrCompressedValue = byPassGetSet.getBuf(slot, keyBytes, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
+            bufOrCompressedValue = byPassGetSet.getBuf(slot, keyBytes, s.bucketIndex, s.keyHash);
         } else {
             var oneSlot = localPersist.oneSlot(slot);
-            bufOrCompressedValue = oneSlot.get(keyBytes, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
+            bufOrCompressedValue = oneSlot.get(keyBytes, s.bucketIndex, s.keyHash, s.keyHash32);
         }
 
         if (bufOrCompressedValue == null) {
@@ -442,7 +444,7 @@ public abstract class BaseCommand {
         }
 
         var cv = bufOrCompressedValue.cv() != null ? bufOrCompressedValue.cv() :
-                CompressedValue.decode(bufOrCompressedValue.buf(), keyBytes, slotWithKeyHash.keyHash());
+                CompressedValue.decode(bufOrCompressedValue.buf(), keyBytes, s.keyHash());
         if (cv.isExpired()) {
             return null;
         }
@@ -780,7 +782,7 @@ public abstract class BaseCommand {
         }
     }
 
-    public boolean remove(short slot, int bucketIndex, String key, long keyHash) {
+    public boolean remove(short slot, int bucketIndex, String key, long keyHash, int keyHash32) {
         if (byPassGetSet != null) {
             return byPassGetSet.remove(slot, key);
         }
@@ -791,7 +793,7 @@ public abstract class BaseCommand {
         }
 
         var oneSlot = localPersist.oneSlot(slot);
-        return oneSlot.remove(key, bucketIndex, keyHash);
+        return oneSlot.remove(key, bucketIndex, keyHash, keyHash32);
     }
 
     public void removeDelay(short slot, int bucketIndex, String key, long keyHash) {
@@ -809,14 +811,14 @@ public abstract class BaseCommand {
         oneSlot.removeDelay(key, bucketIndex, keyHash);
     }
 
-    public boolean exists(short slot, int bucketIndex, String key, long keyHash) {
+    public boolean exists(short slot, int bucketIndex, String key, long keyHash, int keyHash32) {
         if (byPassGetSet != null) {
             var bufOrCompressedValue = byPassGetSet.getBuf(slot, key.getBytes(), bucketIndex, keyHash);
             return bufOrCompressedValue != null;
         }
 
         var oneSlot = localPersist.oneSlot(slot);
-        return oneSlot.exists(key, bucketIndex, keyHash);
+        return oneSlot.exists(key, bucketIndex, keyHash, keyHash32);
     }
 
     void handleTrainSampleResult(TrainSampleJob.TrainSampleResult trainSampleResult) {

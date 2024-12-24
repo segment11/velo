@@ -764,7 +764,9 @@ public class MultiWorkerServer extends Launcher {
             }
 
             ConfForGlobal.pureMemory = config.get(ofBoolean(), "pureMemory", false);
+            ConfForGlobal.pureMemoryV2 = config.get(ofBoolean(), "pureMemoryV2", false);
             log.warn("Global config, pureMemory={}", ConfForGlobal.pureMemory);
+            log.warn("Global config, pureMemoryV2={}", ConfForGlobal.pureMemoryV2);
 
             if (config.getChild("zookeeperConnectString").hasValue()) {
                 ConfForGlobal.zookeeperConnectString = config.get(ofString(), "zookeeperConnectString");

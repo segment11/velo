@@ -104,15 +104,10 @@ public class EGroup extends BaseCommand {
                 if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
                     return ErrorReply.KEY_TOO_LONG;
                 }
-                var key = new String(keyBytes);
 
-                var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-                var slot = slotWithKeyHash.slot();
-                var bucketIndex = slotWithKeyHash.bucketIndex();
-                var keyHash = slotWithKeyHash.keyHash();
-
+                var s = slotWithKeyHashListParsed.get(j);
                 // remove delay, perf better
-                var isExists = exists(slot, bucketIndex, key, keyHash);
+                var isExists = exists(s.slot(), s.bucketIndex(), new String(keyBytes), s.keyHash(), s.keyHash32());
                 if (isExists) {
                     n++;
                 }
@@ -130,8 +125,8 @@ public class EGroup extends BaseCommand {
             var oneSlot = localPersist.oneSlot(slot);
             var p = oneSlot.asyncCall(() -> {
                 ArrayList<Boolean> valueList = new ArrayList<>();
-                for (var one : subList) {
-                    var isExists = exists(oneSlot.slot(), one.bucketIndex(), one.rawKey(), one.keyHash());
+                for (var s : subList) {
+                    var isExists = exists(oneSlot.slot(), s.bucketIndex(), s.rawKey(), s.keyHash(), s.keyHash32());
                     valueList.add(isExists);
                 }
                 return valueList;

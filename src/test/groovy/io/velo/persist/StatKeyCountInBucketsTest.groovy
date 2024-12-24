@@ -77,6 +77,11 @@ class StatKeyCountInBucketsTest extends Specification {
         one.keyCount == 30
 
         when:
+        one.setKeyCountForBucketIndex(10, (short) 11)
+        then:
+        one.getKeyCountForBucketIndex(10) == 11
+
+        when:
         def one1 = new StatKeyCountInBuckets(slot, slotDir)
         then:
         one1.getKeyCountForBucketIndex(10) == 10

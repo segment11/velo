@@ -200,21 +200,21 @@ public class RGroup extends BaseCommand {
             return ErrorReply.NO_SUCH_KEY;
         }
 
-        var dstSlotWithKeyHash = slotWithKeyHashListParsed.getLast();
+        var dstS = slotWithKeyHashListParsed.getLast();
         if (!isCrossRequestWorker) {
             if (isNx) {
-                var isExist = exists(dstSlotWithKeyHash.slot(), dstSlotWithKeyHash.bucketIndex(), dstSlotWithKeyHash.rawKey(), dstSlotWithKeyHash.keyHash());
+                var isExist = exists(dstS.slot(), dstS.bucketIndex(), dstS.rawKey(), dstS.keyHash(), dstS.keyHash32());
                 if (isExist) {
                     return IntegerReply.REPLY_0;
                 }
             }
 
             removeDelay(srcSlotWithKeyHash.slot(), srcSlotWithKeyHash.bucketIndex(), srcSlotWithKeyHash.rawKey(), srcSlotWithKeyHash.keyHash());
-            setCv(dstKeyBytes, srcCv, dstSlotWithKeyHash);
+            setCv(dstKeyBytes, srcCv, dstS);
             return isNx ? IntegerReply.REPLY_1 : OKReply.INSTANCE;
         }
 
-        var dstSlot = dstSlotWithKeyHash.slot();
+        var dstSlot = dstS.slot();
         var dstOneSlot = localPersist.oneSlot(dstSlot);
 
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
@@ -222,14 +222,14 @@ public class RGroup extends BaseCommand {
 
         dstOneSlot.asyncCall(() -> {
             if (isNx) {
-                var isExist = exists(dstSlotWithKeyHash.slot(), dstSlotWithKeyHash.bucketIndex(), dstSlotWithKeyHash.rawKey(), dstSlotWithKeyHash.keyHash());
+                var isExist = exists(dstS.slot(), dstS.bucketIndex(), dstS.rawKey(), dstS.keyHash(), dstS.keyHash32());
                 if (isExist) {
                     finalPromise.set(IntegerReply.REPLY_0);
                     return false;
                 }
             }
 
-            setCv(dstKeyBytes, srcCv, dstSlotWithKeyHash);
+            setCv(dstKeyBytes, srcCv, dstS);
             finalPromise.set(isNx ? IntegerReply.REPLY_1 : OKReply.INSTANCE);
             return true;
         }).whenComplete((r, e) -> {

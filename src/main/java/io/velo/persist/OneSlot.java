@@ -1039,7 +1039,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    public Long getExpireAt(byte[] keyBytes, int bucketIndex, long keyHash) {
+    public Long getExpireAt(byte[] keyBytes, int bucketIndex, long keyHash, int keyHash32) {
         checkCurrentThreadId();
 
         var key = new String(keyBytes);
@@ -1069,12 +1069,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
         kvLRUMissTotal++;
 
-        var valueBytesWithExpireAtAndSeq = keyLoader.getValueByKey(bucketIndex, keyBytes, keyHash);
-        if (valueBytesWithExpireAtAndSeq == null) {
-            return null;
-        }
-
-        return valueBytesWithExpireAtAndSeq.expireAt();
+        return keyLoader.getExpireAt(bucketIndex, keyBytes, keyHash, keyHash32);
     }
 
     public int warmUp() {
@@ -1084,7 +1079,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public record BufOrCompressedValue(@Nullable ByteBuf buf, @Nullable CompressedValue cv) {
     }
 
-    public BufOrCompressedValue get(byte[] keyBytes, int bucketIndex, long keyHash) {
+    public BufOrCompressedValue get(byte[] keyBytes, int bucketIndex, long keyHash, int keyHash32) {
         checkCurrentThreadId();
 
         var key = new String(keyBytes);
@@ -1112,7 +1107,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
         kvLRUMissTotal++;
 
-        var valueBytesWithExpireAtAndSeq = keyLoader.getValueByKey(bucketIndex, keyBytes, keyHash);
+        var valueBytesWithExpireAtAndSeq = keyLoader.getValueByKey(bucketIndex, keyBytes, keyHash, keyHash32);
         if (valueBytesWithExpireAtAndSeq == null) {
             return null;
         }
@@ -1175,7 +1170,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return chunk.preadOneSegment(pvm.segmentIndex);
     }
 
-    public boolean exists(@NotNull String key, int bucketIndex, long keyHash) {
+    public boolean exists(@NotNull String key, int bucketIndex, long keyHash, int keyHash32) {
         checkCurrentThreadId();
 
         var cvEncodedFromWal = getFromWal(key, bucketIndex);
@@ -1184,14 +1179,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return !CompressedValue.isDeleted(cvEncodedFromWal);
         }
 
-        var valueBytesWithExpireAtAndSeq = keyLoader.getValueByKey(bucketIndex, key.getBytes(), keyHash);
+        var valueBytesWithExpireAtAndSeq = keyLoader.getValueByKey(bucketIndex, key.getBytes(), keyHash, keyHash32);
         return valueBytesWithExpireAtAndSeq != null && !valueBytesWithExpireAtAndSeq.isExpired();
     }
 
-    public boolean remove(@NotNull String key, int bucketIndex, long keyHash) {
+    public boolean remove(@NotNull String key, int bucketIndex, long keyHash, int keyHash32) {
         checkCurrentThreadId();
 
-        if (exists(key, bucketIndex, keyHash)) {
+        if (exists(key, bucketIndex, keyHash, keyHash32)) {
             removeDelay(key, bucketIndex, keyHash);
             return true;
         } else {
@@ -1257,7 +1252,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var targetWal = walArray[walGroupIndex];
 
         byte[] cvEncoded;
-        boolean isValueShort = cv.noExpire() && (cv.isTypeNumber() || cv.isShortString());
+        boolean isValueShort;
+        // is use faster kv style, save all key and value in record log
+        if (ConfForGlobal.pureMemoryV2) {
+            isValueShort = false;
+        } else {
+            isValueShort = cv.noExpire() && (cv.isTypeNumber() || cv.isShortString());
+        }
         if (isValueShort) {
             if (cv.isTypeNumber()) {
                 cvEncoded = cv.encodeAsNumber();

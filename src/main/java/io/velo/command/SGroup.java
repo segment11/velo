@@ -95,7 +95,7 @@ public class SGroup extends BaseCommand {
             var cursorLong = Long.parseLong(cursor);
             var scanCursor = ScanCursor.fromLong(cursorLong);
 
-            var slotWithKeyHash = new SlotWithKeyHash(scanCursor.slot(), 0, 0L);
+            var slotWithKeyHash = new SlotWithKeyHash(scanCursor.slot(), 0, 0L, 0);
             slotWithKeyHashList.add(slotWithKeyHash);
             return slotWithKeyHashList;
         }

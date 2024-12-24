@@ -32,7 +32,7 @@ public class VGroup extends BaseCommand {
                 var tmpSlot = slot(key.getBytes(), slotNumber);
 
                 // use long id as key hash for tmp save
-                slotWithKeyHashList.add(new SlotWithKeyHash(tmpSlot.slot(), tmpSlot.bucketIndex(), longId, key));
+                slotWithKeyHashList.add(new SlotWithKeyHash(tmpSlot.slot(), tmpSlot.bucketIndex(), longId, 0, key));
                 return slotWithKeyHashList;
             }
         }
@@ -306,7 +306,7 @@ public class VGroup extends BaseCommand {
 
         var key = REVERSE_INDEX_DOC_KEY_PREFIX + longId;
         var keyBytes = key.getBytes();
-        var slotWithKeyHash = new SlotWithKeyHash(slotWithKeyHashTmp.slot(), slotWithKeyHashTmp.bucketIndex(), KeyHash.hash(keyBytes), key);
+        var slotWithKeyHash = new SlotWithKeyHash(slotWithKeyHashTmp.slot(), slotWithKeyHashTmp.bucketIndex(), KeyHash.hash(keyBytes), KeyHash.hash32(keyBytes), key);
 
         var valueBytes = data[2];
 

@@ -34,6 +34,7 @@ public class PersistValueMeta {
     // for reset compare with old CompressedValue
     byte[] keyBytes;
     long keyHash;
+    int keyHash32;
     int bucketIndex;
 
     byte[] extendBytes;

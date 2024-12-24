@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, CanSaveAndLoad {
     private static final int PAGE_NUMBER_PER_BUCKET = 1;
@@ -38,6 +39,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         this.bucketsPerSlot = bucketsPerSlot;
         this.slotDir = slotDir;
         this.snowFlake = snowFlake;
+
         this.oneSlot = oneSlot;
         this.cvExpiredOrDeletedCallBack = new KeyBucket.CvExpiredOrDeletedCallBack() {
             @Override
@@ -78,9 +80,15 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         size += metaKeyBucketSplitNumber.estimate(sb);
         size += metaOneWalGroupSeq.estimate(sb);
         size += statKeyCountInBuckets.estimate(sb);
-        for (var fdReadWrite : fdReadWriteArray) {
-            if (fdReadWrite != null) {
-                size += fdReadWrite.estimate(sb);
+
+
+        if (ConfForGlobal.pureMemoryV2) {
+            size += allKeyHashBuckets.estimate(sb);
+        } else {
+            for (var fdReadWrite : fdReadWriteArray) {
+                if (fdReadWrite != null) {
+                    size += fdReadWrite.estimate(sb);
+                }
             }
         }
         return size;
@@ -92,6 +100,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     final SnowFlake snowFlake;
 
     private final OneSlot oneSlot;
+    final KeyBucket.CvExpiredOrDeletedCallBack cvExpiredOrDeletedCallBack;
 
     @Override
     public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
@@ -107,18 +116,22 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         is.readFully(statKeyCountInBucketsBytes);
         this.statKeyCountInBuckets.overwriteInMemoryCachedBytes(statKeyCountInBucketsBytes);
 
-        // fd read write
-        var fdCount = is.readInt();
-        for (int i = 0; i < fdCount; i++) {
-            var fdIndex = is.readInt();
-            var walGroupCount = is.readInt();
-            var fd = fdReadWriteArray[fdIndex];
-            for (int j = 0; j < walGroupCount; j++) {
-                var walGroupIndex = is.readInt();
-                var readBytesLength = is.readInt();
-                var readBytes = new byte[readBytesLength];
-                is.readFully(readBytes);
-                fd.setSharedBytesFromLastSavedFileToMemory(readBytes, walGroupIndex);
+        if (ConfForGlobal.pureMemoryV2) {
+            allKeyHashBuckets.loadFromLastSavedFileWhenPureMemory(is);
+        } else {
+            // fd read write
+            var fdCount = is.readInt();
+            for (int i = 0; i < fdCount; i++) {
+                var fdIndex = is.readInt();
+                var walGroupCount = is.readInt();
+                var fd = fdReadWriteArray[fdIndex];
+                for (int j = 0; j < walGroupCount; j++) {
+                    var walGroupIndex = is.readInt();
+                    var readBytesLength = is.readInt();
+                    var readBytes = new byte[readBytesLength];
+                    is.readFully(readBytes);
+                    fd.setSharedBytesFromLastSavedFileToMemory(readBytes, walGroupIndex);
+                }
             }
         }
     }
@@ -129,42 +142,44 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         os.write(metaOneWalGroupSeq.getInMemoryCachedBytes());
         os.write(statKeyCountInBuckets.getInMemoryCachedBytes());
 
-        int fdCount = 0;
-        for (var fdReadWrite : fdReadWriteArray) {
-            if (fdReadWrite != null) {
-                fdCount++;
-            }
-        }
-
-        os.writeInt(fdCount);
-        for (int fdIndex = 0; fdIndex < fdReadWriteArray.length; fdIndex++) {
-            var fdReadWrite = fdReadWriteArray[fdIndex];
-            if (fdReadWrite == null) {
-                continue;
-            }
-
-            os.writeInt(fdIndex);
-            int walGroupCount = 0;
-            for (int walGroupIndex = 0; walGroupIndex < fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length; walGroupIndex++) {
-                var sharedBytes = fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex];
-                if (sharedBytes != null) {
-                    walGroupCount++;
+        if (ConfForGlobal.pureMemoryV2) {
+            allKeyHashBuckets.writeToSavedFileWhenPureMemory(os);
+        } else {
+            int fdCount = 0;
+            for (var fdReadWrite : fdReadWriteArray) {
+                if (fdReadWrite != null) {
+                    fdCount++;
                 }
             }
-            os.writeInt(walGroupCount);
 
-            for (int walGroupIndex = 0; walGroupIndex < fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length; walGroupIndex++) {
-                var sharedBytes = fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex];
-                if (sharedBytes != null) {
-                    os.writeInt(walGroupIndex);
-                    os.writeInt(sharedBytes.length);
-                    os.write(sharedBytes);
+            os.writeInt(fdCount);
+            for (int fdIndex = 0; fdIndex < fdReadWriteArray.length; fdIndex++) {
+                var fdReadWrite = fdReadWriteArray[fdIndex];
+                if (fdReadWrite == null) {
+                    continue;
+                }
+
+                os.writeInt(fdIndex);
+                int walGroupCount = 0;
+                for (int walGroupIndex = 0; walGroupIndex < fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length; walGroupIndex++) {
+                    var sharedBytes = fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex];
+                    if (sharedBytes != null) {
+                        walGroupCount++;
+                    }
+                }
+                os.writeInt(walGroupCount);
+
+                for (int walGroupIndex = 0; walGroupIndex < fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length; walGroupIndex++) {
+                    var sharedBytes = fdReadWrite.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex];
+                    if (sharedBytes != null) {
+                        os.writeInt(walGroupIndex);
+                        os.writeInt(sharedBytes.length);
+                        os.write(sharedBytes);
+                    }
                 }
             }
         }
     }
-
-    final KeyBucket.CvExpiredOrDeletedCallBack cvExpiredOrDeletedCallBack;
 
     @VisibleForTesting
     MetaKeyBucketSplitNumber metaKeyBucketSplitNumber;
@@ -250,6 +265,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     @VisibleForTesting
     FdReadWrite[] fdReadWriteArray;
 
+    // for pure memory mode v2
+    @VisibleForTesting
+    AllKeyHashBuckets allKeyHashBuckets;
+
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(KeyLoader.class);
 
     private StatKeyCountInBuckets statKeyCountInBuckets;
@@ -297,15 +316,23 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         this.metaOneWalGroupSeq = new MetaOneWalGroupSeq(slot, slotDir);
         this.statKeyCountInBuckets = new StatKeyCountInBuckets(slot, slotDir);
 
-        this.libC = libC;
-        this.fdReadWriteArray = new FdReadWrite[MAX_SPLIT_NUMBER];
+        if (ConfForGlobal.pureMemoryV2) {
+            this.allKeyHashBuckets = new AllKeyHashBuckets(this.bucketsPerSlot);
+        } else {
+            this.libC = libC;
+            this.fdReadWriteArray = new FdReadWrite[MAX_SPLIT_NUMBER];
 
-        var maxSplitNumber = metaKeyBucketSplitNumber.maxSplitNumber();
-        this.initFds(maxSplitNumber);
+            var maxSplitNumber = metaKeyBucketSplitNumber.maxSplitNumber();
+            this.initFds(maxSplitNumber);
+        }
     }
 
     @VisibleForTesting
     void initFds(byte splitNumber) {
+        if (ConfForGlobal.pureMemoryV2) {
+            return;
+        }
+
         for (int splitIndex = 0; splitIndex < splitNumber; splitIndex++) {
             if (fdReadWriteArray[splitIndex] != null) {
                 continue;
@@ -336,6 +363,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                     fdReadWrite.cleanUp();
                 }
             }
+        }
+
+        if (allKeyHashBuckets != null) {
+            allKeyHashBuckets.cleanUp();
         }
 
         if (metaKeyBucketSplitNumber != null) {
@@ -560,7 +591,32 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         return r;
     }
 
-    KeyBucket.ValueBytesWithExpireAtAndSeq getValueByKey(int bucketIndex, byte[] keyBytes, long keyHash) {
+    Long getExpireAt(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
+        if (ConfForGlobal.pureMemoryV2) {
+            var recordIdWithExpireAtAndSeq = allKeyHashBuckets.get(keyHash32, bucketIndex);
+            if (recordIdWithExpireAtAndSeq == null) {
+                return null;
+            }
+            return recordIdWithExpireAtAndSeq.expireAt();
+        }
+
+        var r = getValueByKey(bucketIndex, keyBytes, keyHash, keyHash32);
+        return r == null ? null : r.expireAt();
+    }
+
+    KeyBucket.ValueBytesWithExpireAtAndSeq getValueByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
+        if (ConfForGlobal.pureMemoryV2) {
+            var recordIdWithExpireAtAndSeq = allKeyHashBuckets.get(keyHash32, bucketIndex);
+            if (recordIdWithExpireAtAndSeq == null) {
+                return null;
+            }
+
+            var recordId = recordIdWithExpireAtAndSeq.recordId();
+            var pvm = AllKeyHashBuckets.recordIdToPvm(recordId);
+
+            return new KeyBucket.ValueBytesWithExpireAtAndSeq(pvm.encode(), recordIdWithExpireAtAndSeq.expireAt(), recordIdWithExpireAtAndSeq.seq());
+        }
+
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
         var splitIndex = KeyHash.splitIndex(keyHash, splitNumber, bucketIndex);
 
@@ -585,7 +641,14 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     // not exact correct when split, just for test or debug, not public
     @TestOnly
-    void putValueByKey(int bucketIndex, byte[] keyBytes, long keyHash, long expireAt, long seq, byte[] valueBytes) {
+    void putValueByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32, long expireAt, long seq, byte[] valueBytes) {
+        if (ConfForGlobal.pureMemoryV2) {
+            // seq as record id
+            allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, seq);
+            allKeyHashBuckets.putLocalValue(seq, valueBytes);
+            return;
+        }
+
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
         var splitIndex = KeyHash.splitIndex(keyHash, splitNumber, bucketIndex);
 
@@ -666,23 +729,34 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     private void doAfterPutAll(int walGroupIndex, @NotNull XOneWalGroupPersist xForBinlog, @NotNull KeyBucketsInOneWalGroup inner) {
-        updateKeyCountBatch(walGroupIndex, inner.beginBucketIndex, inner.keyCountForStatsTmp);
-        xForBinlog.setKeyCountForStatsTmp(inner.keyCountForStatsTmp);
-
-        var sharedBytesList = inner.writeAfterPutBatch();
-        var seqArray = writeSharedBytesList(sharedBytesList, inner.beginBucketIndex);
-        xForBinlog.setSharedBytesListBySplitIndex(sharedBytesList);
-
-        for (int splitIndex = 0; splitIndex < seqArray.length; splitIndex++) {
-            var seq = seqArray[splitIndex];
-            if (seq != 0L) {
-                metaOneWalGroupSeq.set(walGroupIndex, (byte) splitIndex, seq);
+        if (ConfForGlobal.pureMemoryV2) {
+            var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
+            for (int bucketIndex = inner.beginBucketIndex; bucketIndex < oneChargeBucketNumber; bucketIndex++) {
+                var keyCount = allKeyHashBuckets.getKeyCountInBucketIndex(bucketIndex);
+                inner.keyCountForStatsTmp[bucketIndex - inner.beginBucketIndex] = keyCount;
             }
-        }
-        xForBinlog.setOneWalGroupSeqArrayBySplitIndex(seqArray);
 
-        updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp);
-        xForBinlog.setSplitNumberAfterPut(inner.splitNumberTmp);
+            updateKeyCountBatch(walGroupIndex, inner.beginBucketIndex, inner.keyCountForStatsTmp);
+            xForBinlog.setKeyCountForStatsTmp(inner.keyCountForStatsTmp);
+        } else {
+            updateKeyCountBatch(walGroupIndex, inner.beginBucketIndex, inner.keyCountForStatsTmp);
+            xForBinlog.setKeyCountForStatsTmp(inner.keyCountForStatsTmp);
+
+            var sharedBytesList = inner.writeAfterPutBatch();
+            var seqArray = writeSharedBytesList(sharedBytesList, inner.beginBucketIndex);
+            xForBinlog.setSharedBytesListBySplitIndex(sharedBytesList);
+
+            for (int splitIndex = 0; splitIndex < seqArray.length; splitIndex++) {
+                var seq = seqArray[splitIndex];
+                if (seq != 0L) {
+                    metaOneWalGroupSeq.set(walGroupIndex, (byte) splitIndex, seq);
+                }
+            }
+            xForBinlog.setOneWalGroupSeqArrayBySplitIndex(seqArray);
+
+            updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp);
+            xForBinlog.setSplitNumberAfterPut(inner.splitNumberTmp);
+        }
 
         if (oneSlot != null) {
             oneSlot.clearKvInTargetWalGroupIndexLRU(walGroupIndex);
@@ -697,7 +771,22 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 new KeyBucketsInOneWalGroup(slot, walGroupIndex, this);
         xForBinlog.setBeginBucketIndex(inner.beginBucketIndex);
 
-        inner.putAllPvmList(pvmList);
+        if (ConfForGlobal.pureMemoryV2) {
+            // group by bucket index
+            var pvmListGroupByBucketIndex = pvmList.stream().collect(Collectors.groupingBy(pvm -> pvm.bucketIndex));
+            for (var entry : pvmListGroupByBucketIndex.entrySet()) {
+                var bucketIndex = entry.getKey();
+                var pvmListThisBucket = entry.getValue();
+
+                for (var pvm : pvmListThisBucket) {
+                    var recordId = AllKeyHashBuckets.pvmToRecordId(pvm);
+                    allKeyHashBuckets.put(pvm.keyHash32, bucketIndex, pvm.expireAt, recordId);
+                }
+            }
+        } else {
+            inner.putAllPvmList(pvmList);
+        }
+
         doAfterPutAll(walGroupIndex, xForBinlog, inner);
     }
 
@@ -741,7 +830,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     // use wal delay remove instead of remove immediately
     @TestOnly
-    boolean removeSingleKey(int bucketIndex, byte[] keyBytes, long keyHash) {
+    boolean removeSingleKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
+        if (ConfForGlobal.pureMemoryV2) {
+            return allKeyHashBuckets.remove(keyHash32, bucketIndex);
+        }
+
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
         var splitIndex = KeyHash.splitIndex(keyHash, splitNumber, bucketIndex);
 

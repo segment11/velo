@@ -237,7 +237,21 @@ class KeyLoaderTest extends Specification {
         then:
         keyLoader.fdReadWriteArray[0].allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[1].length == 1024
 
+        when:
+        ConfForGlobal.pureMemoryV2 = true
+        def keyLoader2 = prepareKeyLoader()
+        keyLoader2.putValueByKey(0, 'test'.bytes, 1L, 1, 1L, 1L, new byte[10])
+        def bos2 = new ByteArrayOutputStream()
+        def os2 = new DataOutputStream(bos2)
+        keyLoader2.writeToSavedFileWhenPureMemory(os2)
+        def bis2 = new ByteArrayInputStream(bos2.toByteArray())
+        def is2 = new DataInputStream(bis2)
+        keyLoader2.loadFromLastSavedFileWhenPureMemory(is2)
+        then:
+        keyLoader2.getExpireAt(0, 'test'.bytes, 1L, 1) == 1L
+
         cleanup:
+        ConfForGlobal.pureMemoryV2 = false
         keyLoader.flush()
         keyLoader.cleanUp()
         Consts.slotDir.deleteDir()
@@ -273,9 +287,11 @@ class KeyLoaderTest extends Specification {
 
         when:
         def encodeAsShortStringA = Mock.prepareShortStringCvEncoded('a', 'a')
-        keyLoader.putValueByKey(0, 'a'.bytes, 10L, 0L, 1L, encodeAsShortStringA)
-        def valueBytesWithExpireAt = keyLoader.getValueByKey(0, 'a'.bytes, 10L)
+        keyLoader.putValueByKey(0, 'a'.bytes, 10L, 10, 0L, 1L, encodeAsShortStringA)
+        def expireAt = keyLoader.getExpireAt(0, 'a'.bytes, 10L, 10)
+        def valueBytesWithExpireAt = keyLoader.getValueByKey(0, 'a'.bytes, 10L, 10)
         then:
+        expireAt == 0L
         valueBytesWithExpireAt.valueBytes() == encodeAsShortStringA
 
         when:
@@ -284,7 +300,7 @@ class KeyLoaderTest extends Specification {
         def bytes = k0.encode(true)
         keyLoader.fdReadWriteArray[0].writeOneInner(0, bytes, false)
         keyLoader.setMetaKeyBucketSplitNumber(0, (byte) 2)
-        keyLoader.putValueByKey(0, 'b'.bytes, 11L, 0L, 1L, 'b'.bytes)
+        keyLoader.putValueByKey(0, 'b'.bytes, 11L, 11, 0L, 1L, 'b'.bytes)
         def keyBuckets = keyLoader.readKeyBuckets(0)
         println keyLoader.readKeyBucketsToStringForDebug(0)
         then:
@@ -297,10 +313,10 @@ class KeyLoaderTest extends Specification {
         } == 1
 
         when:
-        def isRemoved = keyLoader.removeSingleKey(0, 'a'.bytes, 10L)
+        def isRemoved = keyLoader.removeSingleKey(0, 'a'.bytes, 10L, 10)
         then:
         isRemoved
-        keyLoader.getValueByKey(0, 'a'.bytes, 10L) == null
+        keyLoader.getValueByKey(0, 'a'.bytes, 10L, 10) == null
 
         when:
         def n = keyLoader.warmUp()
@@ -331,9 +347,9 @@ class KeyLoaderTest extends Specification {
         def rawFdReadWrite = keyLoader.fdReadWriteArray[0]
         keyLoader.fdReadWriteArray[0] = null
         def keyBuckets = keyLoader.readKeyBuckets(0)
-        def valueBytesWithExpireAt0 = keyLoader.getValueByKey(0, 'a'.bytes, 10L)
+        def valueBytesWithExpireAt0 = keyLoader.getValueByKey(0, 'a'.bytes, 10L, 10)
         def bytesBatch0 = keyLoader.readBatchInOneWalGroup(splitIndex, 0)
-        def isRemoved0 = keyLoader.removeSingleKey(0, 'a'.bytes, 10L)
+        def isRemoved0 = keyLoader.removeSingleKey(0, 'a'.bytes, 10L, 10)
         then:
         keyBuckets[0] == null
         valueBytesWithExpireAt0 == null
@@ -345,11 +361,11 @@ class KeyLoaderTest extends Specification {
         def keyBucket = new KeyBucket(slot, 0, splitIndex, (byte) 1, null, keyLoader.snowFlake)
         rawFdReadWrite.writeOneInner(0, keyBucket.encode(true), false)
         def encodeAsShortStringA = Mock.prepareShortStringCvEncoded('a', 'a')
-        keyLoader.putValueByKey(0, 'a'.bytes, 10L, 0L, 1L, encodeAsShortStringA)
-        def valueBytesWithExpireAt = keyLoader.getValueByKey(0, 'a'.bytes, 10L)
+        keyLoader.putValueByKey(0, 'a'.bytes, 10L, 10, 0L, 1L, encodeAsShortStringA)
+        def valueBytesWithExpireAt = keyLoader.getValueByKey(0, 'a'.bytes, 10L, 10)
         def bytesBatch = keyLoader.readBatchInOneWalGroup(splitIndex, 0)
-        def isRemoved = keyLoader.removeSingleKey(0, 'a'.bytes, 10L)
-        def isRemoved2 = keyLoader.removeSingleKey(0, 'b'.bytes, 11L)
+        def isRemoved = keyLoader.removeSingleKey(0, 'a'.bytes, 10L, 10)
+        def isRemoved2 = keyLoader.removeSingleKey(0, 'b'.bytes, 11L, 11)
         then:
         valueBytesWithExpireAt.valueBytes() == encodeAsShortStringA
         bytesBatch != null
@@ -425,12 +441,12 @@ class KeyLoaderTest extends Specification {
         when:
         def pvm = new PersistValueMeta()
         // put a expired pvm so can callback
-        keyLoader.putValueByKey(0, 'normal-key'.bytes, 100L, System.currentTimeMillis() - 1, 100L, pvm.encode())
+        keyLoader.putValueByKey(0, 'normal-key'.bytes, 100L, 100, System.currentTimeMillis() - 1, 100L, pvm.encode())
         def xForBinlog = new XOneWalGroupPersist(true, false, 0)
         keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList, xForBinlog)
         then:
         shortValueList.every {
-            keyLoader.getValueByKey(0, it.key().bytes, it.keyHash()).valueBytes() == it.cvEncoded()
+            keyLoader.getValueByKey(0, it.key().bytes, it.keyHash(), KeyHash.hash32(it.key().bytes)).valueBytes() == it.cvEncoded()
         }
 
         when:
@@ -467,6 +483,7 @@ class KeyLoaderTest extends Specification {
             def pvm = new PersistValueMeta()
             pvm.keyBytes = keyBytes
             pvm.keyHash = keyHash
+            pvm.keyHash32 = (int) keyHash
             pvm.bucketIndex = 0
             pvm.segmentOffset = it
             pvmList << pvm
@@ -477,7 +494,7 @@ class KeyLoaderTest extends Specification {
         keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog, null)
         then:
         pvmList.every {
-            keyLoader.getValueByKey(0, it.keyBytes, it.keyHash).valueBytes() == it.encode()
+            keyLoader.getValueByKey(0, it.keyBytes, it.keyHash, it.keyHash32).valueBytes() == it.encode()
         }
 
         when:

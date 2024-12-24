@@ -6,6 +6,7 @@ import io.velo.NeedCleanUp;
 import io.velo.repl.SlaveReplay;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -147,6 +148,12 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @TestOnly
+    void setKeyCountForBucketIndex(int bucketIndex, short keyCount) {
+        var offset = bucketIndex * ONE_LENGTH;
+        inMemoryCachedByteBuffer.putShort(offset, keyCount);
     }
 
     short getKeyCountForBucketIndex(int bucketIndex) {

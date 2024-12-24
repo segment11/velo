@@ -64,7 +64,7 @@ class ManageCommand extends BaseCommand {
                 slot = MultiShard.asInnerSlotByToClientSlot(slot)
             }
 
-            r.add(new SlotWithKeyHash(slot, 0, 0L))
+            r.add(new SlotWithKeyHash(slot, 0, 0L, 0))
             return r
         }
 

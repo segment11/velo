@@ -1,6 +1,7 @@
 package io.velo.persist;
 
 import io.velo.CompressedValue;
+import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.KeyHash;
 import org.jetbrains.annotations.NotNull;
@@ -24,7 +25,9 @@ public class KeyBucketsInOneWalGroup {
         this.keyCountForStatsTmp = new short[oneChargeBucketNumber];
         this.beginBucketIndex = oneChargeBucketNumber * groupIndex;
 
-        this.readBeforePutBatch();
+        if (!ConfForGlobal.pureMemoryV2) {
+            this.readBeforePutBatch();
+        }
     }
 
     private final short slot;
