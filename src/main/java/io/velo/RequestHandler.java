@@ -272,7 +272,8 @@ public class RequestHandler {
         return total;
     }
 
-    private long getCmdCountStat(String cmd) {
+    @VisibleForTesting
+    long getCmdCountStat(String cmd) {
         return cmdStatCountMap.getOrDefault(cmd, 0L);
     }
 
