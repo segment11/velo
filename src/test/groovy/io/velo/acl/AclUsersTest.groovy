@@ -19,7 +19,12 @@ class AclUsersTest extends Specification {
         Thread.start {
             eventloop.run()
         }
-        Eventloop[] testEventloopArray = [eventloop]
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        Thread.sleep(100)
+        Eventloop[] testEventloopArray = [eventloop, eventloopCurrent]
         aclUsers.initByNetWorkerEventloopArray(testEventloopArray)
         aclUsers.upInsert('test') { u ->
             u.password = U.Password.plain('123456')

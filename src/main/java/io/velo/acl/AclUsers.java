@@ -36,7 +36,8 @@ public class AclUsers {
         inners = new Inner[netWorkerEventloopArray.length];
         for (int i = 0; i < netWorkerEventloopArray.length; i++) {
             var eventloop = netWorkerEventloopArray[i];
-            inners[i] = new Inner(eventloop.getEventloopThread().threadId());
+            var eventloopThread = eventloop.getEventloopThread();
+            inners[i] = new Inner(eventloopThread != null ? eventloopThread.threadId() : Thread.currentThread().threadId());
         }
         log.info("Acl users init by net worker eventloop array");
     }
