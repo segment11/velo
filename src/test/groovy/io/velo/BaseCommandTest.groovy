@@ -593,21 +593,21 @@ class BaseCommandTest extends Specification {
         c.set(key.bytes, longValueBytes, sKey, 0, CompressedValue.NO_EXPIRE)
         then:
         inMemoryGetSet.getBuf(slot, key.bytes, sKey.bucketIndex(), sKey.keyHash()).cv().compressedLength < longValueBytes.length
-        c.remove(slot, sKey.bucketIndex(), key, sKey.keyHash())
+        c.remove(slot, sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
 
         when:
         c.byPassGetSet = null
         c.set(key.bytes, longValueBytes, sKey, 0, CompressedValue.NO_EXPIRE)
         then:
         c.getCv(key.bytes, sKey).compressedLength < longValueBytes.length
-        c.remove(slot, sKey.bucketIndex(), key, sKey.keyHash())
+        c.remove(slot, sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
 
         when:
         c.byPassGetSet = inMemoryGetSet
         c.set(key.bytes, '1234'.bytes, sKey, 0, CompressedValue.NO_EXPIRE)
         then:
-        c.exists(slot, sKey.bucketIndex(), key, sKey.keyHash())
-        !c.exists(slot, sKey.bucketIndex(), 'no-exist-key', sKey.keyHash())
+        c.exists(slot, sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
+        !c.exists(slot, sKey.bucketIndex(), 'no-exist-key', sKey.keyHash(), sKey.keyHash32())
 
         when:
         c.removeDelay(slot, sKey.bucketIndex(), key, sKey.keyHash())
@@ -618,13 +618,13 @@ class BaseCommandTest extends Specification {
         c.byPassGetSet = null
         c.set(key.bytes, '1234'.bytes, sKey, 0, CompressedValue.NO_EXPIRE)
         then:
-        c.exists(slot, sKey.bucketIndex(), key, sKey.keyHash())
+        c.exists(slot, sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
 
         when:
         c.removeDelay(slot, sKey.bucketIndex(), key, sKey.keyHash())
         then:
         c.getCv(key.bytes, sKey) == null
-        !c.exists(slot, sKey.bucketIndex(), key, sKey.keyHash())
+        !c.exists(slot, sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
 
         cleanup:
         localPersist.cleanUp()
@@ -742,7 +742,7 @@ class BaseCommandTest extends Specification {
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = 1
         c.setCv('a'.bytes, cv, s)
-        c.remove(slot, s.bucketIndex(), 'a', s.keyHash())
+        c.remove(slot, s.bucketIndex(), 'a', s.keyHash(), s.keyHash32())
         c.removeDelay(slot, s.bucketIndex(), 'a', s.keyHash())
         Thread.sleep(1000)
         then:

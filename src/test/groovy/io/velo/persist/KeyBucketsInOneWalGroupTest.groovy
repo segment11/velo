@@ -42,7 +42,8 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         keyLoader.writeSharedBytesList(sharedBytesList, inner.beginBucketIndex)
         def isSplitNumberChanged = keyLoader.updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp)
         def firstShortValue = shortValueList[0]
-        def valueBytesWithExpireAt = keyLoader.getValueByKey(firstShortValue.bucketIndex(), firstShortValue.key().bytes, firstShortValue.keyHash())
+        def valueBytesWithExpireAt = keyLoader.getValueByKey(firstShortValue.bucketIndex(), firstShortValue.key().bytes,
+                firstShortValue.keyHash(), KeyHash.hash32(firstShortValue.key().bytes))
         then:
         isSplitNumberChanged == inner.isSplit
         valueBytesWithExpireAt.valueBytes() == firstShortValue.cvEncoded()

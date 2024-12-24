@@ -260,7 +260,7 @@ class RequestHandlerTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def key = 'key'
         def sKey = BaseCommand.slot(key.bytes, slotNumber)
-        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash())
+        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
         def getData2 = new byte[2][]
         getData2[0] = 'get'.bytes
         getData2[1] = key.bytes
@@ -318,7 +318,7 @@ class RequestHandlerTest extends Specification {
         setData3[0] = 'set'.bytes
         setData3[1] = key.bytes
         setData3[2] = 'value'.bytes
-        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash())
+        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
         def setRequest = new Request(setData3, false, false)
         setRequest.slotNumber = slotNumber
         requestHandler.parseSlots(setRequest)

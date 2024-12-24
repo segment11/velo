@@ -52,8 +52,8 @@ class ChunkMergeJobTest extends Specification {
         def sTest3 = BaseCommand.slot(testUpdatedByKeyLoaderKey3.bytes, slotNumber)
 
         oneSlot.removeDelay(testRemovedByWalKey0, 0, sTest0.keyHash())
-        oneSlot.keyLoader.removeSingleKey(0, testRemovedByWalKey2.bytes, sTest2.keyHash())
-        oneSlot.keyLoader.putValueByKey(0, testUpdatedByKeyLoaderKey3.bytes, sTest3.keyHash(), 0, 0L, new byte[10])
+        oneSlot.keyLoader.removeSingleKey(0, testRemovedByWalKey2.bytes, sTest2.keyHash(), sTest2.keyHash32())
+        oneSlot.keyLoader.putValueByKey(0, testUpdatedByKeyLoaderKey3.bytes, sTest3.keyHash(), sTest3.keyHash32(), 0L, 0L, new byte[10])
         def cv2 = new CompressedValue()
         cv2.keyHash = sTest1.keyHash()
         cv2.seq = oneSlot.snowFlake.nextId()

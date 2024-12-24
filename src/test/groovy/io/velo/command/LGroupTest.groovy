@@ -582,7 +582,7 @@ class LGroupTest extends Specification {
         reply == MultiBulkReply.NULL
 
         when:
-        SocketInspector.setResp3(socket)
+        SocketInspector.setResp3(socket, true)
         reply = lGroup.lpop(false)
         then:
         reply == NilReply.INSTANCE
