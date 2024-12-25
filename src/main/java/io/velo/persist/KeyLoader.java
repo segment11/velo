@@ -723,9 +723,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     private void doAfterPutAll(int walGroupIndex, @NotNull XOneWalGroupPersist xForBinlog, @NotNull KeyBucketsInOneWalGroup inner) {
         if (ConfForGlobal.pureMemoryV2) {
             var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
-            for (int bucketIndex = inner.beginBucketIndex; bucketIndex < oneChargeBucketNumber; bucketIndex++) {
+            for (int i = 0; i < oneChargeBucketNumber; i++) {
+                var bucketIndex = inner.beginBucketIndex + i;
                 var keyCount = allKeyHashBuckets.getKeyCountInBucketIndex(bucketIndex);
-                inner.keyCountForStatsTmp[bucketIndex - inner.beginBucketIndex] = keyCount;
+                inner.keyCountForStatsTmp[i] = keyCount;
             }
 
             updateKeyCountBatch(walGroupIndex, inner.beginBucketIndex, inner.keyCountForStatsTmp);
