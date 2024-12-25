@@ -147,8 +147,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
     int[] iterateAndFindThoseNeedToMerge(int beginSegmentIndex, int nextSegmentCount, int targetWalGroupIndex, @NotNull Chunk chunk) {
         var findSegmentIndexWithSegmentCount = new int[]{Chunk.NO_NEED_MERGE_SEGMENT_INDEX, 0};
 
-        // only find 2 segments at most, or once write too many segments for this batch
-        final var maxFindSegmentCount = 2;
+        // only find 4 segments at most, or once write too many segments for this batch
+        final var maxFindSegmentCount = 4;
         var segmentCount = 0;
         var end = Math.min(beginSegmentIndex + nextSegmentCount, maxSegmentNumber);
         for (int segmentIndex = beginSegmentIndex; segmentIndex < end; segmentIndex++) {
