@@ -411,22 +411,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     public static final byte typeAsByteZSet = 4;
     public static final byte typeAsByteHash = 5;
 
-    @TestOnly
-    boolean isSpTypeMatch(byte typeAsByte, int spType) {
-        if (typeAsByte == typeAsByteString) {
-            return CompressedValue.isTypeString(spType);
-        } else if (typeAsByte == typeAsByteList) {
-            return CompressedValue.isList(spType);
-        } else if (typeAsByte == typeAsByteSet) {
-            return CompressedValue.isSet(spType);
-        } else if (typeAsByte == typeAsByteZSet) {
-            return CompressedValue.isZSet(spType);
-        } else if (typeAsByte == typeAsByteHash) {
-            return CompressedValue.isHash(spType);
-        }
-        return true;
-    }
-
     static byte transferToShortType(int spType) {
         if (CompressedValue.isTypeString(spType)) {
             return typeAsByteString;

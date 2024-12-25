@@ -519,17 +519,6 @@ class KeyLoaderTest extends Specification {
         ConfForSlot.global.confBucket.initialSplitNumber = (byte) 3
 
         expect:
-        KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteString, CompressedValue.NULL_DICT_SEQ)
-        !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteString, CompressedValue.SP_TYPE_HASH)
-        KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteHash, CompressedValue.SP_TYPE_HASH)
-        !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteHash, CompressedValue.SP_TYPE_LIST)
-        KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteList, CompressedValue.SP_TYPE_LIST)
-        !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteList, CompressedValue.SP_TYPE_SET)
-        KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteSet, CompressedValue.SP_TYPE_SET)
-        !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteSet, CompressedValue.SP_TYPE_ZSET)
-        KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteZSet, CompressedValue.SP_TYPE_ZSET)
-        !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteZSet, CompressedValue.NULL_DICT_SEQ)
-        KeyLoader.isSpTypeMatch((byte) 10, CompressedValue.NULL_DICT_SEQ)
         KeyLoader.transferToShortType(CompressedValue.SP_TYPE_HASH) == KeyLoader.typeAsByteHash
         KeyLoader.transferToShortType(CompressedValue.SP_TYPE_LIST) == KeyLoader.typeAsByteList
         KeyLoader.transferToShortType(CompressedValue.SP_TYPE_SET) == KeyLoader.typeAsByteSet
@@ -582,7 +571,7 @@ class KeyLoaderTest extends Specification {
 
             // one type not match
             if (it == 7) {
-                pvm.spType = CompressedValue.SP_TYPE_HASH
+                pvm.shortType = KeyLoader.typeAsByteHash
             }
 
             pvmList << pvm
