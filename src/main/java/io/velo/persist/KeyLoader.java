@@ -610,11 +610,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 return null;
             }
 
-            var recordId = recordX.recordId();
-            var pvm = AllKeyHashBuckets.recordIdToPvm(recordId);
-
             // record id can be used as seq
-            return new KeyBucket.ValueBytesWithExpireAtAndSeq(pvm.encode(), recordX.expireAt(), recordId);
+            return new KeyBucket.ValueBytesWithExpireAtAndSeq(recordX.toPvm().encode(), recordX.expireAt(), recordX.recordId());
         }
 
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);

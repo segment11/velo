@@ -9,6 +9,8 @@ class AllKeyHashBucketsTest extends Specification {
     def 'test set and get'() {
         given:
         def allKeyHashBuckets = new AllKeyHashBuckets(65536)
+        def x = new AllKeyHashBuckets.RecordIdWithExpireAtAndShortType(0L, 0L, (byte) 0)
+        println x.toPvm()
 
         when:
         def n = 10000 * 100
