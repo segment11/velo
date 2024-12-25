@@ -529,7 +529,7 @@ public class KeyBucket {
                 return PersistValueMeta.decode(valueBytes).positionUuid();
             } else {
                 // short cv, use seq as position uuid
-                return CompressedValue.getSeqFromNumberOrShortStringBytes(valueBytes);
+                return CompressedValue.getSeqFromNumberOrShortStringEncodedBytes(valueBytes);
             }
         }
     }

@@ -172,7 +172,7 @@ public class CompressedValue {
         return buf.array();
     }
 
-    public static long getSeqFromNumberOrShortStringBytes(byte[] bytes) {
+    public static long getSeqFromNumberOrShortStringEncodedBytes(byte[] bytes) {
         return ByteBuffer.wrap(bytes).getLong(1);
     }
 
