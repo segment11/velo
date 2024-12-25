@@ -1510,6 +1510,21 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var currentSegmentIndex = chunk.getSegmentIndex();
         var needMergeSegmentIndex = chunk.needMergeSegmentIndex(false, currentSegmentIndex);
 
+        if (ConfForGlobal.pureMemory) {
+            // do pre-read and merge more frequently to save memory
+            if (chunk.calcSegmentCountStepWhenOverHalfEstimateKeyNumber != 0) {
+                if (currentSegmentIndex >= chunk.calcSegmentCountStepWhenOverHalfEstimateKeyNumber) {
+                    var begin = currentSegmentIndex - chunk.calcSegmentCountStepWhenOverHalfEstimateKeyNumber - 1;
+                    if (begin < 0) {
+                        begin = 0;
+                    }
+                    needMergeSegmentIndex = begin;
+                } else {
+                    needMergeSegmentIndex = chunk.maxSegmentIndex + currentSegmentIndex - chunk.calcSegmentCountStepWhenOverHalfEstimateKeyNumber;
+                }
+            }
+        }
+
         // find continuous segments those wal group index is same from need merge segment index
         // * 4 make sure to find one
         int nextSegmentCount = Math.min(Math.max(walGroupNumber * 4, (chunk.maxSegmentIndex + 1) / 4), 16384);
@@ -1574,6 +1589,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     long logMergeCount = 0;
 
+    long extCvListCheckCountTotal = 0;
+    long extCvValidCountTotal = 0;
+    long extCvInvalidCountTotal = 0;
+
     @SlaveNeedReplay
     void persistWal(boolean isShortValue, @NotNull Wal targetWal) {
         var walGroupIndex = targetWal.groupIndex;
@@ -1595,7 +1614,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         KeyBucketsInOneWalGroup keyBucketsInOneWalGroup = null;
         if (ext != null) {
+            extCvListCheckCountTotal++;
             var cvList = ext.cvList;
+            var cvListCount = cvList.size();
+
+            int validCount = 0;
             // remove those wal exist
             cvList.removeIf(one -> delayToKeyBucketShortValues.containsKey(one.key) || delayToKeyBucketValues.containsKey(one.key));
             if (!cvList.isEmpty()) {
@@ -1616,15 +1639,19 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                         continue;
                     }
 
-                    var isThisKeyUpdated = valueBytesWithExpireAtAndSeq.positionUuid() != one.positionUuid();
+                    var isThisKeyUpdated = valueBytesWithExpireAtAndSeq.seq() != cv.getSeq();
                     if (isThisKeyUpdated) {
                         continue;
                     }
 
                     list.add(new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
                             one.key, cv.encode(), true));
+                    validCount++;
                 }
             }
+            int invalidCount = cvListCount - validCount;
+            extCvValidCountTotal += validCount;
+            extCvInvalidCountTotal += invalidCount;
         }
 
         if (ext2 != null) {
@@ -1820,6 +1847,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (ConfForGlobal.pureMemory) {
             if (Chunk.Flag.canReuse(flagByte)) {
                 chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
+                if (segmentIndex % 1024 == 0) {
+                    log.info("Clear one segment memory bytes when reuse, segment index={}, slot={}", segmentIndex, slot);
+                }
             }
         }
     }
@@ -2153,6 +2183,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         map.put("slot_pending_submit_index_job_count", (double) pendingSubmitIndexJobRunCount);
 
         map.put("slot_avg_ttl_in_second", getAvgTtlInSecond());
+
+        if (extCvListCheckCountTotal > 0) {
+            map.put("slot_ext_cv_list_check_count_total", (double) extCvListCheckCountTotal);
+            map.put("slot_ext_cv_valid_count_total", (double) extCvValidCountTotal);
+            map.put("slot_ext_cv_invalid_count_total", (double) extCvInvalidCountTotal);
+
+            map.put("slot_ext_cv_invalid_ratio", (double) extCvInvalidCountTotal / (extCvValidCountTotal + extCvInvalidCountTotal));
+            map.put("slot_ext_cv_invalid_once_check", (double) extCvInvalidCountTotal / extCvListCheckCountTotal);
+        }
 
         return map;
     }
