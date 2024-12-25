@@ -212,7 +212,9 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
         }
 
         if (!isPut) {
-            log.info("All key hash buckets expand, bucket index={}, from bytes length={}", bucketIndex, bytes.length);
+            if (bucketIndex % 1024 == 0) {
+                log.info("All key hash buckets expand, bucket index={}, from bytes length={}", bucketIndex, bytes.length);
+            }
             // extend capacity * 2
             var newBytes = new byte[bytes.length * 2];
             System.arraycopy(bytes, 0, newBytes, 0, bytes.length);
