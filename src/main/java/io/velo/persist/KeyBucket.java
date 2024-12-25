@@ -23,7 +23,7 @@ public class KeyBucket {
     // readonly
     static final byte[] EMPTY_BYTES = new byte[KeyLoader.KEY_BUCKET_ONE_COST_SIZE];
 
-    // key length short 2 + key length <= 32 + value length byte 1 + (pvm length 14 or short value case encoded number 17 / string 25 ) <= 60
+    // key length short 2 + key length <= 32 + value length byte 1 + (pvm length 12 or short value case encoded number 17 / string 25 ) <= 60
     // if key length > 32, refer CompressedValue.KEY_MAX_LENGTH, one key may cost 2 cells
     // for example, big string cv is short value, encoded length = 48, if key length = 16, will cost 2 cells
     private static final int ONE_CELL_LENGTH = 60;
