@@ -42,6 +42,12 @@ public class XOneWalGroupPersist implements BinlogContent {
         this.keyCountForStatsTmp = keyCountForStatsTmp;
     }
 
+    private byte[][] recordXBytesArray;
+
+    public void setRecordXBytesArray(byte[][] recordXBytesArray) {
+        this.recordXBytesArray = recordXBytesArray;
+    }
+
     private byte[][] sharedBytesListBySplitIndex;
 
     public void setSharedBytesListBySplitIndex(byte[][] sharedBytesListBySplitIndex) {
@@ -106,8 +112,21 @@ public class XOneWalGroupPersist implements BinlogContent {
         n += 1 + 1 + 4;
         // 4 bytes for begin bucket index
         n += 4;
+
         // 4 bytes for key count for stats tmp, 2 bytes for each key count
         n += 4 + keyCountForStatsTmp.length * 2;
+
+        n += 4;
+        if (recordXBytesArray != null) {
+            for (var bytes : recordXBytesArray) {
+                // 4 bytes for each record x bytes length, record x bytes
+                n += 4;
+                if (bytes != null) {
+                    n += bytes.length;
+                }
+            }
+        }
+
         // 4 bytes for shared bytes list by split index size
         n += 4;
         if (sharedBytesListBySplitIndex != null) {
@@ -119,6 +138,7 @@ public class XOneWalGroupPersist implements BinlogContent {
                 }
             }
         }
+
         // 4 bytes for one wal group seq array
         n += 4;
         if (oneWalGroupSeqArrayBySplitIndex != null) {
@@ -137,6 +157,7 @@ public class XOneWalGroupPersist implements BinlogContent {
             // 4 bytes for segment index, 1 byte for flag, 8 bytes for seq
             n += 4 + 1 + 8;
         }
+
         // 4 bytes for updated chunk segment bytes map size
         n += 4;
         for (var entry : updatedChunkSegmentBytesMap.entrySet()) {
@@ -144,6 +165,7 @@ public class XOneWalGroupPersist implements BinlogContent {
             n += 4 + 4;
             n += entry.getValue().length;
         }
+
         // 4 bytes for chunk segment index after persist
         // 4 bytes for chunk merged segment index end last time
         // 4 bytes for last segment seq
@@ -166,6 +188,20 @@ public class XOneWalGroupPersist implements BinlogContent {
         buffer.putInt(keyCountForStatsTmp.length);
         for (var keyCount : keyCountForStatsTmp) {
             buffer.putShort(keyCount);
+        }
+
+        if (recordXBytesArray != null) {
+            buffer.putInt(recordXBytesArray.length);
+            for (var recordXBytes : recordXBytesArray) {
+                if (recordXBytes == null) {
+                    buffer.putInt(0);
+                } else {
+                    buffer.putInt(recordXBytes.length);
+                    buffer.put(recordXBytes);
+                }
+            }
+        } else {
+            buffer.putInt(0);
         }
 
         if (sharedBytesListBySplitIndex != null) {
@@ -235,6 +271,20 @@ public class XOneWalGroupPersist implements BinlogContent {
         }
         x.setKeyCountForStatsTmp(keyCountForStatsTmp);
 
+        var recordXBytesArraySize = buffer.getInt();
+        if (recordXBytesArraySize != 0) {
+            var recordXBytesArray = new byte[recordXBytesArraySize][];
+            for (var i = 0; i < recordXBytesArraySize; i++) {
+                var recordXBytesLength = buffer.getInt();
+                if (recordXBytesLength > 0) {
+                    var recordXBytes = new byte[recordXBytesLength];
+                    buffer.get(recordXBytes);
+                    recordXBytesArray[i] = recordXBytes;
+                }
+            }
+            x.setRecordXBytesArray(recordXBytesArray);
+        }
+
         var sharedBytesListBySplitIndexSize = buffer.getInt();
         if (sharedBytesListBySplitIndexSize != 0) {
             var sharedBytesListBySplitIndex = new byte[sharedBytesListBySplitIndexSize][];
@@ -296,15 +346,22 @@ public class XOneWalGroupPersist implements BinlogContent {
 
         var keyLoader = oneSlot.getKeyLoader();
         keyLoader.updateKeyCountBatch(walGroupIndex, beginBucketIndex, keyCountForStatsTmp);
+
+        if (recordXBytesArray != null) {
+            keyLoader.updateRecordXBytesArray(recordXBytesArray);
+        }
+
         if (sharedBytesListBySplitIndex != null) {
             keyLoader.writeSharedBytesList(sharedBytesListBySplitIndex, beginBucketIndex);
         }
+
         for (int splitIndex = 0; splitIndex < oneWalGroupSeqArrayBySplitIndex.length; splitIndex++) {
             var seq = oneWalGroupSeqArrayBySplitIndex[splitIndex];
             if (seq != 0L) {
                 keyLoader.setMetaOneWalGroupSeq((byte) splitIndex, beginBucketIndex, seq);
             }
         }
+
         keyLoader.updateMetaKeyBucketSplitNumberBatchIfChanged(beginBucketIndex, splitNumberAfterPut);
 
         for (var entry : updatedChunkSegmentFlagWithSeqMap.entrySet()) {

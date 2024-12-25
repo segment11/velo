@@ -840,7 +840,25 @@ public class XGroup extends BaseCommand {
         var masterOneWalGroupSeq = oneSlot.getKeyLoader().getMetaOneWalGroupSeq(splitIndex, beginBucketIndex);
         var isSkip = masterOneWalGroupSeq == oneWalGroupSeq;
         if (!isSkip) {
-            bytes = oneSlot.getKeyLoader().readBatchInOneWalGroup(splitIndex, beginBucketIndex);
+            if (ConfForGlobal.pureMemoryV2) {
+                // repl all key hash buckets' records
+                var recordXBytesArray = oneSlot.getKeyLoader().getRecordsBytesArrayInOneWalGroup(beginBucketIndex);
+                // array size int
+                var len = 4;
+                for (var recordXBytes : recordXBytesArray) {
+                    len += 4 + recordXBytes.length;
+                }
+
+                bytes = new byte[len];
+                var buffer1 = ByteBuffer.wrap(bytes);
+                buffer1.putInt(recordXBytesArray.length);
+                for (var recordXBytes : recordXBytesArray) {
+                    buffer1.putInt(recordXBytes.length);
+                    buffer1.put(recordXBytes);
+                }
+            } else {
+                bytes = oneSlot.getKeyLoader().readBatchInOneWalGroup(splitIndex, beginBucketIndex);
+            }
         }
 
         if (bytes == null) {
@@ -880,25 +898,49 @@ public class XGroup extends BaseCommand {
                     splitIndex, beginBucketIndex, slot);
         }
 
-        if (!isSkip) {
-            var sharedBytesList = new byte[splitIndex + 1][];
-            if (leftLength == 0) {
-                // clear local key buckets
-                sharedBytesList[splitIndex] = new byte[KeyLoader.KEY_BUCKET_ONE_COST_SIZE * oneChargeBucketNumber];
+        boolean isAllReceived;
+        boolean isLastBatchInThisSplit = false;
+        if (ConfForGlobal.pureMemoryV2) {
+            if (!isSkip) {
+                var arraySize = buffer.getInt();
+                var recordXBytesArray = new byte[arraySize][];
+                for (var i = 0; i < arraySize; i++) {
+                    var recordBytesLength = buffer.getInt();
+                    var recordBytes = new byte[recordBytesLength];
+                    buffer.get(recordBytes);
+                    recordXBytesArray[i] = recordBytes;
+                }
+
+                oneSlot.getKeyLoader().updateRecordXBytesArray(recordXBytesArray);
+                oneSlot.getKeyLoader().setMetaOneWalGroupSeq(splitIndex, beginBucketIndex, masterOneWalGroupSeq);
             } else {
-                // overwrite key buckets
-                var sharedBytes = new byte[leftLength];
-                buffer.get(sharedBytes);
-                sharedBytesList[splitIndex] = sharedBytes;
+                replPair.increaseStatsCountWhenSlaveSkipFetch(s_exists_key_buckets);
             }
-            oneSlot.getKeyLoader().writeSharedBytesList(sharedBytesList, beginBucketIndex);
-            oneSlot.getKeyLoader().setMetaOneWalGroupSeq(splitIndex, beginBucketIndex, masterOneWalGroupSeq);
+
+            isLastBatchInThisSplit = beginBucketIndex == ConfForSlot.global.confBucket.bucketsPerSlot - oneChargeBucketNumber;
+            isAllReceived = isLastBatchInThisSplit;
         } else {
-            replPair.increaseStatsCountWhenSlaveSkipFetch(s_exists_key_buckets);
+            if (!isSkip) {
+                var sharedBytesList = new byte[splitIndex + 1][];
+                if (leftLength == 0) {
+                    // clear local key buckets
+                    sharedBytesList[splitIndex] = new byte[KeyLoader.KEY_BUCKET_ONE_COST_SIZE * oneChargeBucketNumber];
+                } else {
+                    // overwrite key buckets
+                    var sharedBytes = new byte[leftLength];
+                    buffer.get(sharedBytes);
+                    sharedBytesList[splitIndex] = sharedBytes;
+                }
+                oneSlot.getKeyLoader().writeSharedBytesList(sharedBytesList, beginBucketIndex);
+                oneSlot.getKeyLoader().setMetaOneWalGroupSeq(splitIndex, beginBucketIndex, masterOneWalGroupSeq);
+            } else {
+                replPair.increaseStatsCountWhenSlaveSkipFetch(s_exists_key_buckets);
+            }
+
+            isLastBatchInThisSplit = beginBucketIndex == ConfForSlot.global.confBucket.bucketsPerSlot - oneChargeBucketNumber;
+            isAllReceived = splitIndex == maxSplitNumber - 1 && isLastBatchInThisSplit;
         }
 
-        boolean isLastBatchInThisSplit = beginBucketIndex == ConfForSlot.global.confBucket.bucketsPerSlot - oneChargeBucketNumber;
-        var isAllReceived = splitIndex == maxSplitNumber - 1 && isLastBatchInThisSplit;
         if (isAllReceived) {
             log.warn("Repl slave fetch all key buckets done, slot={}", slot);
 
@@ -910,6 +952,11 @@ public class XGroup extends BaseCommand {
         } else {
             var nextSplitIndex = isLastBatchInThisSplit ? splitIndex + 1 : splitIndex;
             var nextBeginBucketIndex = isLastBatchInThisSplit ? 0 : beginBucketIndex + oneChargeBucketNumber;
+
+            if (ConfForGlobal.pureMemoryV2) {
+                nextSplitIndex = 0;
+                nextBeginBucketIndex = beginBucketIndex + oneChargeBucketNumber;
+            }
 
             var requestBytes = new byte[1 + 4 + 8];
             var requestBuffer = ByteBuffer.wrap(requestBytes);

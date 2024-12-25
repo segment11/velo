@@ -138,4 +138,15 @@ class AllKeyHashBucketsTest extends Specification {
             allKeyHashBuckets2.get(it + 1, it).expireAt() == 10L
         }
     }
+
+    def 'test repl'() {
+        given:
+        def allKeyHashBuckets = new AllKeyHashBuckets(65536)
+
+        when:
+        def bb = allKeyHashBuckets.getRecordsBytesArrayByWalGroupIndex(0)
+        then:
+        bb.length == ConfForSlot.global.confWal.oneChargeBucketNumber
+        bb[0].length == 344
+    }
 }

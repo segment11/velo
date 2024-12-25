@@ -1,6 +1,8 @@
 package io.velo.persist;
 
 import io.velo.CompressedValue;
+import io.velo.ConfForGlobal;
+import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
@@ -8,6 +10,7 @@ import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -34,22 +37,75 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
     private static final Logger log = LoggerFactory.getLogger(AllKeyHashBuckets.class);
 
     public AllKeyHashBuckets(int bucketsPerSlot) {
+        final int arrayLength;
         final int initCapacity;
-        if (bucketsPerSlot <= 64 * 1024) {
-            // cache line size * 2
-            initCapacity = 128;
-        } else if (bucketsPerSlot <= 256 * 1024) {
-            initCapacity = 256;
+        if (ConfForGlobal.pureMemoryV2) {
+            if (bucketsPerSlot <= 64 * 1024) {
+                // cache line size * 2
+                initCapacity = 128;
+            } else if (bucketsPerSlot <= 256 * 1024) {
+                initCapacity = 256;
+            } else {
+                initCapacity = 512;
+            }
+            arrayLength = bucketsPerSlot;
         } else {
-            initCapacity = 512;
+            // always init for easy test, cost less memory
+            initCapacity = 64;
+            arrayLength = 1024;
         }
 
-        this.allKeyHash32BitBytes = new byte[bucketsPerSlot][];
-        this.allRecordIdBytes = new byte[bucketsPerSlot][];
-        for (int i = 0; i < bucketsPerSlot; i++) {
+        this.allKeyHash32BitBytes = new byte[arrayLength][];
+        this.allRecordIdBytes = new byte[arrayLength][];
+        for (int i = 0; i < arrayLength; i++) {
             this.allKeyHash32BitBytes[i] = new byte[initCapacity];
             this.allRecordIdBytes[i] = new byte[initCapacity * 4];
         }
+    }
+
+    // for repl
+    public byte[][] getRecordsBytesArrayByWalGroupIndex(int walGroupIndex) {
+        var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
+        var recordXBytesArray = new byte[oneChargeBucketNumber][];
+
+        var beginBucketIndex = oneChargeBucketNumber * walGroupIndex;
+        for (int i = 0; i < oneChargeBucketNumber; i++) {
+            var bucketIndex = i + beginBucketIndex;
+
+            var bytes = allKeyHash32BitBytes[bucketIndex];
+            var byteBuffer = ByteBuffer.wrap(bytes);
+
+            var bytesRecordId = allRecordIdBytes[bucketIndex];
+            var buffer = ByteBuffer.wrap(bytesRecordId);
+
+            var bos = new ByteArrayOutputStream();
+            try (var dataOs = new DataOutputStream(bos)) {
+                dataOs.writeInt(bucketIndex);
+                var recordCount = bytes.length / 4;
+                dataOs.writeInt(recordCount);
+
+                for (int j = 0; j < recordCount; j++) {
+                    var keyHash32 = byteBuffer.getInt(j * 4);
+
+                    var offset = j * 8;
+                    var recordId = buffer.getLong(offset);
+                    var l = buffer.getLong(offset + 8);
+                    var expireAt = l >>> 16;
+                    var shortType = (byte) (l & 0xFF);
+
+                    dataOs.writeInt(keyHash32);
+                    dataOs.writeLong(expireAt);
+                    dataOs.writeByte(shortType);
+                    dataOs.writeLong(recordId);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+            recordXBytesArray[i] = bos.toByteArray();
+        }
+
+        return recordXBytesArray;
     }
 
     public record RecordIdWithExpireAtAndShortType(long recordId, long expireAt, byte shortType) {

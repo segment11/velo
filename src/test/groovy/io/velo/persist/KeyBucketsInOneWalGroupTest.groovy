@@ -336,6 +336,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         pvm.seq = 97L
         pvm.keyBytes = 'a'.bytes
         pvm.keyHash = KeyHash.hash('a'.bytes)
+        pvm.keyHash32 = KeyHash.hash32('a'.bytes)
         pvm.bucketIndex = 0
         pvm.isFromMerge = false
         pvm.extendBytes = 'a'.bytes
@@ -381,6 +382,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         pvm.seq = 97L
         pvm.keyBytes = 'aa'.bytes
         pvm.keyHash = 97L
+        pvm.keyHash32 = 97L
         pvm.bucketIndex = 0
         pvm.isFromMerge = false
         pvm.extendBytes = 'aa'.bytes

@@ -1,10 +1,7 @@
 package io.velo.repl.incremental
 
 import io.velo.ConfForSlot
-import io.velo.persist.Chunk
-import io.velo.persist.Consts
-import io.velo.persist.LocalPersist
-import io.velo.persist.LocalPersistTest
+import io.velo.persist.*
 import io.velo.repl.BinlogContent
 import io.velo.repl.ReplPairTest
 import spock.lang.Specification
@@ -12,6 +9,31 @@ import spock.lang.Specification
 import java.nio.ByteBuffer
 
 class XOneWalGroupPersistTest extends Specification {
+    static byte[][] mockRecordXBytesArray(int n) {
+        def recordXBytesArray = new byte[n][]
+        for (i in 0..<n) {
+            def bos = new ByteArrayOutputStream()
+            def dataOs = new DataOutputStream(bos)
+
+            // bucket index
+            dataOs.writeInt(i)
+            // record count
+            dataOs.writeInt(2)
+            2.times { j ->
+                // key hash 32
+                dataOs.writeInt(i * 100 + j)
+                // expire at
+                dataOs.writeLong(0L)
+                // short type
+                dataOs.writeByte(KeyLoader.typeAsByteString)
+                // record id
+                dataOs.writeLong(0L)
+            }
+            recordXBytesArray[i] = bos.toByteArray()
+        }
+        recordXBytesArray
+    }
+
     def 'test encode and decode'() {
         given:
         def x = new XOneWalGroupPersist(true, true, 0)
@@ -22,15 +44,23 @@ class XOneWalGroupPersistTest extends Specification {
         when:
         x.beginBucketIndex = 0
         x.keyCountForStatsTmp = [1, 2, 3]
+
+        x.recordXBytesArray = mockRecordXBytesArray(2)
+
         def sharedBytesList = new byte[3][]
         sharedBytesList[0] = new byte[ConfForSlot.global.confWal.oneChargeBucketNumber * 4096]
         x.sharedBytesListBySplitIndex = sharedBytesList
+
         x.oneWalGroupSeqArrayBySplitIndex = [0L, 1L, 2L]
+
         byte[] splitNumberAfterPut = [3, 3, 3]
         x.splitNumberAfterPut = splitNumberAfterPut
+
         x.putUpdatedChunkSegmentFlagWithSeq(0, Chunk.Flag.new_write.flagByte(), 0L)
         x.putUpdatedChunkSegmentFlagWithSeq(1, Chunk.Flag.new_write.flagByte(), 1L)
+
         x.putUpdatedChunkSegmentBytes(0, new byte[4096])
+
         x.chunkSegmentIndexAfterPersist = 100
         x.chunkMergedSegmentIndexEndLastTime = 1000
         x.lastSegmentSeq = 1L

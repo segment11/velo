@@ -443,8 +443,16 @@ class XGroupTest extends Specification {
         // key buckets exists
         r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8 + sharedBytesList[0].length
 
+        when:
+        ConfForGlobal.pureMemoryV2 = true
+        r = x.handleRepl()
+        then:
+        r.isReplType(ReplType.s_exists_key_buckets)
+        r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8 + (4 + (4 + 344) * ConfForSlot.global.confWal.oneChargeBucketNumber)
+
         // stat_key_count_in_buckets
         when:
+        ConfForGlobal.pureMemoryV2 = false
         data4[2][0] = ReplType.stat_key_count_in_buckets.code
         contentBytes = new byte[0]
         data4[3] = contentBytes
@@ -925,8 +933,41 @@ class XGroupTest extends Specification {
         // next step
         r.isReplType(ReplType.exists_chunk_segments)
 
+        when:
+        ConfForGlobal.pureMemoryV2 = true
+        contentBytes = new byte[1 + 1 + 4 + 1 + 8 + (4 + (4 + 344) * 2)]
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        // split index
+        requestBuffer.put((byte) 0)
+        // max split number
+        requestBuffer.put((byte) 1)
+        // begin bucket index
+        requestBuffer.putInt(ConfForSlot.global.confBucket.bucketsPerSlot - ConfForSlot.global.confWal.oneChargeBucketNumber)
+        // is skip flag
+        requestBuffer.put((byte) 0)
+        // one wal group seq
+        requestBuffer.putLong(0)
+        // mock 2 buckets record bytes array, length == 2
+        requestBuffer.putInt(2)
+        def recordXBytesArray = oneSlot.keyLoader.getRecordsBytesArrayInOneWalGroup(0)
+        int ccc = 0
+        for (var recordXBytes : recordXBytesArray) {
+            requestBuffer.putInt(recordXBytes.length)
+            requestBuffer.put(recordXBytes)
+            ccc++
+            if (ccc == 2) {
+                break
+            }
+        }
+        data4[3] = contentBytes
+        r = x.handleRepl()
+        then:
+        // next step
+        r.isReplType(ReplType.exists_chunk_segments)
+
         // s_stat_key_count_in_buckets
         when:
+        ConfForGlobal.pureMemoryV2 = false
         data4[2][0] = ReplType.s_stat_key_count_in_buckets.code
         contentBytes = new byte[ConfForSlot.global.confBucket.bucketsPerSlot * 2]
         data4[3] = contentBytes
