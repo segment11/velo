@@ -606,7 +606,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             }
 
             // record id can be used as seq
-            return new KeyBucket.ValueBytesWithExpireAtAndSeq(recordX.toPvm().encode(), recordX.expireAt(), recordX.recordId());
+            return new KeyBucket.ValueBytesWithExpireAtAndSeq(recordX.toPvm().encode(), recordX.expireAt(), recordX.seq());
         }
 
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
@@ -792,6 +792,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                         dataOs.writeLong(pvm.expireAt);
                         dataOs.writeByte(pvm.shortType);
                         dataOs.writeLong(recordId);
+                        dataOs.writeLong(pvm.seq);
                     }
                 } catch (IOException e) {
                     throw new RuntimeException(e);
