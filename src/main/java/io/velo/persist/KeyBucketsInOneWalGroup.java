@@ -16,14 +16,14 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class KeyBucketsInOneWalGroup {
-    public KeyBucketsInOneWalGroup(short slot, int groupIndex, @NotNull KeyLoader keyLoader) {
+    public KeyBucketsInOneWalGroup(short slot, int walGroupIndex, @NotNull KeyLoader keyLoader) {
         this.slot = slot;
         this.keyLoader = keyLoader;
 
         var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
         this.oneChargeBucketNumber = oneChargeBucketNumber;
         this.keyCountForStatsTmp = new short[oneChargeBucketNumber];
-        this.beginBucketIndex = oneChargeBucketNumber * groupIndex;
+        this.beginBucketIndex = oneChargeBucketNumber * walGroupIndex;
 
         if (!ConfForGlobal.pureMemoryV2) {
             this.readBeforePutBatch();

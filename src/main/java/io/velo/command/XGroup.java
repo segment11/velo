@@ -707,13 +707,13 @@ public class XGroup extends BaseCommand {
         }
     }
 
-    private RawBytesContent requestExistsWal(OneSlot oneSlot, int groupIndex) {
+    private RawBytesContent requestExistsWal(OneSlot oneSlot, int walGroupIndex) {
         // 4 bytes int for group index, 8 bytes long for last seq, 8 bytes long for last seq of short value
         var requestBytes = new byte[4 + 8 + 8];
         var requestBuffer = ByteBuffer.wrap(requestBytes);
-        requestBuffer.putInt(groupIndex);
+        requestBuffer.putInt(walGroupIndex);
 
-        var targetWal = oneSlot.getWalByGroupIndex(groupIndex);
+        var targetWal = oneSlot.getWalByGroupIndex(walGroupIndex);
         requestBuffer.putLong(targetWal.getLastSeqAfterPut());
         requestBuffer.putLong(targetWal.getLastSeqShortValueAfterPut());
 
