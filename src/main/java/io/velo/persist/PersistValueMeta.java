@@ -1,17 +1,16 @@
 package io.velo.persist;
 
 import io.activej.bytebuf.ByteBuf;
-import io.velo.CompressedValue;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import static io.velo.CompressedValue.NO_EXPIRE;
 
-public class PersistValueMeta {
-    // 2 bytes for 0 means not a compress value (number or short string), 4 bytes for type int + segment sub block index byte (short)
-    // + length int + segment index int + segment offset int
+public class PersistValueMeta implements UniquePosition {
+    // 2 bytes for 0 means not a compress value (number or short string), short type byte + segment sub block index byte
+    // + segment index int + segment offset int
     // may other metadata in the future
     @VisibleForTesting
-    static final int ENCODED_LENGTH = 2 + 4 + 2 + 4 + 4 + 4;
+    static final int ENCODED_LENGTH = 2 + 1 + 1 + 4 + 4;
 
     // CompressedValue encoded length is much more than PersistValueMeta encoded length
     public static boolean isPvm(byte[] bytes) {
@@ -21,10 +20,9 @@ public class PersistValueMeta {
     }
 
     // for scan filter, need not read chunk segment
-    int spType = CompressedValue.NULL_DICT_SEQ;
+    byte shortType = KeyLoader.typeAsByteString;
     // if segment can be compressed, one chunk segment includes 1-4 compressed block(segment)s
     byte subBlockIndex;
-    public int length;
     int segmentIndex;
     int segmentOffset;
     // need remove expired pvm in key loader to compress better, or reduce split
@@ -54,14 +52,13 @@ public class PersistValueMeta {
     }
 
     public String shortString() {
-        return "l=" + length + ", si=" + segmentIndex + ", sbi=" + subBlockIndex + ", so=" + segmentOffset;
+        return "si=" + segmentIndex + ", sbi=" + subBlockIndex + ", so=" + segmentOffset;
     }
 
     @Override
     public String toString() {
         return "PersistValueMeta{" +
-                "spType=" + spType +
-                ", length=" + length +
+                "shortType=" + shortType +
                 ", segmentIndex=" + segmentIndex +
                 ", subBlockIndex=" + subBlockIndex +
                 ", segmentOffset=" + segmentOffset +
@@ -73,9 +70,8 @@ public class PersistValueMeta {
         var bytes = new byte[ENCODED_LENGTH];
         var buf = ByteBuf.wrapForWriting(bytes);
         buf.writeShort((short) 0);
-        buf.writeInt(spType);
-        buf.writeShort(subBlockIndex);
-        buf.writeInt(length);
+        buf.writeByte(shortType);
+        buf.writeByte(subBlockIndex);
         buf.writeInt(segmentIndex);
         buf.writeInt(segmentOffset);
         return bytes;
@@ -85,12 +81,20 @@ public class PersistValueMeta {
         var buf = ByteBuf.wrapForReading(bytes);
         var pvm = new PersistValueMeta();
         buf.readShort(); // skip 0
-        pvm.spType = buf.readInt();
-        pvm.subBlockIndex = (byte) buf.readShort();
-        pvm.length = buf.readInt();
+        pvm.shortType = buf.readByte();
+        pvm.subBlockIndex = buf.readByte();
         pvm.segmentIndex = buf.readInt();
         pvm.segmentOffset = buf.readInt();
         return pvm;
     }
 
+    @Override
+    public long positionUuid() {
+        // max segment index = 512 * 1024 * 64 - 1 < 2 ^ 25
+        // max sub block index = 3 < 2 ^ 2
+        // max segment length = 4 * 1024 * 16 = 2 ^ 16
+        return (((long) segmentIndex) << (18 + 18 + 2))
+                | (((long) subBlockIndex) << (18 + 18))
+                | (((long) segmentOffset & 0x3FFFF) << 18);
+    }
 }

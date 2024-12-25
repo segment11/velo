@@ -1120,7 +1120,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         var pvm = PersistValueMeta.decode(valueBytes);
-        var segmentBytes = getSegmentBytesByPvm(pvm);
+        var segmentBytes = getSegmentBytesBySegmentIndex(pvm.segmentIndex);
         if (segmentBytes == null) {
             throw new IllegalStateException("Load persisted segment bytes error, pvm=" + pvm);
         }
@@ -1166,8 +1166,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return targetWal.get(key);
     }
 
-    private byte[] getSegmentBytesByPvm(@NotNull PersistValueMeta pvm) {
-        return chunk.preadOneSegment(pvm.segmentIndex);
+    private byte[] getSegmentBytesBySegmentIndex(int segmentIndex) {
+        return chunk.preadOneSegment(segmentIndex);
     }
 
     public boolean exists(@NotNull String key, int bucketIndex, long keyHash, int keyHash32) {
@@ -1616,7 +1616,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                         continue;
                     }
 
-                    var isThisKeyUpdated = valueBytesWithExpireAtAndSeq.seq() > cv.getSeq();
+                    var isThisKeyUpdated = valueBytesWithExpireAtAndSeq.positionUuid() != one.positionUuid();
                     if (isThisKeyUpdated) {
                         continue;
                     }

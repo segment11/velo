@@ -161,10 +161,9 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             pvm.bucketIndex = v.bucketIndex();
             pvm.isFromMerge = v.isFromMerge();
 
-            pvm.spType = v.spType();
+            pvm.shortType = KeyLoader.transferToShortType(v.spType());
             // tmp 0, then update
             pvm.subBlockIndex = 0;
-            pvm.length = length;
             // tmp current segment index, then update
             pvm.segmentIndex = segmentIndex;
             pvm.segmentOffset = offsetInThisSegment;

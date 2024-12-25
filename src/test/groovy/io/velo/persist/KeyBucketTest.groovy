@@ -20,11 +20,15 @@ class KeyBucketTest extends Specification {
         def x = new KeyBucket.ValueBytesWithExpireAtAndSeq('a'.bytes, 0L, 97L)
         def x2 = new KeyBucket.ValueBytesWithExpireAtAndSeq('a'.bytes, System.currentTimeMillis() - 1000, 97L)
         def x3 = new KeyBucket.ValueBytesWithExpireAtAndSeq('a'.bytes, System.currentTimeMillis() + 1000, 97L)
+        def x4 = new KeyBucket.ValueBytesWithExpireAtAndSeq(new PersistValueMeta().encode(), System.currentTimeMillis() + 1000, 100L)
+        def x5 = new KeyBucket.ValueBytesWithExpireAtAndSeq(new byte[9], System.currentTimeMillis() + 1000, 100L)
 
         expect:
         KeyBucket.KVMeta.calcCellCount((short) 16, (byte) 24) == 1
         KeyBucket.KVMeta.calcCellCount((short) 16, (byte) 41) == 1
         KeyBucket.KVMeta.calcCellCount((short) 16, (byte) 42) == 2
+        x4.positionUuid() == 0L
+        x5.positionUuid() == 0L
 
         kvMeta.cellCount() == 1
         kvMeta2.cellCount() == 2

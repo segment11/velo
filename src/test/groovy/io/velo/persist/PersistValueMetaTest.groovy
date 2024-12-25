@@ -1,6 +1,5 @@
 package io.velo.persist
 
-
 import spock.lang.Specification
 
 class PersistValueMetaTest extends Specification {
@@ -21,13 +20,13 @@ class PersistValueMetaTest extends Specification {
     def 'test encode'() {
         given:
         def one = new PersistValueMeta()
-        one.spType = 0
+        one.shortType = (byte) 0
         one.subBlockIndex = (byte) 0
-        one.length = 100
         one.segmentIndex = 10
         one.segmentOffset = 10
 
         println one.shortString()
+        println one.positionUuid()
 
         when:
         def encoded = one.encode()

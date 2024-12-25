@@ -172,6 +172,10 @@ public class CompressedValue {
         return buf.array();
     }
 
+    public static long getSeqFromNumberOrShortStringBytes(byte[] bytes) {
+        return ByteBuffer.wrap(bytes).getLong(1);
+    }
+
     public Number numberValue() {
         return switch (dictSeqOrSpType) {
             case SP_TYPE_NUM_BYTE -> compressedData[0];

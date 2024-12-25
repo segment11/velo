@@ -518,9 +518,19 @@ public class KeyBucket {
         return true;
     }
 
-    public record ValueBytesWithExpireAtAndSeq(byte[] valueBytes, long expireAt, long seq) {
+    public record ValueBytesWithExpireAtAndSeq(byte[] valueBytes, long expireAt, long seq) implements UniquePosition {
         boolean isExpired() {
             return expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis();
+        }
+
+        @Override
+        public long positionUuid() {
+            if (PersistValueMeta.isPvm(valueBytes)) {
+                return PersistValueMeta.decode(valueBytes).positionUuid();
+            } else {
+                // short cv, use seq as position uuid
+                return CompressedValue.getSeqFromNumberOrShortStringBytes(valueBytes);
+            }
         }
     }
 

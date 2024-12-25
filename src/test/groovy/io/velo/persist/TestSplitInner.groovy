@@ -18,7 +18,7 @@ println keyBucket.size
 //}
 
 def inner = new KeyBucketsInOneWalGroup((byte) 0, 0, null)
-inner.splitNumberTmp= [1]
+inner.splitNumberTmp = [1]
 inner.listList << [keyBucket]
 
 List<PersistValueMeta> pvmList = []
@@ -33,4 +33,4 @@ for (key in keysAdd) {
     pvmList << pvm
 }
 
-inner.putPvmListToTargetBucket(pvmList, 0, false)
+inner.putPvmListToTargetBucket(pvmList, 0)

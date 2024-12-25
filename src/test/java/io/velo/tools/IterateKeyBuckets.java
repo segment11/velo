@@ -58,11 +58,11 @@ public class IterateKeyBuckets {
 
             keyWithValueBytes.forEach((key, valueBytes) -> {
                 if (PersistValueMeta.isPvm(valueBytes)) {
-                    var pvm = PersistValueMeta.decode(valueBytes);
-                    var isNormal = pvm.length == cvNormalLength;
-                    if (doLog || !isNormal) {
-                        System.out.println("key=" + key + ", pvm=" + pvm.shortString());
-                    }
+//                    var pvm = PersistValueMeta.decode(valueBytes);
+//                    var isNormal = pvm.length == cvNormalLength;
+//                    if (doLog || !isNormal) {
+//                        System.out.println("key=" + key + ", pvm=" + pvm.shortString());
+//                    }
                 } else {
                     var cv = CompressedValue.decode(Unpooled.wrappedBuffer(valueBytes), null, 0);
                     System.out.println("key=" + key + ", value=" + cv);

@@ -1,6 +1,5 @@
 package io.velo.persist;
 
-import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
@@ -412,8 +411,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     public static final byte typeAsByteZSet = 4;
     public static final byte typeAsByteHash = 5;
 
-    @VisibleForTesting
-    static boolean isSpTypeMatch(byte typeAsByte, int spType) {
+    @TestOnly
+    boolean isSpTypeMatch(byte typeAsByte, int spType) {
         if (typeAsByte == typeAsByteString) {
             return CompressedValue.isTypeString(spType);
         } else if (typeAsByte == typeAsByteList) {
@@ -426,6 +425,22 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return CompressedValue.isHash(spType);
         }
         return true;
+    }
+
+    static byte transferToShortType(int spType) {
+        if (CompressedValue.isTypeString(spType)) {
+            return typeAsByteString;
+        } else if (CompressedValue.isList(spType)) {
+            return typeAsByteList;
+        } else if (CompressedValue.isSet(spType)) {
+            return typeAsByteSet;
+        } else if (CompressedValue.isZSet(spType)) {
+            return typeAsByteZSet;
+        } else if (CompressedValue.isHash(spType)) {
+            return typeAsByteHash;
+        } else {
+            return typeAsByteIgnore;
+        }
     }
 
     public static boolean isKeyMatch(@NotNull String key, @Nullable String matchPattern) {
@@ -495,12 +510,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 if (typeAsByte != typeAsByteIgnore) {
                     if (PersistValueMeta.isPvm(valueBytes)) {
                         var pvm = PersistValueMeta.decode(valueBytes);
-                        if (!isSpTypeMatch(typeAsByte, pvm.spType)) {
+                        if (typeAsByte != pvm.shortType) {
                             return;
                         }
                     } else {
-                        var shortStringCv = CompressedValue.decode(Unpooled.wrappedBuffer(valueBytes), keyBytes, 0L);
-                        if (!isSpTypeMatch(typeAsByte, shortStringCv.getDictSeqOrSpType())) {
+                        // number or short string, is string
+                        if (typeAsByte != typeAsByteString) {
                             return;
                         }
                     }
@@ -593,11 +608,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     Long getExpireAt(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
         if (ConfForGlobal.pureMemoryV2) {
-            var recordIdWithExpireAtAndSeq = allKeyHashBuckets.get(keyHash32, bucketIndex);
-            if (recordIdWithExpireAtAndSeq == null) {
+            var recordX = allKeyHashBuckets.get(keyHash32, bucketIndex);
+            if (recordX == null) {
                 return null;
             }
-            return recordIdWithExpireAtAndSeq.expireAt();
+            return recordX.expireAt();
         }
 
         var r = getValueByKey(bucketIndex, keyBytes, keyHash, keyHash32);
@@ -606,15 +621,16 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     KeyBucket.ValueBytesWithExpireAtAndSeq getValueByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
         if (ConfForGlobal.pureMemoryV2) {
-            var recordIdWithExpireAtAndSeq = allKeyHashBuckets.get(keyHash32, bucketIndex);
-            if (recordIdWithExpireAtAndSeq == null) {
+            var recordX = allKeyHashBuckets.get(keyHash32, bucketIndex);
+            if (recordX == null) {
                 return null;
             }
 
-            var recordId = recordIdWithExpireAtAndSeq.recordId();
+            var recordId = recordX.recordId();
             var pvm = AllKeyHashBuckets.recordIdToPvm(recordId);
 
-            return new KeyBucket.ValueBytesWithExpireAtAndSeq(pvm.encode(), recordIdWithExpireAtAndSeq.expireAt(), recordIdWithExpireAtAndSeq.seq());
+            // record id can be used as seq
+            return new KeyBucket.ValueBytesWithExpireAtAndSeq(pvm.encode(), recordX.expireAt(), recordId);
         }
 
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
@@ -644,7 +660,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     void putValueByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32, long expireAt, long seq, byte[] valueBytes) {
         if (ConfForGlobal.pureMemoryV2) {
             // seq as record id
-            allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, seq);
+            allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, typeAsByteIgnore, seq);
             allKeyHashBuckets.putLocalValue(seq, valueBytes);
             return;
         }
@@ -780,7 +796,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
                 for (var pvm : pvmListThisBucket) {
                     var recordId = AllKeyHashBuckets.pvmToRecordId(pvm);
-                    allKeyHashBuckets.put(pvm.keyHash32, bucketIndex, pvm.expireAt, recordId);
+                    allKeyHashBuckets.put(pvm.keyHash32, bucketIndex, pvm.expireAt, pvm.shortType, recordId);
                 }
             }
         } else {

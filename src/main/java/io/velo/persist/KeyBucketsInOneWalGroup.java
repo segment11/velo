@@ -99,6 +99,10 @@ public class KeyBucketsInOneWalGroup {
     }
 
     KeyBucket.ValueBytesWithExpireAtAndSeq getValue(int bucketIndex, byte[] keyBytes, long keyHash) {
+        if (ConfForGlobal.pureMemoryV2) {
+            return keyLoader.getValueByKey(bucketIndex, keyBytes, keyHash, KeyHash.hash32(keyBytes));
+        }
+
         int relativeBucketIndex = bucketIndex - beginBucketIndex;
         var currentSplitNumber = splitNumberTmp[relativeBucketIndex];
         var splitIndex = KeyHash.splitIndex(keyHash, currentSplitNumber, bucketIndex);

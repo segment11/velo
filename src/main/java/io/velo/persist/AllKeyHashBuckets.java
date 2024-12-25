@@ -13,7 +13,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
-import java.util.Random;
 
 // pure memory v2
 // refer to faster
@@ -53,10 +52,15 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
         }
     }
 
-    public record RecordIdWithExpireAtAndSeq(long recordId, long expireAt, long seq) {
+    public record RecordIdWithExpireAtAndShortType(long recordId, long expireAt, byte shortType) {
+        PersistValueMeta toPvm() {
+            var pvm = recordIdToPvm(recordId);
+            pvm.shortType = shortType;
+            return pvm;
+        }
     }
 
-    public RecordIdWithExpireAtAndSeq get(int keyHash32, int bucketIndex) {
+    public RecordIdWithExpireAtAndShortType get(int keyHash32, int bucketIndex) {
         var bytes = allKeyHash32BitBytes[bucketIndex];
         var bytesRecordId = allRecordIdBytes[bucketIndex];
         var byteBuffer = ByteBuffer.wrap(bytes);
@@ -70,10 +74,10 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
                     return null;
                 } else {
                     var l = buffer.getLong(offset + 8);
-                    // high 48 bit is real expire at millisecond, 16 bit is random int as seq
+                    // high 48 bit is real expire at millisecond, 8 bit is short type
                     var expireAt = l >>> 16;
-                    var seq = l & 0xFFFF;
-                    return new RecordIdWithExpireAtAndSeq(recordId, expireAt, seq);
+                    byte shortType = (byte) (l & 0xFF);
+                    return new RecordIdWithExpireAtAndShortType(recordId, expireAt, shortType);
                 }
             }
         }
@@ -82,7 +86,7 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
     }
 
     public boolean remove(int keyHash32, int bucketIndex) {
-        return put(keyHash32, bucketIndex, CompressedValue.EXPIRE_NOW, NO_RECORD_ID);
+        return put(keyHash32, bucketIndex, CompressedValue.EXPIRE_NOW, KeyLoader.typeAsByteIgnore, NO_RECORD_ID);
     }
 
     @TestOnly
@@ -112,12 +116,12 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
         return n;
     }
 
-    public boolean put(int keyHash32, int bucketIndex, long expireAt, long recordId) {
+    public boolean put(int keyHash32, int bucketIndex, long expireAt, byte shortType, long recordId) {
         if (expireAt > MAX_EXPIRE_AT) {
             throw new IllegalArgumentException("Expire at is too large");
         }
 
-        var l = expireAt << 16 | new Random().nextInt(65536) & 0xFFFF;
+        var l = expireAt << 16 | shortType;
 
         var bytes = allKeyHash32BitBytes[bucketIndex];
         var bytesRecordId = allRecordIdBytes[bucketIndex];
@@ -172,7 +176,8 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
     }
 
     @VisibleForTesting
-    static @NotNull PersistValueMeta recordIdToPvm(long recordId) {
+    @NotNull
+    static PersistValueMeta recordIdToPvm(long recordId) {
         // max segment index = 512 * 1024 * 64 - 1 < 2 ^ 25
         // max sub block index = 3 < 2 ^ 2
         // max segment length = 4 * 1024 * 16 = 2 ^ 16
@@ -181,7 +186,6 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
         pvm.segmentIndex = (int) (recordId >> (18 + 18 + 2));
         pvm.subBlockIndex = (byte) (recordId >> (18 + 18) & 0x3);
         pvm.segmentOffset = (int) (recordId >> 18) & 0x3FFFF;
-        pvm.length = (int) (recordId & 0x3FFFF);
         return pvm;
     }
 
@@ -189,8 +193,7 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
     static long pvmToRecordId(@NotNull PersistValueMeta pvm) {
         return (((long) pvm.segmentIndex) << (18 + 18 + 2))
                 | (((long) pvm.subBlockIndex) << (18 + 18))
-                | (((long) pvm.segmentOffset & 0x3FFFF) << 18)
-                | ((long) pvm.length & 0x3FFFF);
+                | (((long) pvm.segmentOffset & 0x3FFFF) << 18);
     }
 
     @Override

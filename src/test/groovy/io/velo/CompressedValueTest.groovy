@@ -300,6 +300,7 @@ class CompressedValueTest extends Specification {
         encodedBufferShortString.getLong(1) == cv.seq
         encodedBufferShortString.slice(9, 10) == ByteBuffer.wrap(cv.compressedData)
         CompressedValue.encodeAsShortString(1L, new byte[10]).length == 19
+        CompressedValue.getSeqFromNumberOrShortStringBytes(new byte[10]) == 0
 
         when:
         cv.dictSeqOrSpType = 100

@@ -530,6 +530,12 @@ class KeyLoaderTest extends Specification {
         KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteZSet, CompressedValue.SP_TYPE_ZSET)
         !KeyLoader.isSpTypeMatch(KeyLoader.typeAsByteZSet, CompressedValue.NULL_DICT_SEQ)
         KeyLoader.isSpTypeMatch((byte) 10, CompressedValue.NULL_DICT_SEQ)
+        KeyLoader.transferToShortType(CompressedValue.SP_TYPE_HASH) == KeyLoader.typeAsByteHash
+        KeyLoader.transferToShortType(CompressedValue.SP_TYPE_LIST) == KeyLoader.typeAsByteList
+        KeyLoader.transferToShortType(CompressedValue.SP_TYPE_SET) == KeyLoader.typeAsByteSet
+        KeyLoader.transferToShortType(CompressedValue.SP_TYPE_ZSET) == KeyLoader.typeAsByteZSet
+        KeyLoader.transferToShortType(CompressedValue.NULL_DICT_SEQ) == KeyLoader.typeAsByteString
+        KeyLoader.transferToShortType(Integer.MIN_VALUE) == KeyLoader.typeAsByteIgnore
         KeyLoader.isKeyMatch('aaa', null)
         KeyLoader.isKeyMatch('aaa', 'aaa')
         KeyLoader.isKeyMatch('aaa', 'aa*')

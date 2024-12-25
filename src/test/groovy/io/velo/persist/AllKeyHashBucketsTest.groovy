@@ -19,7 +19,7 @@ class AllKeyHashBucketsTest extends Specification {
             new Tuple2<BaseCommand.SlotWithKeyHash, Integer>(s, keyHash32)
         }
         sList.eachWithIndex { s, i ->
-            allKeyHashBuckets.put(s.v2, s.v1.bucketIndex(), 0L, i)
+            allKeyHashBuckets.put(s.v2, s.v1.bucketIndex(), 0L, (byte) 0, i)
         }
         boolean isMatchAll = true
         sList.eachWithIndex { s, i ->
@@ -44,7 +44,7 @@ class AllKeyHashBucketsTest extends Specification {
         when:
         boolean exception = false
         try {
-            allKeyHashBuckets.put(0, 0, AllKeyHashBuckets.MAX_EXPIRE_AT + 1, 0L)
+            allKeyHashBuckets.put(0, 0, AllKeyHashBuckets.MAX_EXPIRE_AT + 1, (byte) 0, 0L)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
@@ -96,7 +96,6 @@ class AllKeyHashBucketsTest extends Specification {
         pvm.segmentIndex = 512 * 1024 * 64 - 1
         pvm.subBlockIndex = 3
         pvm.segmentOffset = 64 * 1024 - 1
-        pvm.length = 64 * 1024
         println pvm
 
         when:
@@ -107,7 +106,6 @@ class AllKeyHashBucketsTest extends Specification {
         pvm2.segmentIndex == pvm.segmentIndex
         pvm2.subBlockIndex == pvm.subBlockIndex
         pvm2.segmentOffset == pvm.segmentOffset
-        pvm2.length == pvm.length
     }
 
     def 'test save and load'() {
@@ -117,13 +115,13 @@ class AllKeyHashBucketsTest extends Specification {
 
         and:
         10.times {
-            allKeyHashBuckets.put(it + 1, it, 10L, it + 1)
+            allKeyHashBuckets.put(it + 1, it, 10L, (byte) 0, it + 1)
         }
 
         expect:
         allKeyHashBuckets.getKeyCountInBucketIndex(0) == 1
         (0..<10).every {
-            allKeyHashBuckets.put(it + 1, it, 10L, it + 1)
+            allKeyHashBuckets.put(it + 1, it, 10L, (byte) 0, it + 1)
         }
 
         when:
