@@ -53,9 +53,12 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     @VisibleForTesting
-    long persistCountTotal;
+    long persistCallCountTotal;
     @VisibleForTesting
     long persistCvCountTotal;
+
+    int calcSegmentCountStepWhenOverHalfEstimateKeyNumber = 0;
+
     @VisibleForTesting
     long updatePvmBatchCostTimeTotalUs;
     @VisibleForTesting
@@ -562,8 +565,17 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
 
         // stats
-        persistCountTotal++;
+        persistCallCountTotal++;
         persistCvCountTotal += list.size();
+
+        if (calcSegmentCountStepWhenOverHalfEstimateKeyNumber == 0) {
+            if ((double) persistCvCountTotal / ConfForGlobal.estimateKeyNumber > 0.5) {
+                calcSegmentCountStepWhenOverHalfEstimateKeyNumber = segmentIndex;
+                log.warn("!!!Over half estimate key number, calc segment count step when over half estimate key number, slot={}, " +
+                                "segment count step={}, estimate key number={}",
+                        slot, calcSegmentCountStepWhenOverHalfEstimateKeyNumber, ConfForGlobal.estimateKeyNumber);
+            }
+        }
 
         var beginT = System.nanoTime();
         keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, pvmList, xForBinlog, keyBucketsInOneWalGroupGiven);
@@ -750,15 +762,15 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
     public static final int NO_NEED_MERGE_SEGMENT_INDEX = -1;
 
-    int needMergeSegmentIndex(boolean isNewAppend, int targetIndex) {
+    int needMergeSegmentIndex(boolean isNewAppend, int bySegmentIndex) {
         int segmentIndexToMerge = NO_NEED_MERGE_SEGMENT_INDEX;
-        if (targetIndex >= halfSegmentNumber) {
+        if (bySegmentIndex >= halfSegmentNumber) {
             // begins with 0
             // ends with 2^18 - 1
-            segmentIndexToMerge = targetIndex - halfSegmentNumber;
+            segmentIndexToMerge = bySegmentIndex - halfSegmentNumber;
         } else {
             if (!isNewAppend) {
-                segmentIndexToMerge = targetIndex + halfSegmentNumber;
+                segmentIndexToMerge = bySegmentIndex + halfSegmentNumber;
             }
         }
         return segmentIndexToMerge;
@@ -845,13 +857,13 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         map.put("chunk_merged_segment_index_end_last_time", (double) mergedSegmentIndexEndLastTime);
         map.put("chunk_max_segment_index", (double) maxSegmentIndex);
 
-        if (persistCountTotal > 0) {
-            map.put("chunk_persist_count_total", (double) persistCountTotal);
+        if (persistCallCountTotal > 0) {
+            map.put("chunk_persist_call_count_total", (double) persistCallCountTotal);
             map.put("chunk_persist_cv_count_total", (double) persistCvCountTotal);
-            map.put("chunk_persist_cv_count_avg", (double) persistCvCountTotal / persistCountTotal);
+            map.put("chunk_persist_cv_count_avg", (double) persistCvCountTotal / persistCallCountTotal);
 
             map.put("chunk_update_pvm_batch_cost_time_total_us", (double) updatePvmBatchCostTimeTotalUs);
-            map.put("chunk_update_pvm_batch_cost_time_avg_us", (double) updatePvmBatchCostTimeTotalUs / persistCountTotal);
+            map.put("chunk_update_pvm_batch_cost_time_avg_us", (double) updatePvmBatchCostTimeTotalUs / persistCallCountTotal);
         }
 
         if (segmentDecompressCountTotal > 0) {

@@ -52,7 +52,7 @@ class ChunkTest extends Specification {
 
         when:
         chunk.collect()
-        chunk.persistCountTotal = 1
+        chunk.persistCallCountTotal = 1
         chunk.persistCvCountTotal = 100
         chunk.updatePvmBatchCostTimeTotalUs = 100
         chunk.segmentDecompressCountTotal = 10
