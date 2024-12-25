@@ -5,7 +5,7 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import static io.velo.CompressedValue.NO_EXPIRE;
 
-public class PersistValueMeta implements UniquePosition {
+public class PersistValueMeta {
     // 2 bytes for 0 means not a compress value (number or short string), short type byte + segment sub block index byte
     // + segment index int + segment offset int
     // may other metadata in the future
@@ -86,15 +86,5 @@ public class PersistValueMeta implements UniquePosition {
         pvm.segmentIndex = buf.readInt();
         pvm.segmentOffset = buf.readInt();
         return pvm;
-    }
-
-    @Override
-    public long positionUuid() {
-        // max segment index = 512 * 1024 * 64 - 1 < 2 ^ 25
-        // max sub block index = 3 < 2 ^ 2
-        // max segment length = 4 * 1024 * 16 = 2 ^ 16
-        return (((long) segmentIndex) << (18 + 18 + 2))
-                | (((long) subBlockIndex) << (18 + 18))
-                | (((long) segmentOffset & 0x3FFFF) << 18);
     }
 }

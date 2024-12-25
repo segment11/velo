@@ -26,7 +26,6 @@ class PersistValueMetaTest extends Specification {
         one.segmentOffset = 10
 
         println one.shortString()
-        println one.positionUuid()
 
         when:
         def encoded = one.encode()

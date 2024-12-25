@@ -20,7 +20,6 @@ class ChunkMergeJobTest extends Specification {
         def cv = new CompressedValue()
         def cvWithKeyAndSegmentOffset = new ChunkMergeJob.CvWithKeyAndSegmentOffset(cv, 'key', 0, 0, (byte) 0)
         println cvWithKeyAndSegmentOffset.shortString()
-        println cvWithKeyAndSegmentOffset.positionUuid()
         println cvWithKeyAndSegmentOffset
 
         and:

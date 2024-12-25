@@ -84,20 +84,13 @@ public class ChunkMergeJob {
         }
     }
 
-    public static class CvWithKeyAndSegmentOffset implements UniquePosition {
+    public static class CvWithKeyAndSegmentOffset {
         public CvWithKeyAndSegmentOffset(CompressedValue cv, String key, int segmentOffset, int segmentIndex, byte subBlockIndex) {
             this.cv = cv;
             this.key = key;
             this.segmentOffset = segmentOffset;
             this.segmentIndex = segmentIndex;
             this.subBlockIndex = subBlockIndex;
-        }
-
-        @Override
-        public long positionUuid() {
-            return (((long) segmentIndex) << (18 + 18 + 2))
-                    | (((long) subBlockIndex) << (18 + 18))
-                    | (((long) segmentOffset & 0x3FFFF) << 18);
         }
 
         public CompressedValue cv;
@@ -375,7 +368,7 @@ public class ChunkMergeJob {
                     if (valueBytesWithExpireAtAndSeq == null || valueBytesWithExpireAtAndSeq.isExpired()) {
                         valueBytesCurrent = null;
                     } else {
-                        if (valueBytesWithExpireAtAndSeq.positionUuid() != one.positionUuid()) {
+                        if (valueBytesWithExpireAtAndSeq.seq() != cv.getSeq()) {
                             valueBytesCurrent = null;
                         } else {
                             valueBytesCurrent = valueBytesWithExpireAtAndSeq.valueBytes();

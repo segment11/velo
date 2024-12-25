@@ -448,7 +448,7 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_key_buckets)
-        r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8 + (4 + (4 + 344) * ConfForSlot.global.confWal.oneChargeBucketNumber)
+        r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8 + (4 + (4 + 472) * ConfForSlot.global.confWal.oneChargeBucketNumber)
 
         // stat_key_count_in_buckets
         when:
@@ -935,7 +935,7 @@ class XGroupTest extends Specification {
 
         when:
         ConfForGlobal.pureMemoryV2 = true
-        contentBytes = new byte[1 + 1 + 4 + 1 + 8 + (4 + (4 + 344) * 2)]
+        contentBytes = new byte[1 + 1 + 4 + 1 + 8 + (4 + (4 + 472) * 2)]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         // split index
         requestBuffer.put((byte) 0)

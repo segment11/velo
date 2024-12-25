@@ -636,7 +636,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     void putValueByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32, long expireAt, long seq, byte[] valueBytes) {
         if (ConfForGlobal.pureMemoryV2) {
             // seq as record id
-            allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, typeAsByteIgnore, seq);
+            allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, seq, typeAsByteIgnore, seq);
             allKeyHashBuckets.putLocalValue(seq, valueBytes);
             return;
         }
@@ -786,7 +786,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
                     for (var pvm : pvmListThisBucket) {
                         var recordId = AllKeyHashBuckets.pvmToRecordId(pvm);
-                        allKeyHashBuckets.put(pvm.keyHash32, bucketIndex, pvm.expireAt, pvm.shortType, recordId);
+                        allKeyHashBuckets.put(pvm.keyHash32, bucketIndex, pvm.expireAt, pvm.seq, pvm.shortType, recordId);
 
                         dataOs.writeInt(pvm.keyHash32);
                         dataOs.writeLong(pvm.expireAt);
@@ -836,8 +836,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 var expireAt = buffer.getLong();
                 var shortType = buffer.get();
                 var recordId = buffer.getLong();
+                var seq = buffer.getLong();
 
-                allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, shortType, recordId);
+                allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, seq, shortType, recordId);
             }
             n += recordSize;
         }
