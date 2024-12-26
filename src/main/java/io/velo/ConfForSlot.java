@@ -39,6 +39,8 @@ public enum ConfForSlot {
         map.put("machineId", ConfForGlobal.machineId);
         map.put("estimateKeyNumber", ConfForGlobal.estimateKeyNumber);
         map.put("estimateOneValueLength", ConfForGlobal.estimateOneValueLength);
+        map.put("pureMemory", ConfForGlobal.pureMemory);
+        map.put("pureMemoryV2", ConfForGlobal.pureMemoryV2);
         map.put("slotNumber", ConfForGlobal.slotNumber);
         map.put("bucket.bucketsPerSlot", confBucket.bucketsPerSlot);
         map.put("chunk.segmentNumberPerFd", confChunk.segmentNumberPerFd);
@@ -382,7 +384,7 @@ public enum ConfForSlot {
         public short binlogFileKeepMaxCount = 10;
         // if slave catch up binlog offset is less than min diff, slave can service read
         public int catchUpOffsetMinDiff = 1024 * 1024;
-        public int catchUpIntervalMillis = 200;
+        public int catchUpIntervalMillis = 100;
 
         @Override
         public String toString() {
