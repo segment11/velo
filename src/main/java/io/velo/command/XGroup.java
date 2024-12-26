@@ -784,8 +784,16 @@ public class XGroup extends BaseCommand {
 
             var chunkSegmentsLength = buffer.getInt();
             if (chunkSegmentsLength == 0) {
-                oneSlot.writeChunkSegmentsFromMasterExists(ConfForSlot.global.confChunk.REPL_EMPTY_BYTES_FOR_ONCE_WRITE,
-                        beginSegmentIndex, segmentCount);
+                if (ConfForGlobal.pureMemory) {
+                    for (int i = 0; i < segmentCount; i++) {
+                        var targetSegmentIndex = beginSegmentIndex + i;
+                        oneSlot.getChunk().clearSegmentBytesWhenPureMemory(targetSegmentIndex);
+                    }
+                } else {
+                    // write 0 to files
+                    oneSlot.writeChunkSegmentsFromMasterExists(ConfForSlot.global.confChunk.REPL_EMPTY_BYTES_FOR_ONCE_WRITE,
+                            beginSegmentIndex, segmentCount);
+                }
             } else {
                 var chunkSegmentsBytes = new byte[chunkSegmentsLength];
                 buffer.get(chunkSegmentsBytes);
@@ -809,7 +817,7 @@ public class XGroup extends BaseCommand {
             var content = new ToMasterExistsChunkSegments(nextBatchBeginSegmentIndex, segmentCount, nextBatchMetaBytes);
 
             if (nextBatchBeginSegmentIndex % (segmentCount * 10) == 0) {
-                oneSlot.delayRun(1000, () -> {
+                oneSlot.delayRun(100, () -> {
                     replPair.write(ReplType.exists_chunk_segments, content);
                 });
                 return Repl.emptyReply();
@@ -967,7 +975,7 @@ public class XGroup extends BaseCommand {
             var content = new RawBytesContent(requestBytes);
 
             if (nextBeginBucketIndex % (oneChargeBucketNumber * 100) == 0) {
-                oneSlot.delayRun(1000, () -> {
+                oneSlot.delayRun(100, () -> {
                     replPair.write(ReplType.exists_key_buckets, content);
                 });
                 return Repl.emptyReply();

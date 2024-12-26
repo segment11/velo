@@ -1420,16 +1420,37 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    byte[] preadForMerge(int segmentIndex, int segmentCount) {
-        checkCurrentThreadId();
-
-        return chunk.preadForMerge(segmentIndex, segmentCount);
+    @VisibleForTesting
+    boolean hasData(int beginSegmentIndex, int segmentCount) {
+        final boolean[] hasDataArray = {false};
+        metaChunkSegmentFlagSeq.iterateRange(beginSegmentIndex, segmentCount, (segmentIndex, flagByte, seq, walGroupIndex) -> {
+            if (!hasDataArray[0]) {
+                if (!Chunk.Flag.canReuse(flagByte)) {
+                    hasDataArray[0] = true;
+                }
+            }
+        });
+        return hasDataArray[0];
     }
 
-    public byte[] preadForRepl(int segmentIndex) {
+    byte[] preadForMerge(int beginSegmentIndex, int segmentCount) {
         checkCurrentThreadId();
 
-        return chunk.preadForRepl(segmentIndex);
+        if (!hasData(beginSegmentIndex, segmentCount)) {
+            return null;
+        }
+
+        return chunk.preadForMerge(beginSegmentIndex, segmentCount);
+    }
+
+    public byte[] preadForRepl(int beginSegmentIndex) {
+        checkCurrentThreadId();
+
+        if (!hasData(beginSegmentIndex, FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD)) {
+            return null;
+        }
+
+        return chunk.preadForRepl(beginSegmentIndex);
     }
 
     @SlaveReplay
@@ -1442,8 +1463,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         chunk.writeSegmentsFromMasterExists(bytes, beginSegmentIndex, segmentCount);
-        log.warn("Repl write chunk segments from master exists, begin segment index={}, segment count={}, slot={}",
-                beginSegmentIndex, segmentCount, slot);
+        if (beginSegmentIndex % 4096 == 0) {
+            log.warn("Repl write chunk segments from master exists, begin segment index={}, segment count={}, slot={}",
+                    beginSegmentIndex, segmentCount, slot);
+        }
     }
 
     @Override
@@ -1875,7 +1898,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (ConfForGlobal.pureMemory) {
             if (Chunk.Flag.canReuse(flagByte)) {
                 chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
-                if (segmentIndex % 1024 == 0) {
+                if (segmentIndex % 4096 == 0) {
                     log.info("Clear one segment memory bytes when reuse, segment index={}, slot={}", segmentIndex, slot);
                 }
             }

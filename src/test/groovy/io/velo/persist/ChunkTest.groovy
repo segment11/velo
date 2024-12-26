@@ -451,6 +451,11 @@ class ChunkTest extends Specification {
         chunk.mergedSegmentIndexEndLastTime == 100
         !chunk.fdReadWriteArray[0].isTargetSegmentIndexNullInMemory(1)
 
+        when:
+        chunk.clearSegmentBytesWhenPureMemory(0)
+        then:
+        chunk.preadOneSegment(0) == null
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()

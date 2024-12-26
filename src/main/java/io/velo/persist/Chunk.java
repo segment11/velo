@@ -140,6 +140,14 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
     }
 
+    public void clearSegmentBytesWhenPureMemory(int targetSegmentIndex) {
+        var fdIndex = targetFdIndex(targetSegmentIndex);
+        var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
+
+        var fdReadWrite = fdReadWriteArray[fdIndex];
+        fdReadWrite.setSegmentBytesFromLastSavedFileToMemory(null, segmentIndexTargetFd);
+    }
+
     @Override
     public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
         segmentIndex = is.readInt();
@@ -202,21 +210,21 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
     }
 
-    byte[] preadForMerge(int targetSegmentIndex, int segmentCount) {
+    byte[] preadForMerge(int beginSegmentIndex, int segmentCount) {
         if (segmentCount > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE) {
             throw new IllegalArgumentException("Merge read segment count too large=" + segmentCount);
         }
 
-        var fdIndex = targetFdIndex(targetSegmentIndex);
-        var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
+        var fdIndex = targetFdIndex(beginSegmentIndex);
+        var segmentIndexTargetFd = targetSegmentIndexTargetFd(beginSegmentIndex);
 
         var fdReadWrite = fdReadWriteArray[fdIndex];
         return fdReadWrite.readSegmentsForMerge(segmentIndexTargetFd, segmentCount);
     }
 
-    byte[] preadForRepl(int targetSegmentIndex) {
-        var fdIndex = targetFdIndex(targetSegmentIndex);
-        var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
+    byte[] preadForRepl(int beginSegmentIndex) {
+        var fdIndex = targetFdIndex(beginSegmentIndex);
+        var segmentIndexTargetFd = targetSegmentIndexTargetFd(beginSegmentIndex);
 
         var fdReadWrite = fdReadWriteArray[fdIndex];
         return fdReadWrite.readBatchForRepl(segmentIndexTargetFd);

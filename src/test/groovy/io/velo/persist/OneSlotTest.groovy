@@ -781,6 +781,9 @@ class OneSlotTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
 
+        expect:
+        !oneSlot.hasData(0, 10)
+
         when:
         def bytesForMerge = oneSlot.preadForMerge(0, 10)
         def bytesForRepl = oneSlot.preadForRepl(0)
@@ -792,9 +795,12 @@ class OneSlotTest extends Specification {
         def mockBytesFromMaster = new byte[oneSlot.chunk.chunkSegmentLength]
         Arrays.fill(mockBytesFromMaster, (byte) 1)
         oneSlot.writeChunkSegmentsFromMasterExists(mockBytesFromMaster, 0, 1)
+        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
         def bytesOneSegment = oneSlot.preadForMerge(0, 1)
+        def bytesNSegments = oneSlot.preadForRepl(0)
         then:
         bytesOneSegment == mockBytesFromMaster
+        bytesNSegments.length == oneSlot.chunk.chunkSegmentLength * FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD
 
         when:
         boolean exception = false
