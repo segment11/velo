@@ -234,14 +234,21 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r2[1] == 1
 
         when:
+        one.setSegmentMergeFlag(1024, Chunk.Flag.merged.flagByte(), 1L, targetWalGroupIndex)
+        r2 = one.iterateAndFindThoseNeedToMerge(1024, 1024 * 10, targetWalGroupIndex, chunk)
+        then:
+        r2[0] == 1024
+        r2[1] == 1
+
+        when:
         10.times {
             one.setSegmentMergeFlag(1024 + it, Chunk.Flag.reuse_new.flagByte(), 1L, targetWalGroupIndex)
         }
         r2 = one.iterateAndFindThoseNeedToMerge(1024, 1024 * 10, targetWalGroupIndex, chunk)
         then:
         r2[0] == 1024
-        // max 2
-        r2[1] == 2
+        // max 4
+        r2[1] == 4
 
         when:
         // cross fd

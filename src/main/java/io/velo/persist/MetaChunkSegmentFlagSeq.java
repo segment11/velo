@@ -165,7 +165,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
                 continue;
             }
 
-            if (flagByte == Chunk.Flag.new_write.flagByte || flagByte == Chunk.Flag.reuse_new.flagByte) {
+            // merged but not persisted, also do compare again
+            if (flagByte == Chunk.Flag.new_write.flagByte || flagByte == Chunk.Flag.reuse_new.flagByte || flagByte == Chunk.Flag.merged.flagByte) {
                 // only set first segment index
                 if (findSegmentIndexWithSegmentCount[0] == Chunk.NO_NEED_MERGE_SEGMENT_INDEX) {
                     findSegmentIndexWithSegmentCount[0] = segmentIndex;

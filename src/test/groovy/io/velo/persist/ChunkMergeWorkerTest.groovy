@@ -22,11 +22,14 @@ class ChunkMergeWorkerTest extends Specification {
 
         println 'in memory size estimate: ' + chunkMergeWorker.estimate(new StringBuilder())
 
+        chunkMergeWorker.lastMergedSegmentIndex = -1
+
         def ms0 = new ChunkMergeWorker.MergedSegment(0, 1)
         def ms1 = new ChunkMergeWorker.MergedSegment(1, 1)
         println ms0
         println ms1
         expect:
+        chunkMergeWorker.lastMergedSegmentIndex == -1
         ms0 < ms1
 
         when:
@@ -54,10 +57,10 @@ class ChunkMergeWorkerTest extends Specification {
         r.vList().size() == 1
 
         when:
-        chunkMergeWorker.removeMergedButNotPersistedAfterPersistWal([0], 0)
+        chunkMergeWorker.removeMergedButNotPersisted([0], 0)
         Debug.instance.logMerge = true
         chunkMergeWorker.logMergeCount = 1000
-        chunkMergeWorker.removeMergedButNotPersistedAfterPersistWal([1], 1)
+        chunkMergeWorker.removeMergedButNotPersisted([1], 1)
         chunkMergeWorker.clearMergedCvList()
         chunkMergeWorker.clearMergedSegmentSet()
         then:

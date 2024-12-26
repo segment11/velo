@@ -164,8 +164,8 @@ public class ChunkMergeWorker implements InMemoryEstimate, InSlotMetricCollector
         return new OneSlot.BeforePersistWalExt2FromMerge(segmentIndexList, vList);
     }
 
-    void removeMergedButNotPersistedAfterPersistWal(@NotNull ArrayList<Integer> segmentIndexList, int walGroupIndex) {
-        mergedCvList.removeIf(one -> Wal.calcWalGroupIndex(one.bucketIndex) == walGroupIndex);
+    void removeMergedButNotPersisted(@NotNull ArrayList<Integer> segmentIndexList, int walGroupIndex) {
+        mergedCvList.removeIf(one -> segmentIndexList.contains(one.segmentIndex) && Wal.calcWalGroupIndex(one.bucketIndex) == walGroupIndex);
         mergedSegmentSet.removeIf(one -> segmentIndexList.contains(one.segmentIndex));
 
         var doLog = Debug.getInstance().logMerge && logMergeCount % 1000 == 0;

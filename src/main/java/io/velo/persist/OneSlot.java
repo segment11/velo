@@ -1494,7 +1494,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     @VisibleForTesting
     record BeforePersistWalExtFromMerge(@NotNull ArrayList<Integer> segmentIndexList,
-                                        @NotNull ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList) {
+                                        @NotNull ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList,
+                                        @NotNull ArrayList<Integer> updatedFlagPersistedSegmentIndexList) {
         boolean isEmpty() {
             return segmentIndexList.isEmpty();
         }
@@ -1564,6 +1565,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         ArrayList<Integer> segmentIndexList = new ArrayList<>();
         ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList = new ArrayList<>(BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE * 10);
+        ArrayList<Integer> updatedFlagPersistedSegmentIndexList = new ArrayList<>();
 
         for (int i = 0; i < segmentCount; i++) {
             var segmentIndex = firstSegmentIndex + i;
@@ -1573,6 +1575,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             // last segments not write at all, need skip
             if (segmentBytesBatchRead == null || relativeOffsetInBatchBytes >= segmentBytesBatchRead.length) {
                 setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted.flagByte, 0L, 0);
+
+                // clear merged but not persisted in chunk merge worker
+                ArrayList<Integer> innerSegmentIndexList = new ArrayList<>();
+                innerSegmentIndexList.add(segmentIndex);
+                chunkMergeWorker.removeMergedButNotPersisted(innerSegmentIndexList, walGroupIndex);
+
+                updatedFlagPersistedSegmentIndexList.add(segmentIndex);
+
                 if (doLog) {
                     log.info("Set segment flag to persisted as not write at all, s={}, i={}", slot, segmentIndex);
                 }
@@ -1583,7 +1593,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             segmentIndexList.add(segmentIndex);
         }
 
-        return new BeforePersistWalExtFromMerge(segmentIndexList, cvList);
+        return new BeforePersistWalExtFromMerge(segmentIndexList, cvList, updatedFlagPersistedSegmentIndexList);
     }
 
     @VisibleForTesting
@@ -1615,6 +1625,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         KeyBucketsInOneWalGroup keyBucketsInOneWalGroup = null;
         if (ext != null) {
             extCvListCheckCountTotal++;
+
+            // add to binlog if some segments flag updated
+            var tmpSegmentList = ext.updatedFlagPersistedSegmentIndexList();
+            if (!tmpSegmentList.isEmpty()) {
+                for (var si : tmpSegmentList) {
+                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(si, Flag.merged_and_persisted.flagByte, 0L);
+                }
+            }
+
             var cvList = ext.cvList;
             var cvListCount = cvList.size();
 
@@ -1682,6 +1701,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 }
                 setSegmentMergeFlagBatch(segmentIndexList.getFirst(), segmentIndexList.size(), Flag.merged_and_persisted.flagByte, seq0List, walGroupIndex);
 
+                // clear merged but not persisted in chunk merge worker
+                chunkMergeWorker.removeMergedButNotPersisted(segmentIndexList, walGroupIndex);
+
                 for (var segmentIndex : segmentIndexList) {
                     xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
                 }
@@ -1690,6 +1712,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 // usually not happen
                 for (var segmentIndex : segmentIndexList) {
                     setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted.flagByte, 0L, walGroupIndex);
+
+                    // clear merged but not persisted in chunk merge worker
+                    ArrayList<Integer> innerSegmentIndexList = new ArrayList<>();
+                    innerSegmentIndexList.add(segmentIndex);
+                    chunkMergeWorker.removeMergedButNotPersisted(innerSegmentIndexList, walGroupIndex);
+
                     xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
                 }
             }
@@ -1706,7 +1734,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
             }
 
-            chunkMergeWorker.removeMergedButNotPersistedAfterPersistWal(segmentIndexList, walGroupIndex);
+            chunkMergeWorker.removeMergedButNotPersisted(segmentIndexList, walGroupIndex);
         }
 
         appendBinlog(xForBinlog);
