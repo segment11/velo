@@ -446,6 +446,7 @@ class OneSlotTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
+        // not include global metrics if not the first slot
         def oneSlot2 = localPersist.oneSlot((byte) 1)
 
         expect:
@@ -518,6 +519,9 @@ class OneSlotTest extends Specification {
         rBigString != null
 
         when:
+        oneSlot.extCvListCheckCountTotal = 1
+        oneSlot.extCvValidCountTotal = 1
+        oneSlot.extCvInvalidCountTotal = 1
         oneSlot.globalGauge.collect()
         oneSlot.collect()
         oneSlot.kvLRUHitTotal = 1
@@ -864,7 +868,8 @@ class OneSlotTest extends Specification {
         oneSlot.getSegmentSeqListBatchForRepl(0, 1)
         oneSlot.updateSegmentMergeFlag(0, Chunk.Flag.merged.flagByte(), 1L)
         List<Long> segmentSeqList = [1L]
-        oneSlot.setSegmentMergeFlagBatch(0, 1, Chunk.Flag.merged.flagByte(), segmentSeqList, 0)
+        oneSlot.setSegmentMergeFlagBatch(0, 1,
+                Chunk.Flag.merged.flagByte(), segmentSeqList, 0)
         then:
         1 == 1
 
@@ -890,8 +895,7 @@ class OneSlotTest extends Specification {
         def oneSlot = localPersist.oneSlot(slot)
         def chunk = oneSlot.chunk
 
-        def ext = new OneSlot.BeforePersistWalExtFromMerge([], [])
-//        def ext2 = new OneSlot.BeforePersistWalExt2FromMerge([], [])
+        def ext = new OneSlot.BeforePersistWalExtFromMerge([], [], [])
         expect:
         ext.isEmpty()
 
@@ -952,7 +956,22 @@ class OneSlotTest extends Specification {
         oneSlot.metaChunkSegmentFlagSeq.getSegmentMergeFlag(1).flagByte() == Chunk.Flag.merged_and_persisted.flagByte()
         oneSlot.chunkMergeWorker.isMergedSegmentSetEmpty()
 
+        when:
+        ConfForGlobal.pureMemory = true
+        oneSlot.chunk.calcSegmentCountStepWhenOverHalfEstimateKeyNumber = 100
+        oneSlot.chunk.segmentIndex = 100
+        e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
+        then:
+        e == null
+
+        when:
+        oneSlot.chunk.segmentIndex = 90
+        e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
+        then:
+        e == null
+
         cleanup:
+        ConfForGlobal.pureMemory = false
         oneSlot.cleanUp()
         Consts.persistDir.deleteDir()
     }
@@ -1156,13 +1175,15 @@ class OneSlotTest extends Specification {
         chunk.writeSegmentToTargetSegmentIndex(new byte[4096], 0)
         oneSlot.setSegmentMergeFlag(0, Chunk.Flag.merged.flagByte(), 1L, 0)
         ArrayList<Long> seqList = [1L]
-        oneSlot.setSegmentMergeFlagBatch(0, 1, Chunk.Flag.merged.flagByte(), seqList, 0)
+        oneSlot.setSegmentMergeFlagBatch(0, 1,
+                Chunk.Flag.merged.flagByte(), seqList, 0)
         then:
         chunk.preadOneSegment(0) != null
 
         when:
         oneSlot.setSegmentMergeFlag(0, Chunk.Flag.merged_and_persisted.flagByte(), 1L, 0)
-        oneSlot.setSegmentMergeFlagBatch(0, 1, Chunk.Flag.merged_and_persisted.flagByte(), seqList, 0)
+        oneSlot.setSegmentMergeFlagBatch(0, 1,
+                Chunk.Flag.merged_and_persisted.flagByte(), seqList, 0)
         then:
         chunk.preadOneSegment(0) == null
 
