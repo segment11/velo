@@ -263,6 +263,7 @@ class ManageCommand extends BaseCommand {
             def outputDir = new File(oneSlot.slotDir, 'debug')
             FileUtils.forceMkdir(outputDir)
 
+            def beginNT = System.nanoTime()
             if (isIterateAll) {
                 final String outputFileName = 'chunk_segment_flag.txt'
                 new File(outputDir, outputFileName).withWriter { writer ->
@@ -280,6 +281,8 @@ class ManageCommand extends BaseCommand {
                     }
                 }
             }
+            def costNT = System.nanoTime() - beginNT
+            log.info 'Output chunk segment flag to file cost {}us', costNT / 1000
 
             return OKReply.INSTANCE
         } else if (subSubCmd == 'set-readonly') {
