@@ -594,11 +594,33 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return recordX.expireAt();
         }
 
-        var r = getValueByKey(bucketIndex, keyBytes, keyHash, keyHash32);
+        var r = getExpireAtAndSeqByKey(bucketIndex, keyBytes, keyHash, keyHash32);
         return r == null ? null : r.expireAt();
     }
 
-    KeyBucket.ValueBytesWithExpireAtAndSeq getValueByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
+    KeyBucket.ExpireAtAndSeq getExpireAtAndSeqByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
+        if (ConfForGlobal.pureMemoryV2) {
+            var recordX = allKeyHashBuckets.get(keyHash32, bucketIndex);
+            if (recordX == null) {
+                return null;
+            }
+
+            // record id can be used as seq
+            return new KeyBucket.ExpireAtAndSeq(recordX.expireAt(), recordX.seq());
+        }
+
+        var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
+        var splitIndex = KeyHash.splitIndex(keyHash, splitNumber, bucketIndex);
+
+        var keyBucket = readKeyBucketForSingleKey(bucketIndex, splitIndex, splitNumber, true);
+        if (keyBucket == null) {
+            return null;
+        }
+
+        return keyBucket.getExpireAtAndSeqByKey(keyBytes, keyHash);
+    }
+
+    KeyBucket.ValueBytesWithExpireAtAndSeq getValueXByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
         if (ConfForGlobal.pureMemoryV2) {
             var recordX = allKeyHashBuckets.get(keyHash32, bucketIndex);
             if (recordX == null) {
@@ -617,7 +639,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return null;
         }
 
-        return keyBucket.getValueByKey(keyBytes, keyHash);
+        return keyBucket.getValueXByKey(keyBytes, keyHash);
     }
 
     int warmUp() {

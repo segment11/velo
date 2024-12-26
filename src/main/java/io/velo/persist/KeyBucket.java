@@ -518,19 +518,19 @@ public class KeyBucket {
         return true;
     }
 
-    public record ValueBytesWithExpireAtAndSeq(byte[] valueBytes, long expireAt, long seq) {
+    public record ExpireAtAndSeq(long expireAt, long seq) {
         boolean isExpired() {
             return expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis();
         }
     }
 
-    public ValueBytesWithExpireAtAndSeq getValueByKey(byte[] keyBytes, long keyHash) {
+    public ExpireAtAndSeq getExpireAtAndSeqByKey(byte[] keyBytes, long keyHash) {
         if (size == 0) {
             return null;
         }
 
         for (int i = 0; i < capacity; i++) {
-            var r = getValueByKeyWithCellIndex(keyBytes, keyHash, i);
+            var r = getExpireAtAndSeqByKeyWithCellIndex(keyBytes, keyHash, i);
             if (r != null) {
                 return r;
             }
@@ -539,7 +539,7 @@ public class KeyBucket {
         return null;
     }
 
-    private ValueBytesWithExpireAtAndSeq getValueByKeyWithCellIndex(byte[] keyBytes, long keyHash, int cellIndex) {
+    private ExpireAtAndSeq getExpireAtAndSeqByKeyWithCellIndex(byte[] keyBytes, long keyHash, int cellIndex) {
         int metaIndex = metaIndex(cellIndex);
         var cellHashValue = buffer.getLong(metaIndex);
         // NO_KEY or PRE_KEY
@@ -555,6 +555,51 @@ public class KeyBucket {
 
         var matchMeta = keyMatch(keyBytes, oneCellOffset(cellIndex));
         if (matchMeta == null) {
+            // hash conflict
+            return null;
+        }
+
+        return new ExpireAtAndSeq(expireAt, seq);
+    }
+
+    public record ValueBytesWithExpireAtAndSeq(byte[] valueBytes, long expireAt, long seq) {
+        boolean isExpired() {
+            return expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis();
+        }
+    }
+
+    public ValueBytesWithExpireAtAndSeq getValueXByKey(byte[] keyBytes, long keyHash) {
+        if (size == 0) {
+            return null;
+        }
+
+        for (int i = 0; i < capacity; i++) {
+            var r = getValueXByKeyWithCellIndex(keyBytes, keyHash, i);
+            if (r != null) {
+                return r;
+            }
+        }
+
+        return null;
+    }
+
+    private ValueBytesWithExpireAtAndSeq getValueXByKeyWithCellIndex(byte[] keyBytes, long keyHash, int cellIndex) {
+        int metaIndex = metaIndex(cellIndex);
+        var cellHashValue = buffer.getLong(metaIndex);
+        // NO_KEY or PRE_KEY
+        if (cellHashValue == NO_KEY || cellHashValue == PRE_KEY) {
+            return null;
+        }
+        if (cellHashValue != keyHash) {
+            return null;
+        }
+
+        var expireAt = buffer.getLong(metaIndex + HASH_VALUE_LENGTH);
+        var seq = buffer.getLong(metaIndex + HASH_VALUE_LENGTH + EXPIRE_AT_VALUE_LENGTH);
+
+        var matchMeta = keyMatch(keyBytes, oneCellOffset(cellIndex));
+        if (matchMeta == null) {
+            // hash conflict
             return null;
         }
 

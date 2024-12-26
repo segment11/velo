@@ -364,7 +364,7 @@ public class ChunkMergeJob {
                     }
                 } else {
                     // from key buckets
-                    var valueBytesWithExpireAtAndSeq = keyBucketsInOneWalGroup.getValue(bucketIndex, key.getBytes(), cv.getKeyHash());
+                    var valueBytesWithExpireAtAndSeq = keyBucketsInOneWalGroup.getValueX(bucketIndex, key.getBytes(), cv.getKeyHash());
                     if (valueBytesWithExpireAtAndSeq == null || valueBytesWithExpireAtAndSeq.isExpired()) {
                         valueBytesCurrent = null;
                     } else {

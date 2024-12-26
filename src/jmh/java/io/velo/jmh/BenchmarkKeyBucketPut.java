@@ -80,7 +80,7 @@ io.velo.jmh.BenchmarkKeyBucketPut.putAndGet  100000  avgt       24.516          
             var key = keys[i];
             var keyHash = keysHash[i];
             keyBucket.put(key.getBytes(), keyHash, 0L, 1L, valueBytes);
-            keyBucket.getValueByKey(key.getBytes(), keyHash);
+            keyBucket.getValueXByKey(key.getBytes(), keyHash);
         }
     }
 

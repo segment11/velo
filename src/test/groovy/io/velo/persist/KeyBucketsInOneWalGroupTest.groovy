@@ -28,10 +28,10 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         inner.putAll(shortValueList)
         then:
         shortValueList.every {
-            inner.getValue(it.bucketIndex(), it.key().bytes, it.keyHash()).valueBytes() == it.cvEncoded()
+            inner.getValueX(it.bucketIndex(), it.key().bytes, it.keyHash()).valueBytes() == it.cvEncoded()
         }
         inner.isSplit == (n > KeyBucket.INIT_CAPACITY)
-        inner.getValue(2, 'xxx'.bytes, 100L) == null
+        inner.getValueX(2, 'xxx'.bytes, 100L) == null
 
         when:
         def sharedBytesList = inner.writeAfterPutBatch()
@@ -42,7 +42,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         keyLoader.writeSharedBytesList(sharedBytesList, inner.beginBucketIndex)
         def isSplitNumberChanged = keyLoader.updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp)
         def firstShortValue = shortValueList[0]
-        def valueBytesWithExpireAt = keyLoader.getValueByKey(firstShortValue.bucketIndex(), firstShortValue.key().bytes,
+        def valueBytesWithExpireAt = keyLoader.getValueXByKey(firstShortValue.bucketIndex(), firstShortValue.key().bytes,
                 firstShortValue.keyHash(), KeyHash.hash32(firstShortValue.key().bytes))
         then:
         isSplitNumberChanged == inner.isSplit
@@ -211,19 +211,22 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
 
         def targetKey = prepareOneKeyInTargetSplitIndex(0, 0)
+        def targetKeyHash = KeyHash.hash(targetKey.bytes)
 
         when:
         inner.listList.clear()
         inner.listList.add(null)
         then:
-        inner.getValue(0, targetKey.bytes, KeyHash.hash(targetKey.bytes)) == null
+        inner.getExpireAtAndSeq(0, targetKey.bytes, targetKeyHash) == null
+        inner.getValueX(0, targetKey.bytes, targetKeyHash) == null
 
         when:
         ArrayList<KeyBucket> list = []
         list.add(null)
         inner.listList.set(0, list)
         then:
-        inner.getValue(0, targetKey.bytes, KeyHash.hash(targetKey.bytes)) == null
+        inner.getExpireAtAndSeq(0, targetKey.bytes, targetKeyHash) == null
+        inner.getValueX(0, targetKey.bytes, targetKeyHash) == null
 
         when:
         def snowFlake = new SnowFlake(1, 1)
@@ -239,7 +242,8 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         }
         inner.putPvmListToTargetBucket(pvmList, 0)
         then:
-        inner.getValue(0, 'a'.bytes, 97L).valueBytes() == 'a'.bytes
+        inner.getExpireAtAndSeq(0, 'a'.bytes, 97L).expireAt() == 0L
+        inner.getValueX(0, 'a'.bytes, 97L).valueBytes() == 'a'.bytes
 
         when:
         keyBucket.clearAll()
@@ -257,8 +261,8 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         keyBucket.put(lastPvm.keyBytes, lastPvm.keyHash, 0L, lastPvm.seq, lastPvm.extendBytes)
         inner2.putPvmListToTargetBucket(pvmList, 0)
         then:
-        inner2.getValue(0, 'a'.bytes, 97L).valueBytes() == 'a'.bytes
-        inner2.getValue(0, firstPvm.keyBytes, firstPvm.keyHash).valueBytes() != 'value'.bytes
+        inner2.getValueX(0, 'a'.bytes, 97L).valueBytes() == 'a'.bytes
+        inner2.getValueX(0, firstPvm.keyBytes, firstPvm.keyHash).valueBytes() != 'value'.bytes
 
         cleanup:
         keyLoader.cleanUp()

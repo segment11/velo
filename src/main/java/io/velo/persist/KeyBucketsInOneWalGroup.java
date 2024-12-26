@@ -98,9 +98,9 @@ public class KeyBucketsInOneWalGroup {
         }
     }
 
-    KeyBucket.ValueBytesWithExpireAtAndSeq getValue(int bucketIndex, byte[] keyBytes, long keyHash) {
+    KeyBucket.ExpireAtAndSeq getExpireAtAndSeq(int bucketIndex, byte[] keyBytes, long keyHash) {
         if (ConfForGlobal.pureMemoryV2) {
-            return keyLoader.getValueByKey(bucketIndex, keyBytes, keyHash, KeyHash.hash32(keyBytes));
+            return keyLoader.getExpireAtAndSeqByKey(bucketIndex, keyBytes, keyHash, KeyHash.hash32(keyBytes));
         }
 
         int relativeBucketIndex = bucketIndex - beginBucketIndex;
@@ -117,7 +117,29 @@ public class KeyBucketsInOneWalGroup {
             return null;
         }
 
-        return keyBucket.getValueByKey(keyBytes, keyHash);
+        return keyBucket.getExpireAtAndSeqByKey(keyBytes, keyHash);
+    }
+
+    KeyBucket.ValueBytesWithExpireAtAndSeq getValueX(int bucketIndex, byte[] keyBytes, long keyHash) {
+        if (ConfForGlobal.pureMemoryV2) {
+            return keyLoader.getValueXByKey(bucketIndex, keyBytes, keyHash, KeyHash.hash32(keyBytes));
+        }
+
+        int relativeBucketIndex = bucketIndex - beginBucketIndex;
+        var currentSplitNumber = splitNumberTmp[relativeBucketIndex];
+        var splitIndex = KeyHash.splitIndex(keyHash, currentSplitNumber, bucketIndex);
+
+        var list = listList.get(splitIndex);
+        if (list == null) {
+            return null;
+        }
+
+        var keyBucket = list.get(relativeBucketIndex);
+        if (keyBucket == null) {
+            return null;
+        }
+
+        return keyBucket.getValueXByKey(keyBytes, keyHash);
     }
 
     byte[][] writeAfterPutBatch() {
@@ -359,7 +381,7 @@ public class KeyBucketsInOneWalGroup {
                 continue;
             }
 
-            var currentOne = keyBucket.getValueByKey(pvm.keyBytes, pvm.keyHash);
+            var currentOne = keyBucket.getValueXByKey(pvm.keyBytes, pvm.keyHash);
             if (currentOne != null) {
                 // wal remove delay use expire now
                 if (pvm.expireAt == CompressedValue.EXPIRE_NOW) {

@@ -1107,7 +1107,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
         kvLRUMissTotal++;
 
-        var valueBytesWithExpireAtAndSeq = keyLoader.getValueByKey(bucketIndex, keyBytes, keyHash, keyHash32);
+        var valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(bucketIndex, keyBytes, keyHash, keyHash32);
         if (valueBytesWithExpireAtAndSeq == null) {
             return null;
         }
@@ -1179,8 +1179,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return !CompressedValue.isDeleted(cvEncodedFromWal);
         }
 
-        var valueBytesWithExpireAtAndSeq = keyLoader.getValueByKey(bucketIndex, key.getBytes(), keyHash, keyHash32);
-        return valueBytesWithExpireAtAndSeq != null && !valueBytesWithExpireAtAndSeq.isExpired();
+        var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, key.getBytes(), keyHash, keyHash32);
+        return expireAtAndSeq != null && !expireAtAndSeq.isExpired();
     }
 
     public boolean remove(@NotNull String key, int bucketIndex, long keyHash, int keyHash32) {
@@ -1633,13 +1633,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                         throw new IllegalStateException("Wal group index not match, s=" + slot + ", wal group index=" + walGroupIndex + ", ext wal group index=" + extWalGroupIndex);
                     }
 
-                    var valueBytesWithExpireAtAndSeq = keyBucketsInOneWalGroup.getValue(bucketIndex, one.key.getBytes(), cv.getKeyHash());
-                    var isThisKeyExpired = valueBytesWithExpireAtAndSeq == null || valueBytesWithExpireAtAndSeq.isExpired();
+                    var expireAtAndSeq = keyBucketsInOneWalGroup.getExpireAtAndSeq(bucketIndex, one.key.getBytes(), cv.getKeyHash());
+                    var isThisKeyExpired = expireAtAndSeq == null || expireAtAndSeq.isExpired();
                     if (isThisKeyExpired) {
                         continue;
                     }
 
-                    var isThisKeyUpdated = valueBytesWithExpireAtAndSeq.seq() != cv.getSeq();
+                    var isThisKeyUpdated = expireAtAndSeq.seq() != cv.getSeq();
                     if (isThisKeyUpdated) {
                         continue;
                     }
