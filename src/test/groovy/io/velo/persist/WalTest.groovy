@@ -13,6 +13,18 @@ import java.nio.ByteBuffer
 class WalTest extends Specification {
     final short slot = 0
 
+    def 'test base'() {
+        given:
+        def a = new Wal.V(1, 0, 0, 0, 0, 'a', 'a'.bytes, false)
+        def b = new Wal.V(2, 0, 0, 0, 0, 'b', 'b'.bytes, false)
+        def bb = new Wal.V(2, 0, 0, 0, 0, 'b', 'b'.bytes, false)
+
+        expect:
+        a < b
+        b == bb
+        b > a
+    }
+
     def 'put and get'() {
         given:
         ConfForGlobal.pureMemory = false
@@ -160,17 +172,28 @@ class WalTest extends Specification {
         // repl export exists batch to slave
         when:
         ConfForGlobal.pureMemory = false
-        def toSlaveExistsBytes = wal.toSlaveExistsOneWalGroupBytes()
+        def toSlaveExistsBytes1 = wal.toSlaveExistsOneWalGroupBytes()
         then:
-        toSlaveExistsBytes.length == 32 + Wal.ONE_GROUP_BUFFER_SIZE * 2
+        toSlaveExistsBytes1.length == 32 + Wal.ONE_GROUP_BUFFER_SIZE * 2
+
+        when:
+        ConfForGlobal.pureMemory = true
+        def toSlaveExistsBytes2 = wal.toSlaveExistsOneWalGroupBytes()
+        then:
+        toSlaveExistsBytes2.length == toSlaveExistsBytes1.length
 
         // repl import exists batch from master
         when:
+        ConfForGlobal.pureMemory = false
         def wal11 = new Wal(slot, 0, raf, rafShortValue, snowFlake)
-        wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes)
+        def wal22 = new Wal(slot, 0, raf, rafShortValue, snowFlake)
+        wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1)
+        wal22.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes2)
         then:
         wal.delayToKeyBucketValues.size() == wal11.delayToKeyBucketValues.size()
         wal.delayToKeyBucketShortValues.size() == wal11.delayToKeyBucketShortValues.size()
+        wal11.delayToKeyBucketValues == wal22.delayToKeyBucketValues
+        wal11.delayToKeyBucketShortValues == wal22.delayToKeyBucketShortValues
 
         when:
         def oldOneGroupBufferSize = Wal.ONE_GROUP_BUFFER_SIZE
@@ -178,7 +201,7 @@ class WalTest extends Specification {
         exception = false
         // buffer size not match
         try {
-            wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes)
+            wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1)
         } catch (IllegalStateException e) {
             println e.message
             exception = true
@@ -190,7 +213,7 @@ class WalTest extends Specification {
         Wal.ONE_GROUP_BUFFER_SIZE = oldOneGroupBufferSize
         exception = false
         try {
-            wal2.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes)
+            wal2.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1)
         } catch (IllegalStateException e) {
             println e.message
             exception = true

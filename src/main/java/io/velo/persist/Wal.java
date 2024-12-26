@@ -18,7 +18,7 @@ import java.util.List;
 
 public class Wal implements InMemoryEstimate {
     public record V(long seq, int bucketIndex, long keyHash, long expireAt, int spType,
-                    String key, byte[] cvEncoded, boolean isFromMerge) {
+                    String key, byte[] cvEncoded, boolean isFromMerge) implements Comparable<V> {
         boolean isRemove() {
             return CompressedValue.isDeleted(cvEncoded);
         }
@@ -110,6 +110,11 @@ public class Wal implements InMemoryEstimate {
             }
 
             return new V(seq, bucketIndex, keyHash, expireAt, spType, new String(keyBytes), cvEncoded, false);
+        }
+
+        @Override
+        public int compareTo(@NotNull Wal.V o) {
+            return Long.compare(this.seq, o.seq);
         }
     }
 
@@ -515,9 +520,10 @@ public class Wal implements InMemoryEstimate {
         // 4 bytes for group index
         // 4 bytes for one group buffer size
         // 4 bytes for value write position and short value write position
-        // 8 bytes for last seq and short value last seq
+        // 8 bytes for last seq and 8 bytes short value last seq
         // value encoded + short value encoded
-        int n = 4 + 4 + 4 * 2 + 8 * 2 + ONE_GROUP_BUFFER_SIZE * 2;
+        int n = 4 + 4 + (4 + 4) + (8 + 8) + ONE_GROUP_BUFFER_SIZE * 2;
+        int realDataOffset = 4 + 4 + (4 + 4) + (8 + 8);
 
         var bytes = new byte[n];
         var buffer = ByteBuffer.wrap(bytes);
@@ -528,13 +534,30 @@ public class Wal implements InMemoryEstimate {
         buffer.putLong(lastSeqAfterPut);
         buffer.putLong(lastSeqShortValueAfterPut);
 
+        if (ConfForGlobal.pureMemory) {
+            for (var entry : delayToKeyBucketValues.entrySet()) {
+                var v = entry.getValue();
+                var encodedBytes = v.encode();
+                buffer.put(encodedBytes);
+            }
+
+            buffer.position(realDataOffset + ONE_GROUP_BUFFER_SIZE);
+            for (var entry : delayToKeyBucketShortValues.entrySet()) {
+                var v = entry.getValue();
+                var encodedBytes = v.encode();
+                buffer.put(encodedBytes);
+            }
+
+            return bytes;
+        }
+
         var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
 
         walSharedFile.seek(targetGroupBeginOffset);
-        walSharedFile.read(bytes, 16, ONE_GROUP_BUFFER_SIZE);
+        walSharedFile.read(bytes, realDataOffset, ONE_GROUP_BUFFER_SIZE);
 
         walSharedFileShortValue.seek(targetGroupBeginOffset);
-        walSharedFileShortValue.read(bytes, 16 + ONE_GROUP_BUFFER_SIZE, ONE_GROUP_BUFFER_SIZE);
+        walSharedFileShortValue.read(bytes, realDataOffset + ONE_GROUP_BUFFER_SIZE, ONE_GROUP_BUFFER_SIZE);
 
         return bytes;
     }
@@ -560,18 +583,22 @@ public class Wal implements InMemoryEstimate {
         lastSeqAfterPut = buffer.getLong();
         lastSeqShortValueAfterPut = buffer.getLong();
 
-        var targetGroupBeginOffset = oneGroupBufferSize * groupIndex1;
+        int realDataOffset = 4 + 4 + (4 + 4) + (8 + 8);
 
-        walSharedFile.seek(targetGroupBeginOffset);
-        walSharedFile.write(bytes, 16, oneGroupBufferSize);
+        if (!ConfForGlobal.pureMemory) {
+            var targetGroupBeginOffset = oneGroupBufferSize * groupIndex1;
 
-        walSharedFileShortValue.seek(targetGroupBeginOffset);
-        walSharedFileShortValue.write(bytes, 16 + oneGroupBufferSize, oneGroupBufferSize);
+            walSharedFile.seek(targetGroupBeginOffset);
+            walSharedFile.write(bytes, realDataOffset, oneGroupBufferSize);
+
+            walSharedFileShortValue.seek(targetGroupBeginOffset);
+            walSharedFileShortValue.write(bytes, realDataOffset + oneGroupBufferSize, oneGroupBufferSize);
+        }
 
         delayToKeyBucketValues.clear();
         delayToKeyBucketShortValues.clear();
-        var n1 = readBytesToList(delayToKeyBucketValues, false, bytes, 16, oneGroupBufferSize);
-        var n2 = readBytesToList(delayToKeyBucketShortValues, true, bytes, 16 + oneGroupBufferSize, oneGroupBufferSize);
+        var n1 = readBytesToList(delayToKeyBucketValues, false, bytes, realDataOffset, oneGroupBufferSize);
+        var n2 = readBytesToList(delayToKeyBucketShortValues, true, bytes, realDataOffset + oneGroupBufferSize, oneGroupBufferSize);
         if (groupIndex1 % 100 == 0) {
             log.warn("Repl slave fetch wal group success, group index={}, value size={}, short value size={}, slot={}",
                     groupIndex1, n1, n2, slot);
