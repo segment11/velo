@@ -101,7 +101,7 @@ public class OneSlotRead {
 
         var keyBytes = key.getBytes();
         var s = BaseCommand.slot(keyBytes, slotNumber);
-        var result = oneSlot.get(keyBytes, s.bucketIndex(), s.keyHash());
+        var result = oneSlot.get(keyBytes, s.bucketIndex(), s.keyHash(), s.keyHash32());
         assert result != null;
     }
 

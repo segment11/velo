@@ -118,8 +118,11 @@ dependencies {
     implementation group: 'io.github.segment11', name: 'segment_common', version: '1.2-SNAPSHOT'
     implementation group: 'io.github.segment11', name: 'segmentweb', version: '1.2-SNAPSHOT'
 
-    implementation group: 'org.openjdk.jmh', name: 'jmh-core', version: '1.36'
-    implementation group: 'org.openjdk.jmh', name: 'jmh-generator-annprocess', version: '1.36'
+//    implementation group: 'org.openjdk.jmh', name: 'jmh-core', version: '1.36'
+//    implementation group: 'org.openjdk.jmh', name: 'jmh-generator-annprocess', version: '1.36'
+
+    jmh 'org.openjdk.jmh:jmh-core:1.36'
+    jmh 'org.openjdk.jmh:jmh-generator-annprocess:1.36'
 
     testImplementation group: 'org.openjdk.jol', name: 'jol-core', version: '0.17'
     testImplementation group: 'org.spockframework', name: 'spock-core', version: '2.3-groovy-4.0'
@@ -130,7 +133,9 @@ jmh {
     fork = 1
     jmhVersion = '1.36'
 
-    includes = ['OneSlotRead*']
+    // change here to run target jmh tests
+//    includes = ['OneSlotRead*']
+    includes = ['BenchmarkXXHash*']
 }
 
 test {
@@ -138,7 +143,7 @@ test {
 
     maxHeapSize = '8G'
     // parallel = true
-    forkEvery = 4
+    forkEvery = 1
 
     testLogging {
         showStandardStreams = true
