@@ -827,21 +827,25 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             var fdReadWrite = fdReadWriteArray[fdIndex];
             if (segmentCount == 1) {
                 if (isAllZero(bytes)) {
+                    log.warn("Repl chunk segment bytes from master all 0, segment index={}, slot={}", segmentIndex, slot);
                     fdReadWrite.clearTargetSegmentIndexInMemory(segmentIndexTargetFd);
                 } else {
                     fdReadWrite.writeOneInner(segmentIndexTargetFd, bytes, false);
                 }
             } else {
+                var allZeroSegmentCount = 0;
                 for (int i = 0; i < segmentCount; i++) {
                     var oneSegmentBytes = new byte[chunkSegmentLength];
                     System.arraycopy(bytes, i * chunkSegmentLength, oneSegmentBytes, 0, chunkSegmentLength);
 
                     if (isAllZero(oneSegmentBytes)) {
-                        fdReadWrite.clearTargetSegmentIndexInMemory(segmentIndexTargetFd);
+                        allZeroSegmentCount++;
+                        fdReadWrite.clearTargetSegmentIndexInMemory(segmentIndexTargetFd + i);
                     } else {
                         fdReadWrite.writeOneInner(segmentIndexTargetFd + i, oneSegmentBytes, false);
                     }
                 }
+                log.warn("Repl chunk segment bytes from master all 0, segment count={}, slot={}", allZeroSegmentCount, slot);
             }
         } else {
             this.segmentIndex = segmentIndex;
