@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+@BetaExtend
 public class MetaIndexWords implements NeedCleanUp {
     private static final String META_INDEX_WORDS_FILE = "meta_index_words.dat";
 
@@ -178,6 +179,11 @@ public class MetaIndexWords implements NeedCleanUp {
 
     @MasterReset
     void reload() throws IOException {
+        if (ConfForGlobal.pureMemory) {
+            // todo
+            return;
+        }
+
         raf.seek(0);
         raf.read(inMemoryCachedBytes);
         log.warn("Index read meta index words file success, worker id={}", workerId);

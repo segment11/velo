@@ -17,6 +17,8 @@ import java.util.TreeSet;
 
 import static io.velo.persist.index.MetaIndexWords.ONE_WORD_MAX_LENGTH;
 
+// only a test to give an example, extend velo support other persist system
+@BetaExtend
 public class IndexHandler implements NeedCleanUp {
     private final byte workerId;
     private final Eventloop eventloop;

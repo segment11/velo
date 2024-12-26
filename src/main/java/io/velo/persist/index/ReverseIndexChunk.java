@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+@BetaExtend
 public class ReverseIndexChunk implements NeedCleanUp {
     // seq is long 8 bytes with time millis, 256KB = 256 * 1024 / 8 = 32768
     // means one word hold 32768 reverse document id
