@@ -4,10 +4,7 @@ import com.github.luben.zstd.Zstd;
 import com.google.common.io.Files;
 import com.kenai.jffi.MemoryIO;
 import com.kenai.jffi.PageManager;
-import io.velo.ConfForGlobal;
-import io.velo.ConfForSlot;
-import io.velo.NeedCleanUp;
-import io.velo.StaticMemoryPrepareBytesStats;
+import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
@@ -64,7 +61,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
     private static final Logger log = LoggerFactory.getLogger(FdReadWrite.class);
 
-    public FdReadWrite(short slot, String name, @NotNull LibC libC, @NotNull File file) throws IOException {
+    public FdReadWrite(short slot, String name, @NullableOnlyTest LibC libC, @NotNull File file) throws IOException {
         this.slot = slot;
         this.name = name;
         if (!ConfForGlobal.pureMemory) {
@@ -262,6 +259,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
     void setSegmentBytesFromLastSavedFileToMemory(byte[] segmentBytes, int segmentIndex) {
         allBytesBySegmentIndexForOneChunkFd[segmentIndex] = segmentBytes;
+        updateWriteIndex(segmentIndex);
     }
 
     @TestOnly
@@ -276,8 +274,12 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             return;
         }
 
+        var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
+        var beginBucketIndex = walGroupIndex * oneChargeBucketNumber;
+
         if (!isPureMemoryModeKeyBucketsUseCompression) {
             allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex] = sharedBytes;
+            updateWriteIndex(beginBucketIndex + oneChargeBucketNumber);
             return;
         }
 
@@ -288,6 +290,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         var costT = (System.nanoTime() - beginT) / 1000;
 
         allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex] = sharedBytesCompressed;
+        updateWriteIndex(beginBucketIndex + oneChargeBucketNumber);
 
         // stats
         keyBucketSharedBytesCompressTimeTotalUs += costT;
@@ -298,6 +301,10 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
     void setSharedBytesFromLastSavedFileToMemory(byte[] sharedBytes, int walGroupIndex) {
         allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex] = sharedBytes;
+
+        var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
+        var beginBucketIndex = walGroupIndex * oneChargeBucketNumber;
+        updateWriteIndex(beginBucketIndex + oneChargeBucketNumber);
     }
 
     @VisibleForTesting
@@ -333,10 +340,11 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     }
 
     // chunk fd is by relative segment index, key bucket fd is by bucket index
-    private LRUMap<Integer, byte[]> oneInnerBytesByIndexLRU;
+    @VisibleForTesting
+    LRUMap<Integer, byte[]> oneInnerBytesByIndexLRU;
 
     @VisibleForTesting
-    void initPureMemoryByteArray() {
+    public void initPureMemoryByteArray() {
         if (isChunkFd) {
             if (this.allBytesBySegmentIndexForOneChunkFd == null) {
                 var segmentNumberPerFd = ConfForSlot.global.confChunk.segmentNumberPerFd;
@@ -584,7 +592,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             oneInnerBytesByIndexLRU = new LRUMap<>(ConfForSlot.global.confBucket.bucketsPerSlot);
         }
 
-        int oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
+        var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
         var walGroupNumber = Wal.calcWalGroupNumber();
 
         int n = 0;
@@ -905,6 +913,10 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         setSharedBytesCompressToMemory(null, walGroupIndex);
     }
 
+    private void updateWriteIndex(int updatedOneIndex) {
+        writeIndex = Math.max(writeIndex, (long) updatedOneIndex * oneInnerLength);
+    }
+
     @VisibleForTesting
     int writeOneInnerBatchToMemory(int beginOneInnerIndex, byte[] bytes, int position) {
         var isSmallerThanOneInner = bytes.length < oneInnerLength;
@@ -919,6 +931,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             }
             // position is 0
             allBytesBySegmentIndexForOneChunkFd[beginOneInnerIndex] = bytes;
+            updateWriteIndex(beginOneInnerIndex);
             return bytes.length;
         }
 
@@ -953,6 +966,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             }
             offset += oneInnerLength;
         }
+
+        updateWriteIndex(beginOneInnerIndex + oneInnerCount);
         return oneInnerCount * oneInnerLength;
     }
 
@@ -973,17 +988,17 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     }
 
     @SlaveNeedReplay
-    public int writeSegmentsBatch(int segmentIndex, byte[] bytes, boolean isRefreshLRUCache) {
+    public int writeSegmentsBatch(int beginOneInnerIndex, byte[] bytes, boolean isRefreshLRUCache) {
         var segmentCount = bytes.length / oneInnerLength;
         if (segmentCount != BATCH_ONCE_SEGMENT_COUNT_PWRITE) {
             throw new IllegalArgumentException("Batch write bytes length not match once batch write segment count");
         }
 
         if (ConfForGlobal.pureMemory) {
-            return writeOneInnerBatchToMemory(segmentIndex, bytes, 0);
+            return writeOneInnerBatchToMemory(beginOneInnerIndex, bytes, 0);
         }
 
-        return writeInnerByBuffer(segmentIndex, writeSegmentBatchBuffer, (buffer) -> {
+        return writeInnerByBuffer(beginOneInnerIndex, writeSegmentBatchBuffer, (buffer) -> {
             // buffer already clear
             buffer.put(bytes);
         }, isRefreshLRUCache);
@@ -1025,6 +1040,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
                 this.allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex = new byte[allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length][];
             }
             log.info("Clear all bytes in memory, name={}", name);
+            writeIndex = 0;
             return;
         }
 
@@ -1044,11 +1060,42 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
                 }
             }
         }
+        writeIndex = 0;
 
         if (isLRUOn) {
             oneInnerBytesByIndexLRU.clear();
             log.info("LRU cache clear, name={}", name);
         }
+    }
+
+    public void truncateAfterTargetSegmentIndex(int targetSegmentIndex) {
+        var length = (long) targetSegmentIndex * oneInnerLength;
+
+        if (ConfForGlobal.pureMemory) {
+            for (int i = targetSegmentIndex; i < allBytesBySegmentIndexForOneChunkFd.length; i++) {
+                allBytesBySegmentIndexForOneChunkFd[i] = null;
+            }
+            writeIndex = length;
+            return;
+        }
+
+        if (ConfForGlobal.isUseDirectIO) {
+            var r = libC.ftruncate(fd, length);
+            if (r < 0) {
+                throw new RuntimeException("Truncate length error=" + strerror());
+            }
+            log.info("Truncate length fd={}, name={}", fd, name);
+        } else {
+            if (raf != null) {
+                try {
+                    raf.setLength(length);
+                    log.info("Truncate length raf, name={}", name);
+                } catch (IOException e) {
+                    throw new RuntimeException("Truncate length error, name=" + name, e);
+                }
+            }
+        }
+        writeIndex = length;
     }
 
     private String strerror() {

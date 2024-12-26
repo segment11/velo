@@ -439,7 +439,10 @@ class ChunkTest extends Specification {
         when:
         chunk.segmentIndex = 1
         chunk.mergedSegmentIndexEndLastTime = 100
-        chunk.fdReadWriteArray[0].setSegmentBytesFromLastSavedFileToMemory(new byte[chunk.chunkSegmentLength], 1)
+        def contentBytes = new byte[chunk.chunkSegmentLength * 2]
+        contentBytes[0] = (byte) 1
+        contentBytes[4096] = (byte) 1
+        chunk.writeSegmentsFromMasterExists(contentBytes, 0, 2)
         def bos = new ByteArrayOutputStream()
         def os = new DataOutputStream(bos)
         chunk.writeToSavedFileWhenPureMemory(os)
@@ -450,6 +453,21 @@ class ChunkTest extends Specification {
         chunk.segmentIndex == 1
         chunk.mergedSegmentIndexEndLastTime == 100
         !chunk.fdReadWriteArray[0].isTargetSegmentIndexNullInMemory(1)
+
+        when:
+        chunk.truncateChunkFdFromSegmentIndex(1)
+        then:
+        chunk.preadOneSegment(1) == null
+        chunk.preadOneSegment(0) != null
+
+        when:
+        // all byte 0 means clear
+        chunk.writeSegmentsFromMasterExists(new byte[chunk.chunkSegmentLength], 0, 1)
+        chunk.writeSegmentsFromMasterExists(new byte[chunk.chunkSegmentLength * 2], 1, 2)
+        then:
+        chunk.preadOneSegment(0) == null
+        chunk.preadOneSegment(1) == null
+        chunk.preadOneSegment(2) == null
 
         when:
         chunk.clearSegmentBytesWhenPureMemory(0)

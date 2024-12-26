@@ -28,6 +28,10 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     final int maxSegmentIndex;
     final int halfSegmentNumber;
 
+    public int getMaxSegmentIndex() {
+        return maxSegmentIndex;
+    }
+
     // seq long + cv number int + crc int
     public static final int SEGMENT_HEADER_LENGTH = 8 + 4 + 4;
 
@@ -76,6 +80,10 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     int[] fdLengths;
     @VisibleForTesting
     FdReadWrite[] fdReadWriteArray;
+
+    public FdReadWrite[] getFdReadWriteArray() {
+        return fdReadWriteArray;
+    }
 
     public Chunk(short slot, @NotNull File slotDir,
                  @NullableOnlyTest OneSlot oneSlot,
@@ -145,7 +153,22 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
 
         var fdReadWrite = fdReadWriteArray[fdIndex];
-        fdReadWrite.setSegmentBytesFromLastSavedFileToMemory(null, segmentIndexTargetFd);
+        fdReadWrite.clearTargetSegmentIndexInMemory(segmentIndexTargetFd);
+    }
+
+    public void truncateChunkFdFromSegmentIndex(int targetSegmentIndex) {
+        var fdIndex = targetFdIndex(targetSegmentIndex);
+        var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
+
+        var fdReadWrite = fdReadWriteArray[fdIndex];
+        fdReadWrite.truncateAfterTargetSegmentIndex(segmentIndexTargetFd);
+
+        log.warn("Truncate chunk fd from segment index={}, fd index={}", targetSegmentIndex, fdIndex);
+
+        for (int i = fdIndex + 1; i < fdReadWriteArray.length; i++) {
+            fdReadWriteArray[i].truncate();
+            log.warn("Truncate chunk fd={}, fd index={}", fdReadWriteArray[i].name, i);
+        }
     }
 
     @Override
@@ -784,6 +807,17 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         return segmentIndexToMerge;
     }
 
+    private boolean isAllZero(byte[] bytes) {
+        boolean isAllZero = true;
+        for (byte aByte : bytes) {
+            if (aByte != 0) {
+                isAllZero = false;
+                break;
+            }
+        }
+        return isAllZero;
+    }
+
     @SlaveReplay
     public void writeSegmentsFromMasterExists(byte[] bytes, int segmentIndex, int segmentCount) {
         if (ConfForGlobal.pureMemory) {
@@ -792,13 +826,21 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
             var fdReadWrite = fdReadWriteArray[fdIndex];
             if (segmentCount == 1) {
-                fdReadWrite.writeOneInner(segmentIndexTargetFd, bytes, false);
+                if (isAllZero(bytes)) {
+                    fdReadWrite.clearTargetSegmentIndexInMemory(segmentIndexTargetFd);
+                } else {
+                    fdReadWrite.writeOneInner(segmentIndexTargetFd, bytes, false);
+                }
             } else {
                 for (int i = 0; i < segmentCount; i++) {
                     var oneSegmentBytes = new byte[chunkSegmentLength];
                     System.arraycopy(bytes, i * chunkSegmentLength, oneSegmentBytes, 0, chunkSegmentLength);
 
-                    fdReadWrite.writeOneInner(segmentIndexTargetFd + i, oneSegmentBytes, false);
+                    if (isAllZero(oneSegmentBytes)) {
+                        fdReadWrite.clearTargetSegmentIndexInMemory(segmentIndexTargetFd);
+                    } else {
+                        fdReadWrite.writeOneInner(segmentIndexTargetFd + i, oneSegmentBytes, false);
+                    }
                 }
             }
         } else {

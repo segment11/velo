@@ -742,9 +742,11 @@ public class XGroup extends BaseCommand {
             return Repl.reply(slot, replPair, ReplType.s_exists_chunk_segments, new RawBytesContent(responseBytes));
         }
 
+        var nextSegmentsHasData = true;
         var chunkSegmentsBytes = oneSlot.preadForRepl(beginSegmentIndex);
         if (chunkSegmentsBytes == null) {
             chunkSegmentsBytes = new byte[0];
+            nextSegmentsHasData = oneSlot.hasData(beginSegmentIndex, oneSlot.getChunk().getMaxSegmentIndex() - beginSegmentIndex + 1);
         }
 
         var responseBytes = new byte[4 + 4 + 4 + masterMetaBytes.length + 4 + chunkSegmentsBytes.length];
@@ -753,9 +755,14 @@ public class XGroup extends BaseCommand {
         responseBuffer.putInt(segmentCount);
         responseBuffer.putInt(masterMetaBytes.length);
         responseBuffer.put(masterMetaBytes);
-        responseBuffer.putInt(chunkSegmentsBytes.length);
-        if (chunkSegmentsBytes.length > 0) {
-            responseBuffer.put(chunkSegmentsBytes);
+
+        if (nextSegmentsHasData) {
+            responseBuffer.putInt(chunkSegmentsBytes.length);
+            if (chunkSegmentsBytes.length > 0) {
+                responseBuffer.put(chunkSegmentsBytes);
+            }
+        } else {
+            responseBuffer.putInt(-1);
         }
 
         return Repl.reply(slot, replPair, ReplType.s_exists_chunk_segments, new RawBytesContent(responseBytes));
@@ -775,6 +782,7 @@ public class XGroup extends BaseCommand {
         }
 
         var oneSlot = localPersist.oneSlot(slot);
+        var chunk = oneSlot.getChunk();
         // content bytes length == 8 -> slave is same for this batch, skip
         if (contentBytes.length != 8) {
             var metaBytesLength = buffer.getInt();
@@ -783,11 +791,22 @@ public class XGroup extends BaseCommand {
             oneSlot.getMetaChunkSegmentFlagSeq().overwriteOneBatch(metaBytes, beginSegmentIndex, segmentCount);
 
             var chunkSegmentsLength = buffer.getInt();
-            if (chunkSegmentsLength == 0) {
+            if (chunkSegmentsLength == -1) {
+                // next segments no data
+                chunk.truncateChunkFdFromSegmentIndex(beginSegmentIndex);
+
+                // update meta segment flag init, not exactly same as master
+                var leftSegmentCount = chunk.getMaxSegmentIndex() - beginSegmentIndex + 1;
+                oneSlot.setSegmentMergeFlagBatch(beginSegmentIndex, leftSegmentCount,
+                        Chunk.Flag.init.flagByte(), null, MetaChunkSegmentFlagSeq.INIT_WAL_GROUP_INDEX);
+
+                // next step, fetch exists wal
+                return Repl.reply(slot, replPair, exists_wal, requestExistsWal(oneSlot, 0));
+            } else if (chunkSegmentsLength == 0) {
                 if (ConfForGlobal.pureMemory) {
                     for (int i = 0; i < segmentCount; i++) {
                         var targetSegmentIndex = beginSegmentIndex + i;
-                        oneSlot.getChunk().clearSegmentBytesWhenPureMemory(targetSegmentIndex);
+                        chunk.clearSegmentBytesWhenPureMemory(targetSegmentIndex);
                     }
                 } else {
                     // write 0 to files

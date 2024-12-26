@@ -156,6 +156,12 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         then:
         one.getSegmentSeqListBatchForRepl(10, 10) == seqLongList
 
+        when:
+        def seq0List = seqLongList.collect { 0L }
+        one.setSegmentMergeFlagBatch(10, 10, Chunk.Flag.merging.flagByte(), null, 0)
+        then:
+        one.getSegmentSeqListBatchForRepl(10, 10) == seq0List
+
         cleanup:
         one.clear()
         one.cleanUp()

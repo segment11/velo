@@ -317,6 +317,7 @@ class XGroupTest extends Specification {
         when:
         // chunk segment bytes exists
         oneSlot.chunk.writeSegmentToTargetSegmentIndex(new byte[4096], 0)
+        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_chunk_segments)
@@ -780,6 +781,7 @@ class XGroupTest extends Specification {
         requestBuffer.putInt(ConfForSlot.global.confChunk.maxSegmentNumber() - FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD)
         r = x.handleRepl()
         then:
+        // next step
         r.isReplType(ReplType.exists_wal)
 
         when:
@@ -821,8 +823,26 @@ class XGroupTest extends Specification {
         // next batch
         r.isReplType(ReplType.exists_chunk_segments)
 
+        when:
+        // no next segments
+        requestBuffer.putInt(8 + 4 + metaBytes.length, -1)
+        r = x.handleRepl()
+        then:
+        // next step
+        r.isReplType(ReplType.exists_wal)
+
+        when:
+        ConfForGlobal.pureMemory = true
+        oneSlot.chunk.fdReadWriteArray[0].initPureMemoryByteArray()
+        requestBuffer.putInt(8 + 4 + metaBytes.length, 0)
+        r = x.handleRepl()
+        then:
+        // next batch
+        r.isReplType(ReplType.exists_chunk_segments)
+
         // exists wal
         when:
+        ConfForGlobal.pureMemory = false
         data4[2][0] = ReplType.s_exists_wal.code
         contentBytes = new byte[16 + 2 * Wal.ONE_GROUP_BUFFER_SIZE]
         requestBuffer = ByteBuffer.wrap(contentBytes)

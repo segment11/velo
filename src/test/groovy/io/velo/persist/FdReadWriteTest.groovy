@@ -436,4 +436,77 @@ class FdReadWriteTest extends Specification {
         ConfForGlobal.pureMemory = false
         ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression = false
     }
+
+    def 'test truncate after target segment index'() {
+        given:
+        def oneFile1 = new File('/tmp/test-fd-read-write-chunk')
+        if (oneFile1.exists()) {
+            oneFile1.delete()
+        }
+
+        def segmentLength = ConfForSlot.global.confChunk.segmentLength
+
+        def fdChunk = new FdReadWrite(slot, 'test', null, oneFile1)
+        fdChunk.initByteBuffers(true)
+
+        when:
+        fdChunk.writeSegmentsBatch(0, new byte[segmentLength * FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE], false)
+        fdChunk.truncateAfterTargetSegmentIndex(1)
+        then:
+        fdChunk.readOneInner(0, false) != null
+        fdChunk.readOneInner(1, false) == null
+
+        when:
+        ConfForGlobal.pureMemory = true
+        fdChunk.initPureMemoryByteArray()
+        fdChunk.writeSegmentsBatch(0, new byte[segmentLength * FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE], false)
+        fdChunk.truncateAfterTargetSegmentIndex(1)
+        then:
+        fdChunk.readOneInner(0, false) != null
+        fdChunk.readOneInner(1, false) == null
+
+        cleanup:
+        ConfForGlobal.pureMemory = false
+        fdChunk.truncate()
+        fdChunk.cleanUp()
+    }
+
+    def 'test warm up'() {
+        given:
+        def oneFile2 = new File('/tmp/test-fd-read-write-key-bucket')
+        if (!oneFile2.exists()) {
+            FileUtils.touch(oneFile2)
+        }
+
+        ConfForSlot.global.confBucket.lruPerFd.maxSize = 0
+
+        def fdKeyBucket = new FdReadWrite(slot, 'test2', null, oneFile2)
+        fdKeyBucket.initByteBuffers(false)
+
+        when:
+        // no data
+        fdKeyBucket.warmUp()
+        fdKeyBucket.warmUp()
+        then:
+        fdKeyBucket.oneInnerBytesByIndexLRU.isEmpty()
+
+        when:
+        fdKeyBucket.writeOneInner(0, new byte[KeyLoader.KEY_BUCKET_ONE_COST_SIZE], false)
+        fdKeyBucket.writeOneInner(1, new byte[KeyLoader.KEY_BUCKET_ONE_COST_SIZE], false)
+        def n0 = fdKeyBucket.warmUp()
+        then:
+        n0 != 0
+        fdKeyBucket.oneInnerBytesByIndexLRU.size() == 2
+
+        when:
+        ConfForGlobal.pureMemory = true
+        def n1 = fdKeyBucket.warmUp()
+        then:
+        n1 == 0
+
+        cleanup:
+        ConfForGlobal.pureMemory = false
+        fdKeyBucket.truncate()
+        fdKeyBucket.cleanUp()
+    }
 }

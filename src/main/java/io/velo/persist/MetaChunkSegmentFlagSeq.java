@@ -8,6 +8,7 @@ import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,7 +24,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
     // flag byte + seq long + wal group index int
     public static final int ONE_LENGTH = 1 + 8 + 4;
 
-    private static final int INIT_WAL_GROUP_INDEX = -1;
+    public static final int INIT_WAL_GROUP_INDEX = -1;
 
     private final short slot;
     private final int maxSegmentNumber;
@@ -285,18 +286,18 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
         StatKeyCountInBuckets.writeToRaf(offset, bytes, inMemoryCachedByteBuffer, raf);
     }
 
-    public void setSegmentMergeFlagBatch(int beginSegmentIndex,
-                                         int segmentCount,
-                                         byte flagByte,
-                                         @NotNull List<Long> segmentSeqList,
-                                         int walGroupIndex) {
+    void setSegmentMergeFlagBatch(int beginSegmentIndex,
+                                  int segmentCount,
+                                  byte flagByte,
+                                  @Nullable List<Long> segmentSeqList,
+                                  int walGroupIndex) {
         var offset = beginSegmentIndex * ONE_LENGTH;
 
         var bytes = new byte[segmentCount * ONE_LENGTH];
         var wrap = ByteBuffer.wrap(bytes);
         for (int i = 0; i < segmentCount; i++) {
             wrap.put(i * ONE_LENGTH, flagByte);
-            wrap.putLong(i * ONE_LENGTH + 1, segmentSeqList.get(i));
+            wrap.putLong(i * ONE_LENGTH + 1, segmentSeqList == null ? 0L : segmentSeqList.get(i));
             wrap.putInt(i * ONE_LENGTH + 1 + 8, walGroupIndex);
         }
 
