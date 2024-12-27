@@ -2077,7 +2077,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             map.put("global_dict_size", new SimpleGauge.ValueWithLabelValues((double) DictMap.getInstance().dictSize(), labelValues));
             // global config for one slot
             map.put("global_estimate_key_number", new SimpleGauge.ValueWithLabelValues((double) ConfForGlobal.estimateKeyNumber, labelValues));
-            map.put("global_estimate_one_value_length", new SimpleGauge.ValueWithLabelValues((double) ConfForGlobal.estimateOneValueLength, labelValues));
             map.put("global_slot_number", new SimpleGauge.ValueWithLabelValues((double) slotNumber, labelValues));
             map.put("global_key_buckets_per_slot", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confBucket.bucketsPerSlot, labelValues));
             map.put("global_chunk_segment_number_per_fd", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confChunk.segmentNumberPerFd, labelValues));

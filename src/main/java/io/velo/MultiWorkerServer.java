@@ -734,9 +734,7 @@ public class MultiWorkerServer extends Launcher {
         ConfForSlot confForSlot(Config config) throws IOException {
             // global conf
             ConfForGlobal.estimateKeyNumber = config.get(ofLong(), "estimateKeyNumber", 1_000_000L);
-            ConfForGlobal.estimateOneValueLength = config.get(ofInteger(), "estimateOneValueLength", 200);
             log.warn("Global config, estimateKeyNumber={}", ConfForGlobal.estimateKeyNumber);
-            log.warn("Global config, estimateOneValueLength={}", ConfForGlobal.estimateOneValueLength);
 
             ConfForGlobal.datacenterId = config.get(ofLong(), "datacenterId", 0L);
             ConfForGlobal.machineId = config.get(ofLong(), "machineId", 0L);
@@ -884,8 +882,6 @@ public class MultiWorkerServer extends Launcher {
                 c.confChunk.lruPerFd.maxSize = config.get(ofInteger(), "chunk.lruPerFd.maxSize");
             }
 
-            c.confChunk.resetByOneValueLength(ConfForGlobal.estimateOneValueLength);
-
             // override wal conf
             if (config.getChild("wal.oneChargeBucketNumber").hasValue()) {
                 c.confWal.oneChargeBucketNumber = config.get(ofInteger(), "wal.oneChargeBucketNumber");
@@ -900,8 +896,6 @@ public class MultiWorkerServer extends Launcher {
             if (config.getChild("wal.shortValueSizeTrigger").hasValue()) {
                 c.confWal.shortValueSizeTrigger = config.get(ofInteger(), "wal.shortValueSizeTrigger");
             }
-
-            c.confWal.resetByOneValueLength(ConfForGlobal.estimateOneValueLength);
 
             if (config.getChild("repl.binlogForReadCacheSegmentMaxCount").hasValue()) {
                 c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount").shortValue();

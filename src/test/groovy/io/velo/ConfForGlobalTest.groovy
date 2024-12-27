@@ -8,7 +8,6 @@ class ConfForGlobalTest extends Specification {
     def 'test all'() {
         given:
         println ConfForGlobal.estimateKeyNumber
-        println ConfForGlobal.estimateOneValueLength
 
         println ConfForGlobal.isValueSetUseCompression
         println ConfForGlobal.isOnDynTrainDictForCompression

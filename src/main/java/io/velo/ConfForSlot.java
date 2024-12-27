@@ -1,6 +1,8 @@
 package io.velo;
 
-import io.velo.persist.*;
+import io.velo.persist.KeyBucket;
+import io.velo.persist.LocalPersist;
+import io.velo.persist.Wal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,7 +40,6 @@ public enum ConfForSlot {
         map.put("datacenterId", ConfForGlobal.datacenterId);
         map.put("machineId", ConfForGlobal.machineId);
         map.put("estimateKeyNumber", ConfForGlobal.estimateKeyNumber);
-        map.put("estimateOneValueLength", ConfForGlobal.estimateOneValueLength);
         map.put("pureMemory", ConfForGlobal.pureMemory);
         map.put("pureMemoryV2", ConfForGlobal.pureMemoryV2);
         map.put("slotNumber", ConfForGlobal.slotNumber);
@@ -81,7 +82,6 @@ public enum ConfForSlot {
     public String toString() {
         return "ConfForSlot{" +
                 "estimateKeyNumber=" + ConfForGlobal.estimateKeyNumber +
-                ", estimateOneValueLength=" + ConfForGlobal.estimateOneValueLength +
                 ", isValueSetUseCompression=" + ConfForGlobal.isValueSetUseCompression +
                 ", confChunk=" + confChunk +
                 ", confBucket=" + confBucket +
@@ -163,88 +163,7 @@ public enum ConfForSlot {
             return segmentNumberPerFd * fdPerChunk;
         }
 
-        private int segmentNumberPerFdOld;
-        private byte fdPerChunkOld;
-        private int segmentLengthOld;
-
-        void mark() {
-            this.segmentNumberPerFdOld = this.segmentNumberPerFd;
-            this.fdPerChunkOld = this.fdPerChunk;
-            this.segmentLengthOld = this.segmentLength;
-        }
-
-        void reset() {
-            this.segmentNumberPerFd = this.segmentNumberPerFdOld;
-            this.fdPerChunk = this.fdPerChunkOld;
-            this.segmentLength = this.segmentLengthOld;
-        }
-
         public byte[] REPL_EMPTY_BYTES_FOR_ONCE_WRITE;
-
-        public void resetByOneValueLength(int estimateOneValueLength) {
-            // when call this method, chunk segment length will not be changed
-            REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * segmentLength];
-
-            boolean isValueSetUseCompression1 = ConfForGlobal.isValueSetUseCompression;
-            // if not use compression, chunk files number need to be doubled
-            if (!isValueSetUseCompression1) {
-                this.fdPerChunk = (byte) (2 * this.fdPerChunk);
-            }
-            if (!isSegmentUseCompression) {
-                this.fdPerChunk = (byte) (2 * this.fdPerChunk);
-            }
-            if (ConfForGlobal.pureMemory) {
-                // save memory, do merge more frequently
-                this.fdPerChunk = (byte) (this.fdPerChunk / 4);
-                if (this.fdPerChunk < 1) {
-                    this.fdPerChunk = 1;
-                }
-            }
-
-            if (estimateOneValueLength <= 200) {
-                Chunk.ONCE_PREPARE_SEGMENT_COUNT_FOR_MERGE = isValueSetUseCompression1 ? 8 : 16;
-                return;
-            }
-
-            if (estimateOneValueLength <= 500) {
-                Chunk.ONCE_PREPARE_SEGMENT_COUNT_FOR_MERGE = isValueSetUseCompression1 ? 8 : 16;
-                if (!ConfForGlobal.pureMemory) {
-                    this.fdPerChunk = (byte) (2 * this.fdPerChunk);
-                }
-                return;
-            }
-
-            if (estimateOneValueLength <= 1000) {
-                this.segmentNumberPerFd = this.segmentNumberPerFd / 4;
-                this.segmentLength = PAGE_SIZE * 4;
-
-                this.fdPerChunk = (byte) Math.min(MAX_FD_PER_CHUNK, (ConfForGlobal.pureMemory ? 2 : 4) * this.fdPerChunk * (isValueSetUseCompression1 ? 1 : 2));
-
-                Chunk.ONCE_PREPARE_SEGMENT_COUNT_FOR_MERGE = isValueSetUseCompression1 ? 8 : 16;
-                return;
-            }
-
-            if (estimateOneValueLength <= 2000) {
-                this.segmentNumberPerFd = this.segmentNumberPerFd / 8;
-                this.segmentLength = PAGE_SIZE * 8;
-                this.fdPerChunk = (byte) Math.min(MAX_FD_PER_CHUNK, (ConfForGlobal.pureMemory ? 4 : 8) * this.fdPerChunk * (isValueSetUseCompression1 ? 1 : 2));
-
-                Chunk.ONCE_PREPARE_SEGMENT_COUNT_FOR_MERGE = isValueSetUseCompression1 ? 8 : 16;
-                return;
-            }
-
-            if (estimateOneValueLength <= ConfForGlobal.MAX_ESTIMATE_ONE_VALUE_LENGTH) {
-                this.segmentNumberPerFd = this.segmentNumberPerFd / 16;
-                this.segmentLength = PAGE_SIZE * 16;
-                this.fdPerChunk = (byte) Math.min(MAX_FD_PER_CHUNK, (ConfForGlobal.pureMemory ? 8 : 16) * this.fdPerChunk * (isValueSetUseCompression1 ? 1 : 2));
-
-                Chunk.ONCE_PREPARE_SEGMENT_COUNT_FOR_MERGE = isValueSetUseCompression1 ? 8 : 16;
-                return;
-            }
-
-            throw new IllegalArgumentException("Estimate one value length too large=" + estimateOneValueLength +
-                    ", should be less than " + ConfForGlobal.MAX_ESTIMATE_ONE_VALUE_LENGTH);
-        }
 
         @Override
         public String toString() {
@@ -307,60 +226,6 @@ public enum ConfForSlot {
                 StaticMemoryPrepareBytesStats.add(StaticMemoryPrepareBytesStats.Type.wal_cache, sum, false);
             }
             Wal.doLogAfterInit();
-        }
-
-        public void resetByOneValueLength(int estimateOneValueLength) {
-            if (ConfForGlobal.pureMemory) {
-                // save memory in wal batch cache, todo, change here
-                if (ConfForGlobal.pureMemoryV2) {
-                    // only set key hash 32, faster
-                    this.valueSizeTrigger = 200;
-                    this.shortValueSizeTrigger = 200;
-                    this.oneChargeBucketNumber = 64;
-                    resetWalStaticValues(PAGE_SIZE * oneChargeBucketNumber);
-                    return;
-                }
-
-                this.valueSizeTrigger = 200;
-                this.shortValueSizeTrigger = 200;
-                this.oneChargeBucketNumber = 16;
-                resetWalStaticValues(PAGE_SIZE * oneChargeBucketNumber);
-                return;
-            }
-
-            if (estimateOneValueLength <= 200) {
-                resetWalStaticValues(PAGE_SIZE * oneChargeBucketNumber / 4);
-                return;
-            }
-
-            if (estimateOneValueLength <= 500) {
-                resetWalStaticValues(PAGE_SIZE * oneChargeBucketNumber / 2);
-                return;
-            }
-
-            if (estimateOneValueLength <= 1000) {
-                this.valueSizeTrigger = 100;
-                this.oneChargeBucketNumber = 16;
-                resetWalStaticValues(PAGE_SIZE * oneChargeBucketNumber);
-                return;
-            }
-
-            if (estimateOneValueLength <= 2000) {
-                this.valueSizeTrigger = 50;
-                this.oneChargeBucketNumber = 16;
-                resetWalStaticValues(PAGE_SIZE * oneChargeBucketNumber);
-                return;
-            }
-
-            if (estimateOneValueLength <= ConfForGlobal.MAX_ESTIMATE_ONE_VALUE_LENGTH) {
-                this.valueSizeTrigger = 20;
-                this.oneChargeBucketNumber = 16;
-                resetWalStaticValues(PAGE_SIZE * oneChargeBucketNumber);
-                return;
-            }
-
-            throw new IllegalArgumentException("Estimate one value length too large=" + estimateOneValueLength +
-                    ", should be less than " + ConfForGlobal.MAX_ESTIMATE_ONE_VALUE_LENGTH);
         }
 
         @Override
