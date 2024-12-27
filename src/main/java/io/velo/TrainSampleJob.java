@@ -52,7 +52,7 @@ public class TrainSampleJob {
         TrainSampleJob.dictKeyPrefixEndIndex = dictKeyPrefixEndIndex;
     }
 
-    public static final String KEY_IN_DYN_CONFIG = "dict_key_prefix_groups";
+    public static final String KEY_IN_DYN_CONFIG = "dict_key_prefix_or_suffix_groups";
 
     private static ArrayList<String> keyPrefixOrSuffixGroupList = new ArrayList<>();
 
@@ -66,11 +66,11 @@ public class TrainSampleJob {
         TrainSampleJob.keyPrefixOrSuffixGroupList = keyPrefixOrSuffixGroupList;
     }
 
-    public synchronized static void addKeyPrefixGroupIfNotExist(String keyPrefixGroup) {
-        if (keyPrefixOrSuffixGroupList.contains(keyPrefixGroup)) {
+    public synchronized static void addKeyPrefixGroupIfNotExist(String keyPrefixOrSuffixGroup) {
+        if (keyPrefixOrSuffixGroupList.contains(keyPrefixOrSuffixGroup)) {
             return;
         }
-        keyPrefixOrSuffixGroupList.add(keyPrefixGroup);
+        keyPrefixOrSuffixGroupList.add(keyPrefixOrSuffixGroup);
         // longer first
         keyPrefixOrSuffixGroupList.sort((a, b) -> b.length() - a.length());
     }

@@ -599,19 +599,19 @@ class ManageCommand extends BaseCommand {
         }
 
         def subSubCmd = new String(data[2]).toLowerCase()
-        if (subSubCmd == 'set-key-prefix-groups') {
-            // manage dict set-key-prefix-groups keyPrefix1,keyPrefix2
+        if (subSubCmd == 'set-key-prefix-or-suffix--groups') {
+            // manage dict set-key-prefix-or-suffix-groups keyPrefix1,keyPrefix2
             if (data.length != 4) {
                 return ErrorReply.FORMAT
             }
 
-            def keyPrefixGroups = new String(data[3])
-            if (!keyPrefixGroups) {
+            def keyPrefixOrSuffixGroup = new String(data[3])
+            if (!keyPrefixOrSuffixGroup) {
                 return ErrorReply.SYNTAX
             }
 
             var firstOneSlot = localPersist.currentThreadFirstOneSlot()
-            firstOneSlot.dynConfig.update(TrainSampleJob.KEY_IN_DYN_CONFIG, keyPrefixGroups);
+            firstOneSlot.dynConfig.update(TrainSampleJob.KEY_IN_DYN_CONFIG, keyPrefixOrSuffixGroup);
 
             return OKReply.INSTANCE
         }

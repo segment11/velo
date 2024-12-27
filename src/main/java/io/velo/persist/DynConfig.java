@@ -49,10 +49,10 @@ public class DynConfig {
             }
 
             if (TrainSampleJob.KEY_IN_DYN_CONFIG.equals(key)) {
-                var keyPrefixGroups = (String) value;
-                ArrayList<String> keyPrefixGroupList = new ArrayList<>(Arrays.asList(keyPrefixGroups.split(",")));
+                var keyPrefixOrSuffixGroups = (String) value;
+                ArrayList<String> keyPrefixOrSuffixGroupList = new ArrayList<>(Arrays.asList(keyPrefixOrSuffixGroups.split(",")));
 
-                TrainSampleJob.setKeyPrefixOrSuffixGroupList(keyPrefixGroupList);
+                TrainSampleJob.setKeyPrefixOrSuffixGroupList(keyPrefixOrSuffixGroupList);
                 log.warn("Dyn config for global set dict_key_prefix_groups={}, slot={}", value, currentSlot);
             }
 
