@@ -5,6 +5,9 @@ import io.velo.MultiWorkerServer;
 import io.velo.SocketInspector;
 import io.velo.TrainSampleJob;
 import io.velo.monitor.BigKeyTopK;
+import io.velo.type.RedisHashKeys;
+import io.velo.type.RedisList;
+import io.velo.type.RedisZSet;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
@@ -46,19 +49,30 @@ public class DynConfig {
             if (SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG.equals(key)) {
                 MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections((int) value);
                 log.warn("Dyn config for global set max_connections={}, slot={}", value, currentSlot);
-            }
-
-            if (TrainSampleJob.KEY_IN_DYN_CONFIG.equals(key)) {
+            } else if (TrainSampleJob.KEY_IN_DYN_CONFIG.equals(key)) {
                 var keyPrefixOrSuffixGroups = (String) value;
                 ArrayList<String> keyPrefixOrSuffixGroupList = new ArrayList<>(Arrays.asList(keyPrefixOrSuffixGroups.split(",")));
 
                 TrainSampleJob.setKeyPrefixOrSuffixGroupList(keyPrefixOrSuffixGroupList);
                 log.warn("Dyn config for global set dict_key_prefix_groups={}, slot={}", value, currentSlot);
-            }
-
-            if (BigKeyTopK.KEY_IN_DYN_CONFIG.equals(key)) {
+            } else if (BigKeyTopK.KEY_IN_DYN_CONFIG.equals(key)) {
                 oneSlot.initBigKeyTopK(Integer.parseInt(value.toString()));
                 log.warn("Global config for current slot set monitor_big_key_top_k={}, slot={}", value, currentSlot);
+            } else if ("type_zset_member_max_length".equals(key)) {
+                RedisZSet.ZSET_MEMBER_MAX_LENGTH = Short.parseShort(value.toString());
+                log.warn("Dyn config for global set zset_member_max_length={}, slot={}", value, currentSlot);
+            } else if ("type_set_member_max_length".equals(key)) {
+                RedisHashKeys.SET_MEMBER_MAX_LENGTH = Short.parseShort(value.toString());
+                log.warn("Dyn config for global set set_member_max_length={}, slot={}", value, currentSlot);
+            } else if ("type_zset_max_size".equals(key)) {
+                RedisZSet.ZSET_MAX_SIZE = Short.parseShort(value.toString());
+                log.warn("Dyn config for global set zset_max_size={}, slot={}", value, currentSlot);
+            } else if ("type_hash_max_size".equals(key)) {
+                RedisHashKeys.HASH_MAX_SIZE = Short.parseShort(value.toString());
+                log.warn("Dyn config for global set hash_max_size={}, slot={}", value, currentSlot);
+            } else if ("type_list_max_size".equals(key)) {
+                RedisList.LIST_MAX_SIZE = Short.parseShort(value.toString());
+                log.warn("Dyn config for global set list_max_size={}, slot={}", value, currentSlot);
             }
             // todo
         }

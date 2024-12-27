@@ -153,6 +153,7 @@ class LocalPersistTest extends Specification {
         short slotNumber = 1
 
         ConfForGlobal.netListenAddresses = 'localhost:7379'
+        ConfForGlobal.initDynConfigItems.a = '97'
         RequestHandler.initMultiShardShadows(netWorkers)
 
         def snowFlakes = new SnowFlake[netWorkers]

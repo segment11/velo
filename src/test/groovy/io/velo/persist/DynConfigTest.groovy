@@ -64,6 +64,11 @@ class DynConfigTest extends Specification {
         config.update(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, 100)
         config.update(TrainSampleJob.KEY_IN_DYN_CONFIG, 'key:,xxx:')
         config.update(BigKeyTopK.KEY_IN_DYN_CONFIG, 100)
+        config.update('type_zset_member_max_length', 255)
+        config.update('type_set_member_max_length', 255)
+        config.update('type_zset_max_size', 4096)
+        config.update('type_hash_max_size', 4096)
+        config.update('type_list_max_size', 4096)
         then:
         config.afterUpdateCallback != null
         config.masterUuid == 1234L

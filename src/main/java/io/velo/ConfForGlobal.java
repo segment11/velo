@@ -1,5 +1,7 @@
 package io.velo;
 
+import java.util.HashMap;
+
 public class ConfForGlobal {
     private ConfForGlobal() {
     }
@@ -60,4 +62,7 @@ public class ConfForGlobal {
 
     // switch
     public static boolean requestSummary = false;
+
+    // dyn-config
+    public static final HashMap<String, String> initDynConfigItems = new HashMap<>();
 }

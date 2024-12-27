@@ -807,6 +807,14 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.requestSummary = config.get(ofBoolean(), "requestSummary", false);
             log.warn("Global config, requestSummary={}", ConfForGlobal.requestSummary);
 
+            var dynConfig = config.getChild("dyn-config");
+            if (dynConfig != null) {
+                dynConfig.getChildren().forEach((k, v) -> {
+                    ConfForGlobal.initDynConfigItems.put(k, v.getValue());
+                });
+            }
+            log.warn("Global config, initDynConfigItems={}", ConfForGlobal.initDynConfigItems);
+
             DictMap.TO_COMPRESS_MIN_DATA_LENGTH = config.get(ofInteger(), "toCompressMinDataLength", 64);
 
             ValkeyRawConfSupport.load();

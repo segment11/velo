@@ -313,10 +313,12 @@ class MultiWorkerServerTest extends Specification {
                 .with("repl.binlogForReadCacheSegmentMaxCount", cc.confRepl.binlogForReadCacheSegmentMaxCount.toString())
                 .with("big.string.lru.maxSize", cc.lruBigString.maxSize.toString())
                 .with("kv.lru.maxSize", cc.lruKeyAndCompressedValueEncoded.maxSize.toString())
+                .with("dyn-config", Config.create().with("a", "b"))
         m1.skipZookeeperConnectCheck = true
         m1.confForSlot(configX)
         m1.beforeCreateHandler(c, snowFlakes, configX)
         then:
+        ConfForGlobal.initDynConfigItems.size() == 1
         1 == 1
 
         when:

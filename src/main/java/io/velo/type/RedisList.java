@@ -14,7 +14,7 @@ public class RedisList {
     // change here to limit list size
     // values encoded compressed length should <= 4KB, suppose ratio is 0.25, then 16KB
     // suppose value length is 32, then 16KB / 32 = 512
-    public static final short LIST_MAX_SIZE = Short.MAX_VALUE;
+    public static short LIST_MAX_SIZE = Short.MAX_VALUE;
 
     @VisibleForTesting
     // size short + dict seq int + body bytes length int + crc int

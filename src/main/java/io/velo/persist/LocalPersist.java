@@ -150,7 +150,7 @@ public class LocalPersist implements NeedCleanUp {
         initSlotsAgainAfterMultiShardLoadedOrChanged();
     }
 
-    public void initSlotsAgainAfterMultiShardLoadedOrChanged() {
+    public void initSlotsAgainAfterMultiShardLoadedOrChanged() throws IOException {
         var firstOneSlot = firstOneSlot();
 
         for (var oneSlot : oneSlots) {
@@ -160,6 +160,12 @@ public class LocalPersist implements NeedCleanUp {
             if (firstOneSlot != null && oneSlot.slot() == firstOneSlot.slot()) {
                 DictMap.getInstance().setBinlog(oneSlot.getBinlog());
                 log.warn("Set dict map binlog to slot={}", oneSlot.slot());
+
+                if (!ConfForGlobal.initDynConfigItems.isEmpty()) {
+                    for (var entry : ConfForGlobal.initDynConfigItems.entrySet()) {
+                        oneSlot.getDynConfig().update(entry.getKey(), entry.getValue());
+                    }
+                }
             }
         }
     }
