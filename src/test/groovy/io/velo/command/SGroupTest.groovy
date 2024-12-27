@@ -8,7 +8,6 @@ import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
 import io.velo.repl.LeaderSelector
-import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.reply.*
 import io.velo.type.RedisHashKeys
 import io.velo.type.RedisList
@@ -216,15 +215,17 @@ sunionstore
     def 'test scan'() {
         given:
         def data8 = new byte[8][]
-        data8[1] = new ScanCursor((short) 0, 0, (short) 0, (byte) 0).toLong().toString().bytes
+        data8[1] = '0'.bytes
         data8[2] = 'match'.bytes
-        data8[3] = 'key:'.bytes
+        data8[3] = '*'.bytes
         data8[4] = 'count'.bytes
         data8[5] = '10'.bytes
         data8[6] = 'type'.bytes
-        data8[7] = 'string'.bytes
+        data8[7] = '*'.bytes
 
-        def sGroup = new SGroup('scan', data8, null)
+        def socket = SocketInspectorTest.mockTcpSocket()
+
+        def sGroup = new SGroup('scan', data8, socket)
         sGroup.from(BaseCommand.mockAGroup())
 
         and:
@@ -232,54 +233,96 @@ sunionstore
         ConfForSlot.global.confBucket.bucketsPerSlot = 4096
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.startIndexHandlerPool()
+
+        and:
+        def keyAnalysisHandler = localPersist.indexHandlerPool.keyAnalysisHandler
+        int valueBytesAsInt = 10 << 8
+        10.times {
+            keyAnalysisHandler.addKey('key:' + (it.toString().padLeft(12, '0')), valueBytesAsInt)
+        }
+        Thread.sleep(1000)
 
         when:
         def reply = sGroup.scan()
         then:
-        reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result instanceof MultiBulkReply
+                    && ((MultiBulkReply) result).replies.length == 2
+                    && ((MultiBulkReply) result).replies[1] instanceof MultiBulkReply
+                    && (((MultiBulkReply) result).replies[1] as MultiBulkReply).replies.length == 10
+        }.result
+
+        when:
+        def veloUserData = SocketInspector.createUserDataIfNotSet(socket)
+        veloUserData.lastScanAssignCursor = 100L
+        veloUserData.lastScanTargetKeyBytes = 'key:000000000001'.bytes
+        data8[1] = '100'.bytes
+        reply = sGroup.scan()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result instanceof MultiBulkReply
+                    && ((MultiBulkReply) result).replies.length == 2
+                    && ((MultiBulkReply) result).replies[1] instanceof MultiBulkReply
+                    && (((MultiBulkReply) result).replies[1] as MultiBulkReply).replies.length == 9
+        }.result
+
+        when:
+        data8[1] = '1000'.bytes
+        reply = sGroup.scan()
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        data8[1] = '0'.bytes
+        int valueBytesAsIntForShortTypeString = 10 << 8 | (byte) 1
+        10.times {
+            keyAnalysisHandler.addKey('key:' + (it.toString().padLeft(12, '0')), valueBytesAsIntForShortTypeString)
+        }
+        Thread.sleep(1000)
+        data8[7] = 'string'.bytes
+        reply = sGroup.scan()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result instanceof MultiBulkReply
+                    && ((MultiBulkReply) result).replies.length == 2
+        }.result
 
         when:
         data8[7] = 'hash'.bytes
         reply = sGroup.scan()
         then:
-        reply instanceof MultiBulkReply
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result == MultiBulkReply.SCAN_EMPTY
+        }.result
 
         when:
         data8[7] = 'list'.bytes
         reply = sGroup.scan()
         then:
-        reply instanceof MultiBulkReply
+        reply instanceof AsyncReply
 
         when:
         data8[7] = 'set'.bytes
         reply = sGroup.scan()
         then:
-        reply instanceof MultiBulkReply
+        reply instanceof AsyncReply
 
         when:
         data8[7] = 'zset'.bytes
         reply = sGroup.scan()
         then:
-        reply instanceof MultiBulkReply
+        reply instanceof AsyncReply
 
         when:
         data8[7] = 'xxx'.bytes
         reply = sGroup.scan()
         then:
         reply instanceof ErrorReply
-
-        when:
-        data8[7] = 'string'.bytes
-        def shortValueList = Mock.prepareShortValueList(10, 0)
-        def xForBinlog = new XOneWalGroupPersist(true, false, 0)
-        def keyLoader = localPersist.oneSlot(slot).keyLoader
-        keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList, xForBinlog)
-        reply = sGroup.scan()
-        then:
-        reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
 
         when:
         // invalid integer
@@ -303,7 +346,7 @@ sunionstore
 
         when:
         def data7 = new byte[7][]
-        data7[1] = new ScanCursor((short) 0, 0, (short) 0, (byte) 0).toLong().toString().bytes
+        data7[1] = '0'.bytes
         data7[2] = 'match'.bytes
         data7[3] = 'key:'.bytes
         data7[4] = 'count'.bytes
@@ -326,6 +369,12 @@ sunionstore
         reply = sGroup.scan()
         then:
         reply == ErrorReply.SYNTAX
+
+        when:
+        data7[1] = 'a'.bytes
+        reply = sGroup.scan()
+        then:
+        reply == ErrorReply.NOT_INTEGER
 
         cleanup:
         localPersist.cleanUp()

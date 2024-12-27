@@ -7,6 +7,7 @@ import io.velo.acl.U;
 import io.velo.command.AGroup;
 import io.velo.decode.Request;
 import io.velo.mock.ByPassGetSet;
+import io.velo.persist.KeyLoader;
 import io.velo.persist.LocalPersist;
 import io.velo.persist.OneSlot;
 import io.velo.repl.cluster.MultiShard;
@@ -308,6 +309,7 @@ public abstract class BaseCommand {
 
     protected final LocalPersist localPersist = LocalPersist.getInstance();
 
+    // create log for each object, perf bad, use static better
     protected static final Logger log = LoggerFactory.getLogger(BaseCommand.class);
 
     public record SlotWithKeyHash(short slot, short toClientSlot, int bucketIndex,
@@ -625,7 +627,9 @@ public abstract class BaseCommand {
 
                 var indexHandlerPool = localPersist.getIndexHandlerPool();
                 if (indexHandlerPool != null) {
-                    indexHandlerPool.getKeyAnalysisHandler().addKey(slotWithKeyHash.rawKey, cv.getUncompressedLength());
+                    var shortType = KeyLoader.transferToShortType(cv.getDictSeqOrSpType());
+                    var valueLengthHigh24WithShortTypeLow8 = cv.getUncompressedLength() << 8 | shortType;
+                    indexHandlerPool.getKeyAnalysisHandler().addKey(slotWithKeyHash.rawKey, valueLengthHigh24WithShortTypeLow8);
                 }
             } else {
                 set(keyBytes, cv.getCompressedData(), slotWithKeyHash, 0, cv.getExpireAt());
@@ -764,7 +768,9 @@ public abstract class BaseCommand {
 
         var indexHandlerPool = localPersist.getIndexHandlerPool();
         if (indexHandlerPool != null) {
-            indexHandlerPool.getKeyAnalysisHandler().addKey(key, valueBytes.length);
+            var shortType = KeyLoader.transferToShortType(spType);
+            var valueLengthHigh24WithShortTypeLow8 = valueBytes.length << 8 | shortType;
+            indexHandlerPool.getKeyAnalysisHandler().addKey(key, valueLengthHigh24WithShortTypeLow8);
         }
     }
 

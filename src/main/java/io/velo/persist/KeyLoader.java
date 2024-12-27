@@ -406,7 +406,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     public static final byte typeAsByteZSet = 4;
     public static final byte typeAsByteHash = 5;
 
-    static byte transferToShortType(int spType) {
+    public static byte transferToShortType(int spType) {
         if (CompressedValue.isTypeString(spType)) {
             return typeAsByteString;
         } else if (CompressedValue.isList(spType)) {
@@ -424,6 +424,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     public static boolean isKeyMatch(@NotNull String key, @Nullable String matchPattern) {
         if (matchPattern == null) {
+            return true;
+        }
+
+        if ("*".equals(matchPattern)) {
             return true;
         }
 

@@ -273,8 +273,24 @@ public class SGroup extends BaseCommand {
 
         var cursorBytes = data[1];
         var cursor = new String(cursorBytes);
-        var cursorLong = Long.parseLong(cursor);
-        var scanCursor = ScanCursor.fromLong(cursorLong);
+        long cursorLong;
+        try {
+            cursorLong = Long.parseLong(cursor);
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+
+        var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
+        var lastScanTargetKeyBytes = veloUserData.getLastScanTargetKeyBytes();
+        if (cursorLong == 0) {
+            lastScanTargetKeyBytes = null;
+            veloUserData.setLastScanTargetKeyBytes(null);
+            veloUserData.setLastScanAssignCursor(0);
+        } else {
+            if (cursorLong != veloUserData.getLastScanAssignCursor()) {
+                return new ErrorReply("cursor is not match");
+            }
+        }
 
         String matchPattern = null;
         String type = null;
@@ -322,7 +338,8 @@ public class SGroup extends BaseCommand {
             var isList = "list".equals(type);
             var isSet = "set".equals(type);
             var isZset = "zset".equals(type);
-            if (!isString && !isHash && !isList && !isSet && !isZset) {
+            var isAny = "*".equals(type);
+            if (!isString && !isHash && !isList && !isSet && !isZset && !isAny) {
                 return new ErrorReply("type not support");
             }
 
@@ -334,36 +351,69 @@ public class SGroup extends BaseCommand {
                 typeAsByte = KeyLoader.typeAsByteSet;
             } else if (isZset) {
                 typeAsByte = KeyLoader.typeAsByteZSet;
-            } else {
+            } else if (isString) {
                 typeAsByte = KeyLoader.typeAsByteString;
             }
         }
 
-        var oneSlot = localPersist.oneSlot(scanCursor.slot());
-        var keyLoader = oneSlot.getKeyLoader();
-        var r = keyLoader.scan(scanCursor.walGroupIndex(), scanCursor.splitIndex(), scanCursor.skipCount(),
-                typeAsByte, matchPattern, count);
+        // use rocksdb iterate
+        final var matchPatternInner = matchPattern;
+        final var typeAsByteInner = typeAsByte;
+        var f = localPersist.getIndexHandlerPool().getKeyAnalysisHandler().filterKeys(lastScanTargetKeyBytes, count,
+                key -> KeyLoader.isKeyMatch(key, matchPatternInner),
+                valueBytesAsInt -> {
+                    if (typeAsByteInner == KeyLoader.typeAsByteIgnore) {
+                        return true;
+                    }
 
-        if (r == null) {
-            return MultiBulkReply.SCAN_EMPTY;
-        }
+                    var shortType = valueBytesAsInt & 0xFF;
+                    return typeAsByteInner == shortType;
+                });
 
-        var keys = r.keys();
-        if (r.keys().isEmpty()) {
-            return MultiBulkReply.SCAN_EMPTY;
-        }
+        final int countInner = count;
 
-        var replies = new Reply[2];
-        replies[0] = new BulkReply(String.valueOf(r.scanCursor().toLong()).getBytes());
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
 
-        var keysReplies = new Reply[keys.size()];
-        replies[1] = new MultiBulkReply(keysReplies);
+        f.whenComplete((keys, e) -> {
+            if (e != null) {
+                log.error("scan error={}", e.getMessage());
+                finalPromise.setException((Exception) e);
+                return;
+            }
 
-        int i = 0;
-        for (var key : keys) {
-            keysReplies[i++] = new BulkReply(key.getBytes());
-        }
-        return new MultiBulkReply(replies);
+            if (keys.isEmpty()) {
+                finalPromise.set(MultiBulkReply.SCAN_EMPTY);
+                return;
+            }
+
+            long assignCursor;
+            if (keys.size() < countInner) {
+                // reach the end
+                assignCursor = 0;
+                veloUserData.setLastScanAssignCursor(0);
+                veloUserData.setLastScanTargetKeyBytes(null);
+            } else {
+                assignCursor = snowFlake.nextId();
+                veloUserData.setLastScanAssignCursor(assignCursor);
+                veloUserData.setLastScanTargetKeyBytes(keys.getLast().getBytes());
+            }
+
+            var replies = new Reply[2];
+            replies[0] = new BulkReply(String.valueOf(assignCursor).getBytes());
+
+            var keysReplies = new Reply[keys.size()];
+            replies[1] = new MultiBulkReply(keysReplies);
+
+            int i = 0;
+            for (var key : keys) {
+                keysReplies[i++] = new BulkReply(key.getBytes());
+            }
+
+            finalPromise.set(new MultiBulkReply(replies));
+        });
+
+        return asyncReply;
     }
 
     private Reply sentinel() {

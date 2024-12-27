@@ -24,6 +24,15 @@ public class SocketInspector implements TcpSocket.Inspector {
         ((TcpSocket) socket).setUserData(null);
     }
 
+    public static VeloUserDataInSocket createUserDataIfNotSet(ITcpSocket socket) {
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        if (veloUserData == null) {
+            veloUserData = new VeloUserDataInSocket();
+            ((TcpSocket) socket).setUserData(veloUserData);
+        }
+        return veloUserData;
+    }
+
     public static boolean isResp3(ITcpSocket socket) {
         // just when do unit test
         if (socket == null) {
@@ -35,12 +44,7 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     public static void setResp3(ITcpSocket socket, boolean isResp3) {
-        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
-        if (veloUserData == null) {
-            veloUserData = new VeloUserDataInSocket();
-            ((TcpSocket) socket).setUserData(veloUserData);
-        }
-        veloUserData.isResp3 = isResp3;
+        createUserDataIfNotSet(socket).isResp3 = isResp3;
     }
 
     public static boolean isConnectionReadonly(ITcpSocket socket) {
@@ -54,21 +58,11 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     public static void setConnectionReadonly(ITcpSocket socket, boolean isConnectionReadonly) {
-        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
-        if (veloUserData == null) {
-            veloUserData = new VeloUserDataInSocket();
-            ((TcpSocket) socket).setUserData(veloUserData);
-        }
-        veloUserData.isConnectionReadonly = isConnectionReadonly;
+        createUserDataIfNotSet(socket).isConnectionReadonly = isConnectionReadonly;
     }
 
     public static void setAuthUser(ITcpSocket socket, String authUser) {
-        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
-        if (veloUserData == null) {
-            veloUserData = new VeloUserDataInSocket();
-            ((TcpSocket) socket).setUserData(veloUserData);
-        }
-        veloUserData.authUser = authUser;
+        createUserDataIfNotSet(socket).authUser = authUser;
     }
 
     public static String getAuthUser(ITcpSocket socket) {

@@ -563,6 +563,7 @@ class KeyLoaderTest extends Specification {
         KeyLoader.transferToShortType(CompressedValue.NULL_DICT_SEQ) == KeyLoader.typeAsByteString
         KeyLoader.transferToShortType(Integer.MIN_VALUE) == KeyLoader.typeAsByteIgnore
         KeyLoader.isKeyMatch('aaa', null)
+        KeyLoader.isKeyMatch('aaa', '*')
         KeyLoader.isKeyMatch('aaa', 'aaa')
         KeyLoader.isKeyMatch('aaa', 'aa*')
         KeyLoader.isKeyMatch('aaa', '*aa')

@@ -12,7 +12,16 @@ class VeloUserDataInSocketTest extends Specification {
         expect:
         !one.isResp3
         one.authUser == null
+        one.lastScanTargetKeyBytes == null
+        one.lastScanAssignCursor == 0
         one.replPairAsSlaveInTcpClient == null
         two.replPairAsSlaveInTcpClient != null
+
+        when:
+        one.lastScanTargetKeyBytes = 'key'.bytes
+        one.lastScanAssignCursor = 1
+        then:
+        one.lastScanTargetKeyBytes == 'key'.bytes
+        one.lastScanAssignCursor == 1
     }
 }

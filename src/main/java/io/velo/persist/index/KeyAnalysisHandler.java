@@ -5,12 +5,11 @@ import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.velo.NeedCleanUp;
 import io.velo.metric.SimpleGauge;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
-import org.rocksdb.CompressionType;
-import org.rocksdb.Options;
-import org.rocksdb.RocksDB;
-import org.rocksdb.RocksDBException;
+import org.rocksdb.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 import static io.activej.config.converter.ConfigConverters.ofInteger;
@@ -81,13 +81,13 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         this.initMetricsCollect();
     }
 
-    public void addKey(String key, int valueLengthAsInt) {
+    public void addKey(String key, int valueLengthHigh24WithShortTypeLow8) {
         var bytes = new byte[4];
-        ByteBuffer.wrap(bytes).putInt(valueLengthAsInt);
+        ByteBuffer.wrap(bytes).putInt(valueLengthHigh24WithShortTypeLow8);
         eventloop.submit(() -> {
             db.put(key.getBytes(), bytes);
             addCount++;
-            addValueLengthTotal += valueLengthAsInt;
+            addValueLengthTotal += (valueLengthHigh24WithShortTypeLow8 >> 8);
         });
     }
 
@@ -98,17 +98,21 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         });
     }
 
-    public CompletableFuture<Void> iterateKeys(byte[] beginKeyBytes, int batchSize, BiConsumer<byte[], Integer> consumer) {
-        return eventloop.submit(() -> {
-            var iterator = db.newIterator();
-            if (beginKeyBytes != null) {
-                iterator.seek(beginKeyBytes);
-                if (!iterator.isValid()) {
-                    iterator.seekToFirst();
-                }
-            } else {
+    private void seekIterator(byte[] beginKeyBytes, RocksIterator iterator) {
+        if (beginKeyBytes != null) {
+            iterator.seek(beginKeyBytes);
+            if (!iterator.isValid()) {
                 iterator.seekToFirst();
             }
+        } else {
+            iterator.seekToFirst();
+        }
+    }
+
+    public CompletableFuture<Void> iterateKeys(byte[] beginKeyBytes, int batchSize, @NotNull BiConsumer<byte[], Integer> consumer) {
+        return eventloop.submit(() -> {
+            var iterator = db.newIterator();
+            seekIterator(beginKeyBytes, iterator);
 
             int count = 0;
             while (iterator.isValid() && count < batchSize) {
@@ -122,12 +126,50 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         });
     }
 
-    public CompletableFuture<ArrayList<String>> prefixMatch(String prefix, Pattern pattern, int maxCount) {
+    public CompletableFuture<ArrayList<String>> filterKeys(byte[] beginKeyBytes, int expectedCount,
+                                                           @Nullable Predicate<String> keyFilter,
+                                                           @Nullable Predicate<Integer> valueBytesAsIntFilter) {
         return eventloop.submit(AsyncComputation.of(() -> {
+            var iterator = db.newIterator();
+            seekIterator(beginKeyBytes, iterator);
+
             var result = new ArrayList<String>();
+            while (iterator.isValid() && result.size() < expectedCount) {
+                boolean isKeyMatch = true;
+                boolean isValueMatch = true;
+
+                var keyBytes = iterator.key();
+                var key = new String(keyBytes);
+
+                if (keyFilter != null) {
+                    isKeyMatch = keyFilter.test(key);
+                }
+
+                if (isKeyMatch) {
+                    if (valueBytesAsIntFilter != null) {
+                        var valueBytes = iterator.value();
+                        var valueLengthAsInt = ByteBuffer.wrap(valueBytes).getInt();
+                        isValueMatch = valueBytesAsIntFilter.test(valueLengthAsInt);
+                    }
+                }
+
+                if (isKeyMatch && isValueMatch) {
+                    result.add(key);
+                }
+
+                iterator.next();
+            }
+
+            return result;
+        }));
+    }
+
+    public CompletableFuture<ArrayList<String>> prefixMatch(@NotNull String prefix, Pattern pattern, int maxCount) {
+        return eventloop.submit(AsyncComputation.of(() -> {
             var iterator = db.newIterator();
             iterator.seek(prefix.getBytes());
 
+            var result = new ArrayList<String>();
             while (iterator.isValid() && result.size() < maxCount) {
                 var keyBytes = iterator.key();
                 var key = new String(keyBytes);

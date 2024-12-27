@@ -36,8 +36,9 @@ class KeyAnalysisHandlerTest extends Specification {
         keyAnalysisHandler.innerTask != innerTask
 
         when:
+        int valueBytesInit = 10 << 8
         10.times {
-            keyAnalysisHandler.addKey('key:' + (it.toString().padLeft(12, '0')), 10)
+            keyAnalysisHandler.addKey('key:' + (it.toString().padLeft(12, '0')), valueBytesInit)
         }
         keyAnalysisHandler.removeKey('key:000000000000')
         keyAnalysisHandler.removeKey('key:000000000001')
@@ -78,6 +79,29 @@ class KeyAnalysisHandlerTest extends Specification {
         def keyList4 = f4.get()
         then:
         keyList4.size() == 1
+
+        // test filter keys
+        when:
+        def f5 = keyAnalysisHandler.filterKeys(null, 5,
+                key -> {
+                    true
+                }, valueBytesAsInt -> {
+            true
+        })
+        def keyList5 = f5.get()
+        then:
+        keyList5.size() == 5
+
+        when:
+        def f6 = keyAnalysisHandler.filterKeys('key:000000000008'.bytes, 5,
+                key -> {
+                    true
+                }, valueBytesAsInt -> {
+            true
+        })
+        def keyList6 = f6.get()
+        then:
+        keyList6.size() == 2
 
         cleanup:
         keyAnalysisHandler.cleanUp()
