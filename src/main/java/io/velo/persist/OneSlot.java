@@ -617,6 +617,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // add white list here, todo, refer command config in CGroup
         dynConfigKeyWhiteList.add("testKey");
         dynConfigKeyWhiteList.add("testKey2");
+
+        dynConfigKeyWhiteList.add("type_zset_member_max_length");
+        dynConfigKeyWhiteList.add("type_set_member_max_length");
+        dynConfigKeyWhiteList.add("type_zset_max_size");
+        dynConfigKeyWhiteList.add("type_hash_max_size");
+        dynConfigKeyWhiteList.add("type_list_max_size");
     }
 
     public boolean updateDynConfig(@NotNull String key, @NotNull String valueString) throws IOException {
@@ -819,6 +825,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         var fileLength = lastSavedFile.length();
+        if (fileLength == 0) {
+            return;
+        }
+
         try (var is = new DataInputStream(new FileInputStream(lastSavedFile))) {
             var beginT = System.currentTimeMillis();
             loadFromLastSavedFileWhenPureMemory(is);
