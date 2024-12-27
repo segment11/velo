@@ -611,41 +611,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return dynConfig;
     }
 
-    private static final ArrayList<String> dynConfigKeyWhiteList = new ArrayList<>();
-
-    static {
-        // add white list here, todo, refer command config in CGroup
-        dynConfigKeyWhiteList.add("testKey");
-        dynConfigKeyWhiteList.add("testKey2");
-
-        dynConfigKeyWhiteList.add("type_zset_member_max_length");
-        dynConfigKeyWhiteList.add("type_set_member_max_length");
-        dynConfigKeyWhiteList.add("type_zset_max_size");
-        dynConfigKeyWhiteList.add("type_hash_max_size");
-        dynConfigKeyWhiteList.add("type_list_max_size");
-    }
-
     public boolean updateDynConfig(@NotNull String key, @NotNull String valueString) throws IOException {
-        if (BigKeyTopK.KEY_IN_DYN_CONFIG.equals(key)) {
-            var k = Integer.parseInt(valueString);
-            dynConfig.update(key, k);
-            return true;
-        }
-
-        // check key white list
-        if (!dynConfigKeyWhiteList.contains(key)) {
-            log.warn("Update dyn config key not in white list, key={}, slot={}", key, slot);
-            return false;
-        }
-
         if (key.equals("testKey")) {
             dynConfig.setTestKey(Integer.parseInt(valueString));
-            return true;
-            // add else if here
         } else {
-            log.warn("Update dyn config key not match, key={}, slot={}", key, slot);
-            return false;
+            dynConfig.update(key, valueString);
         }
+        return true;
     }
 
     public boolean isReadonly() {

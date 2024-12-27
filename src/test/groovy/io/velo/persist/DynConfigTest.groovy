@@ -69,6 +69,7 @@ class DynConfigTest extends Specification {
         config.update('type_zset_max_size', 4096)
         config.update('type_hash_max_size', 4096)
         config.update('type_list_max_size', 4096)
+        config.update('xxx', 1)
         then:
         config.afterUpdateCallback != null
         config.masterUuid == 1234L

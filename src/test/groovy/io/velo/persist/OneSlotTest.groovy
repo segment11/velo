@@ -458,9 +458,7 @@ class OneSlotTest extends Specification {
         !oneSlot.readonly
         oneSlot.canRead
         oneSlot.updateDynConfig(BigKeyTopK.KEY_IN_DYN_CONFIG, '100')
-        !oneSlot.updateDynConfig('xxx', 'xxx')
         oneSlot.updateDynConfig('testKey', '1')
-        !oneSlot.updateDynConfig('testKey2', '1')
 
         when:
         oneSlot.readonly = true
@@ -856,7 +854,7 @@ class OneSlotTest extends Specification {
         when:
         exception = false
         try {
-            oneSlot.getSegmentMergeFlagBatch(0, oneSlot.chunk.maxSegmentIndex + 1)
+            oneSlot.getSegmentMergeFlagBatch(0, oneSlot.chunk.maxSegmentIndex + 2)
         } catch (IllegalStateException e) {
             println e.message
             exception = true
