@@ -64,6 +64,12 @@ class DictMapTest extends Specification {
         Dict.GLOBAL_ZSTD_DICT.hasDictBytes()
 
         when:
+        def mfsList = dictMap.dictCompressedGauge.collect()
+        then:
+        // 2 custom dict + 1 global + 1 self
+        mfsList[0].samples.size() == 8
+
+        when:
         // reload again
         dictMap.cleanUp()
         dictMap.initDictMap(Consts.testDir)

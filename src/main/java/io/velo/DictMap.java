@@ -1,22 +1,32 @@
 package io.velo;
 
+import io.velo.metric.SimpleGauge;
 import io.velo.repl.Binlog;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import io.velo.repl.incremental.XDict;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class DictMap implements NeedCleanUp {
     public static int TO_COMPRESS_MIN_DATA_LENGTH = 64;
     public static int TO_COMPRESS_USE_SELF_DICT_MIN_DATA_LENGTH = 256;
+
+    @VisibleForTesting
+    final static SimpleGauge dictCompressedGauge = new SimpleGauge("dict", "Dict compressed metrics.", "name");
+
+    static {
+        dictCompressedGauge.register();
+    }
 
     // singleton
     private static final DictMap instance = new DictMap();
@@ -26,6 +36,7 @@ public class DictMap implements NeedCleanUp {
     }
 
     private DictMap() {
+        initMetricsCollect();
     }
 
     private Binlog binlog;
@@ -186,5 +197,43 @@ public class DictMap implements NeedCleanUp {
     public synchronized void updateGlobalDictBytes(byte[] dictBytes) {
         Dict.resetGlobalDictBytes(dictBytes);
         Dict.saveGlobalDictBytesToFile(new File(dirFile, Dict.GLOBAL_DICT_FILE_NAME));
+    }
+
+    private final List<String> labelValuesGlobal = List.of("global_");
+    private final List<String> labelValuesSelf = List.of("self_");
+
+    private void initMetricsCollect() {
+        // only first slot show global metrics
+        dictCompressedGauge.addRawGetter(() -> {
+            var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
+
+            for (var entry : cacheDict.entrySet()) {
+                var dict = entry.getValue();
+                var labelValues = List.of(entry.getKey());
+
+                var compressedCount = dict.compressedCountTotal.sum();
+                var compressedRatio = dict.compressedRatio();
+
+                map.put("dict_compressed_count_" + dict.getSeq(), new SimpleGauge.ValueWithLabelValues((double) compressedCount, labelValues));
+                map.put("dict_compressed_ratio_" + dict.getSeq(), new SimpleGauge.ValueWithLabelValues(compressedRatio, labelValues));
+            }
+
+            if (Dict.GLOBAL_ZSTD_DICT.hasDictBytes()) {
+                var compressedCount = Dict.GLOBAL_ZSTD_DICT.compressedCountTotal.sum();
+                var compressedRatio = Dict.GLOBAL_ZSTD_DICT.compressedRatio();
+
+                map.put("dict_compressed_count_" + Dict.GLOBAL_ZSTD_DICT_SEQ, new SimpleGauge.ValueWithLabelValues((double) compressedCount, labelValuesGlobal));
+                map.put("dict_compressed_ratio_" + Dict.GLOBAL_ZSTD_DICT_SEQ, new SimpleGauge.ValueWithLabelValues(compressedRatio, labelValuesGlobal));
+            }
+
+            // self dict
+            var compressedCount = Dict.SELF_ZSTD_DICT.compressedCountTotal.sum();
+            var compressedRatio = Dict.SELF_ZSTD_DICT.compressedRatio();
+
+            map.put("dict_compressed_count_" + Dict.SELF_ZSTD_DICT_SEQ, new SimpleGauge.ValueWithLabelValues((double) compressedCount, labelValuesSelf));
+            map.put("dict_compressed_ratio_" + Dict.SELF_ZSTD_DICT_SEQ, new SimpleGauge.ValueWithLabelValues(compressedRatio, labelValuesSelf));
+
+            return map;
+        });
     }
 }

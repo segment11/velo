@@ -288,4 +288,19 @@ class DictTest extends Specification {
         dictTrained.closeCtx()
         dictMap.cleanUp()
     }
+
+    def 'test metrics'() {
+        given:
+        def dict = new Dict()
+
+        expect:
+        dict.compressedRatio() == 0
+
+        when:
+        dict.compressedCountTotal.add(1)
+        dict.compressedBytesTotal.add(10)
+        dict.beforeCompressedBytesTotal.add(100)
+        then:
+        dict.compressedRatio() == 0.1
+    }
 }

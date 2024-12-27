@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.util.Date;
 import java.util.Objects;
 import java.util.Random;
+import java.util.concurrent.atomic.LongAdder;
 
 public class Dict implements Serializable {
     public static final int SELF_ZSTD_DICT_SEQ = 1;
@@ -105,6 +106,19 @@ public class Dict implements Serializable {
         this.dictBytes = dictBytes;
     }
 
+    final LongAdder compressedCountTotal = new LongAdder();
+    final LongAdder compressedBytesTotal = new LongAdder();
+    final LongAdder beforeCompressedBytesTotal = new LongAdder();
+
+    double compressedRatio() {
+        var sumCompressed = compressedBytesTotal.sum();
+        var sumBeforeCompressed = beforeCompressedBytesTotal.sum();
+        if (sumBeforeCompressed == 0) {
+            return 0;
+        }
+        return (double) sumCompressed / sumBeforeCompressed;
+    }
+
     @VisibleForTesting
     ZstdDecompressCtx[] decompressCtxArray;
     @VisibleForTesting
@@ -149,11 +163,19 @@ public class Dict implements Serializable {
     }
 
     public byte[] compressByteArray(byte[] src) {
-        return ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compress(src);
+        var r = ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compress(src);
+        compressedCountTotal.add(1);
+        beforeCompressedBytesTotal.add(src.length);
+        compressedBytesTotal.add(r.length);
+        return r;
     }
 
     public int compressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
-        return ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
+        var n = ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
+        compressedCountTotal.add(1);
+        beforeCompressedBytesTotal.add(length);
+        compressedBytesTotal.add(n);
+        return n;
     }
 
     public int decompressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
@@ -161,7 +183,11 @@ public class Dict implements Serializable {
     }
 
     public int compressByteBuffer(ByteBuffer dstBuffer, int dstOffset, int dstSize, ByteBuffer srcBuffer, int srcOffset, int length) {
-        return ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
+        var n = ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
+        compressedCountTotal.add(1);
+        beforeCompressedBytesTotal.add(length);
+        compressedBytesTotal.add(n);
+        return n;
     }
 
     public int decompressByteBuffer(ByteBuffer dstBuffer, int dstOffset, int dstSize, ByteBuffer srcBuffer, int srcOffset, int length) {
