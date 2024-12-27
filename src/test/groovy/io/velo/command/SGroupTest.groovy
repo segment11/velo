@@ -266,7 +266,7 @@ sunionstore
             result instanceof MultiBulkReply
                     && ((MultiBulkReply) result).replies.length == 2
                     && ((MultiBulkReply) result).replies[1] instanceof MultiBulkReply
-                    && (((MultiBulkReply) result).replies[1] as MultiBulkReply).replies.length == 9
+                    && (((MultiBulkReply) result).replies[1] as MultiBulkReply).replies.length == 8
         }.result
 
         when:

@@ -98,11 +98,19 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         });
     }
 
-    private void seekIterator(byte[] beginKeyBytes, RocksIterator iterator) {
+    private void seekIterator(byte[] beginKeyBytes, RocksIterator iterator, boolean isIncludeBeginKey) {
         if (beginKeyBytes != null) {
             iterator.seek(beginKeyBytes);
             if (!iterator.isValid()) {
                 iterator.seekToFirst();
+            }
+
+            if (!isIncludeBeginKey) {
+                // move to next
+                iterator.next();
+                if (!iterator.isValid()) {
+                    iterator.seekToLast();
+                }
             }
         } else {
             iterator.seekToFirst();
@@ -112,7 +120,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     public CompletableFuture<Void> iterateKeys(byte[] beginKeyBytes, int batchSize, @NotNull BiConsumer<byte[], Integer> consumer) {
         return eventloop.submit(() -> {
             var iterator = db.newIterator();
-            seekIterator(beginKeyBytes, iterator);
+            seekIterator(beginKeyBytes, iterator, true);
 
             int count = 0;
             while (iterator.isValid() && count < batchSize) {
@@ -126,12 +134,13 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         });
     }
 
+    // begin key exclude
     public CompletableFuture<ArrayList<String>> filterKeys(byte[] beginKeyBytes, int expectedCount,
                                                            @Nullable Predicate<String> keyFilter,
                                                            @Nullable Predicate<Integer> valueBytesAsIntFilter) {
         return eventloop.submit(AsyncComputation.of(() -> {
             var iterator = db.newIterator();
-            seekIterator(beginKeyBytes, iterator);
+            seekIterator(beginKeyBytes, iterator, false);
 
             var result = new ArrayList<String>();
             while (iterator.isValid() && result.size() < expectedCount) {

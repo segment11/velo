@@ -93,6 +93,7 @@ class KeyAnalysisHandlerTest extends Specification {
         keyList5.size() == 5
 
         when:
+        // exclude
         def f6 = keyAnalysisHandler.filterKeys('key:000000000008'.bytes, 5,
                 key -> {
                     true
@@ -101,7 +102,7 @@ class KeyAnalysisHandlerTest extends Specification {
         })
         def keyList6 = f6.get()
         then:
-        keyList6.size() == 2
+        keyList6.size() == 1
 
         cleanup:
         keyAnalysisHandler.cleanUp()
