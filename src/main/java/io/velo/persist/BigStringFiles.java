@@ -99,6 +99,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             is.readFully(bytes);
             allBytesByUuid.put(uuid, bytes);
         }
+        log.warn("Load big string files from last saved file, count={}", bigStringFilesCount);
     }
 
     @Override
