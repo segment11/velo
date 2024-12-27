@@ -299,7 +299,7 @@ class DictTest extends Specification {
         when:
         dict.compressedCountTotal.add(1)
         dict.compressedBytesTotal.add(10)
-        dict.beforeCompressedBytesTotal.add(100)
+        dict.compressBytesTotal.add(100)
         then:
         dict.compressedRatio() == 0.1
     }

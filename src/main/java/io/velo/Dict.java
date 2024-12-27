@@ -108,15 +108,16 @@ public class Dict implements Serializable {
 
     final LongAdder compressedCountTotal = new LongAdder();
     final LongAdder compressedBytesTotal = new LongAdder();
-    final LongAdder beforeCompressedBytesTotal = new LongAdder();
+    final LongAdder compressBytesTotal = new LongAdder();
 
     double compressedRatio() {
-        var sumCompressed = compressedBytesTotal.sum();
-        var sumBeforeCompressed = beforeCompressedBytesTotal.sum();
-        if (sumBeforeCompressed == 0) {
+        var sumCompress = compressBytesTotal.sum();
+        if (sumCompress == 0) {
             return 0;
         }
-        return (double) sumCompressed / sumBeforeCompressed;
+
+        var sumCompressed = compressedBytesTotal.sum();
+        return (double) sumCompressed / sumCompress;
     }
 
     @VisibleForTesting
@@ -165,7 +166,7 @@ public class Dict implements Serializable {
     public byte[] compressByteArray(byte[] src) {
         var r = ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compress(src);
         compressedCountTotal.add(1);
-        beforeCompressedBytesTotal.add(src.length);
+        compressBytesTotal.add(src.length);
         compressedBytesTotal.add(r.length);
         return r;
     }
@@ -173,7 +174,7 @@ public class Dict implements Serializable {
     public int compressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
         var n = ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
         compressedCountTotal.add(1);
-        beforeCompressedBytesTotal.add(length);
+        compressBytesTotal.add(length);
         compressedBytesTotal.add(n);
         return n;
     }
@@ -185,7 +186,7 @@ public class Dict implements Serializable {
     public int compressByteBuffer(ByteBuffer dstBuffer, int dstOffset, int dstSize, ByteBuffer srcBuffer, int srcOffset, int length) {
         var n = ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
         compressedCountTotal.add(1);
-        beforeCompressedBytesTotal.add(length);
+        compressBytesTotal.add(length);
         compressedBytesTotal.add(n);
         return n;
     }
