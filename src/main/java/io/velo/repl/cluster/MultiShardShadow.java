@@ -1,7 +1,10 @@
 package io.velo.repl.cluster;
 
+import io.velo.ThreadNeedLocal;
+
 import java.util.ArrayList;
 
+@ThreadNeedLocal
 public class MultiShardShadow {
     private ArrayList<Shard> shards;
 

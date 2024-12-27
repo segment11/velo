@@ -69,7 +69,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Random;
 
 import static io.activej.config.Config.*;
 import static io.activej.config.converter.ConfigConverters.*;
@@ -290,8 +289,7 @@ public class MultiWorkerServer extends Launcher {
             if (requestHandlerArray.length == 1) {
                 targetHandler = requestHandlerArray[0];
             } else {
-                var i = new Random().nextInt(requestHandlerArray.length);
-                targetHandler = requestHandlerArray[i];
+                targetHandler = requestHandlerArray[STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()];
             }
             var reply = targetHandler.handle(request, socket);
             if (reply == null) {
@@ -1029,7 +1027,7 @@ public class MultiWorkerServer extends Launcher {
         // immutable
         public long[] netWorkerThreadIds;
 
-        // use this instead of ThreadLocal
+        // use this instead of ThreadLocal, use array perf good enough compare to hashtable
         public int getThreadLocalIndexByCurrentThread() {
             var currentThreadId = Thread.currentThread().threadId();
             for (int i = 0; i < MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds.length; i++) {

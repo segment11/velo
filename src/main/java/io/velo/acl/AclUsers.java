@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 
-@ThreadNeedLocal
 public class AclUsers {
     // singleton
     private static final AclUsers instance = new AclUsers();
@@ -27,7 +26,9 @@ public class AclUsers {
 
     private static final Logger log = LoggerFactory.getLogger(AclUsers.class);
 
+    @ThreadNeedLocal
     private Eventloop[] netWorkerEventloopArray;
+    @ThreadNeedLocal
     private Inner[] inners;
 
     public void initByNetWorkerEventloopArray(Eventloop[] netWorkerEventloopArray) {
@@ -48,6 +49,7 @@ public class AclUsers {
         inners[0] = new Inner(Thread.currentThread().threadId());
     }
 
+    @ThreadNeedLocal
     public static class Inner {
         public Inner(long expectThreadId) {
             this.expectThreadId = expectThreadId;

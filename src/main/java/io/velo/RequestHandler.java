@@ -126,6 +126,7 @@ public class RequestHandler {
         this.initMetricsCollect();
     }
 
+    @ThreadNeedLocal
     private static MultiShardShadow[] multiShardShadows;
 
     public static void initMultiShardShadows(byte netWorkers) {
@@ -135,7 +136,8 @@ public class RequestHandler {
         }
     }
 
-    public static void updateMultiShardShadows(MultiShard multiShard) {
+    // not thread safe
+    public static synchronized void updateMultiShardShadows(MultiShard multiShard) {
         var mySelfShard = multiShard.mySelfShard();
         var shards = multiShard.getShards();
 
