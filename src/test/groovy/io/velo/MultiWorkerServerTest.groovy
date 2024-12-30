@@ -219,6 +219,7 @@ class MultiWorkerServerTest extends Specification {
         p != null
 
         when:
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
         // ping need not parse slots, any net worker can handle it
         def pingData = new byte[1][]
         pingData[0] = 'ping'.bytes

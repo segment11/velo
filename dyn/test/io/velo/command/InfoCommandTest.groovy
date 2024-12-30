@@ -1,6 +1,7 @@
 package io.velo.command
 
 import io.velo.BaseCommand
+import io.velo.MultiWorkerServer
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
@@ -128,6 +129,30 @@ class InfoCommandTest extends Specification {
         then:
         ClusterxCommandTest.infoToLines(reply).find { it.contains('master_repl_offset:1048576') } != null
         ClusterxCommandTest.infoToLines(reply).find { it.contains('slave_repl_offset:1024') } != null
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test server'() {
+        given:
+        def iGroup = new IGroup('info', null, null)
+        iGroup.from(BaseCommand.mockAGroup())
+        def infoCommand = new InfoCommand(iGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when:
+        // 10 seconds ago
+        MultiWorkerServer.UP_TIME = System.currentTimeMillis() - 1000 * 10
+        def reply = infoCommand.execute('info server')
+        then:
+        reply instanceof BulkReply
+        new String((reply as BulkReply).raw).contains('uptime_in_seconds:10')
 
         cleanup:
         localPersist.cleanUp()

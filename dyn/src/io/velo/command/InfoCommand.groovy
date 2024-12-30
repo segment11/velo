@@ -2,6 +2,7 @@ package io.velo.command
 
 import groovy.transform.CompileStatic
 import io.velo.BaseCommand
+import io.velo.MultiWorkerServer
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.Reply
@@ -36,6 +37,8 @@ class InfoCommand extends BaseCommand {
                 return keyspace()
             } else if ('replication' == section) {
                 return replication()
+            } else if ('server' == section) {
+                return server()
             } else {
                 return ErrorReply.SYNTAX
             }
@@ -106,6 +109,25 @@ db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
 
         def sb = new StringBuilder()
         list.each { Tuple2<String, Object> tuple ->
+            sb << tuple.v1 << ':' << tuple.v2 << '\r\n'
+        }
+
+        new BulkReply(sb.toString().bytes)
+    }
+
+    private Reply server() {
+        def list = MultiWorkerServer.STATIC_GLOBAL_V.infoServerList
+
+        def upSeconds = ((System.currentTimeMillis() - MultiWorkerServer.UP_TIME) / 1000).intValue()
+        def upDays = (upSeconds / 3600 / 24).intValue()
+        list << new Tuple2<>('uptime_in_seconds', upSeconds.toString())
+        list << new Tuple2<>('uptime_in_days', upDays.toString())
+
+        def firstOneSlot = localPersist.firstOneSlot()
+        list << new Tuple2<>('run_id', firstOneSlot.masterUuid.toString())
+
+        def sb = new StringBuilder()
+        list.each { Tuple2<String, String> tuple ->
             sb << tuple.v1 << ':' << tuple.v2 << '\r\n'
         }
 

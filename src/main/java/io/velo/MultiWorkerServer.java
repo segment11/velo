@@ -1,6 +1,7 @@
 package io.velo;
 
 import groovy.lang.GroovyClassLoader;
+import groovy.lang.Tuple2;
 import io.activej.async.callback.AsyncComputation;
 import io.activej.async.function.AsyncSupplier;
 import io.activej.bytebuf.ByteBuf;
@@ -56,6 +57,7 @@ import io.velo.reply.NilReply;
 import io.velo.reply.Reply;
 import io.velo.task.PrimaryTaskRunnable;
 import io.velo.task.TaskRunnable;
+import jnr.ffi.Platform;
 import net.openhft.affinity.AffinityStrategies;
 import net.openhft.affinity.AffinityThreadFactory;
 import org.apache.commons.net.telnet.TelnetClient;
@@ -69,6 +71,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.List;
 
 import static io.activej.config.Config.*;
 import static io.activej.config.converter.ConfigConverters.*;
@@ -583,6 +586,7 @@ public class MultiWorkerServer extends Launcher {
         logger.info("Prometheus jvm hotspot metrics registered");
 
         UP_TIME = System.currentTimeMillis();
+        STATIC_GLOBAL_V.resetInfoServer(configInject);
 
         var isWarmUpWhenStart = configInject.get(ofBoolean(), "bucket.lruPerFd.isWarmUpWhenStart", false);
         if (isWarmUpWhenStart) {
@@ -1026,6 +1030,36 @@ public class MultiWorkerServer extends Launcher {
         public SocketInspector socketInspector;
         // immutable
         public long[] netWorkerThreadIds;
+
+        // info server
+        public final List<Tuple2<String, String>> infoServerList = new ArrayList<>();
+
+        void resetInfoServer(Config config) {
+            infoServerList.add(new Tuple2<>("version", "1.0.0"));
+            infoServerList.add(new Tuple2<>("redis_mode", ConfForGlobal.clusterEnabled ? "cluster" : "standalone"));
+
+            var platform = Platform.getNativePlatform();
+            // Linux 5.19.0-50-generic x86_64
+            var osLower = platform.getOS().toString();
+            var osStr = osLower.substring(0, 1).toUpperCase() + osLower.substring(1) + " " +
+                    platform.getVersion() + " " + platform.getCPU().name().toLowerCase();
+            infoServerList.add(new Tuple2<>("os", osStr));
+            infoServerList.add(new Tuple2<>("arch_bits", platform.is64Bit() ? "64" : "32"));
+            infoServerList.add(new Tuple2<>("multiplexing_api", "epoll"));
+            infoServerList.add(new Tuple2<>("java_version", System.getProperty("java.version")));
+
+            var arr = ConfForGlobal.netListenAddresses.split(":");
+            infoServerList.add(new Tuple2<>("tcp_port", arr[1]));
+            infoServerList.add(new Tuple2<>("listener0", "name=tcp,bind=" + arr[0] + ",port=" + arr[1]));
+            infoServerList.add(new Tuple2<>("server_time_usec", String.valueOf(UP_TIME * 1000)));
+
+            var netWorkers = config.get(ofInteger(), "netWorkers", 1);
+            infoServerList.add(new Tuple2<>("io_threads_active", netWorkers.toString()));
+
+            long processId = ProcessHandle.current().pid();
+            infoServerList.add(new Tuple2<>("process_id", String.valueOf(processId)));
+            infoServerList.add(new Tuple2<>("process_supervised", "no"));
+        }
 
         // use this instead of ThreadLocal, use array perf good enough compare to hashtable
         public int getThreadLocalIndexByCurrentThread() {
