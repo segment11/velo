@@ -247,7 +247,7 @@ public abstract class CountServiceServer extends Launcher {
 
     /*
     start server:
-    java -Xmx2g -Xms2g -XX:+UseZGC -XX:+ZGenerational -Dvelo-count-service-netWorkers=2 -DuseThreadLocalMap=true -cp velo-1.0.0.jar io.velo.extend.CountServiceServer
+    java -Xmx2g -Xms2g -XX:+UseZGC -XX:+ZGenerational -Dvelo-count-service-netWorkers=2 -Dvelo-count-service-initBytesArraySize=1048576 -Dvelo-count-service-maxConnections=1000 -cp velo-1.0.0.jar io.velo.extend.CountServiceServer
     run benchmark
     memtier_benchmark -h localhost -p 7379 -c 4 -n 1000000 --key-prefix=key: --command="incrby __key__ 5" --hide-histogram
     memtier_benchmark -h localhost -p 7379 -c 4 -n 1000000 --key-prefix=key: --command="get __key__" --hide-histogram
@@ -335,16 +335,16 @@ public abstract class CountServiceServer extends Launcher {
                     assert targetEventloop.getEventloopThread() != null;
                     if (targetEventloop.getEventloopThread().threadId() == currentThreadId) {
                         try {
-                            countService.increase(s.keyHash(), s.keyHash32(), added);
-                            return Promise.of(OKReply.INSTANCE.buffer());
+                            var count = countService.increase(s.keyHash(), s.keyHash32(), added);
+                            return Promise.of(new IntegerReply(count).buffer());
                         } catch (InvalidProtocolBufferException e) {
                             return Promise.of(new ErrorReply(e.getMessage()).buffer());
                         }
                     } else {
                         final int added0 = added;
                         return Promise.ofFuture(targetEventloop.submit(AsyncComputation.of(() -> {
-                            countService.increase(s.keyHash(), s.keyHash32(), added0);
-                            return OKReply.INSTANCE.buffer();
+                            var count = countService.increase(s.keyHash(), s.keyHash32(), added0);
+                            return new IntegerReply(count).buffer();
                         })));
                     }
                 }
