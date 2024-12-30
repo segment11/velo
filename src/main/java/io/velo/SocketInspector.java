@@ -75,12 +75,12 @@ public class SocketInspector implements TcpSocket.Inspector {
         return veloUserData == null ? null : veloUserData.authUser;
     }
 
-    volatile boolean isServerStopped = false;
+    public volatile boolean isServerStopped = false;
 
     @ThreadNeedLocal
     Eventloop[] netWorkerEventloopArray;
 
-    final ConcurrentHashMap<InetSocketAddress, TcpSocket> socketMap = new ConcurrentHashMap<>();
+    public final ConcurrentHashMap<InetSocketAddress, TcpSocket> socketMap = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ConcurrentHashMap<ITcpSocket, Long>> subscribeByChannel = new ConcurrentHashMap<>();
 
     public int subscribe(String channel, ITcpSocket socket) {
