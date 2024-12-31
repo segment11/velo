@@ -417,6 +417,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         if (ConfForGlobal.pureMemory) {
             var size1 = 0L;
             if (isChunkFd) {
+                size1 += allBytesBySegmentIndexForOneChunkFd.length * 16L;
                 for (var bytes : allBytesBySegmentIndexForOneChunkFd) {
                     if (bytes != null) {
                         size1 += bytes.length;
@@ -424,6 +425,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
                 }
                 sb.append("Pure memory, Fd chunk segments, name: ").append(name).append(", size: ").append(size1).append("\n");
             } else {
+                size1 += allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length * 16L;
                 for (var bytes : allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex) {
                     if (bytes != null) {
                         size1 += bytes.length;

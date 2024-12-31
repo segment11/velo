@@ -267,7 +267,7 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
 
     @Override
     public long estimate(@NotNull StringBuilder sb) {
-        long size = 0;
+        long size = allKeyHash32BitBytesArray.length * 16L;
         for (var bytes : allKeyHash32BitBytesArray) {
             size += bytes.length * 7L;
         }

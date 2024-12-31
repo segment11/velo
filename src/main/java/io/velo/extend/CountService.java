@@ -190,7 +190,8 @@ public class CountService implements InMemoryEstimate, InSlotMetricCollector, Ca
 
     @Override
     public long estimate(@NotNull StringBuilder sb) {
-        long s = 0;
+        // object reference 16 bytes
+        long s = countEncoded.length * 16L;
         for (byte[] bytes : countEncoded) {
             if (bytes != null) {
                 s += bytes.length;
