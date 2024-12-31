@@ -20,8 +20,10 @@ class VeloUserDataInSocketTest extends Specification {
         when:
         one.lastScanTargetKeyBytes = 'key'.bytes
         one.lastScanAssignCursor = 1
+        one.clientName = 'xxx'
         then:
         one.lastScanTargetKeyBytes == 'key'.bytes
         one.lastScanAssignCursor == 1
+        one.clientName == 'xxx'
     }
 }

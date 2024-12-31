@@ -3,6 +3,7 @@ package io.velo.command;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
+import io.velo.SocketInspector;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.reply.*;
@@ -73,6 +74,16 @@ public class CGroup extends BaseCommand {
         }
 
         if ("setinfo".equals(subCmd)) {
+            return OKReply.INSTANCE;
+        }
+
+        if ("setname".equals(subCmd)) {
+            if (data.length != 3) {
+                return ErrorReply.FORMAT;
+            }
+
+            var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
+            veloUserData.setClientName(new String(data[2]));
             return OKReply.INSTANCE;
         }
 

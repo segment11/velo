@@ -11,9 +11,9 @@ public class VeloUserDataInSocket {
 
     ReplPair replPairAsSlaveInTcpClient = null;
 
-    byte[] lastScanTargetKeyBytes = null;
+    private byte[] lastScanTargetKeyBytes = null;
 
-    long lastScanAssignCursor = 0;
+    private long lastScanAssignCursor = 0;
 
     public byte[] getLastScanTargetKeyBytes() {
         return lastScanTargetKeyBytes;
@@ -29,6 +29,16 @@ public class VeloUserDataInSocket {
 
     public void setLastScanAssignCursor(long lastScanAssignCursor) {
         this.lastScanAssignCursor = lastScanAssignCursor;
+    }
+
+    private String clientName;
+
+    public String getClientName() {
+        return clientName;
+    }
+
+    public void setClientName(String clientName) {
+        this.clientName = clientName;
     }
 
     public VeloUserDataInSocket() {
