@@ -43,8 +43,15 @@ class InfoCommand extends BaseCommand {
                 return ErrorReply.SYNTAX
             }
         } else {
-            // todo
-            return new BulkReply(''.bytes)
+            def infoServer = server() as BulkReply
+            def infoReplication = replication() as BulkReply
+
+            def sb = new StringBuilder()
+            sb << new String(infoServer.raw)
+            sb << '\r\n'
+            sb << new String(infoReplication.raw)
+
+            return new BulkReply(sb.toString().bytes)
         }
     }
 
@@ -108,6 +115,7 @@ db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
         }
 
         def sb = new StringBuilder()
+        sb << "# Replication\r\n"
         list.each { Tuple2<String, Object> tuple ->
             sb << tuple.v1 << ':' << tuple.v2 << '\r\n'
         }
@@ -116,6 +124,7 @@ db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
     }
 
     private Reply server() {
+        // a copy one
         def list = MultiWorkerServer.STATIC_GLOBAL_V.infoServerList
 
         def upSeconds = ((System.currentTimeMillis() - MultiWorkerServer.UP_TIME) / 1000).intValue()
@@ -127,6 +136,7 @@ db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
         list << new Tuple2<>('run_id', firstOneSlot.masterUuid.toString())
 
         def sb = new StringBuilder()
+        sb << "# Server\r\n"
         list.each { Tuple2<String, String> tuple ->
             sb << tuple.v1 << ':' << tuple.v2 << '\r\n'
         }

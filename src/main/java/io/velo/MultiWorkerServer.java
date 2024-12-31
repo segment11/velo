@@ -1032,7 +1032,12 @@ public class MultiWorkerServer extends Launcher {
         public long[] netWorkerThreadIds;
 
         // info server
-        public final List<Tuple2<String, String>> infoServerList = new ArrayList<>();
+        private final List<Tuple2<String, String>> infoServerList = new ArrayList<>();
+
+        public List<Tuple2<String, String>> getInfoServerList() {
+            // copy one
+            return new ArrayList<>(infoServerList);
+        }
 
         void resetInfoServer(Config config) {
             infoServerList.add(new Tuple2<>("version", "1.0.0"));

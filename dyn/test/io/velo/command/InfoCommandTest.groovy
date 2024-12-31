@@ -32,6 +32,11 @@ class InfoCommandTest extends Specification {
         iGroup.from(BaseCommand.mockAGroup())
         def infoCommand = new InfoCommand(iGroup)
 
+        and:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
         when:
         def reply = infoCommand.handle()
         then:
@@ -52,6 +57,10 @@ class InfoCommandTest extends Specification {
         reply = infoCommand.handle()
         then:
         reply == ErrorReply.SYNTAX
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test keyspace'() {
