@@ -91,6 +91,8 @@ public class PGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
+    private static final BulkReply MESSAGE = new BulkReply("message".getBytes());
+
     public static Reply publish(byte[][] dataGiven, ITcpSocket socket) {
         if (dataGiven.length != 3) {
             return ErrorReply.FORMAT;
@@ -110,12 +112,12 @@ public class PGroup extends BaseCommand {
             }
         }
 
-        var n = socketInInspector.subscribeSocketCount(channel);
-
         var replies = new Reply[3];
-        replies[0] = new BulkReply(channel.getBytes());
-        replies[1] = new BulkReply(message.getBytes());
-        replies[2] = new IntegerReply(n);
+        replies[0] = MESSAGE;
+        replies[1] = new BulkReply(channel.getBytes());
+        replies[2] = new BulkReply(message.getBytes());
+
+        var n = socketInInspector.subscribeSocketCount(channel);
 
         socketInInspector.publish(channel, new MultiBulkReply(replies), (s, r) -> {
             s.write(r.buffer());
