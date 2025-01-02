@@ -106,38 +106,45 @@ class InfoCommandTest extends Specification {
 
         when:
         def reply = infoCommand.handle()
+        def lines = ClusterxCommandTest.infoToLines(reply)
         then:
-        ClusterxCommandTest.infoToLines(reply).find { it.contains('master_link_status:down') } != null
+        lines.find { it.contains('master_host:') } != null
+        lines.find { it.contains('master_port:') } != null
+        lines.find { it.contains('master_link_status:down') } != null
 
         when:
         oneSlot.doMockWhenCreateReplPairAsSlave = true
         def replPairAsSlave = oneSlot.createReplPairAsSlave('localhost', 7379)
         reply = infoCommand.handle()
+        lines = ClusterxCommandTest.infoToLines(reply)
         then:
-        ClusterxCommandTest.infoToLines(reply).find { it.contains('connected_slaves:0') } != null
+        lines.find { it.contains('connected_slaves:0') } != null
 
         when:
         replPairAsSlave.masterBinlogCurrentFileIndexAndOffset = new Binlog.FileIndexAndOffset(0, 1024L)
         replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset = new Binlog.FileIndexAndOffset(0, 1024L)
         reply = infoCommand.handle()
+        lines = ClusterxCommandTest.infoToLines(reply)
         then:
-        ClusterxCommandTest.infoToLines(reply).find { it.contains('master_repl_offset:1024') } != null
-        ClusterxCommandTest.infoToLines(reply).find { it.contains('slave_repl_offset:1024') } != null
+        lines.find { it.contains('master_repl_offset:1024') } != null
+        lines.find { it.contains('slave_repl_offset:1024') } != null
 
         when:
         oneSlot.removeReplPairAsSlave()
         def replPairAsMaster = oneSlot.createIfNotExistReplPairAsMaster(11L, 'localhost', 7380)
         reply = infoCommand.handle()
+        lines = ClusterxCommandTest.infoToLines(reply)
         then:
-        ClusterxCommandTest.infoToLines(reply).find { it.contains('connected_slaves:1') } != null
+        lines.find { it.contains('connected_slaves:1') } != null
 
         when:
         oneSlot.binlog.moveToNextSegment(true)
         replPairAsMaster.slaveLastCatchUpBinlogFileIndexAndOffset = new Binlog.FileIndexAndOffset(0, 1024L)
         reply = infoCommand.handle()
+        lines = ClusterxCommandTest.infoToLines(reply)
         then:
-        ClusterxCommandTest.infoToLines(reply).find { it.contains('master_repl_offset:1048576') } != null
-        ClusterxCommandTest.infoToLines(reply).find { it.contains('slave_repl_offset:1024') } != null
+        lines.find { it.contains('master_repl_offset:1048576') } != null
+        lines.find { it.contains('slave_repl_offset:1024') } != null
 
         cleanup:
         localPersist.cleanUp()

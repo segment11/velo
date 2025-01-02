@@ -2,7 +2,9 @@ package io.velo.command
 
 import groovy.transform.CompileStatic
 import io.velo.BaseCommand
+import io.velo.ConfForGlobal
 import io.velo.MultiWorkerServer
+import io.velo.repl.ReplPair
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.Reply
@@ -77,6 +79,17 @@ db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
         })
     }
 
+    private static List<Tuple2<String, Object>> slaveConnectState(ReplPair replPairAsSlave, int slaveIndex) {
+        List<Tuple2<String, Object>> list = []
+
+        def slaveFo = replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset
+        def state = "ip=${replPairAsSlave.host},port=${replPairAsSlave.port}," +
+                "state=${replPairAsSlave.isLinkUp() ? 'online' : 'offline'},offset=${slaveFo ? slaveFo.asReplOffset() : 0},lag=1"
+        list << new Tuple2("slave${slaveIndex}", state)
+
+        list
+    }
+
     private Reply replication() {
         def firstOneSlot = localPersist.currentThreadFirstOneSlot()
 
@@ -94,24 +107,80 @@ db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
 
         if (isSelfSlave) {
             def replPairAsSlave = firstOneSlot.onlyOneReplPairAsSlave
+            list << new Tuple2('master_host', replPairAsSlave.host)
+            list << new Tuple2('master_port', replPairAsSlave.port)
+
+            list << new Tuple2('master_replid', replPairAsSlave.slaveUuid.toString().padLeft(40, '0'))
+            list << new Tuple2('master_replid2', '0' * 40)
+
             list << new Tuple2('master_link_status', replPairAsSlave.isLinkUp() ? 'up' : 'down')
+
             def masterFo = replPairAsSlave.masterBinlogCurrentFileIndexAndOffset
             list << new Tuple2('master_repl_offset', masterFo ? masterFo.asReplOffset() : 0)
+
             def slaveFo = replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset
+            list << new Tuple2('slave_read_repl_offset', slaveFo ? slaveFo.asReplOffset() : 0)
             list << new Tuple2('slave_repl_offset', slaveFo ? slaveFo.asReplOffset() : 0)
+
+            list << new Tuple2('slave_read_only', firstOneSlot.isReadonly() ? 1 : 0)
+
+            // fix values, may be need change, todo
+            list << new Tuple2('slave_priority', 100)
+            list << new Tuple2('replica_announced', 1)
+            list << new Tuple2('master_failover_state', 'no-failover')
+            list << new Tuple2('repl_backlog_active', 1)
+            list << new Tuple2('repl_backlog_size', 1048576)
+            list << new Tuple2('repl_backlog_first_byte_offset', 1)
+            list << new Tuple2('repl_backlog_histlen', slaveFo ? slaveFo.asReplOffset() : 0)
         } else {
+            def hostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
+            list << new Tuple2('master_host', hostAndPort.host())
+            list << new Tuple2('master_port', hostAndPort.port())
+
             def replPairAsMasterList = firstOneSlot.replPairAsMasterList
             if (!replPairAsMasterList.isEmpty()) {
                 def firstReplPair = replPairAsMasterList.getFirst()
-                list << new Tuple2('master_link_status', firstReplPair.isLinkUp() ? 'up' : 'down')
+                list.addAll slaveConnectState(firstReplPair, 0)
+                list << new Tuple2('master_replid', firstReplPair.slaveUuid.toString().padLeft(40, '0'))
                 list << new Tuple2('master_repl_offset', firstOneSlot.binlog.currentReplOffset())
+
                 def slaveFo = firstReplPair.slaveLastCatchUpBinlogFileIndexAndOffset
+                // for redis 6.x compat
+                list << new Tuple2('master_link_status', firstReplPair.isLinkUp() ? 'up' : 'down')
                 list << new Tuple2('slave_repl_offset', slaveFo ? slaveFo.asReplOffset() : 0)
+
+                if (replPairAsMasterList.size() > 1) {
+                    def secondReplPair = replPairAsMasterList.get(1)
+                    def slaveFo2 = secondReplPair.slaveLastCatchUpBinlogFileIndexAndOffset
+
+                    list.addAll slaveConnectState(secondReplPair, 1)
+                    list << new Tuple2('master_replid2', secondReplPair.slaveUuid.toString().padLeft(40, '0'))
+                    list << new Tuple2('second_repl_offset', slaveFo2 ? slaveFo2.asReplOffset() : 0)
+                } else {
+                    list << new Tuple2('master_replid2', '0' * 40)
+                    list << new Tuple2('second_repl_offset', -1)
+                }
+
+                list << new Tuple2('repl_backlog_histlen', slaveFo ? slaveFo.asReplOffset() : 0)
             } else {
+                list << new Tuple2('master_replid', '0' * 40)
+                list << new Tuple2('master_replid2', '0' * 40)
+
+                list << new Tuple2('master_repl_offset', -1)
+                list << new Tuple2('second_repl_offset', -1)
+
+                // for redis 6.x compat
                 list << new Tuple2('master_link_status', 'down')
-                list << new Tuple2('master_repl_offset', '0')
                 list << new Tuple2('slave_repl_offset', '0')
+
+                list << new Tuple2('repl_backlog_histlen', 0)
             }
+
+            // fix values, may be need change, todo
+            list << new Tuple2('master_failover_state', 'no-failover')
+            list << new Tuple2('repl_backlog_active', 1)
+            list << new Tuple2('repl_backlog_size', 1048576)
+            list << new Tuple2('repl_backlog_first_byte_offset', 1)
         }
 
         def sb = new StringBuilder()
@@ -133,7 +202,7 @@ db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
         list << new Tuple2<>('uptime_in_days', upDays.toString())
 
         def firstOneSlot = localPersist.firstOneSlot()
-        list << new Tuple2<>('run_id', firstOneSlot.masterUuid.toString())
+        list << new Tuple2<>('run_id', firstOneSlot.masterUuid.toString().padLeft(40, '0'))
 
         def sb = new StringBuilder()
         sb << "# Server\r\n"
