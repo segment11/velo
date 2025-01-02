@@ -9,6 +9,7 @@ import io.velo.reply.MultiBulkReply
 import io.velo.reply.Reply
 
 @CompileStatic
+@Deprecated
 class SentinelCommand extends BaseCommand {
     static final String version = '1.0.0'
 
