@@ -23,6 +23,12 @@ public class ReplPair {
 
     private final short slot;
     private final boolean asMaster;
+    private final String host;
+    private final int port;
+
+    public short getSlot() {
+        return slot;
+    }
 
     public String getHost() {
         return host;
@@ -31,6 +37,12 @@ public class ReplPair {
     public int getPort() {
         return port;
     }
+
+    public String getHostAndPort() {
+        return host + ":" + port;
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(ReplPair.class);
 
     public record HostAndPort(String host, int port) {
     }
@@ -42,19 +54,6 @@ public class ReplPair {
 
         var parts = hostAndPort.split(":");
         return new HostAndPort(parts[0], Integer.parseInt(parts[1]));
-    }
-
-    private final String host;
-    private final int port;
-
-    private static final Logger log = LoggerFactory.getLogger(ReplPair.class);
-
-    public short getSlot() {
-        return slot;
-    }
-
-    public String getHostAndPort() {
-        return host + ":" + port;
     }
 
     @Override
