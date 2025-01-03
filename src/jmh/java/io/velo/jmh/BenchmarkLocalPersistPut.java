@@ -142,15 +142,15 @@ public class BenchmarkLocalPersistPut {
     // -d 200
 //    private final byte[] valueBytes = Utils.leftPad("value", "0", 200).getBytes();
     // short values, value length <= 32
-    // -d 5
-    private final byte[] valueBytes = "value".getBytes();
+    // -d 32
+    private final byte[] valueBytes = Utils.leftPad("value", "0", 32).getBytes();
 
     /*
-    -d 5
-    qps: 989902
+    -d 32
+    qps: 986679
 
 Benchmark                     Mode  Cnt  Score   Error  Units
-BenchmarkLocalPersistPut.put  avgt       0.590          us/op
+BenchmarkLocalPersistPut.put  avgt       0.601          us/op
 
     -d 200
     qps: 435293
