@@ -9,14 +9,18 @@ public class ValkeyRawConfSupport {
     private ValkeyRawConfSupport() {
     }
 
-    //    private static final String VALKEY_CONF_FILENAME = "valkey.conf";
     public static final String VALKEY_CONF_FILENAME = "redis.conf";
+    public static final String VALKEY_CONF_FILENAME2 = "valkey.conf";
 
     public static String aclFilename = "acl.conf";
     public static boolean aclPubsubDefault = true;
+    public static int replicaPriority = 100;
 
     public static void load() throws IOException {
         var file = Paths.get(VALKEY_CONF_FILENAME).toFile();
+        if (!file.exists()) {
+            file = Paths.get(VALKEY_CONF_FILENAME2).toFile();
+        }
         if (!file.exists()) {
             return;
         }
@@ -39,6 +43,8 @@ public class ValkeyRawConfSupport {
                 aclFilename = value;
             } else if ("acl-pubsub-default".equals(key)) {
                 aclPubsubDefault = Boolean.parseBoolean(value);
+            } else if ("replica-priority".equals(key)) {
+                replicaPriority = Integer.parseInt(value);
             }
 
             // other key-value pairs, todo

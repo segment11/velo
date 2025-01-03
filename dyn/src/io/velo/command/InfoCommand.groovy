@@ -4,6 +4,7 @@ import groovy.transform.CompileStatic
 import io.velo.BaseCommand
 import io.velo.ConfForGlobal
 import io.velo.MultiWorkerServer
+import io.velo.ValkeyRawConfSupport
 import io.velo.repl.ReplPair
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
@@ -123,9 +124,9 @@ db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
             list << new Tuple2('slave_repl_offset', slaveFo ? slaveFo.asReplOffset() : 0)
 
             list << new Tuple2('slave_read_only', firstOneSlot.isReadonly() ? 1 : 0)
+            list << new Tuple2('slave_priority', ValkeyRawConfSupport.replicaPriority)
 
             // fix values, may be need change, todo
-            list << new Tuple2('slave_priority', 100)
             list << new Tuple2('replica_announced', 1)
             list << new Tuple2('master_failover_state', 'no-failover')
             list << new Tuple2('repl_backlog_active', 1)
