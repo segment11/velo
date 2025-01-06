@@ -120,6 +120,19 @@ class KeyAnalysisHandlerTest extends Specification {
         resultF7.keyCount() == 2
         resultF7.lastKeyBytes() == '4321'.bytes
 
+        when:
+        def f8 = keyAnalysisHandler.flushdb()
+        f8.get()
+        f5 = keyAnalysisHandler.filterKeys(null, 5,
+                key -> {
+                    true
+                }, valueBytesAsInt -> {
+            true
+        })
+        keyList5 = f5.get()
+        then:
+        keyList5.size() == 0
+
         cleanup:
         keyAnalysisHandler.cleanUp()
         Thread.sleep(2000)

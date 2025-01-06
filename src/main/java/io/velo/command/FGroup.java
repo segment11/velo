@@ -101,6 +101,13 @@ public class FGroup extends BaseCommand {
 
         return localPersist.doSthInSlots(oneSlot -> {
             oneSlot.flush();
+
+            if (oneSlot == localPersist.firstOneSlot()) {
+                var indexHandlerPool = localPersist.getIndexHandlerPool();
+                if (indexHandlerPool != null) {
+                    indexHandlerPool.getKeyAnalysisHandler().flushdb();
+                }
+            }
             return true;
         }, resultList -> OKReply.INSTANCE);
     }
