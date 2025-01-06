@@ -316,7 +316,7 @@ public class PGroup extends BaseCommand {
         ArrayList<MGroup.KeyBytesAndSlotWithKeyHash> list = new ArrayList<>();
         for (int i = 2, j = 0; i < data.length; i++, j++) {
             var srcKeyBytes = data[i];
-            var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
+            var slotWithKeyHash = slotWithKeyHashListParsed.get(i - 1);
             list.add(new MGroup.KeyBytesAndSlotWithKeyHash(srcKeyBytes, j, slotWithKeyHash));
         }
 
