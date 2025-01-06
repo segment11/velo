@@ -46,6 +46,7 @@ addslots
 addslotsrange
 delslots
 delslotsrange
+countkeysinslot
 info
 migrate
 meet
@@ -162,6 +163,45 @@ slots
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+    }
+
+    def 'test countkeysinslot'() {
+        given:
+        def data3 = new byte[3][]
+        data3[1] = 'countkeysinslot'.bytes
+        data3[2] = '0'.bytes
+
+        def cGroup = new CGroup('cluster', data3, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when:
+        ConfForGlobal.clusterEnabled = true
+        def reply = clusterx.countkeysinslot()
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 0
+
+        when:
+        data3[2] = 'a'.bytes
+        reply = clusterx.countkeysinslot()
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        def data2 = new byte[2][]
+        clusterx.data = data2
+        reply = clusterx.countkeysinslot()
+        then:
+        reply == ErrorReply.FORMAT
+
+        cleanup:
+        localPersist.cleanUp()
     }
 
     def 'test info'() {

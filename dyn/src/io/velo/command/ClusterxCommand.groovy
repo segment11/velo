@@ -52,6 +52,10 @@ class ClusterxCommand extends BaseCommand {
             return addslots(true, false)
         }
 
+        if ('countkeysinslot' == subCmd) {
+            return countkeysinslot()
+        }
+
         if ('delslots' == subCmd) {
             return addslots(false, true)
         }
@@ -217,6 +221,32 @@ migrating_state:ok
         log.warn 'Cluster add slots success, slots: {}, node: {}', toClientSlots, mySelfNode.nodeId()
         multiShard.saveMeta()
         OK
+    }
+
+    @VisibleForTesting
+    Reply countkeysinslot() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        if (data.length != 3) {
+            return ErrorReply.FORMAT
+        }
+
+        int toClientSlot
+        try {
+            toClientSlot = Integer.parseInt(new String(data[2]))
+        } catch (NumberFormatException ignored) {
+            return ErrorReply.NOT_INTEGER
+        }
+
+        def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
+        def oneInnerSlotIncludeToClientSlotCount = (MultiShard.TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber).intValue()
+
+        def oneSlot = localPersist.oneSlot(innerSlot)
+        def avgKeyCount = (oneSlot.allKeyCount / oneInnerSlotIncludeToClientSlotCount).intValue()
+
+        new IntegerReply(avgKeyCount)
     }
 
     @VisibleForTesting
