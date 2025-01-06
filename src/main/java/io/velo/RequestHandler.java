@@ -398,7 +398,12 @@ public class RequestHandler {
             if (cmd.equals(PING_COMMAND)) {
                 increaseCmdStatArray(PING_COMMAND);
 
-                return PongReply.INSTANCE;
+                if (data.length == 1) {
+                    return PongReply.INSTANCE;
+                } else {
+                    var messageBytes = data[1];
+                    return new BulkReply(messageBytes);
+                }
             }
 
             var doLogCmd = Debug.getInstance().logCmd;

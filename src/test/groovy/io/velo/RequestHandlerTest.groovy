@@ -115,6 +115,16 @@ class RequestHandlerTest extends Specification {
         reply == PongReply.INSTANCE
 
         when:
+        def data2 = new byte[2][]
+        data2[0] = 'ping'.bytes
+        data2[1] = '123'.bytes
+        def pingWithMessageRequest = new Request(data2, false, false)
+        reply = requestHandler.handle(pingWithMessageRequest, socket)
+        then:
+        reply instanceof BulkReply
+        new String((reply as BulkReply).raw) == '123'
+
+        when:
         reply = requestHandler.handle(someRequestList[1], socket)
         then:
         reply == OKReply.INSTANCE
@@ -380,7 +390,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(httpRequest, socket)
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains('dict_size')
+        new String(((BulkReply) reply).raw).contains('request_time_count')
 
         when:
         // for haproxy
