@@ -250,6 +250,8 @@ public enum ConfForSlot {
         // if slave catch up binlog offset is less than min diff, slave can service read
         public int catchUpOffsetMinDiff = 1024 * 1024;
         public int catchUpIntervalMillis = 100;
+        // for exists_keys fetch
+        public int iterateKeysOneBatchSize = 10000;
 
         @Override
         public String toString() {

@@ -201,6 +201,24 @@ class XGroupTest extends Specification {
 
     def 'test as master'() {
         given:
+        ConfForGlobal.netListenAddresses = 'localhost:6379'
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+
+        and:
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
+        and:
         def data4 = new byte[4][]
         // slave uuid long
         data4[0] = new byte[8]
@@ -220,13 +238,6 @@ class XGroupTest extends Specification {
         xGroup.handleRepl() == null
 
         when:
-        ConfForGlobal.netListenAddresses = 'localhost:6379'
-
-        LocalPersistTest.prepareLocalPersist()
-        def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        def oneSlot = localPersist.oneSlot(slot)
-
         // mock from slave repl request data
         final long slaveUuid = 1L
         def replPairAsSlave = ReplPairTest.mockAsSlave(0L, slaveUuid)
@@ -451,9 +462,50 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.s_exists_key_buckets)
         r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8 + (4 + (4 + 472) * ConfForSlot.global.confWal.oneChargeBucketNumber)
 
-        // stat_key_count_in_buckets
+        // exists_keys
         when:
         ConfForGlobal.pureMemoryV2 = false
+        def keyAnalysisHandler = localPersist.indexHandlerPool.keyAnalysisHandler
+        int valueBytesInit = 10 << 8
+        10.times {
+            keyAnalysisHandler.addKey('key:' + (it.toString().padLeft(12, '0')), valueBytesInit)
+        }
+        data4[2][0] = ReplType.exists_keys.code
+        contentBytes = new byte[4]
+        data4[3] = contentBytes
+        def asyncReply = x.handleRepl()
+        eventloopCurrent.run()
+        Thread.sleep(200)
+        then:
+        asyncReply instanceof AsyncReply
+//        (asyncReply as AsyncReply).settablePromise.whenResult { result ->
+//            result instanceof ReplReply &&
+//                    (result as ReplReply).isReplType(ReplType.s_exists_keys)
+//        }.result
+
+
+        when:
+        contentBytes = new byte[4 + 16]
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(16)
+        requestBuffer.put('key:000000000001'.bytes)
+        data4[3] = contentBytes
+        asyncReply = x.handleRepl()
+        eventloopCurrent.run()
+        Thread.sleep(200)
+        then:
+        asyncReply instanceof AsyncReply
+
+        when:
+        // slot 1
+        ByteBuffer.wrap(data4[1]).putShort((short) 1)
+        r = x.handleRepl()
+        then:
+        r.isReplType(ReplType.s_exists_keys)
+
+        // stat_key_count_in_buckets
+        when:
+        ByteBuffer.wrap(data4[1]).putShort((short) 0)
         data4[2][0] = ReplType.stat_key_count_in_buckets.code
         contentBytes = new byte[0]
         data4[3] = contentBytes
@@ -652,6 +704,11 @@ class XGroupTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
 
+        and:
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
         when:
         // mock from master repl response data
         final long masterUuid = 10L
@@ -772,7 +829,6 @@ class XGroupTest extends Specification {
         x = new XGroup(null, data4, null)
         r = x.handleRepl()
         then:
-        // next batch
         r.isReplType(ReplType.exists_chunk_segments)
 
         when:
@@ -805,7 +861,6 @@ class XGroupTest extends Specification {
         x = new XGroup(null, data4, null)
         r = x.handleRepl()
         then:
-        // next batch
         r.isReplType(ReplType.exists_chunk_segments)
 
         when:
@@ -820,7 +875,6 @@ class XGroupTest extends Specification {
         x = new XGroup(null, data4, null)
         r = x.handleRepl()
         then:
-        // next batch
         r.isReplType(ReplType.exists_chunk_segments)
 
         when:
@@ -837,7 +891,6 @@ class XGroupTest extends Specification {
         requestBuffer.putInt(8 + 4 + metaBytes.length, 0)
         r = x.handleRepl()
         then:
-        // next batch
         r.isReplType(ReplType.exists_chunk_segments)
 
         // exists wal
@@ -905,7 +958,6 @@ class XGroupTest extends Specification {
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
-        // next batch
         r.isReplType(ReplType.exists_key_buckets)
 
         when:
@@ -913,7 +965,6 @@ class XGroupTest extends Specification {
         requestBuffer.put(1 + 1 + 4, (byte) 0)
         r = x.handleRepl()
         then:
-        // next batch
         r.isReplType(ReplType.exists_key_buckets)
 
         when:
@@ -932,7 +983,6 @@ class XGroupTest extends Specification {
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
-        // next batch
         r.isReplType(ReplType.exists_key_buckets)
 
         when:
@@ -951,7 +1001,7 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         // next step
-        r.isReplType(ReplType.exists_chunk_segments)
+        r.isReplType(ReplType.exists_keys)
 
         when:
         ConfForGlobal.pureMemoryV2 = true
@@ -983,11 +1033,41 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         // next step
+        r.isReplType(ReplType.exists_keys)
+
+        // s_exists_keys
+        when:
+        ConfForGlobal.pureMemoryV2 = false
+        data4[2][0] = ReplType.s_exists_keys.code
+        contentBytes = new byte[2 + 4 + 4]
+        data4[3] = contentBytes
+        r = x.handleRepl()
+        then:
+        // not keys in rocksdb
+        // next step
         r.isReplType(ReplType.exists_chunk_segments)
+
+        when:
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putShort((short) 4)
+        requestBuffer.put('1234'.bytes)
+        requestBuffer.putInt(1)
+        r = x.handleRepl()
+        then:
+        // test only one key value, less one batch key count, means master already reply last batch
+        // next step
+        r.isReplType(ReplType.exists_chunk_segments)
+
+        when:
+        // just for test
+        ConfForSlot.global.confRepl.iterateKeysOneBatchSize = 1
+        r = x.handleRepl()
+        then:
+        r.isReplType(ReplType.exists_keys)
 
         // s_stat_key_count_in_buckets
         when:
-        ConfForGlobal.pureMemoryV2 = false
+        ConfForSlot.global.confRepl.iterateKeysOneBatchSize = 10000
         data4[2][0] = ReplType.s_stat_key_count_in_buckets.code
         contentBytes = new byte[ConfForSlot.global.confBucket.bucketsPerSlot * 2]
         data4[3] = contentBytes

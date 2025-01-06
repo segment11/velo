@@ -13,6 +13,7 @@ public enum ReplType {
     exists_reverse_index(false, true, (byte) 49),
     s_exists_reverse_index(false, true, (byte) 50),
 
+    exists_keys(false, true, (byte) 18),
     exists_wal(false, true, (byte) 19),
     exists_chunk_segments(false, true, (byte) 20),
     exists_key_buckets(false, true, (byte) 21),
@@ -24,6 +25,7 @@ public enum ReplType {
     exists_all_done(false, true, (byte) 26),
     catch_up(true, true, (byte) 27),
 
+    s_exists_keys(false, false, (byte) 28),
     s_exists_wal(false, false, (byte) 29),
     s_exists_chunk_segments(false, false, (byte) 30),
     s_exists_key_buckets(false, false, (byte) 31),

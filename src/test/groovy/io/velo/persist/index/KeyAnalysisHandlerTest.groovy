@@ -5,6 +5,7 @@ import io.activej.eventloop.Eventloop
 import io.velo.persist.Consts
 import spock.lang.Specification
 
+import java.nio.ByteBuffer
 import java.time.Duration
 
 class KeyAnalysisHandlerTest extends Specification {
@@ -53,7 +54,7 @@ class KeyAnalysisHandlerTest extends Specification {
 
         when:
         int iterateKeyCount = 0
-        def f = keyAnalysisHandler.iterateKeys(null, 10, { bb, valueLength ->
+        def f = keyAnalysisHandler.iterateKeys(null, 10, true, { bb, valueLength ->
             println new String(bb) + ': ' + valueLength
             iterateKeyCount++
         })
@@ -103,6 +104,21 @@ class KeyAnalysisHandlerTest extends Specification {
         def keyList6 = f6.get()
         then:
         keyList6.size() == 1
+
+        when:
+        def bytes = new byte[2 + 4 + 4 + 2 + 4 + 4]
+        def buffer = ByteBuffer.wrap(bytes)
+        buffer.putShort((short) 4)
+        buffer.put('1234'.bytes)
+        buffer.putInt(1)
+        buffer.putShort((short) 4)
+        buffer.put('4321'.bytes)
+        buffer.putInt(1)
+        def f7 = keyAnalysisHandler.addBatch(bytes)
+        def resultF7 = f7.get()
+        then:
+        resultF7.keyCount() == 2
+        resultF7.lastKeyBytes() == '4321'.bytes
 
         cleanup:
         keyAnalysisHandler.cleanUp()

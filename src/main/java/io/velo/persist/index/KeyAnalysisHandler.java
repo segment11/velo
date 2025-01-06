@@ -91,6 +91,36 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         });
     }
 
+    public record LastKeyBytesWithKeyCount(byte[] lastKeyBytes, int keyCount) {
+    }
+
+    public CompletableFuture<LastKeyBytesWithKeyCount> addBatch(byte[] keysWithValueInt) {
+        return eventloop.submit(AsyncComputation.of(() -> {
+            var wb = new WriteBatch();
+            var buffer = ByteBuffer.wrap(keysWithValueInt);
+
+            int keyCount = 0;
+            byte[] lastKeyBytes = null;
+            while (buffer.hasRemaining()) {
+                var keyBytesLength = buffer.getShort();
+                var keyBytes = new byte[keyBytesLength];
+                buffer.get(keyBytes);
+
+                var valueBytesAsInt = buffer.getInt();
+                var bytes = new byte[4];
+                ByteBuffer.wrap(bytes).putInt(valueBytesAsInt);
+
+                wb.put(keyBytes, bytes);
+                lastKeyBytes = keyBytes;
+
+                keyCount++;
+            }
+
+            db.write(new WriteOptions(), wb);
+            return new LastKeyBytesWithKeyCount(lastKeyBytes, keyCount);
+        }));
+    }
+
     public void removeKey(String key) {
         eventloop.submit(() -> {
             db.delete(key.getBytes());
@@ -117,10 +147,10 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         }
     }
 
-    public CompletableFuture<Void> iterateKeys(byte[] beginKeyBytes, int batchSize, @NotNull BiConsumer<byte[], Integer> consumer) {
+    public CompletableFuture<Void> iterateKeys(byte[] beginKeyBytes, int batchSize, boolean isIncludeBeginKey, @NotNull BiConsumer<byte[], Integer> consumer) {
         return eventloop.submit(() -> {
             var iterator = db.newIterator();
-            seekIterator(beginKeyBytes, iterator, true);
+            seekIterator(beginKeyBytes, iterator, isIncludeBeginKey);
 
             int count = 0;
             while (iterator.isValid() && count < batchSize) {
