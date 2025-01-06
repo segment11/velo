@@ -106,9 +106,8 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                 var keyBytes = new byte[keyBytesLength];
                 buffer.get(keyBytes);
 
-                var valueBytesAsInt = buffer.getInt();
                 var bytes = new byte[4];
-                ByteBuffer.wrap(bytes).putInt(valueBytesAsInt);
+                buffer.get(bytes);
 
                 wb.put(keyBytes, bytes);
                 lastKeyBytes = keyBytes;
