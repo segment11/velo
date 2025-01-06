@@ -27,9 +27,7 @@ public class AGroup extends BaseCommand {
             if (data.length < 3) {
                 return slotWithKeyHashList;
             }
-            var keyBytes = data[1];
-            var slotWithKeyHash = slot(keyBytes, slotNumber);
-            slotWithKeyHashList.add(slotWithKeyHash);
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
             return slotWithKeyHashList;
         }
 

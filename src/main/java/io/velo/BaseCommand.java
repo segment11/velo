@@ -26,57 +26,58 @@ import java.util.List;
 
 @ThreadNeedLocal
 public abstract class BaseCommand {
-//    protected interface IsKeyBytes {
-//        boolean isKeyBytes(int i);
-//    }
-//
-//    protected static final class GivenKeyIndex implements IsKeyBytes {
-//        private final int index;
-//
-//        public GivenKeyIndex(int index) {
-//            this.index = index;
-//        }
-//
-//        @Override
-//        public boolean isKeyBytes(int i) {
-//            return i == index;
-//        }
-//    }
-//
-//    protected static final class FromToKeyIndex implements IsKeyBytes {
-//        private final int from;
-//        private final int to;
-//        private final int step;
-//
-//        public FromToKeyIndex(int from, int to, int step) {
-//            this.from = from;
-//            this.to = to;
-//            this.step = step;
-//        }
-//
-//        @Override
-//        public boolean isKeyBytes(int i) {
-//            return i >= from && (to == -1 || i <= to) && (step == 1 || (i - from) % step == 0);
-//        }
-//    }
-//
-//    protected static final IsKeyBytes KeyIndex1 = new GivenKeyIndex(1);
-//    protected static final IsKeyBytes KeyIndex2 = new GivenKeyIndex(2);
-//    protected static final IsKeyBytes KeyIndexBegin1 = new FromToKeyIndex(1, -1, 1);
-//    protected static final IsKeyBytes KeyIndexBegin1Step2 = new FromToKeyIndex(1, -1, 2);
-//    protected static final IsKeyBytes KeyIndexBegin2 = new FromToKeyIndex(2, -1, 1);
-//    protected static final IsKeyBytes KeyIndexBegin2Step2 = new FromToKeyIndex(2, -1, 2);
-//
-//    protected static void addToSlotWithKeyHashList(ArrayList<SlotWithKeyHash> slotWithKeyHashList,
-//                                                   byte[][] data, int slotNumber, IsKeyBytes isKeyBytes) {
-//        for (int i = 1; i < data.length; i++) {
-//            if (isKeyBytes.isKeyBytes(i)) {
-//                var keyBytes = data[i];
-//                var slotWithKeyHash = slot(keyBytes, slotNumber);
-//                slotWithKeyHashList.add(slotWithKeyHash);
-//            }
-//        }
-//    }
+    protected interface IsKeyBytes {
+        boolean isKeyBytes(int i);
+    }
+
+    protected static final class GivenKeyIndex implements IsKeyBytes {
+        private final int index;
+
+        public GivenKeyIndex(int index) {
+            this.index = index;
+        }
+
+        @Override
+        public boolean isKeyBytes(int i) {
+            return i == index;
+        }
+    }
+
+    protected static final class FromToKeyIndex implements IsKeyBytes {
+        private final int from;
+        private final int to;
+        private final int step;
+
+        public FromToKeyIndex(int from, int to, int step) {
+            this.from = from;
+            this.to = to;
+            this.step = step;
+        }
+
+        @Override
+        public boolean isKeyBytes(int i) {
+            return i >= from && (to == -1 || i <= to) && (step == 1 || (i - from) % step == 0);
+        }
+    }
+
+    protected static final IsKeyBytes KeyIndex1 = new GivenKeyIndex(1);
+    protected static final IsKeyBytes KeyIndex2 = new GivenKeyIndex(2);
+    protected static final IsKeyBytes KeyIndex1And2 = new FromToKeyIndex(1, 2, 1);
+    protected static final IsKeyBytes KeyIndexBegin1 = new FromToKeyIndex(1, -1, 1);
+    protected static final IsKeyBytes KeyIndexBegin1Step2 = new FromToKeyIndex(1, -1, 2);
+    protected static final IsKeyBytes KeyIndexBegin2 = new FromToKeyIndex(2, -1, 1);
+    protected static final IsKeyBytes KeyIndexBegin2Step2 = new FromToKeyIndex(2, -1, 2);
+
+    protected static void addToSlotWithKeyHashList(ArrayList<SlotWithKeyHash> slotWithKeyHashList,
+                                                   byte[][] data, int slotNumber, IsKeyBytes isKeyBytes) {
+        for (int i = 1; i < data.length; i++) {
+            if (isKeyBytes.isKeyBytes(i)) {
+                var keyBytes = data[i];
+                var slotWithKeyHash = slot(keyBytes, slotNumber);
+                slotWithKeyHashList.add(slotWithKeyHash);
+            }
+        }
+    }
 
     // for dyn script execute
     public String getCmd() {

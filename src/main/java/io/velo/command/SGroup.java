@@ -8,7 +8,6 @@ import io.velo.*;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.persist.KeyLoader;
-import io.velo.persist.ScanCursor;
 import io.velo.repl.LeaderSelector;
 import io.velo.reply.*;
 import io.velo.type.RedisHashKeys;
@@ -40,9 +39,7 @@ public class SGroup extends BaseCommand {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
-            var keyBytes = data[1];
-            var slotWithKeyHash = slot(keyBytes, slotNumber);
-            slotWithKeyHashList.add(slotWithKeyHash);
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
             return slotWithKeyHashList;
         }
 
@@ -51,11 +48,7 @@ public class SGroup extends BaseCommand {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
-            for (int i = 1; i < data.length; i++) {
-                var keyBytes = data[i];
-                var slotWithKeyHash = slot(keyBytes, slotNumber);
-                slotWithKeyHashList.add(slotWithKeyHash);
-            }
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin1);
             return slotWithKeyHashList;
         }
 
@@ -63,11 +56,7 @@ public class SGroup extends BaseCommand {
             if (data.length < 3) {
                 return slotWithKeyHashList;
             }
-            for (int i = 2; i < data.length; i++) {
-                var keyBytes = data[i];
-                var slotWithKeyHash = slot(keyBytes, slotNumber);
-                slotWithKeyHashList.add(slotWithKeyHash);
-            }
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin2);
             return slotWithKeyHashList;
         }
 
@@ -75,28 +64,7 @@ public class SGroup extends BaseCommand {
             if (data.length != 4) {
                 return slotWithKeyHashList;
             }
-
-            var srcKeyBytes = data[1];
-            var dstKeyBytes = data[2];
-            var s1 = slot(srcKeyBytes, slotNumber);
-            var s2 = slot(dstKeyBytes, slotNumber);
-            slotWithKeyHashList.add(s1);
-            slotWithKeyHashList.add(s2);
-            return slotWithKeyHashList;
-        }
-
-        if ("scan".equals(cmd)) {
-            if (data.length != 2) {
-                return slotWithKeyHashList;
-            }
-
-            var cursorBytes = data[1];
-            var cursor = new String(cursorBytes);
-            var cursorLong = Long.parseLong(cursor);
-            var scanCursor = ScanCursor.fromLong(cursorLong);
-
-            var slotWithKeyHash = new SlotWithKeyHash(scanCursor.slot(), 0, 0L, 0);
-            slotWithKeyHashList.add(slotWithKeyHash);
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1And2);
             return slotWithKeyHashList;
         }
 

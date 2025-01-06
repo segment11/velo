@@ -113,6 +113,44 @@ class BaseCommandTest extends Specification {
         ConfForGlobal.slotNumber = 1
     }
 
+    def 'test key index'() {
+        expect:
+        BaseCommand.KeyIndex1.isKeyBytes(1)
+        !BaseCommand.KeyIndex1.isKeyBytes(2)
+        BaseCommand.KeyIndex2.isKeyBytes(2)
+        !BaseCommand.KeyIndex2.isKeyBytes(1)
+        BaseCommand.KeyIndex1And2.isKeyBytes(1)
+        BaseCommand.KeyIndex1And2.isKeyBytes(2)
+        !BaseCommand.KeyIndex1And2.isKeyBytes(3)
+
+        BaseCommand.KeyIndexBegin1.isKeyBytes(1)
+        BaseCommand.KeyIndexBegin1.isKeyBytes(2)
+
+        BaseCommand.KeyIndexBegin1Step2.isKeyBytes(1)
+        !BaseCommand.KeyIndexBegin1Step2.isKeyBytes(2)
+        BaseCommand.KeyIndexBegin1Step2.isKeyBytes(3)
+        !BaseCommand.KeyIndexBegin1Step2.isKeyBytes(4)
+
+        BaseCommand.KeyIndexBegin2.isKeyBytes(2)
+        BaseCommand.KeyIndexBegin2.isKeyBytes(3)
+        !BaseCommand.KeyIndexBegin2.isKeyBytes(1)
+
+        BaseCommand.KeyIndexBegin2Step2.isKeyBytes(2)
+        !BaseCommand.KeyIndexBegin2Step2.isKeyBytes(3)
+        BaseCommand.KeyIndexBegin2Step2.isKeyBytes(4)
+        !BaseCommand.KeyIndexBegin2Step2.isKeyBytes(5)
+
+        when:
+        def data3 = new byte[3][0]
+        data3[0] = 'get'.bytes
+        data3[1] = 'key'.bytes
+        data3[2] = 'key2'.bytes
+        ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList = []
+        BaseCommand.addToSlotWithKeyHashList(slotWithKeyHashList, data3, slotNumber, BaseCommand.KeyIndex1)
+        then:
+        slotWithKeyHashList.size() == 1
+    }
+
     def 'test init'() {
         given:
         def data2 = new byte[2][0]

@@ -26,12 +26,7 @@ public class MGroup extends BaseCommand {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
-
-            for (int i = 1; i < data.length; i++) {
-                var keyBytes = data[i];
-                var slotWithKeyHash = slot(keyBytes, slotNumber);
-                slotWithKeyHashList.add(slotWithKeyHash);
-            }
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin1);
             return slotWithKeyHashList;
         }
 
@@ -39,12 +34,7 @@ public class MGroup extends BaseCommand {
             if (data.length < 3 || data.length % 2 == 0) {
                 return slotWithKeyHashList;
             }
-
-            for (int i = 1; i < data.length; i += 2) {
-                var keyBytes = data[i];
-                var slotWithKeyHash = slot(keyBytes, slotNumber);
-                slotWithKeyHashList.add(slotWithKeyHash);
-            }
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin1Step2);
             return slotWithKeyHashList;
         }
 

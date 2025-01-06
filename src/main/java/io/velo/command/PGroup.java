@@ -19,9 +19,7 @@ public class PGroup extends BaseCommand {
             if (data.length != 3 && data.length != 4) {
                 return slotWithKeyHashList;
             }
-            var keyBytes = data[1];
-            var slotWithKeyHash = slot(keyBytes, slotNumber);
-            slotWithKeyHashList.add(slotWithKeyHash);
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
             return slotWithKeyHashList;
         }
 
@@ -29,9 +27,23 @@ public class PGroup extends BaseCommand {
             if (data.length != 2) {
                 return slotWithKeyHashList;
             }
-            var keyBytes = data[1];
-            var slotWithKeyHash = slot(keyBytes, slotNumber);
-            slotWithKeyHashList.add(slotWithKeyHash);
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
+            return slotWithKeyHashList;
+        }
+
+        if ("pfadd".equals(cmd)) {
+            if (data.length < 3) {
+                return slotWithKeyHashList;
+            }
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
+            return slotWithKeyHashList;
+        }
+
+        if ("pfcount".equals(cmd)) {
+            if (data.length < 2) {
+                return slotWithKeyHashList;
+            }
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin1);
             return slotWithKeyHashList;
         }
 
@@ -39,9 +51,7 @@ public class PGroup extends BaseCommand {
             if (data.length != 4) {
                 return slotWithKeyHashList;
             }
-            var keyBytes = data[1];
-            var slotWithKeyHash = slot(keyBytes, slotNumber);
-            slotWithKeyHashList.add(slotWithKeyHash);
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
             return slotWithKeyHashList;
         }
 

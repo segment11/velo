@@ -24,13 +24,7 @@ public class LGroup extends BaseCommand {
             if (data.length != 5 && data.length != 6) {
                 return slotWithKeyHashList;
             }
-
-            var srcKeyBytes = data[1];
-            var dstKeyBytes = data[2];
-            var s1 = slot(srcKeyBytes, slotNumber);
-            var s2 = slot(dstKeyBytes, slotNumber);
-            slotWithKeyHashList.add(s1);
-            slotWithKeyHashList.add(s2);
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1And2);
             return slotWithKeyHashList;
         }
 
@@ -42,9 +36,7 @@ public class LGroup extends BaseCommand {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
-            var keyBytes = data[1];
-            var slotWithKeyHash = slot(keyBytes, slotNumber);
-            slotWithKeyHashList.add(slotWithKeyHash);
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
             return slotWithKeyHashList;
         }
 

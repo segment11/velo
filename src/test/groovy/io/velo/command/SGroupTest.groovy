@@ -83,13 +83,6 @@ sunionstore
         sSmoveList.size() == 0
 
         when:
-        def data2 = new byte[2][]
-        data2[1] = new ScanCursor((short) 1, 1, (short) 4, (byte) 1).toLong().toString().bytes
-        def sScanList2 = _SGroup.parseSlots('scan', data2, slotNumber)
-        then:
-        sScanList2.size() == 1
-
-        when:
         def sListList1 = singleKeyCmdList1.collect {
             _SGroup.parseSlots(it, data4, slotNumber)
         }
