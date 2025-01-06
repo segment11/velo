@@ -844,7 +844,7 @@ class XGroupTest extends Specification {
         when:
         ConfForGlobal.pureMemory = false
         data4[2][0] = ReplType.s_exists_wal.code
-        contentBytes = new byte[16 + 2 * Wal.ONE_GROUP_BUFFER_SIZE]
+        contentBytes = new byte[32 + 2 * Wal.ONE_GROUP_BUFFER_SIZE]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         // wal group index
         requestBuffer.putInt(0)
