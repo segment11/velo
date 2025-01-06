@@ -295,7 +295,7 @@ class ManageCommandTest extends Specification {
 
         when:
         data4[1] = 'dict'.bytes
-        data4[2] = 'set-key-prefix-groups'.bytes
+        data4[2] = 'set-key-prefix-or-suffix-groups'.bytes
         data4[3] = 'key:,xxx:'.bytes
         def reply = manage.dict()
         then:
@@ -439,7 +439,7 @@ class ManageCommandTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
-        data3[2] = 'set-key-prefix-groups'.bytes
+        data3[2] = 'set-key-prefix-or-suffix-groups'.bytes
         reply = manage.dict()
         then:
         reply == ErrorReply.FORMAT

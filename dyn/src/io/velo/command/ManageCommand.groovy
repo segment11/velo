@@ -599,7 +599,7 @@ class ManageCommand extends BaseCommand {
         }
 
         def subSubCmd = new String(data[2]).toLowerCase()
-        if (subSubCmd == 'set-key-prefix-or-suffix--groups') {
+        if (subSubCmd == 'set-key-prefix-or-suffix-groups') {
             // manage dict set-key-prefix-or-suffix-groups keyPrefix1,keyPrefix2
             if (data.length != 4) {
                 return ErrorReply.FORMAT
