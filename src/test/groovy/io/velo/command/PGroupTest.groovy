@@ -1,20 +1,24 @@
 package io.velo.command
 
+import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
+import io.velo.CompressedValue
 import io.velo.SocketInspector
 import io.velo.SocketInspectorTest
 import io.velo.acl.AclUsers
 import io.velo.acl.RPubSub
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
-import io.velo.reply.ErrorReply
-import io.velo.reply.IntegerReply
-import io.velo.reply.NilReply
-import io.velo.reply.OKReply
+import io.velo.persist.Mock
+import io.velo.reply.*
 import spock.lang.Specification
+
+import java.time.Duration
 
 class PGroupTest extends Specification {
     def _PGroup = new PGroup(null, null, null)
+
+    final short slot = 0
 
     def 'test parse slot'() {
         given:
@@ -32,6 +36,9 @@ class PGroupTest extends Specification {
         def sPexpireList = _PGroup.parseSlots('pexpire', data4, slotNumber)
         def sPexpireatList = _PGroup.parseSlots('pexpireat', data4, slotNumber)
         def sPexpiretimeList = _PGroup.parseSlots('pexpiretime', data2, slotNumber)
+        def sPfaddList = _PGroup.parseSlots('pfadd', data2, slotNumber)
+        def sPfcountList = _PGroup.parseSlots('pfcount', data2, slotNumber)
+        def sPfmergeList = _PGroup.parseSlots('pfmerge', data2, slotNumber)
         def sPttlList = _PGroup.parseSlots('pttl', data2, slotNumber)
         def sPsetexList = _PGroup.parseSlots('psetex', data4, slotNumber)
         def sList = _PGroup.parseSlots('pxxx', data2, slotNumber)
@@ -39,6 +46,9 @@ class PGroupTest extends Specification {
         sPexpireList.size() == 1
         sPexpireatList.size() == 1
         sPexpiretimeList.size() == 1
+        sPfaddList.size() == 0
+        sPfcountList.size() == 1
+        sPfmergeList.size() == 0
         sPttlList.size() == 1
         sPsetexList.size() == 1
         sList.size() == 0
@@ -46,6 +56,7 @@ class PGroupTest extends Specification {
         when:
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
+        data3[2] = 'b'.bytes
         sPexpireatList = _PGroup.parseSlots('pexpireat', data3, slotNumber)
         then:
         sPexpireatList.size() == 1
@@ -65,6 +76,22 @@ class PGroupTest extends Specification {
         sPexpiretimeList = _PGroup.parseSlots('pexpiretime', data4, slotNumber)
         then:
         sPexpiretimeList.size() == 0
+
+        when:
+        sPfaddList = _PGroup.parseSlots('pfadd', data3, slotNumber)
+        then:
+        sPfaddList.size() == 1
+
+        when:
+        def data1 = new byte[1][]
+        sPfcountList = _PGroup.parseSlots('pfcount', data1, slotNumber)
+        then:
+        sPfcountList.size() == 0
+
+        when:
+        sPfmergeList = _PGroup.parseSlots('pfmerge', data3, slotNumber)
+        then:
+        sPfmergeList.size() == 2
 
         when:
         sPttlList = _PGroup.parseSlots('pttl', data4, slotNumber)
@@ -116,6 +143,27 @@ class PGroupTest extends Specification {
         ((IntegerReply) reply).integer == -2
 
         when:
+        def data1 = new byte[1][]
+        pGroup.cmd = 'pfadd'
+        pGroup.data = data1
+        reply = pGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        pGroup.cmd = 'pfcount'
+        reply = pGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        pGroup.cmd = 'pfmerge'
+        reply = pGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        pGroup.data = data2
         pGroup.cmd = 'pttl'
         reply = pGroup.handle()
         then:
@@ -147,12 +195,118 @@ class PGroupTest extends Specification {
         reply == NilReply.INSTANCE
 
         when:
-        def data1 = new byte[1][]
         pGroup.cmd = 'publish'
         pGroup.data = data1
         reply = pGroup.handle()
         then:
         reply == ErrorReply.FORMAT
+    }
+
+    def 'test pfadd'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def pGroup = new PGroup('pfcount', null, null)
+        pGroup.byPassGetSet = inMemoryGetSet
+        pGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = pGroup.execute('pfadd a abc')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when:
+        reply = pGroup.execute('pfadd a abc')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        boolean exception = false
+        String errorMessage = null
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        try {
+            reply = pGroup.execute('pfadd a abc')
+        } catch (RuntimeException e) {
+            println e.message
+            errorMessage = e.message
+            exception = true
+        }
+        then:
+        exception
+        errorMessage == ErrorReply.WRONG_TYPE.message
+    }
+
+    def 'test pfcount and pfmerge'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def pGroup = new PGroup('pfcount', null, null)
+        pGroup.byPassGetSet = inMemoryGetSet
+        pGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = pGroup.execute('pfcount a')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 0
+
+        when:
+        pGroup.execute('pfadd a abc')
+        pGroup.execute('pfadd b xyz')
+        reply = pGroup.execute('pfcount a')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 1
+
+        when:
+        reply = pGroup.execute('pfmerge dst a b')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+        LocalPersist.instance.addOneSlot(slot, eventloop)
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        pGroup.crossRequestWorker = true
+        reply = pGroup.execute('pfcount a b')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result instanceof IntegerReply && ((IntegerReply) result).integer == 2
+        }.result
+
+        when:
+        reply = pGroup.execute('pfmerge dst a b')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result == OKReply.INSTANCE
+        }.result
+
+        when:
+        pGroup.crossRequestWorker = false
+        reply = pGroup.execute('pfcount dst')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 2
+
+        cleanup:
+        eventloop.breakEventloop()
     }
 
     def 'test publish'() {

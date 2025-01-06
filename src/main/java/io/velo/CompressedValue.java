@@ -26,6 +26,9 @@ public class CompressedValue {
     // need save as a singe file
     public static final int SP_TYPE_BIG_STRING = -64;
 
+    // hyperloglog
+    public static final int SP_TYPE_HLL = -96;
+
     public static final byte SP_FLAG_DELETE_TMP = -128;
 
     public static final int SP_TYPE_HH = -512;
@@ -239,6 +242,14 @@ public class CompressedValue {
 
     public static boolean isBloomFilter(int spType) {
         return spType == SP_TYPE_BLOOM_BITMAP;
+    }
+
+    public boolean isHll() {
+        return dictSeqOrSpType == SP_TYPE_HLL;
+    }
+
+    public static boolean isHll(int spType) {
+        return spType == SP_TYPE_HLL;
     }
 
     @Override

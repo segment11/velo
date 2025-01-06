@@ -775,7 +775,7 @@ public abstract class BaseCommand {
         }
     }
 
-    private void putToOneSlot(short slot, String key, @NotNull SlotWithKeyHash slotWithKeyHash, CompressedValue cv) {
+    protected void putToOneSlot(short slot, String key, @NotNull SlotWithKeyHash slotWithKeyHash, CompressedValue cv) {
         if (byPassGetSet != null) {
             byPassGetSet.put(slot, key, slotWithKeyHash.bucketIndex, cv);
         } else {

@@ -43,7 +43,9 @@ class CompressedValueTest extends Specification {
         CompressedValue.isStream(CompressedValue.SP_TYPE_STREAM)
         !CompressedValue.isStream(CompressedValue.SP_TYPE_BLOOM_BITMAP)
         CompressedValue.isBloomFilter(CompressedValue.SP_TYPE_BLOOM_BITMAP)
-        !CompressedValue.isBloomFilter(CompressedValue.SP_TYPE_HH)
+        !CompressedValue.isBloomFilter(CompressedValue.SP_TYPE_HLL)
+        CompressedValue.isHll(CompressedValue.SP_TYPE_HLL)
+        !CompressedValue.isHll(CompressedValue.SP_TYPE_HH)
         CompressedValue.isDeleted(new byte[]{CompressedValue.SP_FLAG_DELETE_TMP})
         !CompressedValue.isDeleted(new byte[2])
         !CompressedValue.isDeleted(new byte[]{0})
@@ -129,6 +131,12 @@ class CompressedValueTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BLOOM_BITMAP
         then:
         cv.isBloomFilter()
+        !cv.isHll()
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HLL
+        then:
+        cv.isHll()
         !cv.isHash()
 
         when:
