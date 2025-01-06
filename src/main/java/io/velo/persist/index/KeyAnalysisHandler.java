@@ -5,6 +5,7 @@ import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.velo.NeedCleanUp;
 import io.velo.metric.SimpleGauge;
+import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -31,9 +32,11 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         void run(int loopCount);
     }
 
+    private final File keysDir;
     private final Eventloop eventloop;
+    private final Config persistConfig;
     @VisibleForTesting
-    final RocksDB db;
+    RocksDB db;
 
     // null when do unit test
     private KeyAnalysisTask innerTask;
@@ -55,16 +58,12 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisHandler.class);
 
-    public KeyAnalysisHandler(File keysDir, Eventloop eventloop, Config persistConfig) throws RocksDBException {
-        this.eventloop = eventloop;
-
-        RocksDB.loadLibrary();
-
+    private Options openOptions(Config persistConfig) {
         var keyMatchPrefixLength = persistConfig.get(ofInteger(), "keyAnalysis.keyMatchPrefixLength", 3);
 
         // 100 million keys, use one more cpu vcore, cost about 3GB total file size, and less than 1GB memory
         // refer to TestRocksDBConfig.groovy
-        var options = new Options()
+        return new Options()
                 .setCreateIfMissing(true)
                 .setCompressionType(CompressionType.NO_COMPRESSION)
                 .setNumLevels(2)
@@ -72,10 +71,23 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                 .setMaxOpenFiles(64)
                 .setMaxBackgroundJobs(4)
                 .useFixedLengthPrefixExtractor(keyMatchPrefixLength);
-        this.db = RocksDB.open(options, keysDir.getAbsolutePath());
-        log.warn("Key analysis handler started, keysDir={}", keysDir.getAbsolutePath());
+    }
+
+    private void createDB() throws RocksDBException {
+        this.db = RocksDB.open(openOptions(persistConfig), keysDir.getAbsolutePath());
+        log.warn("Key analysis db created, keysDir={}", keysDir.getAbsolutePath());
 
         this.innerTask = new KeyAnalysisTask(this, db, persistConfig);
+    }
+
+    public KeyAnalysisHandler(File keysDir, Eventloop eventloop, Config persistConfig) throws RocksDBException {
+        this.keysDir = keysDir;
+        this.eventloop = eventloop;
+        this.persistConfig = persistConfig;
+
+        RocksDB.loadLibrary();
+        createDB();
+
         eventloop.delay(LOOP_INTERVAL_MILLIS, this);
 
         this.initMetricsCollect();
@@ -124,6 +136,17 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         eventloop.submit(() -> {
             db.delete(key.getBytes());
             removeOrExpireCount++;
+        });
+    }
+
+    public CompletableFuture<Void> flushdb() {
+        return eventloop.submit(() -> {
+            db.close();
+            log.warn("Close key analysis db");
+            FileUtils.deleteDirectory(keysDir);
+            log.warn("Delete key analysis dir");
+
+            createDB();
         });
     }
 
