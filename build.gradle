@@ -215,6 +215,24 @@ jar {
     zip64 true
 }
 
+task fatJar(type: Jar) {
+    manifest {
+        attributes "Main-Class": 'io.velo.MultiWorkerServer'
+        attributes "Class-Path": '.'
+    }
+    archiveBaseName = 'velo-all-in-one'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from {
+        configurations.runtimeClasspath.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    } {
+        exclude '*.dll'
+    }
+    with jar
+    zip64 true
+}
+
 tasks.withType(Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
