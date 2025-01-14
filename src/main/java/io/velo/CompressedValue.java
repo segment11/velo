@@ -36,6 +36,7 @@ public class CompressedValue {
     public static final int SP_TYPE_LIST = -2048;
     public static final int SP_TYPE_SET = -4096;
     public static final int SP_TYPE_ZSET = -8192;
+    public static final int SP_TYPE_GEO = -8193;
     public static final int SP_TYPE_STREAM = -16384;
     public static final int SP_TYPE_BLOOM_BITMAP = -200;
 
@@ -226,6 +227,14 @@ public class CompressedValue {
 
     public static boolean isZSet(int spType) {
         return spType == SP_TYPE_ZSET;
+    }
+
+    public boolean isGeo() {
+        return dictSeqOrSpType == SP_TYPE_GEO;
+    }
+
+    public static boolean isGeo(int spType) {
+        return spType == SP_TYPE_GEO;
     }
 
     public boolean isStream() {

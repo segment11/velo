@@ -39,7 +39,9 @@ class CompressedValueTest extends Specification {
         CompressedValue.isSet(CompressedValue.SP_TYPE_SET)
         !CompressedValue.isSet(CompressedValue.SP_TYPE_ZSET)
         CompressedValue.isZSet(CompressedValue.SP_TYPE_ZSET)
-        !CompressedValue.isZSet(CompressedValue.SP_TYPE_STREAM)
+        !CompressedValue.isZSet(CompressedValue.SP_TYPE_GEO)
+        CompressedValue.isGeo(CompressedValue.SP_TYPE_GEO)
+        !CompressedValue.isGeo(CompressedValue.SP_TYPE_STREAM)
         CompressedValue.isStream(CompressedValue.SP_TYPE_STREAM)
         !CompressedValue.isStream(CompressedValue.SP_TYPE_BLOOM_BITMAP)
         CompressedValue.isBloomFilter(CompressedValue.SP_TYPE_BLOOM_BITMAP)
@@ -66,6 +68,7 @@ class CompressedValueTest extends Specification {
         !cv.isList()
         !cv.isSet()
         !cv.isZSet()
+        !cv.isGeo()
         !cv.isStream()
         !cv.isUseDict()
 
@@ -119,6 +122,12 @@ class CompressedValueTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         then:
         cv.isZSet()
+        !cv.isGeo()
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_GEO
+        then:
+        cv.isGeo()
         !cv.isStream()
 
         when:

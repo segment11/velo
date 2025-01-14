@@ -12,6 +12,7 @@ import spock.lang.Specification
 
 class GGroupTest extends Specification {
     def _GGroup = new GGroup(null, null, null)
+    final short slot = 0
 
     def 'test parse slot'() {
         given:
@@ -28,6 +29,8 @@ class GGroupTest extends Specification {
         def sGetExList = _GGroup.parseSlots('getex', data2, slotNumber)
         def sGetRangeList = _GGroup.parseSlots('getrange', data2, slotNumber)
         def sGetSetList = _GGroup.parseSlots('getset', data2, slotNumber)
+        def sGeoaddList = _GGroup.parseSlots('geoadd', data2, slotNumber)
+        def sGeosearchstoreList = _GGroup.parseSlots('geosearchstore', data2, slotNumber)
         def sList = _GGroup.parseSlots('gxxx', data2, slotNumber)
         then:
         sGetList.size() == 1
@@ -36,13 +39,25 @@ class GGroupTest extends Specification {
         sGetExList.size() == 1
         sGetRangeList.size() == 1
         sGetSetList.size() == 1
+        sGeoaddList.size() == 1
+        sGeosearchstoreList.size() == 0
         sList.size() == 0
+
+        when:
+        def data4 = new byte[4][]
+        data4[1] = 'a'.bytes
+        data4[2] = 'b'.bytes
+        sGeosearchstoreList = _GGroup.parseSlots('geosearchstore', data4, slotNumber)
+        then:
+        sGeosearchstoreList.size() == 2
 
         when:
         def data1 = new byte[1][]
         sGetList = _GGroup.parseSlots('get', data1, slotNumber)
+        sGeoaddList = _GGroup.parseSlots('geoadd', data1, slotNumber)
         then:
         sGetList.size() == 0
+        sGeoaddList.size() == 0
     }
 
     def 'test handle'() {
@@ -82,6 +97,12 @@ class GGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        gGroup.cmd = 'geoadd'
+        reply = gGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         gGroup.cmd = 'zzz'
         reply = gGroup.handle()
         then:
@@ -90,8 +111,6 @@ class GGroupTest extends Specification {
 
     def 'test getbit'() {
         given:
-        final short slot = 0
-
         def inMemoryGetSet = new InMemoryGetSet()
 
         def gGroup = new GGroup('getbit', null, null)
@@ -155,8 +174,6 @@ class GGroupTest extends Specification {
 
     def 'test getdel'() {
         given:
-        final short slot = 0
-
         def data2 = new byte[2][]
         data2[1] = 'a'.bytes
 
@@ -183,8 +200,6 @@ class GGroupTest extends Specification {
 
     def 'test getex'() {
         given:
-        final short slot = 0
-
         def data2 = new byte[2][]
         data2[1] = 'a'.bytes
 
@@ -299,8 +314,6 @@ class GGroupTest extends Specification {
 
     def 'test getrange'() {
         given:
-        final short slot = 0
-
         def inMemoryGetSet = new InMemoryGetSet()
 
         def gGroup = new GGroup('getrange', null, null)
@@ -337,8 +350,6 @@ class GGroupTest extends Specification {
 
     def 'test getset'() {
         given:
-        final short slot = 0
-
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'value'.bytes
@@ -370,5 +381,76 @@ class GGroupTest extends Specification {
         def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
         then:
         bufOrCv.cv().compressedData == 'value'.bytes
+    }
+
+    def 'test geoadd'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def gGroup = new GGroup('geoadd', null, null)
+        gGroup.byPassGetSet = inMemoryGetSet
+        gGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = gGroup.execute('geoadd a nx xx ch 1.0 2.0 m0 2.0 3.0 m1')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 2
+
+        when:
+        reply = gGroup.execute('geoadd a nx 1.0 2.0 m0')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 0
+
+        when:
+        reply = gGroup.execute('geoadd a xx 1.0 2.0 m2')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 0
+
+        when:
+        reply = gGroup.execute('geoadd a 1.0 2.0 m0')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 0
+
+        when:
+        reply = gGroup.execute('geoadd a ch 10.0 20.0 m0')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 1
+
+        when:
+        reply = gGroup.execute('geoadd a ch 10.0 30.0 m0')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 1
+
+        when:
+        reply = gGroup.execute('geoadd a ch 20.0 30.0 m0')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 1
+
+        when:
+        reply = gGroup.execute('geoadd a nx 1.a 2.0 m0')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        reply = gGroup.execute('geoadd a nx 1.0 2.0')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geoadd a nx xx ch')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geoadd a')
+        then:
+        reply == ErrorReply.FORMAT
     }
 }

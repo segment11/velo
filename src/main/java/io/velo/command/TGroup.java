@@ -96,7 +96,7 @@ public class TGroup extends BaseCommand {
         if (cv.isSet()) {
             return TYPE_SET;
         }
-        if (cv.isZSet()) {
+        if (cv.isZSet() || cv.isGeo()) {
             return TYPE_ZSET;
         }
         if (cv.isStream()) {

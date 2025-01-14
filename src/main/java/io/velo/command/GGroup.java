@@ -4,6 +4,7 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.reply.*;
+import io.velo.type.RedisGeo;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
@@ -20,6 +21,23 @@ public class GGroup extends BaseCommand {
 
         if ("get".equals(cmd) || "getbit".equals(cmd) || "getdel".equals(cmd) || "getex".equals(cmd)
                 || "getrange".equals(cmd) || "getset".equals(cmd)) {
+            if (data.length < 2) {
+                return slotWithKeyHashList;
+            }
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
+            return slotWithKeyHashList;
+        }
+
+        // geo category
+        if (cmd.startsWith("geo")) {
+            if ("geosearchstore".equals(cmd)) {
+                if (data.length < 3) {
+                    return slotWithKeyHashList;
+                }
+                addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1And2);
+                return slotWithKeyHashList;
+            }
+
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
@@ -49,6 +67,10 @@ public class GGroup extends BaseCommand {
 
         if ("getset".equals(cmd)) {
             return getset();
+        }
+
+        if (cmd.startsWith("geo")) {
+            return geo();
         }
 
         return NilReply.INSTANCE;
@@ -254,5 +276,188 @@ public class GGroup extends BaseCommand {
 
         set(keyBytes, valueBytes, slotWithKeyHash);
         return new BulkReply(valueBytesExist);
+    }
+
+    private Reply geo() {
+        if (data.length < 2) {
+            return ErrorReply.FORMAT;
+        }
+
+        if ("geoadd".equals(cmd)) {
+            return geoadd();
+        }
+
+        if ("geodist".equals(cmd)) {
+            return geodist();
+        }
+
+        if ("geohash".equals(cmd)) {
+            return geohash();
+        }
+
+        if ("geopos".equals(cmd)) {
+            return geopos();
+        }
+
+        if ("georadius".equals(cmd)) {
+            return georadius(false);
+        }
+
+        if ("georadius_ro".equals(cmd)) {
+            return georadius(true);
+        }
+
+        if ("georadiusbymember".equals(cmd)) {
+            return georadiusbymember(false);
+        }
+
+        if ("georadiusbymember_ro".equals(cmd)) {
+            return georadiusbymember(true);
+        }
+
+        if ("geosearch".equals(cmd)) {
+            return geosearch();
+        }
+
+        if ("geosearchstore".equals(cmd)) {
+            if (data.length < 3) {
+                return ErrorReply.FORMAT;
+            }
+            return geosearchstore();
+        }
+
+        return ErrorReply.SYNTAX;
+    }
+
+    private record GeoItem(double lon, double lat, String member) {
+
+    }
+
+    private RedisGeo getRedisGeo(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
+        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_GEO);
+        if (encodedBytes == null) {
+            return null;
+        }
+
+        return RedisGeo.decode(encodedBytes);
+    }
+
+    private void saveRedisGeo(RedisGeo rg, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
+        var key = new String(keyBytes);
+        if (rg.isEmpty()) {
+            removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());
+            return;
+        }
+
+        set(keyBytes, rg.encode(), slotWithKeyHash, CompressedValue.SP_TYPE_GEO);
+    }
+
+    private Reply geoadd() {
+        if (data.length < 5) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        var s = slotWithKeyHashListParsed.getFirst();
+
+        boolean isNx = false;
+        boolean isXx = false;
+        boolean isIncludeCh = false;
+
+        ArrayList<GeoItem> itemList = new ArrayList<>();
+        for (int i = 2; i < data.length; i++) {
+            var arg = new String(data[i]);
+            if (arg.equalsIgnoreCase("nx")) {
+                isNx = true;
+            } else if (arg.equalsIgnoreCase("xx")) {
+                isXx = true;
+            } else if (arg.equalsIgnoreCase("ch")) {
+                isIncludeCh = true;
+            } else {
+                if (i + 2 >= data.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                try {
+                    var lon = Double.parseDouble(new String(data[i]));
+                    var lat = Double.parseDouble(new String(data[i + 1]));
+                    var member = new String(data[i + 2]);
+                    itemList.add(new GeoItem(lon, lat, member));
+                    i += 2;
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_FLOAT;
+                }
+            }
+        }
+
+        if (itemList.isEmpty()) {
+            return ErrorReply.SYNTAX;
+        }
+
+        var rg = getRedisGeo(keyBytes, s);
+        if (rg == null) {
+            rg = new RedisGeo();
+        }
+
+        int added = 0;
+        int changed = 0;
+        for (var item : itemList) {
+            var member = item.member;
+            if (isNx) {
+                // nx
+                if (rg.contains(member)) {
+                    continue;
+                }
+            } else if (isXx) {
+                // xx
+                if (!rg.contains(member)) {
+                    continue;
+                }
+            }
+
+            var old = rg.get(member);
+            if (old != null) {
+                if (old.getX() != item.lat || old.getY() != item.lon) {
+                    rg.add(member, item.lon, item.lat);
+                    changed++;
+                }
+            } else {
+                rg.add(member, item.lon, item.lat);
+                added++;
+            }
+        }
+
+        var handled = added + changed;
+        if (handled > 0) {
+            saveRedisGeo(rg, keyBytes, s);
+        }
+        return new IntegerReply(isIncludeCh ? changed + added : added);
+    }
+
+    private Reply geodist() {
+        return NilReply.INSTANCE;
+    }
+
+    private Reply geohash() {
+        return NilReply.INSTANCE;
+    }
+
+    private Reply geopos() {
+        return NilReply.INSTANCE;
+    }
+
+    private Reply georadius(boolean isReadonly) {
+        return NilReply.INSTANCE;
+    }
+
+    private Reply georadiusbymember(boolean isReadonly) {
+        return NilReply.INSTANCE;
+    }
+
+    private Reply geosearch() {
+        return NilReply.INSTANCE;
+    }
+
+    private Reply geosearchstore() {
+        return NilReply.INSTANCE;
     }
 }
