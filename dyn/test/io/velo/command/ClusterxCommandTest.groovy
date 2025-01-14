@@ -5,6 +5,7 @@ import io.velo.ConfForGlobal
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
+import io.velo.persist.Mock
 import io.velo.repl.LeaderSelector
 import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
@@ -23,6 +24,33 @@ class ClusterxCommandTest extends Specification {
 
         expect:
         _ClusterxCommand.parseSlots('cluster', data1, 1).size() == 1
+
+        when:
+        def data3 = new byte[3][]
+        data3[1] = 'countkeysinslot'.bytes
+        data3[2] = '0'.bytes
+        then:
+        _ClusterxCommand.parseSlots('cluster', data3, 1).size() == 1
+
+        when:
+        data3[2] = 'a'.bytes
+        then:
+        _ClusterxCommand.parseSlots('cluster', data3, 1).size() == 0
+
+        when:
+        data3[2] = '-1'.bytes
+        then:
+        _ClusterxCommand.parseSlots('cluster', data3, 1).size() == 0
+
+        when:
+        data3[2] = '16384'.bytes
+        then:
+        _ClusterxCommand.parseSlots('cluster', data3, 1).size() == 0
+
+        when:
+        data3[1] = 'getkeysinslot'.bytes
+        then:
+        _ClusterxCommand.parseSlots('cluster', data3, 1).size() == 1
     }
 
     def 'test handle'() {
@@ -47,6 +75,7 @@ addslotsrange
 delslots
 delslotsrange
 countkeysinslot
+getkeysinslot
 info
 migrate
 meet
@@ -165,7 +194,7 @@ slots
         Consts.persistDir.deleteDir()
     }
 
-    def 'test countkeysinslot'() {
+    def 'test countkeysinslot and getkeysinslot'() {
         given:
         def data3 = new byte[3][]
         data3[1] = 'countkeysinslot'.bytes
@@ -194,11 +223,86 @@ slots
         reply == ErrorReply.NOT_INTEGER
 
         when:
+        data3[2] = '-1'.bytes
+        reply = clusterx.countkeysinslot()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        data3[2] = '16384'.bytes
+        reply = clusterx.countkeysinslot()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
         def data2 = new byte[2][]
         clusterx.data = data2
         reply = clusterx.countkeysinslot()
         then:
         reply == ErrorReply.FORMAT
+
+        when:
+        reply = clusterx.getkeysinslot()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+        and:
+        clusterx.data = null
+        reply = clusterx.execute('cluster getkeysinslot 0 10')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == MultiBulkReply.EMPTY
+        }.result
+
+        when:
+        def toClientSlot0Keys = Mock.prepareToClientSlotKeyList((short) 1, (short) 0)
+        for (kk in toClientSlot0Keys) {
+            cGroup.set(kk.bytes, kk.bytes)
+        }
+        Thread.sleep(100)
+        reply = clusterx.execute('cluster getkeysinslot 0 10')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result instanceof MultiBulkReply
+            (result as MultiBulkReply).replies.length == 1
+        }.result
+
+        when:
+        reply = clusterx.execute('cluster getkeysinslot a 10')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = clusterx.execute('cluster getkeysinslot -1 10')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = clusterx.execute('cluster getkeysinslot 16384 10')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = clusterx.execute('cluster getkeysinslot 0 a')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = clusterx.execute('cluster getkeysinslot 0 0')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = clusterx.execute('cluster getkeysinslot 0 10001')
+        then:
+        // count should <= 10000
+        reply instanceof ErrorReply
 
         cleanup:
         localPersist.cleanUp()

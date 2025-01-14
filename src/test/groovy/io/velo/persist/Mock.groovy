@@ -2,6 +2,7 @@ package io.velo.persist
 
 import io.velo.CompressedValue
 import io.velo.KeyHash
+import redis.clients.jedis.util.JedisClusterCRC16
 
 import java.util.function.Function
 
@@ -99,5 +100,23 @@ class Mock {
             subList << new Tuple2(key, keyHash)
         }
         keyHashByBucketIndex
+    }
+
+    static List<String> prepareToClientSlotKeyList(short n, short toClientSlot) {
+        List<String> list = []
+        for (i in 0..<(n * 16384 * 10)) {
+            def key = 'key:' + i.toString().padLeft(12, '0')
+            def clusterSlot = JedisClusterCRC16.getSlot(key.bytes)
+            if (clusterSlot == toClientSlot) {
+                list << key
+                if (list.size() == n) {
+                    break
+                }
+            }
+        }
+        if (list.size() < n) {
+            throw new RuntimeException('not enough keys')
+        }
+        list
     }
 }

@@ -32,6 +32,26 @@ class ClusterxCommand extends BaseCommand {
     @Override
     ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> list = []
+
+        if (data.length > 2) {
+            def subCmd = new String(data[1]).toLowerCase()
+            if ('countkeysinslot' == subCmd) {
+                int toClientSlot
+                try {
+                    toClientSlot = Integer.parseInt(new String(data[2]))
+                } catch (NumberFormatException ignored) {
+                    return list
+                }
+                if (toClientSlot < 0 || toClientSlot >= MultiShard.TO_CLIENT_SLOT_NUMBER) {
+                    return list
+                }
+
+                def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
+                list << new SlotWithKeyHash(innerSlot, 0, 0L, 0, null)
+                return list
+            }
+        }
+
         list << SlotWithKeyHash.TO_FIX_FIRST_SLOT
         list
     }
@@ -62,6 +82,10 @@ class ClusterxCommand extends BaseCommand {
 
         if ('delslotsrange' == subCmd) {
             return addslots(true, true)
+        }
+
+        if ('getkeysinslot' == subCmd) {
+            return getkeysinslot()
         }
 
         if ('info' == subCmd) {
@@ -239,6 +263,9 @@ migrating_state:ok
         } catch (NumberFormatException ignored) {
             return ErrorReply.NOT_INTEGER
         }
+        if (toClientSlot < 0 || toClientSlot >= MultiShard.TO_CLIENT_SLOT_NUMBER) {
+            return ErrorReply.INVALID_INTEGER
+        }
 
         def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
         def oneInnerSlotIncludeToClientSlotCount = (MultiShard.TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber).intValue()
@@ -247,6 +274,75 @@ migrating_state:ok
         def avgKeyCount = (oneSlot.allKeyCount / oneInnerSlotIncludeToClientSlotCount).intValue()
 
         new IntegerReply(avgKeyCount)
+    }
+
+    @VisibleForTesting
+    Reply getkeysinslot() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        if (data.length != 4) {
+            return ErrorReply.FORMAT
+        }
+
+        int toClientSlot
+        try {
+            toClientSlot = Integer.parseInt(new String(data[2]))
+        } catch (NumberFormatException ignored) {
+            return ErrorReply.NOT_INTEGER
+        }
+        if (toClientSlot < 0 || toClientSlot >= MultiShard.TO_CLIENT_SLOT_NUMBER) {
+            return ErrorReply.INVALID_INTEGER
+        }
+
+        int count
+        try {
+            count = Integer.parseInt(new String(data[3]))
+        } catch (NumberFormatException ignored) {
+            return ErrorReply.NOT_INTEGER
+        }
+        if (count <= 0) {
+            return ErrorReply.INVALID_INTEGER
+        }
+
+        final int maxCount = 10000
+        if (count > maxCount) {
+            return new ErrorReply("count must be less than ${maxCount}")
+        }
+
+        def f = localPersist.indexHandlerPool.keyAnalysisHandler.filterKeys(null, count,
+                key -> {
+                    JedisClusterCRC16.getSlot(key.bytes) == toClientSlot
+                },
+                valueBytesAsInt -> {
+                    true
+                })
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>()
+        def asyncReply = new AsyncReply(finalPromise)
+
+        f.whenComplete((keys, e) -> {
+            if (e != null) {
+                log.error('scan error={}', e.message)
+                finalPromise.setException((Exception) e)
+                return
+            }
+
+            if (keys.isEmpty()) {
+                finalPromise.set(MultiBulkReply.EMPTY)
+                return
+            }
+
+            def replies = new Reply[keys.size()]
+            for (int i = 0; i < keys.size(); i++) {
+                replies[i] = new BulkReply(keys.get(i).bytes)
+            }
+
+            finalPromise.set(new MultiBulkReply(replies))
+        })
+
+        return asyncReply
     }
 
     @VisibleForTesting
@@ -370,7 +466,7 @@ migrating_state:ok
         }
 
         def keyBytes = data[2]
-        var toClientSlot = JedisClusterCRC16.getSlot(keyBytes)
+        def toClientSlot = JedisClusterCRC16.getSlot(keyBytes)
         new IntegerReply(toClientSlot)
     }
 
