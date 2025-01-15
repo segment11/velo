@@ -4,10 +4,7 @@ import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Mock
-import io.velo.reply.BulkReply
-import io.velo.reply.ErrorReply
-import io.velo.reply.IntegerReply
-import io.velo.reply.NilReply
+import io.velo.reply.*
 import spock.lang.Specification
 
 class GGroupTest extends Specification {
@@ -517,6 +514,43 @@ class GGroupTest extends Specification {
 
         when:
         reply = gGroup.execute('geodist xxx m0 m1 XX XX')
+        then:
+        reply == ErrorReply.FORMAT
+    }
+
+    def 'test geohash'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def gGroup = new GGroup('geohash', null, null)
+        gGroup.byPassGetSet = inMemoryGetSet
+        gGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = gGroup.execute('geohash xxx m0 m1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.every {
+            it == NilReply.INSTANCE
+        }
+
+        when:
+        gGroup.execute('geoadd xxx 13.361389 38.115556 m0 15.087269 37.502669 m1')
+        reply = gGroup.execute('geohash xxx m0 m1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.every {
+            it instanceof BulkReply
+        }
+
+        when:
+        reply = gGroup.execute('geohash xxx m0 m1 m2')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies[2] == NilReply.INSTANCE
+
+        when:
+        reply = gGroup.execute('geohash xxx')
         then:
         reply == ErrorReply.FORMAT
     }

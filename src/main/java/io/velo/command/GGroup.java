@@ -8,6 +8,7 @@ import io.velo.type.RedisGeo;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import static io.velo.CompressedValue.NO_EXPIRE;
 
@@ -414,9 +415,9 @@ public class GGroup extends BaseCommand {
                 }
             }
 
-            var old = rg.get(member);
-            if (old != null) {
-                if (old.getX() != item.lat || old.getY() != item.lon) {
+            var oldP = rg.get(member);
+            if (oldP != null) {
+                if (oldP.lat() != item.lat || oldP.lon() != item.lon) {
                     rg.add(member, item.lon, item.lat);
                     changed++;
                 }
@@ -487,7 +488,30 @@ public class GGroup extends BaseCommand {
     }
 
     private Reply geohash() {
-        return NilReply.INSTANCE;
+        if (data.length < 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        var s = slotWithKeyHashListParsed.getFirst();
+        var replies = new Reply[data.length - 2];
+
+        var rg = getRedisGeo(keyBytes, s);
+        if (rg == null) {
+            Arrays.fill(replies, NilReply.INSTANCE);
+        } else {
+            for (int i = 2; i < data.length; i++) {
+                var member = new String(data[i]);
+                var p = rg.get(member);
+                if (p == null) {
+                    replies[i - 2] = NilReply.INSTANCE;
+                } else {
+                    replies[i - 2] = new BulkReply(RedisGeo.hash(p));
+                }
+            }
+        }
+
+        return new MultiBulkReply(replies);
     }
 
     private Reply geopos() {

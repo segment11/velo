@@ -42,4 +42,21 @@ class RedisGeoTest extends Specification {
         then:
         exception
     }
+
+    def 'test hash'() {
+        given:
+        def hash = RedisGeo.hash(new RedisGeo.P(15.087269, 37.502669))
+        println new String(hash)
+
+        expect:
+        RedisGeo.geohashEncode(0, 0, 0, 0, -181, 0, (byte) 26) == 0
+        RedisGeo.geohashEncode(0, 0, 0, 0, 181, 0, (byte) 26) == 0
+        RedisGeo.geohashEncode(0, 0, 0, 0, 0, -90, (byte) 26) == 0
+        RedisGeo.geohashEncode(0, 0, 0, 0, 0, 90, (byte) 26) == 0
+
+        RedisGeo.geohashEncode(11, 0, 0, 0, 10, 0, (byte) 26) == 0
+        RedisGeo.geohashEncode(0, 9, 0, 0, 10, 0, (byte) 26) == 0
+        RedisGeo.geohashEncode(0, 0, 11, 0, 0, 10, (byte) 26) == 0
+        RedisGeo.geohashEncode(0, 0, 0, 9, 0, 10, (byte) 26) == 0
+    }
 }
