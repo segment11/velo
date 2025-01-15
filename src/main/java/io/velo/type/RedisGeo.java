@@ -11,7 +11,39 @@ public class RedisGeo {
 
     }
 
+    public enum Unit {
+        M,
+        KM,
+        MI,
+        FT,
+        UNKNOWN;
+
+        public static Unit fromString(String unitString) {
+            return switch (unitString.toLowerCase()) {
+                case "m" -> Unit.M;
+                case "km" -> Unit.KM;
+                case "mi" -> Unit.MI;
+                case "ft" -> Unit.FT;
+                default -> Unit.UNKNOWN;
+            };
+        }
+
+        public double toMeters(double distance) {
+            return switch (this) {
+                case M -> distance;
+                case KM -> distance * 1000;
+                case MI -> distance * 1609.34;
+                case FT -> distance * 0.3048;
+                case UNKNOWN -> distance;
+            };
+        }
+    }
+
     private final HashMap<String, P> map = new HashMap<>();
+
+    public HashMap<String, P> getMap() {
+        return map;
+    }
 
     public int size() {
         return map.size();
@@ -61,6 +93,26 @@ public class RedisGeo {
         double r = EARTH_RADIUS * c;
         // scale to 4 decimal places
         return Math.round(r * Math.pow(10, SCALE_I)) / Math.pow(10, SCALE_I);
+    }
+
+    private static double moveLatitude(double lat, double distanceInMeters) {
+        return lat + Math.toDegrees(distanceInMeters / EARTH_RADIUS);
+    }
+
+    private static double moveLongitude(double lon, double lat, double distanceInMeters) {
+        return lon + Math.toDegrees(distanceInMeters / (EARTH_RADIUS * Math.cos(Math.toRadians(lat))));
+    }
+
+    public static boolean isWithinBox(P p, double centerLon, double centerLat, double widthInMeters, double heightInMeters) {
+        double halfWidth = widthInMeters / 2;
+        double halfHeight = heightInMeters / 2;
+
+        double northLat = moveLatitude(centerLat, halfHeight);
+        double southLat = moveLatitude(centerLat, -halfHeight);
+        double eastLon = moveLongitude(centerLon, centerLat, halfWidth);
+        double westLon = moveLongitude(centerLon, centerLat, -halfWidth);
+
+        return p.lat >= southLat && p.lat <= northLat && p.lon >= westLon && p.lon <= eastLon;
     }
 
     private static final double GEO_LONG_MAX = 180.0;

@@ -99,9 +99,6 @@ dependencies {
     implementation group: 'it.unimi.dsi', name: 'fastutil', version: '8.5.15'
     implementation group: 'commons-cli', name: 'commons-cli', version: '1.9.0'
 
-    // for geo
-    implementation group: 'org.locationtech.jts', name: 'jts-core', version: '1.20.0'
-
     implementation group: 'com.github.jnr', name: 'jnr-posix', version: '3.1.19'
     implementation group: 'com.github.jnr', name: 'jnr-ffi', version: '2.2.16'
     implementation group: 'net.openhft', name: 'affinity', version: '3.23.3'

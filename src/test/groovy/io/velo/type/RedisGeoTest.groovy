@@ -3,13 +3,14 @@ package io.velo.type
 import spock.lang.Specification
 
 class RedisGeoTest extends Specification {
-    def 'test all'() {
+    def 'test member and encode'() {
         given:
         def rg = new RedisGeo()
 
         expect:
         rg.size() == 0
         rg.isEmpty()
+        rg.map.isEmpty()
         !rg.contains('a')
         !rg.remove('b')
 
@@ -17,7 +18,6 @@ class RedisGeoTest extends Specification {
         rg.add('a', 13, 38)
         rg.add('b', 15, 37)
         then:
-        RedisGeo.distance(rg.get('a'), rg.get('b')) > 0
         rg.get('a') != null
         rg.remove('b')
 
@@ -41,6 +41,34 @@ class RedisGeoTest extends Specification {
         }
         then:
         exception
+    }
+
+    def 'test distance'() {
+        given:
+        def p0 = new RedisGeo.P(13.361389, 38.115556)
+        def p1 = new RedisGeo.P(15.087269, 37.502669)
+        def d = RedisGeo.distance(p0, p1)
+        println d
+
+        expect:
+        d > 0
+        RedisGeo.isWithinBox(p0, p0.lon(), p0.lat(), 100, 100)
+        RedisGeo.isWithinBox(p0, p1.lon(), p1.lat(), d * 2 + 100, d * 2 + 100)
+    }
+
+    def 'test unit'() {
+        expect:
+        RedisGeo.Unit.M.toMeters(1.0) == 1.0
+        RedisGeo.Unit.UNKNOWN.toMeters(1.0) == 1.0
+        RedisGeo.Unit.KM.toMeters(1.0) == 1000.0
+        RedisGeo.Unit.MI.toMeters(1.0) == 1609.34
+        RedisGeo.Unit.FT.toMeters(1.0) == 0.3048
+
+        RedisGeo.Unit.fromString('m') == RedisGeo.Unit.M
+        RedisGeo.Unit.fromString('km') == RedisGeo.Unit.KM
+        RedisGeo.Unit.fromString('mi') == RedisGeo.Unit.MI
+        RedisGeo.Unit.fromString('ft') == RedisGeo.Unit.FT
+        RedisGeo.Unit.fromString('xx') == RedisGeo.Unit.UNKNOWN
     }
 
     def 'test hash'() {

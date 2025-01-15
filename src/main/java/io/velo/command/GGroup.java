@@ -1,6 +1,7 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.reply.*;
@@ -9,6 +10,8 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 
 import static io.velo.CompressedValue.NO_EXPIRE;
 
@@ -35,7 +38,12 @@ public class GGroup extends BaseCommand {
                 if (data.length < 3) {
                     return slotWithKeyHashList;
                 }
-                addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1And2);
+
+                var dstS = BaseCommand.slot(data[1], slotNumber);
+                var srcS = BaseCommand.slot(data[2], slotNumber);
+                // source key first
+                slotWithKeyHashList.add(srcS);
+                slotWithKeyHashList.add(dstS);
                 return slotWithKeyHashList;
             }
 
@@ -301,30 +309,41 @@ public class GGroup extends BaseCommand {
         }
 
         if ("georadius".equals(cmd)) {
-            return georadius(false);
+            // deprecated, use geosearch instead
+            return ErrorReply.NOT_SUPPORT;
         }
 
         if ("georadius_ro".equals(cmd)) {
-            return georadius(true);
+            // deprecated, use geosearch instead
+            return ErrorReply.NOT_SUPPORT;
         }
 
         if ("georadiusbymember".equals(cmd)) {
-            return georadiusbymember(false);
+            // deprecated, use geosearch instead
+            return ErrorReply.NOT_SUPPORT;
         }
 
         if ("georadiusbymember_ro".equals(cmd)) {
-            return georadiusbymember(true);
+            // deprecated, use geosearch instead
+            return ErrorReply.NOT_SUPPORT;
         }
 
         if ("geosearch".equals(cmd)) {
-            return geosearch();
+            return geosearch(data, null, null);
         }
 
         if ("geosearchstore".equals(cmd)) {
             if (data.length < 3) {
                 return ErrorReply.FORMAT;
             }
-            return geosearchstore();
+
+            var dd = new byte[data.length - 1][];
+            System.arraycopy(data, 2, dd, 1, data.length - 2);
+
+            var dstKeyBytes = data[1];
+            var dstS = slotWithKeyHashListParsed.getLast();
+
+            return geosearch(dd, dstKeyBytes, dstS);
         }
 
         return ErrorReply.SYNTAX;
@@ -343,7 +362,8 @@ public class GGroup extends BaseCommand {
         return RedisGeo.decode(encodedBytes);
     }
 
-    private void saveRedisGeo(RedisGeo rg, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
+    @VisibleForTesting
+    void saveRedisGeo(RedisGeo rg, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
         var key = new String(keyBytes);
         if (rg.isEmpty()) {
             removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());
@@ -445,18 +465,11 @@ public class GGroup extends BaseCommand {
         var m0 = new String(data[2]);
         var m1 = new String(data[3]);
 
-        byte unit = 'm';
+        RedisGeo.Unit unit = RedisGeo.Unit.M;
         if (data.length == 5) {
-            var unitStr = new String(data[4]);
-            if (unitStr.equalsIgnoreCase("m")) {
-                // ignore
-            } else if (unitStr.equalsIgnoreCase("km")) {
-                unit = 'K';
-            } else if (unitStr.equalsIgnoreCase("mi")) {
-                unit = 'M';
-            } else if (unitStr.equalsIgnoreCase("ft")) {
-                unit = 'F';
-            } else {
+            var unitString = new String(data[4]);
+            unit = RedisGeo.Unit.fromString(unitString);
+            if (unit == RedisGeo.Unit.UNKNOWN) {
                 return ErrorReply.SYNTAX;
             }
         }
@@ -472,19 +485,8 @@ public class GGroup extends BaseCommand {
             return NilReply.INSTANCE;
         }
 
-        double distance = RedisGeo.distance(p0, p1);
-        double x;
-        if (unit == 'K') {
-            x = distance / 1000;
-        } else if (unit == 'M') {
-            x = distance * 0.000621371;
-        } else if (unit == 'F') {
-            x = distance * 3.28084;
-        } else {
-            x = distance;
-        }
-
-        return new BulkReply(String.valueOf(x).getBytes());
+        var distance = RedisGeo.distance(p0, p1);
+        return new BulkReply(unit.toMeters(distance));
     }
 
     private Reply geohash(boolean isGeopos) {
@@ -508,8 +510,8 @@ public class GGroup extends BaseCommand {
                 } else {
                     if (isGeopos) {
                         var subReplies = new Reply[]{
-                                new BulkReply(String.valueOf(p.lon()).getBytes()),
-                                new BulkReply(String.valueOf(p.lat()).getBytes())
+                                new BulkReply(p.lon()),
+                                new BulkReply(p.lat())
                         };
                         replies[i - 2] = new MultiBulkReply(subReplies);
                     } else {
@@ -522,19 +524,244 @@ public class GGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    private Reply georadius(boolean isReadonly) {
-        return NilReply.INSTANCE;
+    private record GeoSearchResult(String member, RedisGeo.P p, double distance) {
     }
 
-    private Reply georadiusbymember(boolean isReadonly) {
-        return NilReply.INSTANCE;
-    }
+    private Reply geosearch(byte[][] dd, byte[] dstKeyBytes, SlotWithKeyHash dstS) {
+        var keyBytes = dd[1];
+        var s = slotWithKeyHashListParsed.getFirst();
 
-    private Reply geosearch() {
-        return NilReply.INSTANCE;
-    }
+        double fromLon = 0d;
+        double fromLat = 0d;
+        String fromMember = null;
 
-    private Reply geosearchstore() {
-        return NilReply.INSTANCE;
+        double byRadius = -1;
+        var byRadiusUnit = RedisGeo.Unit.M;
+        double byBoxWidth = -1;
+        double byBoxHeight = -1;
+        var byBoxUnit = RedisGeo.Unit.M;
+
+        boolean isDesc = false;
+        int count = -1;
+        boolean isWithDist = false;
+        boolean isWithHash = false;
+        boolean isWithCoord = false;
+
+        for (int i = 2; i < dd.length; i++) {
+            var arg = new String(dd[i]);
+            if ("asc".equalsIgnoreCase(arg)) {
+                isDesc = false;
+            } else if ("desc".equalsIgnoreCase(arg)) {
+                isDesc = true;
+            } else if ("count".equalsIgnoreCase(arg)) {
+                if (i + 1 >= dd.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                try {
+                    count = Integer.parseInt(new String(dd[i + 1]));
+                    if (count <= 0) {
+                        return ErrorReply.INVALID_INTEGER;
+                    }
+                    i++;
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+            } else if ("fromlonlat".equalsIgnoreCase(arg)) {
+                if (i + 2 >= dd.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                try {
+                    fromLon = Double.parseDouble(new String(dd[i + 1]));
+                    fromLat = Double.parseDouble(new String(dd[i + 2]));
+                    i += 2;
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_FLOAT;
+                }
+            } else if ("frommember".equalsIgnoreCase(arg)) {
+                if (i + 1 >= dd.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                fromMember = new String(dd[i + 1]);
+                i++;
+            } else if ("byradius".equalsIgnoreCase(arg)) {
+                if (i + 1 >= dd.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                try {
+                    byRadius = Double.parseDouble(new String(dd[i + 1]));
+                    i++;
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_FLOAT;
+                }
+
+                // maybe has unit
+                if (dd.length > i + 1) {
+                    var unitString = new String(dd[i + 1]);
+                    byRadiusUnit = RedisGeo.Unit.fromString(unitString);
+                    if (byRadiusUnit != RedisGeo.Unit.UNKNOWN) {
+                        byRadius = byRadiusUnit.toMeters(byRadius);
+                        i++;
+                    }
+                }
+            } else if ("bybox".equalsIgnoreCase(arg)) {
+                if (i + 2 >= dd.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                try {
+                    byBoxWidth = Double.parseDouble(new String(dd[i + 1]));
+                    byBoxHeight = Double.parseDouble(new String(dd[i + 2]));
+                    i += 2;
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_FLOAT;
+                }
+
+                // maybe has unit
+                if (dd.length > i + 1) {
+                    var unitString = new String(dd[i + 1]);
+                    byBoxUnit = RedisGeo.Unit.fromString(unitString);
+                    if (byBoxUnit != RedisGeo.Unit.UNKNOWN) {
+                        byBoxWidth = byBoxUnit.toMeters(byBoxWidth);
+                        byBoxHeight = byBoxUnit.toMeters(byBoxHeight);
+                        i++;
+                    }
+                }
+            } else if ("withdist".equalsIgnoreCase(arg)) {
+                isWithDist = true;
+            } else if ("withhash".equalsIgnoreCase(arg)) {
+                isWithHash = true;
+            } else if ("withcoord".equalsIgnoreCase(arg)) {
+                isWithCoord = true;
+            } else {
+                return ErrorReply.SYNTAX;
+            }
+        }
+
+        if (byRadius == -1 && byBoxWidth == -1) {
+            return ErrorReply.SYNTAX;
+        }
+
+        var isNeedStoreToDstKey = dstKeyBytes != null;
+
+        var rg = getRedisGeo(keyBytes, s);
+        if (rg == null) {
+            return isNeedStoreToDstKey ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+        }
+
+        if (fromMember != null) {
+            var p = rg.get(fromMember);
+            if (p == null) {
+                return isNeedStoreToDstKey ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+            }
+            fromLon = p.lon();
+            fromLat = p.lat();
+        }
+
+        var fromP = new RedisGeo.P(fromLon, fromLat);
+
+        var map = rg.getMap();
+        List<GeoSearchResult> resultList = new ArrayList<GeoSearchResult>();
+        for (var entry : map.entrySet()) {
+            var member = entry.getKey();
+            var p = entry.getValue();
+            double distance = RedisGeo.distance(p, fromP);
+
+            if (byRadius != -1) {
+                if (distance > byRadius) {
+                    continue;
+                }
+            }
+
+            if (byBoxWidth != -1) {
+                if (!RedisGeo.isWithinBox(p, fromLon, fromLat, byBoxWidth, byBoxHeight)) {
+                    continue;
+                }
+            }
+
+            resultList.add(new GeoSearchResult(member, p, distance));
+        }
+
+        if (resultList.isEmpty()) {
+            return isNeedStoreToDstKey ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+        }
+
+        if (isDesc) {
+            resultList.sort(Comparator.comparingDouble(GeoSearchResult::distance).reversed());
+        } else {
+            resultList.sort(Comparator.comparingDouble(GeoSearchResult::distance));
+        }
+        if (count != -1) {
+            resultList = resultList.subList(0, Math.min(count, resultList.size()));
+        }
+
+        if (isNeedStoreToDstKey) {
+            var dstRg = new RedisGeo();
+            for (var result : resultList) {
+                // not sorted, todo
+                dstRg.add(result.member(), result.p.lon(), result.p.lat());
+            }
+
+            if (!isCrossRequestWorker) {
+                saveRedisGeo(dstRg, dstKeyBytes, dstS);
+                return new IntegerReply(dstRg.size());
+            } else {
+                var dstOneSlot = localPersist.oneSlot(dstS.slot());
+
+                SettablePromise<Reply> finalPromise = new SettablePromise<>();
+                var asyncReply = new AsyncReply(finalPromise);
+
+                var p = dstOneSlot.asyncRun(() -> {
+                    saveRedisGeo(dstRg, dstKeyBytes, dstS);
+                });
+
+                p.whenComplete((v, t) -> {
+                    if (t != null) {
+                        finalPromise.setException(t);
+                    } else {
+                        finalPromise.set(new IntegerReply(dstRg.size()));
+                    }
+                });
+
+                return asyncReply;
+            }
+        }
+
+        var subRepliesLength = 1;
+        if (isWithDist) {
+            subRepliesLength++;
+        }
+        if (isWithHash) {
+            subRepliesLength++;
+        }
+        if (isWithCoord) {
+            subRepliesLength++;
+        }
+
+        var replies = new Reply[resultList.size()];
+        for (int i = 0; i < replies.length; i++) {
+            var result = resultList.get(i);
+
+            var subReplies = new Reply[subRepliesLength];
+            subReplies[0] = new BulkReply(result.member().getBytes());
+
+            var ii = 1;
+            if (isWithDist) {
+                subReplies[ii] = new BulkReply(result.distance());
+                ii++;
+            }
+            if (isWithHash) {
+                subReplies[ii] = new BulkReply(RedisGeo.hash(result.p));
+                ii++;
+            }
+            if (isWithCoord) {
+                subReplies[ii] = new MultiBulkReply(new Reply[]{
+                        new BulkReply(result.p.lon()),
+                        new BulkReply(result.p.lat())
+                });
+            }
+
+            replies[i] = new MultiBulkReply(subReplies);
+        }
+
+        return new MultiBulkReply(replies);
     }
 }

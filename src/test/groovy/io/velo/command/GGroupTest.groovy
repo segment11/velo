@@ -1,11 +1,16 @@
 package io.velo.command
 
+import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
 import io.velo.reply.*
+import io.velo.type.RedisGeo
 import spock.lang.Specification
+
+import java.time.Duration
 
 class GGroupTest extends Specification {
     def _GGroup = new GGroup(null, null, null)
@@ -98,6 +103,16 @@ class GGroupTest extends Specification {
         reply = gGroup.handle()
         then:
         reply == ErrorReply.FORMAT
+
+        when:
+        def data2 = new byte[2][]
+        gGroup.data = data2
+        then:
+        ['georadius', 'georadius_ro', 'georadiusbymember', 'georadiusbymember_ro'].every {
+            gGroup.cmd = it
+            reply = gGroup.handle()
+            reply == ErrorReply.NOT_SUPPORT
+        }
 
         when:
         gGroup.cmd = 'zzz'
@@ -561,5 +576,142 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('geohash xxx')
         then:
         reply == ErrorReply.FORMAT
+    }
+
+    def 'test geosearch and geosearchstore'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def gGroup = new GGroup('geosearch', null, null)
+        gGroup.byPassGetSet = inMemoryGetSet
+        gGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = gGroup.execute('geosearch xxx fromlonlat 15 13 frommember mmm bybox 400 400 km asc desc withdist withhash withcoord count 2')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        gGroup.execute('geoadd xxx 13.361389 38.115556 m0 15.087269 37.502669 m1 20 40 out_one 15 37 mmm')
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 frommember mmm! bybox 400 400 km asc desc withdist withhash withcoord count 2')
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 frommember mmm bybox 400 400 km asc withdist withhash withcoord count 2')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+
+        when:
+        reply = gGroup.execute('geosearchstore yyy xxx fromlonlat 15 37 bybox 400 400 km desc count 2')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 2
+
+        when:
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+        LocalPersist.instance.addOneSlot(slot, eventloop)
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        gGroup.crossRequestWorker = true
+        reply = gGroup.execute('geosearchstore yyy xxx fromlonlat 15 37 bybox 400 400 km desc count 2')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result instanceof IntegerReply && ((IntegerReply) result).integer == 2
+        }.result
+
+        when:
+        reply = gGroup.execute('geosearch xxx fromlonlat')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geosearch xxx fromlonlat a b')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37')
+        then:
+        // need byradius or bybox
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geosearch xxx frommember')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geosearch xxx byradius')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geosearch xxx byradius a')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        reply = gGroup.execute('geosearch xxx byradius 100 km bybox')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geosearch xxx byradius 100 km bybox a b')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        reply = gGroup.execute('geosearch xxx byradius 100 km bybox 1 1 km')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        reply = gGroup.execute('geosearch xxx count')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geosearch xxx count -1')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = gGroup.execute('geosearch xxx count a')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = gGroup.execute('geosearch xxx 333')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geosearchstore xxx')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = gGroup.execute('geosearch_store yyy xxx')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        def dstRg = new RedisGeo()
+        // removed
+        def sss = gGroup.slot('yyy'.bytes)
+        gGroup.saveRedisGeo(dstRg, 'yyy'.bytes, sss)
+        then:
+        inMemoryGetSet.getBuf(slot, 'yyy'.bytes, sss.bucketIndex(), sss.keyHash()) == null
+
+        cleanup:
+        eventloop.breakEventloop()
     }
 }
