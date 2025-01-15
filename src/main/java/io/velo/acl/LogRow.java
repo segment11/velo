@@ -29,7 +29,7 @@ public class LogRow {
                 new BulkReply("username".getBytes()),
                 new BulkReply(username.getBytes()),
                 new BulkReply("age-seconds".getBytes()),
-                new BulkReply(String.valueOf(ageSeconds).getBytes()),
+                new BulkReply(ageSeconds),
                 new BulkReply("client-info".getBytes()),
                 new BulkReply(clientInfo.getBytes()),
                 new BulkReply("entry-id".getBytes()),

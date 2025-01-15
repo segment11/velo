@@ -378,7 +378,7 @@ public class RequestHandler {
                 if ("all".equals(cmd)) {
                     return new BulkReply(cmdStatAsPrometheusFormatString().getBytes());
                 } else {
-                    return new BulkReply(String.valueOf(getCmdCountStat(cmd)).getBytes());
+                    return new BulkReply(getCmdCountStat(cmd));
                 }
             }
         }

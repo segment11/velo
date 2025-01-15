@@ -62,6 +62,8 @@ class RESPReplyTest extends Specification {
         BulkReply.numToBytes(-1, false) == "-1".bytes
 
         new BulkReply('bulk'.bytes).raw == 'bulk'.bytes
+        new BulkReply(1L).raw == '1'.bytes
+        new BulkReply(1.0d).raw == '1.0'.bytes
         new BulkReply('bulk'.bytes).buffer().asArray() == "\$4\r\nbulk\r\n".bytes
         new BulkReply('bulk'.bytes).bufferAsHttp().asArray() == "bulk".bytes
         new BulkReply('bulk'.bytes).dumpForTest(new StringBuilder(), 0)

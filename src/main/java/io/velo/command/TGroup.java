@@ -47,8 +47,8 @@ public class TGroup extends BaseCommand {
             var seconds = nanoTime / 1_000_000_000;
             var microseconds = (nanoTime % 1_000_000_000) / 1_000;
             return new MultiBulkReply(new Reply[]{
-                    new BulkReply(String.valueOf(seconds).getBytes()),
-                    new BulkReply(String.valueOf(microseconds).getBytes())
+                    new BulkReply(seconds),
+                    new BulkReply(microseconds)
             });
         }
 

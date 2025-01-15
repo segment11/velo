@@ -368,7 +368,7 @@ public class SGroup extends BaseCommand {
             }
 
             var replies = new Reply[2];
-            replies[0] = new BulkReply(String.valueOf(assignCursor).getBytes());
+            replies[0] = new BulkReply(assignCursor);
 
             var keysReplies = new Reply[keys.size()];
             replies[1] = new MultiBulkReply(keysReplies);

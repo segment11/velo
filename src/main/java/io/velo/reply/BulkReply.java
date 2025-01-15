@@ -17,6 +17,14 @@ public class BulkReply implements Reply {
         this.raw = raw;
     }
 
+    public BulkReply(long l) {
+        this.raw = String.valueOf(l).getBytes();
+    }
+
+    public BulkReply(double d) {
+        this.raw = String.valueOf(d).getBytes();
+    }
+
     public static final BulkReply ZERO = new BulkReply("0".getBytes());
 
     // copy from camellia-redis-proxy-core/src/main/java/com/netease/nim/camellia/redis/proxy/util/Utils.java
