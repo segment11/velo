@@ -453,4 +453,71 @@ class GGroupTest extends Specification {
         then:
         reply == ErrorReply.FORMAT
     }
+
+    def 'test geodist'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def gGroup = new GGroup('geodist', null, null)
+        gGroup.byPassGetSet = inMemoryGetSet
+        gGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = gGroup.execute('geodist xxx m0 m1')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        gGroup.execute('geoadd xxx 13.361389 38.115556 m00 15.087269 37.502669 m11')
+        reply = gGroup.execute('geodist xxx m0 m1')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        gGroup.execute('geoadd xxx 13.361389 38.115556 m0')
+        reply = gGroup.execute('geodist xxx m0 m1')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        reply = gGroup.execute('geodist xxx m1 m0')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        gGroup.execute('geoadd xxx 15.087269 37.502669 m1')
+        reply = gGroup.execute('geodist xxx m0 m1')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        reply = gGroup.execute('geodist xxx m0 m1 KM')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        reply = gGroup.execute('geodist xxx m0 m1 M')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        reply = gGroup.execute('geodist xxx m0 m1 MI')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        reply = gGroup.execute('geodist xxx m0 m1 FT')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        reply = gGroup.execute('geodist xxx m0 m1 XX')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geodist xxx m0 m1 XX XX')
+        then:
+        reply == ErrorReply.FORMAT
+    }
 }

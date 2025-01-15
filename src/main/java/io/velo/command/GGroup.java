@@ -434,7 +434,56 @@ public class GGroup extends BaseCommand {
     }
 
     private Reply geodist() {
-        return NilReply.INSTANCE;
+        if (data.length != 4 && data.length != 5) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        var s = slotWithKeyHashListParsed.getFirst();
+
+        var m0 = new String(data[2]);
+        var m1 = new String(data[3]);
+
+        byte unit = 'm';
+        if (data.length == 5) {
+            var unitStr = new String(data[4]);
+            if (unitStr.equalsIgnoreCase("m")) {
+                // ignore
+            } else if (unitStr.equalsIgnoreCase("km")) {
+                unit = 'K';
+            } else if (unitStr.equalsIgnoreCase("mi")) {
+                unit = 'M';
+            } else if (unitStr.equalsIgnoreCase("ft")) {
+                unit = 'F';
+            } else {
+                return ErrorReply.SYNTAX;
+            }
+        }
+
+        var rg = getRedisGeo(keyBytes, s);
+        if (rg == null) {
+            return NilReply.INSTANCE;
+        }
+
+        var p0 = rg.get(m0);
+        var p1 = rg.get(m1);
+        if (p0 == null || p1 == null) {
+            return NilReply.INSTANCE;
+        }
+
+        double distance = RedisGeo.distance(p0, p1);
+        double x;
+        if (unit == 'K') {
+            x = distance / 1000;
+        } else if (unit == 'M') {
+            x = distance * 0.000621371;
+        } else if (unit == 'F') {
+            x = distance * 3.28084;
+        } else {
+            x = distance;
+        }
+
+        return new BulkReply(String.valueOf(x).getBytes());
     }
 
     private Reply geohash() {

@@ -40,6 +40,30 @@ public class RedisGeo {
         return map.remove(key) != null;
     }
 
+    // Earth's radius in meters
+    private static final double EARTH_RADIUS = 6378137;
+    private static final int SCALE_I = 4;
+
+    public static double distance(Point p0, Point p1) {
+        // Convert latitude and longitude from degrees to radians
+        double lat1Rad = Math.toRadians(p0.getX());
+        double lon1Rad = Math.toRadians(p0.getY());
+        double lat2Rad = Math.toRadians(p1.getX());
+        double lon2Rad = Math.toRadians(p1.getY());
+
+        // Haversine formula
+        double diffLat = lat2Rad - lat1Rad;
+        double diffLon = lon2Rad - lon1Rad;
+        double a = Math.sin(diffLat / 2) * Math.sin(diffLat / 2) +
+                Math.cos(lat1Rad) * Math.cos(lat2Rad) *
+                        Math.sin(diffLon / 2) * Math.sin(diffLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        double r = EARTH_RADIUS * c;
+        // scale to 4 decimal places
+        return Math.round(r * Math.pow(10, SCALE_I)) / Math.pow(10, SCALE_I);
+    }
+
     @VisibleForTesting
     // size short + body bytes length int + crc int
     static final int HEADER_LENGTH = 2 + 4 + 4;

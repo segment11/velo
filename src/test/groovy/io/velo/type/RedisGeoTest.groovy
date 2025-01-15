@@ -14,14 +14,15 @@ class RedisGeoTest extends Specification {
         !rg.remove('b')
 
         when:
-        rg.add('a', 1.0d, 2.0d)
-        rg.add('b', 1.0d, 2.0d)
+        rg.add('a', 13, 38)
+        rg.add('b', 15, 37)
         then:
+        RedisGeo.distance(rg.get('a'), rg.get('b')) > 0
         rg.get('a') != null
         rg.remove('b')
 
         when:
-        rg.add('b', 1.0d, 2.0d)
+        rg.add('b', 15, 37)
         def encoded = rg.encode()
         def rg2 = RedisGeo.decode(encoded)
         def rg3 = RedisGeo.decode(encoded, false)
