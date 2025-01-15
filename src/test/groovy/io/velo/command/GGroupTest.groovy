@@ -518,7 +518,7 @@ class GGroupTest extends Specification {
         reply == ErrorReply.FORMAT
     }
 
-    def 'test geohash'() {
+    def 'test geohash and geopos'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
 
@@ -548,6 +548,14 @@ class GGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies[2] == NilReply.INSTANCE
+
+        when:
+        reply = gGroup.execute('geopos xxx m0 m1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.every {
+            it instanceof MultiBulkReply
+        }
 
         when:
         reply = gGroup.execute('geohash xxx')

@@ -293,11 +293,11 @@ public class GGroup extends BaseCommand {
         }
 
         if ("geohash".equals(cmd)) {
-            return geohash();
+            return geohash(false);
         }
 
         if ("geopos".equals(cmd)) {
-            return geopos();
+            return geohash(true);
         }
 
         if ("georadius".equals(cmd)) {
@@ -487,7 +487,7 @@ public class GGroup extends BaseCommand {
         return new BulkReply(String.valueOf(x).getBytes());
     }
 
-    private Reply geohash() {
+    private Reply geohash(boolean isGeopos) {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -506,16 +506,20 @@ public class GGroup extends BaseCommand {
                 if (p == null) {
                     replies[i - 2] = NilReply.INSTANCE;
                 } else {
-                    replies[i - 2] = new BulkReply(RedisGeo.hash(p));
+                    if (isGeopos) {
+                        var subReplies = new Reply[]{
+                                new BulkReply(String.valueOf(p.lon()).getBytes()),
+                                new BulkReply(String.valueOf(p.lat()).getBytes())
+                        };
+                        replies[i - 2] = new MultiBulkReply(subReplies);
+                    } else {
+                        replies[i - 2] = new BulkReply(RedisGeo.hash(p));
+                    }
                 }
             }
         }
 
         return new MultiBulkReply(replies);
-    }
-
-    private Reply geopos() {
-        return NilReply.INSTANCE;
     }
 
     private Reply georadius(boolean isReadonly) {
