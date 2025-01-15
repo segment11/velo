@@ -38,7 +38,9 @@ public class RedisGeo {
     }
 
     // Earth's radius in meters
-    private static final double EARTH_RADIUS = 6378137;
+    // same as define in redis geohash_helper.h EARTH_RADIUS_IN_METERS
+    private static final double EARTH_RADIUS = 6372797.560856;
+
     private static final int SCALE_I = 4;
 
     public static double distance(P p0, P p1) {
