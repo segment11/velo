@@ -108,11 +108,20 @@ public class RedisGeo {
         double halfHeight = heightInMeters / 2;
 
         double northLat = moveLatitude(centerLat, halfHeight);
+        if (p.lat > northLat) {
+            return false;
+        }
         double southLat = moveLatitude(centerLat, -halfHeight);
-        double eastLon = moveLongitude(centerLon, centerLat, halfWidth);
-        double westLon = moveLongitude(centerLon, centerLat, -halfWidth);
+        if (p.lat < southLat) {
+            return false;
+        }
 
-        return p.lat >= southLat && p.lat <= northLat && p.lon >= westLon && p.lon <= eastLon;
+        double eastLon = moveLongitude(centerLon, centerLat, halfWidth);
+        if (p.lon > eastLon) {
+            return false;
+        }
+        double westLon = moveLongitude(centerLon, centerLat, -halfWidth);
+        return p.lon >= westLon;
     }
 
     private static final double GEO_LONG_MAX = 180.0;
