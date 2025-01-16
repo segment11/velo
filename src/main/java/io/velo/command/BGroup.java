@@ -1,5 +1,6 @@
 package io.velo.command;
 
+import com.github.luben.zstd.Zstd;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.SettablePromise;
 import io.activej.reactor.Reactor;
@@ -12,6 +13,7 @@ import io.velo.type.RedisBF;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
@@ -310,6 +312,10 @@ public class BGroup extends BaseCommand {
             return bfInsert();
         }
 
+        if ("loadchunk".equalsIgnoreCase(bfCmdSuffix)) {
+            return bfLoadchunk();
+        }
+
         if ("madd".equals(bfCmdSuffix)) {
             return bfAdd(true);
         }
@@ -320,6 +326,10 @@ public class BGroup extends BaseCommand {
 
         if ("reserve".equalsIgnoreCase(bfCmdSuffix)) {
             return bfReserve();
+        }
+
+        if ("scandump".equalsIgnoreCase(bfCmdSuffix)) {
+            return bfScandump();
         }
 
         return ErrorReply.SYNTAX;
@@ -618,6 +628,77 @@ public class BGroup extends BaseCommand {
         }
 
         return new MultiBulkReply(replies);
+    }
+
+    private Reply bfLoadchunk() {
+        if (data.length != 4) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        var s = slotWithKeyHashListParsed.getFirst();
+
+        var iteratorBytes = data[2];
+        int iterator = 0;
+        try {
+            iterator = Integer.parseInt(new String(iteratorBytes));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        // only support 0, dump all once
+        if (iterator != 0) {
+            return ErrorReply.INVALID_INTEGER;
+        }
+
+        var dumpBytes = data[3];
+        var buffer = ByteBuffer.wrap(dumpBytes);
+        var encodedLength = buffer.getInt();
+        var encoded = new byte[encodedLength];
+
+        Zstd.decompressByteArray(encoded, 0, encodedLength, dumpBytes, 4, dumpBytes.length - 4);
+        set(keyBytes, encoded, s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+        return OKReply.INSTANCE;
+    }
+
+    private Reply bfScandump() {
+        if (data.length != 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        var s = slotWithKeyHashListParsed.getFirst();
+
+        var iteratorBytes = data[2];
+        int iterator = 0;
+        try {
+            iterator = Integer.parseInt(new String(iteratorBytes));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        // only support 0, dump all once
+        if (iterator != 0) {
+            return ErrorReply.INVALID_INTEGER;
+        }
+
+        var cv = getCv(keyBytes, s);
+        if (cv == null) {
+            return MultiBulkReply.EMPTY;
+        }
+        if (!cv.isBloomFilter()) {
+            return MultiBulkReply.EMPTY;
+        }
+
+        var encoded = cv.getCompressedData();
+        var compressed = Zstd.compress(encoded);
+
+        var dumpBytes = new byte[4 + compressed.length];
+        ByteBuffer.wrap(dumpBytes).putInt(encoded.length).put(compressed);
+
+        return new MultiBulkReply(new Reply[]{
+                // 0 -> dump all
+                new IntegerReply(0),
+                new BulkReply(dumpBytes)
+        });
     }
 
     private Reply bfReserve() {

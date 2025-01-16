@@ -327,7 +327,19 @@ class BGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        bGroup.cmd = 'bf.loadchunk'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         bGroup.cmd = 'bf.reserve'
+        reply = bGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        bGroup.cmd = 'bf.scandump'
         reply = bGroup.handle()
         then:
         reply == ErrorReply.FORMAT
@@ -831,6 +843,69 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('bf.insert a items item0')
         then:
         reply == ErrorReply.WRONG_TYPE
+    }
+
+    def 'test bf scandump and loadchunk'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = bGroup.execute('bf.scandump a 0')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        bGroup.execute('bf.add a item0')
+        reply = bGroup.execute('bf.scandump a 0')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+
+        when:
+        def encodedAndCompressed = ((reply as MultiBulkReply).replies[1] as BulkReply).raw
+        println 'encoded and compressed length: ' + encodedAndCompressed.length
+        def data4 = new byte[4][]
+        data4[0] = 'bf.loadchunk'.bytes
+        data4[1] = 'a'.bytes
+        data4[2] = '0'.bytes
+        data4[3] = encodedAndCompressed
+        bGroup.cmd = 'bf.loadchunk'
+        bGroup.data = data4
+        reply = bGroup.handle()
+        then:
+        reply == OKReply.INSTANCE
+        bGroup.execute('bf.exists a item0') == IntegerReply.REPLY_1
+
+        when:
+        def cv = new CompressedValue()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = bGroup.execute('bf.scandump a 0')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        reply = bGroup.execute('bf.scandump a 1')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = bGroup.execute('bf.scandump a a')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = bGroup.execute('bf.loadchunk a 1 xxx')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = bGroup.execute('bf.loadchunk a a xxx')
+        then:
+        reply == ErrorReply.NOT_INTEGER
     }
 
     def 'test bf reserve'() {
