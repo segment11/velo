@@ -600,6 +600,13 @@ class GGroupTest extends Specification {
         (reply as MultiBulkReply).replies.length == 2
 
         when:
+        // only return member
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 frommember mmm bybox 100 100 asc count 1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+
+        when:
         reply = gGroup.execute('geosearchstore yyy xxx fromlonlat 15 37 bybox 400 400 km desc count 2')
         then:
         reply instanceof IntegerReply

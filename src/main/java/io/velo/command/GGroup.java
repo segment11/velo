@@ -739,6 +739,11 @@ public class GGroup extends BaseCommand {
         var replies = new Reply[resultList.size()];
         for (int i = 0; i < replies.length; i++) {
             var result = resultList.get(i);
+            // only return member
+            if (subRepliesLength == 1) {
+                replies[i] = new BulkReply(result.member().getBytes());
+                continue;
+            }
 
             var subReplies = new Reply[subRepliesLength];
             subReplies[0] = new BulkReply(result.member().getBytes());
