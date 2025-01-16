@@ -73,8 +73,11 @@ class RedisGeoTest extends Specification {
 
     def 'test hash'() {
         given:
-        def hash = RedisGeo.hash(new RedisGeo.P(15.087269, 37.502669))
-        println new String(hash)
+        def p = new RedisGeo.P(15.087269, 37.502669)
+        def hash = RedisGeo.hash(p)
+        def hashAsStore = RedisGeo.hashAsStore(p)
+        println 'geo hash: ' + new String(hash)
+        println 'geo hash as score: ' + hashAsStore
 
         expect:
         RedisGeo.geohashEncode(0, 0, 0, 0, -181, 0, (byte) 26) == 0

@@ -178,6 +178,10 @@ public class RedisGeo {
         return x | (y << 1);
     }
 
+    public static long hashAsStore(P p) {
+        return geohashEncode(GEO_LONG_MIN, GEO_LONG_MAX, GEO_LAT_MIN, GEO_LAT_MAX, p.lon, p.lat, (byte) 26);
+    }
+
     public static byte[] hash(P p) {
         var l = geohashEncode(-180, 180, -90, 90, p.lon, p.lat, (byte) 26);
 
