@@ -35,6 +35,7 @@ import static io.activej.config.converter.ConfigConverters.ofInteger;
 public class RequestHandler {
     private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
 
+    private static final String ECHO_COMMAND = "echo";
     private static final String PING_COMMAND = "ping";
     public static final String AUTH_COMMAND = "auth";
     private static final String GET_COMMAND = "get";
@@ -395,6 +396,16 @@ public class RequestHandler {
             requestTimer = requestTimeSummary.labels(cmd).startTimer();
         }
         try {
+            if (cmd.equals(ECHO_COMMAND)) {
+                increaseCmdStatArray(ECHO_COMMAND);
+
+                if (data.length == 2) {
+                    return new BulkReply(data[1]);
+                } else {
+                    return ErrorReply.FORMAT;
+                }
+            }
+
             if (cmd.equals(PING_COMMAND)) {
                 increaseCmdStatArray(PING_COMMAND);
 
