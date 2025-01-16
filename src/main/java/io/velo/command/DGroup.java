@@ -47,8 +47,15 @@ public class DGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
-        if ("decr".equals(cmd) || "decrby".equals(cmd)) {
+        if ("decr".equals(cmd)) {
             if (data.length < 2) {
+                return slotWithKeyHashList;
+            }
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
+        }
+
+        if ("decrby".equals(cmd) || "decrbyfloat".equals(cmd)) {
+            if (data.length != 3) {
                 return slotWithKeyHashList;
             }
             addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
@@ -89,6 +96,21 @@ public class DGroup extends BaseCommand {
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
             }
+        }
+
+        if ("decrbyfloat".equals(cmd)) {
+            if (data.length != 3) {
+                return ErrorReply.FORMAT;
+            }
+
+            double by;
+            try {
+                by = Double.parseDouble(new String(data[2]));
+            } catch (NumberFormatException e) {
+                return ErrorReply.NOT_FLOAT;
+            }
+
+            return decrBy(0, by);
         }
 
         return NilReply.INSTANCE;

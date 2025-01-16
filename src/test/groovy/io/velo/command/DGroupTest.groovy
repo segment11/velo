@@ -27,11 +27,13 @@ class DGroupTest extends Specification {
         when:
         def sDecrList = _DGroup.parseSlots('decr', data2, slotNumber)
         def sDecrByList = _DGroup.parseSlots('decrby', data2, slotNumber)
+        def sDecrByFloatList = _DGroup.parseSlots('decrbyfloat', data2, slotNumber)
         def sDelList = _DGroup.parseSlots('del', data2, slotNumber)
         def sList = _DGroup.parseSlots('dxxx', data2, slotNumber)
         then:
         sDecrList.size() == 1
-        sDecrByList.size() == 1
+        sDecrByList.size() == 0
+        sDecrByFloatList.size() == 0
         sDelList.size() == 1
         sList.size() == 0
 
@@ -40,8 +42,10 @@ class DGroupTest extends Specification {
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
         sDelList = _DGroup.parseSlots('del', data3, slotNumber)
+        sDecrByList = _DGroup.parseSlots('decrby', data3, slotNumber)
         then:
         sDelList.size() == 2
+        sDecrByList.size() == 1
 
         when:
         data3[1] = 'object'.bytes
@@ -104,6 +108,12 @@ class DGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        dGroup.cmd = 'decrbyfloat'
+        reply = dGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
         dGroup.data = data2
         dGroup.cmd = 'decr'
         dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decr', data2, dGroup.slotNumber)
@@ -113,6 +123,7 @@ class DGroupTest extends Specification {
         ((IntegerReply) reply).integer == -1
 
         when:
+        // decrby
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
@@ -132,6 +143,27 @@ class DGroupTest extends Specification {
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == -1
+
+        when:
+        // decrbyfloat
+        data3[1] = 'a'.bytes
+        data3[2] = 'b'.bytes
+        dGroup.data = data3
+        dGroup.cmd = 'decrbyfloat'
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrbyfloat', data3, dGroup.slotNumber)
+        reply = dGroup.handle()
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // decrbyfloat
+        data3[1] = 'n'.bytes
+        data3[2] = '1'.bytes
+        dGroup.setNumber('n'.bytes, 0, dGroup.slotWithKeyHashListParsed.getFirst())
+        reply = dGroup.handle()
+        then:
+        reply instanceof DoubleReply
+        ((DoubleReply) reply).doubleValue() == -1
 
         when:
         dGroup.cmd = 'zzz'
@@ -351,17 +383,18 @@ class DGroupTest extends Specification {
         given:
         final short slot = 0
 
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
+        def data3 = new byte[3][]
+        data3[1] = 'a'.bytes
+        data3[2] = '1'.bytes
 
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def dGroup = new DGroup('decrby', data2, null)
+        def dGroup = new DGroup('decrby', data3, null)
         dGroup.byPassGetSet = inMemoryGetSet
         dGroup.from(BaseCommand.mockAGroup())
 
         when:
-        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data2, dGroup.slotNumber)
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data3, dGroup.slotNumber)
         def cv = new CompressedValue()
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_BYTE
         // 0
@@ -374,15 +407,15 @@ class DGroupTest extends Specification {
         ((IntegerReply) reply).integer == -1
 
         when:
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data2, dGroup.slotNumber)
+        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data3, dGroup.slotNumber)
         reply = dGroup.decrBy(1, 0)
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data2[1] = 'a'.bytes
-        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data2, dGroup.slotNumber)
+        data3[1] = 'a'.bytes
+        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data3, dGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         reply = dGroup.decrBy(1, 0)
         then:
