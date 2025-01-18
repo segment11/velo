@@ -12,16 +12,24 @@ class VeloUserDataInSocketTest extends Specification {
         expect:
         !one.isResp3
         one.authUser == null
+        !one.isConnectionReadonly
+        one.replyMode == VeloUserDataInSocket.ReplyMode.on
         one.lastScanTargetKeyBytes == null
         one.lastScanAssignCursor == 0
         one.replPairAsSlaveInTcpClient == null
         two.replPairAsSlaveInTcpClient != null
 
+        VeloUserDataInSocket.ReplyMode.from('on') == VeloUserDataInSocket.ReplyMode.on
+        VeloUserDataInSocket.ReplyMode.from('off') == VeloUserDataInSocket.ReplyMode.off
+        VeloUserDataInSocket.ReplyMode.from('skip') == VeloUserDataInSocket.ReplyMode.skip
+
         when:
+        one.replyMode = VeloUserDataInSocket.ReplyMode.off
         one.lastScanTargetKeyBytes = 'key'.bytes
         one.lastScanAssignCursor = 1
         one.clientName = 'xxx'
         then:
+        one.replyMode == VeloUserDataInSocket.ReplyMode.off
         one.lastScanTargetKeyBytes == 'key'.bytes
         one.lastScanAssignCursor == 1
         one.clientName == 'xxx'

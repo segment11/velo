@@ -4,6 +4,7 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.SocketInspector;
+import io.velo.VeloUserDataInSocket;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.reply.*;
@@ -75,6 +76,19 @@ public class CGroup extends BaseCommand {
 
         if ("id".equals(subCmd)) {
             return new IntegerReply(socket.hashCode());
+        }
+
+        if ("reply".equals(subCmd)) {
+            if (data.length != 3) {
+                return ErrorReply.FORMAT;
+            }
+
+            var replyModeStr = new String(data[2]).toLowerCase();
+            var replyMode = VeloUserDataInSocket.ReplyMode.from(replyModeStr);
+
+            var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
+            veloUserData.setReplyMode(replyMode);
+            return replyMode == VeloUserDataInSocket.ReplyMode.on ? OKReply.INSTANCE : null;
         }
 
         if ("setinfo".equals(subCmd)) {

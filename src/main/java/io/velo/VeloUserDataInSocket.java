@@ -9,11 +9,25 @@ public class VeloUserDataInSocket {
 
     boolean isConnectionReadonly = false;
 
-    ReplPair replPairAsSlaveInTcpClient = null;
+    public enum ReplyMode {
+        on, off, skip;
+
+        public static ReplyMode from(String str) {
+            return switch (str) {
+                case "off" -> off;
+                case "skip" -> skip;
+                default -> on;
+            };
+        }
+    }
+
+    ReplyMode replyMode = ReplyMode.on;
+
+    public void setReplyMode(ReplyMode replyMode) {
+        this.replyMode = replyMode;
+    }
 
     private byte[] lastScanTargetKeyBytes = null;
-
-    private long lastScanAssignCursor = 0;
 
     public byte[] getLastScanTargetKeyBytes() {
         return lastScanTargetKeyBytes;
@@ -22,6 +36,8 @@ public class VeloUserDataInSocket {
     public void setLastScanTargetKeyBytes(byte[] lastScanTargetKeyBytes) {
         this.lastScanTargetKeyBytes = lastScanTargetKeyBytes;
     }
+
+    private long lastScanAssignCursor = 0;
 
     public long getLastScanAssignCursor() {
         return lastScanAssignCursor;
@@ -40,6 +56,8 @@ public class VeloUserDataInSocket {
     public void setClientName(String clientName) {
         this.clientName = clientName;
     }
+
+    ReplPair replPairAsSlaveInTcpClient = null;
 
     public VeloUserDataInSocket() {
     }

@@ -56,7 +56,9 @@
 ## connection management
 
 - [√] AUTH
+- [√] CLIENT GETNAME
 - [√] CLIENT ID
+- [√] CLIENT REPLY
 - [√] CLIENT SETNAME
 - [√] ECHO
 - [√] HELLO
