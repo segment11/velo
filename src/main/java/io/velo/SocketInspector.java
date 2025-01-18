@@ -6,6 +6,7 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.prometheus.client.Gauge;
 import io.velo.command.XGroup;
+import io.velo.persist.KeyLoader;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class SocketInspector implements TcpSocket.Inspector {
@@ -82,6 +84,16 @@ public class SocketInspector implements TcpSocket.Inspector {
 
     public final ConcurrentHashMap<InetSocketAddress, TcpSocket> socketMap = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ConcurrentHashMap<ITcpSocket, Long>> subscribeByChannel = new ConcurrentHashMap<>();
+
+    public ArrayList<String> filterSubscribeChannels(String pattern) {
+        ArrayList<String> result = new ArrayList<>();
+        subscribeByChannel.forEach((key, value) -> {
+            if (KeyLoader.isKeyMatch(key, pattern)) {
+                result.add(key);
+            }
+        });
+        return result;
+    }
 
     public int subscribe(String channel, ITcpSocket socket) {
         var sockets = subscribeByChannel.computeIfAbsent(channel, k -> new ConcurrentHashMap<>());

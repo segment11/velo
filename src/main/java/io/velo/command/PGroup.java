@@ -130,6 +130,10 @@ public class PGroup extends BaseCommand {
             return publish(data, socket);
         }
 
+        if ("pubsub".equals(cmd)) {
+            return pubsub();
+        }
+
         return NilReply.INSTANCE;
     }
 
@@ -402,5 +406,48 @@ public class PGroup extends BaseCommand {
             s.write(r.buffer());
         });
         return new IntegerReply(n);
+    }
+
+    private Reply pubsub() {
+        if (data.length < 2) {
+            return ErrorReply.FORMAT;
+        }
+
+        var subCmd = new String(data[1]).toLowerCase();
+        if ("channels".equals(subCmd)) {
+            var pattern = data.length == 3 ? new String(data[2]) : null;
+            var channels = localPersist.getSocketInspector().filterSubscribeChannels(pattern);
+            if (channels.isEmpty()) {
+                return MultiBulkReply.EMPTY;
+            } else {
+                var replies = new Reply[channels.size()];
+                for (int i = 0; i < channels.size(); i++) {
+                    replies[i] = new BulkReply(channels.get(i).getBytes());
+                }
+                return new MultiBulkReply(replies);
+            }
+        } else if ("numpat".equals(subCmd)) {
+            return NilReply.INSTANCE;
+        } else if ("numsub".equals(subCmd)) {
+            if (data.length < 3) {
+                return ErrorReply.FORMAT;
+            }
+
+            var channels = new ArrayList<String>();
+            for (int i = 2; i < data.length; i++) {
+                channels.add(new String(data[i]));
+            }
+
+            var replies = new Reply[channels.size() * 2];
+            int j = 0;
+            for (var channel : channels) {
+                var size = localPersist.getSocketInspector().subscribeSocketCount(channel);
+                replies[j++] = new BulkReply(channel.getBytes());
+                replies[j++] = new IntegerReply(size);
+            }
+            return new MultiBulkReply(replies);
+        } else {
+            return NilReply.INSTANCE;
+        }
     }
 }

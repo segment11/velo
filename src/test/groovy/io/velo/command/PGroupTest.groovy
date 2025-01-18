@@ -200,6 +200,12 @@ class PGroupTest extends Specification {
         reply = pGroup.handle()
         then:
         reply == ErrorReply.FORMAT
+
+        when:
+        pGroup.cmd = 'pubsub'
+        reply = pGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
     }
 
     def 'test pfadd'() {
@@ -347,5 +353,62 @@ class PGroupTest extends Specification {
         reply = _PGroup.publish(data1, null)
         then:
         reply == ErrorReply.FORMAT
+    }
+
+    def 'test pubsub'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def pGroup = new PGroup('pubsub', null, null)
+        pGroup.byPassGetSet = inMemoryGetSet
+        pGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def socketInspector = new SocketInspector()
+        LocalPersist.instance.socketInspector = socketInspector
+        def reply = pGroup.execute('pubsub channels')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        def channel = 'test_channel'
+        reply = pGroup.execute('pubsub channels ' + channel)
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        def socket = SocketInspectorTest.mockTcpSocket()
+        socketInspector.subscribe(channel, socket)
+        reply = pGroup.execute('pubsub channels ' + channel)
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == channel.bytes
+
+        when:
+        reply = pGroup.execute('pubsub numpat')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        reply = pGroup.execute('pubsub numsub ' + channel)
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == channel.bytes
+        (reply as MultiBulkReply).replies[1] instanceof IntegerReply
+        ((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 1
+
+        when:
+        reply = pGroup.execute('pubsub numsub')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = pGroup.execute('pubsub xxx')
+        then:
+        reply == NilReply.INSTANCE
     }
 }

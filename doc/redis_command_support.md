@@ -160,6 +160,7 @@
 ## pub/sub
 
 - [√] PUBLISH
+- [√] PUBSUB
 - [√] SUBSCRIBE
 
 ## server management

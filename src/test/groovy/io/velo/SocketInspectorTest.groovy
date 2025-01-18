@@ -163,6 +163,8 @@ class SocketInspectorTest extends Specification {
         then:
         n == 1
         inspector.subscribeSocketCount(channel) == 1
+        inspector.filterSubscribeChannels(null) == [channel]
+        inspector.filterSubscribeChannels('xxx') == []
 
         when:
         // in eventloop thread
