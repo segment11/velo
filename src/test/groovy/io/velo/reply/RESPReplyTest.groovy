@@ -8,6 +8,7 @@ class RESPReplyTest extends Specification {
         expect:
         OKReply.INSTANCE.buffer().asArray() == "+OK\r\n".bytes
         PongReply.INSTANCE.buffer().asArray() == "+PONG\r\n".bytes
+        EmptyReply.INSTANCE.buffer().asArray().length == 0
         NilReply.INSTANCE.buffer().asArray() == "\$-1\r\n".bytes
         IntegerReply.REPLY_0.buffer().asArray() == ":0\r\n".bytes
         IntegerReply.REPLY_1.buffer().asArray() == ":1\r\n".bytes

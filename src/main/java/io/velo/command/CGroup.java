@@ -1,6 +1,7 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.net.socket.tcp.TcpSocket;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.SocketInspector;
@@ -86,9 +87,12 @@ public class CGroup extends BaseCommand {
             var replyModeStr = new String(data[2]).toLowerCase();
             var replyMode = VeloUserDataInSocket.ReplyMode.from(replyModeStr);
 
+            var remoteAddress = ((TcpSocket) socket).getRemoteAddress();
+            log.warn("Client {} change reply mode={}", remoteAddress, replyMode);
+
             var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
             veloUserData.setReplyMode(replyMode);
-            return replyMode == VeloUserDataInSocket.ReplyMode.on ? OKReply.INSTANCE : null;
+            return replyMode == VeloUserDataInSocket.ReplyMode.on ? OKReply.INSTANCE : EmptyReply.INSTANCE;
         }
 
         if ("setinfo".equals(subCmd)) {

@@ -301,7 +301,7 @@ public class MultiWorkerServer extends Launcher {
                 return Promise.of(null);
             }
             if (replyMode != VeloUserDataInSocket.ReplyMode.on) {
-                return Promise.of(null);
+                return Promise.of(ByteBuf.empty());
             }
 
             if (reply instanceof AsyncReply) {
@@ -346,7 +346,7 @@ public class MultiWorkerServer extends Launcher {
                 return null;
             }
             if (replyMode != VeloUserDataInSocket.ReplyMode.on) {
-                return null;
+                return Promise.of(ByteBuf.empty());
             }
 
             if (reply instanceof AsyncReply) {

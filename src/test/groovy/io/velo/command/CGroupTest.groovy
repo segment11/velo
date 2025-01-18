@@ -99,7 +99,7 @@ class CGroupTest extends Specification {
         when:
         reply = cGroup.execute('client reply off')
         then:
-        reply == null
+        reply == EmptyReply.INSTANCE
 
         when:
         reply = cGroup.execute('client reply on xxx')
