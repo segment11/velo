@@ -23,12 +23,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Measurement(iterations = 1, time = 10)
 @State(Scope.Benchmark)
 @Threads(1)
-public class BenchmarkLocalPersistPut {
+public class BenchmarkLocalPersistGet {
     private String[] keys;
 
     int keyNumber = 10_000_000;
 
-    private final File persistDir = new File("/tmp/test_jmh_persist_put");
+    private final File persistDir = new File("/tmp/test_jmh_persist_get");
 
     private final LocalPersist localPersist = LocalPersist.getInstance();
 
@@ -38,7 +38,8 @@ public class BenchmarkLocalPersistPut {
 
     private Eventloop[] netWorkerEventloopArray;
 
-    private AtomicInteger count = new AtomicInteger();
+    private AtomicInteger putCount = new AtomicInteger();
+    private AtomicInteger getCount = new AtomicInteger();
     private long beginTimeMs;
     private long beginTimeMs2;
 
@@ -98,15 +99,11 @@ public class BenchmarkLocalPersistPut {
         }
 
         beginTimeMs = System.currentTimeMillis();
-        beginTimeMs2 = System.currentTimeMillis();
-    }
-
-    @TearDown
-    public void tearDown() throws InterruptedException {
+        putBatch();
         // 30s
         final int maxLoopCount = 10 * 30;
         int loopCount = 0;
-        while (count.get() < keyNumber) {
+        while (putCount.get() < keyNumber) {
             Thread.sleep(100);
             loopCount++;
 
@@ -117,6 +114,27 @@ public class BenchmarkLocalPersistPut {
 
         var costTimeMs = System.currentTimeMillis() - beginTimeMs;
         System.out.printf("put %d keys, cost time: %d ms\n", keyNumber, costTimeMs);
+        System.out.println("begin to test get by random keys");
+
+        beginTimeMs2 = System.currentTimeMillis();
+    }
+
+    @TearDown
+    public void tearDown() throws InterruptedException {
+        // 30s
+        final int maxLoopCount = 10 * 30;
+        int loopCount = 0;
+        while (getCount.get() < keyNumber) {
+            Thread.sleep(100);
+            loopCount++;
+
+            if (loopCount > maxLoopCount) {
+                throw new RuntimeException("timeout");
+            }
+        }
+
+        var costTimeMs = System.currentTimeMillis() - beginTimeMs;
+        System.out.printf("get %d keys, cost time: %d ms\n", keyNumber, costTimeMs);
 
         var qps = keyNumber * 1000L / costTimeMs;
         System.out.printf("qps: %d\n", qps);
@@ -153,29 +171,63 @@ public class BenchmarkLocalPersistPut {
     private final Random random = new Random();
 
     // -d 200
-//    private final byte[] valueBytes = Utils.leftPad("value", "0", 200).getBytes();
+    private final byte[] valueBytes = Utils.leftPad("value", "0", 200).getBytes();
     // short values, value length <= 32
     // -d 32
-    private final byte[] valueBytes = Utils.leftPad("value", "0", 32).getBytes();
+//    private final byte[] valueBytes = Utils.leftPad("value", "0", 32).getBytes();
+
+    public void putBatch() {
+        for (int i = 0; i < keyNumber; i++) {
+            var key = keys[random.nextInt(keyNumber)];
+            var s = BaseCommand.slot(key.getBytes(), slotNumber);
+            var oneSlot = localPersist.oneSlot(s.slot());
+            var eventloop = netWorkerEventloopArray[s.slot() % netWorkers];
+
+            eventloop.submit(() -> {
+                if (isAfterTearDown) {
+                    return;
+                }
+
+                var cv = new CompressedValue();
+                cv.setSeq(1L);
+                cv.setKeyHash(s.keyHash());
+                cv.setExpireAt(CompressedValue.NO_EXPIRE);
+                cv.setDictSeqOrSpType(CompressedValue.NULL_DICT_SEQ);
+                cv.setCompressedLength(valueBytes.length);
+                cv.setUncompressedLength(valueBytes.length);
+                cv.setCompressedData(valueBytes);
+
+                oneSlot.put(key, s.bucketIndex(), cv);
+
+                var c = putCount.incrementAndGet();
+                if (c % 1_000_000 == 0) {
+                    var costTimeMs2 = System.currentTimeMillis() - beginTimeMs2;
+                    System.out.printf("put %d keys, 100w cost time: %d ms, qps: %d\n", c, costTimeMs2, 1_000_000_000L / costTimeMs2);
+                    beginTimeMs2 = System.currentTimeMillis();
+                }
+            });
+        }
+    }
 
     /*
-    -d 32
-    qps: 986679
+  -d 32
+  qps: 658544 cache hit ratio: 45%
 
-Benchmark                     Mode  Cnt  Score   Error  Units
-BenchmarkLocalPersistPut.put  avgt       0.601          us/op
+Benchmark                      Mode  Cnt  Score   Error   Units
+BenchmarkLocalPersistGet.get  thrpt       1.845          ops/us
+BenchmarkLocalPersistGet.get   avgt       0.543           us/op
 
-    -d 200
-    qps: 435293
+  -d 200
+  qps: 527648 cache hit ratio: 27%
 
-Benchmark                     Mode  Cnt  Score   Error  Units
-BenchmarkLocalPersistPut.put  avgt       0.629          us/op
+Benchmark                      Mode  Cnt  Score   Error   Units
+BenchmarkLocalPersistGet.get  thrpt       1.599          ops/us
+BenchmarkLocalPersistGet.get   avgt       0.562           us/op
 
 TIPS: 512MB write buffer for each slot, so the real write qps is in logs. (100w cost time: ***)
-     */
-
+   */
     @Benchmark
-    public void put() {
+    public void get() {
         var key = keys[random.nextInt(keyNumber)];
         var s = BaseCommand.slot(key.getBytes(), slotNumber);
         var oneSlot = localPersist.oneSlot(s.slot());
@@ -186,21 +238,12 @@ TIPS: 512MB write buffer for each slot, so the real write qps is in logs. (100w 
                 return;
             }
 
-            var cv = new CompressedValue();
-            cv.setSeq(1L);
-            cv.setKeyHash(s.keyHash());
-            cv.setExpireAt(CompressedValue.NO_EXPIRE);
-            cv.setDictSeqOrSpType(CompressedValue.NULL_DICT_SEQ);
-            cv.setCompressedLength(valueBytes.length);
-            cv.setUncompressedLength(valueBytes.length);
-            cv.setCompressedData(valueBytes);
+            oneSlot.get(key.getBytes(), s.bucketIndex(), s.keyHash(), s.keyHash32());
 
-            oneSlot.put(key, s.bucketIndex(), cv);
-
-            var c = count.incrementAndGet();
+            var c = getCount.incrementAndGet();
             if (c % 1_000_000 == 0) {
                 var costTimeMs2 = System.currentTimeMillis() - beginTimeMs2;
-                System.out.printf("put %d keys, 100w cost time: %d ms, qps: %d\n", c, costTimeMs2, 1_000_000_000L / costTimeMs2);
+                System.out.printf("get %d keys, 100w cost time: %d ms, qps: %d\n", c, costTimeMs2, 1_000_000_000L / costTimeMs2);
                 beginTimeMs2 = System.currentTimeMillis();
             }
         });
@@ -208,7 +251,7 @@ TIPS: 512MB write buffer for each slot, so the real write qps is in logs. (100w 
 
     public static void main(String[] args) throws RunnerException {
         var opt = new OptionsBuilder()
-                .include(BenchmarkLocalPersistPut.class.getSimpleName())
+                .include(BenchmarkLocalPersistGet.class.getSimpleName())
                 .forks(1)
                 .build();
         new Runner(opt).run();

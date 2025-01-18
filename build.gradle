@@ -149,7 +149,7 @@ jmh {
 
     // change here to run target jmh tests
 //    includes = ['OneSlotRead*']
-    includes = ['BenchmarkInt32*']
+    includes = ['BenchmarkLocalPersistGet*']
 }
 
 protobuf {
