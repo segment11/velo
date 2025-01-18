@@ -63,6 +63,16 @@ public class CGroup extends BaseCommand {
         }
 
         var subCmd = new String(data[1]).toLowerCase();
+        if ("getname".equals(subCmd)) {
+            if (data.length != 2) {
+                return ErrorReply.FORMAT;
+            }
+
+            var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
+            var clientName = veloUserData.getClientName();
+            return clientName == null ? NilReply.INSTANCE : new BulkReply(clientName.getBytes());
+        }
+
         if ("id".equals(subCmd)) {
             return new IntegerReply(socket.hashCode());
         }

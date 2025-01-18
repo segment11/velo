@@ -97,9 +97,24 @@ class CGroupTest extends Specification {
         reply == OKReply.INSTANCE
 
         when:
+        reply = cGroup.execute('client getname')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
         reply = cGroup.execute('client setname xxx')
         then:
         reply == OKReply.INSTANCE
+
+        when:
+        reply = cGroup.execute('client getname')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        reply = cGroup.execute('client getname xxx')
+        then:
+        reply == ErrorReply.FORMAT
 
         when:
         reply = cGroup.execute('client setname')
