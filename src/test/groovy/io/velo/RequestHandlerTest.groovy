@@ -28,6 +28,8 @@ class RequestHandlerTest extends Specification {
 
     def 'test handle'() {
         given:
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.connectedClientCountArray = [0]
         def snowFlake = new SnowFlake(1, 1)
         def requestHandler = new RequestHandler(workerId, netWorkers, slotNumber, snowFlake, Config.create())
         println requestHandler

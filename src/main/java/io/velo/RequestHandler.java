@@ -653,7 +653,10 @@ public class RequestHandler {
         requestHandlerGauge.addRawGetter(() -> {
             var labelValues = List.of(workerIdStr);
 
+            var connectedClientCount = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.connectedClientCountArray[workerId];
+
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
+            map.put("connected_client_count", new SimpleGauge.ValueWithLabelValues((double) connectedClientCount, labelValues));
             map.put("request_sample_to_train_size", new SimpleGauge.ValueWithLabelValues((double) sampleToTrainList.size(), labelValues));
             return map;
         });

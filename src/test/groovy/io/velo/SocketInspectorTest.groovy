@@ -72,6 +72,8 @@ class SocketInspectorTest extends Specification {
         def socket = mockTcpSocket()
 
         when:
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        inspector.connectedClientCountArray = [0]
         inspector.onConnect(socket)
         inspector.onDisconnect(socket)
         inspector.subscribe('test_channel', socket)
@@ -147,7 +149,8 @@ class SocketInspectorTest extends Specification {
         }
         Thread.sleep(1000)
 
-        inspector.netWorkerEventloopArray = [eventloop2, eventloop]
+        Eventloop[] eventloopArray = [eventloop2, eventloop]
+        inspector.initByNetWorkerEventloopArray(eventloopArray)
 
         when:
         def channel = 'test_channel'

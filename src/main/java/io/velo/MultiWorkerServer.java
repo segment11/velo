@@ -578,7 +578,7 @@ public class MultiWorkerServer extends Launcher {
 
         localPersist.startIndexHandlerPool();
 
-        socketInspector.netWorkerEventloopArray = netWorkerEventloopArray;
+        socketInspector.initByNetWorkerEventloopArray(netWorkerEventloopArray);
         localPersist.setSocketInspector(socketInspector);
 
         var isWalLazyReadOk = localPersist.walLazyReadFromFile();

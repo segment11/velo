@@ -4,7 +4,6 @@ import io.activej.bytebuf.ByteBuf;
 import io.activej.eventloop.Eventloop;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
-import io.prometheus.client.Gauge;
 import io.velo.command.XGroup;
 import io.velo.persist.KeyLoader;
 import io.velo.reply.Reply;
@@ -80,7 +79,14 @@ public class SocketInspector implements TcpSocket.Inspector {
     public volatile boolean isServerStopped = false;
 
     @ThreadNeedLocal
-    Eventloop[] netWorkerEventloopArray;
+    private Eventloop[] netWorkerEventloopArray;
+    @ThreadNeedLocal
+    int[] connectedClientCountArray;
+
+    void initByNetWorkerEventloopArray(Eventloop[] netWorkerEventloopArray) {
+        this.netWorkerEventloopArray = netWorkerEventloopArray;
+        this.connectedClientCountArray = new int[netWorkerEventloopArray.length];
+    }
 
     public final ConcurrentHashMap<InetSocketAddress, TcpSocket> socketMap = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ConcurrentHashMap<ITcpSocket, Long>> subscribeByChannel = new ConcurrentHashMap<>();
@@ -151,12 +157,6 @@ public class SocketInspector implements TcpSocket.Inspector {
 
     public static final String MAX_CONNECTIONS_KEY_IN_DYN_CONFIG = "max_connections";
 
-    // inject, singleton, need not static
-    private static final Gauge connectedCountGauge = Gauge.build()
-            .name("connected_client_count")
-            .help("connected client count")
-            .register();
-
     @Override
     public void onConnect(TcpSocket socket) {
         if (isServerStopped) {
@@ -184,7 +184,7 @@ public class SocketInspector implements TcpSocket.Inspector {
         log.info("Inspector on connect, remote address={}", remoteAddress);
         socketMap.put(remoteAddress, socket);
 
-        connectedCountGauge.inc();
+        connectedClientCountArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()]++;
     }
 
     @Override
@@ -241,7 +241,7 @@ public class SocketInspector implements TcpSocket.Inspector {
         // remove from subscribe by channel
         subscribeByChannel.forEach((channel, sockets) -> sockets.remove(socket));
 
-        connectedCountGauge.dec();
+        connectedClientCountArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()]--;
     }
 
     @Override
