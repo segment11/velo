@@ -121,8 +121,10 @@ public class Dict implements Serializable {
     }
 
     @VisibleForTesting
+    @ThreadNeedLocal
     ZstdDecompressCtx[] decompressCtxArray;
     @VisibleForTesting
+    @ThreadNeedLocal
     ZstdCompressCtx[] ctxCompressArray;
 
     void initCtx() {
