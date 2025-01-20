@@ -78,7 +78,7 @@
 - [√] EXPIRETIME
 - [√] KEYS
 - [x] MIGRATE
-- [√] MOVE
+- [x] MOVE
 - [x] OBJECT
 - [x] PERSIST
 - [√] PEXPIRE

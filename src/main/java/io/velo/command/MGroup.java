@@ -5,10 +5,14 @@ import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
+import io.velo.CompressedValue;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.params.RestoreParams;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -53,6 +57,10 @@ public class MGroup extends BaseCommand {
     }
 
     public Reply handle() {
+        if ("manage".equals(cmd)) {
+            return manage();
+        }
+
         if ("mget".equals(cmd)) {
             return mget();
         }
@@ -61,8 +69,12 @@ public class MGroup extends BaseCommand {
             return mset();
         }
 
-        if ("manage".equals(cmd)) {
-            return manage();
+        if ("migrate".equals(cmd)) {
+            return migrate();
+        }
+
+        if ("move".equals(cmd)) {
+            return ErrorReply.NOT_SUPPORT;
         }
 
         return NilReply.INSTANCE;
@@ -207,6 +219,179 @@ public class MGroup extends BaseCommand {
         });
 
         return asyncReply;
+    }
+
+    // todo, migrate use dump
+    private byte[] dump(CompressedValue cv, byte[] keyBytes, SlotWithKeyHash s) {
+        return getValueBytesByCv(cv, keyBytes, s);
+    }
+
+    private void restore(byte[] keyBytes, byte[] dumpBytes, long expireAt, RestoreParams restoreParams, Jedis jedisTo) {
+//        jedisTo.restore(keyBytes, expireAt, dumpBytes, restoreParams);
+        if (expireAt != CompressedValue.NO_EXPIRE) {
+            jedisTo.psetex(keyBytes, expireAt - System.currentTimeMillis(), dumpBytes);
+        } else {
+            jedisTo.set(keyBytes, dumpBytes);
+        }
+    }
+
+    private record DumpBytesAndTtlAndIndex(byte[] dumpBytes, long expireAt, int index) {
+    }
+
+    private Reply migrate() {
+        if (data.length < 7) {
+            return ErrorReply.FORMAT;
+        }
+
+        var host = new String(data[1]);
+        var port = Integer.parseInt(new String(data[2]));
+        var keyOrBlank = new String(data[3]);
+        var destinationDb = Integer.parseInt(new String(data[4]));
+        var timeoutMs = Integer.parseInt(new String(data[5]));
+
+        boolean isCopy = false;
+        boolean isReplace = false;
+        String authUsername = null;
+        String authPassword = null;
+
+        ArrayList<String> keys = new ArrayList<>();
+        for (int i = 6; i < data.length; i++) {
+            var arg = new String(data[i]);
+            if (arg.equalsIgnoreCase("keys")) {
+                if (i + 1 < data.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                for (int j = i + 1; j < data.length; j++) {
+                    keys.add(new String(data[j]));
+                }
+                break;
+            } else if (arg.equalsIgnoreCase("copy")) {
+                isCopy = true;
+            } else if (arg.equalsIgnoreCase("replace")) {
+                isReplace = true;
+            } else if (arg.equalsIgnoreCase("auth")) {
+                if (i + 2 < data.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                if (new String(data[i + 2]).equalsIgnoreCase("keys")) {
+                    authPassword = new String(data[i + 1]);
+                } else {
+                    authUsername = new String(data[i + 1]);
+                    authPassword = new String(data[i + 2]);
+                }
+            } else {
+                return ErrorReply.SYNTAX;
+            }
+        }
+
+        if (keys.isEmpty()) {
+            return ErrorReply.SYNTAX;
+        }
+
+        var jedisClientConfig = DefaultJedisClientConfig.builder().timeoutMillis(timeoutMs).build();
+        Jedis jedisTo;
+        try {
+            jedisTo = new Jedis(host, port, jedisClientConfig);
+            jedisTo.select(destinationDb);
+
+            if (authUsername != null) {
+                jedisTo.auth(authUsername, authPassword);
+            } else if (authPassword != null) {
+                jedisTo.auth(authPassword);
+            }
+        } catch (Exception e) {
+            return new ErrorReply(e.getMessage());
+        }
+        log.info("Connect to {}:{}", host, port);
+
+        var restoreParams = new RestoreParams();
+        restoreParams.absTtl();
+        if (isReplace) {
+            restoreParams.replace();
+        }
+
+        if (!isCrossRequestWorker) {
+            int count = 0;
+            for (var key : keys) {
+                var s = slot(key.getBytes());
+                var cv = getCv(key.getBytes(), s);
+                if (cv == null) {
+                    continue;
+                }
+
+                var dumpBytes = dump(cv, key.getBytes(), s);
+                restore(key.getBytes(), dumpBytes, cv.getExpireAt(), restoreParams, jedisTo);
+                count++;
+
+                if (isReplace) {
+                    removeDelay(s.slot(), s.bucketIndex(), key, s.keyHash());
+                }
+            }
+            log.info("Migrate {} keys to {}:{}", count, host, port);
+
+            jedisTo.close();
+            log.info("Close jedis {}:{}", host, port);
+
+            return count != 0 ? OKReply.INSTANCE : new BulkReply("NOKEY".getBytes());
+        } else {
+            ArrayList<KeyBytesAndSlotWithKeyHash> list = new ArrayList<>();
+            for (int i = 0; i < keys.size(); i++) {
+                var keyBytes = data[i];
+                var slotWithKeyHash = slot(keyBytes);
+                list.add(new KeyBytesAndSlotWithKeyHash(keyBytes, i, slotWithKeyHash));
+            }
+
+            ArrayList<Promise<ArrayList<DumpBytesAndTtlAndIndex>>> promises = new ArrayList<>();
+            var groupBySlot = list.stream().collect(Collectors.groupingBy(one -> one.slotWithKeyHash.slot()));
+            for (var entry : groupBySlot.entrySet()) {
+                var slot = entry.getKey();
+                var subList = entry.getValue();
+
+                var oneSlot = localPersist.oneSlot(slot);
+                var p = oneSlot.asyncCall(() -> {
+                    ArrayList<DumpBytesAndTtlAndIndex> dumpBytesList = new ArrayList<>();
+                    for (var one : subList) {
+                        var cv = getCv(one.keyBytes, one.slotWithKeyHash);
+                        if (cv == null) {
+                            continue;
+                        }
+
+                        var dumpBytes = dump(cv, one.keyBytes, one.slotWithKeyHash);
+                        dumpBytesList.add(new DumpBytesAndTtlAndIndex(dumpBytes, cv.getExpireAt(), one.index));
+                    }
+                    return dumpBytesList;
+                });
+                promises.add(p);
+            }
+
+            SettablePromise<Reply> finalPromise = new SettablePromise<>();
+            var asyncReply = new AsyncReply(finalPromise);
+
+            Promises.all(promises).whenComplete((r, e) -> {
+                if (e != null) {
+                    log.error("migrate error={}", e.getMessage());
+                    finalPromise.setException(e);
+                    return;
+                }
+
+                var count = 0;
+                for (var p : promises) {
+                    for (var d : p.getResult()) {
+                        var one = list.get(d.index);
+                        restore(one.slotWithKeyHash.rawKey().getBytes(), d.dumpBytes, d.expireAt, restoreParams, jedisTo);
+                        count++;
+                    }
+                }
+
+                jedisTo.close();
+                log.info("Close jedis {}:{}", host, port);
+
+                var rr = count != 0 ? OKReply.INSTANCE : new BulkReply("NOKEY".getBytes());
+                finalPromise.set(rr);
+            });
+
+            return asyncReply;
+        }
     }
 
     private Reply manage() {

@@ -98,6 +98,12 @@ class MGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        mGroup.cmd = 'move'
+        reply = mGroup.handle()
+        then:
+        reply == ErrorReply.NOT_SUPPORT
+
+        when:
         def classpath = Utils.projectPath("/dyn/src")
         CachedGroovyClassLoader.getInstance().init(GroovyClassLoader.getClass().classLoader, classpath, null)
         mGroup.cmd = 'manage'
