@@ -100,7 +100,6 @@ class RequestHandlerTest extends Specification {
 
         when:
         requestHandler.isStopped = false
-        ConfForGlobal.requestSummary = true
         then:
         requestList.every {
             requestHandler.handle(it, socket) == NilReply.INSTANCE

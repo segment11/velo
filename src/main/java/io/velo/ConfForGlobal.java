@@ -57,9 +57,6 @@ public class ConfForGlobal {
     // for type
     public static int doubleScale = 2;
 
-    // switch
-    public static boolean requestSummary = false;
-
     // dyn-config
     public static final HashMap<String, String> initDynConfigItems = new HashMap<>();
 }

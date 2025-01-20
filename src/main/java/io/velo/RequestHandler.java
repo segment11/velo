@@ -390,11 +390,7 @@ public class RequestHandler {
 
         var cmd = request.cmd();
 
-        Summary.Timer requestTimer = null;
-
-        if (ConfForGlobal.requestSummary) {
-            requestTimer = requestTimeSummary.labels(cmd).startTimer();
-        }
+        var requestTimer = requestTimeSummary.labels(cmd).startTimer();
         try {
             if (cmd.equals(ECHO_COMMAND)) {
                 increaseCmdStatArray(ECHO_COMMAND);
@@ -641,9 +637,7 @@ public class RequestHandler {
                 return new ErrorReply(e.getMessage());
             }
         } finally {
-            if (ConfForGlobal.requestSummary) {
-                requestTimer.observeDuration();
-            }
+            requestTimer.observeDuration();
         }
     }
 

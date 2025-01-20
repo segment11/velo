@@ -814,9 +814,6 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.doubleScale = config.get(ofInteger(), "number.doubleScale", 2);
             log.warn("Global config, doubleScale={}", ConfForGlobal.doubleScale);
 
-            ConfForGlobal.requestSummary = config.get(ofBoolean(), "requestSummary", false);
-            log.warn("Global config, requestSummary={}", ConfForGlobal.requestSummary);
-
             var dynConfig = config.getChild("dyn-config");
             if (dynConfig != null) {
                 dynConfig.getChildren().forEach((k, v) -> {
