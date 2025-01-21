@@ -2,7 +2,6 @@ package io.velo.persist
 
 import io.velo.CompressedValue
 import io.velo.KeyHash
-import redis.clients.jedis.util.JedisClusterCRC16
 
 import java.util.function.Function
 
@@ -103,19 +102,10 @@ class Mock {
     }
 
     static List<String> prepareToClientSlotKeyList(short n, short toClientSlot) {
-        List<String> list = []
-        for (i in 0..<(n * 16384 * 10)) {
-            def key = 'key:' + i.toString().padLeft(12, '0')
-            def clusterSlot = JedisClusterCRC16.getSlot(key.bytes)
-            if (clusterSlot == toClientSlot) {
-                list << key
-                if (list.size() == n) {
-                    break
-                }
-            }
-        }
-        if (list.size() < n) {
-            throw new RuntimeException('not enough keys')
+        List<String> list = (0..<n).collect { i ->
+            // use hash tag
+            'key:' + i.toString().padLeft(12, '0') +
+                    '_{' + MockForCluster.toClientSlotPreparedKeys[toClientSlot] + '}'
         }
         list
     }
