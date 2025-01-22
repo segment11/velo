@@ -35,7 +35,7 @@ public class PGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
-        if ("pexpiretime".equals(cmd) || "pttl".equals(cmd)) {
+        if ("pexpiretime".equals(cmd) || "pttl".equals(cmd) || "persist".equals(cmd)) {
             if (data.length != 2) {
                 return slotWithKeyHashList;
             }
@@ -79,6 +79,10 @@ public class PGroup extends BaseCommand {
     }
 
     public Reply handle() {
+        if ("persist".equals(cmd)) {
+            return persist();
+        }
+
         if ("pexpire".equals(cmd)) {
             var eGroup = new EGroup(cmd, data, socket);
             eGroup.from(this);
@@ -135,6 +139,27 @@ public class PGroup extends BaseCommand {
         }
 
         return NilReply.INSTANCE;
+    }
+
+    private Reply persist() {
+        if (data.length != 2) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        var s = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(keyBytes, s);
+        if (cv == null) {
+            return IntegerReply.REPLY_0;
+        }
+
+        if (cv.getExpireAt() == CompressedValue.NO_EXPIRE) {
+            return IntegerReply.REPLY_0;
+        }
+
+        cv.setExpireAt(CompressedValue.NO_EXPIRE);
+        putToOneSlot(s.slot(), s.rawKey(), s, cv);
+        return IntegerReply.REPLY_1;
     }
 
     private void saveHll(SlotWithKeyHash s, HyperLogLog hll) throws IOException {

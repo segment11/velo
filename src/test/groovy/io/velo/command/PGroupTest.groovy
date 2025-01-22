@@ -40,6 +40,7 @@ class PGroupTest extends Specification {
         def sPfcountList = _PGroup.parseSlots('pfcount', data2, slotNumber)
         def sPfmergeList = _PGroup.parseSlots('pfmerge', data2, slotNumber)
         def sPttlList = _PGroup.parseSlots('pttl', data2, slotNumber)
+        def sPersistList = _PGroup.parseSlots('persist', data2, slotNumber)
         def sPsetexList = _PGroup.parseSlots('psetex', data4, slotNumber)
         def sList = _PGroup.parseSlots('pxxx', data2, slotNumber)
         then:
@@ -50,6 +51,7 @@ class PGroupTest extends Specification {
         sPfcountList.size() == 1
         sPfmergeList.size() == 0
         sPttlList.size() == 1
+        sPersistList.size() == 1
         sPsetexList.size() == 1
         sList.size() == 0
 
@@ -99,6 +101,11 @@ class PGroupTest extends Specification {
         sPttlList.size() == 0
 
         when:
+        sPersistList = _PGroup.parseSlots('persist', data4, slotNumber)
+        then:
+        sPersistList.size() == 0
+
+        when:
         sPsetexList = _PGroup.parseSlots('psetex', data2, slotNumber)
         then:
         sPsetexList.size() == 0
@@ -144,8 +151,14 @@ class PGroupTest extends Specification {
 
         when:
         def data1 = new byte[1][]
-        pGroup.cmd = 'pfadd'
+        pGroup.cmd = 'persist'
         pGroup.data = data1
+        reply = pGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        pGroup.cmd = 'pfadd'
         reply = pGroup.handle()
         then:
         reply == ErrorReply.FORMAT
@@ -204,6 +217,46 @@ class PGroupTest extends Specification {
         when:
         pGroup.cmd = 'pubsub'
         reply = pGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+    }
+
+    def 'test persist'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def pGroup = new PGroup('persist', null, null)
+        pGroup.byPassGetSet = inMemoryGetSet
+        pGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = pGroup.execute('persist a')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = pGroup.execute('persist a')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        cv.expireAt = System.currentTimeMillis() + 1000
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = pGroup.execute('persist a')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when:
+        def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
+        then:
+        bufOrCv.cv().expireAt == cv.expireAt
+
+        when:
+        reply = pGroup.execute('persist')
         then:
         reply == ErrorReply.FORMAT
     }
