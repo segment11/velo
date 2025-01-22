@@ -253,7 +253,7 @@ class PGroupTest extends Specification {
         when:
         def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
         then:
-        bufOrCv.cv().expireAt == cv.expireAt
+        bufOrCv.cv().expireAt == CompressedValue.NO_EXPIRE
 
         when:
         reply = pGroup.execute('persist')
