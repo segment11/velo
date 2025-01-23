@@ -55,10 +55,6 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
     @Override
     public void run(int loopCount) {
-        if (loopCount % 10 == 0) {
-            log.info("Key analysis task loop count: {}", loopCount);
-        }
-
         var addCountIncreasedLast10Second = handler.addCount - handlerAddCountLastSecond;
         handlerAddCountLastSecond = handler.addCount;
 
