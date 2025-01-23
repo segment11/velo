@@ -45,7 +45,7 @@ class UGroupTest extends Specification {
         reply == NilReply.INSTANCE
     }
 
-    def 'test subscribe'() {
+    def 'test unsubscribe'() {
         given:
         def data4 = new byte[4][]
         data4[1] = 'a'.bytes
@@ -59,7 +59,7 @@ class UGroupTest extends Specification {
 
         when:
         LocalPersist.instance.socketInspector = new SocketInspector()
-        def reply = uGroup.unsubscribe()
+        def reply = uGroup.unsubscribe(false)
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 3 * 3
@@ -67,7 +67,7 @@ class UGroupTest extends Specification {
         when:
         def data1 = new byte[1][]
         uGroup.data = data1
-        reply = uGroup.unsubscribe()
+        reply = uGroup.unsubscribe(false)
         then:
         reply == ErrorReply.FORMAT
     }

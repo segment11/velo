@@ -422,6 +422,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         }
     }
 
+    // todo, need change to glob match
     public static boolean isKeyMatch(@NotNull String key, @Nullable String matchPattern) {
         if (matchPattern == null) {
             return true;

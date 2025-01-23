@@ -162,6 +162,9 @@
 - [√] PUBLISH
 - [√] PUBSUB
 - [√] SUBSCRIBE
+- [√] UNSUBSCRIBE
+- [√] PSUBSCRIBE
+- [√] PUNSUBSCRIBE
 
 ## server management
 

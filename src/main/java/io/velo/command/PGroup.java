@@ -130,12 +130,24 @@ public class PGroup extends BaseCommand {
             return sGroup.set(dd);
         }
 
+        if ("psubscribe".equals(cmd)) {
+            var sGroup = new SGroup(cmd, data, socket);
+            sGroup.from(this);
+            return sGroup.subscribe(true);
+        }
+
         if ("publish".equals(cmd)) {
             return publish(data, socket);
         }
 
         if ("pubsub".equals(cmd)) {
             return pubsub();
+        }
+
+        if ("punsubscribe".equals(cmd)) {
+            var uGroup = new UGroup(cmd, data, socket);
+            uGroup.from(this);
+            return uGroup.unsubscribe(true);
         }
 
         return NilReply.INSTANCE;
@@ -425,7 +437,7 @@ public class PGroup extends BaseCommand {
         replies[1] = new BulkReply(channel.getBytes());
         replies[2] = new BulkReply(message.getBytes());
 
-        var n = socketInInspector.subscribeSocketCount(channel);
+        var n = socketInInspector.subscribeSocketCount(channel, false);
 
         socketInInspector.publish(channel, new MultiBulkReply(replies), (s, r) -> {
             s.write(r.buffer());
@@ -438,16 +450,19 @@ public class PGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
+        var socketInspector = localPersist.getSocketInspector();
+
         var subCmd = new String(data[1]).toLowerCase();
         if ("channels".equals(subCmd)) {
             var pattern = data.length == 3 ? new String(data[2]) : null;
-            var channels = localPersist.getSocketInspector().filterSubscribeChannels(pattern);
-            if (channels.isEmpty()) {
+            var ones = pattern == null ? socketInspector.allSubscribeOnes() :
+                    socketInspector.filterSubscribeOnesByChannel(pattern, true);
+            if (ones.isEmpty()) {
                 return MultiBulkReply.EMPTY;
             } else {
-                var replies = new Reply[channels.size()];
-                for (int i = 0; i < channels.size(); i++) {
-                    replies[i] = new BulkReply(channels.get(i).getBytes());
+                var replies = new Reply[ones.size()];
+                for (int i = 0; i < ones.size(); i++) {
+                    replies[i] = new BulkReply(ones.get(i).getChannel().getBytes());
                 }
                 return new MultiBulkReply(replies);
             }
@@ -466,7 +481,7 @@ public class PGroup extends BaseCommand {
             var replies = new Reply[channels.size() * 2];
             int j = 0;
             for (var channel : channels) {
-                var size = localPersist.getSocketInspector().subscribeSocketCount(channel);
+                var size = socketInspector.subscribeSocketCount(channel, true);
                 replies[j++] = new BulkReply(channel.getBytes());
                 replies[j++] = new IntegerReply(size);
             }

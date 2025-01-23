@@ -199,7 +199,7 @@ public class SGroup extends BaseCommand {
         }
 
         if ("subscribe".equals(cmd)) {
-            return subscribe();
+            return subscribe(false);
         }
 
         if ("sunion".equals(cmd)) {
@@ -1798,7 +1798,7 @@ public class SGroup extends BaseCommand {
     }
 
     @VisibleForTesting
-    Reply subscribe() {
+    Reply subscribe(boolean isPattern) {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -1828,7 +1828,7 @@ public class SGroup extends BaseCommand {
         for (var channel : channels) {
             replies[j++] = new BulkReply("subscribe".getBytes());
             replies[j++] = new BulkReply(channel.getBytes());
-            var size = socketInInspector.subscribe(channel, socket);
+            var size = socketInInspector.subscribe(channel, isPattern, socket);
             replies[j++] = new IntegerReply(size);
         }
 

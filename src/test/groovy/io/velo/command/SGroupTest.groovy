@@ -2161,7 +2161,7 @@ sunionstore
 
         when:
         LocalPersist.instance.socketInspector = new SocketInspector()
-        def reply = sGroup.subscribe()
+        def reply = sGroup.subscribe(false)
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 3 * 3
@@ -2171,7 +2171,7 @@ sunionstore
         AclUsers.instance.upInsert('default') {
             it.addRPubSub(true, RPubSub.fromLiteral('&special_channel'))
         }
-        reply = sGroup.subscribe()
+        reply = sGroup.subscribe(false)
         then:
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
@@ -2179,14 +2179,14 @@ sunionstore
         AclUsers.instance.upInsert('default') {
             it.on = false
         }
-        reply = sGroup.subscribe()
+        reply = sGroup.subscribe(false)
         then:
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
         def data1 = new byte[1][]
         sGroup.data = data1
-        reply = sGroup.subscribe()
+        reply = sGroup.subscribe(false)
         then:
         reply == ErrorReply.FORMAT
     }

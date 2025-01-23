@@ -120,8 +120,9 @@ class PGroupTest extends Specification {
         data3[2] = '60000'.bytes
 
         def inMemoryGetSet = new InMemoryGetSet()
+        def socket = SocketInspectorTest.mockTcpSocket()
 
-        def pGroup = new PGroup('pexpire', data3, null)
+        def pGroup = new PGroup('pexpire', data3, socket)
         pGroup.byPassGetSet = inMemoryGetSet
         pGroup.from(BaseCommand.mockAGroup())
 
@@ -219,6 +220,24 @@ class PGroupTest extends Specification {
         reply = pGroup.handle()
         then:
         reply == ErrorReply.FORMAT
+
+        when:
+        def socketInspector = new SocketInspector()
+        LocalPersist.instance.socketInspector = socketInspector
+        data2[0] = 'psubscribe'.bytes
+        data2[1] = 'test_channel'.bytes
+        pGroup.cmd = 'psubscribe'
+        pGroup.data = data2
+        reply = pGroup.handle()
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        data2[0] = 'punsubscribe'.bytes
+        pGroup.cmd = 'punsubscribe'
+        reply = pGroup.handle()
+        then:
+        reply instanceof MultiBulkReply
     }
 
     def 'test persist'() {
@@ -431,7 +450,7 @@ class PGroupTest extends Specification {
 
         when:
         def socket = SocketInspectorTest.mockTcpSocket()
-        socketInspector.subscribe(channel, socket)
+        socketInspector.subscribe(channel, false, socket)
         reply = pGroup.execute('pubsub channels ' + channel)
         then:
         reply instanceof MultiBulkReply

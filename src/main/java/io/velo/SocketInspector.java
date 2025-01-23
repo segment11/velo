@@ -5,8 +5,8 @@ import io.activej.eventloop.Eventloop;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.velo.command.XGroup;
-import io.velo.persist.KeyLoader;
 import io.velo.reply.Reply;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
@@ -14,6 +14,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.FileSystems;
+import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -88,34 +90,102 @@ public class SocketInspector implements TcpSocket.Inspector {
         this.connectedClientCountArray = new int[netWorkerEventloopArray.length];
     }
 
-    public final ConcurrentHashMap<InetSocketAddress, TcpSocket> socketMap = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, ConcurrentHashMap<ITcpSocket, Long>> subscribeByChannel = new ConcurrentHashMap<>();
+    public static class ChannelAndIsPattern {
+        private final String channel;
+        private final boolean isPattern;
+        private final PathMatcher pathMatcher;
 
-    public ArrayList<String> filterSubscribeChannels(String pattern) {
-        ArrayList<String> result = new ArrayList<>();
-        subscribeByChannel.forEach((key, value) -> {
-            if (KeyLoader.isKeyMatch(key, pattern)) {
-                result.add(key);
+        public String getChannel() {
+            return channel;
+        }
+
+        ChannelAndIsPattern(@NotNull String channel, boolean isPattern) {
+            this.channel = channel;
+            this.isPattern = isPattern;
+            if (isPattern) {
+                pathMatcher = FileSystems.getDefault().getPathMatcher("glob:" + channel);
+            } else {
+                pathMatcher = null;
             }
-        });
-        return result;
+        }
+
+        @Override
+        public int hashCode() {
+            return isPattern ? channel.hashCode() * 31 : channel.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == this) {
+                return true;
+            }
+
+            if (!(obj instanceof ChannelAndIsPattern other)) {
+                return false;
+            }
+
+            if (isPattern != other.isPattern) {
+                return false;
+            }
+
+            return channel.equals(other.channel);
+        }
+
+        boolean isMatch(String channel2) {
+            if (!isPattern) {
+                return channel.equals(channel2);
+            }
+
+            return pathMatcher.matches(FileSystems.getDefault().getPath(channel2));
+        }
     }
 
-    public int subscribe(String channel, ITcpSocket socket) {
-        var sockets = subscribeByChannel.computeIfAbsent(channel, k -> new ConcurrentHashMap<>());
+    public final ConcurrentHashMap<InetSocketAddress, TcpSocket> socketMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ChannelAndIsPattern, ConcurrentHashMap<ITcpSocket, Long>> subscribeByChannel = new ConcurrentHashMap<>();
+
+    public ArrayList<ChannelAndIsPattern> allSubscribeOnes() {
+        return new ArrayList<>(subscribeByChannel.keySet());
+    }
+
+    public ArrayList<ChannelAndIsPattern> filterSubscribeOnesByChannel(@NotNull String channel, boolean isPattern) {
+        var two = new ChannelAndIsPattern(channel, isPattern);
+        ArrayList<ChannelAndIsPattern> oneList = new ArrayList<>();
+        subscribeByChannel.forEach((one, value) -> {
+            if (one.isMatch(channel) || two.isMatch(one.channel)) {
+                oneList.add(one);
+            }
+        });
+        return oneList;
+    }
+
+    public int subscribe(@NotNull String channel, boolean isPattern, ITcpSocket socket) {
+        var one = new ChannelAndIsPattern(channel, isPattern);
+        var sockets = subscribeByChannel.computeIfAbsent(one, k -> new ConcurrentHashMap<>());
         sockets.put(socket, Thread.currentThread().threadId());
         return sockets.size();
     }
 
-    public int unsubscribe(String channel, ITcpSocket socket) {
-        var sockets = subscribeByChannel.computeIfAbsent(channel, k -> new ConcurrentHashMap<>());
+    public int unsubscribe(@NotNull String channel, boolean isPattern, ITcpSocket socket) {
+        var one = new ChannelAndIsPattern(channel, isPattern);
+        var sockets = subscribeByChannel.computeIfAbsent(one, k -> new ConcurrentHashMap<>());
         sockets.remove(socket);
         return sockets.size();
     }
 
-    public int subscribeSocketCount(String channel) {
-        var sockets = subscribeByChannel.get(channel);
-        return sockets == null ? 0 : sockets.size();
+    public int subscribeSocketCount(String channel, boolean isPattern) {
+        var oneList = filterSubscribeOnesByChannel(channel, isPattern);
+        if (oneList.isEmpty()) {
+            return 0;
+        }
+
+        int count = 0;
+        for (var one : oneList) {
+            var sockets = subscribeByChannel.get(one);
+            if (sockets != null) {
+                count += sockets.size();
+            }
+        }
+        return count;
     }
 
     public interface PublishWriteSocketCallback {
@@ -123,7 +193,20 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     public int publish(String channel, Reply reply, PublishWriteSocketCallback callback) {
-        var sockets = subscribeByChannel.get(channel);
+        var oneList = filterSubscribeOnesByChannel(channel, false);
+        if (oneList.isEmpty()) {
+            return 0;
+        }
+
+        int count = 0;
+        for (var one : oneList) {
+            count += publishOne(one, reply, callback);
+        }
+        return count;
+    }
+
+    private int publishOne(@NotNull ChannelAndIsPattern one, Reply reply, PublishWriteSocketCallback callback) {
+        var sockets = subscribeByChannel.get(one);
         if (sockets == null) {
             return 0;
         }

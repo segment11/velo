@@ -19,14 +19,14 @@ public class UGroup extends BaseCommand {
 
     public Reply handle() {
         if (cmd.equals("unsubscribe")) {
-            return unsubscribe();
+            return unsubscribe(false);
         }
 
         return NilReply.INSTANCE;
     }
 
     @VisibleForTesting
-    Reply unsubscribe() {
+    Reply unsubscribe(boolean isPattern) {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -44,7 +44,7 @@ public class UGroup extends BaseCommand {
         for (var channel : channels) {
             replies[j++] = new BulkReply("unsubscribe".getBytes());
             replies[j++] = new BulkReply(channel.getBytes());
-            var size = socketInInspector.unsubscribe(channel, socket);
+            var size = socketInInspector.unsubscribe(channel, isPattern, socket);
             replies[j++] = new IntegerReply(size);
         }
 
