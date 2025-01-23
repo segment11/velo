@@ -36,5 +36,10 @@ class RedisCrcTest extends Specification {
         println 'crc64: ' + r
         then:
         r == -1601353934260610614L
+
+        when:
+        def r2 = RedisCrc.crc64(0, new byte[0], 0)
+        then:
+        r2 == 0
     }
 }

@@ -150,9 +150,11 @@ void Java_io_velo_rdb_RedisCrc_crc64Init(JNIEnv *, jclass) {
     printf("done crc64_init\n");
 }
 
-jlong Java_io_velo_rdb_RedisCrc_crc64(JNIEnv *env, jclass cls, jlong crc, jbyteArray s, jlong l) {
-    jbyte *s_ptr = (*env)->GetByteArrayElements(env, s, NULL);
-    jlong result = crc64(crc, s_ptr, l);
-    (*env)->ReleaseByteArrayElements(env, s, s_ptr, JNI_ABORT);
+jlong Java_io_velo_rdb_RedisCrc_crc64(JNIEnv *env, jclass cls, jlong crc, jbyteArray data, jlong l) {
+    void *data_buf = (*env)->GetPrimitiveArrayCritical(env, data, NULL);
+    if (data_buf == NULL) return 0;
+
+    jlong result = (jlong) crc64(crc, data_buf, l);
+    (*env)->ReleasePrimitiveArrayCritical(env, data, data_buf, JNI_ABORT);
     return result;
 }
