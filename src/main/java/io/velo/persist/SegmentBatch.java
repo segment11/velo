@@ -83,23 +83,23 @@ public class SegmentBatch implements InSlotMetricCollector {
     }
 
     @VisibleForTesting
-    record SegmentCompressedBytesWithIndex(byte[] compressedBytes, int segmentIndex, long segmentSeq) {
+    record SegmentCompressedBytesWithIndex(byte[] compressedBytes, int tmpSegmentIndex, long segmentSeq) {
         @Override
         public String toString() {
             return "SegmentCompressedBytesWithIndex{" +
-                    "segmentIndex=" + segmentIndex +
+                    "tmpSegmentIndex=" + tmpSegmentIndex +
                     ", segmentSeq=" + segmentSeq +
                     ", compressedBytes.length=" + compressedBytes.length +
                     '}';
         }
     }
 
-    public record SegmentTightBytesWithLengthAndSegmentIndex(byte[] tightBytesWithLength, int segmentIndex,
+    public record SegmentTightBytesWithLengthAndSegmentIndex(byte[] tightBytesWithLength, int tmpSegmentIndex,
                                                              byte blockNumber, long segmentSeq) {
         @Override
         public String toString() {
             return "SegmentTightBytesWithLengthAndSegmentIndex{" +
-                    "segmentIndex=" + segmentIndex +
+                    "tmpSegmentIndex=" + tmpSegmentIndex +
                     ", blockNumber=" + blockNumber +
                     ", segmentSeq=" + segmentSeq +
                     ", tightBytesWithLength.length=" + tightBytesWithLength.length +
@@ -128,7 +128,7 @@ public class SegmentBatch implements InSlotMetricCollector {
             var s = onceList.get(j);
 
             for (var pvm : returnPvmList) {
-                if (pvm.segmentIndex == s.segmentIndex) {
+                if (pvm.segmentIndex == s.tmpSegmentIndex) {
                     pvm.subBlockIndex = subBlockIndex;
                     pvm.segmentIndex = afterTightSegmentIndex;
                 }
@@ -173,7 +173,7 @@ public class SegmentBatch implements InSlotMetricCollector {
         ArrayList<SegmentCompressedBytesWithIndex> onceList = new ArrayList<>(MAX_BLOCK_NUMBER);
         int onceListBytesLength = 0;
 
-        int afterTightSegmentIndex = segments.getFirst().segmentIndex;
+        int afterTightSegmentIndex = segments.getFirst().tmpSegmentIndex;
         for (var segment : segments) {
             var compressedBytes = segment.compressedBytes;
 
@@ -198,24 +198,22 @@ public class SegmentBatch implements InSlotMetricCollector {
     }
 
     ArrayList<SegmentBatch2.SegmentBytesWithIndex> split(@NotNull ArrayList<Wal.V> list,
-                                                         int[] nextNSegmentIndex,
                                                          @NotNull ArrayList<PersistValueMeta> returnPvmList) {
-        var r = splitAndTight(list, nextNSegmentIndex, returnPvmList);
+        var r = splitAndTight(list, returnPvmList);
         ArrayList<SegmentBatch2.SegmentBytesWithIndex> returnList = new ArrayList<>(r.size());
         for (var one : r) {
-            returnList.add(new SegmentBatch2.SegmentBytesWithIndex(one.tightBytesWithLength, one.segmentIndex, one.segmentSeq));
+            returnList.add(new SegmentBatch2.SegmentBytesWithIndex(one.tightBytesWithLength, one.tmpSegmentIndex, one.segmentSeq));
         }
         return returnList;
     }
 
     @VisibleForTesting
     ArrayList<SegmentTightBytesWithLengthAndSegmentIndex> splitAndTight(@NotNull ArrayList<Wal.V> list,
-                                                                        int[] nextNSegmentIndex,
                                                                         @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         ArrayList<SegmentCompressedBytesWithIndex> result = new ArrayList<>(100);
         ArrayList<Wal.V> onceList = new ArrayList<>(100);
 
-        int i = 0;
+        int tmpSegmentIndex = 0;
 
         var persistLength = Chunk.SEGMENT_HEADER_LENGTH;
         for (Wal.V v : list) {
@@ -224,13 +222,8 @@ public class SegmentBatch implements InSlotMetricCollector {
             if (persistLength < chunkSegmentLength) {
                 onceList.add(v);
             } else {
-                if (i >= nextNSegmentIndex.length) {
-                    log.warn("Batch next {} segment prepare is not enough, list size={}", nextNSegmentIndex.length, list.size());
-                    throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size=" + list.size());
-                }
-
-                result.add(compressAsSegment(onceList, nextNSegmentIndex[i], returnPvmList));
-                i++;
+                result.add(compressAsSegment(onceList, tmpSegmentIndex, returnPvmList));
+                tmpSegmentIndex++;
 
                 onceList.clear();
                 persistLength = Chunk.SEGMENT_HEADER_LENGTH + v.persistLength();
@@ -239,25 +232,20 @@ public class SegmentBatch implements InSlotMetricCollector {
         }
 
         if (!onceList.isEmpty()) {
-            if (i >= nextNSegmentIndex.length) {
-                log.warn("Batch next {} segment prepare is not enough, list size={}", nextNSegmentIndex.length, list.size());
-                throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size=" + list.size());
-            }
-
-            result.add(compressAsSegment(onceList, nextNSegmentIndex[i], returnPvmList));
+            result.add(compressAsSegment(onceList, tmpSegmentIndex, returnPvmList));
         }
 
         return tight(result, returnPvmList);
     }
 
     private SegmentCompressedBytesWithIndex compressAsSegment(@NotNull ArrayList<Wal.V> list,
-                                                              int segmentIndex,
+                                                              int tmpSegmentIndex,
                                                               @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         batchCountTotal++;
         batchKvCountTotal += list.size();
 
         long segmentSeq = snowFlake.nextId();
-        SegmentBatch2.encodeToBuffer(list, buffer, returnPvmList, slot, segmentIndex, segmentSeq);
+        SegmentBatch2.encodeToBuffer(list, buffer, returnPvmList, tmpSegmentIndex, segmentSeq);
 
         // important: 4KB decompress cost ~200us, so use 4KB segment length for better read latency
         // double compress
@@ -273,7 +261,7 @@ public class SegmentBatch implements InSlotMetricCollector {
         buffer.clear();
         Arrays.fill(bytes, (byte) 0);
 
-        return new SegmentCompressedBytesWithIndex(compressedBytes, segmentIndex, segmentSeq);
+        return new SegmentCompressedBytesWithIndex(compressedBytes, tmpSegmentIndex, segmentSeq);
     }
 
     static byte[] decompressSegmentBytesFromOneSubBlock(short slot,

@@ -339,8 +339,6 @@ class ManageCommand extends BaseCommand {
             }
 
             if (n >= updateKeyBucketsAndChunkSegmentsDirectlyMinKeyNumber && !ConfForSlot.global.confChunk.isSegmentUseCompression) {
-                Chunk.ONCE_PREPARE_SEGMENT_COUNT = 128
-
                 // s list size may be = 32 * 48 / 2 = 768
                 def batchDone = setBigBatchKeyValues(n, keyPrefix, mockValueBytes, k, oneSlot)
                 putN = batchDone.putN

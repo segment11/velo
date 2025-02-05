@@ -55,11 +55,11 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     }
 
     @VisibleForTesting
-    record SegmentBytesWithIndex(byte[] segmentBytes, int segmentIndex, long segmentSeq) {
+    record SegmentBytesWithIndex(byte[] segmentBytes, int tmpSegmentIndex, long segmentSeq) {
         @Override
         public String toString() {
             return "SegmentCompressedBytesWithIndex{" +
-                    "segmentIndex=" + segmentIndex +
+                    "tmpSegmentIndex=" + tmpSegmentIndex +
                     ", segmentSeq=" + segmentSeq +
                     ", segmentBytes.length=" + segmentBytes.length +
                     '}';
@@ -67,7 +67,6 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     }
 
     ArrayList<SegmentBytesWithIndex> split(@NotNull ArrayList<Wal.V> list,
-                                           int[] nextNSegmentIndex,
                                            @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         ArrayList<SegmentBytesWithIndex> result = new ArrayList<>(100);
         ArrayList<Wal.V> onceList = new ArrayList<>(100);
@@ -81,12 +80,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             if (persistLength < bytes.length) {
                 onceList.add(v);
             } else {
-                if (i >= nextNSegmentIndex.length) {
-                    log.warn("Batch next {} segment prepare is not enough, list size={}", nextNSegmentIndex.length, list.size());
-                    throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size=" + list.size());
-                }
-
-                result.add(compressAsSegment(onceList, nextNSegmentIndex[i], returnPvmList));
+                result.add(compressAsSegment(onceList, i, returnPvmList));
                 i++;
 
                 onceList.clear();
@@ -96,39 +90,33 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         }
 
         if (!onceList.isEmpty()) {
-            if (i >= nextNSegmentIndex.length) {
-                log.warn("Batch next {} segment prepare is not enough, list size={}", nextNSegmentIndex.length, list.size());
-                throw new IllegalArgumentException("Batch next " + nextNSegmentIndex.length + " segment prepare is not enough, list size=" + list.size());
-            }
-
-            result.add(compressAsSegment(onceList, nextNSegmentIndex[i], returnPvmList));
+            result.add(compressAsSegment(onceList, i, returnPvmList));
         }
 
         return result;
     }
 
     private SegmentBytesWithIndex compressAsSegment(@NotNull ArrayList<Wal.V> list,
-                                                    int segmentIndex,
+                                                    int tmpSegmentIndex,
                                                     @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         batchCountTotal++;
         batchKvCountTotal += list.size();
 
         long segmentSeq = snowFlake.nextId();
-        encodeToBuffer(list, buffer, returnPvmList, slot, segmentIndex, segmentSeq);
+        encodeToBuffer(list, buffer, returnPvmList, tmpSegmentIndex, segmentSeq);
 
         var copyBytes = Arrays.copyOf(this.bytes, this.bytes.length);
 
         buffer.clear();
         Arrays.fill(bytes, (byte) 0);
 
-        return new SegmentBytesWithIndex(copyBytes, segmentIndex, segmentSeq);
+        return new SegmentBytesWithIndex(copyBytes, tmpSegmentIndex, segmentSeq);
     }
 
     static void encodeToBuffer(@NotNull ArrayList<Wal.V> list,
                                @NotNull ByteBuffer buffer,
                                @NotNull ArrayList<PersistValueMeta> returnPvmList,
-                               short slot,
-                               int segmentIndex,
+                               int tmpSegmentIndex,
                                long segmentSeq) {
         // only use key bytes hash to calculate crc
         var crcCalBytes = new byte[8 * list.size()];
@@ -165,7 +153,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             // tmp 0, then update
             pvm.subBlockIndex = 0;
             // tmp current segment index, then update
-            pvm.segmentIndex = segmentIndex;
+            pvm.segmentIndex = tmpSegmentIndex;
             pvm.segmentOffset = offsetInThisSegment;
             pvm.expireAt = v.expireAt();
             pvm.seq = v.seq();

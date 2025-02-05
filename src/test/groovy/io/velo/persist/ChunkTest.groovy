@@ -331,27 +331,6 @@ class ChunkTest extends Specification {
         chunk.segmentIndex == 2
         r.size() == 0
 
-//        when:
-//        chunk.segmentIndex = confChunk.maxSegmentNumber() - 10
-//        boolean exception = false
-//        try {
-//            chunk.persist(0, vList, false, xForBinlog)
-//        } catch (SegmentOverflowException ignore) {
-//            exception = true
-//        }
-//        then:
-//        exception
-
-//        when:
-//        exception = false
-//        try {
-//            chunk.persist(0, vList, true, xForBinlog)
-//        } catch (SegmentOverflowException ignore) {
-//            exception = true
-//        }
-//        then:
-//        exception
-
         when:
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.Flag.init.flagByte(), blankSeqList, 0)
         chunk.segmentIndex = 0
@@ -406,6 +385,22 @@ class ChunkTest extends Specification {
         chunk.persist(0, vListManyCount, false, xForBinlog, null)
         then:
         chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE
+
+        when:
+        List<Long> blankSeqListForAll = []
+        ConfForSlot.global.confChunk.maxSegmentNumber().times {
+            blankSeqListForAll << 0L
+        }
+        chunk.segmentIndex = 0
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqListForAll.size(), Chunk.Flag.new_write.flagByte(), blankSeqListForAll, 0)
+        boolean exception = false
+        try {
+            chunk.persist(0, vList, false, xForBinlog, null)
+        } catch (SegmentOverflowException ignore) {
+            exception = true
+        }
+        then:
+        exception
 
         when:
         chunk.writeSegmentToTargetSegmentIndex(new byte[4096], 0)

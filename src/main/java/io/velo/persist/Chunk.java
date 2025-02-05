@@ -27,6 +27,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     private final byte fdPerChunk;
     final int maxSegmentIndex;
     final int halfSegmentNumber;
+    final int findCanWriteSegmentsMaxTryTimes;
 
     public int getMaxSegmentIndex() {
         return maxSegmentIndex;
@@ -99,6 +100,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
         log.info("Chunk init slot={}, segment number per fd={}, fd per chunk={}, max segment index={}, half segment number={}",
                 slot, segmentNumberPerFd, fdPerChunk, maxSegmentIndex, halfSegmentNumber);
+
+        this.findCanWriteSegmentsMaxTryTimes = Math.max(Wal.calcWalGroupNumber() / 1024, 128);
 
         this.slot = slot;
         this.slotDir = slotDir;
@@ -416,11 +419,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
     }
 
-    // need refer Wal valueSizeTrigger
-    // 32 not tight segments is enough for 400 Wal.V persist ?, need check, todo
-    // one wal group charges 32 key buckets, 32 * 4KB = 128KB
-    // with merged valid cv list together, once most pre-read 2 segments, valid cv list size ~= 400
-    public static int ONCE_PREPARE_SEGMENT_COUNT = 32;
+    // each fd left 32 segments no use
+    public static final int ONCE_PREPARE_SEGMENT_COUNT = 32;
 
     private int mergedSegmentIndexEndLastTime = NO_NEED_MERGE_SEGMENT_INDEX;
 
@@ -446,10 +446,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
     }
 
-    // merge, valid cv list is smaller, only need one segment, or need 4 or 8 ? todo
-    // but even list size is smaller, one v maybe is not compressed, one v encoded length is large
-    public static int ONCE_PREPARE_SEGMENT_COUNT_FOR_MERGE = 16;
-
     @SlaveNeedReplay
     // return need merge segment index array
     public ArrayList<Integer> persist(int walGroupIndex,
@@ -457,42 +453,42 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                                       boolean isMerge,
                                       @NotNull XOneWalGroupPersist xForBinlog,
                                       @Nullable KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
-        logMergeCount++;
-        var doLog = (Debug.getInstance().logMerge && logMergeCount % 1000 == 0);
-
         moveSegmentIndexForPrepare();
-        boolean canWrite;
-        if (isMerge) {
-            canWrite = reuseSegments(false, ONCE_PREPARE_SEGMENT_COUNT_FOR_MERGE, false);
-        } else {
-            canWrite = reuseSegments(false, ONCE_PREPARE_SEGMENT_COUNT, false);
+
+        ArrayList<PersistValueMeta> pvmList = new ArrayList<>();
+        var segments = ConfForSlot.global.confChunk.isSegmentUseCompression ?
+                segmentBatch.split(list, pvmList) : segmentBatch2.split(list, pvmList);
+
+        boolean canWrite = false;
+        for (int i = 0; i < findCanWriteSegmentsMaxTryTimes; i++) {
+            canWrite = reuseSegments(false, segments.size(), false);
+            if (canWrite) {
+                break;
+            } else {
+                segmentIndex++;
+            }
         }
         if (!canWrite) {
             throw new SegmentOverflowException("Segment can not write, s=" + slot + ", i=" + segmentIndex);
         }
 
-        var oncePrepareSegmentCount = isMerge ? ONCE_PREPARE_SEGMENT_COUNT_FOR_MERGE : ONCE_PREPARE_SEGMENT_COUNT;
-        int[] nextNSegmentIndex = new int[oncePrepareSegmentCount];
-        for (int i = 0; i < oncePrepareSegmentCount; i++) {
-            nextNSegmentIndex[i] = segmentIndex + i;
+        // reset segment index after find those segments can reuse
+        var currentSegmentIndex = this.segmentIndex;
+        for (var pvm : pvmList) {
+            pvm.segmentIndex += currentSegmentIndex;
         }
-
-        ArrayList<PersistValueMeta> pvmList = new ArrayList<>();
-        var segments = ConfForSlot.global.confChunk.isSegmentUseCompression ?
-                segmentBatch.split(list, nextNSegmentIndex, pvmList) : segmentBatch2.split(list, nextNSegmentIndex, pvmList);
 
         List<Long> segmentSeqListAll = new ArrayList<>();
         for (var segment : segments) {
             segmentSeqListAll.add(segment.segmentSeq());
         }
-        oneSlot.setSegmentMergeFlagBatch(segmentIndex, segments.size(),
+        oneSlot.setSegmentMergeFlagBatch(currentSegmentIndex, segments.size(),
                 Flag.reuse.flagByte, segmentSeqListAll, walGroupIndex);
 
         boolean isNewAppendAfterBatch = true;
 
-        var firstSegmentIndex = segments.getFirst().segmentIndex();
-        var fdIndex = targetFdIndex(firstSegmentIndex);
-        var segmentIndexTargetFd = targetSegmentIndexTargetFd(firstSegmentIndex);
+        var fdIndex = targetFdIndex();
+        var segmentIndexTargetFd = targetSegmentIndexTargetFd();
 
         // never cross fd files because prepare batch segments to write
         var fdReadWrite = fdReadWriteArray[fdIndex];
@@ -500,37 +496,39 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         if (ConfForGlobal.pureMemory) {
             isNewAppendAfterBatch = fdReadWrite.isTargetSegmentIndexNullInMemory(segmentIndexTargetFd);
             for (var segment : segments) {
+                int targetSegmentIndex = segment.tmpSegmentIndex() + currentSegmentIndex;
                 var bytes = segment.segmentBytes();
-                fdReadWrite.writeOneInner(targetSegmentIndexTargetFd(segment.segmentIndex()), bytes, false);
+                fdReadWrite.writeOneInner(targetSegmentIndexTargetFd(targetSegmentIndex), bytes, false);
 
-                xForBinlog.putUpdatedChunkSegmentBytes(segment.segmentIndex(), bytes);
-                xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segment.segmentIndex(),
+                xForBinlog.putUpdatedChunkSegmentBytes(targetSegmentIndex, bytes);
+                xForBinlog.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex,
                         isNewAppendAfterBatch ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
             }
 
-            oneSlot.setSegmentMergeFlagBatch(segmentIndex, segments.size(),
+            oneSlot.setSegmentMergeFlagBatch(currentSegmentIndex, segments.size(),
                     isNewAppendAfterBatch ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segmentSeqListAll, walGroupIndex);
 
             moveSegmentIndexNext(segments.size());
         } else {
             if (segments.size() < BATCH_ONCE_SEGMENT_COUNT_PWRITE) {
                 for (var segment : segments) {
+                    int targetSegmentIndex = segment.tmpSegmentIndex() + currentSegmentIndex;
                     var bytes = segment.segmentBytes();
                     boolean isNewAppend = writeSegments(bytes, 1);
                     isNewAppendAfterBatch = isNewAppend;
 
                     // need set segment flag so that merge worker can merge
-                    oneSlot.setSegmentMergeFlag(segment.segmentIndex(),
+                    oneSlot.setSegmentMergeFlag(targetSegmentIndex,
                             isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq(), walGroupIndex);
 
                     moveSegmentIndexNext(1);
 
-                    xForBinlog.putUpdatedChunkSegmentBytes(segment.segmentIndex(), bytes);
-                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segment.segmentIndex(),
+                    xForBinlog.putUpdatedChunkSegmentBytes(targetSegmentIndex, bytes);
+                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex,
                             isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
                 }
             } else {
-                // batch write
+                // batch write, perf better ? need test
                 var batchCount = segments.size() / BATCH_ONCE_SEGMENT_COUNT_PWRITE;
                 var remainCount = segments.size() % BATCH_ONCE_SEGMENT_COUNT_PWRITE;
 
@@ -556,7 +554,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
                         segmentSeqListSubBatch.add(segment.segmentSeq());
 
-                        xForBinlog.putUpdatedChunkSegmentBytes(segment.segmentIndex(), bytes);
+                        xForBinlog.putUpdatedChunkSegmentBytes(segment.tmpSegmentIndex() + currentSegmentIndex, bytes);
                     }
 
                     boolean isNewAppend = writeSegments(tmpBatchBytes, BATCH_ONCE_SEGMENT_COUNT_PWRITE);
@@ -569,7 +567,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                     for (int j = 0; j < BATCH_ONCE_SEGMENT_COUNT_PWRITE; j++) {
                         var segment = segments.get(i * BATCH_ONCE_SEGMENT_COUNT_PWRITE + j);
 
-                        xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segment.segmentIndex(),
+                        xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segment.tmpSegmentIndex() + currentSegmentIndex,
                                 isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
                     }
 
@@ -577,18 +575,19 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                 }
 
                 for (int i = 0; i < remainCount; i++) {
-                    var segment = segments.get(batchCount * BATCH_ONCE_SEGMENT_COUNT_PWRITE + i);
-                    var bytes = segment.segmentBytes();
+                    var leftSegment = segments.get(batchCount * BATCH_ONCE_SEGMENT_COUNT_PWRITE + i);
+                    var bytes = leftSegment.segmentBytes();
+                    int targetSegmentIndex = leftSegment.tmpSegmentIndex() + currentSegmentIndex;
                     boolean isNewAppend = writeSegments(bytes, 1);
                     isNewAppendAfterBatch = isNewAppend;
 
-                    xForBinlog.putUpdatedChunkSegmentBytes(segment.segmentIndex(), bytes);
-                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segment.segmentIndex(),
-                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
+                    xForBinlog.putUpdatedChunkSegmentBytes(targetSegmentIndex, bytes);
+                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex,
+                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, leftSegment.segmentSeq());
 
                     // need set segment flag so that merge worker can merge
-                    oneSlot.setSegmentMergeFlag(segment.segmentIndex(),
-                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq(), walGroupIndex);
+                    oneSlot.setSegmentMergeFlag(targetSegmentIndex,
+                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, leftSegment.segmentSeq(), walGroupIndex);
 
                     moveSegmentIndexNext(1);
                 }
@@ -624,7 +623,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
 
         for (var segment : segments) {
-            var toMergeSegmentIndex = needMergeSegmentIndex(isNewAppendAfterBatch, segment.segmentIndex());
+            var toMergeSegmentIndex = needMergeSegmentIndex(isNewAppendAfterBatch, segment.tmpSegmentIndex() + currentSegmentIndex);
             if (toMergeSegmentIndex != NO_NEED_MERGE_SEGMENT_INDEX) {
                 needMergeSegmentIndexList.add(toMergeSegmentIndex);
             }
@@ -640,6 +639,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
         xForBinlog.setLastSegmentSeq(segmentSeqListAll.getLast());
 
+        logMergeCount++;
+        var doLog = (Debug.getInstance().logMerge && logMergeCount % 1000 == 0);
         if (doLog) {
             log.info("Chunk persist need merge segment index list, s={}, i={}, list={}", slot, segmentIndex, needMergeSegmentIndexList);
         }

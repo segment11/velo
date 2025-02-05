@@ -27,8 +27,6 @@ class SegmentBatchTest extends Specification {
         and:
         def list = Mock.prepareValueList(800)
 
-        int[] nextNSegmentIndex = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-        int[] nextNSegmentIndex2 = [0, 1, 2, 3, 4, 5, 6]
         ArrayList<PersistValueMeta> returnPvmList = []
         ArrayList<PersistValueMeta> returnPvmList2 = []
 
@@ -39,34 +37,11 @@ class SegmentBatchTest extends Specification {
         SegmentBatch.subBlockMetaPosition(3) == 24
 
         when:
-        boolean exception = false
-        try {
-            segmentBatch.splitAndTight(list, nextNSegmentIndex2, returnPvmList2)
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        nextNSegmentIndex2 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-        exception = false
-        try {
-            segmentBatch.splitAndTight(list, nextNSegmentIndex2, returnPvmList2)
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        def r = segmentBatch.splitAndTight(list, nextNSegmentIndex, returnPvmList)
+        def r = segmentBatch.splitAndTight(list, returnPvmList)
         for (one in r) {
             println one
         }
-        def r2 = segmentBatch.split(list, nextNSegmentIndex, [])
+        def r2 = segmentBatch.split(list, [])
         then:
         r.size() == r2.size()
         returnPvmList.size() == list.size()
