@@ -37,7 +37,7 @@ class Mock {
         shortValueList
     }
 
-    static ArrayList<Wal.V> prepareValueList(int n, int bucketIndex = 0) {
+    static ArrayList<Wal.V> prepareValueList(int n, int bucketIndex = 0, Function<Wal.V, Wal.V> transfer = null) {
         ArrayList<Wal.V> valueList = []
         n.times {
             def key = 'key:' + it.toString().padLeft(12, '0')
@@ -55,6 +55,9 @@ class Mock {
 
             def v = new Wal.V(it, bucketIndex, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
                     key, cv.encode(), false)
+            if (transfer != null) {
+                v = transfer.apply(v)
+            }
 
             valueList << v
         }

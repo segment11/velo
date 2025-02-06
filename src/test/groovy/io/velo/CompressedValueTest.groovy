@@ -207,6 +207,7 @@ class CompressedValueTest extends Specification {
         cv.encodeTo(buf)
         cv2.encodeTo(buf2)
         then:
+        CompressedValue.onlyReadSeq(encoded) == cv.seq
         cvDecode.seq == cv.seq
         cvDecode.dictSeqOrSpType == cv.dictSeqOrSpType
         cvDecode.keyHash == cv.keyHash
@@ -234,6 +235,7 @@ class CompressedValueTest extends Specification {
         def encodedBufferNumber = ByteBuffer.wrap(encodedNumber)
         def cvDecodeNumber = CompressedValue.decode(Unpooled.wrappedBuffer(encodedNumber), null, 0L)
         then:
+        CompressedValue.onlyReadSeq(encodedNumber) == cv.seq
         encodedNumber.length == 10
         encodedBufferNumber.getLong(1) == cv.seq
         encodedBufferNumber.get(9) == Byte.MAX_VALUE

@@ -387,6 +387,21 @@ public class CompressedValue {
         return VALUE_HEADER_LENGTH + compressedLength;
     }
 
+    public static long onlyReadSeq(byte[] encodedBytes) {
+        var buffer = ByteBuffer.wrap(encodedBytes);
+
+        long valueSeqCurrent;
+        // refer to CompressedValue decode
+        var firstByte = buffer.get(0);
+        if (firstByte < 0) {
+            valueSeqCurrent = buffer.position(1).getLong();
+        } else {
+            // normal compressed value encoded
+            valueSeqCurrent = buffer.getLong();
+        }
+        return valueSeqCurrent;
+    }
+
     public byte[] encode() {
         var bytes = new byte[encodedLength()];
         var buf = ByteBuf.wrapForWriting(bytes);

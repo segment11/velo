@@ -172,11 +172,10 @@ class ChunkMergeJobTest extends Specification {
         TrainSampleJob.keyPrefixOrSuffixGroupList = ['xh!']
         dictMap.putDict('xh!', Dict.SELF_ZSTD_DICT)
 
-        int[] nextNSegmentIndex = [0, 1, 2, 3, 4, 5, 6]
         ArrayList<PersistValueMeta> returnPvmList = []
 
         def segmentBatch2 = new SegmentBatch2(slot, oneSlot.snowFlake)
-        def r = segmentBatch2.split(valueList, nextNSegmentIndex, returnPvmList)
+        def r = segmentBatch2.split(valueList, returnPvmList)
         println 'split: ' + r.size() + ' segments, ' + returnPvmList.size() + ' pvm list'
 
         def fdChunk = oneSlot.chunk.fdReadWriteArray[0]

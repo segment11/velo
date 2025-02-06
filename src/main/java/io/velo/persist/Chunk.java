@@ -257,11 +257,15 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     byte[] preadOneSegment(int targetSegmentIndex) {
+        return preadOneSegment(targetSegmentIndex, true);
+    }
+
+    byte[] preadOneSegment(int targetSegmentIndex, boolean isRefreshLRUCache) {
         var fdIndex = targetFdIndex(targetSegmentIndex);
         var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
 
         var fdReadWrite = fdReadWriteArray[fdIndex];
-        return fdReadWrite.readOneInner(segmentIndexTargetFd, true);
+        return fdReadWrite.readOneInner(segmentIndexTargetFd, isRefreshLRUCache);
     }
 
     void clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(int targetSegmentIndex) {

@@ -15,10 +15,7 @@ import io.velo.monitor.BigKeyTopK;
 import io.velo.persist.index.IndexHandler;
 import io.velo.repl.*;
 import io.velo.repl.content.RawBytesContent;
-import io.velo.repl.incremental.XBigStrings;
-import io.velo.repl.incremental.XFlush;
-import io.velo.repl.incremental.XOneWalGroupPersist;
-import io.velo.repl.incremental.XWalV;
+import io.velo.repl.incremental.*;
 import io.velo.task.ITask;
 import io.velo.task.TaskChain;
 import jnr.posix.LibC;
@@ -982,6 +979,31 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 this.loopCount = loopCount;
             }
         });
+
+        if (ConfForGlobal.pureMemory) {
+            // do every 1s
+            taskChain.add(new ITask() {
+                private int lastCheckedSegmentIndex = 0;
+
+                @Override
+                public String name() {
+                    return "check and save memory";
+                }
+
+                @Override
+                public void run() {
+                    OneSlot.this.checkAndSaveMemory(lastCheckedSegmentIndex);
+
+                    lastCheckedSegmentIndex++;
+                    if (lastCheckedSegmentIndex >= chunk.getMaxSegmentIndex()) {
+                        lastCheckedSegmentIndex = 0;
+                    }
+                }
+
+                public void setLoopCount(int loopCount) {
+                }
+            });
+        }
     }
 
     void debugMode() {
@@ -2050,6 +2072,60 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         chunk.checkMergedSegmentIndexEndLastTimeValidAfterServerStart();
         log.info("Get merged segment index end last time, s={}, i={}", slot, chunk.getMergedSegmentIndexEndLastTime());
+    }
+
+    @VisibleForTesting
+    void checkAndSaveMemory(int targetSegmentIndex) {
+        var segmentFlag = metaChunkSegmentFlagSeq.getSegmentMergeFlag(targetSegmentIndex);
+        if (segmentFlag.flagByte() != Flag.new_write.flagByte() && segmentFlag.flagByte() != Flag.reuse_new.flagByte()) {
+            return;
+        }
+
+        var segmentBytes = chunk.preadOneSegment(targetSegmentIndex, false);
+        if (segmentBytes == null) {
+            return;
+        }
+
+        ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList = new ArrayList<>(BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE * 10);
+        int expiredCount = ChunkMergeJob.readToCvList(cvList, segmentBytes, 0, ConfForSlot.global.confChunk.segmentLength, targetSegmentIndex, this);
+
+        ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> invalidCvList = new ArrayList<>();
+
+        for (var one : cvList) {
+            var tmpWalValueBytes = getFromWal(one.key, one.bucketIndex);
+            if (tmpWalValueBytes != null) {
+                invalidCvList.add(one);
+                continue;
+            }
+
+            var keyHash32 = KeyHash.hash32(one.key.getBytes());
+            var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(one.bucketIndex, one.key.getBytes(), one.cv.getKeyHash(), keyHash32);
+            if (expireAtAndSeq == null || expireAtAndSeq.isExpired()) {
+                invalidCvList.add(one);
+                continue;
+            }
+
+            if (expireAtAndSeq.seq() != one.cv.getSeq()) {
+                invalidCvList.add(one);
+            }
+        }
+
+        var totalCvCount = expiredCount + cvList.size();
+        var invalidRate = (invalidCvList.size() + expiredCount) * 100 / totalCvCount;
+        final int invalidMergedTriggerRate = 50;
+        if (invalidRate > invalidMergedTriggerRate) {
+            var validCvList = cvList.stream().filter(one -> !invalidCvList.contains(one)).toList();
+            // put back to wal
+            for (var one : validCvList) {
+                put(one.key, one.bucketIndex, one.cv, true);
+            }
+
+            setSegmentMergeFlag(targetSegmentIndex, Flag.merged_and_persisted.flagByte(), 0L, segmentFlag.walGroupIndex());
+
+            var xChunkSegmentFlagUpdate = new XChunkSegmentFlagUpdate();
+            xChunkSegmentFlagUpdate.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex, Flag.merged_and_persisted.flagByte, 0L);
+            appendBinlog(xChunkSegmentFlagUpdate);
+        }
     }
 
     @VisibleForTesting

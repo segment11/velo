@@ -383,17 +383,7 @@ public class ChunkMergeJob {
                 // if not meta, short value encoded or from wal cv encoded
                 if (!PersistValueMeta.isPvm(valueBytesCurrent)) {
                     // compare seq
-                    var buffer = ByteBuffer.wrap(valueBytesCurrent);
-
-                    long valueSeqCurrent;
-                    // refer to CompressedValue decode
-                    var firstByte = buffer.get(0);
-                    if (firstByte < 0) {
-                        valueSeqCurrent = buffer.position(1).getLong();
-                    } else {
-                        // normal compressed value encoded
-                        valueSeqCurrent = buffer.getLong();
-                    }
+                    var valueSeqCurrent = CompressedValue.onlyReadSeq(valueBytesCurrent);
 
                     if (cv.getSeq() < valueSeqCurrent) {
                         // cv is old， discard

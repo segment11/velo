@@ -3,10 +3,12 @@ package io.velo.persist
 import io.activej.common.function.RunnableEx
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
+import io.netty.buffer.Unpooled
 import io.velo.*
 import io.velo.monitor.BigKeyTopK
 import io.velo.repl.Binlog
 import io.velo.repl.ReplPairTest
+import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.repl.incremental.XWalV
 import org.jetbrains.annotations.NotNull
 import org.jetbrains.annotations.Nullable
@@ -1256,5 +1258,61 @@ class OneSlotTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
         ConfForGlobal.pureMemory = false
+    }
+
+    def 'test check and save memory'() {
+        given:
+        ConfForGlobal.pureMemory = true
+        ConfForGlobal.pureMemoryV2 = true
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def chunk = oneSlot.chunk
+
+        and:
+        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.init.flagByte(), 0L, 0)
+        oneSlot.setSegmentMergeFlag(1, Chunk.Flag.new_write.flagByte(), 1L, 0)
+
+        when:
+        oneSlot.checkAndSaveMemory(0)
+        oneSlot.checkAndSaveMemory(1)
+        then:
+        1 == 1
+
+        when:
+        def xForBinlog = new XOneWalGroupPersist(true, false, 0)
+        def vList = Mock.prepareValueList(100, 0) { v ->
+            if (v.seq() == 10) {
+                return v
+            } else {
+                // mock all others expired
+                def v2 = new Wal.V(v.seq(), v.bucketIndex(), v.keyHash(), System.currentTimeMillis() - 1000, CompressedValue.NULL_DICT_SEQ,
+                        v.key(), v.cvEncoded(), false)
+                return v2
+            }
+        }
+        chunk.persist(0, vList, false, xForBinlog, null)
+        // put new one to wal
+        def firstV = vList[0]
+        def firstCv = CompressedValue.decode(Unpooled.wrappedBuffer(firstV.cvEncoded()), firstV.key().bytes, firstV.keyHash())
+        oneSlot.put(firstV.key(), 0, firstCv)
+        // remove one in wal
+        def secondV = vList[1]
+        oneSlot.removeDelay(secondV.key(), 0, secondV.keyHash())
+        // change one and remove in key loader
+        def thirdV = vList[2]
+        def keyHash32 = KeyHash.hash32(thirdV.key().bytes)
+        oneSlot.keyLoader.removeSingleKey(0, thirdV.key().bytes, thirdV.keyHash(), keyHash32)
+        // do check, persist begin segment index 2
+        oneSlot.checkAndSaveMemory(2)
+        then:
+        oneSlot.getSegmentMergeFlag(2).flagByte() == Chunk.Flag.merged_and_persisted.flagByte()
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.pureMemory = false
+        ConfForGlobal.pureMemoryV2 = false
     }
 }
