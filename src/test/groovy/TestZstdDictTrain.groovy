@@ -1,6 +1,8 @@
 import com.github.luben.zstd.ZstdCompressCtx
 import com.github.luben.zstd.ZstdDictTrainer
 
+import java.nio.ByteBuffer
+
 def url = this.getClass().getClassLoader().getResource('data/faker-data.csv')
 if (url == null) {
     println 'file not exists'
@@ -49,15 +51,29 @@ def costT2 = (System.nanoTime() - beginT2) / 1000
 println "compressed 32K size: ${compressedBytes.length}, cost: ${costT2}us"
 println "compress ratio: ${compressedBytes.length / bytes32.length}"
 
+// no memory copy
+def srcBuffer = ByteBuffer.allocateDirect(1024 * 32)
+def dstBuffer = ByteBuffer.allocateDirect(1024 * 32)
+srcBuffer.put(bytes32)
+srcBuffer.position(0)
+beginT2 = System.nanoTime()
+def compressedLength = compressCtx.compress(dstBuffer, srcBuffer)
+costT2 = (System.nanoTime() - beginT2) / 1000
+
+println "compressed 32K size: ${compressedLength}, cost: ${costT2}us"
+println "compress ratio: ${compressedLength / bytes32.length}"
+
 /*
 read file bytes length: 1048576
-dict size: 16384, cost: 35ms
-compressed 1M size: 299259, cost: 3ms
+dict size: 16384, cost: 36ms
+compressed 1M size: 299259, cost: 5ms
 compress ratio: 0.28539562225341796875
-compressed 32K size: 10094, cost: 304.849us
+compressed 32K size: 10094, cost: 307.631us
+compress ratio: 0.30804443359375
+compressed 32K size: 10094, cost: 952.861us
 compress ratio: 0.30804443359375
 
-bellow is C zstd dict train result: (32K compress use much less than java, maybe jni call cost too much)
+bellow is C zstd dict train result: (32K compress use much less than java, maybe memory copy or jni)
 File read length: 1048576
 dict id: 1
 train dict 1M cost us avg: 35063
