@@ -1,17 +1,20 @@
 package io.velo.command;
 
+import io.velo.type.RedisHH;
+import io.velo.type.RedisHashKeys;
+import io.velo.type.RedisList;
+import io.velo.type.RedisZSet;
+
 public interface RDBCallback {
     void onInteger(Integer value);
 
     void onString(byte[] valueBytes);
 
-    void onList(byte[] encodedBytes);
+    void onList(RedisList rl);
 
-    void onSet(byte[] encodedBytes);
+    void onSet(RedisHashKeys rhk);
 
-    void onZSet(byte[] encodedBytes);
+    void onZSet(RedisZSet rz);
 
-    void onHashKeys(byte[] encodedBytes);
-
-    void onHashFieldValues(String field, byte[] valueBytes);
+    void onHash(RedisHH rhh);
 }

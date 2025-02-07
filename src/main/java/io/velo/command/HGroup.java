@@ -125,7 +125,7 @@ public class HGroup extends BaseCommand {
         return RedisHashKeys.decode(keysValueBytes);
     }
 
-    private void saveRedisHashKeys(RedisHashKeys rhk, String key) {
+    void saveRedisHashKeys(RedisHashKeys rhk, String key) {
         var keysKey = RedisHashKeys.keysKey(key);
         var keysKeyBytes = keysKey.getBytes();
         var slotWithKeyHashForKeys = slot(keysKeyBytes);
@@ -152,7 +152,7 @@ public class HGroup extends BaseCommand {
         return RedisHH.decode(encodedBytes);
     }
 
-    private void saveRedisHH(RedisHH rhh, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
+    void saveRedisHH(RedisHH rhh, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
         var key = new String(keyBytes);
         if (rhh.size() == 0) {
             removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());

@@ -7,8 +7,10 @@ import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.persist.Wal;
 import io.velo.reply.*;
+import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
 import io.velo.type.RedisList;
+import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
@@ -303,15 +305,15 @@ public class RGroup extends BaseCommand {
         if (!replace) {
             var cv = getCv(keyBytes, slotWithKeyHash);
             if (cv != null) {
-                return new ErrorReply("target key name is busy");
+                return ErrorReply.TARGET_KEY_BUSY;
             }
         }
 
         var buf = Unpooled.wrappedBuffer(serializedValue);
-        // todo
-        RDBImporter rdbImporter = null;
+        var rdbImporter = new VeloRDBImporter();
         try {
             final long finalExpireAt = expireAt;
+            final RGroup _rGroup = this;
 
             rdbImporter.restore(buf, new RDBCallback() {
                 @Override
@@ -325,34 +327,44 @@ public class RGroup extends BaseCommand {
                 }
 
                 @Override
-                public void onList(byte[] valueBytes) {
-                    set(keyBytes, valueBytes, slotWithKeyHash, CompressedValue.SP_TYPE_LIST, finalExpireAt);
+                public void onList(RedisList rl) {
+                    LGroup.saveRedisList(rl, keyBytes, slotWithKeyHash, _rGroup, dictMap);
                 }
 
                 @Override
-                public void onSet(byte[] encodedBytes) {
-                    set(keyBytes, encodedBytes, slotWithKeyHash, CompressedValue.SP_TYPE_SET, finalExpireAt);
+                public void onSet(RedisHashKeys rhk) {
+                    SGroup.saveRedisSet(rhk, keyBytes, slotWithKeyHash, _rGroup, dictMap);
                 }
 
                 @Override
-                public void onZSet(byte[] encodedBytes) {
-                    set(keyBytes, encodedBytes, slotWithKeyHash, CompressedValue.SP_TYPE_ZSET, finalExpireAt);
+                public void onZSet(RedisZSet rz) {
+                    ZGroup.saveRedisZSet(rz, keyBytes, slotWithKeyHash, _rGroup, dictMap);
                 }
 
                 @Override
-                public void onHashKeys(byte[] encodedBytes) {
-                    var keysKey = RedisHashKeys.keysKey(key);
-                    var keysKeyBytes = keysKey.getBytes();
-                    var slotWithKeyHash = slot(keysKeyBytes, slotNumber);
-                    set(keysKeyBytes, encodedBytes, slotWithKeyHash, CompressedValue.SP_TYPE_HASH, finalExpireAt);
-                }
+                public void onHash(RedisHH rhh) {
+                    var hGroup = new HGroup(cmd, data, socket);
+                    hGroup.from(_rGroup);
+                    hGroup.setSlotWithKeyHashListParsed(_rGroup.slotWithKeyHashListParsed);
 
-                @Override
-                public void onHashFieldValues(String field, byte[] fieldValueBytes) {
-                    var fieldKey = RedisHashKeys.fieldKey(key, field);
-                    var fieldKeyBytes = fieldKey.getBytes();
-                    var slotWithKeyHash = slot(fieldKeyBytes, slotNumber);
-                    set(fieldKeyBytes, fieldValueBytes, slotWithKeyHash);
+                    if (hGroup.isUseHH(keyBytes)) {
+                        hGroup.saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+                    } else {
+                        var map = rhh.getMap();
+                        var rhk = new RedisHashKeys();
+
+                        for (var entry : map.entrySet()) {
+                            var field = entry.getKey();
+                            var fieldKey = RedisHashKeys.fieldKey(key, field);
+                            var fieldValueBytes = entry.getValue();
+                            var slotWithKeyHashThisField = slot(fieldKey.getBytes());
+                            set(fieldKey.getBytes(), fieldValueBytes, slotWithKeyHashThisField);
+
+                            rhk.add(field);
+                        }
+
+                        hGroup.saveRedisHashKeys(rhk, new String(keyBytes));
+                    }
                 }
             });
             return OKReply.INSTANCE;

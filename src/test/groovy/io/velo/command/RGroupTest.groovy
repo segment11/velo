@@ -4,6 +4,7 @@ import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.ConfForSlot
+import io.velo.Debug
 import io.velo.SocketInspectorTest
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
@@ -298,6 +299,58 @@ class RGroupTest extends Specification {
 
         cleanup:
         eventloop.breakEventloop()
+    }
+
+    def 'test restore'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def rGroup = new RGroup(null, null, null)
+        rGroup.byPassGetSet = inMemoryGetSet
+        rGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        VeloRDBImporter.DEBUG = true
+        Debug.instance.logRestore = true
+        def reply = rGroup.execute('restore a 0 bbb replace absttl idletime 0 freq 0')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        Debug.instance.logRestore = false
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = rGroup.execute('restore a 1000 bbb')
+        then:
+        reply == ErrorReply.TARGET_KEY_BUSY
+
+        when:
+        reply = rGroup.execute('restore a 1000 bbb absttl')
+        then:
+        reply == ErrorReply.TARGET_KEY_BUSY
+
+        when:
+        reply = rGroup.execute('restore a 0 bbb replace absttl idletime 0 freq -1')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = rGroup.execute('restore a 0 bbb replace absttl idletime -1 freq 0')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = rGroup.execute('restore a 0 bbb replace absttl idletime')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = rGroup.execute('restore a 0 bbb replace absttl freq')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        cleanup:
+        VeloRDBImporter.DEBUG = false
     }
 
     def 'test rpop'() {
