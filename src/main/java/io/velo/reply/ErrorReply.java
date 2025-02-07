@@ -36,6 +36,7 @@ public class ErrorReply implements Reply {
     public static final ErrorReply CLUSTER_SLOT_CROSS_SHARDS = new ErrorReply("cluster slot cross shards");
     public static final ErrorReply CLUSTER_SLOT_NOT_SET = new ErrorReply("cluster slot not set");
     public static final ErrorReply NO_SUCH_FILE = new ErrorReply("no such file");
+    public static final ErrorReply TARGET_KEY_BUSY = new ErrorReply("target key name is busy");
 
     public static ErrorReply clusterMoved(int toClientSlot, String host, int port) {
         return new ErrorReply("MOVED " + toClientSlot + " " + host + ":" + port);

@@ -764,7 +764,7 @@ public class SGroup extends BaseCommand {
         return RedisHashKeys.decode(encodedBytes);
     }
 
-    private static void saveRedisSet(RedisHashKeys rhk, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
+    static void saveRedisSet(RedisHashKeys rhk, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
         var key = new String(keyBytes);
         if (rhk.size() == 0) {
             baseCommand.removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());
