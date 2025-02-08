@@ -40,7 +40,6 @@ netWorkers=1
 dir=/tmp/velo-data
 net.listenAddresses=127.0.0.1:7379
 estimateKeyNumber=10000000
-estimateOneValueLength=200
 kv.lru.maxSize=1000000
 ```
 

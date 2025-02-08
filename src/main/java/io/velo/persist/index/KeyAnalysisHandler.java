@@ -60,18 +60,30 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisHandler.class);
 
     private Options openOptions(Config persistConfig) {
-        var keyMatchPrefixLength = persistConfig.get(ofInteger(), "keyAnalysis.keyMatchPrefixLength", 3);
+        var rocksDBWriteBufferSize = persistConfig.get(ofInteger(), "keyAnalysis.rocksDBWriteBufferSize", 4 * 1024 * 1024);
+        var rocksDBMaxWriteBufferNumber = persistConfig.get(ofInteger(), "keyAnalysis.rocksDBMaxWriteBufferNumber", 4);
+        var rocksDBMinWriteBufferNumberToMerge = persistConfig.get(ofInteger(), "keyAnalysis.rocksDBMinWriteBufferNumberToMerge", 2);
+        var rocksDBNumLevels = persistConfig.get(ofInteger(), "keyAnalysis.rocksDBNumLevels", 2);
+        var rocksDBLevelZeroFileNumCompactionTrigger = persistConfig.get(ofInteger(), "keyAnalysis.rocksDBLevelZeroFileNumCompactionTrigger", 8);
+        var rocksDBMaxOpenFiles = persistConfig.get(ofInteger(), "keyAnalysis.rocksDBMaxOpenFiles", 128);
+        var rocksDBMaxBackgroundJobs = persistConfig.get(ofInteger(), "keyAnalysis.rocksDBMaxBackgroundJobs", 4);
+        var rocksDBFixedLengthPrefixExtractor = persistConfig.get(ofInteger(), "keyAnalysis.rocksDBFixedLengthPrefixExtractor", 3);
+
+//        long totalEstimateKeyNumber = ConfForGlobal.estimateKeyNumber * ConfForGlobal.slotNumber;
 
         // 100 million keys, use one more cpu vcore, cost about 3GB total file size, and less than 1GB memory
         // refer to TestRocksDBConfig.groovy
         return new Options()
                 .setCreateIfMissing(true)
                 .setCompressionType(CompressionType.NO_COMPRESSION)
-                .setNumLevels(2)
-                .setLevelZeroFileNumCompactionTrigger(8)
-                .setMaxOpenFiles(64)
-                .setMaxBackgroundJobs(4)
-                .useFixedLengthPrefixExtractor(keyMatchPrefixLength);
+                .setWriteBufferSize(rocksDBWriteBufferSize)
+                .setMaxWriteBufferNumber(rocksDBMaxWriteBufferNumber)
+                .setMinWriteBufferNumberToMerge(rocksDBMinWriteBufferNumberToMerge)
+                .setNumLevels(rocksDBNumLevels)
+                .setLevelZeroFileNumCompactionTrigger(rocksDBLevelZeroFileNumCompactionTrigger)
+                .setMaxOpenFiles(rocksDBMaxOpenFiles)
+                .setMaxBackgroundJobs(rocksDBMaxBackgroundJobs)
+                .useFixedLengthPrefixExtractor(rocksDBFixedLengthPrefixExtractor);
     }
 
     private void createDB() throws RocksDBException {
