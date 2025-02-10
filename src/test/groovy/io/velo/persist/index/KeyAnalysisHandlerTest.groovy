@@ -25,6 +25,8 @@ class KeyAnalysisHandlerTest extends Specification {
             eventloop.run()
         }
 
+        ConfForGlobal.keyAnalysisNumberPercent = 50
+        ConfForGlobal.estimateKeyNumber = 20
         def keyAnalysisHandler = new KeyAnalysisHandler(keyDir, eventloop, Config.create())
         def innerTask = keyAnalysisHandler.innerTask
 
@@ -40,8 +42,16 @@ class KeyAnalysisHandlerTest extends Specification {
         when:
         int valueBytesInit = 10 << 8
         10.times {
-            keyAnalysisHandler.addKey('key:' + (it.toString().padLeft(12, '0')), valueBytesInit)
+            def kk = 'key:' + (it.toString().padLeft(12, '0'))
+            keyAnalysisHandler.addKey(kk, valueBytesInit)
+            Thread.sleep(10)
+            keyAnalysisHandler.addKey(kk, valueBytesInit)
+            Thread.sleep(10)
         }
+        // full
+        def kk11 = 'key:000000000011'
+        keyAnalysisHandler.addKey(kk11, valueBytesInit)
+
         keyAnalysisHandler.removeKey('key:000000000000')
         keyAnalysisHandler.removeKey('key:000000000001')
         Thread.sleep(2000)
@@ -50,8 +60,7 @@ class KeyAnalysisHandlerTest extends Specification {
         then:
         samples.size() == 3
         samples.find { it.name == 'key_analysis_add_count' }.value == 10
-        samples.find { it.name == 'key_analysis_remove_or_expire_count' }.value == 2
-        samples.find { it.name == 'key_analysis_add_value_length_avg' }.value == 10
+        samples.find { it.name == 'key_analysis_all_key_count' }.value == 8
 
         when:
         int iterateKeyCount = 0
@@ -135,8 +144,10 @@ class KeyAnalysisHandlerTest extends Specification {
         keyList5.size() == 0
 
         cleanup:
+        keyAnalysisHandler.flushdb()
+        Thread.sleep(1000)
         keyAnalysisHandler.cleanUp()
-        Thread.sleep(2000)
+        Thread.sleep(1000)
         eventloop.breakEventloop()
     }
 
@@ -156,6 +167,8 @@ class KeyAnalysisHandlerTest extends Specification {
             eventloop.run()
         }
 
+        ConfForGlobal.keyAnalysisNumberPercent = 100
+        ConfForGlobal.estimateKeyNumber = 10
         def keyAnalysisHandler = new KeyAnalysisHandler(keyDir, eventloop, Config.create())
         def innerTask = keyAnalysisHandler.innerTask
 
@@ -182,6 +195,7 @@ class KeyAnalysisHandlerTest extends Specification {
         })
         f.get()
         then:
+        keyAnalysisHandler.allKeyCount() == 8
         iterateKeyCount == 8
 
         when:
@@ -256,8 +270,10 @@ class KeyAnalysisHandlerTest extends Specification {
         keyList5.size() == 0
 
         cleanup:
+        keyAnalysisHandler.flushdb()
+        Thread.sleep(1000)
         keyAnalysisHandler.cleanUp()
-        Thread.sleep(2000)
+        Thread.sleep(1000)
         eventloop.breakEventloop()
         ConfForGlobal.pureMemory = false
     }

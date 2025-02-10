@@ -56,7 +56,7 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
     boolean isNotBusyAfterRun;
 
     @Override
-    public void run(int loopCount) {
+    public boolean run(int loopCount) {
         var addCountIncreasedLast10Second = handler.addCount - handlerAddCountLastSecond;
         handlerAddCountLastSecond = handler.addCount;
 
@@ -78,12 +78,12 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
             if (continueBeBusyCount % 10 == 0) {
                 log.info("Key analysis task continue be busy {} times", continueBeBusyCount);
             }
-            return;
+            return false;
         }
 
         // not busy now, can do target job
         continueBeBusyCount = 0;
-        doMyTask();
+        return doMyTask();
     }
 
     private byte[] lastIterateKeyBytes = null;
@@ -98,7 +98,8 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
     @VisibleForTesting
     int doMyTaskSkipTimes = 0;
 
-    private void iterateAndDoAnalysis(@Nullable RocksIterator iterator, @Nullable Iterator<Map.Entry<String, byte[]>> iterator2) {
+    // return true if iterate to the end
+    private boolean iterateAndDoAnalysis(@Nullable RocksIterator iterator, @Nullable Iterator<Map.Entry<String, byte[]>> iterator2) {
         Map<String, Integer> prefixCounts = new HashMap<>();
         String fromKey = null;
 
@@ -153,7 +154,7 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
         if (prefixCounts.isEmpty()) {
             doMyTaskSkipTimes = 2;
-            return;
+            return false;
         }
 
         doMyTaskSkipTimes = 0;
@@ -182,23 +183,36 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
                 fromKey, new String(lastIterateKeyBytes), count, topKPrefixCounts.size(), sb);
 
         if (count < onceIterateKeyCount) {
+            var isEnd = lastIterateKeyBytes != null;
             // start first again
             lastIterateKeyBytes = null;
             log.warn("Key analysis task will iterate start from first again after 6 hours.");
             // skip next 6 hours
             doMyTaskSkipTimes = (int) ((6 * 3600 * 1000) / KeyAnalysisHandler.LOOP_INTERVAL_MILLIS);
+            return isEnd;
+        } else {
+            return false;
         }
     }
 
     @VisibleForTesting
-    void doMyTask() {
+        // return true if iterate to the end
+    boolean doMyTask() {
         if (doMyTaskSkipTimes > 0) {
             doMyTaskSkipTimes--;
-            return;
+            return false;
         }
 
         if (ConfForGlobal.pureMemory) {
-            iterateAndDoAnalysis(null, allKeysInMemory.entrySet().iterator());
+            Iterator<Map.Entry<String, byte[]>> iterator2;
+            if (lastIterateKeyBytes != null) {
+                iterator2 = allKeysInMemory.tailMap(new String(lastIterateKeyBytes)).entrySet().iterator();
+            } else {
+                iterator2 = allKeysInMemory.entrySet().iterator();
+                log.warn("Key analysis task iterator seek to first again.");
+                topKPrefixCounts.clear();
+            }
+            return iterateAndDoAnalysis(null, iterator2);
         } else {
             var iterator = db.newIterator();
             if (lastIterateKeyBytes != null) {
@@ -214,7 +228,7 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
                 topKPrefixCounts.clear();
             }
 
-            iterateAndDoAnalysis(iterator, null);
+            return iterateAndDoAnalysis(iterator, null);
         }
     }
 

@@ -35,6 +35,8 @@ class KeyAnalysisTaskTest extends Specification {
             keyDir.mkdirs()
         }
 
+        ConfForGlobal.keyAnalysisNumberPercent = 100
+        ConfForGlobal.estimateKeyNumber = 1_000_000
         def keyAnalysisHandler = new KeyAnalysisHandler(keyDir, eventloop, persistConfig)
         def keyAnalysisTask = keyAnalysisHandler.innerTask as KeyAnalysisTask
         keyAnalysisTask.addTopKPrefixCount('test:', 0)
@@ -75,14 +77,14 @@ class KeyAnalysisTaskTest extends Specification {
         when:
         def random = new Random()
         def wb = new WriteBatch()
-        20000.times {
+        19000.times {
             def xx = random.nextInt(10).toString() + it.toString().padLeft(12, '0')
             def key = 'key:' + xx
             def value = 'value:' + xx
             wb.put(key.bytes, value.bytes)
         }
         keyAnalysisHandler.db.write(new WriteOptions(), wb)
-        println 'done write batch, count 20000'
+        println 'done write batch, count 19000'
         keyAnalysisTask2.doMyTaskSkipTimes = 1
         // skip one time
         keyAnalysisTask2.run(3)
@@ -96,6 +98,8 @@ class KeyAnalysisTaskTest extends Specification {
         keyAnalysisTask2.topKPrefixCounts.size() > 0
 
         cleanup:
+        keyAnalysisHandler.flushdb()
+        Thread.sleep(1000)
         eventloop.breakEventloop()
         localPersist.cleanUp()
         keyDir.deleteDir()
@@ -125,6 +129,8 @@ class KeyAnalysisTaskTest extends Specification {
             keyDir.mkdirs()
         }
 
+        ConfForGlobal.keyAnalysisNumberPercent = 100
+        ConfForGlobal.estimateKeyNumber = 1_000_000
         def keyAnalysisHandler = new KeyAnalysisHandler(keyDir, eventloop, persistConfig)
         def keyAnalysisTask = keyAnalysisHandler.innerTask as KeyAnalysisTask
         keyAnalysisTask.addTopKPrefixCount('test:', 0)
@@ -164,13 +170,13 @@ class KeyAnalysisTaskTest extends Specification {
 
         when:
         def random = new Random()
-        20000.times {
+        19000.times {
             def xx = random.nextInt(10).toString() + it.toString().padLeft(12, '0')
             def key = 'key:' + xx
             def value = 'value:' + xx
             keyAnalysisHandler.allKeysInMemory.put(key, value.bytes)
         }
-        println 'done write batch, count 20000'
+        println 'done write batch, count 19000'
         keyAnalysisTask2.doMyTaskSkipTimes = 1
         // skip one time
         keyAnalysisTask2.run(3)
@@ -184,6 +190,8 @@ class KeyAnalysisTaskTest extends Specification {
         keyAnalysisTask2.topKPrefixCounts.size() > 0
 
         cleanup:
+        keyAnalysisHandler.flushdb()
+        Thread.sleep(1000)
         eventloop.breakEventloop()
         localPersist.cleanUp()
         keyDir.deleteDir()

@@ -748,6 +748,12 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.estimateKeyNumber = config.get(ofLong(), "estimateKeyNumber", 1_000_000L);
             log.warn("Global config, estimateKeyNumber={}", ConfForGlobal.estimateKeyNumber);
 
+            ConfForGlobal.keyAnalysisNumberPercent = config.get(ofInteger(), "keyAnalysisNumberPercent", 1);
+            if (ConfForGlobal.keyAnalysisNumberPercent < 1 || ConfForGlobal.keyAnalysisNumberPercent > 100) {
+                throw new IllegalArgumentException("Key analysis number percent must be between 1 and 100");
+            }
+            log.warn("Global config, keyAnalysisNumberPercent={}", ConfForGlobal.keyAnalysisNumberPercent);
+
             ConfForGlobal.datacenterId = config.get(ofLong(), "datacenterId", 0L);
             ConfForGlobal.machineId = config.get(ofLong(), "machineId", 0L);
             log.warn("Global config, datacenterId={}", ConfForGlobal.datacenterId);

@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -27,7 +28,7 @@ import static io.activej.config.converter.ConfigConverters.ofInteger;
 
 public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     public interface InnerTask {
-        void run(int loopCount);
+        boolean run(int loopCount);
     }
 
     private final File keysDir;
@@ -36,6 +37,10 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     @VisibleForTesting
     RocksDB db;
 
+    private final int doAddWhenAddLoopIncreaseCount;
+    private final long keyAnalysisNumberTotal;
+
+    // thread not safe
     @VisibleForTesting
     final TreeMap<String, byte[]> allKeysInMemory = new TreeMap<>(String::compareTo);
 
@@ -51,9 +56,11 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         this.innerTask = new KeyAnalysisTask(this, allKeysInMemory, db, persistConfig);
     }
 
+    long addLoopCount = 0;
     long addCount = 0;
     long addValueLengthTotal = 0;
-    long removeOrExpireCount = 0;
+
+    volatile boolean isKeyAnalysisNumberFull = false;
 
     static final long LOOP_INTERVAL_MILLIS = 10000L;
 
@@ -89,6 +96,8 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     private void createDB() throws RocksDBException {
         this.db = RocksDB.open(openOptions(persistConfig), keysDir.getAbsolutePath());
         log.warn("Key analysis db created, keysDir={}", keysDir.getAbsolutePath());
+
+        this.addCount = db.getLongProperty("rocksdb.estimate-num-keys");
     }
 
     public KeyAnalysisHandler(File keysDir, Eventloop eventloop, Config persistConfig) throws RocksDBException {
@@ -102,12 +111,29 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         }
         this.innerTask = new KeyAnalysisTask(this, allKeysInMemory, db, persistConfig);
 
+        this.doAddWhenAddLoopIncreaseCount = 100 / ConfForGlobal.keyAnalysisNumberPercent;
+        this.keyAnalysisNumberTotal = ConfForGlobal.keyAnalysisNumberPercent *
+                ConfForGlobal.estimateKeyNumber * ConfForGlobal.slotNumber / 100;
+        log.warn("Key analysis number total={}, do add when add loop increase count={}",
+                keyAnalysisNumberTotal, doAddWhenAddLoopIncreaseCount);
+
         eventloop.delay(LOOP_INTERVAL_MILLIS, this);
 
         this.initMetricsCollect();
     }
 
     public void addKey(String key, int valueLengthHigh24WithShortTypeLow8) {
+        if (isKeyAnalysisNumberFull) {
+            return;
+        }
+
+        if (addLoopCount % doAddWhenAddLoopIncreaseCount != 0) {
+            addLoopCount++;
+            // skip
+            return;
+        }
+        addLoopCount++;
+
         var bytes = new byte[4];
         ByteBuffer.wrap(bytes).putInt(valueLengthHigh24WithShortTypeLow8);
         eventloop.submit(() -> {
@@ -119,6 +145,10 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
             addCount++;
             addValueLengthTotal += (valueLengthHigh24WithShortTypeLow8 >> 8);
+
+            if (addCount >= keyAnalysisNumberTotal) {
+                isKeyAnalysisNumberFull = true;
+            }
         });
     }
 
@@ -157,31 +187,50 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         }));
     }
 
-    public void removeKey(String key) {
+    @TestOnly
+    void removeKey(String key) {
         eventloop.submit(() -> {
             if (ConfForGlobal.pureMemory) {
                 allKeysInMemory.remove(key);
             } else {
                 db.delete(key.getBytes());
             }
-            removeOrExpireCount++;
         });
     }
 
-    public CompletableFuture<Void> flushdb() {
-        return eventloop.submit(() -> {
-            if (ConfForGlobal.pureMemory) {
-                allKeysInMemory.clear();
-            } else {
-                db.close();
-                log.warn("Close key analysis db");
-                FileUtils.deleteDirectory(keysDir);
-                log.warn("Delete key analysis dir");
-
-                createDB();
-                this.innerTask = new KeyAnalysisTask(this, allKeysInMemory, db, persistConfig);
+    public long allKeyCount() {
+        if (ConfForGlobal.pureMemory) {
+            return allKeysInMemory.size();
+        } else {
+            try {
+                return db.getLongProperty("rocksdb.estimate-num-keys");
+            } catch (RocksDBException e) {
+                return -1L;
             }
-        });
+        }
+    }
+
+    void clearAllKeysAfterAnalysis() throws IOException, RocksDBException {
+        if (ConfForGlobal.pureMemory) {
+            allKeysInMemory.clear();
+        } else {
+            db.close();
+            log.warn("Close key analysis db");
+            FileUtils.deleteDirectory(keysDir);
+            log.warn("Delete key analysis dir");
+
+            createDB();
+            this.innerTask = new KeyAnalysisTask(this, allKeysInMemory, db, persistConfig);
+        }
+
+        addCount = 0;
+        addValueLengthTotal = 0;
+
+        isKeyAnalysisNumberFull = false;
+    }
+
+    public CompletableFuture<Void> flushdb() {
+        return eventloop.submit(this::clearAllKeysAfterAnalysis);
     }
 
     private void seekIterator(byte[] beginKeyBytes, RocksIterator iterator, boolean isIncludeBeginKey) {
@@ -352,7 +401,14 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     public void run() {
         loopCount++;
         if (innerTask != null) {
-            innerTask.run(loopCount);
+            var isEnd = innerTask.run(loopCount);
+            if (isEnd) {
+                try {
+                    clearAllKeysAfterAnalysis();
+                } catch (Exception e) {
+                    log.error("Key analysis clear all keys after analysis failed", e);
+                }
+            }
         }
 
         if (isStopped) {
@@ -382,9 +438,9 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
 
             map.put("key_analysis_add_count", new SimpleGauge.ValueWithLabelValues((double) addCount, labelValues));
-            map.put("key_analysis_remove_or_expire_count", new SimpleGauge.ValueWithLabelValues((double) removeOrExpireCount, labelValues));
-
             if (addCount > 0) {
+                map.put("key_analysis_all_key_count", new SimpleGauge.ValueWithLabelValues((double) allKeyCount(), labelValues));
+
                 var addValueLengthAvg = (double) addValueLengthTotal / addCount;
                 map.put("key_analysis_add_value_length_avg", new SimpleGauge.ValueWithLabelValues(addValueLengthAvg, labelValues));
             }

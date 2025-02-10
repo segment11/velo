@@ -9,6 +9,8 @@ public class ConfForGlobal {
     public static long datacenterId;
     public static long machineId;
     public static long estimateKeyNumber;
+    // 1%
+    public static int keyAnalysisNumberPercent = 1;
 
     public static final int JEDIS_POOL_CONNECT_TIMEOUT_MILLIS = 1000;
     public static String PASSWORD;

@@ -794,11 +794,6 @@ public abstract class BaseCommand {
             return byPassGetSet.remove(slot, key);
         }
 
-        var indexHandlerPool = localPersist.getIndexHandlerPool();
-        if (indexHandlerPool != null) {
-            indexHandlerPool.getKeyAnalysisHandler().removeKey(key);
-        }
-
         var oneSlot = localPersist.oneSlot(slot);
         return oneSlot.remove(key, bucketIndex, keyHash, keyHash32);
     }
@@ -807,11 +802,6 @@ public abstract class BaseCommand {
         if (byPassGetSet != null) {
             byPassGetSet.remove(slot, key);
             return;
-        }
-
-        var indexHandlerPool = localPersist.getIndexHandlerPool();
-        if (indexHandlerPool != null) {
-            indexHandlerPool.getKeyAnalysisHandler().removeKey(key);
         }
 
         var oneSlot = localPersist.oneSlot(slot);
