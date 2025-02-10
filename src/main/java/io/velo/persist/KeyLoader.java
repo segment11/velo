@@ -445,16 +445,20 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         }
     }
 
-    private ScanCursor readKeysToList(@NotNull ArrayList<String> keys,
-                                      int walGroupIndex,
-                                      byte splitIndex,
-                                      short skipCount,
-                                      byte typeAsByte,
-                                      @Nullable String matchPattern,
-                                      int[] countArray) {
+    private ScanCursor readKeysToList(final @NotNull ArrayList<String> keys,
+                                      final int walGroupIndex,
+                                      final byte splitIndex,
+                                      final short skipCount,
+                                      final byte typeAsByte,
+                                      final @Nullable String matchPattern,
+                                      final int[] countArray) {
         var keyCountThisWalGroup = statKeyCountInBuckets.getKeyCountForOneWalGroup(walGroupIndex);
         if (keyCountThisWalGroup == 0) {
             return null;
+        }
+
+        if (ConfForGlobal.pureMemoryV2) {
+            // todo
         }
 
         var beginBucketIndex = walGroupIndex * ConfForSlot.global.confWal.oneChargeBucketNumber;
@@ -477,17 +481,25 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             var splitNumber = metaKeyBucketSplitNumber.get(beginBucketIndex + i);
             var keyBucket = new KeyBucket(slot, beginBucketIndex + i, splitIndex, splitNumber, sharedBytes, position, snowFlake);
 
-            final short[] returnSkipCount = {0};
+            final short[] addedKeyCount = {0};
             final short[] tmpSkipCount = {skipCount};
+            final short[] expiredOrNotMatchedCount = {0};
             final long currentTimeMillis = System.currentTimeMillis();
             keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+                if (tmpSkipCount[0] > 0) {
+                    tmpSkipCount[0]--;
+                    return;
+                }
+
                 // skip expired
                 if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
+                    expiredOrNotMatchedCount[0]++;
                     return;
                 }
 
                 var key = new String(keyBytes);
                 if (!isKeyMatch(key, matchPattern)) {
+                    expiredOrNotMatchedCount[0]++;
                     return;
                 }
 
@@ -495,32 +507,30 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                     if (PersistValueMeta.isPvm(valueBytes)) {
                         var pvm = PersistValueMeta.decode(valueBytes);
                         if (typeAsByte != pvm.shortType) {
+                            expiredOrNotMatchedCount[0]++;
                             return;
                         }
                     } else {
                         // number or short string, is string
                         if (typeAsByte != typeAsByteString) {
+                            expiredOrNotMatchedCount[0]++;
                             return;
                         }
                     }
-                }
-
-                if (tmpSkipCount[0] > 0) {
-                    tmpSkipCount[0]--;
-                    return;
                 }
 
                 if (countArray[0] <= 0) {
                     return;
                 }
 
+                addedKeyCount[0]++;
                 keys.add(key);
                 countArray[0]--;
-                returnSkipCount[0]++;
             });
 
             if (countArray[0] <= 0) {
-                return new ScanCursor(slot, walGroupIndex, returnSkipCount[0], splitIndex);
+                var nextTimeSkipCount = skipCount + expiredOrNotMatchedCount[0] + addedKeyCount[0];
+                return new ScanCursor(slot, walGroupIndex, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) nextTimeSkipCount, splitIndex);
             }
         }
         return null;
@@ -529,25 +539,25 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     public record ScanCursorWithReturnKeys(@NotNull ScanCursor scanCursor, @NotNull ArrayList<String> keys) {
     }
 
-    public ScanCursorWithReturnKeys scan(int walGroupIndex,
-                                         byte splitIndex,
-                                         short skipCount,
-                                         byte typeAsByte,
-                                         @Nullable String matchPattern,
-                                         int count) {
-        ArrayList<String> keys = new ArrayList<>(count);
+    public ScanCursorWithReturnKeys scan(final int walGroupIndex,
+                                         final byte splitIndex,
+                                         final short skipCount,
+                                         final byte typeAsByte,
+                                         final @Nullable String matchPattern,
+                                         final int count) {
+        final ArrayList<String> keys = new ArrayList<>(count);
 
         var walGroupNumber = Wal.calcWalGroupNumber();
         var maxSplitNumber = metaKeyBucketSplitNumber.maxSplitNumber();
 
-        int[] countArray = new int[]{count};
+        final int[] countArray = new int[]{count};
         for (int j = walGroupIndex; j < walGroupNumber; j++) {
             for (int i = 0; i < maxSplitNumber; i++) {
                 if (j == walGroupIndex && i < splitIndex) {
                     continue;
                 }
 
-                var skipCountInThisWalGroupThisSplitIndex = i == splitIndex && j == walGroupIndex ? skipCount : 0;
+                final var skipCountInThisWalGroupThisSplitIndex = i == splitIndex && j == walGroupIndex ? skipCount : 0;
 
                 var scanCursor = readKeysToList(keys, j, (byte) i, skipCountInThisWalGroupThisSplitIndex,
                         typeAsByte, matchPattern, countArray);

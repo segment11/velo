@@ -6,9 +6,12 @@ import spock.lang.Specification
 class ScanCursorTest extends Specification {
     def 'test base'() {
         given:
-        def scanCursor = new ScanCursor((short) 1, 65536, Short.MAX_VALUE, (byte) 1)
+        def scanCursor = new ScanCursor((short) 1, 65536, (short) 1023, (short) 1023, (byte) 1)
         println scanCursor
         println ScanCursor.END
+
+        expect:
+        scanCursor.isWalIterateEnd()
 
         when:
         def l = scanCursor.toLong()

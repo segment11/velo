@@ -27,16 +27,6 @@ public class VeloUserDataInSocket {
         this.replyMode = replyMode;
     }
 
-    private byte[] lastScanTargetKeyBytes = null;
-
-    public byte[] getLastScanTargetKeyBytes() {
-        return lastScanTargetKeyBytes;
-    }
-
-    public void setLastScanTargetKeyBytes(byte[] lastScanTargetKeyBytes) {
-        this.lastScanTargetKeyBytes = lastScanTargetKeyBytes;
-    }
-
     private long lastScanAssignCursor = 0;
 
     public long getLastScanAssignCursor() {

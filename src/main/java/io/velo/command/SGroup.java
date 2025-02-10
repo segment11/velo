@@ -8,6 +8,7 @@ import io.velo.*;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.persist.KeyLoader;
+import io.velo.persist.ScanCursor;
 import io.velo.repl.LeaderSelector;
 import io.velo.reply.*;
 import io.velo.type.RedisHashKeys;
@@ -233,6 +234,29 @@ public class SGroup extends BaseCommand {
         }, resultList -> OKReply.INSTANCE);
     }
 
+    private MultiBulkReply scanResultToReply(KeyLoader.ScanCursorWithReturnKeys r, VeloUserDataInSocket veloUserData, int count) {
+        var keys = r.keys();
+        assert (!keys.isEmpty());
+        if (keys.size() < count) {
+            // reach the end
+            veloUserData.setLastScanAssignCursor(0);
+        } else {
+            veloUserData.setLastScanAssignCursor(r.scanCursor().toLong());
+        }
+
+        var replies = new Reply[2];
+        replies[0] = new BulkReply(r.scanCursor().toLong());
+
+        var keysReplies = new Reply[keys.size()];
+        replies[1] = new MultiBulkReply(keysReplies);
+
+        int i = 0;
+        for (var key : keys) {
+            keysReplies[i++] = new BulkReply(key.getBytes());
+        }
+        return new MultiBulkReply(replies);
+    }
+
     @VisibleForTesting
     Reply scan() {
         if (data.length < 2) {
@@ -247,12 +271,10 @@ public class SGroup extends BaseCommand {
         } catch (NumberFormatException e) {
             return ErrorReply.NOT_INTEGER;
         }
+        var scanCursor = ScanCursor.fromLong(cursorLong);
 
         var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
-        var lastScanTargetKeyBytes = veloUserData.getLastScanTargetKeyBytes();
         if (cursorLong == 0) {
-            lastScanTargetKeyBytes = null;
-            veloUserData.setLastScanTargetKeyBytes(null);
             veloUserData.setLastScanAssignCursor(0);
         } else {
             if (cursorLong != veloUserData.getLastScanAssignCursor()) {
@@ -324,64 +346,50 @@ public class SGroup extends BaseCommand {
             }
         }
 
-        // use rocksdb iterate
-        final var matchPatternInner = matchPattern;
-        final var typeAsByteInner = typeAsByte;
-        var f = localPersist.getIndexHandlerPool().getKeyAnalysisHandler().filterKeys(lastScanTargetKeyBytes, count,
-                key -> KeyLoader.isKeyMatch(key, matchPatternInner),
-                valueBytesAsInt -> {
-                    if (typeAsByteInner == KeyLoader.typeAsByteIgnore) {
-                        return true;
-                    }
+        var oneSlot = localPersist.oneSlot(scanCursor.slot());
 
-                    var shortType = valueBytesAsInt & 0xFF;
-                    return typeAsByteInner == shortType;
-                });
+        int leftCount = count;
 
-        final int countInner = count;
+        KeyLoader.ScanCursorWithReturnKeys rWal = null;
+        if (!scanCursor.isWalIterateEnd()) {
+            var wal = oneSlot.getWalByGroupIndex(scanCursor.walGroupIndex());
+            rWal = wal.scan(scanCursor.walSkipCount(), typeAsByte, matchPattern, count);
 
-        SettablePromise<Reply> finalPromise = new SettablePromise<>();
-        var asyncReply = new AsyncReply(finalPromise);
-
-        f.whenComplete((keys, e) -> {
-            if (e != null) {
-                log.error("scan error={}", e.getMessage());
-                finalPromise.setException((Exception) e);
-                return;
+            if (rWal != null) {
+                if (rWal.keys().size() == count) {
+                    // need not scan key buckets
+                    return scanResultToReply(rWal, veloUserData, count);
+                } else {
+                    leftCount -= rWal.keys().size();
+                }
             }
+        }
 
-            if (keys.isEmpty()) {
-                finalPromise.set(MultiBulkReply.SCAN_EMPTY);
-                return;
-            }
+        var keyLoader = oneSlot.getKeyLoader();
+        var r = keyLoader.scan(scanCursor.walGroupIndex(), scanCursor.splitIndex(), scanCursor.keyBucketsSkipCount(),
+                typeAsByte, matchPattern, leftCount);
 
-            long assignCursor;
-            if (keys.size() < countInner) {
-                // reach the end
-                assignCursor = 0;
-                veloUserData.setLastScanAssignCursor(0);
-                veloUserData.setLastScanTargetKeyBytes(null);
+        if (r == null || r.keys().isEmpty()) {
+            if (rWal != null) {
+                // only return wal scan result
+                var rAll = new KeyLoader.ScanCursorWithReturnKeys(ScanCursor.END, rWal.keys());
+                var finalReply = scanResultToReply(rAll, veloUserData, count);
+                // overwrite, reach the end
+                veloUserData.setLastScanAssignCursor(0L);
+                return finalReply;
             } else {
-                assignCursor = snowFlake.nextId();
-                veloUserData.setLastScanAssignCursor(assignCursor);
-                veloUserData.setLastScanTargetKeyBytes(keys.getLast().getBytes());
+                // reach the end
+                veloUserData.setLastScanAssignCursor(0L);
+                return MultiBulkReply.SCAN_EMPTY;
             }
-
-            var replies = new Reply[2];
-            replies[0] = new BulkReply(assignCursor);
-
-            var keysReplies = new Reply[keys.size()];
-            replies[1] = new MultiBulkReply(keysReplies);
-
-            int i = 0;
-            for (var key : keys) {
-                keysReplies[i++] = new BulkReply(key.getBytes());
+        } else {
+            if (rWal != null) {
+                // merged keys from wal scan
+                r.keys().addAll(rWal.keys());
             }
+        }
 
-            finalPromise.set(new MultiBulkReply(replies));
-        });
-
-        return asyncReply;
+        return scanResultToReply(r, veloUserData, count);
     }
 
     private Reply sentinel() {

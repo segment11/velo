@@ -402,6 +402,19 @@ public class CompressedValue {
         return valueSeqCurrent;
     }
 
+    public static int onlyReadSpType(byte[] encodedBytes) {
+        var buffer = ByteBuffer.wrap(encodedBytes);
+
+        var firstByte = buffer.get(0);
+        if (firstByte < 0) {
+            return firstByte;
+        } else {
+            // normal compressed value encoded
+            // skip seq long + expire at long
+            return buffer.getInt(8 + 8);
+        }
+    }
+
     public byte[] encode() {
         var bytes = new byte[encodedLength()];
         var buf = ByteBuf.wrapForWriting(bytes);

@@ -13,14 +13,21 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+
+import static io.velo.CompressedValue.NO_EXPIRE;
 
 public class Wal implements InMemoryEstimate {
     public record V(long seq, int bucketIndex, long keyHash, long expireAt, int spType,
                     String key, byte[] cvEncoded, boolean isFromMerge) implements Comparable<V> {
         boolean isRemove() {
             return CompressedValue.isDeleted(cvEncoded);
+        }
+
+        boolean isExpired() {
+            return expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis();
         }
 
         @Override
@@ -118,7 +125,7 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
-    record PutResult(boolean needPersist, boolean isValueShort, @Nullable V needPutV, int offset) {
+    public record PutResult(boolean needPersist, boolean isValueShort, @Nullable V needPutV, int offset) {
     }
 
     long initMemoryN = 0;
@@ -241,6 +248,64 @@ public class Wal implements InMemoryEstimate {
         return delayToKeyBucketValues.size() + delayToKeyBucketShortValues.size();
     }
 
+    public KeyLoader.ScanCursorWithReturnKeys scan(final short skipCount,
+                                                   final byte typeAsByte,
+                                                   final @Nullable String matchPattern,
+                                                   final int count) {
+        if (delayToKeyBucketValues.isEmpty() && delayToKeyBucketShortValues.isEmpty()) {
+            return null;
+        }
+
+        ArrayList<String> keys = new ArrayList<>(count);
+
+        short tmpSkipCount = skipCount;
+        short removedOrExpiredOrNotMatchedCount = 0;
+
+        var allValues = new HashMap<String, V>();
+        allValues.putAll(delayToKeyBucketShortValues);
+        allValues.putAll(delayToKeyBucketValues);
+        for (var entry : allValues.entrySet()) {
+            if (tmpSkipCount > 0) {
+                tmpSkipCount--;
+                continue;
+            }
+
+            var key = entry.getKey();
+            var v = entry.getValue();
+
+            if (v.isRemove() || v.isExpired()) {
+                removedOrExpiredOrNotMatchedCount++;
+                continue;
+            }
+
+            if (!KeyLoader.isKeyMatch(key, matchPattern)) {
+                removedOrExpiredOrNotMatchedCount++;
+                continue;
+            }
+
+            if (typeAsByte != KeyLoader.typeAsByteIgnore) {
+                var spType = CompressedValue.onlyReadSpType(v.cvEncoded);
+                var shortType = KeyLoader.transferToShortType(spType);
+                if (shortType != typeAsByte) {
+                    removedOrExpiredOrNotMatchedCount++;
+                    continue;
+                }
+            }
+
+            keys.add(key);
+            if (keys.size() >= count) {
+                break;
+            }
+        }
+
+        if (keys.isEmpty()) {
+            return null;
+        }
+
+        var nextTimeSkipCount = skipCount + removedOrExpiredOrNotMatchedCount + keys.size();
+        return new KeyLoader.ScanCursorWithReturnKeys(new ScanCursor(slot, groupIndex, (short) nextTimeSkipCount, (short) 0, (byte) 0), keys);
+    }
+
     @VisibleForTesting
     int readWal(@NullableOnlyTest RandomAccessFile fromWalFile, @NotNull HashMap<String, V> toMap, boolean isShortValue) throws IOException {
         // for unit test
@@ -326,7 +391,7 @@ public class Wal implements InMemoryEstimate {
     }
 
     @TestOnly
-    void clear() {
+    public void clear() {
         clear(true);
     }
 
@@ -460,7 +525,7 @@ public class Wal implements InMemoryEstimate {
     }
 
     // return need persist
-    PutResult put(boolean isValueShort, @NotNull String key, @NotNull V v) {
+    public PutResult put(boolean isValueShort, @NotNull String key, @NotNull V v) {
         var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
         var offset = isValueShort ? writePositionShortValue : writePosition;
 

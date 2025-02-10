@@ -1,20 +1,29 @@
 package io.velo.persist;
 
-public record ScanCursor(short slot, int walGroupIndex, short skipCount, byte splitIndex) {
-    public static ScanCursor END = new ScanCursor((short) 0, 0, (short) 0, (byte) 0);
+public record ScanCursor(short slot, int walGroupIndex, short walSkipCount, short keyBucketsSkipCount,
+                         byte splitIndex) {
+    public static ScanCursor END = new ScanCursor((short) 0, 0, (short) 0, (short) 0, (byte) 0);
+
+    public static final short ONE_WAL_SKIP_COUNT_ITERATE_END = 1023;
+
+    public boolean isWalIterateEnd() {
+        return walSkipCount == ONE_WAL_SKIP_COUNT_ITERATE_END;
+    }
 
     public long toLong() {
-        // wal group index use 24 bits
-        return ((long) slot << 48) | (long) walGroupIndex << 24 | ((long) skipCount << 8) | splitIndex;
+        assert (walSkipCount < 1024 && keyBucketsSkipCount < 1024);
+        // slot use 16 bits, wal group index use 24 bits
+        // wal skip count use 10 bits, key buckets skip count use 10 bits, split index use 4 bits
+        return ((long) slot << 48) | (long) walGroupIndex << 24 | ((long) walSkipCount << 14) | ((long) keyBucketsSkipCount << 4) | splitIndex;
     }
 
     public static ScanCursor fromLong(long value) {
-        var walGroupIndexLong = (value << 16) >> 40;
         return new ScanCursor(
                 (short) (value >> 48),
-                (int) walGroupIndexLong,
-                (short) (value >> 8),
-                (byte) value
+                (int) ((value >> 24) & 0xffffff),
+                (short) ((value >> 14) & 0x3ff),
+                (short) ((value >> 4) & 0x3ff),
+                (byte) (value & 0xf)
         );
     }
 }

@@ -23,6 +23,19 @@ class WalTest extends Specification {
         a < b
         b == bb
         b > a
+
+        when:
+        byte[] encoded = [CompressedValue.SP_FLAG_DELETE_TMP]
+        def vRemoved = new Wal.V(1, 0, 0, 0, 0, 'a', encoded, false)
+        then:
+        vRemoved.isRemove()
+        !vRemoved.isExpired()
+
+        when:
+        def vExpired = new Wal.V(1, 0, 0, System.currentTimeMillis() - 1000, 0, 'a', 'a'.bytes, true)
+        then:
+        vExpired.isExpired()
+        !vExpired.isRemove()
     }
 
     def 'put and get'() {
@@ -368,5 +381,73 @@ class WalTest extends Specification {
         cleanup:
         ConfForGlobal.pureMemory = false
         Wal.ONE_GROUP_BUFFER_SIZE = 64 * 1024
+    }
+
+    def 'test scan'() {
+        given:
+        ConfForGlobal.pureMemory = true
+
+        def snowFlake = new SnowFlake(1, 1)
+        def wal = new Wal(slot, 0, null, null, snowFlake)
+
+        when:
+        def r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10)
+        then:
+        r == null
+
+        when:
+        def shortValueList = Mock.prepareShortValueList(10, 0)
+        for (shortV in shortValueList) {
+            wal.put(true, shortV.key(), shortV)
+        }
+        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10)
+        then:
+        r != null
+        r.keys().size() == 10
+
+        when:
+        r = wal.scan((short) 5, KeyLoader.typeAsByteIgnore, null, 10)
+        then:
+        r != null
+        r.keys().size() == 5
+        r.scanCursor().walSkipCount() == 10
+
+        when:
+        r = wal.scan((short) 0, KeyLoader.typeAsByteHash, null, 10)
+        then:
+        r == null
+
+        when:
+        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, 'xxx:', 10)
+        then:
+        r == null
+
+        when:
+        wal.clear()
+        def shortValueList2 = Mock.prepareShortValueList(10, 0) { v ->
+            // mock some removed
+            if (v.seq() == 9) {
+                byte[] encoded = [CompressedValue.SP_FLAG_DELETE_TMP]
+                return new Wal.V(v.seq(), 0, v.keyHash(), 0L, 0,
+                        v.key(), encoded, false)
+            }
+
+            // mock some expired
+            def v2 = new Wal.V(v.seq(), 0, v.keyHash(), v.seq() % 2 == 0 ? System.currentTimeMillis() - 1000 : 0L, 0,
+                    v.key(), v.cvEncoded(), false)
+            return v2
+        }
+        for (shortV in shortValueList2) {
+            wal.put(true, shortV.key(), shortV)
+        }
+        r = wal.scan((short) 5, KeyLoader.typeAsByteIgnore, null, 10)
+        then:
+        r != null
+        // 1 removed and 5 expired
+        r.keys().size() == 2
+        r.scanCursor().walSkipCount() == 10
+
+        cleanup:
+        ConfForGlobal.pureMemory = false
     }
 }

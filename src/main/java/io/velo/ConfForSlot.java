@@ -193,7 +193,9 @@ public enum ConfForSlot {
         // 4 pages ~= 16KB, one V persist length is about 100B, so 4 pages can store about 160 V
         // for better latency, do not configure too large
         // 200 make sure there is at least one batch 16KB
+        // must < 512, scan cursor use 10 bits for wal skip key count, value and short value key count total need < 1024
         public int valueSizeTrigger;
+        // must < 512
         public int shortValueSizeTrigger;
 
         private int oneChargeBucketNumberOld;
