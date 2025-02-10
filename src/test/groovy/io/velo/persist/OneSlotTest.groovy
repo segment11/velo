@@ -203,14 +203,14 @@ class OneSlotTest extends Specification {
         replPairAsMaster1.slaveUuid = 12L
         // add 12L first
         oneSlot.replPairs.add(replPairAsMaster1)
-        oneSlot.doTask(0)
+        oneSlot.doTask(100)
         oneSlot.replPairs.add(replPairAsMaster0)
-        oneSlot.doTask(0)
+        oneSlot.doTask(100)
         def replPairAsSlave0 = oneSlot.createReplPairAsSlave('localhost', 6379)
         def replPairAsSlave1 = oneSlot.createReplPairAsSlave('localhost', 6379)
         replPairAsSlave0.sendBye = true
         replPairAsSlave1.masterBinlogCurrentFileIndexAndOffset = new Binlog.FileIndexAndOffset(1, 1)
-        oneSlot.doTask(0)
+        oneSlot.doTask(100)
         then:
         oneSlot.replPairs.size() == 4
         oneSlot.delayNeedCloseReplPairs.size() == 0
@@ -234,14 +234,14 @@ class OneSlotTest extends Specification {
         oneSlot.delayNeedCloseReplPairs.size() == 1
 
         when:
-        oneSlot.doTask(0)
+        oneSlot.doTask(100)
         then:
         // will remain in 10s
         oneSlot.delayNeedCloseReplPairs.size() == 1
 
         when:
         Thread.sleep(11 * 1000)
-        oneSlot.doTask(0)
+        oneSlot.doTask(100)
         then:
         oneSlot.delayNeedCloseReplPairs.size() == 0
 
@@ -249,13 +249,13 @@ class OneSlotTest extends Specification {
         // clear all
         oneSlot.replPairs.clear()
         oneSlot.delayNeedCloseReplPairs.clear()
-        oneSlot.doTask(0)
+        oneSlot.doTask(100)
         // add 2 as slaves
         oneSlot.replPairs.add(replPairAsSlave0)
         oneSlot.replPairs.add(replPairAsSlave1)
         replPairAsSlave0.addToFetchBigStringUuid(1L)
-        oneSlot.doTask(0)
-        oneSlot.doTask(1)
+        oneSlot.doTask(100)
+        oneSlot.doTask(200)
         replPairAsSlave0.sendBye = false
         replPairAsSlave1.sendBye = false
         oneSlot.removeReplPairAsSlave()
@@ -265,8 +265,8 @@ class OneSlotTest extends Specification {
 
         when:
         Thread.sleep(11 * 1000)
-        oneSlot.doTask(0)
-        oneSlot.doTask(1)
+        oneSlot.doTask(100)
+        oneSlot.doTask(200)
         then:
         oneSlot.delayNeedCloseReplPairs.size() == 0
 
@@ -598,8 +598,8 @@ class OneSlotTest extends Specification {
         exception
 
         when:
-        oneSlot.doTask(0)
-        oneSlot.taskChain.doTask(1)
+        oneSlot.doTask(100)
+        oneSlot.taskChain.doTask(200)
         then:
         1 == 1
 
@@ -1307,7 +1307,7 @@ class OneSlotTest extends Specification {
         // do check, persist begin segment index 2
         oneSlot.checkAndSaveMemory(2)
         then:
-        SegmentBatch2.isSegmentBytesSlim(chunk.preadOneSegment(2), 0)
+        chunk.preadOneSegment(2) == null
 
         cleanup:
         localPersist.cleanUp()
