@@ -11,6 +11,9 @@ class ConfVolumeDirsForSlotTest extends Specification {
         def persistConfig = Config.create().with('volumeDirsBySlot',
                 '/tmp/data0:0-31,/tmp/data1:32-63,/tmp/data2:64-95,/tmp/data3:96-127')
 
+        expect:
+        ConfVolumeDirsForSlot.getVolumeDirBySlot((short) 0) == null
+
         when:
         new File('/tmp/data0').mkdir()
         new File('/tmp/data1').mkdir()
@@ -19,14 +22,14 @@ class ConfVolumeDirsForSlotTest extends Specification {
         ConfVolumeDirsForSlot.initFromConfig(persistConfigBlank, (short) 128)
         ConfVolumeDirsForSlot.initFromConfig(persistConfig, (short) 128)
         then:
-        ConfVolumeDirsForSlot.getVolumeDirBySlot((byte) 0) == '/tmp/data0'
-        ConfVolumeDirsForSlot.getVolumeDirBySlot((byte) 31) == '/tmp/data0'
-        ConfVolumeDirsForSlot.getVolumeDirBySlot((byte) 32) == '/tmp/data1'
-        ConfVolumeDirsForSlot.getVolumeDirBySlot((byte) 63) == '/tmp/data1'
-        ConfVolumeDirsForSlot.getVolumeDirBySlot((byte) 64) == '/tmp/data2'
-        ConfVolumeDirsForSlot.getVolumeDirBySlot((byte) 95) == '/tmp/data2'
-        ConfVolumeDirsForSlot.getVolumeDirBySlot((byte) 96) == '/tmp/data3'
-        ConfVolumeDirsForSlot.getVolumeDirBySlot((byte) 127) == '/tmp/data3'
+        ConfVolumeDirsForSlot.getVolumeDirBySlot((short) 0) == '/tmp/data0'
+        ConfVolumeDirsForSlot.getVolumeDirBySlot((short) 31) == '/tmp/data0'
+        ConfVolumeDirsForSlot.getVolumeDirBySlot((short) 32) == '/tmp/data1'
+        ConfVolumeDirsForSlot.getVolumeDirBySlot((short) 63) == '/tmp/data1'
+        ConfVolumeDirsForSlot.getVolumeDirBySlot((short) 64) == '/tmp/data2'
+        ConfVolumeDirsForSlot.getVolumeDirBySlot((short) 95) == '/tmp/data2'
+        ConfVolumeDirsForSlot.getVolumeDirBySlot((short) 96) == '/tmp/data3'
+        ConfVolumeDirsForSlot.getVolumeDirBySlot((short) 127) == '/tmp/data3'
     }
 
     def 'test exception'() {
