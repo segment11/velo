@@ -206,7 +206,7 @@ public class ChunkMergeJob {
                 alreadyDoLog = true;
             }
 
-            var expiredCount = readToCvList(cvList, segmentBytesBatchRead, relativeOffsetInBatchBytes, chunkSegmentLength, segmentIndex, oneSlot);
+            var expiredCount = readToCvList(cvList, segmentBytesBatchRead, relativeOffsetInBatchBytes, chunkSegmentLength, segmentIndex, oneSlot.slot());
             if (expiredCount > 0) {
                 var validCvCountRecord = validCvCountRecordList.get(segmentIndex - firstSegmentIndex);
                 validCvCountRecord.invalidCvCount += expiredCount;
@@ -276,11 +276,11 @@ public class ChunkMergeJob {
 
     // return expired count
     static int readToCvList(ArrayList<CvWithKeyAndSegmentOffset> cvList, byte[] segmentBytesBatchRead, int relativeOffsetInBatchBytes,
-                            int chunkSegmentLength, int segmentIndex, OneSlot oneSlot) {
+                            int chunkSegmentLength, int segmentIndex, short slot) {
         final int[] expiredCountArray = {0};
         var length = Math.min(segmentBytesBatchRead.length, chunkSegmentLength);
 
-        if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
+        if (SegmentBatch2.isSegmentBytesTight(segmentBytesBatchRead, relativeOffsetInBatchBytes)) {
             var buffer = ByteBuffer.wrap(segmentBytesBatchRead, relativeOffsetInBatchBytes, length).slice();
             // iterate sub blocks, refer to SegmentBatch.tight
             for (int subBlockIndex = 0; subBlockIndex < SegmentBatch.MAX_BLOCK_NUMBER; subBlockIndex++) {
@@ -296,7 +296,7 @@ public class ChunkMergeJob {
                 var d = Zstd.decompressByteArray(decompressedBytes, 0, chunkSegmentLength,
                         segmentBytesBatchRead, relativeOffsetInBatchBytes + subBlockOffset, subBlockLength);
                 if (d != chunkSegmentLength) {
-                    throw new IllegalStateException("Decompress error, s=" + oneSlot.slot()
+                    throw new IllegalStateException("Decompress error, s=" + slot
                             + ", i=" + segmentIndex + ", sbi=" + subBlockIndex + ", d=" + d + ", chunkSegmentLength=" + chunkSegmentLength);
                 }
 

@@ -437,7 +437,7 @@ class ChunkTest extends Specification {
         def contentBytes = new byte[chunk.chunkSegmentLength * 2]
         contentBytes[0] = (byte) 1
         contentBytes[4096] = (byte) 1
-        chunk.writeSegmentsFromMasterExists(contentBytes, 0, 2)
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(contentBytes, 0, 2)
         def bos = new ByteArrayOutputStream()
         def os = new DataOutputStream(bos)
         chunk.writeToSavedFileWhenPureMemory(os)
@@ -457,8 +457,8 @@ class ChunkTest extends Specification {
 
         when:
         // all byte 0 means clear
-        chunk.writeSegmentsFromMasterExists(new byte[chunk.chunkSegmentLength], 0, 1)
-        chunk.writeSegmentsFromMasterExists(new byte[chunk.chunkSegmentLength * 2], 1, 2)
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(new byte[chunk.chunkSegmentLength], 0, 1)
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(new byte[chunk.chunkSegmentLength * 2], 1, 2)
         then:
         chunk.preadOneSegment(0) == null
         chunk.preadOneSegment(1) == null
@@ -485,20 +485,20 @@ class ChunkTest extends Specification {
 
         when:
         def replBytes = new byte[4096]
-        chunk.writeSegmentsFromMasterExists(replBytes, 0, 1)
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1)
         then:
         1 == 1
 
         when:
         // write again, fd length will not change
-        chunk.writeSegmentsFromMasterExists(replBytes, 0, 1)
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1)
         then:
         1 == 1
 
         when:
         boolean exception = false
         try {
-            chunk.writeSegmentsFromMasterExists(replBytes, 0, REPL_ONCE_SEGMENT_COUNT_PREAD + 1)
+            chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, REPL_ONCE_SEGMENT_COUNT_PREAD + 1)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
@@ -511,13 +511,13 @@ class ChunkTest extends Specification {
         for (fdReadWrite in chunk.fdReadWriteArray) {
             fdReadWrite.initByteBuffers(true)
         }
-        chunk.writeSegmentsFromMasterExists(replBytes, 0, 1)
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1)
         then:
         1 == 1
 
         when:
         def replBytes2 = new byte[4096 * 2]
-        chunk.writeSegmentsFromMasterExists(replBytes2, 0, 2)
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes2, 0, 2)
         then:
         1 == 1
 

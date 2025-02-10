@@ -109,15 +109,15 @@ public class SegmentBatch implements InSlotMetricCollector {
 
     // zstd compress ratio usually < 0.25, max 4 blocks tight to one segment
     public static final int MAX_BLOCK_NUMBER = 4;
-    // seq long + total bytes length int + each sub block * (offset short + length short)
-    private static final int HEADER_LENGTH = 8 + 4 + MAX_BLOCK_NUMBER * (2 + 2);
+    // seq long + segment type bit + total bytes length int + each sub block * (offset short + length short)
+    private static final int HEADER_LENGTH = 8 + 1 + 4 + MAX_BLOCK_NUMBER * (2 + 2);
 
     public static int subBlockMetaPosition(int subBlockIndex) {
         if (subBlockIndex >= MAX_BLOCK_NUMBER) {
             throw new IllegalArgumentException("Segment batch sub block index must be less than=" + MAX_BLOCK_NUMBER);
         }
 
-        return 8 + 4 + subBlockIndex * (2 + 2);
+        return 8 + 1 + 4 + subBlockIndex * (2 + 2);
     }
 
     private SegmentTightBytesWithLengthAndSegmentIndex tightSegments(int afterTightSegmentIndex,
@@ -144,6 +144,7 @@ public class SegmentBatch implements InSlotMetricCollector {
         var buffer = ByteBuffer.wrap(tightBytesWithLength);
         var segmentSeq = snowFlake.nextId();
         buffer.putLong(segmentSeq);
+        buffer.put(Chunk.SegmentType.TIGHT.val);
         buffer.putInt(totalBytesN);
 
         int offset = HEADER_LENGTH;
@@ -215,7 +216,7 @@ public class SegmentBatch implements InSlotMetricCollector {
 
         int tmpSegmentIndex = 0;
 
-        var persistLength = Chunk.SEGMENT_HEADER_LENGTH;
+        var persistLength = SegmentBatch2.SEGMENT_HEADER_LENGTH;
         for (Wal.V v : list) {
             persistLength += v.persistLength();
 
@@ -226,7 +227,7 @@ public class SegmentBatch implements InSlotMetricCollector {
                 tmpSegmentIndex++;
 
                 onceList.clear();
-                persistLength = Chunk.SEGMENT_HEADER_LENGTH + v.persistLength();
+                persistLength = SegmentBatch2.SEGMENT_HEADER_LENGTH + v.persistLength();
                 onceList.add(v);
             }
         }

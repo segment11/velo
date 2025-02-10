@@ -31,10 +31,10 @@ class SegmentBatchTest extends Specification {
         ArrayList<PersistValueMeta> returnPvmList2 = []
 
         expect:
-        SegmentBatch.subBlockMetaPosition(0) == 12
-        SegmentBatch.subBlockMetaPosition(1) == 16
-        SegmentBatch.subBlockMetaPosition(2) == 20
-        SegmentBatch.subBlockMetaPosition(3) == 24
+        SegmentBatch.subBlockMetaPosition(0) == 13
+        SegmentBatch.subBlockMetaPosition(1) == 17
+        SegmentBatch.subBlockMetaPosition(2) == 21
+        SegmentBatch.subBlockMetaPosition(3) == 25
 
         when:
         def r = segmentBatch.splitAndTight(list, returnPvmList)

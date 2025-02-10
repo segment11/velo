@@ -1307,7 +1307,7 @@ class OneSlotTest extends Specification {
         // do check, persist begin segment index 2
         oneSlot.checkAndSaveMemory(2)
         then:
-        oneSlot.getSegmentMergeFlag(2).flagByte() == Chunk.Flag.merged_and_persisted.flagByte()
+        SegmentBatch2.isSegmentBytesSlim(chunk.preadOneSegment(2), 0)
 
         cleanup:
         localPersist.cleanUp()

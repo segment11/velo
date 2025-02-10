@@ -47,7 +47,7 @@ class SegmentBatch2Test extends Specification {
         }
 
         when:
-        def bytesX = new byte[16]
+        def bytesX = new byte[SegmentBatch2.SEGMENT_HEADER_LENGTH]
         List<CompressedValue> loaded2 = []
         SegmentBatch2.iterateFromSegmentBytes(bytesX, { key, cv, offsetInThisSegment ->
             println "key: $key, cv: $cv, offset in this segment: $offsetInThisSegment"
@@ -57,7 +57,7 @@ class SegmentBatch2Test extends Specification {
         loaded2.size() == 0
 
         when:
-        bytesX = new byte[18]
+        bytesX = new byte[SegmentBatch2.SEGMENT_HEADER_LENGTH + 2]
         SegmentBatch2.iterateFromSegmentBytes(bytesX, { key, cv, offsetInThisSegment ->
             println "key: $key, cv: $cv, offset in this segment: $offsetInThisSegment"
             loaded2 << cv
@@ -67,7 +67,7 @@ class SegmentBatch2Test extends Specification {
 
         when:
         boolean exception = false
-        ByteBuffer.wrap(bytesX).putShort(16, (short) -1)
+        ByteBuffer.wrap(bytesX).putShort(SegmentBatch2.SEGMENT_HEADER_LENGTH, (short) -1)
         try {
             SegmentBatch2.iterateFromSegmentBytes(bytesX, 0, bytesX.length, { key, cv, offsetInThisSegment ->
                 println "key: $key, cv: $cv, offset in this segment: $offsetInThisSegment"
@@ -79,5 +79,49 @@ class SegmentBatch2Test extends Specification {
         }
         then:
         exception
+    }
+
+    def 'test segment slim'() {
+        given:
+        def byteX = new byte[SegmentBatch2.SEGMENT_HEADER_LENGTH]
+
+        when:
+        byteX[8] = Chunk.SegmentType.SLIM.val
+        then:
+        SegmentBatch2.isSegmentBytesSlim(byteX, 0)
+        !SegmentBatch2.isSegmentBytesTight(byteX, 0)
+
+        when:
+        byteX[8] = Chunk.SegmentType.TIGHT.val
+        then:
+        !SegmentBatch2.isSegmentBytesSlim(byteX, 0)
+        SegmentBatch2.isSegmentBytesTight(byteX, 0)
+
+        when:
+        def vList = Mock.prepareValueList(2, 0)
+        List<ChunkMergeJob.CvWithKeyAndSegmentOffset> invalidCvList = []
+        for (v in vList) {
+            invalidCvList << new ChunkMergeJob.CvWithKeyAndSegmentOffset(Mock.fromV(v), v.key(), (int) v.seq(), 0, (byte) 0)
+        }
+        def segmentBytesSlim = SegmentBatch2.encodeValidCvListSlim(invalidCvList)
+        then:
+        SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytesSlim, (byte) 0, 0).keyBytes() == vList[0].key().bytes
+        SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytesSlim, (byte) 0, 1).valueBytes() == vList[1].cvEncoded()
+        SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytesSlim, (byte) 0, 2) == null
+
+        when:
+        SegmentBatch2.iterateFromSegmentBytes(segmentBytesSlim, new SegmentBatch2.ForDebugCvCallback())
+        then:
+        1 == 1
+
+        when:
+        def cvListMany = Mock.prepareCompressedValueList(100)
+        List<ChunkMergeJob.CvWithKeyAndSegmentOffset> invalidCvListMany = []
+        for (cv in cvListMany) {
+            invalidCvListMany << new ChunkMergeJob.CvWithKeyAndSegmentOffset(cv, 'key:' + cv.seq, (int) cv.seq, 0, (byte) 0)
+        }
+        def segmentBytesSlim2 = SegmentBatch2.encodeValidCvListSlim(invalidCvListMany)
+        then:
+        segmentBytesSlim2 == null
     }
 }

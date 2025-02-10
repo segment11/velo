@@ -199,4 +199,22 @@ class ChunkMergeJobTest extends Specification {
         dictMap.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test read tight segment'() {
+        given:
+        def snowFlake = new SnowFlake(1, 1)
+        def segmentBatch = new SegmentBatch(slot, snowFlake)
+
+        and:
+        def list = Mock.prepareValueList(800)
+        ArrayList<PersistValueMeta> returnPvmList = []
+
+        when:
+        def r = segmentBatch.splitAndTight(list, returnPvmList)
+        def first = r[0]
+        ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList = []
+        ChunkMergeJob.readToCvList(cvList, first.tightBytesWithLength(), 0, 4096, 0, (short) 0)
+        then:
+        cvList.size() == 252
+    }
 }

@@ -33,8 +33,15 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         return maxSegmentIndex;
     }
 
-    // seq long + cv number int + crc int
-    public static final int SEGMENT_HEADER_LENGTH = 8 + 4 + 4;
+    enum SegmentType {
+        NORMAL((byte) 0), TIGHT((byte) 1), SLIM((byte) 2);
+
+        final byte val;
+
+        SegmentType(byte val) {
+            this.val = val;
+        }
+    }
 
     private static final Logger log = LoggerFactory.getLogger(Chunk.class);
 
@@ -824,7 +831,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     @SlaveReplay
-    public void writeSegmentsFromMasterExists(byte[] bytes, int segmentIndex, int segmentCount) {
+    public void writeSegmentsFromMasterExistsOrAfterSegmentSlim(byte[] bytes, int segmentIndex, int segmentCount) {
         if (ConfForGlobal.pureMemory) {
             var fdIndex = targetFdIndex(segmentIndex);
             var segmentIndexTargetFd = targetSegmentIndexTargetFd(segmentIndex);

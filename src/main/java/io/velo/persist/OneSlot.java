@@ -38,6 +38,7 @@ import java.util.function.Consumer;
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
 import static io.velo.persist.Chunk.*;
 import static io.velo.persist.FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE;
+import static io.velo.persist.SegmentBatch2.SEGMENT_HEADER_LENGTH;
 
 public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, CanSaveAndLoad, HandlerWhenCvExpiredOrDeleted {
     @TestOnly
@@ -1123,38 +1124,64 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (segmentBytes == null) {
             throw new IllegalStateException("Load persisted segment bytes error, pvm=" + pvm);
         }
-        if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
-            segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
+
+        if (SegmentBatch2.isSegmentBytesSlim(segmentBytes, 0)) {
+//            // crc check
+//            var segmentSeq = buf.readLong();
+//            var cvCount = buf.readInt();
+//            var segmentMaskedValue = buf.readInt();
+//            buf.skipBytes(SEGMENT_HEADER_LENGTH);
+
+            var keyBytesAndValueBytes = SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytes, pvm.subBlockIndex, pvm.segmentOffset);
+            if (keyBytesAndValueBytes == null) {
+                throw new IllegalStateException("No key value found in segment bytes slim, pvm=" + pvm);
+            }
+
+            var keyBytesRead = keyBytesAndValueBytes.keyBytes();
+            if (!Arrays.equals(keyBytesRead, keyBytes)) {
+                throw new IllegalStateException("Key not match, key=" + new String(keyBytes) + ", key persisted=" + new String(keyBytesRead));
+            }
+
+            // set to lru cache, just target bytes
+            ByteBuf buf = Unpooled.wrappedBuffer(keyBytesAndValueBytes.valueBytes());
+            var cv = CompressedValue.decode(buf, keyBytes, keyHash);
+            lru.put(key, cv.encode());
+
+            return new BufOrCompressedValue(null, cv);
+        } else {
+            if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
+                segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
+            }
+            ByteBuf buf = Unpooled.wrappedBuffer(segmentBytes);
+//            SegmentBatch2.iterateFromSegmentBytes(segmentBytes, 0, segmentBytes.length, new SegmentBatch2.ForDebugCvCallback());
+
+//            // crc check
+//            var segmentSeq = buf.readLong();
+//            var cvCount = buf.readInt();
+//            var segmentMaskedValue = buf.readInt();
+//            buf.skipBytes(SEGMENT_HEADER_LENGTH);
+
+            buf.readerIndex(pvm.segmentOffset);
+
+            // skip key header or check key
+            var keyLength = buf.readShort();
+            if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
+                throw new IllegalStateException("Key length error, key length=" + keyLength);
+            }
+
+            var keyBytesRead = new byte[keyLength];
+            buf.readBytes(keyBytesRead);
+
+            if (!Arrays.equals(keyBytesRead, keyBytes)) {
+                throw new IllegalStateException("Key not match, key=" + new String(keyBytes) + ", key persisted=" + new String(keyBytesRead));
+            }
+
+            // set to lru cache, just target bytes
+            var cv = CompressedValue.decode(buf, keyBytes, keyHash);
+            lru.put(key, cv.encode());
+
+            return new BufOrCompressedValue(null, cv);
         }
-//        SegmentBatch2.iterateFromSegmentBytes(segmentBytes, 0, segmentBytes.length, new SegmentBatch2.ForDebugCvCallback());
-
-        var buf = Unpooled.wrappedBuffer(segmentBytes);
-        // crc check
-//        var segmentSeq = buf.readLong();
-//        var cvCount = buf.readInt();
-//        var segmentMaskedValue = buf.readInt();
-//        buf.skipBytes(SEGMENT_HEADER_LENGTH);
-
-        buf.readerIndex(pvm.segmentOffset);
-
-        // skip key header or check key
-        var keyLength = buf.readShort();
-        if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
-            throw new IllegalStateException("Key length error, key length=" + keyLength);
-        }
-
-        var keyBytesRead = new byte[keyLength];
-        buf.readBytes(keyBytesRead);
-
-        if (!Arrays.equals(keyBytesRead, keyBytes)) {
-            throw new IllegalStateException("Key not match, key=" + new String(keyBytes) + ", key persisted=" + new String(keyBytesRead));
-        }
-
-        // set to lru cache, just target bytes
-        var cv = CompressedValue.decode(buf, keyBytes, keyHash);
-        lru.put(key, cv.encode());
-
-        return new BufOrCompressedValue(null, cv);
     }
 
     byte[] getFromWal(@NotNull String key, int bucketIndex) {
@@ -1460,7 +1487,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     ", chunk segment length=" + chunk.chunkSegmentLength + ", segment count=" + segmentCount + ", slot=" + slot);
         }
 
-        chunk.writeSegmentsFromMasterExists(bytes, beginSegmentIndex, segmentCount);
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(bytes, beginSegmentIndex, segmentCount);
         if (beginSegmentIndex % 4096 == 0) {
             log.warn("Repl write chunk segments from master exists, begin segment index={}, segment count={}, slot={}",
                     beginSegmentIndex, segmentCount, slot);
@@ -1610,7 +1637,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 continue;
             }
 
-            ChunkMergeJob.readToCvList(cvList, segmentBytesBatchRead, relativeOffsetInBatchBytes, chunkSegmentLength, segmentIndex, this);
+            ChunkMergeJob.readToCvList(cvList, segmentBytesBatchRead, relativeOffsetInBatchBytes, chunkSegmentLength, segmentIndex, slot);
             segmentIndexList.add(segmentIndex);
         }
 
@@ -2082,7 +2109,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList = new ArrayList<>(BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE * 10);
-        int expiredCount = ChunkMergeJob.readToCvList(cvList, segmentBytes, 0, ConfForSlot.global.confChunk.segmentLength, targetSegmentIndex, this);
+        int expiredCount = ChunkMergeJob.readToCvList(cvList, segmentBytes, 0, chunkSegmentLength, targetSegmentIndex, slot);
 
         ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> invalidCvList = new ArrayList<>();
 
@@ -2110,16 +2137,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         final int invalidMergedTriggerRate = 50;
         if (invalidRate > invalidMergedTriggerRate) {
             var validCvList = cvList.stream().filter(one -> !invalidCvList.contains(one)).toList();
-            // put back to wal
-            for (var one : validCvList) {
-                put(one.key, one.bucketIndex, one.cv, true);
+            var encodedSlim = SegmentBatch2.encodeValidCvListSlim(validCvList);
+            if (encodedSlim != null) {
+                chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(encodedSlim, targetSegmentIndex, 1);
+
+                var xChunkSegmentSlimUpdate = new XChunkSegmentSlimUpdate(targetSegmentIndex, encodedSlim);
+                appendBinlog(xChunkSegmentSlimUpdate);
             }
-
-            setSegmentMergeFlag(targetSegmentIndex, Flag.merged_and_persisted.flagByte(), 0L, segmentFlag.walGroupIndex());
-
-            var xChunkSegmentFlagUpdate = new XChunkSegmentFlagUpdate();
-            xChunkSegmentFlagUpdate.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex, Flag.merged_and_persisted.flagByte, 0L);
-            appendBinlog(xChunkSegmentFlagUpdate);
         }
     }
 

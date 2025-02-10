@@ -9,17 +9,15 @@ import io.velo.metric.InSlotMetricCollector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 // do not compress
 public class SegmentBatch2 implements InSlotMetricCollector {
+    // seq long + segment type byte + cv number int + crc int
+    public static final int SEGMENT_HEADER_LENGTH = 8 + 1 + 4 + 4;
+
     private final byte[] bytes;
     private final ByteBuffer buffer;
     private final short slot;
@@ -29,8 +27,6 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     @VisibleForTesting
     long batchCountTotal;
     private long batchKvCountTotal;
-
-    private static final Logger log = LoggerFactory.getLogger(SegmentBatch2.class);
 
     public SegmentBatch2(short slot, SnowFlake snowFlake) {
         this.slot = slot;
@@ -73,7 +69,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
 
         int i = 0;
 
-        var persistLength = Chunk.SEGMENT_HEADER_LENGTH;
+        var persistLength = SEGMENT_HEADER_LENGTH;
         for (Wal.V v : list) {
             persistLength += v.persistLength();
 
@@ -84,7 +80,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
                 i++;
 
                 onceList.clear();
-                persistLength = Chunk.SEGMENT_HEADER_LENGTH + v.persistLength();
+                persistLength = SEGMENT_HEADER_LENGTH + v.persistLength();
                 onceList.add(v);
             }
         }
@@ -125,11 +121,12 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         // write segment header
         buffer.clear();
         buffer.putLong(segmentSeq);
+        buffer.put(Chunk.SegmentType.NORMAL.val);
         buffer.putInt(list.size());
         // temp write crc, then update
         buffer.putInt(0);
 
-        int offsetInThisSegment = Chunk.SEGMENT_HEADER_LENGTH;
+        int offsetInThisSegment = SEGMENT_HEADER_LENGTH;
 
         for (var v : list) {
             crcCalBuffer.putLong(v.keyHash());
@@ -170,8 +167,8 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         // update crc
         int segmentCrc32 = KeyHash.hash32(crcCalBytes);
         // refer to SEGMENT_HEADER_LENGTH definition
-        // seq long + cv number int + crc int
-        buffer.putInt(8 + 4, segmentCrc32);
+        // seq long + segment type byte + cv number int + crc int
+        buffer.putInt(8 + 1 + 4, segmentCrc32);
     }
 
     public interface CvCallback {
@@ -194,10 +191,33 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         var buf = Unpooled.wrappedBuffer(segmentBytes, offset, length).slice();
         // for crc check
         var segmentSeq = buf.readLong();
+        var segmentType = buf.readByte();
         var cvCount = buf.readInt();
         var segmentCrc32 = buf.readInt();
 
-        int offsetInThisSegment = Chunk.SEGMENT_HEADER_LENGTH;
+        if (segmentType == Chunk.SegmentType.SLIM.val) {
+            for (int i = 0; i < cvCount; i++) {
+                var subBlockIndex = buf.readByte();
+                var segmentOffset = buf.readInt();
+                var keyLength = buf.readShort();
+
+                if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
+                    throw new IllegalStateException("Key length error, key length=" + keyLength);
+                }
+
+                var keyBytes = new byte[keyLength];
+                buf.readBytes(keyBytes);
+                var key = new String(keyBytes);
+
+                var cvEncodedLength = buf.readInt();
+                var cv = CompressedValue.decode(buf, keyBytes, 0);
+
+                cvCallback.callback(key, cv, segmentOffset);
+            }
+            return;
+        }
+
+        int offsetInThisSegment = SEGMENT_HEADER_LENGTH;
         while (true) {
             // refer to comment: write 0 short, so merge loop can break, because reuse old bytes
             if (buf.readableBytes() < 2) {
@@ -224,5 +244,107 @@ public class SegmentBatch2 implements InSlotMetricCollector {
 
             offsetInThisSegment += persistLength;
         }
+    }
+
+    static boolean isSegmentBytesTight(byte[] segmentBytes, int offset) {
+        // seq long + segment type byte
+        return segmentBytes[offset + 8] == Chunk.SegmentType.TIGHT.val;
+    }
+
+    static boolean isSegmentBytesSlim(byte[] segmentBytes, int offset) {
+        // seq long + segment type byte
+        return segmentBytes[offset + 8] == Chunk.SegmentType.SLIM.val;
+    }
+
+    record KeyBytesAndValueBytesInSegment(byte[] keyBytes, byte[] valueBytes) {
+    }
+
+    static KeyBytesAndValueBytesInSegment getKeyBytesAndValueBytesInSegmentBytesSlim(byte[] segmentBytesSlim, byte subBlockIndex, int segmentOffset) {
+        var buffer = ByteBuffer.wrap(segmentBytesSlim);
+
+        // seq long + segment type byte + cv number int + crc int
+        var cvNumber = buffer.getInt(8 + 1);
+        buffer.position(SEGMENT_HEADER_LENGTH);
+
+        for (int i = 0; i < cvNumber; i++) {
+            var subBlockIndexInner = buffer.get();
+            var segmentOffsetInner = buffer.getInt();
+            if (subBlockIndexInner == subBlockIndex && segmentOffsetInner == segmentOffset) {
+                var keyLength = buffer.getShort();
+                var keyBytes = new byte[keyLength];
+                buffer.get(keyBytes);
+                var cvEncodedLength = buffer.getInt();
+                var cvEncoded = new byte[cvEncodedLength];
+                buffer.get(cvEncoded);
+
+                return new KeyBytesAndValueBytesInSegment(keyBytes, cvEncoded);
+            } else {
+                var keyLength = buffer.getShort();
+                buffer.position(buffer.position() + keyLength);
+                var cvEncodedLength = buffer.getInt();
+                buffer.position(buffer.position() + cvEncodedLength);
+            }
+        }
+        return null;
+    }
+
+    // probe liner encode and search
+    static byte[] encodeValidCvListSlim(List<ChunkMergeJob.CvWithKeyAndSegmentOffset> invalidCvList) {
+        var lastOneSeqAsSegmentSeq = invalidCvList.getLast().cv.getSeq();
+        int bytesLengthN = SEGMENT_HEADER_LENGTH;
+
+        for (var one : invalidCvList) {
+            var keyLength = one.key.length();
+            var cvEncodedLength = one.cv.encodedLength();
+
+            // 1 byte for sub block index, 4 bytes for segment offset
+            // 2 bytes for key length, key bytes, 4 bytes for cv encoded length, cv encoded bytes
+            bytesLengthN += 1 + 4 + 2 + keyLength + 4 + cvEncodedLength;
+        }
+
+        // when after encoded is bigger, need not merged at all
+        if (bytesLengthN >= ConfForSlot.global.confChunk.segmentLength) {
+            return null;
+        }
+
+        var bytes = new byte[bytesLengthN];
+        var buffer = ByteBuffer.wrap(bytes);
+
+        // only use key bytes hash to calculate crc
+        var crcCalBytes = new byte[8 * invalidCvList.size()];
+        var crcCalBuffer = ByteBuffer.wrap(crcCalBytes);
+
+        // write segment header
+        buffer.putLong(lastOneSeqAsSegmentSeq);
+        buffer.put(Chunk.SegmentType.SLIM.val);
+        buffer.putInt(invalidCvList.size());
+        // temp write crc, then update
+        buffer.putInt(0);
+
+        for (var one : invalidCvList) {
+            var subBlockIndex = one.subBlockIndex;
+            var segmentOffset = one.segmentOffset;
+            buffer.put(subBlockIndex);
+            buffer.putInt(segmentOffset);
+
+            var keyLength = one.key.length();
+            var keyBytes = one.key.getBytes();
+            buffer.putShort((short) keyLength);
+            buffer.put(keyBytes);
+
+            var cvEncoded = one.cv.encode();
+            buffer.putInt(cvEncoded.length);
+            buffer.put(cvEncoded);
+
+            crcCalBuffer.putLong(one.cv.getKeyHash());
+        }
+
+        // update crc
+        int segmentCrc32 = KeyHash.hash32(crcCalBytes);
+        // refer to SEGMENT_HEADER_LENGTH definition
+        // seq long + segment type byte + cv number int + crc int
+        buffer.putInt(8 + 1 + 4, segmentCrc32);
+
+        return bytes;
     }
 }

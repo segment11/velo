@@ -1,5 +1,6 @@
 package io.velo.persist
 
+import io.netty.buffer.Unpooled
 import io.velo.CompressedValue
 import io.velo.KeyHash
 
@@ -35,6 +36,10 @@ class Mock {
             shortValueList << v
         }
         shortValueList
+    }
+
+    static CompressedValue fromV(Wal.V v) {
+        return CompressedValue.decode(Unpooled.wrappedBuffer(v.cvEncoded()), v.key().bytes, v.keyHash())
     }
 
     static ArrayList<Wal.V> prepareValueList(int n, int bucketIndex = 0, Function<Wal.V, Wal.V> transfer = null) {
