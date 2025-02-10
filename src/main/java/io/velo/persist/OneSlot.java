@@ -217,7 +217,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return size;
     }
 
+    @NotPureMemoryMode
     public void initLRU(boolean doRemoveForStats) {
+        if (ConfForGlobal.pureMemory) {
+            return;
+        }
+
         int maxSizeForAllWalGroups = ConfForSlot.global.lruKeyAndCompressedValueEncoded.maxSize;
         var maxSizeForEachWalGroup = maxSizeForAllWalGroups / walGroupNumber;
         final var maybeOneCompressedValueEncodedLength = 200;
@@ -522,6 +527,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return bigStringFiles.bigStringDir;
     }
 
+    @NotPureMemoryMode
     private final Map<Integer, LRUMap<String, byte[]>> kvByWalGroupIndexLRU = new HashMap<>();
 
     public int kvByWalGroupIndexLRUCountTotal() {
@@ -544,6 +550,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     int lruClearedCount = 0;
 
+    @NotPureMemoryMode
     public String randomKeyInLRU(int walGroupIndex) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         if (lru == null || lru.isEmpty()) {
@@ -562,6 +569,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return null;
     }
 
+    @NotPureMemoryMode
     int clearKvInTargetWalGroupIndexLRU(int walGroupIndex) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         if (lru == null) {
@@ -580,6 +588,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @TestOnly
+    @NotPureMemoryMode
     public void putKvInTargetWalGroupIndexLRU(int walGroupIndex, @NotNull String key, byte[] cvEncoded) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         if (lru == null) {
@@ -1068,18 +1077,20 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         // from lru cache
-        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
-        var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
-        var cvEncodedBytesFromLRU = lru.get(key);
-        if (cvEncodedBytesFromLRU != null) {
-            kvLRUHitTotal++;
-            kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
+        if (!ConfForGlobal.pureMemory) {
+            var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
+            var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
+            var cvEncodedBytesFromLRU = lru.get(key);
+            if (cvEncodedBytesFromLRU != null) {
+                kvLRUHitTotal++;
+                kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
 
-            var cv = CompressedValue.decode(Unpooled.wrappedBuffer(cvEncodedBytesFromLRU), keyBytes, keyHash);
-            return cv.getExpireAt();
+                var cv = CompressedValue.decode(Unpooled.wrappedBuffer(cvEncodedBytesFromLRU), keyBytes, keyHash);
+                return cv.getExpireAt();
+            }
         }
-        kvLRUMissTotal++;
 
+        kvLRUMissTotal++;
         return keyLoader.getExpireAt(bucketIndex, keyBytes, keyHash, keyHash32);
     }
 
@@ -1109,13 +1120,16 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // from lru cache
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
-        var cvEncodedBytesFromLRU = lru.get(key);
-        if (cvEncodedBytesFromLRU != null) {
-            kvLRUHitTotal++;
-            kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
+        if (!ConfForGlobal.pureMemory) {
+            var cvEncodedBytesFromLRU = lru.get(key);
+            if (cvEncodedBytesFromLRU != null) {
+                kvLRUHitTotal++;
+                kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
 
-            return new BufOrCompressedValue(Unpooled.wrappedBuffer(cvEncodedBytesFromLRU), null);
+                return new BufOrCompressedValue(Unpooled.wrappedBuffer(cvEncodedBytesFromLRU), null);
+            }
         }
+
         kvLRUMissTotal++;
 
         var valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(bucketIndex, keyBytes, keyHash, keyHash32);
@@ -1126,7 +1140,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var valueBytes = valueBytesWithExpireAtAndSeq.valueBytes();
         if (!PersistValueMeta.isPvm(valueBytes)) {
             // short value, just return, CompressedValue can decode
-            lru.put(key, valueBytes);
+            if (!ConfForGlobal.pureMemory) {
+                lru.put(key, valueBytes);
+            }
             return new BufOrCompressedValue(Unpooled.wrappedBuffer(valueBytes), null);
         }
 
@@ -1156,7 +1172,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             // set to lru cache, just target bytes
             ByteBuf buf = Unpooled.wrappedBuffer(keyBytesAndValueBytes.valueBytes());
             var cv = CompressedValue.decode(buf, keyBytes, keyHash);
-            lru.put(key, cv.encode());
+            if (!ConfForGlobal.pureMemory) {
+                lru.put(key, cv.encode());
+            }
 
             return new BufOrCompressedValue(null, cv);
         } else {
@@ -1189,7 +1207,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             // set to lru cache, just target bytes
             var cv = CompressedValue.decode(buf, keyBytes, keyHash);
-            lru.put(key, cv.encode());
+            if (!ConfForGlobal.pureMemory) {
+                lru.put(key, cv.encode());
+            }
 
             return new BufOrCompressedValue(null, cv);
         }
