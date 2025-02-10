@@ -2,6 +2,7 @@ package io.velo.persist.index;
 
 import io.activej.config.Config;
 import io.velo.ConfForGlobal;
+import io.velo.ParamMutable;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -32,7 +33,25 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisTask.class);
 
-    public KeyAnalysisTask(KeyAnalysisHandler handler, TreeMap<String, byte[]> allKeysInMemory, @Nullable RocksDB db, Config persistConfig) {
+    public KeyAnalysisTask(KeyAnalysisHandler handler, @ParamMutable @Nullable TreeMap<String, byte[]> allKeysInMemory,
+                           @Nullable RocksDB db, KeyAnalysisTask oldOne) {
+        this.handler = handler;
+        this.allKeysInMemory = allKeysInMemory;
+        this.db = db;
+
+        this.notBusyAddCountIncreasedLastSecond = oldOne.notBusyAddCountIncreasedLastSecond;
+        this.notBusyBeginTime = oldOne.notBusyBeginTime;
+        this.notBusyEndTime = oldOne.notBusyEndTime;
+
+        this.onceIterateKeyCount = oldOne.onceIterateKeyCount;
+        this.doLogByKeyPrefixCountIfBiggerThan = oldOne.doLogByKeyPrefixCountIfBiggerThan;
+
+        this.groupByMinLengthForKey = oldOne.groupByMinLengthForKey;
+        this.groupByMaxLengthForKey = oldOne.groupByMaxLengthForKey;
+    }
+
+    public KeyAnalysisTask(KeyAnalysisHandler handler, @ParamMutable @Nullable TreeMap<String, byte[]> allKeysInMemory,
+                           @Nullable RocksDB db, Config persistConfig) {
         this.handler = handler;
         this.allKeysInMemory = allKeysInMemory;
         this.db = db;

@@ -66,7 +66,13 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisHandler.class);
 
+    private Options initOptions;
+
     private Options openOptions(Config persistConfig) {
+        if (initOptions != null) {
+            return initOptions;
+        }
+
         var rocksDBWriteBufferSize = persistConfig.get(ofInteger(), "keyAnalysis.rocksDBWriteBufferSize", 4 * 1024 * 1024);
         var rocksDBMaxWriteBufferNumber = persistConfig.get(ofInteger(), "keyAnalysis.rocksDBMaxWriteBufferNumber", 4);
         var rocksDBMinWriteBufferNumberToMerge = persistConfig.get(ofInteger(), "keyAnalysis.rocksDBMinWriteBufferNumberToMerge", 2);
@@ -80,7 +86,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
         // 100 million keys, use one more cpu vcore, cost about 3GB total file size, and less than 1GB memory
         // refer to TestRocksDBConfig.groovy
-        return new Options()
+        initOptions = new Options()
                 .setCreateIfMissing(true)
                 .setCompressionType(CompressionType.NO_COMPRESSION)
                 .setWriteBufferSize(rocksDBWriteBufferSize)
@@ -91,6 +97,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                 .setMaxOpenFiles(rocksDBMaxOpenFiles)
                 .setMaxBackgroundJobs(rocksDBMaxBackgroundJobs)
                 .useFixedLengthPrefixExtractor(rocksDBFixedLengthPrefixExtractor);
+        return initOptions;
     }
 
     private void createDB() throws RocksDBException {
@@ -220,7 +227,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
             log.warn("Delete key analysis dir");
 
             createDB();
-            this.innerTask = new KeyAnalysisTask(this, allKeysInMemory, db, persistConfig);
+            this.innerTask = new KeyAnalysisTask(this, allKeysInMemory, db, this.innerTask);
         }
 
         addCount = 0;

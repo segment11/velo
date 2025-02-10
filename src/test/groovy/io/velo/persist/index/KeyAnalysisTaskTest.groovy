@@ -63,6 +63,7 @@ class KeyAnalysisTaskTest extends Specification {
                 .with('keyAnalysis', config2)
 
         def keyAnalysisTask2 = new KeyAnalysisTask(keyAnalysisHandler, null, keyAnalysisHandler.db, persistConfig2)
+        def keyAnalysisTask3 = new KeyAnalysisTask(keyAnalysisHandler, null, keyAnalysisHandler.db, keyAnalysisTask2)
         keyAnalysisHandler.addCount = 10000
         keyAnalysisTask2.run(1)
         then:
