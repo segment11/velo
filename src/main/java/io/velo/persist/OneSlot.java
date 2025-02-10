@@ -926,7 +926,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             @Override
             public void run() {
-                if (loopCount % 1000 == 0) {
+                // do every 100 loop, 1s
+                if (loopCount % 100 != 0) {
+                    return;
+                }
+
+                // do log every 1000s
+                if (loopCount % (100 * 1000) == 0) {
                     log.info("Task {} run, slot={}, loop count={}", name(), slot, loopCount);
                 }
 
@@ -977,7 +983,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         });
 
         if (ConfForGlobal.pureMemory) {
-            // do every 1s
+            // do every 10ms
             taskChain.add(new ITask() {
                 private int lastCheckedSegmentIndex = 0;
 
@@ -1013,6 +1019,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             @Override
             public void run() {
+                // do every 1000 loop, 10s
+                if (loopCount % 1000 != 0) {
+                    return;
+                }
+
                 // reduce log
                 var firstOneSlot = LocalPersist.getInstance().firstOneSlot();
                 if (firstOneSlot != null && slot == firstOneSlot.slot) {
@@ -2114,22 +2125,36 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> invalidCvList = new ArrayList<>();
 
         for (var one : cvList) {
-            var tmpWalValueBytes = getFromWal(one.key, one.bucketIndex);
+            var cv = one.cv;
+            var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash(), keyLoader.bucketsPerSlot);
+
+            var tmpWalValueBytes = getFromWal(one.key, bucketIndex);
             if (tmpWalValueBytes != null) {
                 invalidCvList.add(one);
                 continue;
             }
 
-            var keyHash32 = KeyHash.hash32(one.key.getBytes());
-            var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(one.bucketIndex, one.key.getBytes(), one.cv.getKeyHash(), keyHash32);
+            var keyBytes = one.key.getBytes();
+            var keyHash32 = KeyHash.hash32(keyBytes);
+            var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, keyBytes, cv.getKeyHash(), keyHash32);
             if (expireAtAndSeq == null || expireAtAndSeq.isExpired()) {
                 invalidCvList.add(one);
                 continue;
             }
 
-            if (expireAtAndSeq.seq() != one.cv.getSeq()) {
+            if (expireAtAndSeq.seq() != cv.getSeq()) {
                 invalidCvList.add(one);
             }
+        }
+
+        // all is invalid
+        if (invalidCvList.size() == cvList.size()) {
+            setSegmentMergeFlag(targetSegmentIndex, Flag.merged_and_persisted.flagByte, 0L, 0);
+
+            var xChunkSegmentFlagUpdate = new XChunkSegmentFlagUpdate();
+            xChunkSegmentFlagUpdate.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex, Flag.merged_and_persisted.flagByte, 0L);
+            appendBinlog(xChunkSegmentFlagUpdate);
+            return;
         }
 
         var totalCvCount = expiredCount + cvList.size();

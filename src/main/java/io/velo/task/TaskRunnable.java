@@ -55,7 +55,8 @@ public class TaskRunnable implements Runnable {
             return;
         }
 
-        netWorkerEventloop.delay(1000L, this);
+        final long INTERVAL_MS = 10L;
+        netWorkerEventloop.delay(INTERVAL_MS, this);
     }
 
     private volatile boolean isStopped = false;
