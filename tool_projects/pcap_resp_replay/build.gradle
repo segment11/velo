@@ -1,0 +1,100 @@
+plugins {
+    id 'java'
+    id 'groovy'
+}
+
+group = 'io.velo'
+version = '1.0.0'
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src_java']
+        }
+
+        groovy {
+            srcDirs = ['src']
+        }
+        resources {
+            srcDirs = ['resources']
+        }
+    }
+    test {
+        groovy {
+            srcDirs = ['test']
+        }
+        resources {
+            srcDirs = ['test_resources']
+        }
+    }
+}
+
+sourceCompatibility = 17
+targetCompatibility = 17
+
+//compileGroovy {
+//    groovyOptions.configurationScript = file("config.groovy")
+//}
+
+repositories {
+    mavenCentral()
+}
+
+String nettyVersion = '4.1.100.Final'
+
+dependencies {
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: '2.0.9'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.20.0'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-api', version: '2.20.0'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j2-impl', version: '2.20.0'
+
+    implementation group: 'org.apache.groovy', name: 'groovy', version: '4.0.12'
+    implementation group: 'org.apache.groovy', name: 'groovy-dateutil', version: '4.0.12'
+
+    implementation group: 'io.vproxy', name: 'pcap4j-core', version: '1.8.3.3'
+    implementation group: 'io.vproxy', name: 'commons', version: '1.4.0'
+
+    implementation group: 'io.netty', name: 'netty-buffer', version: nettyVersion
+
+    testImplementation group: 'org.spockframework', name: 'spock-core', version: '2.3-groovy-4.0'
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        showStandardStreams = true
+    }
+}
+
+// for debug
+/*
+java \
+-Xmx1g -Xms1g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m \
+-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:12321 \
+-jar pcap_resp_replay-1.0.0.jar
+ */
+
+jar {
+    manifest {
+        attributes "Main-Class": 'io.velo.tool.pcap.replay.MonitorAndReplay'
+        attributes "Class-Path": '. lib/' + configurations.runtimeClasspath.collect { it.name }.join(' lib/')
+    }
+    exclude 'log4j2.xml'
+    zip64 true
+}
+
+tasks.withType(Jar) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+task copyLog4j2(type: Copy) {
+    from 'resources/log4j2.xml'
+    into "$buildDir/libs/"
+}
+
+task copyDependencies(type: Copy) {
+    from configurations.runtimeClasspath
+    into 'build/libs/lib'
+}
+
+jar.dependsOn copyLog4j2, copyDependencies

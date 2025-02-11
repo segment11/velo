@@ -1,0 +1,3 @@
+moduleName=groovy-ext-console-color
+moduleVersion=4.0.12
+extensionClasses=io.velo.tool.pcap.extend.ConsoleColorExtensions
