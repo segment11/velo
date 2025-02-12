@@ -79,14 +79,17 @@ class AllKeyHashBucketsTest extends Specification {
 
         when:
         def a1m = new AllKeyHashBuckets(65536)
+        def estimateSize = a1m.estimate(sb)
         then:
-        a1m.estimate(sb) == 128L * 64 * 1024 * 7
+        estimateSize == 128L * 64 * 1024 * 7 + 64 * 1024 * 16
 
         when:
+        println sb.toString()
         ConfForSlot.global = ConfForSlot.c10m
         def a10m = new AllKeyHashBuckets(256 * 1024)
+        def estimateSize2 = a10m.estimate(sb)
         then:
-        a10m.estimate(sb) == 256L * 256 * 1024 * 7
+        estimateSize2 == 256L * 256 * 1024 * 7 + 256 * 1024 * 16
 
         when:
         println sb.toString()
