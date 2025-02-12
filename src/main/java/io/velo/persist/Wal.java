@@ -15,6 +15,7 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 
 import static io.velo.CompressedValue.NO_EXPIRE;
@@ -246,6 +247,14 @@ public class Wal implements InMemoryEstimate {
 
     public int getKeyCount() {
         return delayToKeyBucketValues.size() + delayToKeyBucketShortValues.size();
+    }
+
+    // for scan skip
+    HashSet<String> inWalKeys() {
+        HashSet<String> set = new HashSet<>();
+        set.addAll(delayToKeyBucketValues.keySet());
+        set.addAll(delayToKeyBucketShortValues.keySet());
+        return set;
     }
 
     public KeyLoader.ScanCursorWithReturnKeys scan(final short skipCount,

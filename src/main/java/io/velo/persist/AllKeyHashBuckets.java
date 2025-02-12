@@ -5,6 +5,7 @@ import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -15,7 +16,9 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 
 // pure memory v2
 // refer to faster
@@ -34,9 +37,17 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
     @VisibleForTesting
     static final long MAX_EXPIRE_AT = Long.MAX_VALUE & 0xffffffffffffL;
 
+    private final short slot;
+    private final OneSlot oneSlot;
+
     private static final Logger log = LoggerFactory.getLogger(AllKeyHashBuckets.class);
 
-    public AllKeyHashBuckets(int bucketsPerSlot) {
+    @TestOnly
+    AllKeyHashBuckets(int bucketsPerSlot) {
+        this(bucketsPerSlot, null);
+    }
+
+    public AllKeyHashBuckets(int bucketsPerSlot, OneSlot oneSlot) {
         final int arrayLength;
         final int initCapacity;
         if (ConfForGlobal.pureMemoryV2) {
@@ -55,6 +66,8 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
             arrayLength = 1024;
         }
 
+        this.slot = oneSlot == null ? 0 : oneSlot.slot();
+        this.oneSlot = oneSlot;
         this.allKeyHash32BitBytesArray = new byte[arrayLength][];
         this.extendBytesArray = new byte[arrayLength][];
         for (int i = 0; i < arrayLength; i++) {
@@ -130,6 +143,7 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
                 var extendBuffer = ByteBuffer.wrap(extendBytes);
                 var offset = i * 6;
                 var recordId = extendBuffer.getLong(offset);
+                // deleted
                 if (recordId == NO_RECORD_ID) {
                     return null;
                 } else {
@@ -140,6 +154,96 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
                     var seq = extendBuffer.getLong(offset + 16);
                     return new RecordX(recordId, expireAt, shortType, seq);
                 }
+            }
+        }
+
+        return null;
+    }
+
+    ScanCursor readKeysToList(final @NotNull ArrayList<String> keys,
+                              final int walGroupIndex,
+                              final short skipCount,
+                              final byte typeAsByte,
+                              final @Nullable String matchPattern,
+                              final int[] countArray,
+                              final HashSet<String> inWalKeys) {
+        var beginBucketIndex = walGroupIndex * ConfForSlot.global.confWal.oneChargeBucketNumber;
+
+        short addedKeyCount = 0;
+        short tmpSkipCount = skipCount;
+        short expiredOrNotMatchedCount = 0;
+        final long currentTimeMillis = System.currentTimeMillis();
+        for (int ii = 0; ii < ConfForSlot.global.confWal.oneChargeBucketNumber; ii++) {
+            var bucketIndex = beginBucketIndex + ii;
+
+            var bytes = allKeyHash32BitBytesArray[bucketIndex];
+            var buffer = ByteBuffer.wrap(bytes);
+            var extendBytes = extendBytesArray[bucketIndex];
+            var extendBuffer = ByteBuffer.wrap(extendBytes);
+
+            for (int i = 0; i < bytes.length; i += 4) {
+                var targetKeyHash32 = buffer.getInt(i);
+                if (targetKeyHash32 == 0) {
+                    continue;
+                }
+
+                var offset = i * 6;
+                var recordId = extendBuffer.getLong(offset);
+                // deleted
+                if (recordId == NO_RECORD_ID) {
+                    continue;
+                }
+
+                if (tmpSkipCount > 0) {
+                    tmpSkipCount--;
+                    continue;
+                }
+
+                var l = extendBuffer.getLong(offset + 8);
+                // high 48 bit is real expire at millisecond, 8 bit is short type
+                var expireAt = l >>> 16;
+                byte shortType = (byte) (l & 0xFF);
+
+                if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
+                    expiredOrNotMatchedCount++;
+                    continue;
+                }
+
+                if (typeAsByte != KeyLoader.typeAsByteIgnore && shortType != typeAsByte) {
+                    expiredOrNotMatchedCount++;
+                    continue;
+                }
+
+                var pvm = AllKeyHashBuckets.recordIdToPvm(recordId);
+                // in loop, may decompress too many times, perf bad
+                var keyBytes = oneSlot.getOnlyKeyBytesFromSegment(pvm);
+                if (keyBytes == null) {
+                    throw new IllegalStateException("Find key bytes is null, recordId: " + recordId);
+                }
+
+                var key = new String(keyBytes);
+                if (!KeyLoader.isKeyMatch(key, matchPattern)) {
+                    expiredOrNotMatchedCount++;
+                    continue;
+                }
+
+                if (inWalKeys.contains(key)) {
+                    expiredOrNotMatchedCount++;
+                    continue;
+                }
+
+                if (countArray[0] <= 0) {
+                    break;
+                }
+
+                addedKeyCount++;
+                keys.add(key);
+                countArray[0]--;
+            }
+
+            if (countArray[0] <= 0) {
+                var nextTimeSkipCount = skipCount + expiredOrNotMatchedCount + addedKeyCount;
+                return new ScanCursor(slot, walGroupIndex, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) nextTimeSkipCount, (byte) 0);
             }
         }
 

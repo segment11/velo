@@ -390,6 +390,9 @@ class WalTest extends Specification {
         def snowFlake = new SnowFlake(1, 1)
         def wal = new Wal(slot, 0, null, null, snowFlake)
 
+        expect:
+        wal.inWalKeys().isEmpty()
+
         when:
         def r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10)
         then:

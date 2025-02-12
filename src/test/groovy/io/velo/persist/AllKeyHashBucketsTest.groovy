@@ -3,10 +3,12 @@ package io.velo.persist
 import io.velo.BaseCommand
 import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
-import io.velo.KeyHash
 import spock.lang.Specification
 
 class AllKeyHashBucketsTest extends Specification {
+    final short slot = 0
+    final short slotNumber = 1
+
     def 'test set and get'() {
         given:
         ConfForGlobal.pureMemoryV2 = true
@@ -18,16 +20,14 @@ class AllKeyHashBucketsTest extends Specification {
         def n = 10000 * 100
         def sList = (0..<n).collect {
             def key = 'key:' + (it.toString().padLeft(12, '0'))
-            def keyHash32 = KeyHash.hash32(key.bytes)
-            def s = BaseCommand.slot(key.bytes, 1)
-            new Tuple2<BaseCommand.SlotWithKeyHash, Integer>(s, keyHash32)
+            BaseCommand.slot(key.bytes, 1)
         }
         sList.eachWithIndex { s, i ->
-            allKeyHashBuckets.put(s.v2, s.v1.bucketIndex(), 0L, i, (byte) 0, i)
+            allKeyHashBuckets.put(s.keyHash32(), s.bucketIndex(), 0L, i, (byte) 0, i)
         }
         boolean isMatchAll = true
         sList.eachWithIndex { s, i ->
-            def isMatch = allKeyHashBuckets.get(s.v2, s.v1.bucketIndex()).recordId() == i
+            def isMatch = allKeyHashBuckets.get(s.keyHash32(), s.bucketIndex()).recordId() == i
             isMatchAll &= isMatch
         }
         then:
@@ -35,14 +35,14 @@ class AllKeyHashBucketsTest extends Specification {
 
         when:
         sList[0..<10].each {
-            allKeyHashBuckets.remove(it.v2, it.v1.bucketIndex())
+            allKeyHashBuckets.remove(it.keyHash32(), it.bucketIndex())
         }
         then:
         sList[0..<10].every {
-            allKeyHashBuckets.get(it.v2, it.v1.bucketIndex()) == null
+            allKeyHashBuckets.get(it.keyHash32(), it.bucketIndex()) == null
         }
         sList[0..<10].every {
-            !allKeyHashBuckets.remove(it.v2, it.v1.bucketIndex())
+            !allKeyHashBuckets.remove(it.keyHash32(), it.bucketIndex())
         }
 
         when:
@@ -165,5 +165,53 @@ class AllKeyHashBucketsTest extends Specification {
         then:
         bb.length == ConfForSlot.global.confWal.oneChargeBucketNumber
         bb[0].length == 472
+    }
+
+    def 'test scan'() {
+        given:
+        ConfForGlobal.pureMemory = true
+        ConfForGlobal.pureMemoryV2 = true
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def keyLoader = oneSlot.keyLoader
+        def allKeyHashBuckets = keyLoader.allKeyHashBuckets
+
+        and:
+        def inWalKeys = oneSlot.getWalByGroupIndex(0).inWalKeys()
+
+        // test read keys
+        when:
+        ArrayList<String> keys = []
+        int[] countArray = [10]
+        allKeyHashBuckets.readKeysToList(keys, 0, (short) 1, KeyLoader.typeAsByteIgnore, null, countArray, inWalKeys)
+        then:
+        keys.isEmpty()
+
+        when:
+        countArray[0] = 10
+        // trigger persist wal
+        5.times {
+            OneSlotTest.batchPut(oneSlot, 100, 100, 1, slotNumber)
+        }
+        def r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteIgnore, null, 10)
+        then:
+        // all keys are in wal
+        r.keys().isEmpty()
+
+        when:
+        for (i in 0..<Wal.calcWalGroupNumber()) {
+            oneSlot.getWalByGroupIndex(i).clear()
+        }
+        def r2 = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteIgnore, null, 10)
+        then:
+        r2.keys().size() == 10
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.pureMemory = false
+        ConfForGlobal.pureMemoryV2 = false
     }
 }

@@ -1215,6 +1215,38 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
+    byte[] getOnlyKeyBytesFromSegment(PersistValueMeta pvm) {
+        var segmentBytes = getSegmentBytesBySegmentIndex(pvm.segmentIndex);
+        if (segmentBytes == null) {
+            return null;
+        }
+
+        if (SegmentBatch2.isSegmentBytesSlim(segmentBytes, 0)) {
+            var keyBytesAndValueBytes = SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytes, pvm.subBlockIndex, pvm.segmentOffset);
+            if (keyBytesAndValueBytes == null) {
+                return null;
+            }
+
+            return keyBytesAndValueBytes.keyBytes();
+        } else {
+            if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
+                segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
+            }
+            ByteBuf buf = Unpooled.wrappedBuffer(segmentBytes);
+            buf.readerIndex(pvm.segmentOffset);
+
+            // skip key header or check key
+            var keyLength = buf.readShort();
+            if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
+                throw new IllegalStateException("Key length error, key length=" + keyLength);
+            }
+
+            var keyBytes = new byte[keyLength];
+            buf.readBytes(keyBytes);
+            return keyBytes;
+        }
+    }
+
     byte[] getFromWal(@NotNull String key, int bucketIndex) {
         checkCurrentThreadId();
 

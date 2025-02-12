@@ -61,7 +61,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             }
         };
 
-        this.allKeyHashBuckets = new AllKeyHashBuckets(bucketsPerSlot);
+        this.allKeyHashBuckets = new AllKeyHashBuckets(bucketsPerSlot, oneSlot);
     }
 
     @Override
@@ -451,25 +451,27 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                                       final short skipCount,
                                       final byte typeAsByte,
                                       final @Nullable String matchPattern,
-                                      final int[] countArray) {
+                                      final int[] countArray,
+                                      HashSet<String> inWalKeys) {
         var keyCountThisWalGroup = statKeyCountInBuckets.getKeyCountForOneWalGroup(walGroupIndex);
         if (keyCountThisWalGroup == 0) {
             return null;
         }
 
         if (ConfForGlobal.pureMemoryV2) {
-            // todo
+            return allKeyHashBuckets.readKeysToList(keys, walGroupIndex, skipCount, typeAsByte, matchPattern, countArray, inWalKeys);
         }
 
         var beginBucketIndex = walGroupIndex * ConfForSlot.global.confWal.oneChargeBucketNumber;
-        var sharedBytes = readBatchInOneWalGroup(splitIndex, beginBucketIndex);
 
+        var sharedBytes = readBatchInOneWalGroup(splitIndex, beginBucketIndex);
         if (sharedBytes == null) {
             return null;
         }
 
         for (int i = 0; i < ConfForSlot.global.confWal.oneChargeBucketNumber; i++) {
-            var position = getPositionInSharedBytes(beginBucketIndex + i);
+            var bucketIndex = beginBucketIndex + i;
+            var position = getPositionInSharedBytes(bucketIndex);
             if (position >= sharedBytes.length) {
                 continue;
             }
@@ -478,8 +480,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 continue;
             }
 
-            var splitNumber = metaKeyBucketSplitNumber.get(beginBucketIndex + i);
-            var keyBucket = new KeyBucket(slot, beginBucketIndex + i, splitIndex, splitNumber, sharedBytes, position, snowFlake);
+            var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
+            var keyBucket = new KeyBucket(slot, bucketIndex, splitIndex, splitNumber, sharedBytes, position, snowFlake);
 
             final short[] addedKeyCount = {0};
             final short[] tmpSkipCount = {skipCount};
@@ -499,6 +501,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
                 var key = new String(keyBytes);
                 if (!isKeyMatch(key, matchPattern)) {
+                    expiredOrNotMatchedCount[0]++;
+                    return;
+                }
+
+                if (inWalKeys.contains(key)) {
                     expiredOrNotMatchedCount[0]++;
                     return;
                 }
@@ -539,6 +546,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     public record ScanCursorWithReturnKeys(@NotNull ScanCursor scanCursor, @NotNull ArrayList<String> keys) {
     }
 
+    // need skip already wal keys
     public ScanCursorWithReturnKeys scan(final int walGroupIndex,
                                          final byte splitIndex,
                                          final short skipCount,
@@ -546,6 +554,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                                          final @Nullable String matchPattern,
                                          final int count) {
         final ArrayList<String> keys = new ArrayList<>(count);
+        final var inWalKeys = oneSlot.getWalByGroupIndex(walGroupIndex).inWalKeys();
 
         var walGroupNumber = Wal.calcWalGroupNumber();
         var maxSplitNumber = metaKeyBucketSplitNumber.maxSplitNumber();
@@ -560,7 +569,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 final var skipCountInThisWalGroupThisSplitIndex = i == splitIndex && j == walGroupIndex ? skipCount : 0;
 
                 var scanCursor = readKeysToList(keys, j, (byte) i, skipCountInThisWalGroupThisSplitIndex,
-                        typeAsByte, matchPattern, countArray);
+                        typeAsByte, matchPattern, countArray, inWalKeys);
                 if (scanCursor != null) {
                     return new ScanCursorWithReturnKeys(scanCursor, keys);
                 }

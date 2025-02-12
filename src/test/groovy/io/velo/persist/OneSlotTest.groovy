@@ -686,6 +686,12 @@ class OneSlotTest extends Specification {
         oneSlot.get(notExistKey.bytes, sNotExistKey.bucketIndex(), sNotExistKey.keyHash(), sNotExistKey.keyHash32()) == null
 
         when:
+        def testPvm = new PersistValueMeta()
+        def keyBytes = oneSlot.getOnlyKeyBytesFromSegment(testPvm)
+        then:
+        keyBytes == null
+
+        when:
         cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
         cv.compressedData = new byte[CompressedValue.SP_TYPE_SHORT_STRING_MIN_LEN * 100]
         cv.compressedLength = cv.compressedData.length
@@ -698,6 +704,19 @@ class OneSlotTest extends Specification {
         oneSlot.getWalByBucketIndex(sKey.bucketIndex()).clear()
         then:
         oneSlot.get(key.bytes, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) != null
+
+        when:
+        def keyLoader = oneSlot.keyLoader
+        def valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(sKey.bucketIndex(), key.bytes, sKey.keyHash(), sKey.keyHash32())
+        then:
+        valueBytesWithExpireAtAndSeq != null
+        PersistValueMeta.isPvm(valueBytesWithExpireAtAndSeq.valueBytes())
+
+        when:
+        def testPvm2 = PersistValueMeta.decode(valueBytesWithExpireAtAndSeq.valueBytes())
+        def keyBytes2 = oneSlot.getOnlyKeyBytesFromSegment(testPvm2)
+        then:
+        keyBytes2 == key.bytes
 
         when:
         oneSlot.readonly = true
@@ -771,6 +790,30 @@ class OneSlotTest extends Specification {
         then:
         oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
         oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
+
+        when:
+        def chunk = oneSlot.chunk
+        ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList = []
+        def segmentBytes = chunk.preadForRepl(testPvm2.segmentIndex)
+        ChunkMergeJob.readToCvList(cvList, segmentBytes, 0, segmentBytes.length, testPvm2.segmentIndex, slot)
+        ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> validCvList = []
+        validCvList << cvList[0]
+        def encodedSlim = SegmentBatch2.encodeValidCvListSlim(validCvList)
+        chunk.writeSegmentToTargetSegmentIndex(encodedSlim, testPvm2.segmentIndex)
+        keyBytes2 = oneSlot.getOnlyKeyBytesFromSegment(testPvm2)
+        then:
+        keyBytes2 == key.bytes
+
+        when:
+        valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(sKey.bucketIndex(), key.bytes, sKey.keyHash(), sKey.keyHash32())
+        def testPvm3 = PersistValueMeta.decode(valueBytesWithExpireAtAndSeq.valueBytes())
+        chunk.writeSegmentToTargetSegmentIndex(encodedSlim, testPvm3.segmentIndex)
+        // clear lru and wal
+        oneSlot.clearKvInTargetWalGroupIndexLRU(Wal.calcWalGroupIndex(sKey.bucketIndex()))
+        oneSlot.getWalByBucketIndex(sKey.bucketIndex()).clear()
+        def bufOrCv2 = oneSlot.get(key.bytes, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
+        then:
+        bufOrCv2 != null
 
         cleanup:
         oneSlot.flush()
