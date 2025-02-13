@@ -240,6 +240,7 @@ public class SGroup extends BaseCommand {
         if (keys.size() < count) {
             // reach the end
             veloUserData.setLastScanAssignCursor(0);
+            veloUserData.setBeginScanSeq(0);
         } else {
             veloUserData.setLastScanAssignCursor(r.scanCursor().toLong());
         }
@@ -347,13 +348,16 @@ public class SGroup extends BaseCommand {
         }
 
         var oneSlot = localPersist.oneSlot(scanCursor.slot());
+        if (cursorLong == 0) {
+            veloUserData.setBeginScanSeq(oneSlot.getSnowFlake().getLastNextId());
+        }
 
         int leftCount = count;
 
         KeyLoader.ScanCursorWithReturnKeys rWal = null;
         if (!scanCursor.isWalIterateEnd()) {
             var wal = oneSlot.getWalByGroupIndex(scanCursor.walGroupIndex());
-            rWal = wal.scan(scanCursor.walSkipCount(), typeAsByte, matchPattern, count);
+            rWal = wal.scan(scanCursor.walSkipCount(), typeAsByte, matchPattern, count, veloUserData.getBeginScanSeq());
 
             if (rWal != null) {
                 if (rWal.keys().size() == count) {
@@ -367,7 +371,7 @@ public class SGroup extends BaseCommand {
 
         var keyLoader = oneSlot.getKeyLoader();
         var r = keyLoader.scan(scanCursor.walGroupIndex(), scanCursor.splitIndex(), scanCursor.keyBucketsSkipCount(),
-                typeAsByte, matchPattern, leftCount);
+                typeAsByte, matchPattern, leftCount, veloUserData.getBeginScanSeq());
 
         if (r == null || r.keys().isEmpty()) {
             if (rWal != null) {

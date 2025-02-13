@@ -579,7 +579,7 @@ class KeyLoaderTest extends Specification {
 
         when:
         // no keys put yet
-        def r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10)
+        def r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
         then:
         r.scanCursor() == ScanCursor.END
 
@@ -615,12 +615,17 @@ class KeyLoaderTest extends Specification {
         }
         def xForBinlog = new XOneWalGroupPersist(true, false, 0)
         keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog, null)
-        r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6)
+        r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, 0L)
         then:
         r.keys().size() == 6
         r.keys().every { key ->
             key in pvmList.collect { new String(it.keyBytes) }
         }
+
+        when:
+        r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, -1L)
+        then:
+        r.keys().isEmpty()
 
         when:
         ConfForGlobal.pureMemoryV2 = true

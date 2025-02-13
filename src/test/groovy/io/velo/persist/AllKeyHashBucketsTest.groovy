@@ -198,7 +198,7 @@ class AllKeyHashBucketsTest extends Specification {
         5.times {
             OneSlotTest.batchPut(oneSlot, 100, 100, 1, slotNumber)
         }
-        def r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteIgnore, null, 10)
+        def r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteIgnore, null, 10, 0L)
         then:
         // all keys are in wal
         r.keys().isEmpty()
@@ -207,7 +207,7 @@ class AllKeyHashBucketsTest extends Specification {
         for (i in 0..<Wal.calcWalGroupNumber()) {
             oneSlot.getWalByGroupIndex(i).clear()
         }
-        def r2 = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteIgnore, null, 10)
+        def r2 = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteIgnore, null, 10, 0L)
         then:
         r2.keys().size() == 10
 

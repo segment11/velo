@@ -299,8 +299,9 @@ sunionstore
 
         when:
         // add wal key values
+        def shortValueList2 = Mock.prepareShortValueList(20, 0)[10..-1]
         def wal = oneSlot.getWalByGroupIndex(0)
-        for (shortV in shortValueList) {
+        for (shortV in shortValueList2) {
             wal.put(true, shortV.key(), shortV)
         }
         // reset

@@ -452,6 +452,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                                       final byte typeAsByte,
                                       final @Nullable String matchPattern,
                                       final int[] countArray,
+                                      final long beginScanSeq,
                                       HashSet<String> inWalKeys) {
         var keyCountThisWalGroup = statKeyCountInBuckets.getKeyCountForOneWalGroup(walGroupIndex);
         if (keyCountThisWalGroup == 0) {
@@ -526,6 +527,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                     }
                 }
 
+                // skip data that is new added after time do scan
+                if (seq > beginScanSeq) {
+                    return;
+                }
+
                 if (countArray[0] <= 0) {
                     return;
                 }
@@ -552,7 +558,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                                          final short skipCount,
                                          final byte typeAsByte,
                                          final @Nullable String matchPattern,
-                                         final int count) {
+                                         final int count,
+                                         final long beginScanSeq) {
         final ArrayList<String> keys = new ArrayList<>(count);
         final var inWalKeys = oneSlot.getWalByGroupIndex(walGroupIndex).inWalKeys();
 
@@ -569,7 +576,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 final var skipCountInThisWalGroupThisSplitIndex = i == splitIndex && j == walGroupIndex ? skipCount : 0;
 
                 var scanCursor = readKeysToList(keys, j, (byte) i, skipCountInThisWalGroupThisSplitIndex,
-                        typeAsByte, matchPattern, countArray, inWalKeys);
+                        typeAsByte, matchPattern, countArray, beginScanSeq, inWalKeys);
                 if (scanCursor != null) {
                     return new ScanCursorWithReturnKeys(scanCursor, keys);
                 }

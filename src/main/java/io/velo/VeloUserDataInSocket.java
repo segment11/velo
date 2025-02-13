@@ -37,6 +37,17 @@ public class VeloUserDataInSocket {
         this.lastScanAssignCursor = lastScanAssignCursor;
     }
 
+    private long beginScanSeq = 0;
+
+    public long getBeginScanSeq() {
+        return beginScanSeq;
+    }
+
+    public void setBeginScanSeq(long beginScanSeq) {
+        this.beginScanSeq = beginScanSeq;
+
+    }
+
     private String clientName;
 
     public String getClientName() {

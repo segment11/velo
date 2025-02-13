@@ -260,7 +260,8 @@ public class Wal implements InMemoryEstimate {
     public KeyLoader.ScanCursorWithReturnKeys scan(final short skipCount,
                                                    final byte typeAsByte,
                                                    final @Nullable String matchPattern,
-                                                   final int count) {
+                                                   final int count,
+                                                   final long beginScanSeq) {
         if (delayToKeyBucketValues.isEmpty() && delayToKeyBucketShortValues.isEmpty()) {
             return null;
         }
@@ -299,6 +300,11 @@ public class Wal implements InMemoryEstimate {
                     removedOrExpiredOrNotMatchedCount++;
                     continue;
                 }
+            }
+
+            // skip data that is new added after time do scan
+            if (v.seq > beginScanSeq) {
+                continue;
             }
 
             keys.add(key);

@@ -394,7 +394,7 @@ class WalTest extends Specification {
         wal.inWalKeys().isEmpty()
 
         when:
-        def r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10)
+        def r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
         then:
         r == null
 
@@ -403,25 +403,31 @@ class WalTest extends Specification {
         for (shortV in shortValueList) {
             wal.put(true, shortV.key(), shortV)
         }
-        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10)
+        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
         then:
         r != null
         r.keys().size() == 10
 
         when:
-        r = wal.scan((short) 5, KeyLoader.typeAsByteIgnore, null, 10)
+        r = wal.scan((short) 5, KeyLoader.typeAsByteIgnore, null, 10, 100L)
         then:
         r != null
         r.keys().size() == 5
         r.scanCursor().walSkipCount() == 10
 
         when:
-        r = wal.scan((short) 0, KeyLoader.typeAsByteHash, null, 10)
+        // all wal v seq is > 0
+        r = wal.scan((short) 5, KeyLoader.typeAsByteIgnore, null, 10, 0L)
         then:
         r == null
 
         when:
-        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, 'xxx:', 10)
+        r = wal.scan((short) 0, KeyLoader.typeAsByteHash, null, 10, 100L)
+        then:
+        r == null
+
+        when:
+        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, 'xxx:', 10, 100L)
         then:
         r == null
 
@@ -443,7 +449,7 @@ class WalTest extends Specification {
         for (shortV in shortValueList2) {
             wal.put(true, shortV.key(), shortV)
         }
-        r = wal.scan((short) 5, KeyLoader.typeAsByteIgnore, null, 10)
+        r = wal.scan((short) 5, KeyLoader.typeAsByteIgnore, null, 10, 100L)
         then:
         r != null
         // 1 removed and 5 expired

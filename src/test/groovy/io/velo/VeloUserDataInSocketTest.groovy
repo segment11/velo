@@ -15,6 +15,7 @@ class VeloUserDataInSocketTest extends Specification {
         !one.isConnectionReadonly
         one.replyMode == VeloUserDataInSocket.ReplyMode.on
         one.lastScanAssignCursor == 0
+        one.beginScanSeq == 0
         one.replPairAsSlaveInTcpClient == null
         two.replPairAsSlaveInTcpClient != null
 
@@ -25,10 +26,12 @@ class VeloUserDataInSocketTest extends Specification {
         when:
         one.replyMode = VeloUserDataInSocket.ReplyMode.off
         one.lastScanAssignCursor = 1
+        one.beginScanSeq = 1
         one.clientName = 'xxx'
         then:
         one.replyMode == VeloUserDataInSocket.ReplyMode.off
         one.lastScanAssignCursor == 1
+        one.beginScanSeq == 1
         one.clientName == 'xxx'
     }
 }
