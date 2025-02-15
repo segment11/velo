@@ -28,8 +28,6 @@ class ReuseBufsTest extends Specification {
         reuseBufs.isFeedFull()
 
         when:
-        buf1.head(0)
-        buf2.head(0)
         def bufs2 = new ByteBufs()
         bufs2.add(buf2)
         bufs2.add(buf1)
@@ -39,8 +37,6 @@ class ReuseBufsTest extends Specification {
         reuseBufs.isFeedFull()
 
         when:
-        buf1.head(0)
-        buf2.head(0)
         def bufs3 = new ByteBufs()
         bufs3.add(buf2)
         reuseBufs.decodeFromBufs(bufs3)
@@ -49,8 +45,6 @@ class ReuseBufsTest extends Specification {
         reuseBufs.isFeedFull()
 
         when:
-        buf1.head(0)
-        buf2.head(0)
         def bufs4 = new ByteBufs()
         bufs4.add(buf1)
         reuseBufs.decodeFromBufs(bufs4)
