@@ -163,7 +163,7 @@ todo
 ## Perf cpu flame graph
 
 get:
-https://github.com/segment11/velo/blob/main/doc/performance/cpu-flame-get.html
+https://github.com/segment11/velo/blob/main/doc/performance/arthas-profiler-get.html
 
 set:
-https://github.com/segment11/velo/blob/main/doc/performance/cpu-flame-set.html
+https://github.com/segment11/velo/blob/main/doc/performance/arthas-profiler-set.html
