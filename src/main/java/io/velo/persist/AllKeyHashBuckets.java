@@ -17,6 +17,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 
@@ -31,6 +32,15 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
     private final byte[][] allKeyHash32BitBytesArray;
     // record id long 8 byte + (8 byte include expire at 48 bit + short type 8 bit) + seq long 8 byte
     private final byte[][] extendBytesArray;
+
+    void flush() {
+        for (var bb : allKeyHash32BitBytesArray) {
+            Arrays.fill(bb, (byte) 0);
+        }
+        for (var bb : extendBytesArray) {
+            Arrays.fill(bb, (byte) 0);
+        }
+    }
 
     // 48 bit, enough for date timestamp
     // year 10889, date 10889:08:02

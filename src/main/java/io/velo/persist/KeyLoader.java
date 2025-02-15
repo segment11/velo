@@ -957,15 +957,19 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         metaOneWalGroupSeq.clear();
         statKeyCountInBuckets.clear();
 
-        for (int splitIndex = 0; splitIndex < MAX_SPLIT_NUMBER; splitIndex++) {
-            if (fdReadWriteArray.length <= splitIndex) {
-                continue;
+        if (ConfForGlobal.pureMemoryV2) {
+            allKeyHashBuckets.flush();
+        } else {
+            for (int splitIndex = 0; splitIndex < MAX_SPLIT_NUMBER; splitIndex++) {
+                if (fdReadWriteArray.length <= splitIndex) {
+                    continue;
+                }
+                var fdReadWrite = fdReadWriteArray[splitIndex];
+                if (fdReadWrite == null) {
+                    continue;
+                }
+                fdReadWrite.truncate();
             }
-            var fdReadWrite = fdReadWriteArray[splitIndex];
-            if (fdReadWrite == null) {
-                continue;
-            }
-            fdReadWrite.truncate();
         }
     }
 

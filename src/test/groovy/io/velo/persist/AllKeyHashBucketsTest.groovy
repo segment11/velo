@@ -69,6 +69,7 @@ class AllKeyHashBucketsTest extends Specification {
         allKeyHashBuckets.getLocalValue(1L).length == 10
 
         cleanup:
+        allKeyHashBuckets.flush()
         ConfForGlobal.pureMemoryV2 = false
     }
 
