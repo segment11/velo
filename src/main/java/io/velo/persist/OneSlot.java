@@ -2209,6 +2209,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @VisibleForTesting
+    long saveMemoryExecuteTotal = 0;
+    @VisibleForTesting
+    long saveMemoryBytesTotal = 0;
+
+    @VisibleForTesting
     void checkAndSaveMemory(int targetSegmentIndex) {
         var segmentFlag = metaChunkSegmentFlagSeq.getSegmentMergeFlag(targetSegmentIndex);
         if (segmentFlag.flagByte() != Flag.new_write.flagByte() && segmentFlag.flagByte() != Flag.reuse_new.flagByte()) {
@@ -2255,6 +2260,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             var xChunkSegmentFlagUpdate = new XChunkSegmentFlagUpdate();
             xChunkSegmentFlagUpdate.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex, Flag.merged_and_persisted.flagByte, 0L);
             appendBinlog(xChunkSegmentFlagUpdate);
+
+            saveMemoryExecuteTotal++;
+            saveMemoryBytesTotal += segmentBytes.length;
+
             return;
         }
 
@@ -2269,6 +2278,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
                 var xChunkSegmentSlimUpdate = new XChunkSegmentSlimUpdate(targetSegmentIndex, encodedSlim);
                 appendBinlog(xChunkSegmentSlimUpdate);
+
+                saveMemoryExecuteTotal++;
+                saveMemoryBytesTotal += (segmentBytes.length - encodedSlim.length);
             }
         }
     }
@@ -2448,6 +2460,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             if (sum > 0) {
                 map.put("slot_ext_cv_invalid_ratio", (double) extCvInvalidCountTotal / sum);
             }
+        }
+
+        if (saveMemoryExecuteTotal > 0) {
+            map.put("slot_save_memory_execute_total", (double) saveMemoryExecuteTotal);
+            map.put("slot_save_memory_bytes_total", (double) saveMemoryBytesTotal);
+            map.put("slot_save_memory_bytes_avg", (double) saveMemoryBytesTotal / saveMemoryExecuteTotal);
         }
 
         return map;
