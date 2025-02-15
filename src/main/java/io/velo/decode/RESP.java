@@ -6,12 +6,11 @@ import io.netty.util.CharsetUtil;
 
 // reuse decode by netty ByteBuf, copy from camellia-redis-proxy com.netease.nim.camellia.redis.proxy.netty.CommandDecoder
 public class RESP {
-    private static final byte STRING_MARKER = '+';
-    private static final byte BYTES_MARKER = '$';
-    private static final byte ARRAY_MARKER = '*';
+    static final byte STRING_MARKER = '+';
+    static final byte BYTES_MARKER = '$';
+    static final byte ARRAY_MARKER = '*';
 
     private static final int POSITIVE_LONG_MAX_LENGTH = 19; // length of Long.MAX_VALUE
-    private static final int EOL_LENGTH = 2;
 
     private static final class NumberProcessor implements ByteProcessor {
         private int result;
@@ -59,7 +58,8 @@ public class RESP {
     }
 
     private ByteBuf readLine(ByteBuf in) {
-        if (!in.isReadable(EOL_LENGTH)) {
+        // \r\n
+        if (!in.isReadable(2)) {
             return null;
         }
         final int lfIndex = in.forEachByte(ByteProcessor.FIND_LF);

@@ -15,8 +15,8 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
     // in local thread
     private final RESP resp = new RESP();
 
-    private Request tryDecodeOne(ByteBufs bufs) {
-        io.netty.buffer.CompositeByteBuf compositeByteBuf = Unpooled.compositeBuffer();
+    private Request tryDecodeOne(ByteBufs bufs) throws MalformedDataException {
+        var compositeByteBuf = Unpooled.compositeBuffer();
         int capacity = 0;
         for (var buf : bufs) {
             int remainingN = buf.readRemaining();
