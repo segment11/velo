@@ -72,6 +72,7 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static io.activej.config.Config.*;
 import static io.activej.config.converter.ConfigConverters.*;
@@ -427,14 +428,21 @@ public class MultiWorkerServer extends Launcher {
     }
 
     @Provides
-    @Worker
-    SimpleServer workerServer(NioReactor reactor, SocketInspector socketInspector, Config config) {
+    Consumer<ITcpSocket> consumer(Config config) {
         int slotNumber = config.get(ofInteger(), "slotNumber", (int) LocalPersist.DEFAULT_SLOT_NUMBER);
-        return SimpleServer.builder(reactor, socket ->
-                        BinaryChannelSupplier.of(ChannelSuppliers.ofSocket(socket))
-                                .decodeStream(new RequestDecoder())
-                                .mapAsync(pipeline -> handlePipeline(pipeline, socket, (short) slotNumber))
-                                .streamTo(ChannelConsumers.ofSocket(socket)))
+        return socket -> {
+            var byteBufSupplier = ChannelSuppliers.prefetch(8, ChannelSuppliers.ofAsyncSupplier(socket::read, socket));
+            BinaryChannelSupplier.of(byteBufSupplier)
+                    .decodeStream(new RequestDecoder())
+                    .mapAsync(pipeline -> handlePipeline(pipeline, socket, (short) slotNumber))
+                    .streamTo(ChannelConsumers.ofSocket(socket));
+        };
+    }
+
+    @Provides
+    @Worker
+    SimpleServer workerServer(NioReactor reactor, SocketInspector socketInspector, Consumer<ITcpSocket> consumer, Config config) {
+        return SimpleServer.builder(reactor, consumer)
                 .withSocketInspector(socketInspector)
                 .build();
     }

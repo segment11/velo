@@ -3,7 +3,6 @@ package io.velo.decode;
 import io.activej.bytebuf.ByteBufs;
 import io.activej.common.exception.MalformedDataException;
 import io.activej.csp.binary.decoder.ByteBufsDecoder;
-import io.netty.buffer.Unpooled;
 import io.velo.repl.Repl;
 import org.jetbrains.annotations.Nullable;
 
@@ -14,35 +13,30 @@ import java.util.Map;
 public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
     // in local thread
     private final RESP resp = new RESP();
+    private final ReuseBufs reuseBufs = new ReuseBufs();
 
     private Request tryDecodeOne(ByteBufs bufs) throws MalformedDataException {
-        var compositeByteBuf = Unpooled.compositeBuffer();
-        int capacity = 0;
-        for (var buf : bufs) {
-            int remainingN = buf.readRemaining();
-            if (remainingN > 0) {
-                capacity += remainingN;
-                compositeByteBuf.addComponent(true, Unpooled.wrappedBuffer(buf.array(), buf.head(), remainingN));
-            }
-        }
-        if (capacity == 0) {
+        if (bufs.remainingBytes() <= 0) {
             return null;
         }
 
-        compositeByteBuf.readerIndex(0);
-        compositeByteBuf.writerIndex(capacity).capacity(capacity);
+        reuseBufs.refresh(bufs);
+        var compositeByteBuf = reuseBufs.compositeByteBuf;
+        var beforeDecodeReaderIndex = compositeByteBuf.readerIndex();
 
         // check first 6 bytes, http or repl at least 6 bytes
         byte[][] data;
         boolean isHttp = false;
         boolean isRepl = false;
         Map<String, String> httpHeaders = null;
-        if (capacity < 6) {
+        if (compositeByteBuf.readableBytes() < 6) {
             data = resp.decode(compositeByteBuf);
             if (data == null) {
                 return null;
             }
         } else {
+            compositeByteBuf.markReaderIndex();
+
             var first6 = new byte[6];
             compositeByteBuf.readBytes(first6);
             var isGet = Arrays.equals(first6, 0, 3, HttpHeaderBody.GET, 0, 3);
@@ -50,11 +44,9 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
             var isPut = Arrays.equals(first6, 0, 3, HttpHeaderBody.PUT, 0, 3);
             var isDelete = Arrays.equals(first6, 0, 6, HttpHeaderBody.DELETE, 0, 6);
             isHttp = isGet || isPost || isPut || isDelete;
-
             isRepl = Arrays.equals(first6, 0, 6, Repl.PROTOCOL_KEYWORD_BYTES, 0, 6);
 
-            // set reader index back
-            compositeByteBuf.readerIndex(0);
+            compositeByteBuf.resetReaderIndex();
 
             if (isHttp) {
                 var h = new HttpHeaderBody();
@@ -109,8 +101,8 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
         }
 
         // remove already consumed bytes
-        int consumedN = compositeByteBuf.readerIndex();
-        bufs.takeExactSize(consumedN);
+        int consumedN = compositeByteBuf.readerIndex() - beforeDecodeReaderIndex;
+        bufs.skip(consumedN);
 
         var r = new Request(data, isHttp, isRepl);
         r.setHttpHeaders(httpHeaders);

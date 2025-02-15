@@ -8,17 +8,16 @@ import io.netty.buffer.Unpooled;
 import io.netty.util.ByteProcessor;
 import org.jetbrains.annotations.TestOnly;
 
-import java.util.Arrays;
-
 import static io.velo.decode.RESP.*;
 
 public class ReuseBufs {
     private static final int MAX_DATA_IN_ONE_REQUEST = 1024;
 
-    int dataLength = 0;
-    final int[] offsets = new int[MAX_DATA_IN_ONE_REQUEST];
-    final int[] lengths = new int[MAX_DATA_IN_ONE_REQUEST];
+    private int dataLength = 0;
+    private final int[] offsets = new int[MAX_DATA_IN_ONE_REQUEST];
+    private final int[] lengths = new int[MAX_DATA_IN_ONE_REQUEST];
 
+    @TestOnly
     void printForDebug() {
         for (int i = 0; i < dataLength; i++) {
             int offset = offsets[i];
@@ -40,53 +39,53 @@ public class ReuseBufs {
     }
 
     private int head = 0;
-    private int bufCountLastSet = 0;
     private int bufCount = 0;
 
     private final byte[][] arrays = new byte[MAX_DATA_IN_ONE_REQUEST][];
+
+    private int nettyByteBufsCount = 0;
     private final ByteBuf[] nettyByteBufs = new ByteBuf[MAX_DATA_IN_ONE_REQUEST];
+    private final CompositeByteBuf[] compositeByteBufs = new CompositeByteBuf[MAX_DATA_IN_ONE_REQUEST];
 
     CompositeByteBuf compositeByteBuf;
 
     private void reuseNettyByteBufs() {
-        ByteBuf[] nettyByteBufsRefCopy = bufCountLastSet != 0 ? Arrays.copyOf(nettyByteBufs, bufCountLastSet) : null;
+        int[] indexArray = new int[MAX_DATA_IN_ONE_REQUEST];
 
-        boolean isNeedRecreateCompositeByteBuf = false;
         for (int i = 0; i < bufCount; i++) {
             var array = arrays[i];
-            var preferReuseOne = nettyByteBufs[i];
-            if (preferReuseOne == null) {
-                nettyByteBufs[i] = Unpooled.wrappedBuffer(array);
-                isNeedRecreateCompositeByteBuf = true;
-            } else {
-                if (preferReuseOne.array() == array) {
-                    continue;
-                }
 
-                isNeedRecreateCompositeByteBuf = true;
-                if (nettyByteBufsRefCopy == null) {
-                    nettyByteBufs[i] = Unpooled.wrappedBuffer(array);
-                } else {
-                    boolean isSet = false;
-                    for (int j = 0; j < bufCountLastSet; j++) {
-                        var lastSet = nettyByteBufsRefCopy[j];
-                        if (lastSet.array() == array) {
-                            nettyByteBufs[i] = lastSet;
-                            isSet = true;
-                            break;
-                        }
-                    }
-                    if (!isSet) {
-                        nettyByteBufs[i] = Unpooled.wrappedBuffer(array);
-                    }
+            for (int j = 1; j <= nettyByteBufsCount; j++) {
+                var lastSet = nettyByteBufs[j];
+                if (lastSet.array() == array) {
+                    indexArray[i] = j;
+                    break;
                 }
             }
         }
 
-        if (compositeByteBuf == null || isNeedRecreateCompositeByteBuf) {
+        for (int i = 0; i < bufCount; i++) {
+            int j = indexArray[i];
+            if (j == 0) {
+                var array = arrays[i];
+
+                int nextIndex = nettyByteBufsCount + 1;
+                nettyByteBufs[nextIndex] = Unpooled.wrappedBuffer(array);
+                compositeByteBufs[nextIndex] = Unpooled.compositeBuffer();
+                compositeByteBufs[nextIndex].addComponent(true, nettyByteBufs[nextIndex]);
+
+                indexArray[i] = nextIndex;
+                nettyByteBufsCount = nextIndex;
+            }
+        }
+
+        if (bufCount == 1) {
+            compositeByteBuf = compositeByteBufs[indexArray[0]];
+        } else {
             compositeByteBuf = Unpooled.compositeBuffer();
             for (int i = 0; i < bufCount; i++) {
-                compositeByteBuf.addComponent(true, nettyByteBufs[i]);
+                int j = indexArray[i];
+                compositeByteBuf.addComponent(true, nettyByteBufs[j]);
             }
         }
     }
@@ -131,7 +130,7 @@ public class ReuseBufs {
 
     private final FindUntilLF findUntilLF = new FindUntilLF();
 
-    private int parseDataLength() throws MalformedDataException {
+    private int parseDataLength() {
         // \r\n
         if (!compositeByteBuf.isReadable(2)) {
             return -1;
@@ -156,7 +155,7 @@ public class ReuseBufs {
 
     private int currentDataIndex = 0;
 
-    private int readCurrentDataOffsetAndLength() throws MalformedDataException {
+    private int readCurrentDataOffsetAndLength() {
         // \r\n
         if (!compositeByteBuf.isReadable(2)) {
             return -1;
@@ -212,6 +211,7 @@ public class ReuseBufs {
                     if (compositeByteBuf.readableBytes() <= 0) {
                         break outerLoop;
                     }
+
                     byte b = compositeByteBuf.readByte();
                     afterScanOrSkipByteCount++;
                     if (b == BYTES_MARKER) {
@@ -234,7 +234,7 @@ public class ReuseBufs {
         parseOffsetsAndLengths();
     }
 
-    public void refresh(ByteBufs bufs) {
+    void refresh(ByteBufs bufs) {
         int innerArrayIndex = 0;
         for (var buf : bufs) {
             if (innerArrayIndex == 0) {
@@ -246,7 +246,6 @@ public class ReuseBufs {
         this.bufCount = innerArrayIndex;
         reuseNettyByteBufs();
         this.compositeByteBuf.readerIndex(this.head).writerIndex(this.head + bufs.remainingBytes());
-        this.bufCountLastSet = bufCount;
 
         this.dataLength = 0;
         this.currentDataIndex = 0;
