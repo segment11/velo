@@ -13,7 +13,7 @@ public class TaskChain {
     final ArrayList<ITask> list = new ArrayList<>();
 
     @VisibleForTesting
-    ArrayList<ITask> getList() {
+    public ArrayList<ITask> getList() {
         return list;
     }
 
@@ -25,6 +25,7 @@ public class TaskChain {
                 '}';
     }
 
+    // loop count begin from 0
     public void doTask(int loopCount) {
         for (var t : list) {
             if (loopCount % t.executeOnceAfterLoopCount() == 0) {

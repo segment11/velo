@@ -993,28 +993,67 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         if (ConfForGlobal.pureMemory) {
             // do every 10ms
-            taskChain.add(new ITask() {
-                private int lastCheckedSegmentIndex = 0;
-
-                @Override
-                public String name() {
-                    return "check and save memory";
-                }
-
-                @Override
-                public void run() {
-                    OneSlot.this.checkAndSaveMemory(lastCheckedSegmentIndex);
-
-                    lastCheckedSegmentIndex++;
-                    if (lastCheckedSegmentIndex >= chunk.getMaxSegmentIndex()) {
-                        lastCheckedSegmentIndex = 0;
-                    }
-                }
-
-                public void setLoopCount(int loopCount) {
-                }
-            });
+            taskChain.add(new CheckAndSaveMemoryTask(this));
         }
+    }
+
+    static class CheckAndSaveMemoryTask implements ITask {
+        @VisibleForTesting
+        int lastCheckedSegmentIndex = 0;
+
+        private int lastLoopChunkSegmentIndex = -1;
+
+        private final OneSlot oneSlot;
+
+        CheckAndSaveMemoryTask(OneSlot oneSlot) {
+            this.oneSlot = oneSlot;
+        }
+
+        @Override
+        public String name() {
+            return "check and save memory";
+        }
+
+        @Override
+        public void run() {
+            int onceCheckSegmentCount = 1;
+            final int onceCheckMaxSegmentCount = 4;
+
+            var currentSegmentIndex = oneSlot.chunk.getSegmentIndex();
+            if (lastLoopChunkSegmentIndex == -1) {
+                lastLoopChunkSegmentIndex = currentSegmentIndex;
+            } else {
+                var increasedSegmentCount = currentSegmentIndex - lastLoopChunkSegmentIndex;
+                if (increasedSegmentCount > 0) {
+                    // < 0 means read to end, begin from 0
+                    onceCheckSegmentCount = Math.min(increasedSegmentCount, onceCheckMaxSegmentCount);
+                }
+                lastLoopChunkSegmentIndex = currentSegmentIndex;
+            }
+
+            var maxSegmentIndex = oneSlot.chunk.getMaxSegmentIndex();
+            for (int i = 0; i < onceCheckSegmentCount; i++) {
+                var targetSegmentIndex = lastCheckedSegmentIndex + i;
+                if (targetSegmentIndex > maxSegmentIndex) {
+                    targetSegmentIndex = 0;
+                }
+                oneSlot.checkAndSaveMemory(targetSegmentIndex);
+            }
+
+            lastCheckedSegmentIndex += onceCheckSegmentCount;
+            if (lastCheckedSegmentIndex > maxSegmentIndex) {
+                lastCheckedSegmentIndex = 0;
+            }
+        }
+
+        public void setLoopCount(int loopCount) {
+        }
+    }
+
+    @TestOnly
+    void updateTaskCheckAndSaveMemoryLastCheckedSegmentIndex(int lastCheckedSegmentIndex) {
+        var checkAndSaveMemoryTask = (CheckAndSaveMemoryTask) this.taskChain.getList().stream().filter(task -> task.name().equals("check and save memory")).findFirst().get();
+        checkAndSaveMemoryTask.lastCheckedSegmentIndex = lastCheckedSegmentIndex;
     }
 
     void debugMode() {

@@ -3,12 +3,10 @@ package io.velo.persist
 import io.activej.common.function.RunnableEx
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
-import io.netty.buffer.Unpooled
 import io.velo.*
 import io.velo.monitor.BigKeyTopK
 import io.velo.repl.Binlog
 import io.velo.repl.ReplPairTest
-import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.repl.incremental.XWalV
 import org.jetbrains.annotations.NotNull
 import org.jetbrains.annotations.Nullable
@@ -1324,33 +1322,63 @@ class OneSlotTest extends Specification {
         1 == 1
 
         when:
-        def xForBinlog = new XOneWalGroupPersist(true, false, 0)
-        def vList = Mock.prepareValueList(100, 0) { v ->
-            if (v.seq() == 10) {
-                return v
-            } else {
-                // mock all others expired
-                def v2 = new Wal.V(v.seq(), v.bucketIndex(), v.keyHash(), System.currentTimeMillis() - 1000, CompressedValue.NULL_DICT_SEQ,
-                        v.key(), v.cvEncoded(), false)
-                return v2
-            }
+        // trigger persist wal
+        List<String> bucketIndex0KeyList
+        5.times {
+            bucketIndex0KeyList = batchPut(oneSlot, 100, 100, 1, slotNumber)
         }
-        chunk.persist(0, vList, false, xForBinlog, null)
-        // put new one to wal
-        def firstV = vList[0]
-        def firstCv = CompressedValue.decode(Unpooled.wrappedBuffer(firstV.cvEncoded()), firstV.key().bytes, firstV.keyHash())
-        oneSlot.put(firstV.key(), 0, firstCv)
-        // remove one in wal
-        def secondV = vList[1]
-        oneSlot.removeDelay(secondV.key(), 0, secondV.keyHash())
-        // change one and remove in key loader
-        def thirdV = vList[2]
-        def keyHash32 = KeyHash.hash32(thirdV.key().bytes)
-        oneSlot.keyLoader.removeSingleKey(0, thirdV.key().bytes, thirdV.keyHash(), keyHash32)
+        // put first key, new value to wal
+        def firstKey = bucketIndex0KeyList[0]
+        def firstS = BaseCommand.slot(firstKey.bytes, slotNumber)
+        def firstCv = new CompressedValue()
+        firstCv.keyHash = firstS.keyHash()
+        firstCv.compressedData = new byte[10]
+        firstCv.compressedLength = 10
+        firstCv.uncompressedLength = 10
+        firstCv.seq = oneSlot.snowFlake.nextId()
+        oneSlot.put(firstKey, firstS.bucketIndex(), firstCv)
+        // clear wal for test
+        oneSlot.getWalByGroupIndex(0).clear()
+        // remove second key
+        def secondKey = bucketIndex0KeyList[1]
+        def secondS = BaseCommand.slot(secondKey.bytes, slotNumber)
+        oneSlot.removeDelay(secondKey, secondS.bucketIndex(), secondS.keyHash())
+        // change some keys in key loader
+        def random = new Random()
+        100.times {
+            def someKey = bucketIndex0KeyList[random.nextInt(bucketIndex0KeyList.size())]
+            def someS = BaseCommand.slot(someKey.bytes, slotNumber)
+            oneSlot.keyLoader.removeSingleKey(someS.bucketIndex(), someKey.bytes, someS.keyHash(), someS.keyHash32())
+        }
         // do check, persist begin segment index 2
         oneSlot.checkAndSaveMemory(2)
         then:
-        chunk.preadOneSegment(2) == null
+        SegmentBatch2.isSegmentBytesSlim(chunk.preadOneSegment(2), 0)
+
+        when:
+        // mock all values invalid
+        oneSlot.flush()
+        5.times {
+            bucketIndex0KeyList = batchPut(oneSlot, 100, 100, 1, slotNumber)
+        }
+        oneSlot.checkAndSaveMemory(0)
+        then:
+        chunk.preadOneSegment(0) == null
+
+        when:
+        chunk.segmentIndex = 0
+        oneSlot.doTask(0)
+        // increase 2 segments
+        chunk.segmentIndex = 2
+        oneSlot.doTask(0)
+        then:
+        1 == 1
+
+        when:
+        oneSlot.updateTaskCheckAndSaveMemoryLastCheckedSegmentIndex(chunk.maxSegmentIndex)
+        oneSlot.doTask(0)
+        then:
+        1 == 1
 
         cleanup:
         localPersist.cleanUp()
