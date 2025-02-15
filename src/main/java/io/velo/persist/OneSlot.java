@@ -1016,6 +1016,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         @Override
         public void run() {
+            final var maxSegmentIndex = oneSlot.chunk.getMaxSegmentIndex();
+
+            final int fastCheckSegmentFlagCount = 100;
+            if (lastCheckedSegmentIndex < maxSegmentIndex - fastCheckSegmentFlagCount) {
+                // check if all segment flag is not new_write and reuse_new, skip
+                if (oneSlot.metaChunkSegmentFlagSeq.isAllFlagsNotWrite(lastCheckedSegmentIndex, fastCheckSegmentFlagCount)) {
+                    lastCheckedSegmentIndex += fastCheckSegmentFlagCount;
+                    return;
+                }
+            }
+
             int onceCheckSegmentCount = 1;
             final int onceCheckMaxSegmentCount = 4;
 
@@ -1031,7 +1042,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 lastLoopChunkSegmentIndex = currentSegmentIndex;
             }
 
-            var maxSegmentIndex = oneSlot.chunk.getMaxSegmentIndex();
             for (int i = 0; i < onceCheckSegmentCount; i++) {
                 var targetSegmentIndex = lastCheckedSegmentIndex + i;
                 if (targetSegmentIndex > maxSegmentIndex) {

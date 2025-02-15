@@ -323,6 +323,19 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
         return list;
     }
 
+    boolean isAllFlagsNotWrite(int beginSegmentIndex, int segmentCount) {
+        var offset = beginSegmentIndex * ONE_LENGTH;
+        for (int i = 0; i < segmentCount; i++) {
+            var flagByte = inMemoryCachedByteBuffer.get(offset);
+            if (flagByte == Chunk.Flag.new_write.flagByte || flagByte == Chunk.Flag.reuse_new.flagByte) {
+                return false;
+            }
+            offset += ONE_LENGTH;
+        }
+
+        return true;
+    }
+
     @SlaveNeedReplay
     @SlaveReplay
     void clear() {

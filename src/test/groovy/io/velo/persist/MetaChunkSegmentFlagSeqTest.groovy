@@ -117,7 +117,6 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         segmentFlag.flagByte() == Chunk.Flag.merging.flagByte()
         segmentFlag.segmentSeq() == 1L
         segmentFlag.walGroupIndex() == 0
-
         segmentFlagList.size() == 2
         segmentFlagList[0].flagByte() == Chunk.Flag.merging.flagByte()
         segmentFlagList[0].segmentSeq() == 1L
@@ -125,6 +124,22 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         segmentFlagList[1].flagByte() == Chunk.Flag.merged.flagByte()
         segmentFlagList[1].segmentSeq() == 2L
         segmentFlagList[1].walGroupIndex() == 11
+
+        when:
+        one.setSegmentMergeFlag(0, Chunk.Flag.init.flagByte(), 1L, 0)
+        one.setSegmentMergeFlag(1, Chunk.Flag.init.flagByte(), 1L, 0)
+        then:
+        one.isAllFlagsNotWrite(0, 2)
+
+        when:
+        one.setSegmentMergeFlag(1, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        then:
+        !one.isAllFlagsNotWrite(0, 2)
+
+        when:
+        one.setSegmentMergeFlag(1, Chunk.Flag.reuse_new.flagByte(), 1L, 0)
+        then:
+        !one.isAllFlagsNotWrite(0, 2)
 
         cleanup:
         one.clear()
