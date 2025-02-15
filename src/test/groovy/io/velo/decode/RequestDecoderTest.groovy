@@ -62,6 +62,26 @@ class RequestDecoderTest extends Specification {
         requestList3 = decoder.tryDecode(bufs3)
         then:
         requestList3 == null
+
+        when:
+        buf3 = ByteBuf.wrapForReading(
+                '*1\r\n$'.bytes
+        )
+        bufs3 = new ByteBufs(1)
+        bufs3.add(buf3)
+        requestList3 = decoder.tryDecode(bufs3)
+        then:
+        requestList3 == null
+
+        when:
+        buf3 = ByteBuf.wrapForReading(
+                '*1\r\n$1'.bytes
+        )
+        bufs3 = new ByteBufs(1)
+        bufs3.add(buf3)
+        requestList3 = decoder.tryDecode(bufs3)
+        then:
+        requestList3 == null
     }
 
     def "test decode http"() {
