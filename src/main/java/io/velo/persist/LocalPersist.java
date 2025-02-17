@@ -236,7 +236,7 @@ public class LocalPersist implements NeedCleanUp {
             return oneSlots[0];
         }
 
-        var firstToClientSlot = multiShard.firstToClientSlot();
+        var firstToClientSlot = multiShard == null ? null : multiShard.firstToClientSlot();
         if (firstToClientSlot == null) {
             return null;
         }

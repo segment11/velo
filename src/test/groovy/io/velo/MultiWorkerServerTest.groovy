@@ -170,6 +170,17 @@ class MultiWorkerServerTest extends Specification {
         }.result
 
         when:
+        boolean exception = false
+        try {
+            m.consumer(config).accept(socket)
+        } catch (IllegalStateException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
         def data3 = new byte[3][]
         data3[0] = 'copy'.bytes
         data3[1] = 'a'.bytes
@@ -303,7 +314,7 @@ class MultiWorkerServerTest extends Specification {
                 .with("zookeeperConnectString", 'localhost:2181')
                 .with("bucket.bucketsPerSlot", cc.confBucket.bucketsPerSlot.toString())
                 .with("bucket.initialSplitNumber", cc.confBucket.initialSplitNumber.toString())
-                .with("bucket.lruPerFd.maxSize", cc.confBucket.lruPerFd.maxSize.toString())
+                .with("bucket.lruPerFd.percent", "100")
                 .with("chunk.segmentNumberPerFd", cc.confChunk.segmentNumberPerFd.toString())
                 .with("chunk.fdPerChunk", cc.confChunk.fdPerChunk.toString())
                 .with("chunk.segmentLength", cc.confChunk.segmentLength.toString())
@@ -323,7 +334,7 @@ class MultiWorkerServerTest extends Specification {
         1 == 1
 
         when:
-        boolean exception = false
+        exception = false
         m1.skipZookeeperConnectCheck = false
         try {
             m1.confForSlot(configX)
@@ -535,6 +546,7 @@ class MultiWorkerServerTest extends Specification {
         eventloop1.breakEventloop()
     }
 
+    // need zookeeper server
     def 'test do repl'() {
         given:
         ConfForGlobal.slotNumber = 1
@@ -587,12 +599,30 @@ class MultiWorkerServerTest extends Specification {
 
     def 'test static global v'() {
         given:
-        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        def staticGlobalV = MultiWorkerServer.STATIC_GLOBAL_V
 
         when:
-        def i = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()
+        staticGlobalV.netWorkerThreadIds = [-1L]
+        then:
+        staticGlobalV.threadLocalIndexByCurrentThread == -1
+
+        when:
+        staticGlobalV.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        then:
+        staticGlobalV.threadLocalIndexByCurrentThread == 0
+
+        when:
+        def i = staticGlobalV.getThreadLocalIndexByCurrentThread()
         then:
         i == 0
+
+        when:
+        ConfForGlobal.netListenAddresses = 'localhost:7379'
+        def config = Config.create()
+        staticGlobalV.resetInfoServer(config)
+        def infoServerList = staticGlobalV.infoServerList
+        then:
+        infoServerList.size() == 12
     }
 
     def 'test cluster slot cross shards'() {
@@ -602,6 +632,8 @@ class MultiWorkerServerTest extends Specification {
         m.isMockHandle = true
 
         and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
         RequestHandler.initMultiShardShadows((byte) 1)
         MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
         def snowFlake = new SnowFlake(1, 1)
@@ -630,15 +662,29 @@ class MultiWorkerServerTest extends Specification {
         def getRequest = new Request(getData2, false, false)
         getRequest.slotNumber = slotNumber
         requestHandler.parseSlots(getRequest)
+        // MOVED
         m.handleRequest(getRequest, null)
         then:
         1 == 1
 
         when:
+        def checkResult = m.checkClusterSlot(getRequest.slotWithKeyHashList)
+        then:
+        checkResult instanceof ErrorReply
+        (checkResult as ErrorReply).message.startsWith('MOVED')
+
+        when:
+        ArrayList<BaseCommand.SlotWithKeyHash> ignoreSlotWithKeyHashList = [BaseCommand.SlotWithKeyHash.TO_FIX_FIRST_SLOT]
+        def checkResult2 = m.checkClusterSlot(ignoreSlotWithKeyHashList)
+        then:
+        checkResult2 == null
+
+        when:
+        def socket = SocketInspectorTest.mockTcpSocket()
         multiShard.shards[0].nodes[0].mySelf = false
         multiShard.shards[1].nodes[0].mySelf = true
         RequestHandler.updateMultiShardShadows(multiShard)
-        m.handleRequest(getRequest, null)
+        m.handleRequest(getRequest, socket)
         then:
         1 == 1
 
@@ -651,7 +697,7 @@ class MultiWorkerServerTest extends Specification {
         def getRequest2 = new Request(getData5, false, false)
         getRequest2.slotNumber = slotNumber
         requestHandler.parseSlots(getRequest2)
-        m.handleRequest(getRequest2, null)
+        m.handleRequest(getRequest2, socket)
         then:
         1 == 1
 
@@ -663,12 +709,13 @@ class MultiWorkerServerTest extends Specification {
         shard2.multiSlotRange.addSingle(4096, 8191)
         multiShard.shards << shard2
         RequestHandler.updateMultiShardShadows(multiShard)
-        m.handleRequest(getRequest2, null)
+        m.handleRequest(getRequest2, socket)
         then:
         1 == 1
 
         cleanup:
-        ConfForGlobal.clusterEnabled = false
+        localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+        ConfForGlobal.clusterEnabled = false
     }
 }

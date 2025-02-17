@@ -208,6 +208,51 @@ public class MultiWorkerServer extends Launcher {
         return httpBuf;
     }
 
+    @VisibleForTesting
+    ErrorReply checkClusterSlot(ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList) {
+        // check if cross shards or not my shard
+        var multiShardShadow = RequestHandler.getMultiShardShadow();
+        var mySelfShard = multiShardShadow.getMySelfShard();
+
+        boolean isIncludeMySelfShard = false;
+        Shard movedToShard = null;
+        int movedToClientSlot = 0;
+        for (var slotWithKeyHash : slotWithKeyHashList) {
+            var toClientSlot = slotWithKeyHash.toClientSlot();
+            if (toClientSlot == BaseCommand.SlotWithKeyHash.IGNORE_TO_CLIENT_SLOT) {
+                continue;
+            }
+
+            var expectRequestShard = multiShardShadow.getShardBySlot(toClientSlot);
+            if (expectRequestShard == null) {
+                return ErrorReply.CLUSTER_SLOT_NOT_SET;
+            }
+
+            if (expectRequestShard != mySelfShard) {
+                if (movedToShard == null) {
+                    movedToShard = expectRequestShard;
+                } else {
+                    if (expectRequestShard != movedToShard) {
+                        return ErrorReply.CLUSTER_SLOT_CROSS_SHARDS;
+                    }
+                }
+            } else {
+                isIncludeMySelfShard = true;
+            }
+        }
+
+        if (movedToShard != null) {
+            if (isIncludeMySelfShard) {
+                return ErrorReply.CLUSTER_SLOT_CROSS_SHARDS;
+            }
+
+            var master = movedToShard.master();
+            return ErrorReply.clusterMoved(movedToClientSlot, master.getHost(), master.getPort());
+        }
+
+        return null;
+    }
+
     Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
         var isAclCheckOk = request.isAclCheckOk();
         if (!isAclCheckOk.asBoolean()) {
@@ -224,45 +269,9 @@ public class MultiWorkerServer extends Launcher {
 
         var slotWithKeyHashList = request.getSlotWithKeyHashList();
         if (ConfForGlobal.clusterEnabled && slotWithKeyHashList != null) {
-            // check if cross shards or not my shard
-            var multiShardShadow = RequestHandler.getMultiShardShadow();
-            var mySelfShard = multiShardShadow.getMySelfShard();
-
-            boolean isIncludeMySelfShard = false;
-            Shard movedToShard = null;
-            int movedToClientSlot = 0;
-            for (var slotWithKeyHash : slotWithKeyHashList) {
-                var toClientSlot = slotWithKeyHash.toClientSlot();
-                if (toClientSlot == BaseCommand.SlotWithKeyHash.IGNORE_TO_CLIENT_SLOT) {
-                    continue;
-                }
-
-                var expectRequestShard = multiShardShadow.getShardBySlot(toClientSlot);
-                if (expectRequestShard == null) {
-                    return Promise.of(ErrorReply.CLUSTER_SLOT_NOT_SET.buffer());
-                }
-
-                if (expectRequestShard != mySelfShard) {
-                    if (movedToShard == null) {
-                        movedToShard = expectRequestShard;
-                    } else {
-                        if (expectRequestShard != movedToShard) {
-                            return Promise.of(ErrorReply.CLUSTER_SLOT_CROSS_SHARDS.buffer());
-                        }
-                    }
-                } else {
-                    isIncludeMySelfShard = true;
-                }
-            }
-
-            if (movedToShard != null) {
-                if (isIncludeMySelfShard) {
-                    return Promise.of(ErrorReply.CLUSTER_SLOT_CROSS_SHARDS.buffer());
-                }
-
-                var master = movedToShard.master();
-                var movedReply = ErrorReply.clusterMoved(movedToClientSlot, master.getHost(), master.getPort());
-                return Promise.of(movedReply.buffer());
+            var checkResult = checkClusterSlot(slotWithKeyHashList);
+            if (checkResult != null) {
+                return Promise.of(checkResult.buffer());
             }
         }
 
@@ -880,8 +889,12 @@ public class MultiWorkerServer extends Launcher {
                 c.confBucket.initialSplitNumber = config.get(ofInteger(), "bucket.initialSplitNumber").byteValue();
             }
 
-            if (config.getChild("bucket.lruPerFd.maxSize").hasValue()) {
-                c.confBucket.lruPerFd.maxSize = config.get(ofInteger(), "bucket.lruPerFd.maxSize");
+            if (config.getChild("bucket.lruPerFd.percent").hasValue()) {
+                var percentValue = config.get(ofInteger(), "bucket.lruPerFd.percent");
+                if (percentValue < 0 || percentValue > 100) {
+                    throw new IllegalArgumentException("Key bucket fd read lru percent be between 0 and 100");
+                }
+                c.confBucket.lruPerFd.maxSize = percentValue / 100 * c.confBucket.bucketsPerSlot;
             }
 
             // override chunk conf
@@ -1060,7 +1073,9 @@ public class MultiWorkerServer extends Launcher {
             return new ArrayList<>(infoServerList);
         }
 
+        @VisibleForTesting
         void resetInfoServer(Config config) {
+            infoServerList.clear();
             infoServerList.add(new Tuple2<>("version", "1.0.0"));
             infoServerList.add(new Tuple2<>("redis_mode", ConfForGlobal.clusterEnabled ? "cluster" : "standalone"));
 
@@ -1090,8 +1105,8 @@ public class MultiWorkerServer extends Launcher {
         // use this instead of ThreadLocal, use array perf good enough compare to hashtable
         public int getThreadLocalIndexByCurrentThread() {
             var currentThreadId = Thread.currentThread().threadId();
-            for (int i = 0; i < MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds.length; i++) {
-                if (currentThreadId == MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds[i]) {
+            for (int i = 0; i < netWorkerThreadIds.length; i++) {
+                if (currentThreadId == netWorkerThreadIds[i]) {
                     return i;
                 }
             }
