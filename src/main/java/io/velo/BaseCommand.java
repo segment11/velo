@@ -503,11 +503,11 @@ public abstract class BaseCommand {
 
             var beginT = System.nanoTime();
             var decompressed = cv.decompress(dict);
-            var costT = (System.nanoTime() - beginT) / 1000;
+            var costT = System.nanoTime() - beginT;
 
             // stats
             compressStats.decompressedCount++;
-            compressStats.decompressedCostTimeTotalUs += costT;
+            compressStats.decompressedCostTimeTotalNs += costT;
 
             if (slotWithKeyHash != null && byPassGetSet == null) {
                 localPersist.oneSlot(slotWithKeyHash.slot).monitorBigKeyByValueLength(keyBytes, decompressed.length);

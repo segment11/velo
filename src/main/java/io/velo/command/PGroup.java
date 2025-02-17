@@ -211,11 +211,11 @@ public class PGroup extends BaseCommand {
 
         var beginT = System.nanoTime();
         var decompressed = cv.decompress(Dict.SELF_ZSTD_DICT);
-        var costT = (System.nanoTime() - beginT) / 1000;
+        var costT = System.nanoTime() - beginT;
 
         // stats
         compressStats.decompressedCount++;
-        compressStats.decompressedCostTimeTotalUs += costT;
+        compressStats.decompressedCostTimeTotalNs += costT;
 
         var is = new ByteArrayInputStream(decompressed);
         try {

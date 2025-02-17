@@ -13,7 +13,7 @@ public class CompressStats {
     public long compressedTotalLength = 0;
     public long compressedCostTimeTotalUs = 0;
     public long decompressedCount = 0;
-    public long decompressedCostTimeTotalUs = 0;
+    public long decompressedCostTimeTotalNs = 0;
 
     public CompressStats(String name, String prefix) {
         compressStatsGauge.addRawGetter(() -> {
@@ -34,9 +34,9 @@ public class CompressStats {
 
             if (decompressedCount > 0) {
                 map.put(prefix + "decompressed_count", new SimpleGauge.ValueWithLabelValues((double) decompressedCount, labelValues));
-                map.put(prefix + "decompressed_cost_time_total_ms", new SimpleGauge.ValueWithLabelValues((double) decompressedCostTimeTotalUs / 1000, labelValues));
-                double decompressedCostTAvg = (double) decompressedCostTimeTotalUs / decompressedCount;
-                map.put(prefix + "decompressed_cost_time_avg_us", new SimpleGauge.ValueWithLabelValues(decompressedCostTAvg, labelValues));
+                map.put(prefix + "decompressed_cost_time_total_ms", new SimpleGauge.ValueWithLabelValues((double) decompressedCostTimeTotalNs / 1000 / 1000, labelValues));
+                double decompressedCostTAvg = (double) decompressedCostTimeTotalNs / decompressedCount;
+                map.put(prefix + "decompressed_cost_time_avg_ns", new SimpleGauge.ValueWithLabelValues(decompressedCostTAvg, labelValues));
             }
 
             return map;

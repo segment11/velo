@@ -27,7 +27,7 @@ class CompressStatsTest extends Specification {
         when:
         compressStats.compressedCount = 0
         compressStats.decompressedCount = 10
-        compressStats.decompressedCostTimeTotalUs = 50
+        compressStats.decompressedCostTimeTotalNs = 50
         mfsList = compressStats.compressStatsGauge.collect()
         then:
         mfsList[0].samples.size() >= 0
