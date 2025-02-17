@@ -2,6 +2,7 @@ package io.velo.command
 
 import groovy.transform.CompileStatic
 import io.velo.BaseCommand
+import io.velo.ConfForGlobal
 import io.velo.reply.*
 import org.jetbrains.annotations.VisibleForTesting
 
@@ -70,7 +71,7 @@ class CommandCommand extends BaseCommand {
         }
 
         def a_zGroup = requestHandler.getA_ZGroupCommand(firstByte)
-        def sList = a_zGroup.parseSlots(targetCmd, dd, slotNumber)
+        def sList = a_zGroup.parseSlots(targetCmd, dd, ConfForGlobal.slotNumber)
 
         if (!sList) {
             return MultiBulkReply.EMPTY

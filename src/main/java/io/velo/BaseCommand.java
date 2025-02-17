@@ -68,6 +68,14 @@ public abstract class BaseCommand {
     protected static final IsKeyBytes KeyIndexBegin2 = new FromToKeyIndex(2, -1, 1);
     protected static final IsKeyBytes KeyIndexBegin2Step2 = new FromToKeyIndex(2, -1, 2);
 
+    /**
+     * Adds slot-key hash mappings for relevant keys in the command data array.
+     *
+     * @param slotWithKeyHashList The list to store slot-key hash mappings
+     * @param data                All data array received from the client including command
+     * @param slotNumber          Total number of slots in the velo running instance
+     * @param isKeyBytes          Predicate to determine which array indices contain keys
+     */
     protected static void addToSlotWithKeyHashList(ArrayList<SlotWithKeyHash> slotWithKeyHashList,
                                                    byte[][] data, int slotNumber, IsKeyBytes isKeyBytes) {
         for (int i = 1; i < data.length; i++) {
@@ -79,15 +87,29 @@ public abstract class BaseCommand {
         }
     }
 
-    // for dyn script execute
+    /**
+     * Gets the command string received from the client.
+     *
+     * @return The command string received from the client
+     */
     public String getCmd() {
         return cmd;
     }
 
+    /**
+     * Gets all data array received from the client including command.
+     *
+     * @return All data array received from the client including command
+     */
     public byte[][] getData() {
         return data;
     }
 
+    /**
+     * Gets the network socket connection for the command.
+     *
+     * @return The TCP socket connection to the client
+     */
     public ITcpSocket getSocket() {
         return socket;
     }
@@ -112,12 +134,25 @@ public abstract class BaseCommand {
         this.socket = socket;
     }
 
+    /**
+     * Constructs a BaseCommand instance with the provided command string, data array, and network socket connection.
+     *
+     * @param cmd    The command string received from the client
+     * @param data   All data array received from the client including command
+     * @param socket The TCP socket connection to the client
+     */
     public BaseCommand(String cmd, byte[][] data, ITcpSocket socket) {
         this.cmd = cmd;
         this.data = data;
         this.socket = socket;
     }
 
+    /**
+     * Gets the Acl user object associated with the network socket connection.
+     *
+     * @param socket0 The network socket connection
+     * @return Acl user, use a default user if not found
+     */
     public static @NotNull U getAuthU(ITcpSocket socket0) {
         var authUser = SocketInspector.getAuthUser(socket0);
         return authUser == null ? U.INIT_DEFAULT_U : AclUsers.getInstance().get(authUser);
@@ -194,14 +229,23 @@ public abstract class BaseCommand {
 
     protected boolean isCrossRequestWorker;
 
+    /**
+     * Sets whether the command needs to be sent to other workers.
+     * When do unit test, can change
+     * When reuse a command method, can change
+     *
+     * @param crossRequestWorker Whether the command needs to be sent to other workers
+     */
     public void setCrossRequestWorker(boolean crossRequestWorker) {
         isCrossRequestWorker = crossRequestWorker;
     }
 
+    @TestOnly
     public static AGroup mockAGroup() {
         return BaseCommand.mockAGroup((byte) 0, (byte) 1, (short) 1);
     }
 
+    @TestOnly
     public static AGroup mockAGroup(byte workerId, byte netWorkers, short slotNumber) {
         return mockAGroup(workerId, netWorkers, slotNumber, new CompressStats("mock", "net_"),
                 Zstd.defaultCompressionLevel(), 100, new SnowFlake(1, 1),
@@ -210,6 +254,7 @@ public abstract class BaseCommand {
                 new ArrayList<>(), false);
     }
 
+    @TestOnly
     public static AGroup mockAGroup(byte workerId, byte netWorkers, short slotNumber, CompressStats compressStats,
                                     int compressLevel, int trainSampleListMaxSize, SnowFlake snowFlake,
                                     TrainSampleJob trainSampleJob, List<TrainSampleJob.TrainSampleKV> sampleToTrainList,
@@ -238,6 +283,13 @@ public abstract class BaseCommand {
         return aGroup;
     }
 
+    /**
+     * Copy the properties of another BaseCommand object to this object.
+     * When do unit test, can use this
+     * When reuse a command method, can use this
+     *
+     * @param other The other BaseCommand object to copy properties from
+     */
     public void from(BaseCommand other) {
         this.requestHandler = other.requestHandler;
 
@@ -265,6 +317,13 @@ public abstract class BaseCommand {
         }
     }
 
+    /**
+     * Initialize the properties of this BaseCommand object.
+     *
+     * @param requestHandler The RequestHandler object associated with this BaseCommand object
+     * @param request        The Request object associated with this BaseCommand object
+     * @return The BaseCommand object itself
+     */
     public BaseCommand init(RequestHandler requestHandler, Request request) {
         this.requestHandler = requestHandler;
 
@@ -289,6 +348,14 @@ public abstract class BaseCommand {
         return this;
     }
 
+    /**
+     * Parse the slots hash information from the given command and data.
+     *
+     * @param cmd        The command string
+     * @param data       All data array
+     * @param slotNumber The slot number
+     * @return List of SlotWithKeyHash objects representing the parsed slots
+     */
     public abstract ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber);
 
     public abstract Reply handle();
@@ -313,6 +380,16 @@ public abstract class BaseCommand {
     // create log for each object, perf bad, use static better
     protected static final Logger log = LoggerFactory.getLogger(BaseCommand.class);
 
+    /**
+     * Represents a key's slot assignment and hash information.
+     *
+     * @param slot         The internal slot index used for sharding
+     * @param toClientSlot The slot number exposed to Redis clients when cluster enabled
+     * @param bucketIndex  The bucket index within the slot
+     * @param keyHash      Main 64-bit hash of the key
+     * @param keyHash32    Another 32 bits of the key
+     * @param rawKey       The original key string
+     */
     public record SlotWithKeyHash(short slot, short toClientSlot, int bucketIndex,
                                   long keyHash, int keyHash32, String rawKey) {
         @Override
@@ -359,6 +436,14 @@ public abstract class BaseCommand {
         return 0L;
     }
 
+    /**
+     * For one redis client connection, can send commands by keys, and Velo server can always do not cross worker (thread), for perf better.
+     *
+     * @param keyBytes       The key bytes
+     * @param slotNumber     Velo server slot number
+     * @param bucketsPerSlot Velo server configure buckets per slot
+     * @return The slot number for the given key
+     */
     public static short calSlotInRedisClientWhenNeedBetterPerf(byte[] keyBytes, int slotNumber, int bucketsPerSlot) {
         final int halfSlotNumber = slotNumber / 2;
         final int x = halfSlotNumber * bucketsPerSlot;
@@ -376,6 +461,13 @@ public abstract class BaseCommand {
         return (short) slot;
     }
 
+    /**
+     * Calculates slot assignment and hash information for a key.
+     *
+     * @param keyBytes   Original key bytes
+     * @param slotNumber Total number of slots in the velo running instance
+     * @return SlotWithKeyHash containing full positioning information
+     */
     public static SlotWithKeyHash slot(byte[] keyBytes, int slotNumber) {
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
@@ -406,6 +498,12 @@ public abstract class BaseCommand {
         return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, keyHash32, new String(keyBytes));
     }
 
+    /**
+     * Calculates slot assignment for a key using instance-configured slot number.
+     *
+     * @param keyBytes Original key bytes
+     * @return SlotWithKeyHash Key hash information including slot number, bucket index, and key hash.
+     */
     public SlotWithKeyHash slot(byte[] keyBytes) {
         return slot(keyBytes, slotNumber);
     }
@@ -413,24 +511,40 @@ public abstract class BaseCommand {
     // for mock test
     private ByPassGetSet byPassGetSet;
 
+    @TestOnly
     public void setByPassGetSet(ByPassGetSet byPassGetSet) {
         this.byPassGetSet = byPassGetSet;
     }
 
-    public Long getExpireAt(byte[] keyBytes, @NotNull SlotWithKeyHash s) {
+    /**
+     * Gets expiration time for a key in milliseconds since epoch.
+     *
+     * @param keyBytes        Original key bytes
+     * @param slotWithKeyHash Precomputed slot and hash information
+     * @return Expiration time or null if no expiration set
+     */
+    public Long getExpireAt(byte[] keyBytes, @NotNull SlotWithKeyHash slotWithKeyHash) {
         if (byPassGetSet != null) {
-            var cv = getCv(keyBytes, s);
+            var cv = getCv(keyBytes, slotWithKeyHash);
             if (cv == null) {
                 return null;
             }
             return cv.getExpireAt();
         } else {
-            var slot = s.slot();
+            var slot = slotWithKeyHash.slot();
             var oneSlot = localPersist.oneSlot(slot);
-            return oneSlot.getExpireAt(keyBytes, s.bucketIndex, s.keyHash, s.keyHash32);
+            return oneSlot.getExpireAt(keyBytes, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash, slotWithKeyHash.keyHash32);
         }
     }
 
+    /**
+     * Gets the CompressedValue for a key and precomputed slot and hash information.
+     *
+     * @param keyBytes Original key bytes
+     * @param s        Precomputed slot and hash information
+     * @return CompressedValue or null if expired/not found
+     * @throws DictMissingException If required compression dictionary is missing
+     */
     public CompressedValue getCv(byte[] keyBytes, SlotWithKeyHash s) {
         var slot = s.slot();
 
@@ -477,6 +591,15 @@ public abstract class BaseCommand {
         return getValueBytesByCv(cv, null, null);
     }
 
+    /**
+     * Get value bytes from a CompressedValue.
+     *
+     * @param cv              The CompressedValue to decompress
+     * @param keyBytes        Original key bytes
+     * @param slotWithKeyHash Precomputed slot and hash information
+     * @return Decompressed value bytes
+     * @throws DictMissingException If required compression dictionary is missing
+     */
     public byte[] getValueBytesByCv(CompressedValue cv, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
         if (cv.isTypeNumber()) {
             return String.valueOf(cv.numberValue()).getBytes();
@@ -522,6 +645,13 @@ public abstract class BaseCommand {
         }
     }
 
+    /**
+     * Get value bytes from a key.
+     *
+     * @param keyBytes        Original key bytes
+     * @param slotWithKeyHash Precomputed slot and hash information
+     * @return Value bytes or null if not found
+     */
     public byte[] get(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
         return get(keyBytes, slotWithKeyHash, false);
     }
@@ -535,6 +665,15 @@ public abstract class BaseCommand {
         return false;
     }
 
+    /**
+     * Get value bytes from a key.
+     *
+     * @param keyBytes          Original key bytes
+     * @param slotWithKeyHash   Precomputed slot and hash information
+     * @param expectTypeString  Expect return CompressValue is string type or ignore
+     * @param expectSpTypeArray Expect return CompressValue sp type array
+     * @return Value bytes or null if not found
+     */
     public byte[] get(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, boolean expectTypeString, Integer... expectSpTypeArray) {
         var cv = getCv(keyBytes, slotWithKeyHash);
         if (cv == null) {
@@ -549,10 +688,25 @@ public abstract class BaseCommand {
         return getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
     }
 
+    /**
+     * Set a number value to a key.
+     *
+     * @param keyBytes             Original key bytes
+     * @param value                Number value
+     * @param slotWithKeyHashReuse Precomputed slot and hash information
+     */
     public void setNumber(byte[] keyBytes, Number value, SlotWithKeyHash slotWithKeyHashReuse) {
         setNumber(keyBytes, value, slotWithKeyHashReuse, CompressedValue.NO_EXPIRE);
     }
 
+    /**
+     * Set a number value to a key.
+     *
+     * @param keyBytes             Original key bytes
+     * @param value                Number value
+     * @param slotWithKeyHashReuse Precomputed slot and hash information
+     * @param expireAt             Given expire time
+     */
     public void setNumber(byte[] keyBytes, Number value, SlotWithKeyHash slotWithKeyHashReuse, long expireAt) {
         if (value instanceof Short) {
             short shortValue = value.shortValue();
@@ -609,6 +763,13 @@ public abstract class BaseCommand {
         }
     }
 
+    /**
+     * Stores a CompressedValue in the persistence layer.
+     *
+     * @param keyBytes             Original key bytes
+     * @param cv                   CompressedValue to store
+     * @param slotWithKeyHashReuse Precomputed slot and hash information
+     */
     public void setCv(byte[] keyBytes, CompressedValue cv, SlotWithKeyHash slotWithKeyHashReuse) {
         var slotWithKeyHash = slotWithKeyHashReuse != null ? slotWithKeyHashReuse : slot(keyBytes);
         if (cv.isTypeNumber()) {
@@ -643,16 +804,40 @@ public abstract class BaseCommand {
         set(keyBytes, valueBytes, slot(keyBytes, slotNumber), CompressedValue.NULL_DICT_SEQ, CompressedValue.NO_EXPIRE);
     }
 
+    /**
+     * Stores a value in the persistence layer.
+     *
+     * @param keyBytes             Original key bytes
+     * @param valueBytes           Value bytes
+     * @param slotWithKeyHashReuse Precomputed slot and hash information
+     */
     public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHashReuse) {
         set(keyBytes, valueBytes, slotWithKeyHashReuse, CompressedValue.NULL_DICT_SEQ, CompressedValue.NO_EXPIRE);
     }
 
-    public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHashReuse, int spType) {
-        set(keyBytes, valueBytes, slotWithKeyHashReuse, spType, CompressedValue.NO_EXPIRE);
+    /**
+     * Stores a value in the persistence layer.
+     *
+     * @param keyBytes        Original key bytes
+     * @param valueBytes      Value bytes
+     * @param slotWithKeyHash Precomputed slot and hash information
+     * @param spType          Given as CompressValue spType
+     */
+    public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType) {
+        set(keyBytes, valueBytes, slotWithKeyHash, spType, CompressedValue.NO_EXPIRE);
     }
 
     private static final int MAX_LONG_VALUE_IN_BYTES_LENGTH = String.valueOf(Long.MAX_VALUE).length();
 
+    /**
+     * Stores a value in the persistence layer.
+     *
+     * @param keyBytes        Original key bytes
+     * @param valueBytes      Value bytes
+     * @param slotWithKeyHash Precomputed slot and hash information
+     * @param spType          Given as CompressValue spType
+     * @param expireAt        Given expire time
+     */
     public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType, long expireAt) {
         compressStats.rawTotalLength += valueBytes.length;
 
@@ -775,6 +960,14 @@ public abstract class BaseCommand {
         }
     }
 
+    /**
+     * Store a CompressedValue to a specific slot's storage.
+     *
+     * @param slot            Target slot number
+     * @param key             Original key string
+     * @param slotWithKeyHash Precomputed slot and hash information
+     * @param cv              CompressedValue to store
+     */
     protected void putToOneSlot(short slot, String key, @NotNull SlotWithKeyHash slotWithKeyHash, CompressedValue cv) {
         if (byPassGetSet != null) {
             byPassGetSet.put(slot, key, slotWithKeyHash.bucketIndex, cv);
@@ -789,6 +982,16 @@ public abstract class BaseCommand {
         }
     }
 
+    /**
+     * Removes a key from the persistence layer.
+     *
+     * @param slot        Target slot number
+     * @param bucketIndex Precomputed bucket index
+     * @param key         The key string to remove
+     * @param keyHash     Main 64-bit key hash
+     * @param keyHash32   Another 32 bits of key
+     * @return true if the key was found and removed
+     */
     public boolean remove(short slot, int bucketIndex, String key, long keyHash, int keyHash32) {
         if (byPassGetSet != null) {
             return byPassGetSet.remove(slot, key);
@@ -798,6 +1001,14 @@ public abstract class BaseCommand {
         return oneSlot.remove(key, bucketIndex, keyHash, keyHash32);
     }
 
+    /**
+     * Schedules a key for delayed removal (asynchronous deletion).
+     *
+     * @param slot        Target slot number
+     * @param bucketIndex Precomputed bucket index
+     * @param key         The key string to remove
+     * @param keyHash     Main 64-bit key hash
+     */
     public void removeDelay(short slot, int bucketIndex, String key, long keyHash) {
         if (byPassGetSet != null) {
             byPassGetSet.remove(slot, key);
@@ -808,6 +1019,16 @@ public abstract class BaseCommand {
         oneSlot.removeDelay(key, bucketIndex, keyHash);
     }
 
+    /**
+     * Checks if a key exists in the persistence layer.
+     *
+     * @param slot        Target slot number
+     * @param bucketIndex Precomputed bucket index
+     * @param key         The key string to check
+     * @param keyHash     Main 64-bit key hash
+     * @param keyHash32   Another 32 bits of key hash
+     * @return true if the key exists and is not expired
+     */
     public boolean exists(short slot, int bucketIndex, String key, long keyHash, int keyHash32) {
         if (byPassGetSet != null) {
             var bufOrCompressedValue = byPassGetSet.getBuf(slot, key.getBytes(), bucketIndex, keyHash);
@@ -818,6 +1039,7 @@ public abstract class BaseCommand {
         return oneSlot.exists(key, bucketIndex, keyHash, keyHash32);
     }
 
+    @VisibleForTesting
     void handleTrainSampleResult(TrainSampleJob.TrainSampleResult trainSampleResult) {
         if (trainSampleResult == null) {
             return;

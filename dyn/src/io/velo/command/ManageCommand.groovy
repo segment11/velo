@@ -129,7 +129,7 @@ class ManageCommand extends BaseCommand {
             return migrateFrom()
         }
 
-        if (slot >= slotNumber) {
+        if (slot >= ConfForGlobal.slotNumber) {
             return ErrorReply.INVALID_INTEGER
         }
 
