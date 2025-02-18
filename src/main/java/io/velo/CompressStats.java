@@ -6,15 +6,52 @@ import org.jetbrains.annotations.VisibleForTesting;
 import java.util.HashMap;
 import java.util.List;
 
+/**
+ * Represents compression statistics for monitoring and analysis.
+ * Tracks various metrics related to compression and decompression processes.
+ */
 public class CompressStats {
+    /**
+     * Total count of raw data items processed.
+     */
     public long rawCount = 0;
+
+    /**
+     * Total count of compressed data items processed.
+     */
     public long compressedCount = 0;
+
+    /**
+     * Total length of raw data in bytes.
+     */
     public long rawTotalLength = 0;
+
+    /**
+     * Total length of compressed data in bytes.
+     */
     public long compressedTotalLength = 0;
+
+    /**
+     * Total time spent on compression in microseconds.
+     */
     public long compressedCostTimeTotalUs = 0;
+
+    /**
+     * Total count of decompressed data items processed.
+     */
     public long decompressedCount = 0;
+
+    /**
+     * Total time spent on decompression in nanoseconds.
+     */
     public long decompressedCostTimeTotalNs = 0;
 
+    /**
+     * Initializes a new instance of the CompressStats class with the specified name and prefix.
+     *
+     * @param name   The name of the statistics instance.
+     * @param prefix The prefix used for metric labels.
+     */
     public CompressStats(String name, String prefix) {
         compressStatsGauge.addRawGetter(() -> {
             var labelValues = List.of(name);
@@ -43,6 +80,9 @@ public class CompressStats {
         });
     }
 
+    /**
+     * Static gauge for compress stats.
+     */
     @VisibleForTesting
     final static SimpleGauge compressStatsGauge = new SimpleGauge("compress_stats", "Net worker request handle compress stats.",
             "name");

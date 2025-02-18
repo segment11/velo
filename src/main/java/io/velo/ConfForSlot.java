@@ -10,19 +10,63 @@ import java.util.HashMap;
 
 import static io.velo.persist.LocalPersist.PAGE_SIZE;
 
+/**
+ * Configuration settings for slots in the Velo application.
+ * This class provides different configurations based on the estimated number of keys.
+ *
+ * <p>Key features:
+ * <ul>
+ *   <li>Configuration for different slot sizes (debugMode, c1m, c10m, c100m)</li>
+ *   <li>Configuration for buckets, chunks, and write-ahead logs (WAL)</li>
+ *   <li>Configuration for least recently used (LRU) caches</li>
+ *   <li>Replication configuration</li>
+ * </ul>
+ */
 public enum ConfForSlot {
     debugMode(100_000), c1m(1_000_000L),
     c10m(10_000_000L), c100m(100_000_000L);
 
+    /**
+     * Logger for logging messages.
+     */
     public static final Logger log = LoggerFactory.getLogger(ConfForSlot.class);
 
+    /**
+     * Configuration for buckets.
+     */
     public final ConfBucket confBucket;
+
+    /**
+     * Configuration for chunks.
+     */
     public final ConfChunk confChunk;
+
+    /**
+     * Configuration for write-ahead logs (WAL).
+     */
     public final ConfWal confWal;
+
+    /**
+     * Configuration for LRU cache for big strings.
+     */
     public final ConfLru lruBigString = new ConfLru(1000);
+
+    /**
+     * Configuration for LRU cache for key and compressed value encoded data.
+     */
     public final ConfLru lruKeyAndCompressedValueEncoded = new ConfLru(100_000);
+
+    /**
+     * Configuration for replication.
+     */
     public final ConfRepl confRepl = new ConfRepl();
 
+    /**
+     * Retrieves the appropriate configuration based on the estimated number of keys.
+     *
+     * @param estimateKeyNumber The estimated number of keys.
+     * @return The appropriate configuration for the given number of keys.
+     */
     public static ConfForSlot from(long estimateKeyNumber) {
         if (estimateKeyNumber <= 100_000L) {
             return debugMode;
@@ -35,6 +79,11 @@ public enum ConfForSlot {
         }
     }
 
+    /**
+     * Returns a map of values that need to be matched for a slave to be considered compatible with the master.
+     *
+     * @return A map of configuration values.
+     */
     public HashMap<String, Object> slaveCanMatchCheckValues() {
         var map = new HashMap<String, Object>();
         map.put("datacenterId", ConfForGlobal.datacenterId);
@@ -56,8 +105,16 @@ public enum ConfForSlot {
         return map;
     }
 
+    /**
+     * Global configuration instance.
+     */
     public static ConfForSlot global = c1m;
 
+    /**
+     * Initializes the configuration based on the estimated number of keys.
+     *
+     * @param estimateKeyNumber The estimated number of keys.
+     */
     ConfForSlot(long estimateKeyNumber) {
         if (estimateKeyNumber == 100_000L) {
             this.confChunk = ConfChunk.debugMode;
@@ -89,33 +146,58 @@ public enum ConfForSlot {
                 '}';
     }
 
+    /**
+     * Configuration for least recently used (LRU) caches.
+     */
     public static class ConfLru {
+        /**
+         * Initializes the LRU cache with the specified maximum size.
+         *
+         * @param maxSize The maximum size of the LRU cache.
+         */
         public ConfLru(int maxSize) {
             this.maxSize = maxSize;
         }
 
+        /**
+         * Maximum size of the LRU cache.
+         */
         public int maxSize;
     }
 
+    /**
+     * Configuration for buckets.
+     */
     public enum ConfBucket {
         debugMode(4096, (byte) 1),
         c1m(KeyBucket.DEFAULT_BUCKETS_PER_SLOT, (byte) 1),
         c10m(KeyBucket.MAX_BUCKETS_PER_SLOT / 2, (byte) 1),
         c100m(KeyBucket.MAX_BUCKETS_PER_SLOT, (byte) 3);
 
+        /**
+         * Initializes the bucket configuration with the specified parameters.
+         *
+         * @param bucketsPerSlot     The number of buckets per slot.
+         * @param initialSplitNumber The initial split number.
+         */
         ConfBucket(int bucketsPerSlot, byte initialSplitNumber) {
             this.bucketsPerSlot = bucketsPerSlot;
             this.initialSplitNumber = initialSplitNumber;
         }
 
-        /*
-        suppose memory / ssd capacity ~= 1:8
-        when 1000w key, c10m, wal will use 256MB, ssd may use 2-3GB
+        /**
+         * Number of buckets per slot.
          */
         public int bucketsPerSlot;
+
+        /**
+         * Initial split number.
+         */
         public byte initialSplitNumber;
 
-        // 4KB one segment, 25 * 1000 * 4KB = 100MB
+        /**
+         * Configuration for LRU cache per file descriptor.
+         */
         public final ConfLru lruPerFd = new ConfLru(0);
 
         @Override
@@ -127,42 +209,70 @@ public enum ConfForSlot {
         }
     }
 
+    /**
+     * Configuration for chunks.
+     */
     public enum ConfChunk {
         debugMode(8 * 1024, (byte) 2, PAGE_SIZE),
         c1m(256 * 1024, (byte) 1, PAGE_SIZE),
         c10m(512 * 1024, (byte) 2, PAGE_SIZE),
         c100m(512 * 1024, (byte) 8, PAGE_SIZE);
 
+        /**
+         * Initializes the chunk configuration with the specified parameters.
+         *
+         * @param segmentNumberPerFd The number of segments per file descriptor.
+         * @param fdPerChunk         The number of file descriptors per chunk.
+         * @param segmentLength      The length of each segment.
+         */
         ConfChunk(int segmentNumberPerFd, byte fdPerChunk, int segmentLength) {
             this.segmentNumberPerFd = segmentNumberPerFd;
             this.fdPerChunk = fdPerChunk;
             this.segmentLength = segmentLength;
         }
 
+        /**
+         * Maximum number of file descriptors per chunk.
+         */
         public static final int MAX_FD_PER_CHUNK = 64;
 
-        // each slot each worker persist to a file, one file one chunk, each file max 2GB, 4KB page size, each file max 512K pages
+        /**
+         * Number of segments per file descriptor.
+         */
         public int segmentNumberPerFd;
-        // 16 * 2GB = 32GB per slot (per worker)
-        // suppose one key value encoded length (value is already compressed) ~= 100 byte, one page size 4096 contains 40 key value pairs
-        // one fd contains 512K pages, so one fd contains 20M key value pairs
-        // one chunk contains 20M * 16 = 320M key value pairs
-        // merge worker is another chunk, so one slot may contain 640M key value pairs
 
-        // if one key value encoded length (value is already compressed) ~= 500 byte, one page size 4096 contains 8 key value pairs
-        // fd per chunk need to be 32 or 64
+        /**
+         * Number of file descriptors per chunk.
+         */
         public byte fdPerChunk;
-        // for better latency, PAGE_SIZE 4K is ok
+
+        /**
+         * Length of each segment.
+         */
         public int segmentLength;
+
+        /**
+         * Flag to indicate if segments should use compression.
+         */
         public boolean isSegmentUseCompression;
 
-        // 4KB one segment, 25 * 1000 * 4KB = 100MB
+        /**
+         * Configuration for LRU cache per file descriptor.
+         */
         public final ConfLru lruPerFd = new ConfLru(0);
 
+        /**
+         * Calculates the maximum number of segments.
+         *
+         * @return The maximum number of segments.
+         */
         public int maxSegmentNumber() {
             return segmentNumberPerFd * fdPerChunk;
         }
 
+        /**
+         * Empty bytes for once write.
+         */
         public byte[] REPL_EMPTY_BYTES_FOR_ONCE_WRITE;
 
         @Override
@@ -175,45 +285,48 @@ public enum ConfForSlot {
         }
     }
 
+    /**
+     * Configuration for write-ahead logs (WAL).
+     */
     public enum ConfWal {
         debugMode(32, 200, 200),
         c1m(32, 200, 200),
         c10m(32, 200, 200),
         c100m(32, 200, 200);
 
+        /**
+         * Initializes the WAL configuration with the specified parameters.
+         *
+         * @param oneChargeBucketNumber The number of buckets to charge at once.
+         * @param valueSizeTrigger      The trigger size for values.
+         * @param shortValueSizeTrigger The trigger size for short values.
+         */
         ConfWal(int oneChargeBucketNumber, int valueSizeTrigger, int shortValueSizeTrigger) {
             this.oneChargeBucketNumber = oneChargeBucketNumber;
             this.valueSizeTrigger = valueSizeTrigger;
             this.shortValueSizeTrigger = shortValueSizeTrigger;
         }
 
+        /**
+         * Number of buckets to charge in one wal group.
+         */
         public int oneChargeBucketNumber;
 
-        // refer to Chunk BATCH_SEGMENT_COUNT_FOR_PWRITE
-        // 4 pages ~= 16KB, one V persist length is about 100B, so 4 pages can store about 160 V
-        // for better latency, do not configure too large
-        // 200 make sure there is at least one batch 16KB
-        // must < 512, scan cursor use 10 bits for wal skip key count, value and short value key count total need < 1024
+        /**
+         * Trigger to persist when >= size for values.
+         */
         public int valueSizeTrigger;
-        // must < 512
+
+        /**
+         * Trigger to persist when >= size for short values.
+         */
         public int shortValueSizeTrigger;
 
-        private int oneChargeBucketNumberOld;
-        private int valueSizeTriggerOld;
-        private int shortValueSizeTriggerOld;
-
-        void mark() {
-            this.oneChargeBucketNumberOld = this.oneChargeBucketNumber;
-            this.valueSizeTriggerOld = this.valueSizeTrigger;
-            this.shortValueSizeTriggerOld = this.shortValueSizeTrigger;
-        }
-
-        void reset() {
-            this.oneChargeBucketNumber = this.oneChargeBucketNumberOld;
-            this.valueSizeTrigger = this.valueSizeTriggerOld;
-            this.shortValueSizeTrigger = this.shortValueSizeTriggerOld;
-        }
-
+        /**
+         * Resets WAL static values based on the one group buffer size.
+         *
+         * @param oneGroupBufferSize The size of one group buffer.
+         */
         public void resetWalStaticValues(int oneGroupBufferSize) {
             if (Wal.ONE_GROUP_BUFFER_SIZE != oneGroupBufferSize) {
                 Wal.ONE_GROUP_BUFFER_SIZE = oneGroupBufferSize;
@@ -240,19 +353,43 @@ public enum ConfForSlot {
         }
     }
 
+    /**
+     * Configuration for replication.
+     */
     public static class ConfRepl {
-        // because padding, can not change after binlog file created
-        // for better latency, do not configure too large
-        // 256KB ~= io depths = 64 (4KB * 64 = 256KB)
-        // 1M ~= io depths = 256 (4KB * 256 = 1M)
+        /**
+         * Length of one segment in the binlog.
+         */
         public final int binlogOneSegmentLength = 1024 * 1024;
+
+        /**
+         * Maximum length of one binlog file.
+         */
         public final int binlogOneFileMaxLength = 512 * 1024 * 1024;
+
+        /**
+         * Maximum count of segments in the read cache.
+         */
         public short binlogForReadCacheSegmentMaxCount = 100;
+
+        /**
+         * Maximum count of binlog files to keep.
+         */
         public short binlogFileKeepMaxCount = 10;
-        // if slave catch up binlog offset is less than min diff, slave can service read
+
+        /**
+         * Minimum difference in catch-up offset for a slave to service reads.
+         */
         public int catchUpOffsetMinDiff = 1024 * 1024;
+
+        /**
+         * Interval in milliseconds for catch-up checks.
+         */
         public int catchUpIntervalMillis = 100;
-        // for exists_keys fetch
+
+        /**
+         * Batch size for iterating keys.
+         */
         public int iterateKeysOneBatchSize = 10000;
 
         @Override
