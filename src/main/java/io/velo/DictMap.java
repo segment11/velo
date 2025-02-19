@@ -17,10 +17,25 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Manages a map of dictionaries used for compression and decompression.
+ * This class provides methods for adding, retrieving, and managing dictionaries, as well as handling metrics and persistence.
+ */
 public class DictMap implements NeedCleanUp {
+
+    /**
+     * Minimum data length to trigger compression.
+     */
     public static int TO_COMPRESS_MIN_DATA_LENGTH = 64;
+
+    /**
+     * Minimum data length to use the self dictionary for compression.
+     */
     public static int TO_COMPRESS_USE_SELF_DICT_MIN_DATA_LENGTH = 256;
 
+    /**
+     * Gauge for tracking dictionary compression metrics.
+     */
     @VisibleForTesting
     final static SimpleGauge dictCompressedGauge = new SimpleGauge("dict", "Dict compressed metrics.", "name");
 
@@ -28,33 +43,75 @@ public class DictMap implements NeedCleanUp {
         dictCompressedGauge.register();
     }
 
-    // singleton
+    /**
+     * Singleton instance of DictMap.
+     */
     private static final DictMap instance = new DictMap();
 
+    /**
+     * Returns the singleton instance of DictMap.
+     *
+     * @return the singleton instance of DictMap
+     */
     public static DictMap getInstance() {
         return instance;
     }
 
+    /**
+     * Private constructor to enforce singleton pattern.
+     */
     private DictMap() {
         initMetricsCollect();
     }
 
+    /**
+     * Binlog for logging dictionary changes.
+     */
     private Binlog binlog;
 
+    /**
+     * Sets the binlog for logging dictionary changes.
+     *
+     * @param binlog the binlog to set
+     */
     public void setBinlog(Binlog binlog) {
         this.binlog = binlog;
     }
 
+    /**
+     * Logger for logging information and errors.
+     */
     private static final Logger log = LoggerFactory.getLogger(DictMap.class);
 
+    /**
+     * Retrieves a dictionary by its sequence number.
+     *
+     * @param seq the sequence number of the dictionary
+     * @return the dictionary with the specified sequence number, or null if not found
+     */
     public Dict getDictBySeq(int seq) {
         return cacheDictBySeq.get(seq);
     }
 
+    /**
+     * Retrieves a dictionary by its key prefix or suffix.
+     *
+     * @param keyPrefixOrSuffix the key prefix or suffix of the dictionary
+     * @return the dictionary with the specified key prefix or suffix, or null if not found
+     */
     public Dict getDict(String keyPrefixOrSuffix) {
         return cacheDict.get(keyPrefixOrSuffix);
     }
 
+    /**
+     * Puts a dictionary into the map with a key prefix or suffix.
+     * If the dictionary's sequence number already exists, a new sequence number is generated.
+     *
+     * @param keyPrefixOrSuffix the key prefix or suffix of the dictionary
+     * @param dict              the dictionary to put
+     * @return the dictionary that was put into the map
+     * @throws RuntimeException if there is an error writing the dictionary to the file or appending to the binlog
+     */
     @SlaveNeedReplay
     @SlaveReplay
     public synchronized Dict putDict(String keyPrefixOrSuffix, Dict dict) {
@@ -92,28 +149,51 @@ public class DictMap implements NeedCleanUp {
         return cacheDict.put(keyPrefixOrSuffix, dict);
     }
 
+    /**
+     * Returns a copy of the cache dictionary map.
+     *
+     * @return a copy of the cache dictionary map
+     */
     public HashMap<String, Dict> getCacheDictCopy() {
         return new HashMap<>(cacheDict);
     }
 
+    /**
+     * Returns a copy of the cache dictionary by sequence map.
+     *
+     * @return a copy of the cache dictionary by sequence map
+     */
     public TreeMap<Integer, Dict> getCacheDictBySeqCopy() {
         return new TreeMap<>(cacheDictBySeq);
     }
 
-    // worker share dict, init on start, need persist
-    // for compress
+    /**
+     * Cache for dictionaries by key prefix or suffix.
+     */
     private final ConcurrentHashMap<String, Dict> cacheDict = new ConcurrentHashMap<>();
-    // can not be removed
-    // for decompress
-    // if dict retrain, and dict count is large, it will be a problem, need clean not used dict, todo
+
+    /**
+     * Cache for dictionaries by sequence number.
+     */
     private final ConcurrentHashMap<Integer, Dict> cacheDictBySeq = new ConcurrentHashMap<>();
 
+    /**
+     * Returns the size of the dictionary map.
+     *
+     * @return the size of the dictionary map
+     */
     public int dictSize() {
         return cacheDictBySeq.size();
     }
 
+    /**
+     * File output stream for writing dictionaries to a file.
+     */
     private FileOutputStream fos;
 
+    /**
+     * Cleans up resources used by the dictionary map.
+     */
     @Override
     public synchronized void cleanUp() {
         if (fos != null) {
@@ -132,6 +212,9 @@ public class DictMap implements NeedCleanUp {
         Dict.GLOBAL_ZSTD_DICT.closeCtx();
     }
 
+    /**
+     * Clears all dictionaries from the map and truncates the dictionary file.
+     */
     public synchronized void clearAll() {
         for (var entry : cacheDictBySeq.entrySet()) {
             entry.getValue().closeCtx();
@@ -149,9 +232,22 @@ public class DictMap implements NeedCleanUp {
         }
     }
 
+    /**
+     * File name for the dictionary map file.
+     */
     private static final String FILE_NAME = "dict-map.dat";
+
+    /**
+     * Directory file for storing dictionary files.
+     */
     private File dirFile;
 
+    /**
+     * Initializes the dictionary map from a directory file.
+     *
+     * @param dirFile the directory file to initialize from
+     * @throws IOException if an I/O error occurs
+     */
     public synchronized void initDictMap(File dirFile) throws IOException {
         this.dirFile = dirFile;
         var file = new File(dirFile, FILE_NAME);
@@ -194,14 +290,29 @@ public class DictMap implements NeedCleanUp {
         Dict.initGlobalDictBytesByFile(new File(dirFile, Dict.GLOBAL_DICT_FILE_NAME));
     }
 
+    /**
+     * Updates the global dictionary bytes and saves them to a file.
+     *
+     * @param dictBytes the new global dictionary bytes
+     */
     public synchronized void updateGlobalDictBytes(byte[] dictBytes) {
         Dict.resetGlobalDictBytes(dictBytes);
         Dict.saveGlobalDictBytesToFile(new File(dirFile, Dict.GLOBAL_DICT_FILE_NAME));
     }
 
+    /**
+     * Label values for global dictionary metrics.
+     */
     private final List<String> labelValuesGlobal = List.of("global_");
+
+    /**
+     * Label values for self dictionary metrics.
+     */
     private final List<String> labelValuesSelf = List.of("self_");
 
+    /**
+     * Initializes metrics collection for dictionary compression.
+     */
     private void initMetricsCollect() {
         // only first slot show global metrics
         dictCompressedGauge.addRawGetter(() -> {
@@ -237,3 +348,4 @@ public class DictMap implements NeedCleanUp {
         });
     }
 }
+
