@@ -10,62 +10,143 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * A class responsible for training sample data to generate dictionaries using the Zstd compression library.
+ * Each instance of this class is associated with a worker ID, thread local safe.
+ */
 public class TrainSampleJob {
+    /**
+     * The unique identifier for the worker.
+     */
     private final byte workerId;
 
+    /**
+     * The number of train operations performed. This field is visible for testing purposes.
+     */
     @VisibleForTesting
     int trainCount = 0;
 
+    /**
+     * Constructs a new instance of TrainSampleJob with the given worker ID.
+     *
+     * @param workerId The unique identifier for the worker.
+     */
     public TrainSampleJob(byte workerId) {
         this.workerId = workerId;
     }
 
+    /**
+     * Logger for logging information and errors.
+     */
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(TrainSampleJob.class);
 
+    /**
+     * The minimum number of samples required to start training a dictionary.
+     */
     public static final int MIN_TRAIN_SAMPLE_SIZE = 10;
 
+    /**
+     * A cache that stores trained dictionaries by their key prefix or suffix.
+     */
     private final HashMap<String, Dict> cacheDict = new HashMap<>();
+
+    /**
+     * A copy of the list of samples to be trained.
+     */
     private List<TrainSampleKV> sampleToTrainListCopy = new ArrayList<>();
+
+    /**
+     * A list of sequence numbers of samples that have been removed after training.
+     */
     private final List<Long> removedSampleKVSeqList = new ArrayList<>();
 
+    /**
+     * Resets the list of samples to be trained with a new list.
+     *
+     * @param list The new list of samples.
+     */
     public void resetSampleToTrainList(List<TrainSampleKV> list) {
         sampleToTrainListCopy = new ArrayList<>(list);
         removedSampleKVSeqList.clear();
     }
 
+    /**
+     * The size of the dictionary to be trained.
+     */
     private int dictSize = 1024;
 
+    /**
+     * Sets the size of the dictionary to be trained.
+     *
+     * @param dictSize The size of the dictionary.
+     */
     public void setDictSize(int dictSize) {
         this.dictSize = dictSize;
     }
 
+    /**
+     * The minimum body length of samples required to start training a dictionary.
+     */
     private int trainSampleMinBodyLength = 4096;
 
+    /**
+     * Sets the minimum body length of samples required to start training a dictionary.
+     *
+     * @param trainSampleMinBodyLength The minimum body length of samples.
+     */
     public void setTrainSampleMinBodyLength(int trainSampleMinBodyLength) {
         this.trainSampleMinBodyLength = trainSampleMinBodyLength;
     }
 
-    // exclusive, e.g. 5 means 'abcdef'.substring(0, 5) == 'abcde'
+    /**
+     * The exclusive end index for the dictionary key prefix.
+     */
     private static int dictKeyPrefixEndIndex = 5;
 
+    /**
+     * Sets the exclusive end index for the dictionary key prefix.
+     *
+     * @param dictKeyPrefixEndIndex The end index for the dictionary key prefix.
+     */
     public static void setDictKeyPrefixEndIndex(int dictKeyPrefixEndIndex) {
         TrainSampleJob.dictKeyPrefixEndIndex = dictKeyPrefixEndIndex;
     }
 
+    /**
+     * The key used in dynamic configuration for dictionary key prefix or suffix groups.
+     */
     public static final String KEY_IN_DYN_CONFIG = "dict_key_prefix_or_suffix_groups";
 
+    /**
+     * The list of key prefix or suffix groups.
+     */
     private static ArrayList<String> keyPrefixOrSuffixGroupList = new ArrayList<>();
 
+    /**
+     * Returns the list of key prefix or suffix groups.
+     *
+     * @return The list of key prefix or suffix groups.
+     */
     public static ArrayList<String> getKeyPrefixOrSuffixGroupList() {
         return keyPrefixOrSuffixGroupList;
     }
 
+    /**
+     * Sets the list of key prefix or suffix groups.
+     *
+     * @param keyPrefixOrSuffixGroupList The list of key prefix or suffix groups.
+     */
     public synchronized static void setKeyPrefixOrSuffixGroupList(ArrayList<String> keyPrefixOrSuffixGroupList) {
         // longer first
         keyPrefixOrSuffixGroupList.sort((a, b) -> b.length() - a.length());
         TrainSampleJob.keyPrefixOrSuffixGroupList = keyPrefixOrSuffixGroupList;
     }
 
+    /**
+     * Adds a key prefix group to the list if it does not already exist.
+     *
+     * @param keyPrefixOrSuffixGroup The key prefix group to add.
+     */
     public synchronized static void addKeyPrefixGroupIfNotExist(String keyPrefixOrSuffixGroup) {
         if (keyPrefixOrSuffixGroupList.contains(keyPrefixOrSuffixGroup)) {
             return;
@@ -75,6 +156,12 @@ public class TrainSampleJob {
         keyPrefixOrSuffixGroupList.sort((a, b) -> b.length() - a.length());
     }
 
+    /**
+     * Trains a new dictionary using the provided list of samples.
+     *
+     * @param list The list of samples to be used for training.
+     * @return The trained dictionary or null if training fails.
+     */
     private Dict trainNewDict(List<TrainSampleKV> list) {
         int sampleBodyLength = 0;
         int sampleNum = 0;
@@ -95,11 +182,6 @@ public class TrainSampleJob {
             var body = one.valueBytes();
             boolean isAddSampleOk = trainer.addSample(body);
             assert isAddSampleOk;
-//            boolean isAddSampleOk = trainer.addSample(body);
-//            if (!isAddSampleOk) {
-//                log.warn("Train sample, w={}, train dict add sample fail, sample size={}, add body size={}",
-//                        workerId, sampleBodyLength, body.length);
-//            }
         }
 
         byte[] dictBytes;
@@ -119,6 +201,12 @@ public class TrainSampleJob {
         return new Dict(dictBytes);
     }
 
+    /**
+     * Determines the key prefix or suffix for a given key.
+     *
+     * @param key The key for which to determine the prefix or suffix.
+     * @return The key prefix or suffix.
+     */
     public static String keyPrefixOrSuffixGroup(String key) {
         if (!keyPrefixOrSuffixGroupList.isEmpty()) {
             for (var keyPrefixOrSuffix : keyPrefixOrSuffixGroupList) {
@@ -144,6 +232,11 @@ public class TrainSampleJob {
         }
     }
 
+    /**
+     * Trains dictionaries for the samples in the list.
+     *
+     * @return The result of the training process, including the trained dictionaries and the list of removed sample sequence numbers.
+     */
     public TrainSampleResult train() {
         trainCount++;
         if (trainCount % 100 == 0 || Debug.getInstance().logTrainDict) {
@@ -198,9 +291,17 @@ public class TrainSampleJob {
         return new TrainSampleResult(new HashMap<>(cacheDict), new ArrayList<>(removedSampleKVSeqList));
     }
 
+    /**
+     * A record representing the result of the training process.
+     * Contains the trained dictionaries and the list of removed sample sequence numbers.
+     */
     public record TrainSampleResult(HashMap<String, Dict> cacheDict, ArrayList<Long> removedSampleKVSeqList) {
     }
 
+    /**
+     * A record representing a sample key-value pair.
+     * Contains the key, an optional key prefix or suffix, the sequence number, and the value bytes.
+     */
     public record TrainSampleKV(String key, String keyPrefixOrSuffixGiven, Long seq, byte[] valueBytes) {
     }
 }

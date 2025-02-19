@@ -1,6 +1,5 @@
 package io.velo
 
-
 import spock.lang.Specification
 
 class UtilsTest extends Specification {
@@ -16,5 +15,13 @@ class UtilsTest extends Specification {
         Utils.rightPad("abcde", 'x', 5) == "abcde"
 
         new File(Utils.projectPath('/src/main/java/io/velo/Utils.java')).exists()
+    }
+
+    def 'test generate random chars'() {
+        given:
+        def randomChars = io.velo.util.Utils.generateRandomChars(10)
+        println randomChars
+        expect:
+        randomChars.size() == 10
     }
 }

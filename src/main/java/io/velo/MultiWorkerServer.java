@@ -81,32 +81,73 @@ import static io.activej.launchers.initializers.Initializers.ofEventloop;
 import static io.activej.launchers.initializers.Initializers.ofPrimaryServer;
 import static org.slf4j.LoggerFactory.getLogger;
 
+/**
+ * Manages a multi-worker server for handling network connections and processing requests.
+ * This class initializes and manages worker pools, event loops, and request handlers, ensuring efficient processing of client requests.
+ */
 public class MultiWorkerServer extends Launcher {
+    /**
+     * Properties file name for configuration.
+     */
     public static final String PROPERTIES_FILE = "velo.properties";
 
+    /**
+     * Server uptime timestamp.
+     */
     public static long UP_TIME;
 
+    /**
+     * Maximum number of network workers.
+     */
     static final int MAX_NET_WORKERS = 128;
+
+    /**
+     * Maximum number of index workers.
+     */
     static final int MAX_INDEX_WORKERS = 64;
 
+    /**
+     * Primary server for handling incoming connections.
+     */
     @Inject
     PrimaryServer primaryServer;
 
+    /**
+     * Array of request handlers, one per network worker.
+     */
     @ThreadNeedLocal
     @Inject
     RequestHandler[] requestHandlerArray;
 
+    /**
+     * Array of event loops for network workers.
+     */
     @ThreadNeedLocal
     Eventloop[] netWorkerEventloopArray;
 
+    /**
+     * Socket inspector for managing socket connections.
+     */
     @Inject
     SocketInspector socketInspector;
 
+    /**
+     * Refresh loader for dynamic class loading.
+     */
     @Inject
     RefreshLoader refreshLoader;
 
+    /**
+     * Logger for logging information and errors.
+     */
     private static final Logger log = LoggerFactory.getLogger(MultiWorkerServer.class);
 
+    /**
+     * Returns the directory file based on the configuration.
+     *
+     * @param config the configuration
+     * @return the directory file
+     */
     static File dirFile(Config config) {
         var dirPath = config.get(ofString(), "dir", "/tmp/velo-data");
         ConfForGlobal.dirPath = dirPath;
@@ -129,6 +170,12 @@ public class MultiWorkerServer extends Launcher {
         return dirFile;
     }
 
+    /**
+     * Provides the primary reactor for the server.
+     *
+     * @param config the configuration
+     * @return the primary reactor
+     */
     @Provides
     NioReactor primaryReactor(Config config) {
         // default 10ms
@@ -142,6 +189,14 @@ public class MultiWorkerServer extends Launcher {
         return primaryEventloop;
     }
 
+    /**
+     * Provides the worker reactor for each worker.
+     *
+     * @param workerId             the worker ID
+     * @param throttlingController the throttling controller
+     * @param config               the configuration
+     * @return the worker reactor
+     */
     @Provides
     @Worker
     NioReactor workerReactor(@WorkerId int workerId, OptionalDependency<ThrottlingController> throttlingController, Config config) {
@@ -157,6 +212,13 @@ public class MultiWorkerServer extends Launcher {
         return netHandleEventloop;
     }
 
+    /**
+     * Provides the worker pool for managing workers.
+     *
+     * @param workerPools the worker pools
+     * @param config      the configuration
+     * @return the worker pool
+     */
     @Provides
     WorkerPool workerPool(WorkerPools workerPools, Config config) {
         int netWorkers = config.get(ofInteger(), "netWorkers", 1);
@@ -171,6 +233,14 @@ public class MultiWorkerServer extends Launcher {
         return workerPools.createPool(netWorkers);
     }
 
+    /**
+     * Provides the primary server for handling incoming connections.
+     *
+     * @param primaryReactor the primary reactor
+     * @param workerServers  the worker servers
+     * @param config         the configuration
+     * @return the primary server
+     */
     @Provides
     PrimaryServer primaryServer(NioReactor primaryReactor, WorkerPool.Instances<SimpleServer> workerServers, Config config) {
         return PrimaryServer.builder(primaryReactor, workerServers.getList())
@@ -178,6 +248,12 @@ public class MultiWorkerServer extends Launcher {
                 .build();
     }
 
+    /**
+     * Wraps the HTTP response with the given reply.
+     *
+     * @param reply the reply to wrap
+     * @return the wrapped HTTP response as a ByteBuf
+     */
     ByteBuf wrapHttpResponse(Reply reply) {
         byte[] array;
 
@@ -208,6 +284,12 @@ public class MultiWorkerServer extends Launcher {
         return httpBuf;
     }
 
+    /**
+     * Checks if the cluster slots are valid for the given list of slots with key hashes.
+     *
+     * @param slotWithKeyHashList the list of slots with key hashes
+     * @return an error reply if the slots are invalid, null otherwise
+     */
     @VisibleForTesting
     ErrorReply checkClusterSlot(ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList) {
         // check if cross shards or not my shard
@@ -253,6 +335,13 @@ public class MultiWorkerServer extends Launcher {
         return null;
     }
 
+    /**
+     * Handles a single request from a client socket.
+     *
+     * @param request the request to handle
+     * @param socket  the client socket
+     * @return a promise of the response as a ByteBuf
+     */
     Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
         var isAclCheckOk = request.isAclCheckOk();
         if (!isAclCheckOk.asBoolean()) {
@@ -335,9 +424,21 @@ public class MultiWorkerServer extends Launcher {
         }
     }
 
+    /**
+     * Flag indicating whether the handle is mocked for testing.
+     */
     @TestOnly
     boolean isMockHandle = false;
 
+    /**
+     * Gets a promise of the response by handling the request on another event loop.
+     *
+     * @param request         the request to handle
+     * @param socket          the client socket
+     * @param targetHandler   the target request handler
+     * @param targetEventloop the target event loop
+     * @return a promise of the response as a ByteBuf
+     */
     private Promise<ByteBuf> getByteBufPromiseByOtherEventloop(Request request, ITcpSocket socket, RequestHandler targetHandler,
                                                                Eventloop targetEventloop) {
         if (isMockHandle) {
@@ -371,6 +472,14 @@ public class MultiWorkerServer extends Launcher {
         });
     }
 
+    /**
+     * Transfers an asynchronous reply to a ByteBuf promise.
+     *
+     * @param request the request that generated the reply
+     * @param reply   the asynchronous reply
+     * @param isResp3 true if the reply should be formatted in RESP3, false otherwise
+     * @return a promise of the response as a ByteBuf
+     */
     private Promise<ByteBuf> transferAsyncReply(Request request, AsyncReply reply, boolean isResp3) {
         var promise = reply.getSettablePromise();
         return promise.map((r, e) -> {
@@ -385,6 +494,14 @@ public class MultiWorkerServer extends Launcher {
         });
     }
 
+    /**
+     * Handles a pipeline of requests from a client socket.
+     *
+     * @param pipeline   the pipeline of requests to handle
+     * @param socket     the client socket
+     * @param slotNumber the slot number for the requests
+     * @return a promise of the response as a ByteBuf
+     */
     Promise<ByteBuf> handlePipeline(ArrayList<Request> pipeline, ITcpSocket socket, short slotNumber) {
         if (pipeline == null) {
             return Promise.of(null);
@@ -411,6 +528,12 @@ public class MultiWorkerServer extends Launcher {
         return allPipelineByteBuf(promiseN);
     }
 
+    /**
+     * Combines multiple ByteBuf promises into a single ByteBuf promise.
+     *
+     * @param promiseN the array of ByteBuf promises
+     * @return a promise of the combined ByteBuf
+     */
     public static Promise<ByteBuf> allPipelineByteBuf(Promise<ByteBuf>[] promiseN) {
         return Promises.toArray(ByteBuf.class, promiseN)
                 .map(bufs -> {
@@ -436,6 +559,12 @@ public class MultiWorkerServer extends Launcher {
                 });
     }
 
+    /**
+     * Provides a consumer for handling incoming TCP sockets.
+     *
+     * @param config the configuration
+     * @return a consumer for handling TCP sockets
+     */
     @Provides
     Consumer<ITcpSocket> consumer(Config config) {
         int slotNumber = config.get(ofInteger(), "slotNumber", (int) LocalPersist.DEFAULT_SLOT_NUMBER);
@@ -448,6 +577,15 @@ public class MultiWorkerServer extends Launcher {
         };
     }
 
+    /**
+     * Provides a worker server for handling client connections.
+     *
+     * @param reactor         the reactor for the worker server
+     * @param socketInspector the socket inspector for managing socket connections
+     * @param consumer        the consumer for handling incoming sockets
+     * @param config          the configuration
+     * @return a worker server
+     */
     @Provides
     @Worker
     SimpleServer workerServer(NioReactor reactor, SocketInspector socketInspector, Consumer<ITcpSocket> consumer, Config config) {
@@ -456,10 +594,15 @@ public class MultiWorkerServer extends Launcher {
                 .build();
     }
 
-    static final int PORT = 7379;
+    private static final int PORT = 7379;
 
     static String[] MAIN_ARGS;
 
+    /**
+     * Provides the configuration for the server.
+     *
+     * @return the configuration
+     */
     @Provides
     Config config() {
         String givenConfigFilePath;
@@ -482,8 +625,13 @@ public class MultiWorkerServer extends Launcher {
                 .overrideWith(ofSystemProperties("velo-config"));
     }
 
-    // no share
-    // if support transaction, need share to generate lsn for all slots
+    /**
+     * Provides an array of SnowFlake instances for generating unique IDs.
+     *
+     * @param confForSlot the configuration for slots
+     * @param config      the configuration
+     * @return an array of SnowFlake instances
+     */
     @Provides
     SnowFlake[] snowFlakes(ConfForSlot confForSlot, Config config) {
         int netWorkers = config.get(ofInteger(), "netWorkers", 1);
@@ -495,6 +643,11 @@ public class MultiWorkerServer extends Launcher {
         return snowFlakes;
     }
 
+    /**
+     * Provides a refresh loader for dynamic class loading.
+     *
+     * @return a refresh loader
+     */
     @Provides
     RefreshLoader refreshLoader() {
         var classpath = Utils.projectPath("/dyn/src");
@@ -503,6 +656,11 @@ public class MultiWorkerServer extends Launcher {
                 .addDir(Utils.projectPath("/dyn/src/io/velo"));
     }
 
+    /**
+     * Provides the module configuration for the application.
+     *
+     * @return the configured module
+     */
     @Override
     protected final Module getModule() {
         var affinityThreadFactory = new AffinityThreadFactory("net-worker",
@@ -519,6 +677,11 @@ public class MultiWorkerServer extends Launcher {
         );
     }
 
+    /**
+     * Provides the business logic module.
+     *
+     * @return the business logic module
+     */
     protected Module getBusinessLogicModule() {
         return new InnerModule();
     }
@@ -533,6 +696,12 @@ public class MultiWorkerServer extends Launcher {
 
     PrimaryTaskRunnable primaryScheduleRunnable;
 
+    /**
+     * Configures the event loop as a scheduler.
+     *
+     * @param netWorkerEventloop the event loop for the network worker
+     * @param index              the index of the network worker
+     */
     private void eventloopAsScheduler(Eventloop netWorkerEventloop, int index) {
         var taskRunnable = scheduleRunnableArray[index];
         taskRunnable.setNetWorkerEventloop(netWorkerEventloop);
@@ -547,6 +716,11 @@ public class MultiWorkerServer extends Launcher {
     @VisibleForTesting
     long[] netWorkerThreadIds;
 
+    /**
+     * Starts the application.
+     *
+     * @throws Exception if an error occurs during startup
+     */
     @Override
     protected void onStart() throws Exception {
         netWorkerThreadIds = new long[netWorkerEventloopArray.length];
@@ -629,7 +803,11 @@ public class MultiWorkerServer extends Launcher {
         }
     }
 
-    // run in primary eventloop
+    /**
+     * Performs replication after leader selection.
+     *
+     * @param slot the slot number
+     */
     static void doReplAfterLeaderSelect(short slot) {
         var leaderSelector = LeaderSelector.getInstance();
         // if failover, wait 20s and then start leader select
@@ -690,11 +868,21 @@ public class MultiWorkerServer extends Launcher {
         }
     }
 
+    /**
+     * Runs the application.
+     *
+     * @throws Exception if an error occurs during execution
+     */
     @Override
     protected void run() throws Exception {
         awaitShutdown();
     }
 
+    /**
+     * Stops the application.
+     *
+     * @throws Exception if an error occurs during shutdown
+     */
     @Override
     protected void onStop() throws Exception {
         try {
@@ -753,12 +941,22 @@ public class MultiWorkerServer extends Launcher {
         }
     }
 
+    /**
+     * Inner module class for configuring the application.
+     */
     static class InnerModule extends AbstractModule {
         private final Logger logger = getLogger(getClass());
 
         @TestOnly
         boolean skipZookeeperConnectCheck = false;
 
+        /**
+         * Provides the configuration for a slot.
+         *
+         * @param config the configuration object
+         * @return the configuration for the slot
+         * @throws IOException if an I/O error occurs
+         */
         @Provides
         ConfForSlot confForSlot(Config config) throws IOException {
             // global conf
@@ -954,6 +1152,15 @@ public class MultiWorkerServer extends Launcher {
             return c;
         }
 
+        /**
+         * Initializes the handler before creation.
+         *
+         * @param confForSlot the configuration for the slot
+         * @param snowFlakes  the array of SnowFlake instances
+         * @param config      the configuration object
+         * @return an integer indicating the result of the initialization
+         * @throws IOException if an I/O error occurs
+         */
         @Provides
         Integer beforeCreateHandler(ConfForSlot confForSlot, SnowFlake[] snowFlakes, Config config) throws IOException {
             int slotNumber = config.get(ofInteger(), "slotNumber", (int) LocalPersist.DEFAULT_SLOT_NUMBER);
@@ -968,12 +1175,6 @@ public class MultiWorkerServer extends Launcher {
             }
             ConfForGlobal.slotNumber = (short) slotNumber;
             log.warn("Global config, slotNumber={}", ConfForGlobal.slotNumber);
-
-//            if (ConfForGlobal.clusterEnabled) {
-//                if (MultiShard.TO_CLIENT_SLOT_NUMBER % slotNumber != 0) {
-//                    throw new IllegalArgumentException("Slot number should be divided by " + MultiShard.TO_CLIENT_SLOT_NUMBER);
-//                }
-//            }
 
             int netWorkers = config.get(ofInteger(), "netWorkers", 1);
             if (netWorkers > MAX_NET_WORKERS) {
@@ -1024,6 +1225,14 @@ public class MultiWorkerServer extends Launcher {
             return 0;
         }
 
+        /**
+         * Provides an array of request handlers.
+         *
+         * @param snowFlakes          the array of SnowFlake instances
+         * @param beforeCreateHandler the result of the handler initialization
+         * @param config              the configuration object
+         * @return an array of request handlers
+         */
         @Provides
         RequestHandler[] requestHandlerArray(SnowFlake[] snowFlakes, Integer beforeCreateHandler, Config config) {
             int slotNumber = config.get(ofInteger(), "slotNumber", (int) LocalPersist.DEFAULT_SLOT_NUMBER);
@@ -1036,6 +1245,13 @@ public class MultiWorkerServer extends Launcher {
             return list;
         }
 
+        /**
+         * Provides an array of task runnables.
+         *
+         * @param beforeCreateHandler the result of the handler initialization
+         * @param config              the configuration object
+         * @return an array of task runnables
+         */
         @Provides
         TaskRunnable[] scheduleRunnableArray(Integer beforeCreateHandler, Config config) {
             int netWorkers = config.get(ofInteger(), "netWorkers", 1);
@@ -1046,6 +1262,12 @@ public class MultiWorkerServer extends Launcher {
             return list;
         }
 
+        /**
+         * Provides a socket inspector.
+         *
+         * @param config the configuration object
+         * @return the socket inspector
+         */
         @Provides
         SocketInspector socketInspector(Config config) {
             int maxConnections = config.get(ofInteger(), "maxConnections", 1000);
@@ -1063,19 +1285,40 @@ public class MultiWorkerServer extends Launcher {
         launcher.launch(args);
     }
 
+    /**
+     * Holds global static variables and methods for the server.
+     */
     public static class StaticGlobalV {
+        /**
+         * The socket inspector for managing socket connections.
+         */
         public SocketInspector socketInspector;
-        // immutable
+
+        /**
+         * Array of network worker thread IDs.
+         * This array is immutable.
+         */
         public long[] netWorkerThreadIds;
 
-        // info server
+        /**
+         * List of information about the server.
+         */
         private final List<Tuple2<String, String>> infoServerList = new ArrayList<>();
 
+        /**
+         * Returns a copy of the server information list.
+         *
+         * @return a copy of the server information list
+         */
         public List<Tuple2<String, String>> getInfoServerList() {
-            // copy one
             return new ArrayList<>(infoServerList);
         }
 
+        /**
+         * Resets the server information list with the current configuration.
+         *
+         * @param config the configuration object
+         */
         @VisibleForTesting
         void resetInfoServer(Config config) {
             infoServerList.clear();
@@ -1105,7 +1348,12 @@ public class MultiWorkerServer extends Launcher {
             infoServerList.add(new Tuple2<>("process_supervised", "no"));
         }
 
-        // use this instead of ThreadLocal, use array perf good enough compare to hashtable
+        /**
+         * Gets the index of the current thread in the network worker thread IDs array.
+         * This method uses an array for performance reasons instead of a hashtable.
+         *
+         * @return the index of the current thread, or -1 if not found
+         */
         public int getThreadLocalIndexByCurrentThread() {
             var currentThreadId = Thread.currentThread().threadId();
             for (int i = 0; i < netWorkerThreadIds.length; i++) {
@@ -1117,5 +1365,8 @@ public class MultiWorkerServer extends Launcher {
         }
     }
 
+    /**
+     * Static instance of the global variables and methods.
+     */
     public static final StaticGlobalV STATIC_GLOBAL_V = new StaticGlobalV();
 }

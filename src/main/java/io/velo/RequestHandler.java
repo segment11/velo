@@ -31,6 +31,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
 import static io.activej.config.converter.ConfigConverters.ofInteger;
 
+/**
+ * Handles requests for the server.
+ * Need be thread safe.
+ */
 @ThreadNeedLocal
 public class RequestHandler {
     private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
@@ -72,6 +76,9 @@ public class RequestHandler {
 
     volatile boolean isStopped = false;
 
+    /**
+     * Stops the request handler.
+     */
     void stop() {
         System.out.println("Worker " + workerId + " stopped callback");
         isStopped = true;
@@ -89,6 +96,15 @@ public class RequestHandler {
                 '}';
     }
 
+    /**
+     * Constructs a new RequestHandler.
+     *
+     * @param workerId   the worker ID
+     * @param netWorkers the number of network workers
+     * @param slotNumber the slot number
+     * @param snowFlake  the SnowFlake instance
+     * @param config     the configuration object
+     */
     public RequestHandler(byte workerId, byte netWorkers, short slotNumber, SnowFlake snowFlake, Config config) {
         this.workerId = workerId;
         this.workerIdStr = String.valueOf(workerId);
@@ -130,6 +146,11 @@ public class RequestHandler {
     @ThreadNeedLocal
     private static MultiShardShadow[] multiShardShadows;
 
+    /**
+     * Initializes the multi-shard shadows.
+     *
+     * @param netWorkers the number of network workers
+     */
     public static void initMultiShardShadows(byte netWorkers) {
         multiShardShadows = new MultiShardShadow[netWorkers];
         for (int i = 0; i < netWorkers; i++) {
@@ -137,7 +158,12 @@ public class RequestHandler {
         }
     }
 
-    // not thread safe
+    /**
+     * Updates the multi-shard shadows.
+     * This method is not thread safe.
+     *
+     * @param multiShard the multi-shard instance
+     */
     public static synchronized void updateMultiShardShadows(MultiShard multiShard) {
         var mySelfShard = multiShard.mySelfShard();
         var shards = multiShard.getShards();
@@ -148,12 +174,21 @@ public class RequestHandler {
         }
     }
 
+    /**
+     * Gets the multi-shard shadow for the current thread.
+     *
+     * @return the multi-shard shadow
+     */
     static MultiShardShadow getMultiShardShadow() {
         return multiShardShadows[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()];
     }
 
     private final BaseCommand[] commandGroups = new BaseCommand[26];
 
+    /**
+     * Initializes the command groups.
+     * These command groups can be reused in the same worker thread.
+     */
     private void initCommandGroups() {
         commandGroups[0] = new AGroup(null, null, null);
         commandGroups[1] = new BGroup(null, null, null);
@@ -187,11 +222,22 @@ public class RequestHandler {
         }
     }
 
+    /**
+     * Gets the command group for the given first byte.
+     *
+     * @param firstByte the first byte of the command
+     * @return the command group
+     */
     public BaseCommand getA_ZGroupCommand(byte firstByte) {
         return commandGroups[firstByte - 'a'];
     }
 
-    // cross threads, need be thread safe
+    /**
+     * Parses the slots for the given request.
+     * This method is not thread safe.
+     *
+     * @param request the request
+     */
     public void parseSlots(@NotNull Request request) {
         var cmd = request.cmd();
         if (cmd.equals(PING_COMMAND) || cmd.equals(QUIT_COMMAND) || cmd.equals(AUTH_COMMAND)) {
@@ -234,6 +280,12 @@ public class RequestHandler {
     private static final String URL_QUERY_FOR_CMD_STAT_COUNT = "cmd_stat_count";
     private static final String HEADER_NAME_FOR_BASIC_AUTH = "Authorization";
 
+    /**
+     * Transfers data for the XGroup command.
+     *
+     * @param keyAsData the key as data
+     * @return the transferred data
+     */
     private static byte[][] transferDataForXGroup(String keyAsData) {
         // eg. get x_repl,sub_cmd,sub_sub_cmd,***
         // transfer data to: x_repl sub_cmd sub_sub_cmd ***
@@ -249,6 +301,12 @@ public class RequestHandler {
     // all cmd count is less than 1k, so need no rehash
     private final HashMap<String, Long> cmdStatCountMap = new HashMap<>(1000);
 
+    /**
+     * Increases the command stat count for the given command.
+     *
+     * @param cmd the command
+     * @return the new command stat count
+     */
     @VisibleForTesting
     long increaseCmdStatArray(String cmd) {
         var count = cmdStatCountMap.getOrDefault(cmd, 0L);
@@ -257,6 +315,11 @@ public class RequestHandler {
         return count;
     }
 
+    /**
+     * Gets the command stat as a Prometheus format string.
+     *
+     * @return the command stat as a Prometheus format string
+     */
     @VisibleForTesting
     String cmdStatAsPrometheusFormatString() {
         var sb = new StringBuilder();
@@ -266,6 +329,11 @@ public class RequestHandler {
         return sb.toString();
     }
 
+    /**
+     * Gets the total command stat count.
+     *
+     * @return the total command stat count
+     */
     @TestOnly
     long cmdStatCountTotal() {
         long total = 0;
@@ -275,6 +343,12 @@ public class RequestHandler {
         return total;
     }
 
+    /**
+     * Gets the command count stat for the given command.
+     *
+     * @param cmd the command
+     * @return the command count stat
+     */
     @VisibleForTesting
     long getCmdCountStat(String cmd) {
         return cmdStatCountMap.getOrDefault(cmd, 0L);
@@ -290,6 +364,13 @@ public class RequestHandler {
             .quantile(0.999, 0.001)
             .register();
 
+    /**
+     * Handles the given request.
+     *
+     * @param request the request
+     * @param socket  the socket
+     * @return the reply
+     */
     Reply handle(@NotNull Request request, ITcpSocket socket) {
         if (isStopped) {
             return ErrorReply.SERVER_STOPPED;
