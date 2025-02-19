@@ -22,7 +22,7 @@ public class IterateKeyBuckets {
         short slot = 0;
         byte splitIndex = 0;
         byte splitNumber = 1;
-        var bucketsPerSlot = ConfForSlot.ConfBucket.c100m.bucketsPerSlot;
+        var bucketsPerSlot = ConfForSlot.ConfBucket.c10m.bucketsPerSlot;
         int[] sumArray = new int[bucketsPerSlot];
 
         // change here

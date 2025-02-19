@@ -6,7 +6,7 @@ import io.velo.ValkeyRawConfSupport;
 import io.velo.acl.*;
 import io.velo.decode.Request;
 import io.velo.reply.*;
-import io.velo.util.Utils;
+import io.velo.Utils;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.VisibleForTesting;
 

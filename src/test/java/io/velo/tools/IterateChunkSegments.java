@@ -25,7 +25,7 @@ public class IterateChunkSegments {
     private static final int cvNormalCompressedLength = 127;
 
     public static void main(String[] args) throws IOException {
-        confChunk = ConfForSlot.c100m.confChunk;
+        confChunk = ConfForSlot.c10m.confChunk;
 
         short slot = 0;
         int[] sumArray = new int[confChunk.maxSegmentNumber()];
