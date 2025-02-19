@@ -1,5 +1,8 @@
 package io.velo;
 
+/**
+ * For debug, some switch
+ */
 public class Debug {
     // singleton
     private static final Debug instance = new Debug();
