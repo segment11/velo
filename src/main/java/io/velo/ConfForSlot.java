@@ -2,7 +2,6 @@ package io.velo;
 
 import io.velo.persist.KeyBucket;
 import io.velo.persist.LocalPersist;
-import io.velo.persist.Wal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -171,7 +170,7 @@ public enum ConfForSlot {
     public enum ConfBucket {
         debugMode(4096, (byte) 1),
         c1m(KeyBucket.DEFAULT_BUCKETS_PER_SLOT, (byte) 1),
-        c10m(KeyBucket.MAX_BUCKETS_PER_SLOT / 2, (byte) 1),
+        c10m(KeyBucket.MAX_BUCKETS_PER_SLOT, (byte) 1),
         c100m(KeyBucket.MAX_BUCKETS_PER_SLOT, (byte) 3);
 
         /**
@@ -321,27 +320,6 @@ public enum ConfForSlot {
          * Trigger to persist when >= size for short values.
          */
         public int shortValueSizeTrigger;
-
-        /**
-         * Resets WAL static values based on the one group buffer size.
-         *
-         * @param oneGroupBufferSize The size of one group buffer.
-         */
-        public void resetWalStaticValues(int oneGroupBufferSize) {
-            if (Wal.ONE_GROUP_BUFFER_SIZE != oneGroupBufferSize) {
-                Wal.ONE_GROUP_BUFFER_SIZE = oneGroupBufferSize;
-                Wal.EMPTY_BYTES_FOR_ONE_GROUP = new byte[Wal.ONE_GROUP_BUFFER_SIZE];
-
-                int groupNumber = Wal.calcWalGroupNumber();
-                var sum = oneGroupBufferSize * groupNumber / 1024 / 1024;
-                // wal init m4
-                sum += 4;
-
-                log.info("Static memory init, type={}, MB={}, all slots", StaticMemoryPrepareBytesStats.Type.wal_cache, sum);
-                StaticMemoryPrepareBytesStats.add(StaticMemoryPrepareBytesStats.Type.wal_cache, sum, false);
-            }
-            Wal.doLogAfterInit();
-        }
 
         @Override
         public String toString() {

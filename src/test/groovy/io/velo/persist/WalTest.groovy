@@ -62,9 +62,6 @@ class WalTest extends Specification {
         println 'Mock Wal.V, v1: ' + v1 + ', persist length: ' + v1.persistLength()
         println Wal.V.persistLength(v1.key().length(), v1.cvEncoded().length)
 
-        and:
-        ConfForSlot.global.confWal.resetWalStaticValues(Wal.ONE_GROUP_BUFFER_SIZE)
-
         def raf = new RandomAccessFile(file, 'rw')
         def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
         def snowFlake = new SnowFlake(1, 1)

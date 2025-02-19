@@ -197,14 +197,9 @@ public class Wal implements InMemoryEstimate {
     // for latency, do not configure too large
     public static final List<Integer> VALID_ONE_CHARGE_BUCKET_NUMBER_LIST = List.of(16, 32, 64);
     // 1 file max 2GB, 2GB / 64K = 32K wal groups
-    public static final int MAX_WAL_GROUP_NUMBER = (int) (2L * 1024 * 1024 * 1024 / (LocalPersist.PAGE_SIZE * VALID_ONE_CHARGE_BUCKET_NUMBER_LIST.getFirst()));
+//    public static final int MAX_WAL_GROUP_NUMBER = (int) (2L * 1024 * 1024 * 1024 / (LocalPersist.PAGE_SIZE * VALID_ONE_CHARGE_BUCKET_NUMBER_LIST.getFirst()));
 
     private static final Logger log = LoggerFactory.getLogger(Wal.class);
-
-    public static void doLogAfterInit() {
-        log.warn("Init wal groups, one group buffer size={}KB, one charge bucket number={}, wal group number={}",
-                ONE_GROUP_BUFFER_SIZE / 1024, ConfForSlot.global.confWal.oneChargeBucketNumber, calcWalGroupNumber());
-    }
 
     // current wal group write position in target group of wal file
     @VisibleForTesting
