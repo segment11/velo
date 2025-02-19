@@ -15,25 +15,74 @@ import java.util.List;
 import static io.velo.acl.U.CheckCmdAndKeyResult.FALSE_WHEN_CHECK_CMD;
 import static io.velo.acl.U.CheckCmdAndKeyResult.FALSE_WHEN_CHECK_KEY;
 
-// acl user
+/**
+ * Represents an ACL user in the Velo system.
+ * This class encapsulates the properties and behaviors of a user, including:
+ * - User status (enabled/disabled)
+ * - User passwords
+ * - Command and key access rules
+ * - Channel subscriptions
+ */
 public class U {
+    /**
+     * The default user when no specific user is provided.
+     */
     public static final String DEFAULT_USER = "default";
 
+    /**
+     * Prefix for adding a plain password.
+     */
     public static final String ADD_PASSWORD_PREFIX = ">";
+    /**
+     * Prefix for removing a plain password.
+     */
     public static final String REMOVE_PASSWORD_PREFIX = "<";
+    /**
+     * Prefix for adding a hashed password.
+     */
     public static final String ADD_HASH_PASSWORD_PREFIX = "#";
+    /**
+     * Prefix for removing a hashed password.
+     */
     public static final String REMOVE_HASH_PASSWORD_PREFIX = "!";
 
+    /**
+     * Enum representing the encoding type of a password.
+     */
     private enum PasswordEncodedType {
         plain, sha256Hex;
     }
 
+    /**
+     * Record representing a user's password.
+     */
     public record Password(String passwordEncoded, PasswordEncodedType encodeType) {
+        /**
+         * Constant representing no password.
+         */
+        public static final String NO_PASS = "nopass";
+
+        /**
+         * Sentinel Password instance representing no password.
+         */
+        public static final Password NO_PASSWORD = new Password(NO_PASS, PasswordEncodedType.plain);
+
+        /**
+         * Checks if the password is set to 'nopass'.
+         *
+         * @return true if the password is 'nopass', false otherwise.
+         */
         @VisibleForTesting
         boolean isNoPass() {
             return NO_PASS.equals(this.passwordEncoded);
         }
 
+        /**
+         * Checks if the provided raw password matches this password.
+         *
+         * @param passwordRaw The raw password to check.
+         * @return true if the provided password matches, false otherwise.
+         */
         boolean check(String passwordRaw) {
             if (isNoPass()) {
                 return true;
@@ -44,6 +93,36 @@ public class U {
             } else {
                 return this.passwordEncoded.equals(DigestUtils.sha256Hex(passwordRaw));
             }
+        }
+
+        /**
+         * Creates a plain password instance.
+         *
+         * @param passwordRaw The raw password.
+         * @return A Password instance with the plain encoding type.
+         */
+        public static Password plain(String passwordRaw) {
+            return new Password(passwordRaw, PasswordEncodedType.plain);
+        }
+
+        /**
+         * Creates a SHA-256 hashed password instance.
+         *
+         * @param passwordRaw The raw password.
+         * @return A Password instance with the SHA-256 encoding type.
+         */
+        public static Password sha256Hex(String passwordRaw) {
+            return new Password(DigestUtils.sha256Hex(passwordRaw), PasswordEncodedType.sha256Hex);
+        }
+
+        /**
+         * Creates a Password instance from a pre-encoded SHA-256 hash.
+         *
+         * @param passwordSha256Hex The pre-encoded SHA-256 hash.
+         * @return A Password instance with the SHA-256 encoding type.
+         */
+        public static Password sha256HexEncoded(String passwordSha256Hex) {
+            return new Password(passwordSha256Hex, PasswordEncodedType.sha256Hex);
         }
 
         @Override
@@ -57,46 +136,64 @@ public class U {
             var password = (Password) obj;
             return passwordEncoded.equals(password.passwordEncoded) && encodeType == password.encodeType;
         }
-
-        public static Password plain(String passwordRaw) {
-            return new Password(passwordRaw, PasswordEncodedType.plain);
-        }
-
-        public static Password sha256Hex(String passwordRaw) {
-            return new Password(DigestUtils.sha256Hex(passwordRaw), PasswordEncodedType.sha256Hex);
-        }
-
-        public static Password sha256HexEncoded(String passwordSha256Hex) {
-            return new Password(passwordSha256Hex, PasswordEncodedType.sha256Hex);
-        }
-
-        public static final String NO_PASS = "nopass";
-        public static final Password NO_PASSWORD = new Password(NO_PASS, PasswordEncodedType.plain);
     }
 
+    /**
+     * The username.
+     */
     final String user;
 
-    public String getUser() {
-        return user;
-    }
-
+    /**
+     * Constructs a new user with the given username.
+     *
+     * @param user The username.
+     */
     public U(String user) {
         this.user = user;
     }
 
-    // new user default off
+    /**
+     * Returns the username.
+     *
+     * @return The username.
+     */
+    public String getUser() {
+        return user;
+    }
+
+    /**
+     * Whether the user is enabled.
+     */
     private boolean isOn = false;
 
+    /**
+     * Returns whether the user is enabled.
+     *
+     * @return true if the user is enabled, false otherwise.
+     */
     public boolean isOn() {
         return isOn;
     }
 
+    /**
+     * Sets the user's enabled status.
+     *
+     * @param on True to enable the user, false to disable the user.
+     */
     public void setOn(boolean on) {
         isOn = on;
     }
 
+    /**
+     * List of passwords for the user.
+     */
     private final ArrayList<Password> passwords = new ArrayList<>();
 
+    /**
+     * Adds a password to the user.
+     *
+     * @param password The password to add.
+     */
     public void addPassword(Password password) {
         // check duplicate
         if (passwords.stream().anyMatch(p -> p.equals(password))) {
@@ -105,14 +202,28 @@ public class U {
         passwords.add(password);
     }
 
+    /**
+     * Removes a password from the user.
+     *
+     * @param password The password to remove.
+     */
     public void removePassword(Password password) {
         passwords.stream().filter(p -> p.equals(password)).findFirst().ifPresent(passwords::remove);
     }
 
+    /**
+     * Resets (clears) all passwords for the user.
+     */
     public void resetPassword() {
         passwords.clear();
     }
 
+    /**
+     * Checks if the provided raw password matches any of the user's passwords.
+     *
+     * @param passwordRaw The raw password to check.
+     * @return true if the password matches, false otherwise.
+     */
     public boolean checkPassword(String passwordRaw) {
         // reset password
         if (passwords.isEmpty()) {
@@ -121,17 +232,30 @@ public class U {
         return passwords.stream().anyMatch(password -> password.check(passwordRaw));
     }
 
+    /**
+     * Sets the user's password. Clears any existing passwords.
+     *
+     * @param password The password to set.
+     */
     @TestOnly
     public void setPassword(Password password) {
         passwords.clear();
         passwords.add(password);
     }
 
+    /**
+     * Returns the first password of the user.
+     *
+     * @return The first password, or null if there are no passwords.
+     */
     @TestOnly
     public Password getFirstPassword() {
         return passwords.isEmpty() ? null : passwords.getFirst();
     }
 
+    /**
+     * Default initialized user with 'default' username.
+     */
     public static final U INIT_DEFAULT_U = new U(DEFAULT_USER);
 
     static {
@@ -142,13 +266,20 @@ public class U {
         INIT_DEFAULT_U.addRPubSub(true, RPubSub.fromLiteral("&*"));
     }
 
+    /**
+     * Returns a string representation of the user in a literal format.
+     *
+     * @return A string representation of the user.
+     */
     public String literal() {
         var sb = new StringBuilder();
         sb.append("user ").append(user).append(" ");
         sb.append(isOn ? "on" : "off").append(" ");
         var firstPassword = getFirstPassword();
         // need # before password ? todo
-        sb.append(firstPassword.passwordEncoded).append(" ");
+        if (firstPassword != null) {
+            sb.append(firstPassword.passwordEncoded).append(" ");
+        }
 
         for (var rCmd : rCmdList) {
             sb.append(rCmd.literal()).append(" ");
@@ -164,11 +295,17 @@ public class U {
         }
 
         // remove last space
-        sb.deleteCharAt(sb.length() - 1);
+        if (sb.length() > 0) {
+            sb.deleteCharAt(sb.length() - 1);
+        }
         return sb.toString();
     }
 
-    // for acl getuser
+    /**
+     * Returns an array of Redis replies representing the user's properties.
+     *
+     * @return An array of Redis replies representing the user's properties.
+     */
     public Reply[] toReplies() {
         var replies = new Reply[10];
         replies[0] = new BulkReply("flags".getBytes());
@@ -233,6 +370,12 @@ public class U {
         return replies;
     }
 
+    /**
+     * Creates a user instance from a literal string representation.
+     *
+     * @param str The literal string representation of the user.
+     * @return A user instance, or null if the string is invalid.
+     */
     public static U fromLiteral(String str) {
         if (!str.startsWith("user")) {
             return null;
@@ -274,30 +417,57 @@ public class U {
         return u;
     }
 
+    /**
+     * List of allowed commands for the user.
+     */
     @VisibleForTesting
     final List<RCmd> rCmdList = new ArrayList<>();
+    /**
+     * List of disallowed commands for the user.
+     */
     @VisibleForTesting
     final List<RCmd> rCmdDisallowList = new ArrayList<>();
 
+    /**
+     * List of allowed keys for the user.
+     */
     @VisibleForTesting
     final List<RKey> rKeyList = new ArrayList<>();
 
+    /**
+     * List of allowed channels for the user.
+     */
     @VisibleForTesting
     final List<RPubSub> rPubSubList = new ArrayList<>();
 
+    /**
+     * Resets the command rules for the user.
+     */
     public void resetCmd() {
         rCmdList.clear();
         rCmdDisallowList.clear();
     }
 
+    /**
+     * Resets the key rules for the user.
+     */
     public void resetKey() {
         rKeyList.clear();
     }
 
+    /**
+     * Resets the channel rules for the user.
+     */
     public void resetPubSub() {
         rPubSubList.clear();
     }
 
+    /**
+     * Adds command rules to the user.
+     *
+     * @param clear If true, clears existing command rules before adding.
+     * @param rCmd  Command rules to add.
+     */
     public void addRCmd(boolean clear, RCmd... rCmd) {
         if (clear) {
             rCmdList.clear();
@@ -305,6 +475,12 @@ public class U {
         rCmdList.addAll(Arrays.asList(rCmd));
     }
 
+    /**
+     * Adds disallowed command rules to the user.
+     *
+     * @param clear If true, clears existing disallowed command rules before adding.
+     * @param rCmd  Disallowed command rules to add.
+     */
     public void addRCmdDisallow(boolean clear, RCmd... rCmd) {
         if (clear) {
             rCmdDisallowList.clear();
@@ -312,6 +488,12 @@ public class U {
         rCmdDisallowList.addAll(Arrays.asList(rCmd));
     }
 
+    /**
+     * Adds key rules to the user.
+     *
+     * @param clear If true, clears existing key rules before adding.
+     * @param rKey  Key rules to add.
+     */
     public void addRKey(boolean clear, RKey... rKey) {
         if (clear) {
             rKeyList.clear();
@@ -319,6 +501,12 @@ public class U {
         rKeyList.addAll(Arrays.asList(rKey));
     }
 
+    /**
+     * Adds channel rules to the user.
+     *
+     * @param clear   If true, clears existing channel rules before adding.
+     * @param rPubSub Channel rules to add.
+     */
     public void addRPubSub(boolean clear, RPubSub... rPubSub) {
         if (clear) {
             rPubSubList.clear();
@@ -326,6 +514,12 @@ public class U {
         rPubSubList.addAll(Arrays.asList(rPubSub));
     }
 
+    /**
+     * Merges rules from another user into this user.
+     *
+     * @param another The user whose rules are to be merged.
+     * @param isReset If true, resets this user's rules before merging.
+     */
     public void mergeRulesFromAnother(U another, boolean isReset) {
         if (isReset) {
             rCmdList.clear();
@@ -340,6 +534,12 @@ public class U {
         rPubSubList.addAll(another.rPubSubList);
     }
 
+    /**
+     * Access check result when checking command and key access.
+     *
+     * @param isOk      Whether the result is OK.
+     * @param isKeyFail Whether the result is due to a key failure. When false means is due to a command failure.
+     */
     public record CheckCmdAndKeyResult(boolean isOk, boolean isKeyFail) {
         public boolean asBoolean() {
             return isOk;
@@ -350,6 +550,14 @@ public class U {
         public static final CheckCmdAndKeyResult TRUE = new CheckCmdAndKeyResult(true, false);
     }
 
+    /**
+     * Checks if the user has access to the given command and key.
+     *
+     * @param cmd                 The command.
+     * @param data                The command arguments.
+     * @param slotWithKeyHashList The keys.
+     * @return A CheckCmdAndKeyResult instance representing the access check result.
+     */
     public CheckCmdAndKeyResult checkCmdAndKey(String cmd, byte[][] data, ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList) {
         if (rCmdList.isEmpty()) {
             return FALSE_WHEN_CHECK_CMD;
@@ -392,6 +600,12 @@ public class U {
         return CheckCmdAndKeyResult.TRUE;
     }
 
+    /**
+     * Checks if the user has access to the given channels.
+     *
+     * @param channels The channels.
+     * @return true if the user has access to all the channels, false otherwise.
+     */
     public boolean checkChannels(String... channels) {
         if (rPubSubList.isEmpty()) {
             return false;

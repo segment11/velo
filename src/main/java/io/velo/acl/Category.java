@@ -2,6 +2,10 @@ package io.velo.acl;
 
 import java.util.*;
 
+/**
+ * Enum representing different categories of Redis commands.
+ * Each category contains a list of commands that belong to it.
+ */
 public enum Category {
     all, admin, bitmap, blocking, connection, dangerous,
     geo, hash, hyperloglog, fast, keyspace,
@@ -9,15 +13,34 @@ public enum Category {
     set, sortedset, slow, stream, string,
     transaction, write;
 
+    /**
+     * A map that associates each category with a list of commands.
+     */
     private static final Map<Category, List<String>> CMD_LIST_BY_CATEGORY = new HashMap<>();
+
+    /**
+     * A map that associates each command with a list of categories it belongs to.
+     */
     private static final Map<String, List<Category>> CATEGORY_LIST_BY_CMD = new HashMap<>();
 
+    /**
+     * A set containing all write commands.
+     */
     private static final HashSet<String> writeCmdSet = new HashSet<>();
 
+    /**
+     * Checks if a given command is a write command.
+     *
+     * @param cmd The command to check.
+     * @return true if the command is a write command, false otherwise.
+     */
     public static boolean isWriteCmd(String cmd) {
         return writeCmdSet.contains(cmd);
     }
 
+    /**
+     * Static block to initialize command lists and mappings.
+     */
     static {
         List<String> adminCmdList = List.of(
                 "acl",
@@ -851,10 +874,22 @@ public enum Category {
         writeCmdSet.addAll(writeCmdList);
     }
 
+    /**
+     * Returns the list of commands for the given category.
+     *
+     * @param category The category for which to fetch commands.
+     * @return A list of commands belonging to the specified category.
+     */
     public static List<String> getCmdListByCategory(Category category) {
         return CMD_LIST_BY_CATEGORY.get(category);
     }
 
+    /**
+     * Returns the list of categories for the given command.
+     *
+     * @param cmd The command for which to fetch categories.
+     * @return A list of categories to which the specified command belongs.
+     */
     public static List<Category> getCategoryListByCmd(String cmd) {
         return CATEGORY_LIST_BY_CMD.get(cmd);
     }

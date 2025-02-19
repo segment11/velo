@@ -2,12 +2,19 @@ package io.velo.acl;
 
 import org.jetbrains.annotations.VisibleForTesting;
 
-// acl rule
+/**
+ * Represents an access control rule for commands.
+ * Each rule can be of different types (cmd, cmd_with_first_arg, category, all)
+ * and can either allow or disallow the execution of commands.
+ */
 public class RCmd {
     public static final String ALL = "*";
     public static final String ALLOW_LITERAL_PREFIX = "+";
     public static final String DISALLOW_LITERAL_PREFIX = "-";
 
+    /**
+     * Types of rules that RCmd can represent.
+     */
     public enum Type {
         cmd, cmd_with_first_arg, category, all
     }
@@ -29,6 +36,13 @@ public class RCmd {
     @VisibleForTesting
     Category category;
 
+    /**
+     * Checks if the given command and first argument match this rule.
+     *
+     * @param cmd      The command to check.
+     * @param firstArg The first argument of the command to check.
+     * @return true if the command and argument match the rule, false otherwise.
+     */
     boolean match(String cmd, String firstArg) {
         if (type == Type.all) {
             return true;
@@ -60,6 +74,11 @@ public class RCmd {
         }
     }
 
+    /**
+     * Converts the rule to a literal string representation.
+     *
+     * @return A string representing the literal form of the rule.
+     */
     String literal() {
         if (type == Type.all) {
             return allow ? ALLOW_LITERAL_PREFIX + ALL : DISALLOW_LITERAL_PREFIX + ALL;
@@ -72,10 +91,22 @@ public class RCmd {
         }
     }
 
+    /**
+     * Checks if a given literal string represents an allow rule.
+     *
+     * @param str The literal string to check.
+     * @return true if the string represents an allow rule, false otherwise.
+     */
     public static boolean isAllowLiteral(String str) {
         return str.startsWith(ALLOW_LITERAL_PREFIX) || "allcommands".equals(str);
     }
 
+    /**
+     * Checks if a given literal string is a valid RCmd literal.
+     *
+     * @param str The literal string to check.
+     * @return true if the string is a valid RCmd literal, false otherwise.
+     */
     public static boolean isRCmdLiteral(String str) {
         return str.startsWith(ALLOW_LITERAL_PREFIX)
                 || str.startsWith(DISALLOW_LITERAL_PREFIX)
@@ -83,6 +114,13 @@ public class RCmd {
                 || "nocommands".equals(str);
     }
 
+    /**
+     * Creates an RCmd object from a literal string.
+     *
+     * @param str The literal string to convert.
+     * @return An RCmd object representing the literal string.
+     * @throws IllegalArgumentException if the literal string is invalid.
+     */
     public static RCmd fromLiteral(String str) {
         if ("allcommands".equals(str)) {
             var rCmd = new RCmd();

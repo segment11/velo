@@ -4,6 +4,9 @@ import io.velo.reply.BulkReply;
 import io.velo.reply.IntegerReply;
 import io.velo.reply.Reply;
 
+/**
+ * For acl log command response
+ */
 public class LogRow {
     public int count;
     public String reason;
