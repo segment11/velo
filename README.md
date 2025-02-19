@@ -5,15 +5,24 @@ multi-threading key value storage system.
 
 ## Redis command support
 
-Velo supports redis main 5 data types:
+Velo supports redis main data types:
 
 - string
 - hash
 - list
 - set
 - zset
+- bitmap
+- hyperloglog
+- bloomfilter
+- geo
 
 Details refer to https://github.com/segment11/velo/blob/main/doc/redis_command_support.md
+
+## Ingestion
+
+- parquet file
+- sst file [todo]
 
 ## Get started
 
