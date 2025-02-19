@@ -1,0 +1,6 @@
+    message example {
+      required int32 id;
+      required binary name (UTF8);
+      required double score;
+      required binary des (UTF8);
+    }

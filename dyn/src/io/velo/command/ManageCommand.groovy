@@ -1,5 +1,6 @@
 package io.velo.command
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import groovy.transform.CompileStatic
 import groovy.transform.TupleConstructor
 import io.activej.config.Config
@@ -7,6 +8,7 @@ import io.activej.promise.Promise
 import io.activej.promise.Promises
 import io.activej.promise.SettablePromise
 import io.velo.*
+import io.velo.ingest.ParquetGroupToValue
 import io.velo.persist.Chunk
 import io.velo.persist.LocalPersist
 import io.velo.persist.OneSlot
@@ -20,6 +22,11 @@ import io.velo.type.RedisHashKeys
 import io.velo.type.RedisList
 import io.velo.type.RedisZSet
 import org.apache.commons.io.FileUtils
+import org.apache.hadoop.fs.Path
+import org.apache.parquet.example.data.Group
+import org.apache.parquet.hadoop.ParquetReader
+import org.apache.parquet.hadoop.example.GroupReadSupport
+import org.apache.parquet.schema.MessageTypeParser
 import org.jetbrains.annotations.VisibleForTesting
 import org.slf4j.LoggerFactory
 
@@ -729,6 +736,88 @@ class ManageCommand extends BaseCommand {
             }
 
             return trainSampleListAndReturnRatio(keyPrefixOrSuffixGiven, sampleToTrainList)
+        }
+
+        if (subSubCmd == 'train-new-dict-by-parquet-file') {
+            // manage dict train-new-dict-by-parquet-file keyPrefixOrSuffix=t1: file=sample.parquet schema-file=schema.message n=1000 ingest-format=json
+            if (data.length != 8) {
+                return ErrorReply.FORMAT
+            }
+
+            String keyPrefixOrSuffix = null
+            File file
+            File schemaFile
+            final int minN = 100
+            final int maxN = 1000
+            int n = minN
+            // train dict format json or csv
+            String ingestFormat = 'json'
+
+            for (int i = 3; i < data.length; i++) {
+                def arg = new String(data[i])
+                def arr = arg.split('=')
+                if (arr.length != 2) {
+                    return ErrorReply.SYNTAX
+                }
+
+                def key = arr[0]
+                def value = arr[1]
+                if (key == 'file') {
+                    file = new File(Utils.projectPath('/' + value))
+                } else if (key == 'schema-file') {
+                    schemaFile = new File(Utils.projectPath('/' + value))
+                } else if (key == 'n') {
+                    try {
+                        n = Integer.parseInt(value)
+                    } catch (NumberFormatException ignore) {
+                        return ErrorReply.INVALID_INTEGER
+                    }
+                    if (n < minN) {
+                        return new ErrorReply('n must be greater than ' + minN)
+                    }
+                    if (n > maxN) {
+                        return new ErrorReply('n must be less than ' + maxN)
+                    }
+                } else if (key == 'ingest-format') {
+                    ingestFormat = value
+                } else if (key == 'keyPrefixOrSuffix') {
+                    keyPrefixOrSuffix = value
+                }
+            }
+
+            if (keyPrefixOrSuffix == null) {
+                return new ErrorReply('keyPrefixOrSuffix is required, eg: keyPrefixOrSuffix=t1:')
+            }
+            if (file == null || !file.exists()) {
+                return new ErrorReply('File not exists: ' + file)
+            }
+            if (schemaFile == null || !schemaFile.exists()) {
+                return new ErrorReply('Schema file not exists: ' + schemaFile)
+            }
+
+            def schema = MessageTypeParser.parseMessageType(schemaFile.text)
+
+            def path = new Path(file.absolutePath)
+            def readSupport = new GroupReadSupport()
+            ParquetReader.Builder<Group> readerBuilder = ParquetReader.builder(readSupport, path)
+            ParquetReader<Group> reader = readerBuilder.build()
+
+            List<TrainSampleJob.TrainSampleKV> sampleToTrainList = []
+            try {
+                Group group
+                def objectMapper = new ObjectMapper()
+                while ((group = reader.read()) != null && n-- > 0) {
+                    def string = 'json' == ingestFormat ?
+                            ParquetGroupToValue.toJson(schema, objectMapper, group) :
+                            ParquetGroupToValue.toCsv(schema, group)
+
+                    sampleToTrainList << new TrainSampleJob.TrainSampleKV(null, keyPrefixOrSuffix, 0L, string.bytes)
+                }
+            } finally {
+                reader.close()
+            }
+
+            return trainSampleListAndReturnRatio(keyPrefixOrSuffix, sampleToTrainList)
         }
 
         if (subSubCmd == 'output-dict-bytes') {

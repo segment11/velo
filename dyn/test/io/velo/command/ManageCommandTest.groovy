@@ -431,6 +431,96 @@ class ManageCommandTest extends Specification {
         // xxx not exists
         reply instanceof ErrorReply
 
+        // ***
+        when:
+        def data8 = new byte[8][]
+        data8[1] = 'dict'.bytes
+        data8[2] = 'train-new-dict-by-parquet-file'.bytes
+        // keyPrefixOrSuffix=t1: file=sample.parquet schema-file=schema.message n=1000 ingest-format=json
+        data8[3] = 'keyPrefixOrSuffix=t1:'.bytes
+        // relative to project root path
+        data8[4] = 'file=src/test/groovy/sample.parquet'.bytes
+        data8[5] = 'schema-file=src/test/groovy/sample.schema'.bytes
+        data8[6] = 'n=1000'.bytes
+        data8[7] = 'ingest-format=json'.bytes
+        manage.data = data8
+        reply = manage.dict()
+        then:
+        reply instanceof BulkReply
+
+        when:
+        data8[3] = 'keyPrefixOrSuffix=t2:'.bytes
+        data8[7] = 'ingest-format=csv'.bytes
+        reply = manage.dict()
+        then:
+        reply instanceof BulkReply
+
+        when:
+        data8[6] = 'n=xxx'.bytes
+        reply = manage.dict()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        data8[6] = 'n=99'.bytes
+        reply = manage.dict()
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        data8[6] = 'n=1001'.bytes
+        reply = manage.dict()
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        data8[6] = 'n=100'.bytes
+        data8[4] = 'file0=sample.parquet'.bytes
+        reply = manage.dict()
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        // file not exists
+        data8[4] = 'file=sample.parquet'.bytes
+        reply = manage.dict()
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        data8[4] = 'file=src/test/groovy/sample.parquet'.bytes
+        data8[5] = 'schema-file0=sample.schema'.bytes
+        reply = manage.dict()
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        // schema file not exists
+        data8[5] = 'schema-file=sample.schema'.bytes
+        reply = manage.dict()
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        data8[3] = 'keyPrefixOrSuffix0=t1:'.bytes
+        reply = manage.dict()
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        data8[3] = 'keyPrefixOrSuffix0'.bytes
+        reply = manage.dict()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        data4[2] = 'train-new-dict-by-parquet-file'.bytes
+        manage.data = data4
+        reply = manage.dict()
+        then:
+        reply == ErrorReply.FORMAT
+
+        // ***
         when:
         data3[2] = 'output-dict-bytes'.bytes
         manage.data = data3

@@ -122,6 +122,11 @@ dependencies {
     implementation group: 'org.apache.lucene', name: 'lucene-core', version: '9.11.1'
 
     implementation group: 'org.rocksdb', name: 'rocksdbjni', version: '9.7.3'
+    implementation group: 'org.apache.parquet', name: 'parquet-common', version: '1.15.0'
+    implementation group: 'org.apache.parquet', name: 'parquet-column', version: '1.15.0'
+    implementation group: 'org.apache.parquet', name: 'parquet-hadoop', version: '1.15.0'
+    implementation group: 'org.apache.hadoop', name: 'hadoop-client', version: '3.4.1'
+//    implementation group: 'org.apache.parquet', name: 'parquet-hadoop-bundle', version: '1.15.0'
 
     implementation group: 'org.apache.curator', name: 'curator-framework', version: '5.7.0'
     implementation group: 'org.apache.curator', name: 'curator-recipes', version: '5.7.0'
