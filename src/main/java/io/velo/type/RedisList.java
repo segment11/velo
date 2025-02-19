@@ -10,42 +10,92 @@ import java.util.LinkedList;
 
 import static io.velo.DictMap.TO_COMPRESS_MIN_DATA_LENGTH;
 
+/**
+ * A class representing a list that can be encoded and decoded with optional compression using Zstandard.
+ * This class is designed to handle a list of byte arrays and provides methods for encoding and decoding the data.
+ */
 public class RedisList {
-    // change here to limit list size
-    // values encoded compressed length should <= 4KB, suppose ratio is 0.25, then 16KB
-    // suppose value length is 32, then 16KB / 32 = 512
+    /**
+     * The maximum size of the list. This is set to Short.MAX_VALUE.
+     * This value can be changed by configuration.
+     * The values encoded and compressed length should be less than or equal to 4KB, assuming a compression ratio of 0.25, then 16KB.
+     * Assuming a value length of 32, then 16KB / 32 = 512.
+     */
     public static short LIST_MAX_SIZE = Short.MAX_VALUE;
 
+    /**
+     * The length of the header in bytes, which includes size, dict sequence, body bytes length, and CRC.
+     */
     @VisibleForTesting
-    // size short + dict seq int + body bytes length int + crc int
     static final int HEADER_LENGTH = 2 + 4 + 4 + 4;
 
+    /**
+     * The internal list to store byte arrays.
+     */
     private final LinkedList<byte[]> list = new LinkedList<>();
 
+    /**
+     * Returns the internal list containing byte arrays.
+     *
+     * @return The internal list.
+     */
     public LinkedList<byte[]> getList() {
         return list;
     }
 
+    /**
+     * Returns the number of elements in the list.
+     *
+     * @return The size of the list.
+     */
     public int size() {
         return list.size();
     }
 
+    /**
+     * Adds an element to the beginning of the list.
+     *
+     * @param e The element to add.
+     */
     public void addFirst(byte[] e) {
         list.addFirst(e);
     }
 
+    /**
+     * Adds an element to the end of the list.
+     *
+     * @param e The element to add.
+     */
     public void addLast(byte[] e) {
         list.add(e);
     }
 
+    /**
+     * Adds an element at the specified index in the list.
+     *
+     * @param index The index at which to add the element.
+     * @param e     The element to add.
+     */
     public void addAt(int index, byte[] e) {
         list.add(index, e);
     }
 
+    /**
+     * Sets the element at the specified index in the list.
+     *
+     * @param index The index at which to set the element.
+     * @param e     The element to set.
+     */
     public void setAt(int index, byte[] e) {
         list.set(index, e);
     }
 
+    /**
+     * Returns the index of the specified element in the list.
+     *
+     * @param b The element to search for.
+     * @return The index of the element, or -1 if the element is not found.
+     */
     public int indexOf(byte[] b) {
         int i = 0;
         for (var e : list) {
@@ -57,26 +107,58 @@ public class RedisList {
         return -1;
     }
 
+    /**
+     * Retrieves the element at the specified index.
+     *
+     * @param index The index of the element to retrieve.
+     * @return The element at the specified index.
+     */
     public byte[] get(int index) {
         return list.get(index);
     }
 
+    /**
+     * Removes and returns the first element from the list.
+     *
+     * @return The first element in the list.
+     */
     public byte[] removeFirst() {
         return list.removeFirst();
     }
 
+    /**
+     * Removes and returns the last element from the list.
+     *
+     * @return The last element in the list.
+     */
     public byte[] removeLast() {
         return list.removeLast();
     }
 
+    /**
+     * Encodes the list to a byte array without compression.
+     *
+     * @return The encoded byte array.
+     */
     public byte[] encodeButDoNotCompress() {
         return encode(null);
     }
 
+    /**
+     * Encodes the list to a byte array with compression using the default dictionary.
+     *
+     * @return The encoded and compressed byte array.
+     */
     public byte[] encode() {
         return encode(Dict.SELF_ZSTD_DICT);
     }
 
+    /**
+     * Encodes the list to a byte array with optional compression using the specified dictionary.
+     *
+     * @param dict The dictionary to use for compression, or null if no compression is desired.
+     * @return The encoded byte array, possibly compressed.
+     */
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
         for (var e : list) {
@@ -116,15 +198,34 @@ public class RedisList {
         return rawBytesWithHeader;
     }
 
+    /**
+     * Retrieves the size of the list without decoding the entire byte array.
+     *
+     * @param data The byte array containing the encoded list.
+     * @return The size of the list.
+     */
     public static int getSizeWithoutDecode(byte[] data) {
         var buffer = ByteBuffer.wrap(data);
         return buffer.getShort();
     }
 
+    /**
+     * Decodes a byte array to a RedisList object. Checks the CRC32 by default.
+     *
+     * @param data The byte array to decode.
+     * @return The RedisList object.
+     */
     public static RedisList decode(byte[] data) {
         return decode(data, true);
     }
 
+    /**
+     * Decodes a byte array to a RedisList object with optional CRC32 check.
+     *
+     * @param data         The byte array to decode.
+     * @param doCheckCrc32 Whether to check the CRC32.
+     * @return The RedisList object.
+     */
     public static RedisList decode(byte[] data, boolean doCheckCrc32) {
         var buffer = ByteBuffer.wrap(data);
         var size = buffer.getShort();
@@ -141,7 +242,7 @@ public class RedisList {
         if (size > 0 && doCheckCrc32) {
             int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
             if (crc != crcCompare) {
-                throw new IllegalStateException("Crc check failed");
+                throw new IllegalStateException("CRC check failed");
             }
         }
 

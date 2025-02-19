@@ -9,25 +9,49 @@ import java.util.TreeSet;
 
 import static io.velo.DictMap.TO_COMPRESS_MIN_DATA_LENGTH;
 
-// key save together, one field value save as single key
+/**
+ * A class representing a set of hash keys that can be encoded and decoded with optional compression using Zstandard.
+ * This class is designed to handle a sorted set of field names and provides methods for encoding and decoding the data.
+ */
 public class RedisHashKeys {
-    // change here to limit hash size
-    // keys encoded compressed length should <= 4KB, suppose ratio is 0.25, then 16KB
-    // suppose key length is 32, then 16KB / 32 = 512
+    /**
+     * The maximum size of the hash. This is set to 4096.
+     * This value can be changed by configuration.
+     * The keys encoded and compressed length should be less than or equal to 4KB, assuming a compression ratio of 0.25, then 16KB.
+     * Assuming a key length of 32, then 16KB / 32 = 512.
+     */
     public static short HASH_MAX_SIZE = 4096;
 
+    /**
+     * The maximum length of a set member. This is set to 255.
+     */
     public static short SET_MEMBER_MAX_LENGTH = 255;
 
+    /**
+     * The length of the header in bytes, which includes size, dict sequence, body bytes length, and CRC.
+     */
     @VisibleForTesting
-    // size short + dict seq int + body bytes length int + crc int
     static final int HEADER_LENGTH = 2 + 4 + 4 + 4;
 
+    /**
+     * Generates a key for storing the keys of a hash, ensuring all keys are in the same slot.
+     *
+     * @param key The base key of the hash.
+     * @return The generated key.
+     */
     // may be length > CompressedValue.KEY_MAX_LENGTH
     public static String keysKey(String key) {
         // add hashtag to make sure all keys in one slot
         return "h_k_{" + key + "}";
     }
 
+    /**
+     * Generates a key for storing a field of a hash, ensuring all fields of the same key are in the same slot.
+     *
+     * @param key   The base key of the hash.
+     * @param field The field name.
+     * @return The generated key.
+     */
     // may be length > CompressedValue.KEY_MAX_LENGTH
     public static String fieldKey(String key, String field) {
         // add hashtag to make sure all keys in one slot
@@ -35,37 +59,83 @@ public class RedisHashKeys {
         return "h_f_" + "{" + key + "}." + field;
     }
 
-    // sorted fields
+    /**
+     * The internal set to store sorted field names.
+     */
     private final TreeSet<String> set = new TreeSet<>();
 
+    /**
+     * Returns the internal sorted set containing field names.
+     *
+     * @return The internal set.
+     */
     public TreeSet<String> getSet() {
         return set;
     }
 
+    /**
+     * Returns the number of field names in the set.
+     *
+     * @return The size of the set.
+     */
     public int size() {
         return set.size();
     }
 
+    /**
+     * Checks if the set contains the specified field name.
+     *
+     * @param field The field name to check.
+     * @return True if the field name is contained in the set, false otherwise.
+     */
     public boolean contains(String field) {
         return set.contains(field);
     }
 
+    /**
+     * Removes the specified field name from the set.
+     *
+     * @param field The field name to remove.
+     * @return True if the field name was removed, false otherwise.
+     */
     public boolean remove(String field) {
         return set.remove(field);
     }
 
+    /**
+     * Adds a field name to the set.
+     *
+     * @param field The field name to add.
+     * @return True if the field name was added, false if it was already present.
+     */
     public boolean add(String field) {
         return set.add(field);
     }
 
+    /**
+     * Encodes the set of field names to a byte array without compression.
+     *
+     * @return The encoded byte array.
+     */
     public byte[] encodeButDoNotCompress() {
         return encode(null);
     }
 
+    /**
+     * Encodes the set of field names to a byte array with compression using the default dictionary.
+     *
+     * @return The encoded and compressed byte array.
+     */
     public byte[] encode() {
         return encode(Dict.SELF_ZSTD_DICT);
     }
 
+    /**
+     * Encodes the set of field names to a byte array with optional compression using the specified dictionary.
+     *
+     * @param dict The dictionary to use for compression, or null if no compression is desired.
+     * @return The encoded byte array, possibly compressed.
+     */
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
         for (var e : set) {
@@ -105,15 +175,34 @@ public class RedisHashKeys {
         return rawBytesWithHeader;
     }
 
+    /**
+     * Retrieves the size of the set without decoding the entire byte array.
+     *
+     * @param data The byte array containing the encoded set.
+     * @return The size of the set.
+     */
     public static int getSizeWithoutDecode(byte[] data) {
         var buffer = ByteBuffer.wrap(data);
         return buffer.getShort();
     }
 
+    /**
+     * Decodes a byte array to a RedisHashKeys object. Checks the CRC32 by default.
+     *
+     * @param data The byte array to decode.
+     * @return The RedisHashKeys object.
+     */
     public static RedisHashKeys decode(byte[] data) {
         return decode(data, true);
     }
 
+    /**
+     * Decodes a byte array to a RedisHashKeys object with optional CRC32 check.
+     *
+     * @param data         The byte array to decode.
+     * @param doCheckCrc32 Whether to check the CRC32.
+     * @return The RedisHashKeys object.
+     */
     public static RedisHashKeys decode(byte[] data, boolean doCheckCrc32) {
         var buffer = ByteBuffer.wrap(data);
         var size = buffer.getShort();
@@ -130,7 +219,7 @@ public class RedisHashKeys {
         if (size > 0 && doCheckCrc32) {
             int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
             if (crc != crcCompare) {
-                throw new IllegalStateException("Crc check failed");
+                throw new IllegalStateException("CRC check failed");
             }
         }
 

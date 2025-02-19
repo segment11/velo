@@ -10,24 +10,52 @@ import java.util.HashMap;
 
 import static io.velo.DictMap.TO_COMPRESS_MIN_DATA_LENGTH;
 
-// key / value save together
+/**
+ * A class representing a hash map that can be encoded and decoded with optional compression using Zstd.
+ * This class is designed to handle key-value pairs and provides methods for encoding and decoding the data.
+ */
 public class RedisHH {
+    /**
+     * A prefix used to indicate that a member should not be stored together.
+     */
     public static final byte[] PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX = "h_not_hh_".getBytes();
 
+    /**
+     * The length of the header in bytes, which includes size, dict sequence, body bytes length, and CRC.
+     */
     @VisibleForTesting
-    // size short + dict seq int + body bytes length int + crc int
     static final int HEADER_LENGTH = 2 + 4 + 4 + 4;
 
+    /**
+     * The internal map to store key-value pairs.
+     */
     private final HashMap<String, byte[]> map = new HashMap<>();
 
+    /**
+     * Returns the internal map containing key-value pairs.
+     *
+     * @return The internal map.
+     */
     public HashMap<String, byte[]> getMap() {
         return map;
     }
 
+    /**
+     * Returns the number of key-value pairs in the map.
+     *
+     * @return The size of the map.
+     */
     public int size() {
         return map.size();
     }
 
+    /**
+     * Adds a key-value pair to the map.
+     *
+     * @param key   The key of the pair.
+     * @param value The value of the pair.
+     * @throws IllegalArgumentException if the key or value length exceeds the maximum allowed length.
+     */
     public void put(String key, byte[] value) {
         if (key.length() > CompressedValue.KEY_MAX_LENGTH) {
             throw new IllegalArgumentException("Key length too long, key length=" + key.length());
@@ -38,26 +66,59 @@ public class RedisHH {
         map.put(key, value);
     }
 
+    /**
+     * Removes a key-value pair from the map by key.
+     *
+     * @param key The key of the pair to remove.
+     * @return True if the pair was removed, false otherwise.
+     */
     public boolean remove(String key) {
         return map.remove(key) != null;
     }
 
+    /**
+     * Adds all key-value pairs from the provided map to the internal map.
+     *
+     * @param map The map containing key-value pairs to add.
+     */
     public void putAll(HashMap<String, byte[]> map) {
         this.map.putAll(map);
     }
 
+    /**
+     * Retrieves the value associated with the specified key.
+     *
+     * @param key The key of the pair to retrieve.
+     * @return The value associated with the key, or null if the key is not found.
+     */
     public byte[] get(String key) {
         return map.get(key);
     }
 
+    /**
+     * Encodes the map to a byte array without compression.
+     *
+     * @return The encoded byte array.
+     */
     public byte[] encodeButDoNotCompress() {
         return encode(null);
     }
 
+    /**
+     * Encodes the map to a byte array with compression using the default dictionary.
+     *
+     * @return The encoded and compressed byte array.
+     */
     public byte[] encode() {
         return encode(Dict.SELF_ZSTD_DICT);
     }
 
+    /**
+     * Encodes the map to a byte array with optional compression using the specified dictionary.
+     *
+     * @param dict The dictionary to use for compression, or null if no compression is desired.
+     * @return The encoded byte array, possibly compressed.
+     */
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
         for (var entry : map.entrySet()) {
@@ -103,9 +164,22 @@ public class RedisHH {
         return rawBytesWithHeader;
     }
 
+    /**
+     * The preferred compression ratio for compressing data.
+     */
     @TestOnly
     static double PREFER_COMPRESS_RATIO = 0.9;
 
+    /**
+     * Compresses the byte array if the compressed size is within the preferred compression ratio.
+     *
+     * @param dict               The dictionary to use for compression.
+     * @param bodyBytesLength    The length of the body bytes.
+     * @param rawBytesWithHeader The raw byte array with header.
+     * @param size               The size of the map.
+     * @param crc                The CRC value.
+     * @return The compressed byte array if compression is successful, otherwise null.
+     */
     static byte[] compressIfBytesLengthIsLong(Dict dict, int bodyBytesLength, byte[] rawBytesWithHeader, short size, int crc) {
         var dictSeq = dict.getSeq();
 
@@ -130,10 +204,23 @@ public class RedisHH {
         return null;
     }
 
+    /**
+     * Decodes a byte array to a RedisHH object. Checks the CRC32 by default.
+     *
+     * @param data The byte array to decode.
+     * @return The RedisHH object.
+     */
     public static RedisHH decode(byte[] data) {
         return decode(data, true);
     }
 
+    /**
+     * Decodes a byte array to a RedisHH object with optional CRC32 check.
+     *
+     * @param data         The byte array to decode.
+     * @param doCheckCrc32 Whether to check the CRC32.
+     * @return The RedisHH object.
+     */
     public static RedisHH decode(byte[] data, boolean doCheckCrc32) {
         var r = new RedisHH();
         iterate(data, doCheckCrc32, (field, valueBytes) -> {
@@ -143,15 +230,38 @@ public class RedisHH {
         return r;
     }
 
+    /**
+     * Retrieves the size of the map without decoding the entire byte array.
+     *
+     * @param data The byte array containing the encoded map.
+     * @return The size of the map.
+     */
     public static int getSizeWithoutDecode(byte[] data) {
         var buffer = ByteBuffer.wrap(data);
         return buffer.getShort();
     }
 
+    /**
+     * An interface for iterating over fields and values in a RedisHH object.
+     */
     public interface IterateCallback {
+        /**
+         * Called for each field and value pair.
+         *
+         * @param field      The field name.
+         * @param valueBytes The value bytes.
+         * @return True to break the iteration, false to continue.
+         */
         boolean onField(String field, byte[] valueBytes);
     }
 
+    /**
+     * Iterates over the fields and values in a byte array representing a RedisHH object.
+     *
+     * @param data         The byte array containing the encoded map.
+     * @param doCheckCrc32 Whether to check the CRC32.
+     * @param callback     The callback to be called for each field and value pair.
+     */
     public static void iterate(byte[] data, boolean doCheckCrc32, IterateCallback callback) {
         var buffer = ByteBuffer.wrap(data);
         var size = buffer.getShort();
@@ -168,7 +278,7 @@ public class RedisHH {
         if (size > 0 && doCheckCrc32) {
             int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
             if (crc != crcCompare) {
-                throw new IllegalStateException("Crc check failed");
+                throw new IllegalStateException("CRC check failed");
             }
         }
 
@@ -194,6 +304,16 @@ public class RedisHH {
         }
     }
 
+    /**
+     * Decompresses a byte array using the specified dictionary sequence.
+     *
+     * @param dictSeq         The dictionary sequence.
+     * @param bodyBytesLength The length of the body bytes.
+     * @param data            The byte array to decompress.
+     * @return The decompressed ByteBuffer.
+     * @throws IllegalStateException if decompression fails.
+     * @throws DictMissingException  if the dictionary is not found.
+     */
     static ByteBuffer decompressIfUseDict(int dictSeq, int bodyBytesLength, byte[] data) {
         if (dictSeq == Dict.SELF_ZSTD_DICT_SEQ) {
             var bodyBytes = new byte[bodyBytesLength];
