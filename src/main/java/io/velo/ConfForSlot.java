@@ -15,15 +15,16 @@ import static io.velo.persist.LocalPersist.PAGE_SIZE;
  *
  * <p>Key features:
  * <ul>
- *   <li>Configuration for different slot sizes (debugMode, c1m, c10m, c100m)</li>
+ *   <li>Configuration for different slot sizes (debugMode, c1m, c10m)</li>
  *   <li>Configuration for buckets, chunks, and write-ahead logs (WAL)</li>
  *   <li>Configuration for least recently used (LRU) caches</li>
  *   <li>Replication configuration</li>
  * </ul>
  */
 public enum ConfForSlot {
-    debugMode(100_000), c1m(1_000_000L),
-    c10m(10_000_000L), c100m(100_000_000L);
+    debugMode(100_000),
+    c1m(1_000_000L),
+    c10m(10_000_000L);
 
     /**
      * Logger for logging messages.
@@ -71,10 +72,8 @@ public enum ConfForSlot {
             return debugMode;
         } else if (estimateKeyNumber <= 1_000_000L) {
             return c1m;
-        } else if (estimateKeyNumber <= 10_000_000L) {
-            return c10m;
         } else {
-            return c100m;
+            return c10m;
         }
     }
 
@@ -123,14 +122,10 @@ public enum ConfForSlot {
             this.confChunk = ConfChunk.c1m;
             this.confBucket = ConfBucket.c1m;
             this.confWal = ConfWal.c1m;
-        } else if (estimateKeyNumber == 10_000_000L) {
+        } else {
             this.confChunk = ConfChunk.c10m;
             this.confBucket = ConfBucket.c10m;
             this.confWal = ConfWal.c10m;
-        } else {
-            this.confChunk = ConfChunk.c100m;
-            this.confBucket = ConfBucket.c100m;
-            this.confWal = ConfWal.c100m;
         }
     }
 
@@ -170,8 +165,7 @@ public enum ConfForSlot {
     public enum ConfBucket {
         debugMode(4096, (byte) 1),
         c1m(KeyBucket.DEFAULT_BUCKETS_PER_SLOT, (byte) 1),
-        c10m(KeyBucket.MAX_BUCKETS_PER_SLOT, (byte) 1),
-        c100m(KeyBucket.MAX_BUCKETS_PER_SLOT, (byte) 3);
+        c10m(KeyBucket.MAX_BUCKETS_PER_SLOT, (byte) 1);
 
         /**
          * Initializes the bucket configuration with the specified parameters.
@@ -214,8 +208,7 @@ public enum ConfForSlot {
     public enum ConfChunk {
         debugMode(8 * 1024, (byte) 2, PAGE_SIZE),
         c1m(256 * 1024, (byte) 1, PAGE_SIZE),
-        c10m(512 * 1024, (byte) 2, PAGE_SIZE),
-        c100m(512 * 1024, (byte) 8, PAGE_SIZE);
+        c10m(512 * 1024, (byte) 2, PAGE_SIZE);
 
         /**
          * Initializes the chunk configuration with the specified parameters.
@@ -233,7 +226,7 @@ public enum ConfForSlot {
         /**
          * Maximum number of file descriptors per chunk.
          */
-        public static final int MAX_FD_PER_CHUNK = 64;
+        public static final int MAX_FD_PER_CHUNK = 16;
 
         /**
          * Number of segments per file descriptor.
@@ -290,8 +283,7 @@ public enum ConfForSlot {
     public enum ConfWal {
         debugMode(32, 200, 200),
         c1m(32, 200, 200),
-        c10m(32, 200, 200),
-        c100m(32, 200, 200);
+        c10m(32, 200, 200);
 
         /**
          * Initializes the WAL configuration with the specified parameters.
