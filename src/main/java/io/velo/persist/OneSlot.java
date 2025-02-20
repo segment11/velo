@@ -1338,7 +1338,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
-        var putResult = targetWal.removeDelay(key, bucketIndex, keyHash);
+        var putResult = targetWal.removeDelay(key, bucketIndex, keyHash, lastPersistTimeMs);
 
         if (putResult.needPersist()) {
             doPersist(walGroupIndex, key, putResult);
@@ -1430,7 +1430,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             isValueShort = true;
         }
 
-        var putResult = targetWal.put(isValueShort, key, v);
+        var putResult = targetWal.put(isValueShort, key, v, lastPersistTimeMs);
         if (!putResult.needPersist()) {
             var xWalV = new XWalV(v, isValueShort, putResult.offset());
             appendBinlog(xWalV);
@@ -1441,10 +1441,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         doPersist(walGroupIndex, key, putResult);
     }
 
+    private long lastPersistTimeMs = 0L;
+
     @SlaveNeedReplay
     private void doPersist(int walGroupIndex, @NotNull String key, @NotNull Wal.PutResult putResult) {
         var targetWal = walArray[walGroupIndex];
         persistWal(putResult.isValueShort(), targetWal);
+        lastPersistTimeMs = System.currentTimeMillis();
 
         if (putResult.isValueShort()) {
             targetWal.clearShortValues();
@@ -1454,7 +1457,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var needPutV = putResult.needPutV();
         if (needPutV != null) {
-            targetWal.put(putResult.isValueShort(), key, needPutV);
+            targetWal.put(putResult.isValueShort(), key, needPutV, lastPersistTimeMs);
 
             var xWalV = new XWalV(needPutV, putResult.isValueShort(), putResult.offset());
             appendBinlog(xWalV);

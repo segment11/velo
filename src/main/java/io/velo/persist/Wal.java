@@ -470,12 +470,12 @@ public class Wal implements InMemoryEstimate {
         return v.cvEncoded;
     }
 
-    PutResult removeDelay(@NotNull String key, int bucketIndex, long keyHash) {
+    PutResult removeDelay(@NotNull String key, int bucketIndex, long keyHash, long lastPersistTimeMs) {
         byte[] encoded = {CompressedValue.SP_FLAG_DELETE_TMP};
         var v = new V(snowFlake.nextId(), bucketIndex, keyHash, CompressedValue.EXPIRE_NOW,
                 CompressedValue.NULL_DICT_SEQ, key, encoded, false);
 
-        return put(true, key, v);
+        return put(true, key, v, lastPersistTimeMs);
     }
 
     @VisibleForTesting
@@ -534,8 +534,13 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
-    // return need persist
+    @TestOnly
     public PutResult put(boolean isValueShort, @NotNull String key, @NotNull V v) {
+        return put(isValueShort, key, v, 0L);
+    }
+
+    // return need persist
+    public PutResult put(boolean isValueShort, @NotNull String key, @NotNull V v, long lastPersistTimeMs) {
         var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
         var offset = isValueShort ? writePositionShortValue : writePosition;
 
@@ -560,6 +565,8 @@ public class Wal implements InMemoryEstimate {
             writePosition += encodeLength;
         }
 
+        // 2 ms at least do persist once, suppose once batch 150 key values, 1 thread 1s may persist 1000 / 2 * 150 = 75000 key values
+        final int atLeastDoPersistOnceIntervalMs = 2;
         if (isValueShort) {
             delayToKeyBucketShortValues.put(key, v);
             delayToKeyBucketValues.remove(key);
@@ -571,6 +578,15 @@ public class Wal implements InMemoryEstimate {
                 needPersistCountTotal++;
                 needPersistKvCountTotal += delayToKeyBucketShortValues.size();
                 needPersistOffsetTotal += writePositionShortValue;
+            } else {
+                if (delayToKeyBucketShortValues.size() >= ConfForSlot.global.confWal.shortValueSizeTrigger / 2) {
+                    if (System.currentTimeMillis() - lastPersistTimeMs > atLeastDoPersistOnceIntervalMs) {
+                        needPersist = true;
+                        needPersistCountTotal++;
+                        needPersistKvCountTotal += delayToKeyBucketShortValues.size();
+                        needPersistOffsetTotal += writePositionShortValue;
+                    }
+                }
             }
             return new PutResult(needPersist, true, null, needPersist ? 0 : offset);
         }
@@ -585,6 +601,15 @@ public class Wal implements InMemoryEstimate {
             needPersistCountTotal++;
             needPersistKvCountTotal += delayToKeyBucketValues.size();
             needPersistOffsetTotal += writePosition;
+        } else {
+            if (delayToKeyBucketValues.size() >= ConfForSlot.global.confWal.valueSizeTrigger / 2) {
+                if (System.currentTimeMillis() - lastPersistTimeMs > atLeastDoPersistOnceIntervalMs) {
+                    needPersist = true;
+                    needPersistCountTotal++;
+                    needPersistKvCountTotal += delayToKeyBucketValues.size();
+                    needPersistOffsetTotal += writePosition;
+                }
+            }
         }
         return new PutResult(needPersist, false, null, needPersist ? 0 : offset);
     }
