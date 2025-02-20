@@ -182,6 +182,7 @@ class WalTest extends Specification {
         // repl export exists batch to slave
         when:
         ConfForGlobal.pureMemory = false
+        wal.put(false, 'xyz', vList[-1])
         def toSlaveExistsBytes1 = wal.toSlaveExistsOneWalGroupBytes()
         then:
         toSlaveExistsBytes1.length == 32 + Wal.ONE_GROUP_BUFFER_SIZE * 2
@@ -308,7 +309,7 @@ class WalTest extends Specification {
         wal.get(key) == null
 
         when:
-        wal.removeDelay(key, 0, v.keyHash())
+        wal.removeDelay(key, 0, v.keyHash(), 0L)
         def cvEncoded = wal.get(key)
         then:
         cvEncoded != null && cvEncoded.length == 1
