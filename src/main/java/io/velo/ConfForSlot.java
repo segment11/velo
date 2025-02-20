@@ -1,5 +1,6 @@
 package io.velo;
 
+import io.velo.persist.FdReadWrite;
 import io.velo.persist.KeyBucket;
 import io.velo.persist.LocalPersist;
 import org.slf4j.Logger;
@@ -47,6 +48,11 @@ public enum ConfForSlot {
     public final ConfWal confWal;
 
     /**
+     * Configuration for replication.
+     */
+    public final ConfRepl confRepl = new ConfRepl();
+
+    /**
      * Configuration for LRU cache for big strings.
      */
     public final ConfLru lruBigString = new ConfLru(1000);
@@ -55,11 +61,6 @@ public enum ConfForSlot {
      * Configuration for LRU cache for key and compressed value encoded data.
      */
     public final ConfLru lruKeyAndCompressedValueEncoded = new ConfLru(100_000);
-
-    /**
-     * Configuration for replication.
-     */
-    public final ConfRepl confRepl = new ConfRepl();
 
     /**
      * Retrieves the appropriate configuration based on the estimated number of keys.
@@ -134,9 +135,12 @@ public enum ConfForSlot {
         return "ConfForSlot{" +
                 "estimateKeyNumber=" + ConfForGlobal.estimateKeyNumber +
                 ", isValueSetUseCompression=" + ConfForGlobal.isValueSetUseCompression +
-                ", confChunk=" + confChunk +
                 ", confBucket=" + confBucket +
+                ", confChunk=" + confChunk +
                 ", confWal=" + confWal +
+                ", confRepl=" + confRepl +
+                ", lruBigString=" + lruBigString +
+                ", lruKeyAndCompressedValueEncoded=" + lruKeyAndCompressedValueEncoded +
                 '}';
     }
 
@@ -157,6 +161,12 @@ public enum ConfForSlot {
          * Maximum size of the LRU cache.
          */
         public int maxSize;
+
+        public String toString() {
+            return "ConfLru{" +
+                    "maxSize=" + maxSize +
+                    '}';
+        }
     }
 
     /**
@@ -198,6 +208,7 @@ public enum ConfForSlot {
             return "ConfBucket{" +
                     "bucketsPerSlot=" + bucketsPerSlot +
                     ", initialSplitNumber=" + initialSplitNumber +
+                    ", lruPerFd=" + lruPerFd +
                     '}';
         }
     }
@@ -265,7 +276,7 @@ public enum ConfForSlot {
         /**
          * Empty bytes for once write.
          */
-        public byte[] REPL_EMPTY_BYTES_FOR_ONCE_WRITE;
+        public static final byte[] REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4096];
 
         @Override
         public String toString() {
@@ -273,6 +284,10 @@ public enum ConfForSlot {
                     "segmentNumberPerFd=" + segmentNumberPerFd +
                     ", fdPerChunk=" + fdPerChunk +
                     ", segmentLength=" + segmentLength +
+                    ", isSegmentUseCompression=" + isSegmentUseCompression +
+                    ", lruPerFd=" + lruPerFd +
+                    ", maxSegmentNumber=" + maxSegmentNumber() +
+                    ", REPL_EMPTY_BYTES_FOR_ONCE_WRITE.length=" + REPL_EMPTY_BYTES_FOR_ONCE_WRITE.length +
                     '}';
         }
     }
@@ -313,12 +328,25 @@ public enum ConfForSlot {
          */
         public int shortValueSizeTrigger;
 
+        /**
+         * Trigger to persist at least once interval ms.
+         */
+        public int atLeastDoPersistOnceIntervalMs = 2;
+
+        /**
+         * When value size / short value size >= size trigger * 0.8, check if last persist time is <= 2ms, if true, do persist.
+         * So can avoid io skew.
+         */
+        public double checkAtLeastDoPersistOnceSizeRate = 0.8;
+
         @Override
         public String toString() {
             return "ConfWal{" +
                     "oneChargeBucketNumber=" + oneChargeBucketNumber +
                     ", valueSizeTrigger=" + valueSizeTrigger +
                     ", shortValueSizeTrigger=" + shortValueSizeTrigger +
+                    ", atLeastDoPersistOnceIntervalMs=" + atLeastDoPersistOnceIntervalMs +
+                    ", checkAtLeastDoPersistOnceSizeRate=" + checkAtLeastDoPersistOnceSizeRate +
                     '}';
         }
     }
@@ -368,8 +396,10 @@ public enum ConfForSlot {
                     "binlogOneSegmentLength=" + binlogOneSegmentLength +
                     ", binlogOneFileMaxLength=" + binlogOneFileMaxLength +
                     ", binlogForReadCacheSegmentMaxCount=" + binlogForReadCacheSegmentMaxCount +
+                    ", binlogFileKeepMaxCount=" + binlogFileKeepMaxCount +
                     ", catchUpOffsetMinDiff=" + catchUpOffsetMinDiff +
                     ", catchUpIntervalMillis=" + catchUpIntervalMillis +
+                    ", iterateKeysOneBatchSize=" + iterateKeysOneBatchSize +
                     '}';
         }
     }

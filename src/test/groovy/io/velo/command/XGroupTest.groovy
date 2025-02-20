@@ -697,7 +697,6 @@ class XGroupTest extends Specification {
     def 'test as slave'() {
         given:
         ConfForGlobal.netListenAddresses = 'localhost:6380'
-        ConfForSlot.global.confChunk.REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4096]
 
         LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
         def localPersist = LocalPersist.instance

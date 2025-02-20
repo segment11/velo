@@ -1133,6 +1133,8 @@ public class MultiWorkerServer extends Launcher {
             if (config.getChild("wal.shortValueSizeTrigger").hasValue()) {
                 c.confWal.shortValueSizeTrigger = config.get(ofInteger(), "wal.shortValueSizeTrigger");
             }
+            c.confWal.atLeastDoPersistOnceIntervalMs = config.get(ofInteger(), "wal.atLeastDoPersistOnceIntervalMs", 2);
+            c.confWal.checkAtLeastDoPersistOnceSizeRate = config.get(ofDouble(), "wal.checkAtLeastDoPersistOnceSizeRate", 0.8);
 
             if (config.getChild("repl.binlogForReadCacheSegmentMaxCount").hasValue()) {
                 c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount").shortValue();
@@ -1145,10 +1147,8 @@ public class MultiWorkerServer extends Launcher {
                 c.lruKeyAndCompressedValueEncoded.maxSize = config.get(ofInteger(), "kv.lru.maxSize");
             }
 
-            // important, log 3 times
-            logger.info("!!!!!!ConfForSlot={}", c);
-            logger.info("!!!!!!ConfForSlot={}", c);
-            logger.info("!!!!!!ConfForSlot={}", c);
+            // important log
+            logger.info("!!!!!!\n\nConfForSlot={}\n\n", c);
             return c;
         }
 

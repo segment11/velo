@@ -566,7 +566,8 @@ public class Wal implements InMemoryEstimate {
         }
 
         // 2 ms at least do persist once, suppose once batch 150 key values, 1 thread 1s may persist 1000 / 2 * 150 = 75000 key values
-        final int atLeastDoPersistOnceIntervalMs = 2;
+        final int atLeastDoPersistOnceIntervalMs = ConfForSlot.global.confWal.atLeastDoPersistOnceIntervalMs;
+        final double checkAtLeastDoPersistOnceSizeRate = ConfForSlot.global.confWal.checkAtLeastDoPersistOnceSizeRate;
         if (isValueShort) {
             delayToKeyBucketShortValues.put(key, v);
             delayToKeyBucketValues.remove(key);
@@ -579,7 +580,7 @@ public class Wal implements InMemoryEstimate {
                 needPersistKvCountTotal += delayToKeyBucketShortValues.size();
                 needPersistOffsetTotal += writePositionShortValue;
             } else {
-                if (delayToKeyBucketShortValues.size() >= ConfForSlot.global.confWal.shortValueSizeTrigger / 2) {
+                if (delayToKeyBucketShortValues.size() >= ConfForSlot.global.confWal.shortValueSizeTrigger * checkAtLeastDoPersistOnceSizeRate) {
                     if (System.currentTimeMillis() - lastPersistTimeMs > atLeastDoPersistOnceIntervalMs) {
                         needPersist = true;
                         needPersistCountTotal++;
@@ -602,7 +603,7 @@ public class Wal implements InMemoryEstimate {
             needPersistKvCountTotal += delayToKeyBucketValues.size();
             needPersistOffsetTotal += writePosition;
         } else {
-            if (delayToKeyBucketValues.size() >= ConfForSlot.global.confWal.valueSizeTrigger / 2) {
+            if (delayToKeyBucketValues.size() >= ConfForSlot.global.confWal.valueSizeTrigger * checkAtLeastDoPersistOnceSizeRate) {
                 if (System.currentTimeMillis() - lastPersistTimeMs > atLeastDoPersistOnceIntervalMs) {
                     needPersist = true;
                     needPersistCountTotal++;

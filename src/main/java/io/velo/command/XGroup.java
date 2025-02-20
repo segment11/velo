@@ -902,7 +902,7 @@ public class XGroup extends BaseCommand {
                     }
                 } else {
                     // write 0 to files
-                    oneSlot.writeChunkSegmentsFromMasterExists(ConfForSlot.global.confChunk.REPL_EMPTY_BYTES_FOR_ONCE_WRITE,
+                    oneSlot.writeChunkSegmentsFromMasterExists(ConfForSlot.ConfChunk.REPL_EMPTY_BYTES_FOR_ONCE_WRITE,
                             beginSegmentIndex, segmentCount);
                 }
             } else {
