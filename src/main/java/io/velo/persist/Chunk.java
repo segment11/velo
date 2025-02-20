@@ -170,12 +170,14 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
         var fdReadWrite = fdReadWriteArray[fdIndex];
         fdReadWrite.truncateAfterTargetSegmentIndex(segmentIndexTargetFd);
+        fdLengths[fdIndex] = chunkSegmentLength * targetSegmentIndex;
 
         log.warn("Truncate chunk fd from segment index={}, fd index={}", targetSegmentIndex, fdIndex);
 
         for (int i = fdIndex + 1; i < fdReadWriteArray.length; i++) {
             fdReadWriteArray[i].truncate();
             log.warn("Truncate chunk fd={}, fd index={}", fdReadWriteArray[i].name, i);
+            fdLengths[i] = 0;
         }
     }
 

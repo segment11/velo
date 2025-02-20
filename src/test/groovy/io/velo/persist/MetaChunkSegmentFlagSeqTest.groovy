@@ -358,26 +358,18 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         one.canTruncateFdIndex == 0
 
         when:
-        ConfForSlot.global = ConfForSlot.c10m
-        def two = new MetaChunkSegmentFlagSeq(slot, slotDirTmp)
-        512.times {
-            two.run()
-        }
+        one.updateBitSetFalseForSegmentIndex(0, 0)
         then:
-        two.canTruncateFdIndex == 0
+        one.canTruncateFdIndex == -1
 
         when:
-        512.times {
-            two.run()
+        one.setSegmentMergeFlag(8192, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        one.updateBitSetFalseForSegmentIndex(1, 0)
+        8.times {
+            one.run()
         }
         then:
-        two.canTruncateFdIndex == 1
-
-        when:
-        two.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        two.run()
-        then:
-        two.canTruncateFdIndex == -1
+        one.canTruncateFdIndex == -1
 
         cleanup:
         slotDirTmp.deleteDir()

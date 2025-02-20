@@ -923,14 +923,20 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public void doTask(int loopCount) {
         taskChain.doTask(loopCount);
 
-        if (metaChunkSegmentFlagSeq.canTruncateFdIndex != -1) {
-            var fdLength = chunk.fdLengths[metaChunkSegmentFlagSeq.canTruncateFdIndex];
-            if (fdLength != 0) {
-                var fd = chunk.fdReadWriteArray[metaChunkSegmentFlagSeq.canTruncateFdIndex];
-                fd.truncate();
-                metaChunkSegmentFlagSeq.canTruncateFdIndex = -1;
-            }
+        var canTruncateFdIndex = metaChunkSegmentFlagSeq.canTruncateFdIndex;
+        if (canTruncateFdIndex != -1) {
+            truncateChunkFile(canTruncateFdIndex);
         }
+    }
+
+    void truncateChunkFile(int fdIndex) {
+        var fdLength = chunk.fdLengths[fdIndex];
+        if (fdLength != 0) {
+            var fd = chunk.fdReadWriteArray[fdIndex];
+            fd.truncate();
+            chunk.fdLengths[fdIndex] = 0;
+        }
+        metaChunkSegmentFlagSeq.canTruncateFdIndex = -1;
     }
 
     private void initTasks() {
@@ -1004,10 +1010,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (ConfForGlobal.pureMemory) {
             // do every 10ms
             taskChain.add(new CheckAndSaveMemoryTask(this));
-        } else {
-            // do every 10ms
-            // for truncate file to save ssd space
-            taskChain.add(metaChunkSegmentFlagSeq);
         }
     }
 
@@ -1530,6 +1532,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.metaChunkSegmentFlagSeq = new MetaChunkSegmentFlagSeq(slot, slotDir);
         this.metaChunkSegmentIndex = new MetaChunkSegmentIndex(slot, slotDir);
 
+        if (!ConfForGlobal.pureMemory) {
+            // do every 10ms
+            // for truncate file to save ssd space
+            taskChain.add(metaChunkSegmentFlagSeq);
+        }
+
         // chunk
         initChunk();
     }
@@ -2050,6 +2058,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     log.info("Clear one segment memory bytes when reuse, segment index={}, slot={}", segmentIndex, slot);
                 }
             }
+        } else {
+            if (!Chunk.Flag.canReuse(flagByte)) {
+                var fdIndex = chunk.targetFdIndex(segmentIndex);
+                var segmentIndexTargetFd = chunk.targetSegmentIndexTargetFd(segmentIndex);
+                metaChunkSegmentFlagSeq.updateBitSetFalseForSegmentIndex(fdIndex, segmentIndexTargetFd);
+            }
         }
     }
 
@@ -2067,6 +2081,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 for (int i = 0; i < segmentCount; i++) {
                     var segmentIndex = beginSegmentIndex + i;
                     chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
+                }
+            }
+        } else {
+            if (!Chunk.Flag.canReuse(flagByte)) {
+                for (int i = 0; i < segmentCount; i++) {
+                    var segmentIndex = beginSegmentIndex + i;
+                    var fdIndex = chunk.targetFdIndex(segmentIndex);
+                    var segmentIndexTargetFd = chunk.targetSegmentIndexTargetFd(segmentIndex);
+                    metaChunkSegmentFlagSeq.updateBitSetFalseForSegmentIndex(fdIndex, segmentIndexTargetFd);
                 }
             }
         }

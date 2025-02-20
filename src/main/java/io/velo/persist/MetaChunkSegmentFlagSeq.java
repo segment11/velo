@@ -37,6 +37,16 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     private final BitSet[] stepBy1KSegmentsGroupAllMergedFlagBitSet;
     private final int max1KSegmentsGroupNumber;
 
+    void updateBitSetFalseForSegmentIndex(int fdIndex, int targetSegmentIndex) {
+        var bitSet = stepBy1KSegmentsGroupAllMergedFlagBitSet[fdIndex];
+        var groupNumber = targetSegmentIndex / 1024;
+        bitSet.set(groupNumber, false);
+
+        if (canTruncateFdIndex == fdIndex) {
+            canTruncateFdIndex = -1;
+        }
+    }
+
     private final int maxSegmentNumber;
 
     final int allCapacity;
@@ -161,7 +171,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
     private int checkFdIndex = 0;
     private int check1KSegmentsGroupIndex = 0;
-    int canTruncateFdIndex = -1;
+    int canTruncateFdIndex;
 
     @Override
     public String name() {
@@ -170,17 +180,17 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
     @Override
     public void run() {
-        boolean isAllCanReuse = true;
+        boolean isAllCanClear1KSegmentsGroup = true;
         var beginSegmentIndex = checkFdIndex * segmentNumberPerFd + check1KSegmentsGroupIndex * 1024;
         for (int i = 0; i < 1024; i++) {
             var flagByte = inMemoryCachedBytes[(beginSegmentIndex + i) * ONE_LENGTH];
             if (!Chunk.Flag.canReuse(flagByte)) {
-                isAllCanReuse = false;
+                isAllCanClear1KSegmentsGroup = false;
                 break;
             }
         }
 
-        if (isAllCanReuse) {
+        if (isAllCanClear1KSegmentsGroup) {
             var bitSet = stepBy1KSegmentsGroupAllMergedFlagBitSet[checkFdIndex];
             bitSet.set(check1KSegmentsGroupIndex);
 
@@ -205,6 +215,12 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
                 checkFdIndex = 0;
             }
         }
+    }
+
+    @Override
+    public int executeOnceAfterLoopCount() {
+        // execute once every 100ms
+        return 10;
     }
 
     public interface IterateCallBack {
@@ -351,8 +367,6 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         wrap.putInt(walGroupIndex);
 
         StatKeyCountInBuckets.writeToRaf(offset, bytes, inMemoryCachedByteBuffer, raf);
-
-        canTruncateFdIndex = -1;
     }
 
     void setSegmentMergeFlagBatch(int beginSegmentIndex,
@@ -371,8 +385,6 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         }
 
         StatKeyCountInBuckets.writeToRaf(offset, bytes, inMemoryCachedByteBuffer, raf);
-
-        canTruncateFdIndex = -1;
     }
 
     Chunk.SegmentFlag getSegmentMergeFlag(int segmentIndex) {
