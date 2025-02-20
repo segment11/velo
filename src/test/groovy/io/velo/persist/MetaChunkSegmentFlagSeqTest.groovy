@@ -222,10 +222,12 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
 
         // c1m
         def confChunk = ConfForSlot.global.confChunk
-        def c100mConfChunk = ConfForSlot.ConfChunk.c100m
+        def segmentNumberPerFdOld = confChunk.segmentNumberPerFd
+        def fdPerChunkOld = confChunk.fdPerChunk
+        def c10mConfChunk = ConfForSlot.ConfChunk.c10m
 //        def targetConfChunk = ConfForSlot.ConfChunk.debugMode
-        confChunk.segmentNumberPerFd = c100mConfChunk.segmentNumberPerFd
-        confChunk.fdPerChunk = c100mConfChunk.fdPerChunk
+        confChunk.segmentNumberPerFd = c10mConfChunk.segmentNumberPerFd
+        confChunk.fdPerChunk = c10mConfChunk.fdPerChunk
 
         def one = new MetaChunkSegmentFlagSeq(slot, slotDir)
 
@@ -289,8 +291,8 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r2[1] == 0
 
         cleanup:
-        confChunk.segmentNumberPerFd = ConfForSlot.c1m.confChunk.segmentNumberPerFd
-        confChunk.fdPerChunk = ConfForSlot.c1m.confChunk.fdPerChunk
+        confChunk.segmentNumberPerFd = segmentNumberPerFdOld
+        confChunk.fdPerChunk = fdPerChunkOld
         one.clear()
         one.cleanUp()
     }
@@ -335,5 +337,50 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
 
         cleanup:
         ConfForGlobal.pureMemory = false
+    }
+
+    def 'test check if file can truncate'() {
+        given:
+        final File slotDirTmp = new File(Consts.persistDir, 'test-slot-tmp')
+        slotDirTmp.mkdirs()
+
+        ConfForSlot.global = ConfForSlot.debugMode
+        def one = new MetaChunkSegmentFlagSeq(slot, slotDirTmp)
+
+        expect:
+        one.name() == 'segments all merged check for truncate file'
+
+        when:
+        8.times {
+            one.run()
+        }
+        then:
+        one.canTruncateFdIndex == 0
+
+        when:
+        ConfForSlot.global = ConfForSlot.c10m
+        def two = new MetaChunkSegmentFlagSeq(slot, slotDirTmp)
+        512.times {
+            two.run()
+        }
+        then:
+        two.canTruncateFdIndex == 0
+
+        when:
+        512.times {
+            two.run()
+        }
+        then:
+        two.canTruncateFdIndex == 1
+
+        when:
+        two.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        two.run()
+        then:
+        two.canTruncateFdIndex == -1
+
+        cleanup:
+        slotDirTmp.deleteDir()
+        ConfForSlot.global = ConfForSlot.c1m
     }
 }

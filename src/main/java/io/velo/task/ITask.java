@@ -25,7 +25,8 @@ public interface ITask {
      *
      * @param loopCount the number of times the task should loop
      */
-    void setLoopCount(int loopCount);
+    default void setLoopCount(long loopCount) {
+    }
 
     /**
      * Returns the number of times the task should execute

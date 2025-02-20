@@ -18,10 +18,10 @@ class TaskChainTest extends Specification {
             println 'task1, loop count: ' + loopCount
         }
 
-        int loopCount
+        long loopCount
 
         @Override
-        void setLoopCount(int loopCount) {
+        void setLoopCount(long loopCount) {
             this.loopCount = loopCount
         }
 
@@ -49,10 +49,10 @@ class TaskChainTest extends Specification {
             println 'task3, loop count: ' + loopCount
         }
 
-        int loopCount
+        long loopCount
 
         @Override
-        void setLoopCount(int loopCount) {
+        void setLoopCount(long loopCount) {
             this.loopCount = loopCount
         }
     }

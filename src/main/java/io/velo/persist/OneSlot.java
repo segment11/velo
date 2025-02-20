@@ -922,11 +922,20 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     public void doTask(int loopCount) {
         taskChain.doTask(loopCount);
+
+        if (metaChunkSegmentFlagSeq.canTruncateFdIndex != -1) {
+            var fdLength = chunk.fdLengths[metaChunkSegmentFlagSeq.canTruncateFdIndex];
+            if (fdLength != 0) {
+                var fd = chunk.fdReadWriteArray[metaChunkSegmentFlagSeq.canTruncateFdIndex];
+                fd.truncate();
+                metaChunkSegmentFlagSeq.canTruncateFdIndex = -1;
+            }
+        }
     }
 
     private void initTasks() {
         taskChain.add(new ITask() {
-            private int loopCount = 0;
+            private long loopCount = 0;
 
             @Override
             public String name() {
@@ -935,11 +944,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             @Override
             public void run() {
-                // do every 100 loop, 1s
-                if (loopCount % 100 != 0) {
-                    return;
-                }
-
                 // do log every 1000s
                 if (loopCount % (100 * 1000) == 0) {
                     log.info("Task {} run, slot={}, loop count={}", name(), slot, loopCount);
@@ -986,14 +990,24 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
 
             @Override
-            public void setLoopCount(int loopCount) {
+            public void setLoopCount(long loopCount) {
                 this.loopCount = loopCount;
+            }
+
+            // do every 100 loop, 1s
+            @Override
+            public int executeOnceAfterLoopCount() {
+                return 100;
             }
         });
 
         if (ConfForGlobal.pureMemory) {
             // do every 10ms
             taskChain.add(new CheckAndSaveMemoryTask(this));
+        } else {
+            // do every 10ms
+            // for truncate file to save ssd space
+            taskChain.add(metaChunkSegmentFlagSeq);
         }
     }
 
@@ -1055,9 +1069,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 lastCheckedSegmentIndex = 0;
             }
         }
-
-        public void setLoopCount(int loopCount) {
-        }
     }
 
     @TestOnly
@@ -1068,7 +1079,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     void debugMode() {
         taskChain.add(new ITask() {
-            private int loopCount = 0;
+            private long loopCount = 0;
 
             @Override
             public String name() {
@@ -1077,11 +1088,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             @Override
             public void run() {
-                // do every 1000 loop, 10s
-                if (loopCount % 1000 != 0) {
-                    return;
-                }
-
                 // reduce log
                 var firstOneSlot = LocalPersist.getInstance().firstOneSlot();
                 if (firstOneSlot != null && slot == firstOneSlot.slot) {
@@ -1090,13 +1096,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
 
             @Override
-            public void setLoopCount(int loopCount) {
+            public void setLoopCount(long loopCount) {
                 this.loopCount = loopCount;
             }
 
+            // do every 1000 loop, 10s
             @Override
             public int executeOnceAfterLoopCount() {
-                return 10;
+                return 1000;
             }
         });
     }

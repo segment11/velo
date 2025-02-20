@@ -6,6 +6,7 @@ import io.velo.NeedCleanUp;
 import io.velo.StaticMemoryPrepareBytesStats;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
+import io.velo.task.ITask;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -17,9 +18,10 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.List;
 
-public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
+public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, ITask {
     private static final String META_CHUNK_SEGMENT_SEQ_FLAG_FILE = "meta_chunk_segment_flag_seq.dat";
     // flag byte + seq long + wal group index int
     public static final int ONE_LENGTH = 1 + 8 + 4;
@@ -27,6 +29,14 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
     public static final int INIT_WAL_GROUP_INDEX = -1;
 
     private final short slot;
+    // for truncate file to save ssd space
+    // at least chunk segment number is 8K, each 1K segment use one bit to indicate whether this group of segments is all merged
+    // when the bit set is all 0, it means all segments in this file are all merged, so we can truncate file to save ssd space
+    private final int fdPerChunk;
+    private final int segmentNumberPerFd;
+    private final BitSet[] stepBy1KSegmentsGroupAllMergedFlagBitSet;
+    private final int max1KSegmentsGroupNumber;
+
     private final int maxSegmentNumber;
 
     final int allCapacity;
@@ -98,6 +108,15 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
 
     public MetaChunkSegmentFlagSeq(short slot, @NotNull File slotDir) throws IOException {
         this.slot = slot;
+
+        this.fdPerChunk = ConfForSlot.global.confChunk.fdPerChunk;
+        this.segmentNumberPerFd = ConfForSlot.global.confChunk.segmentNumberPerFd;
+        this.stepBy1KSegmentsGroupAllMergedFlagBitSet = new BitSet[fdPerChunk];
+        this.max1KSegmentsGroupNumber = segmentNumberPerFd / 1024;
+        for (int i = 0; i < fdPerChunk; i++) {
+            this.stepBy1KSegmentsGroupAllMergedFlagBitSet[i] = new BitSet(max1KSegmentsGroupNumber);
+        }
+
         this.maxSegmentNumber = ConfForSlot.global.confChunk.maxSegmentNumber();
         this.allCapacity = maxSegmentNumber * ONE_LENGTH;
 
@@ -138,6 +157,54 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
     public long estimate(@NotNull StringBuilder sb) {
         sb.append("Meta chunk segment flag seq: ").append(allCapacity).append("\n");
         return allCapacity;
+    }
+
+    private int checkFdIndex = 0;
+    private int check1KSegmentsGroupIndex = 0;
+    int canTruncateFdIndex = -1;
+
+    @Override
+    public String name() {
+        return "segments all merged check for truncate file";
+    }
+
+    @Override
+    public void run() {
+        boolean isAllCanReuse = true;
+        var beginSegmentIndex = checkFdIndex * segmentNumberPerFd + check1KSegmentsGroupIndex * 1024;
+        for (int i = 0; i < 1024; i++) {
+            var flagByte = inMemoryCachedBytes[(beginSegmentIndex + i) * ONE_LENGTH];
+            if (!Chunk.Flag.canReuse(flagByte)) {
+                isAllCanReuse = false;
+                break;
+            }
+        }
+
+        if (isAllCanReuse) {
+            var bitSet = stepBy1KSegmentsGroupAllMergedFlagBitSet[checkFdIndex];
+            bitSet.set(check1KSegmentsGroupIndex);
+
+            // if all true, means can truncate
+            if (bitSet.cardinality() == max1KSegmentsGroupNumber) {
+                canTruncateFdIndex = checkFdIndex;
+            } else {
+                canTruncateFdIndex = -1;
+            }
+        } else {
+            canTruncateFdIndex = -1;
+        }
+
+        check1KSegmentsGroupIndex++;
+        if (check1KSegmentsGroupIndex == max1KSegmentsGroupNumber) {
+            // reach one file end
+            check1KSegmentsGroupIndex = 0;
+
+            checkFdIndex++;
+            if (checkFdIndex == fdPerChunk) {
+                // reach all files end, from the first file
+                checkFdIndex = 0;
+            }
+        }
     }
 
     public interface IterateCallBack {
@@ -284,6 +351,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
         wrap.putInt(walGroupIndex);
 
         StatKeyCountInBuckets.writeToRaf(offset, bytes, inMemoryCachedByteBuffer, raf);
+
+        canTruncateFdIndex = -1;
     }
 
     void setSegmentMergeFlagBatch(int beginSegmentIndex,
@@ -302,6 +371,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp {
         }
 
         StatKeyCountInBuckets.writeToRaf(offset, bytes, inMemoryCachedByteBuffer, raf);
+
+        canTruncateFdIndex = -1;
     }
 
     Chunk.SegmentFlag getSegmentMergeFlag(int segmentIndex) {

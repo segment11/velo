@@ -84,9 +84,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     final SegmentBatch segmentBatch;
     private final SegmentBatch2 segmentBatch2;
 
-    @VisibleForTesting
     int[] fdLengths;
-    @VisibleForTesting
     FdReadWrite[] fdReadWriteArray;
 
     public FdReadWrite[] getFdReadWriteArray() {
