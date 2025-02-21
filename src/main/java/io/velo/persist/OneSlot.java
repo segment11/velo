@@ -739,7 +739,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    public void setChunkSegmentIndexFromMeta() {
+    public void updateChunkSegmentIndexFromMeta() {
         chunk.setSegmentIndex(metaChunkSegmentIndex.get());
     }
 
@@ -1542,6 +1542,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     private void initChunk() throws IOException {
         this.chunk = new Chunk(slot, slotDir, this);
         chunk.initFds(libC);
+
+        updateChunkSegmentIndexFromMeta();
     }
 
     public boolean hasData(int beginSegmentIndex, int segmentCount) {

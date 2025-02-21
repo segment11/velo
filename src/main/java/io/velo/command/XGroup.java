@@ -1367,7 +1367,7 @@ public class XGroup extends BaseCommand {
 
         var oneSlot = localPersist.oneSlot(slot);
         var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();
-        oneSlot.setChunkSegmentIndexFromMeta();
+        oneSlot.updateChunkSegmentIndexFromMeta();
 
         var binlogMasterUuid = metaChunkSegmentIndex.getMasterUuid();
         var lastUpdatedFileIndexAndOffset = metaChunkSegmentIndex.getMasterBinlogFileIndexAndOffset();
