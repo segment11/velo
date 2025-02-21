@@ -34,7 +34,7 @@ class ChunkTest extends Specification {
         println new Chunk.SegmentFlag(flagInit.flagByte(), 1L, 0)
 
         expect:
-        Chunk.Flag.canReuse(Chunk.Flag.init.flagByte()) && Chunk.Flag.canReuse(Chunk.Flag.reuse.flagByte()) && Chunk.Flag.canReuse(Chunk.Flag.merged_and_persisted.flagByte())
+        Chunk.Flag.canReuse(Chunk.Flag.init.flagByte()) && Chunk.Flag.canReuse(Chunk.Flag.merged_and_persisted.flagByte())
         !Chunk.Flag.canReuse(Chunk.Flag.new_write.flagByte())
     }
 
@@ -67,8 +67,6 @@ class ChunkTest extends Specification {
         chunk.targetSegmentIndexTargetFd(segmentNumberPerFd - 1) == segmentNumberPerFd - 1
         chunk.targetSegmentIndexTargetFd(segmentNumberPerFd) == 0
         chunk.targetSegmentIndexTargetFd(segmentNumberPerFd * 2 - 1) == segmentNumberPerFd - 1
-        chunk.initSegmentIndexWhenFirstStart(0)
-        chunk.initSegmentIndexWhenFirstStart(chunk.maxSegmentIndex + 1)
 
         when:
         chunk.moveSegmentIndexNext(1)
@@ -139,65 +137,6 @@ class ChunkTest extends Specification {
         chunk.resetAsFlush()
         then:
         chunk.segmentIndex == 0
-
-        cleanup:
-        oneSlot.metaChunkSegmentFlagSeq.clear()
-        oneSlot.metaChunkSegmentFlagSeq.cleanUp()
-    }
-
-    def 'test reuse segments'() {
-        given:
-        def chunk = prepareOne(slot)
-        def oneSlot = chunk.oneSlot
-
-        when:
-        chunk.segmentIndex = 0
-        chunk.reuseSegments(true, 1, true)
-        then:
-        oneSlot.metaChunkSegmentFlagSeq.getSegmentMergeFlag(0).flagByte() == Chunk.Flag.reuse.flagByte()
-        chunk.reuseSegments(true, 1, true)
-        chunk.reuseSegments(false, 1, true)
-
-        when:
-        chunk.segmentIndex = 0
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.merged_and_persisted.flagByte(), 1L, 0)
-        then:
-        chunk.reuseSegments(false, 1, false)
-        chunk.reuseSegments(false, 1, true)
-
-        when:
-        chunk.segmentIndex = 0
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        then:
-        chunk.reuseSegments(false, 1, false)
-        chunk.segmentIndex == 1
-
-        when:
-        chunk.segmentIndex = 0
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(1, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(2, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(3, Chunk.Flag.init.flagByte(), 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(4, Chunk.Flag.init.flagByte(), 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(5, Chunk.Flag.init.flagByte(), 1L, 0)
-        then:
-        chunk.reuseSegments(false, 3, false)
-        chunk.segmentIndex == 3
-
-        when:
-        chunk.segmentIndex = 0
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(2, Chunk.Flag.init.flagByte(), 1L, 0)
-        chunk.reuseSegments(false, 3, false)
-        then:
-        chunk.segmentIndex == 2
-
-        when:
-        chunk.segmentIndex = 0
-        5.times {
-            oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0 + it, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        }
-        then:
-        !chunk.reuseSegments(true, 5, false)
 
         cleanup:
         oneSlot.metaChunkSegmentFlagSeq.clear()
@@ -447,7 +386,7 @@ class ChunkTest extends Specification {
         when:
         boolean exception = false
         try {
-            chunk.writeSegmentsFromMasterElocalPersistxistsOrAfterSegmentSlim(replBytes, 0, REPL_ONCE_SEGMENT_COUNT_PREAD + 1)
+            chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, REPL_ONCE_SEGMENT_COUNT_PREAD + 1)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true

@@ -943,12 +943,6 @@ class OneSlotTest extends Specification {
 
         when:
         final int walGroupIndex = 0
-        chunk.initSegmentIndexWhenFirstStart(0)
-        def e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
-        then:
-        e == null
-
-        when:
         Debug.instance.logMerge = true
         oneSlot.logMergeCount = 999
         e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
@@ -956,7 +950,6 @@ class OneSlotTest extends Specification {
         e == null
 
         when:
-        chunk.initSegmentIndexWhenFirstStart(chunk.halfSegmentNumber)
         oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, walGroupIndex)
         oneSlot.logMergeCount = 999
         e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)

@@ -316,77 +316,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         return targetSegmentIndex % segmentNumberPerFd;
     }
 
-    public boolean initSegmentIndexWhenFirstStart(int segmentIndex) {
-        log.info("Chunk init s={}, i={}", slot, segmentIndex);
-        if (segmentIndex > maxSegmentIndex) {
-            segmentIndex = 0;
-        }
-        this.segmentIndex = segmentIndex;
-        return reuseSegments(true, 1, true);
-    }
-
-    @VisibleForTesting
-    boolean reuseSegments(boolean isFirstStart, int segmentCount, boolean updateAsReuseFlag) {
-        // skip can not reuse segments
-        if (!isFirstStart && segmentIndex == 0) {
-            var segmentFlagList = oneSlot.getSegmentMergeFlagBatch(segmentIndex, segmentCount);
-            int skipN = 0;
-            for (int i = 0; i < segmentFlagList.size(); i++) {
-                var segmentFlag = segmentFlagList.get(i);
-                var flagByte = segmentFlag.flagByte();
-                if (!Chunk.Flag.canReuse(flagByte)) {
-                    skipN = (i + 1);
-                }
-            }
-
-            // begin with new segment index
-            if (skipN != 0) {
-                segmentIndex += skipN;
-                return reuseSegments(false, segmentCount, updateAsReuseFlag);
-            }
-        }
-
-        for (int i = 0; i < segmentCount; i++) {
-            var targetSegmentIndex = segmentIndex + i;
-
-            var segmentFlag = oneSlot.getSegmentMergeFlag(targetSegmentIndex);
-            var flagByte = segmentFlag.flagByte();
-
-            // already set flag to reuse, can reuse
-            if (flagByte == Flag.reuse.flagByte) {
-                continue;
-            }
-
-            // init can reuse
-            if (flagByte == Flag.init.flagByte) {
-                if (updateAsReuseFlag) {
-                    oneSlot.setSegmentMergeFlag(targetSegmentIndex, Flag.reuse.flagByte, 0L, segmentFlag.walGroupIndex);
-                }
-                continue;
-            }
-
-            // merged and persisted, can reuse
-            if (flagByte == Flag.merged_and_persisted.flagByte) {
-                if (updateAsReuseFlag) {
-                    oneSlot.setSegmentMergeFlag(targetSegmentIndex, Flag.reuse.flagByte, 0L, segmentFlag.walGroupIndex);
-                }
-                continue;
-            }
-
-            // left can not reuse: new_write, reuse_new, merging, merged
-            log.warn("Chunk segment index is not init/merged and persisted/reuse, can not write, s={}, i={}, flag={}",
-                    slot, targetSegmentIndex, flagByte);
-            return false;
-        }
-        return true;
-    }
-
     public enum Flag {
         init((byte) 100),
         new_write((byte) 0),
         reuse_new((byte) 10),
-        merged_and_persisted((byte) -10),
-        reuse((byte) -100);
+        merged_and_persisted((byte) -10);
 
         final byte flagByte;
 
@@ -399,7 +333,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
 
         static boolean canReuse(byte flagByteTarget) {
-            return flagByteTarget == init.flagByte || flagByteTarget == reuse.flagByte || flagByteTarget == merged_and_persisted.flagByte;
+            return flagByteTarget == init.flagByte || flagByteTarget == merged_and_persisted.flagByte;
         }
 
         @Override
@@ -451,8 +385,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         for (var segment : segments) {
             segmentSeqListAll.add(segment.segmentSeq());
         }
-        oneSlot.setSegmentMergeFlagBatch(currentSegmentIndex, segments.size(),
-                Flag.reuse.flagByte, segmentSeqListAll, walGroupIndex);
 
         boolean isNewAppendAfterBatch;
 
