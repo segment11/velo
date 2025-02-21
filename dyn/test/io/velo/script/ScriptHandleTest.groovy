@@ -3,6 +3,9 @@ package io.velo.script
 import io.velo.Utils
 import io.velo.command.*
 import io.velo.dyn.CachedGroovyClassLoader
+import io.velo.persist.Consts
+import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import spock.lang.Specification
 
 class ScriptHandleTest extends Specification {
@@ -11,6 +14,12 @@ class ScriptHandleTest extends Specification {
         given:
         def classpath = Utils.projectPath('/dyn/src')
         CachedGroovyClassLoader.instance.init(GroovyClassLoader.getClass().classLoader, classpath, null)
+
+        and:
+        final short slot = 0
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
 
         and:
         def data1 = new byte[1][]
@@ -114,5 +123,9 @@ class ScriptHandleTest extends Specification {
         new ManageCommandParseSlots(binding2).run()
         then:
         1 == 1
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 }
