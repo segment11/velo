@@ -504,7 +504,7 @@ public class HGroup extends BaseCommand {
         byte[][] dd = {null, fieldKey.getBytes()};
         var dGroup = new DGroup(cmd, dd, socket);
         dGroup.from(this);
-        dGroup.setSlotWithKeyHashListParsed(dGroup.parseSlots("decrby", dd, slotNumber));
+        dGroup.setSlotWithKeyHashListParsed(slotWithKeyHashListParsed);
 
         if (isFloat) {
             return dGroup.decrBy(0, -byFloat);
