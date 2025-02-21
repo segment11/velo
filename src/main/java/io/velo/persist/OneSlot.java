@@ -1674,7 +1674,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // * 4 make sure to find one
         int nextSegmentCount = Math.min(Math.max(walGroupNumber * 4, (chunk.maxSegmentIndex + 1) / 4), 16384);
         final int[] firstSegmentIndexWithReadSegmentCountArray = metaChunkSegmentFlagSeq.iterateAndFindThoseNeedToMerge(
-                needMergeSegmentIndex, nextSegmentCount, walGroupIndex);
+                needMergeSegmentIndex, nextSegmentCount,
+                walGroupIndex, chunk.maxOncePersistSegmentSize);
 
         logMergeCount++;
         var doLog = Debug.getInstance().logMerge && logMergeCount % 1000 == 0;
@@ -1682,13 +1683,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // always consider first 10 and last 10 segments
         if (firstSegmentIndexWithReadSegmentCountArray[0] == -1) {
             final int[] arrayLastN = metaChunkSegmentFlagSeq.iterateAndFindThoseNeedToMerge(
-                    chunk.maxSegmentIndex - ONCE_PREPARE_SEGMENT_COUNT, ONCE_PREPARE_SEGMENT_COUNT, walGroupIndex);
+                    chunk.maxSegmentIndex - ONCE_PREPARE_SEGMENT_COUNT, ONCE_PREPARE_SEGMENT_COUNT,
+                    walGroupIndex, chunk.maxOncePersistSegmentSize);
             if (arrayLastN[0] != -1) {
                 firstSegmentIndexWithReadSegmentCountArray[0] = arrayLastN[0];
                 firstSegmentIndexWithReadSegmentCountArray[1] = arrayLastN[1];
             } else {
                 final int[] arrayFirstN = metaChunkSegmentFlagSeq.iterateAndFindThoseNeedToMerge(
-                        0, ONCE_PREPARE_SEGMENT_COUNT, walGroupIndex);
+                        0, ONCE_PREPARE_SEGMENT_COUNT,
+                        walGroupIndex, chunk.maxOncePersistSegmentSize);
                 if (arrayFirstN[0] != -1) {
                     firstSegmentIndexWithReadSegmentCountArray[0] = arrayFirstN[0];
                     firstSegmentIndexWithReadSegmentCountArray[1] = arrayFirstN[1];

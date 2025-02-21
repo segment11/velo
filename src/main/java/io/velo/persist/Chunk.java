@@ -353,6 +353,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
     }
 
+    int maxOncePersistSegmentSize;
+
     @SlaveNeedReplay
     // return need merge segment index array
     public void persist(int walGroupIndex,
@@ -362,6 +364,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         ArrayList<PersistValueMeta> pvmList = new ArrayList<>();
         var segments = ConfForSlot.global.confChunk.isSegmentUseCompression ?
                 segmentBatch.split(list, pvmList) : segmentBatch2.split(list, pvmList);
+        maxOncePersistSegmentSize = Math.max(maxOncePersistSegmentSize, segments.size());
 
         var ii = metaChunkSegmentFlagSeq.findCanReuseSegmentIndex(segmentIndex, segments.size());
         if (ii == -1) {

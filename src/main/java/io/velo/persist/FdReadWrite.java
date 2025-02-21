@@ -248,7 +248,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     private int oneInnerLength;
     private boolean isChunkFd;
 
-    static final int BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE = 10;
+    static final int BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE = 32;
 
     // when pure memory mode, need to store all bytes in memory
     // for chunk, already compressed, refer to SegmentBatch

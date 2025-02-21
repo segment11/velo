@@ -186,7 +186,7 @@ class FdReadWriteTest extends Specification {
         when:
         exception = false
         try {
-            fdChunk.readSegmentsForMerge(0, loop + 1)
+            fdChunk.readSegmentsForMerge(0, FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE + 1)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true

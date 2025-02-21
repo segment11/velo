@@ -294,11 +294,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     }
 
     // performance critical
-    int[] iterateAndFindThoseNeedToMerge(int beginSegmentIndex, int nextSegmentCount, int targetWalGroupIndex) {
+    int[] iterateAndFindThoseNeedToMerge(int beginSegmentIndex, int nextSegmentCount, int targetWalGroupIndex, int maxFindSegmentCount) {
         var findSegmentIndexWithSegmentCount = new int[]{-1, 0};
 
         // only find 4 segments at most, or once write too many segments for this batch
-        final var maxFindSegmentCount = 4;
         int maxSegmentIndex = ConfForSlot.global.confChunk.maxSegmentNumber() - 1;
         var segmentCount = 0;
         var end = Math.min(beginSegmentIndex + nextSegmentCount, maxSegmentNumber);
