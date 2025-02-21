@@ -574,7 +574,7 @@ class OneSlotTest extends Specification {
 
         when:
         oneSlot.setMetaChunkSegmentIndexInt(0)
-        oneSlot.setChunkSegmentIndexFromMeta()
+        oneSlot.updateChunkSegmentIndexFromMeta()
         then:
         oneSlot.chunk.segmentIndex == 0
 
