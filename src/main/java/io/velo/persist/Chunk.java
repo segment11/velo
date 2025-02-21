@@ -664,6 +664,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
         map.put("chunk_current_segment_index", (double) segmentIndex);
         map.put("chunk_max_segment_index", (double) maxSegmentIndex);
+        map.put("chunk_max_once_segment_size", (double) maxOncePersistSegmentSize);
 
         if (persistCallCountTotal > 0) {
             map.put("chunk_persist_call_count_total", (double) persistCallCountTotal);
