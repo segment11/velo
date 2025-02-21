@@ -1,6 +1,9 @@
 package io.velo.persist;
 
-import io.velo.*;
+import io.velo.ConfForGlobal;
+import io.velo.ConfForSlot;
+import io.velo.NeedCleanUp;
+import io.velo.NullableOnlyTest;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
@@ -27,7 +30,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     private final byte fdPerChunk;
     final int maxSegmentIndex;
     final int halfSegmentNumber;
-    final int findCanWriteSegmentsMaxTryTimes;
 
     public int getMaxSegmentIndex() {
         return maxSegmentIndex;
@@ -81,6 +83,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     @VisibleForTesting
     final OneSlot oneSlot;
     private final KeyLoader keyLoader;
+    private final MetaChunkSegmentFlagSeq metaChunkSegmentFlagSeq;
     final SegmentBatch segmentBatch;
     private final SegmentBatch2 segmentBatch2;
 
@@ -91,10 +94,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         return fdReadWriteArray;
     }
 
-    public Chunk(short slot, @NotNull File slotDir,
-                 @NullableOnlyTest OneSlot oneSlot,
-                 @NullableOnlyTest SnowFlake snowFlake,
-                 @NullableOnlyTest KeyLoader keyLoader) {
+    public Chunk(short slot, @NotNull File slotDir, @NullableOnlyTest OneSlot oneSlot) {
         var confChunk = ConfForSlot.global.confChunk;
         this.segmentNumberPerFd = confChunk.segmentNumberPerFd;
         this.fdPerChunk = confChunk.fdPerChunk;
@@ -106,17 +106,16 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         log.info("Chunk init slot={}, segment number per fd={}, fd per chunk={}, max segment index={}, half segment number={}",
                 slot, segmentNumberPerFd, fdPerChunk, maxSegmentIndex, halfSegmentNumber);
 
-        this.findCanWriteSegmentsMaxTryTimes = Math.max(Wal.calcWalGroupNumber() / 1024, 128);
-
         this.slot = slot;
         this.slotDir = slotDir;
 
         this.chunkSegmentLength = confChunk.segmentLength;
 
         this.oneSlot = oneSlot;
-        this.keyLoader = keyLoader;
-        this.segmentBatch = new SegmentBatch(slot, snowFlake);
-        this.segmentBatch2 = new SegmentBatch2(slot, snowFlake);
+        this.keyLoader = oneSlot.keyLoader;
+        this.metaChunkSegmentFlagSeq = oneSlot.metaChunkSegmentFlagSeq;
+        this.segmentBatch = new SegmentBatch(slot, oneSlot.snowFlake);
+        this.segmentBatch2 = new SegmentBatch2(slot, oneSlot.snowFlake);
     }
 
     @Override
@@ -184,7 +183,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     @Override
     public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
         segmentIndex = is.readInt();
-        mergedSegmentIndexEndLastTime = is.readInt();
 
         // fd read write
         var fdCount = is.readInt();
@@ -206,7 +204,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     @Override
     public void writeToSavedFileWhenPureMemory(@NotNull DataOutputStream os) throws IOException {
         os.writeInt(segmentIndex);
-        os.writeInt(mergedSegmentIndexEndLastTime);
 
         int fdCount = 0;
         for (var fdReadWrite : fdReadWriteArray) {
@@ -284,8 +281,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     // begin with 0
-    // -1 means not init
-    private int segmentIndex = -1;
+    private int segmentIndex = 0;
 
     public int getSegmentIndex() {
         return segmentIndex;
@@ -299,7 +295,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     @SlaveReplay
     void resetAsFlush() {
         segmentIndex = 0;
-        mergedSegmentIndexEndLastTime = NO_NEED_MERGE_SEGMENT_INDEX;
     }
 
     @VisibleForTesting
@@ -390,8 +385,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         init((byte) 100),
         new_write((byte) 0),
         reuse_new((byte) 10),
-        merging((byte) 1),
-        merged((byte) -1),
         merged_and_persisted((byte) -10),
         reuse((byte) -100);
 
@@ -407,10 +400,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
         static boolean canReuse(byte flagByteTarget) {
             return flagByteTarget == init.flagByte || flagByteTarget == reuse.flagByte || flagByteTarget == merged_and_persisted.flagByte;
-        }
-
-        static boolean isMergingOrMerged(byte flagByteTarget) {
-            return flagByteTarget == merging.flagByte || flagByteTarget == merged.flagByte;
         }
 
         @Override
@@ -430,58 +419,27 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
     }
 
-    // each fd left 32 segments no use
-    public static final int ONCE_PREPARE_SEGMENT_COUNT = 32;
-
-    private int mergedSegmentIndexEndLastTime = NO_NEED_MERGE_SEGMENT_INDEX;
-
-    public int getMergedSegmentIndexEndLastTime() {
-        return mergedSegmentIndexEndLastTime;
-    }
-
-    public void setMergedSegmentIndexEndLastTime(int mergedSegmentIndexEndLastTime) {
-        this.mergedSegmentIndexEndLastTime = mergedSegmentIndexEndLastTime;
-    }
-
-    @SlaveNeedReplay
-    public void setMergedSegmentIndexEndLastTimeAfterSlaveCatchUp(int mergedSegmentIndexEndLastTime) {
-        this.mergedSegmentIndexEndLastTime = mergedSegmentIndexEndLastTime;
-    }
-
-    // for find bug
-    void checkMergedSegmentIndexEndLastTimeValidAfterServerStart() {
-        if (mergedSegmentIndexEndLastTime != NO_NEED_MERGE_SEGMENT_INDEX) {
-            if (mergedSegmentIndexEndLastTime < 0 || mergedSegmentIndexEndLastTime >= maxSegmentIndex) {
-                throw new IllegalStateException("Merged segment index end last time out of bound, s=" + slot + ", i=" + mergedSegmentIndexEndLastTime);
-            }
-        }
-    }
-
     @SlaveNeedReplay
     // return need merge segment index array
-    public ArrayList<Integer> persist(int walGroupIndex,
-                                      @NotNull ArrayList<Wal.V> list,
-                                      boolean isMerge,
-                                      @NotNull XOneWalGroupPersist xForBinlog,
-                                      @Nullable KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
-        moveSegmentIndexForPrepare();
-
+    public void persist(int walGroupIndex,
+                        @NotNull ArrayList<Wal.V> list,
+                        @NotNull XOneWalGroupPersist xForBinlog,
+                        @Nullable KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
         ArrayList<PersistValueMeta> pvmList = new ArrayList<>();
         var segments = ConfForSlot.global.confChunk.isSegmentUseCompression ?
                 segmentBatch.split(list, pvmList) : segmentBatch2.split(list, pvmList);
 
-        boolean canWrite = false;
-        for (int i = 0; i < findCanWriteSegmentsMaxTryTimes; i++) {
-            canWrite = reuseSegments(false, segments.size(), false);
-            if (canWrite) {
-                break;
-            } else {
-                segmentIndex++;
+        var ii = metaChunkSegmentFlagSeq.findCanReuseSegmentIndex(segmentIndex, segments.size());
+        if (ii == -1) {
+            if (segmentIndex != 0) {
+                // from beginning find again
+                ii = metaChunkSegmentFlagSeq.findCanReuseSegmentIndex(0, segments.size());
             }
         }
-        if (!canWrite) {
+        if (ii == -1) {
             throw new SegmentOverflowException("Segment can not write, s=" + slot + ", i=" + segmentIndex);
         }
+        segmentIndex = ii;
 
         // reset segment index after find those segments can reuse
         var currentSegmentIndex = this.segmentIndex;
@@ -496,7 +454,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         oneSlot.setSegmentMergeFlagBatch(currentSegmentIndex, segments.size(),
                 Flag.reuse.flagByte, segmentSeqListAll, walGroupIndex);
 
-        boolean isNewAppendAfterBatch = true;
+        boolean isNewAppendAfterBatch;
 
         var fdIndex = targetFdIndex();
         var segmentIndexTargetFd = targetSegmentIndexTargetFd();
@@ -626,154 +584,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         // update meta, segment index for next time
         oneSlot.setMetaChunkSegmentIndexInt(segmentIndex);
         xForBinlog.setChunkSegmentIndexAfterPersist(segmentIndex);
-
-        ArrayList<Integer> needMergeSegmentIndexList = new ArrayList<>();
-        if (isMerge) {
-            // return empty list
-            return needMergeSegmentIndexList;
-        }
-
-        for (var segment : segments) {
-            var toMergeSegmentIndex = needMergeSegmentIndex(isNewAppendAfterBatch, segment.tmpSegmentIndex() + currentSegmentIndex);
-            if (toMergeSegmentIndex != NO_NEED_MERGE_SEGMENT_INDEX) {
-                needMergeSegmentIndexList.add(toMergeSegmentIndex);
-            }
-        }
-
-        if (needMergeSegmentIndexList.isEmpty()) {
-            return needMergeSegmentIndexList;
-        }
-
-        needMergeSegmentIndexList.sort(Integer::compareTo);
-        updateLastMergedSegmentIndexEnd(needMergeSegmentIndexList);
-        xForBinlog.setChunkMergedSegmentIndexEndLastTime(mergedSegmentIndexEndLastTime);
-
-        xForBinlog.setLastSegmentSeq(segmentSeqListAll.getLast());
-
-        logMergeCount++;
-        var doLog = (Debug.getInstance().logMerge && logMergeCount % 1000 == 0);
-        if (doLog) {
-            log.info("Chunk persist need merge segment index list, s={}, i={}, list={}", slot, segmentIndex, needMergeSegmentIndexList);
-        }
-        return needMergeSegmentIndexList;
-    }
-
-    @VisibleForTesting
-    void updateLastMergedSegmentIndexEnd(@NotNull ArrayList<Integer> needMergeSegmentIndexList) {
-        TreeSet<Integer> sorted = new TreeSet<>(needMergeSegmentIndexList);
-
-        // recycle, need spit to two part
-        if (sorted.getLast() - sorted.getFirst() > halfSegmentNumber) {
-            if (!sorted.contains(0)) {
-                throw new IllegalStateException("Need merge segment index list not contains 0 while reuse from the beginning, s="
-                        + slot + ", list=" + sorted);
-            }
-            if (mergedSegmentIndexEndLastTime == NO_NEED_MERGE_SEGMENT_INDEX) {
-                throw new IllegalStateException("Merged segment index end last time not set, s=" + slot);
-            }
-
-            TreeSet<Integer> onePart = new TreeSet<>();
-            TreeSet<Integer> anotherPart = new TreeSet<>();
-            for (var segmentIndex : sorted) {
-                if (segmentIndex < oneSlot.chunk.halfSegmentNumber) {
-                    onePart.add(segmentIndex);
-                } else {
-                    anotherPart.add(segmentIndex);
-                }
-            }
-            log.warn("Recycle merge chunk, s={}, one part need merge segment index list ={}, another part need merge segment index list={}",
-                    slot, onePart, anotherPart);
-
-            // prepend from merged segment index end last time
-            var firstNeedMergeSegmentIndex = anotherPart.getFirst();
-
-            // mergedSegmentIndexEndLastTime maybe > firstNeedMergeSegmentIndex when server restart, because pre-read merge before persist wal
-//            assert mergedSegmentIndexEndLastTime < firstNeedMergeSegmentIndex;
-            for (int i = mergedSegmentIndexEndLastTime + 1; i < firstNeedMergeSegmentIndex; i++) {
-                anotherPart.add(i);
-            }
-
-            checkNeedMergeSegmentIndexListContinuous(onePart);
-            checkNeedMergeSegmentIndexListContinuous(anotherPart);
-
-            mergedSegmentIndexEndLastTime = onePart.getLast();
-        } else {
-            var firstNeedMergeSegmentIndex = sorted.getFirst();
-            if (mergedSegmentIndexEndLastTime == NO_NEED_MERGE_SEGMENT_INDEX) {
-                if (firstNeedMergeSegmentIndex != 0) {
-                    throw new IllegalStateException("First need merge segment index not 0, s=" + slot + ", i=" + firstNeedMergeSegmentIndex);
-                }
-            } else {
-                // prepend from merged segment index end last time
-//                assert mergedSegmentIndexEndLastTime < firstNeedMergeSegmentIndex;
-                for (int i = mergedSegmentIndexEndLastTime + 1; i < firstNeedMergeSegmentIndex; i++) {
-                    sorted.add(i);
-                }
-
-                // last ONCE_PREPARE_SEGMENT_COUNT segments, need merge
-                var lastNeedMergeSegmentIndex = sorted.getLast();
-                if (lastNeedMergeSegmentIndex >= maxSegmentIndex - ONCE_PREPARE_SEGMENT_COUNT) {
-                    for (int i = lastNeedMergeSegmentIndex + 1; i <= maxSegmentIndex; i++) {
-                        sorted.add(i);
-                    }
-                    log.warn("Add extra need merge segment index to the end, s={}, i={}, list={}", slot, segmentIndex, sorted);
-                } else if (lastNeedMergeSegmentIndex < halfSegmentNumber &&
-                        lastNeedMergeSegmentIndex >= halfSegmentNumber - 1 - ONCE_PREPARE_SEGMENT_COUNT) {
-                    for (int i = lastNeedMergeSegmentIndex + 1; i < halfSegmentNumber; i++) {
-                        sorted.add(i);
-                    }
-                    log.warn("Add extra need merge segment index to the half end, s={}, i={}, list={}", slot, segmentIndex, sorted);
-                }
-            }
-
-            checkNeedMergeSegmentIndexListContinuous(sorted);
-            mergedSegmentIndexEndLastTime = sorted.getLast();
-        }
-    }
-
-    @VisibleForTesting
-    void checkNeedMergeSegmentIndexListContinuous(@NotNull TreeSet<Integer> sortedSet) {
-        if (sortedSet.size() == 1) {
-            return;
-        }
-
-        final int maxSize = ONCE_PREPARE_SEGMENT_COUNT * 4;
-
-        if (sortedSet.getLast() - sortedSet.getFirst() != sortedSet.size() - 1) {
-            throw new IllegalStateException("Need merge segment index not continuous, s=" + slot +
-                    ", first need merge segment index=" + sortedSet.getFirst() +
-                    ", last need merge segment index=" + sortedSet.getLast() +
-                    ", last time merged segment index =" + mergedSegmentIndexEndLastTime +
-                    ", list size=" + sortedSet.size());
-        }
-
-        if (sortedSet.size() > maxSize) {
-            throw new IllegalStateException("Need merge segment index list size too large, s=" + slot +
-                    ", first need merge segment index=" + sortedSet.getFirst() +
-                    ", last need merge segment index=" + sortedSet.getLast() +
-                    ", last time merged segment index =" + mergedSegmentIndexEndLastTime +
-                    ", list size=" + sortedSet.size() +
-                    ", max size=" + maxSize);
-        }
-
-        if (sortedSet.size() >= ONCE_PREPARE_SEGMENT_COUNT) {
-            log.debug("Chunk persist need merge segment index list too large, performance bad, maybe many is skipped, s={}, i={}, list={}",
-                    slot, segmentIndex, sortedSet);
-        }
-    }
-
-    private long logMergeCount = 0;
-
-    @VisibleForTesting
-    void moveSegmentIndexForPrepare() {
-        int leftSegmentCountThisFd = segmentNumberPerFd - segmentIndex % segmentNumberPerFd;
-        if (leftSegmentCountThisFd < ONCE_PREPARE_SEGMENT_COUNT) {
-            // begin with next fd
-            segmentIndex += leftSegmentCountThisFd;
-        }
-        if (segmentIndex >= maxSegmentIndex) {
-            segmentIndex = 0;
-        }
     }
 
     @VisibleForTesting
@@ -803,10 +613,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
     }
 
-    public static final int NO_NEED_MERGE_SEGMENT_INDEX = -1;
-
-    int needMergeSegmentIndex(boolean isNewAppend, int bySegmentIndex) {
-        int segmentIndexToMerge = NO_NEED_MERGE_SEGMENT_INDEX;
+    int prevFindSegmentIndexSkipHalf(boolean isNewAppend, int bySegmentIndex) {
+        int segmentIndexToMerge = -1;
         if (bySegmentIndex >= halfSegmentNumber) {
             // begins with 0
             // ends with 2^18 - 1
@@ -920,7 +728,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         var map = new HashMap<String, Double>();
 
         map.put("chunk_current_segment_index", (double) segmentIndex);
-        map.put("chunk_merged_segment_index_end_last_time", (double) mergedSegmentIndexEndLastTime);
         map.put("chunk_max_segment_index", (double) maxSegmentIndex);
 
         if (persistCallCountTotal > 0) {

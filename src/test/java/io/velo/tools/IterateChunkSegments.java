@@ -2,7 +2,6 @@ package io.velo.tools;
 
 import com.github.luben.zstd.Zstd;
 import io.velo.ConfForSlot;
-import io.velo.persist.ChunkMergeJob;
 import io.velo.persist.SegmentBatch;
 import io.velo.persist.SegmentBatch2;
 
@@ -60,7 +59,7 @@ public class IterateChunkSegments {
         while (fis.read(bytes) != -1) {
             var segmentIndex = segmentIndexThisFd + beginSegmentIndex;
 
-            ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList = new ArrayList<>(1000);
+            ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList = new ArrayList<>(1000);
 
             var buffer = ByteBuffer.wrap(bytes);
             for (int subBlockIndex = 0; subBlockIndex < SegmentBatch.MAX_BLOCK_NUMBER; subBlockIndex++) {
@@ -81,13 +80,13 @@ public class IterateChunkSegments {
 
                 int finalSubBlockIndex = subBlockIndex;
                 SegmentBatch2.iterateFromSegmentBytes(decompressedBytes, (key, cv, offsetInThisSegment) -> {
-                    cvList.add(new ChunkMergeJob.CvWithKeyAndSegmentOffset(cv, key, offsetInThisSegment, segmentIndex, (byte) finalSubBlockIndex));
+                    cvList.add(new SegmentBatch2.CvWithKeyAndSegmentOffset(cv, key, offsetInThisSegment, segmentIndex, (byte) finalSubBlockIndex));
                 });
             }
 
             for (var one : cvList) {
-                if (cvNormalCompressedLength != 0 && one.cv.getCompressedLength() != cvNormalCompressedLength) {
-                    System.out.println("key=" + one.key + ", cv=" + one.cv);
+                if (cvNormalCompressedLength != 0 && one.cv().getCompressedLength() != cvNormalCompressedLength) {
+                    System.out.println("key=" + one.key() + ", cv=" + one.cv());
                 }
             }
 

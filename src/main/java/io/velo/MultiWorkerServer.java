@@ -777,9 +777,6 @@ public class MultiWorkerServer extends Launcher {
             throw new RuntimeException("Wal lazy read from file failed");
         }
 
-        // recover
-        primaryEventloop.submit(localPersist::persistMergedSegmentsJobUndone);
-
         // metrics
         CollectorRegistry.defaultRegistry.register(new BufferPoolsExports());
         CollectorRegistry.defaultRegistry.register(new MemoryPoolsExports());

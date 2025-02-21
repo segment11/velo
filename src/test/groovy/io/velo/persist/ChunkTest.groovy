@@ -2,7 +2,6 @@ package io.velo.persist
 
 import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
-import io.velo.SnowFlake
 import io.velo.repl.incremental.XOneWalGroupPersist
 import jnr.ffi.LibraryLoader
 import jnr.posix.LibC
@@ -17,10 +16,9 @@ class ChunkTest extends Specification {
         confChunk.segmentNumberPerFd = 4096
 
         def keyLoader = withKeyLoader ? KeyLoaderTest.prepareKeyLoader() : null
-        def snowFlake = keyLoader ? keyLoader.snowFlake : new SnowFlake(1, 1)
         def oneSlot = new OneSlot(slot, Consts.slotDir, keyLoader, null)
 
-        def chunk = new Chunk(slot, Consts.slotDir, oneSlot, snowFlake, keyLoader)
+        def chunk = new Chunk(slot, Consts.slotDir, oneSlot)
         oneSlot.chunk = chunk
 
         chunk
@@ -37,9 +35,7 @@ class ChunkTest extends Specification {
 
         expect:
         Chunk.Flag.canReuse(Chunk.Flag.init.flagByte()) && Chunk.Flag.canReuse(Chunk.Flag.reuse.flagByte()) && Chunk.Flag.canReuse(Chunk.Flag.merged_and_persisted.flagByte())
-        Chunk.Flag.isMergingOrMerged(Chunk.Flag.merging.flagByte()) && Chunk.Flag.isMergingOrMerged(Chunk.Flag.merged.flagByte())
-        !Chunk.Flag.canReuse(Chunk.Flag.merging.flagByte())
-        !Chunk.Flag.isMergingOrMerged(Chunk.Flag.init.flagByte())
+        !Chunk.Flag.canReuse(Chunk.Flag.new_write.flagByte())
     }
 
     def 'test segment index'() {
@@ -103,81 +99,35 @@ class ChunkTest extends Specification {
         isMoveOverflow
 
         when:
-        chunk.segmentIndex = confChunk.segmentNumberPerFd - 1
-        chunk.moveSegmentIndexForPrepare()
-        then:
-        chunk.segmentIndex == confChunk.segmentNumberPerFd
-
-        when:
-        chunk.moveSegmentIndexForPrepare()
-        then:
-        chunk.segmentIndex == confChunk.segmentNumberPerFd
-
-        when:
-        chunk.segmentIndex = chunk.maxSegmentIndex - 1
-        chunk.moveSegmentIndexForPrepare()
-        then:
-        chunk.segmentIndex == 0
-
-        when:
         chunk.segmentIndex = confChunk.maxSegmentNumber() - 1
         chunk.moveSegmentIndexNext(1)
         then:
         chunk.segmentIndex == 0
 
         when:
-        List<Integer> needMergeSegmentIndexListNewAppend = []
-        List<Integer> needMergeSegmentIndexListNotNewAppend = []
+        List<Integer> segmentIndexListNewAppend = []
+        List<Integer> prevFindSegmentIndexListNotNewAppend = []
         confChunk.maxSegmentNumber().times {
-            needMergeSegmentIndexListNewAppend << chunk.needMergeSegmentIndex(true, it)
-            needMergeSegmentIndexListNotNewAppend << chunk.needMergeSegmentIndex(false, it)
+            segmentIndexListNewAppend << chunk.prevFindSegmentIndexSkipHalf(true, it)
+            prevFindSegmentIndexListNotNewAppend << chunk.prevFindSegmentIndexSkipHalf(false, it)
         }
-        println needMergeSegmentIndexListNewAppend
-        println needMergeSegmentIndexListNotNewAppend
+        println segmentIndexListNewAppend
+        println prevFindSegmentIndexListNotNewAppend
         then:
-        chunk.needMergeSegmentIndex(true, halfSegmentNumber) == 0
-        chunk.needMergeSegmentIndex(true, halfSegmentNumber + 10) == 10
-        chunk.needMergeSegmentIndex(true, halfSegmentNumber - 10) == -1
-        chunk.needMergeSegmentIndex(false, halfSegmentNumber - 10) == halfSegmentNumber * 2 - 10
-        needMergeSegmentIndexListNewAppend.count { it == -1 } == halfSegmentNumber
-        new HashSet(needMergeSegmentIndexListNewAppend.findAll { it != -1 }).size() == halfSegmentNumber
-        new HashSet(needMergeSegmentIndexListNotNewAppend).size() == confChunk.maxSegmentNumber()
-        needMergeSegmentIndexListNewAppend[halfSegmentNumber] == 0
-        needMergeSegmentIndexListNewAppend[0] == -1
-        needMergeSegmentIndexListNewAppend[-1] == halfSegmentNumber - 1
-        needMergeSegmentIndexListNotNewAppend[halfSegmentNumber] == 0
-        needMergeSegmentIndexListNotNewAppend[0] == halfSegmentNumber
-        needMergeSegmentIndexListNotNewAppend[halfSegmentNumber - 1] == confChunk.maxSegmentNumber() - 1
-        needMergeSegmentIndexListNotNewAppend[-1] == halfSegmentNumber - 1
-
-        when:
-        chunk.mergedSegmentIndexEndLastTime = Chunk.NO_NEED_MERGE_SEGMENT_INDEX
-        chunk.mergedSegmentIndexEndLastTimeAfterSlaveCatchUp = Chunk.NO_NEED_MERGE_SEGMENT_INDEX
-        chunk.checkMergedSegmentIndexEndLastTimeValidAfterServerStart()
-        chunk.mergedSegmentIndexEndLastTime = 0
-        chunk.checkMergedSegmentIndexEndLastTimeValidAfterServerStart()
-        chunk.mergedSegmentIndexEndLastTime = chunk.maxSegmentIndex - 1
-        chunk.checkMergedSegmentIndexEndLastTimeValidAfterServerStart()
-        boolean exception = false
-        try {
-            chunk.mergedSegmentIndexEndLastTime = chunk.maxSegmentIndex
-            chunk.checkMergedSegmentIndexEndLastTimeValidAfterServerStart()
-        } catch (IllegalStateException ignored) {
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        try {
-            chunk.mergedSegmentIndexEndLastTime = -100
-            chunk.checkMergedSegmentIndexEndLastTimeValidAfterServerStart()
-        } catch (IllegalStateException ignored) {
-            exception = true
-        }
-        then:
-        exception
+        chunk.prevFindSegmentIndexSkipHalf(true, halfSegmentNumber) == 0
+        chunk.prevFindSegmentIndexSkipHalf(true, halfSegmentNumber + 10) == 10
+        chunk.prevFindSegmentIndexSkipHalf(true, halfSegmentNumber - 10) == -1
+        chunk.prevFindSegmentIndexSkipHalf(false, halfSegmentNumber - 10) == halfSegmentNumber * 2 - 10
+        segmentIndexListNewAppend.count { it == -1 } == halfSegmentNumber
+        new HashSet(segmentIndexListNewAppend.findAll { it != -1 }).size() == halfSegmentNumber
+        new HashSet(prevFindSegmentIndexListNotNewAppend).size() == confChunk.maxSegmentNumber()
+        segmentIndexListNewAppend[halfSegmentNumber] == 0
+        segmentIndexListNewAppend[0] == -1
+        segmentIndexListNewAppend[-1] == halfSegmentNumber - 1
+        prevFindSegmentIndexListNotNewAppend[halfSegmentNumber] == 0
+        prevFindSegmentIndexListNotNewAppend[0] == halfSegmentNumber
+        prevFindSegmentIndexListNotNewAppend[halfSegmentNumber - 1] == confChunk.maxSegmentNumber() - 1
+        prevFindSegmentIndexListNotNewAppend[-1] == halfSegmentNumber - 1
 
         when:
         chunk.segmentIndex = halfSegmentNumber - 1
@@ -189,7 +139,6 @@ class ChunkTest extends Specification {
         chunk.resetAsFlush()
         then:
         chunk.segmentIndex == 0
-        chunk.mergedSegmentIndexEndLastTime == Chunk.NO_NEED_MERGE_SEGMENT_INDEX
 
         cleanup:
         oneSlot.metaChunkSegmentFlagSeq.clear()
@@ -226,8 +175,8 @@ class ChunkTest extends Specification {
         when:
         chunk.segmentIndex = 0
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(1, Chunk.Flag.merging.flagByte(), 1L, 0)
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(2, Chunk.Flag.merged.flagByte(), 1L, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(1, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(2, Chunk.Flag.new_write.flagByte(), 1L, 0)
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(3, Chunk.Flag.init.flagByte(), 1L, 0)
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(4, Chunk.Flag.init.flagByte(), 1L, 0)
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(5, Chunk.Flag.init.flagByte(), 1L, 0)
@@ -264,6 +213,13 @@ class ChunkTest extends Specification {
         System.setProperty('jnr.ffi.asm.enabled', 'false')
         def libC = LibraryLoader.create(LibC.class).load('c')
         chunk.initFds(libC)
+
+        when:
+        def sb = new StringBuilder()
+        chunk.estimate(sb)
+        println sb.toString()
+        then:
+        1 == 1
 
         when:
         def bytes = chunk.preadForMerge(0, 10)
@@ -314,10 +270,9 @@ class ChunkTest extends Specification {
         when:
         def vList = Mock.prepareValueList(100)
         chunk.segmentIndex = 0
-        def r = chunk.persist(0, vList, false, xForBinlog, null)
+        chunk.persist(0, vList, xForBinlog, null)
         then:
         chunk.segmentIndex == 2
-        r.size() == 0
 
         when:
         List<Long> blankSeqList = []
@@ -326,10 +281,9 @@ class ChunkTest extends Specification {
         }
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.Flag.init.flagByte(), blankSeqList, 0)
         chunk.segmentIndex = 0
-        r = chunk.persist(0, vList, true, xForBinlog, null)
+        chunk.persist(0, vList, xForBinlog, null)
         then:
         chunk.segmentIndex == 2
-        r.size() == 0
 
         when:
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.Flag.init.flagByte(), blankSeqList, 0)
@@ -338,32 +292,29 @@ class ChunkTest extends Specification {
         (1..<16).each {
             vListManyCount.addAll Mock.prepareValueList(100, it)
         }
-        chunk.persist(0, vListManyCount, false, xForBinlog, null)
+        chunk.persist(0, vListManyCount, xForBinlog, null)
         then:
         chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE
 
         when:
         int halfSegmentNumber = (confChunk.maxSegmentNumber() / 2).intValue()
         chunk.fdLengths[0] = 4096 * 100
-        chunk.mergedSegmentIndexEndLastTime = halfSegmentNumber - 1
         List<Long> seqList = []
-        Chunk.ONCE_PREPARE_SEGMENT_COUNT.times {
+        32.times {
             seqList << 0L
         }
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, seqList.size(), Chunk.Flag.merged_and_persisted.flagByte(), seqList, 0)
         chunk.segmentIndex = 0
-        r = chunk.persist(0, vListManyCount, false, xForBinlog, null)
+        chunk.persist(0, vListManyCount, xForBinlog, null)
         then:
         chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE
-        r.size() == chunk.segmentIndex
 
         when:
         chunk.fdLengths[0] = 0
-        chunk.mergedSegmentIndexEndLastTime = Chunk.NO_NEED_MERGE_SEGMENT_INDEX
         chunk.segmentIndex = halfSegmentNumber
-        r = chunk.persist(0, vList, false, xForBinlog, null)
+        chunk.persist(0, vList, xForBinlog, null)
         then:
-        r.size() > 0
+        1 == 1
 
         when:
         ConfForGlobal.pureMemory = true
@@ -382,7 +333,7 @@ class ChunkTest extends Specification {
         }
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqListMany.size(), Chunk.Flag.init.flagByte(), blankSeqListMany, 0)
         chunk.segmentIndex = 0
-        chunk.persist(0, vListManyCount, false, xForBinlog, null)
+        chunk.persist(0, vListManyCount, xForBinlog, null)
         then:
         chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE
 
@@ -395,7 +346,7 @@ class ChunkTest extends Specification {
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqListForAll.size(), Chunk.Flag.new_write.flagByte(), blankSeqListForAll, 0)
         boolean exception = false
         try {
-            chunk.persist(0, vList, false, xForBinlog, null)
+            chunk.persist(0, vList, xForBinlog, null)
         } catch (SegmentOverflowException ignore) {
             exception = true
         }
@@ -433,7 +384,6 @@ class ChunkTest extends Specification {
 
         when:
         chunk.segmentIndex = 1
-        chunk.mergedSegmentIndexEndLastTime = 100
         def contentBytes = new byte[chunk.chunkSegmentLength * 2]
         contentBytes[0] = (byte) 1
         contentBytes[4096] = (byte) 1
@@ -446,7 +396,6 @@ class ChunkTest extends Specification {
         chunk.loadFromLastSavedFileWhenPureMemory(is)
         then:
         chunk.segmentIndex == 1
-        chunk.mergedSegmentIndexEndLastTime == 100
         !chunk.fdReadWriteArray[0].isTargetSegmentIndexNullInMemory(1)
 
         when:
@@ -498,7 +447,7 @@ class ChunkTest extends Specification {
         when:
         boolean exception = false
         try {
-            chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, REPL_ONCE_SEGMENT_COUNT_PREAD + 1)
+            chunk.writeSegmentsFromMasterElocalPersistxistsOrAfterSegmentSlim(replBytes, 0, REPL_ONCE_SEGMENT_COUNT_PREAD + 1)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
@@ -523,150 +472,6 @@ class ChunkTest extends Specification {
 
         cleanup:
         ConfForGlobal.pureMemory = false
-        localPersist.cleanUp()
-        Consts.persistDir.deleteDir()
-    }
-
-    def 'test need merge segment index list'() {
-        given:
-        LocalPersistTest.prepareLocalPersist()
-        def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        def oneSlot = localPersist.oneSlot(slot)
-        def chunk = oneSlot.chunk
-        println 'in memory size estimate: ' + chunk.estimate(new StringBuilder())
-
-        def confChunk = ConfForSlot.global.confChunk
-        int halfSegmentNumber = (confChunk.maxSegmentNumber() / 2).intValue()
-
-        when:
-        boolean exception = false
-        ArrayList<Integer> needMergeSegmentIndexList = [1, chunk.maxSegmentIndex]
-        try {
-            chunk.updateLastMergedSegmentIndexEnd(needMergeSegmentIndexList)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        needMergeSegmentIndexList = [0, 1, chunk.maxSegmentIndex]
-        try {
-            chunk.updateLastMergedSegmentIndexEnd(needMergeSegmentIndexList)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        chunk.mergedSegmentIndexEndLastTime = chunk.maxSegmentIndex - 2
-        chunk.updateLastMergedSegmentIndexEnd(needMergeSegmentIndexList)
-        then:
-        chunk.mergedSegmentIndexEndLastTime == 1
-
-        when:
-        exception = false
-        chunk.mergedSegmentIndexEndLastTime = Chunk.NO_NEED_MERGE_SEGMENT_INDEX
-        needMergeSegmentIndexList = [1]
-        try {
-            chunk.updateLastMergedSegmentIndexEnd(needMergeSegmentIndexList)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        chunk.mergedSegmentIndexEndLastTime = Chunk.NO_NEED_MERGE_SEGMENT_INDEX
-        needMergeSegmentIndexList = [0, 1]
-        chunk.updateLastMergedSegmentIndexEnd(needMergeSegmentIndexList)
-        then:
-        chunk.mergedSegmentIndexEndLastTime == 1
-
-        when:
-        chunk.mergedSegmentIndexEndLastTime = 1
-        needMergeSegmentIndexList = [3]
-        chunk.updateLastMergedSegmentIndexEnd(needMergeSegmentIndexList)
-        then:
-        chunk.mergedSegmentIndexEndLastTime == 3
-
-        when:
-        chunk.mergedSegmentIndexEndLastTime = chunk.maxSegmentIndex - 10
-        needMergeSegmentIndexList = [chunk.maxSegmentIndex - 2, chunk.maxSegmentIndex - 1]
-        chunk.updateLastMergedSegmentIndexEnd(needMergeSegmentIndexList)
-        then:
-        chunk.mergedSegmentIndexEndLastTime == chunk.maxSegmentIndex
-
-        when:
-        chunk.mergedSegmentIndexEndLastTime = halfSegmentNumber - 20
-        needMergeSegmentIndexList = [halfSegmentNumber - 10, halfSegmentNumber - 9]
-        chunk.updateLastMergedSegmentIndexEnd(needMergeSegmentIndexList)
-        then:
-        chunk.mergedSegmentIndexEndLastTime == halfSegmentNumber - 1
-
-        when:
-        chunk.mergedSegmentIndexEndLastTime = halfSegmentNumber - 100
-        needMergeSegmentIndexList = [halfSegmentNumber - 90, halfSegmentNumber - 89]
-        chunk.updateLastMergedSegmentIndexEnd(needMergeSegmentIndexList)
-        then:
-        chunk.mergedSegmentIndexEndLastTime == halfSegmentNumber - 89
-
-        when:
-        chunk.mergedSegmentIndexEndLastTime = halfSegmentNumber + 100
-        needMergeSegmentIndexList = [halfSegmentNumber + 101, halfSegmentNumber + 102]
-        chunk.updateLastMergedSegmentIndexEnd(needMergeSegmentIndexList)
-        then:
-        chunk.mergedSegmentIndexEndLastTime == halfSegmentNumber + 102
-
-        when:
-        TreeSet<Integer> sorted = [0]
-        chunk.checkNeedMergeSegmentIndexListContinuous(sorted)
-        then:
-        1 == 1
-
-        when:
-        exception = false
-        sorted = [0, 2]
-        try {
-            chunk.checkNeedMergeSegmentIndexListContinuous(sorted)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        sorted.clear()
-        (Chunk.ONCE_PREPARE_SEGMENT_COUNT * 4 + 1).times {
-            sorted << it
-        }
-        try {
-            chunk.checkNeedMergeSegmentIndexListContinuous(sorted)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        sorted.clear()
-        (Chunk.ONCE_PREPARE_SEGMENT_COUNT * 4).times {
-            sorted << it
-        }
-        chunk.checkNeedMergeSegmentIndexListContinuous(sorted)
-        then:
-        1 == 1
-
-        cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }

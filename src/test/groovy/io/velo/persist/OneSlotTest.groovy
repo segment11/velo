@@ -182,6 +182,12 @@ class OneSlotTest extends Specification {
         then:
         oneSlot.allKeyCount == 200
 
+        when:
+        oneSlot.truncateChunkFile(0)
+        oneSlot.truncateChunkFile(0)
+        then:
+        oneSlot.chunk.fdLengths[0] == 0
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
@@ -190,8 +196,11 @@ class OneSlotTest extends Specification {
 
     def 'test repl pair'() {
         given:
-        def snowFlake = new SnowFlake(1, 1)
-        def oneSlot = new OneSlot(slot, slotNumber, snowFlake, Consts.persistDir, Config.create())
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
 
         when:
         // test repl pair
@@ -320,8 +329,7 @@ class OneSlotTest extends Specification {
         oneSlot.replPairs.size() == 2
 
         cleanup:
-        oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()
-        oneSlot.cleanUp()
+        localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
 
@@ -793,10 +801,10 @@ class OneSlotTest extends Specification {
 
         when:
         def chunk = oneSlot.chunk
-        ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList = []
+        ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList = []
         def segmentBytes = chunk.preadForRepl(testPvm2.segmentIndex)
-        ChunkMergeJob.readToCvList(cvList, segmentBytes, 0, segmentBytes.length, testPvm2.segmentIndex, slot)
-        ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> validCvList = []
+        SegmentBatch2.readToCvList(cvList, segmentBytes, 0, segmentBytes.length, testPvm2.segmentIndex, slot)
+        ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> validCvList = []
         validCvList << cvList[0]
         def encodedSlim = SegmentBatch2.encodeValidCvListSlim(validCvList)
         chunk.writeSegmentToTargetSegmentIndex(encodedSlim, testPvm2.segmentIndex)
@@ -909,19 +917,10 @@ class OneSlotTest extends Specification {
 
         when:
         oneSlot.getSegmentSeqListBatchForRepl(0, 1)
-        oneSlot.updateSegmentMergeFlag(0, Chunk.Flag.merged.flagByte(), 1L)
+        oneSlot.updateSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L)
         List<Long> segmentSeqList = [1L]
         oneSlot.setSegmentMergeFlagBatch(0, 1,
-                Chunk.Flag.merged.flagByte(), segmentSeqList, 0)
-        then:
-        1 == 1
-
-        when:
-        ArrayList<Integer> needMergeSegmentIndexList = [0]
-        oneSlot.doMergeJob(needMergeSegmentIndexList)
-        oneSlot.doMergeJobWhenServerStart(needMergeSegmentIndexList)
-        oneSlot.persistMergingOrMergedSegmentsButNotPersisted()
-        oneSlot.getMergedSegmentIndexEndLastTime()
+                Chunk.Flag.new_write.flagByte(), segmentSeqList, 0)
         then:
         1 == 1
 
@@ -974,32 +973,6 @@ class OneSlotTest extends Specification {
         e.isEmpty()
 
         when:
-        final String testMergedKey = 'xh!0_test-merged-key'
-        def cv = new CompressedValue()
-        cv.keyHash = KeyHash.hash(testMergedKey.bytes)
-        oneSlot.chunkMergeWorker.addMergedSegment(0, 1)
-        oneSlot.chunkMergeWorker.addMergedCv(new ChunkMergeWorker.CvWithKeyAndBucketIndexAndSegmentIndex(cv, testMergedKey, 0, 0))
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.merged.flagByte(), 1L, walGroupIndex)
-        chunk.initSegmentIndexWhenFirstStart(1)
-        10.times {
-            batchPut(oneSlot, 100, 100, 0, slotNumber)
-        }
-        chunk.initSegmentIndexWhenFirstStart(chunk.halfSegmentNumber)
-        oneSlot.logMergeCount = 999
-        e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
-        then:
-        !e.isEmpty()
-
-        when:
-        // trigger persist wal
-        5.times {
-            batchPut(oneSlot, 100, 100, 1, slotNumber)
-        }
-        then:
-        oneSlot.metaChunkSegmentFlagSeq.getSegmentMergeFlag(1).flagByte() == Chunk.Flag.merged_and_persisted.flagByte()
-        oneSlot.chunkMergeWorker.isMergedSegmentSetEmpty()
-
-        when:
         ConfForGlobal.pureMemory = true
         oneSlot.chunk.calcSegmentCountStepWhenOverHalfEstimateKeyNumber = 100
         oneSlot.chunk.segmentIndex = 100
@@ -1016,152 +989,6 @@ class OneSlotTest extends Specification {
         cleanup:
         ConfForGlobal.pureMemory = false
         oneSlot.cleanUp()
-        Consts.persistDir.deleteDir()
-    }
-
-    def 'test check merged but not persist'() {
-        given:
-        LocalPersistTest.prepareLocalPersist()
-        def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        def oneSlot = localPersist.oneSlot(slot)
-        def chunk = oneSlot.chunk
-        def chunkMergeWorker = oneSlot.chunkMergeWorker
-
-        when:
-        final int walGroupIndex = 0
-        chunk.initSegmentIndexWhenFirstStart(chunk.maxSegmentIndex - 10)
-        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 10, Chunk.Flag.reuse.flagByte(), 1L, walGroupIndex)
-        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 9, Chunk.Flag.merged_and_persisted.flagByte(), 1L, walGroupIndex)
-        oneSlot.checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(true)
-        then:
-        1 == 1
-
-        when:
-        oneSlot.checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(false)
-        then:
-        1 == 1
-
-        when:
-        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 8, Chunk.Flag.new_write.flagByte(), 1L, walGroupIndex)
-        oneSlot.checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(true)
-        then:
-        1 == 1
-
-        when:
-        oneSlot.checkFirstMergedButNotPersistedSegmentIndexTooNear()
-        then:
-        1 == 1
-
-        when:
-        String testMergedKey = 'xh!0_test-merged-key'
-        def cv = new CompressedValue()
-        cv.keyHash = KeyHash.hash(testMergedKey.bytes)
-        chunkMergeWorker.addMergedSegment(1, 1)
-        chunkMergeWorker.addMergedCv(new ChunkMergeWorker.CvWithKeyAndBucketIndexAndSegmentIndex(cv, testMergedKey, 0, 1))
-        chunk.initSegmentIndexWhenFirstStart(0)
-        oneSlot.checkFirstMergedButNotPersistedSegmentIndexTooNear()
-        then:
-        1 == 1
-
-        when:
-        chunkMergeWorker.clearMergedSegmentSet()
-        chunkMergeWorker.addMergedSegment(100, 1)
-        chunk.initSegmentIndexWhenFirstStart(0)
-        oneSlot.checkFirstMergedButNotPersistedSegmentIndexTooNear()
-        then:
-        1 == 1
-
-        when:
-        chunkMergeWorker.clearMergedSegmentSet()
-        chunkMergeWorker.addMergedSegment(0, 1)
-        chunk.initSegmentIndexWhenFirstStart(chunk.halfSegmentNumber)
-        oneSlot.checkFirstMergedButNotPersistedSegmentIndexTooNear()
-        then:
-        1 == 1
-
-        when:
-        chunkMergeWorker.clearMergedCvList()
-        chunkMergeWorker.clearMergedSegmentSet()
-        chunkMergeWorker.addMergedSegment(chunk.halfSegmentNumber + 1, 1)
-        chunkMergeWorker.addMergedCv(new ChunkMergeWorker.CvWithKeyAndBucketIndexAndSegmentIndex(cv, testMergedKey, 0, chunk.halfSegmentNumber + 1))
-        chunk.initSegmentIndexWhenFirstStart(chunk.halfSegmentNumber)
-        oneSlot.checkFirstMergedButNotPersistedSegmentIndexTooNear()
-        then:
-        1 == 1
-
-        when:
-        chunkMergeWorker.clearMergedSegmentSet()
-        chunkMergeWorker.addMergedSegment(chunk.halfSegmentNumber + 100, 1)
-        chunk.initSegmentIndexWhenFirstStart(chunk.halfSegmentNumber)
-        oneSlot.checkFirstMergedButNotPersistedSegmentIndexTooNear()
-        then:
-        1 == 1
-
-        when:
-        chunkMergeWorker.clearMergedSegmentSet()
-        chunkMergeWorker.addMergedSegment(chunk.halfSegmentNumber - 1, 1)
-        chunk.initSegmentIndexWhenFirstStart(chunk.halfSegmentNumber)
-        oneSlot.checkFirstMergedButNotPersistedSegmentIndexTooNear()
-        then:
-        1 == 1
-
-        when:
-        chunkMergeWorker.clearMergedCvList()
-        chunkMergeWorker.clearMergedSegmentSet()
-        chunkMergeWorker.addMergedSegment(0, 1)
-        chunkMergeWorker.addMergedCv(new ChunkMergeWorker.CvWithKeyAndBucketIndexAndSegmentIndex(cv, testMergedKey, 0, 0))
-        chunk.initSegmentIndexWhenFirstStart(chunk.maxSegmentIndex - 1)
-        oneSlot.checkFirstMergedButNotPersistedSegmentIndexTooNear()
-        then:
-        1 == 1
-
-        when:
-        chunkMergeWorker.clearMergedSegmentSet()
-        chunkMergeWorker.addMergedSegment(100, 1)
-        chunk.initSegmentIndexWhenFirstStart(chunk.maxSegmentIndex - 1)
-        oneSlot.checkFirstMergedButNotPersistedSegmentIndexTooNear()
-        then:
-        1 == 1
-
-        when:
-        chunkMergeWorker.clearMergedSegmentSet()
-        chunkMergeWorker.addMergedSegment(0, 1)
-        chunk.initSegmentIndexWhenFirstStart(chunk.maxSegmentIndex - 100)
-        oneSlot.checkFirstMergedButNotPersistedSegmentIndexTooNear()
-        then:
-        1 == 1
-
-        cleanup:
-        oneSlot.cleanUp()
-        Consts.persistDir.deleteDir()
-    }
-
-    def 'test init chunk flag fail'() {
-        given:
-        LocalPersistTest.prepareLocalPersist()
-        def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        def oneSlot = localPersist.oneSlot(slot)
-
-        Chunk.ONCE_PREPARE_SEGMENT_COUNT.times {
-            oneSlot.setSegmentMergeFlag(it, Chunk.Flag.merged.flagByte(), 1L, 0)
-        }
-        oneSlot.cleanUp()
-
-        when:
-        // load again
-        boolean exception = false
-        try {
-            LocalPersistTest.prepareLocalPersist()
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        cleanup:
         Consts.persistDir.deleteDir()
     }
 
@@ -1216,10 +1043,10 @@ class OneSlotTest extends Specification {
 
         when:
         chunk.writeSegmentToTargetSegmentIndex(new byte[4096], 0)
-        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.merged.flagByte(), 1L, 0)
+        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
         ArrayList<Long> seqList = [1L]
         oneSlot.setSegmentMergeFlagBatch(0, 1,
-                Chunk.Flag.merged.flagByte(), seqList, 0)
+                Chunk.Flag.new_write.flagByte(), seqList, 0)
         then:
         chunk.preadOneSegment(0) != null
 

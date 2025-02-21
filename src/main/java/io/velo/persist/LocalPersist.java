@@ -53,17 +53,6 @@ public class LocalPersist implements NeedCleanUp {
 
     private final LibC libC;
 
-    public void persistMergedSegmentsJobUndone() {
-        for (var oneSlot : oneSlots) {
-            oneSlot.asyncRun(() -> {
-                oneSlot.persistMergingOrMergedSegmentsButNotPersisted();
-                // merged segments may do merge again, it is ok, only do once when server restart
-                oneSlot.checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(true);
-                oneSlot.getMergedSegmentIndexEndLastTime();
-            });
-        }
-    }
-
     private OneSlot[] oneSlots;
 
     public OneSlot[] oneSlots() {

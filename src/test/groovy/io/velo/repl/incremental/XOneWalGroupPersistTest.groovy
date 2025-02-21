@@ -64,7 +64,6 @@ class XOneWalGroupPersistTest extends Specification {
         x.putUpdatedChunkSegmentBytes(0, new byte[4096])
 
         x.chunkSegmentIndexAfterPersist = 100
-        x.chunkMergedSegmentIndexEndLastTime = 1000
         x.lastSegmentSeq = 1L
 
         def encoded = x.encodeWithType()
@@ -110,7 +109,6 @@ class XOneWalGroupPersistTest extends Specification {
 
         when:
         x.shortValue = false
-        x.chunkMergedSegmentIndexEndLastTime = -1
         x.lastSegmentSeq = 0L
         x.apply(slot, replPair)
         then:

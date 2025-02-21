@@ -99,10 +99,12 @@ class SegmentBatch2Test extends Specification {
 
         when:
         def vList = Mock.prepareValueList(2, 0)
-        List<ChunkMergeJob.CvWithKeyAndSegmentOffset> invalidCvList = []
+        List<SegmentBatch2.CvWithKeyAndSegmentOffset> invalidCvList = []
         for (v in vList) {
-            invalidCvList << new ChunkMergeJob.CvWithKeyAndSegmentOffset(Mock.fromV(v), v.key(), (int) v.seq(), 0, (byte) 0)
+            invalidCvList << new SegmentBatch2.CvWithKeyAndSegmentOffset(Mock.fromV(v), v.key(), (int) v.seq(), 0, (byte) 0)
         }
+        println invalidCvList[0].toString()
+        println invalidCvList[0].shortString()
         def segmentBytesSlim = SegmentBatch2.encodeValidCvListSlim(invalidCvList)
         then:
         SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytesSlim, (byte) 0, 0).keyBytes() == vList[0].key().bytes
@@ -116,12 +118,39 @@ class SegmentBatch2Test extends Specification {
 
         when:
         def cvListMany = Mock.prepareCompressedValueList(100)
-        List<ChunkMergeJob.CvWithKeyAndSegmentOffset> invalidCvListMany = []
+        List<SegmentBatch2.CvWithKeyAndSegmentOffset> invalidCvListMany = []
         for (cv in cvListMany) {
-            invalidCvListMany << new ChunkMergeJob.CvWithKeyAndSegmentOffset(cv, 'key:' + cv.seq, (int) cv.seq, 0, (byte) 0)
+            invalidCvListMany << new SegmentBatch2.CvWithKeyAndSegmentOffset(cv, 'key:' + cv.seq, (int) cv.seq, 0, (byte) 0)
         }
         def segmentBytesSlim2 = SegmentBatch2.encodeValidCvListSlim(invalidCvListMany)
         then:
         segmentBytesSlim2 == null
+    }
+
+    def 'test read tight segment'() {
+        given:
+        def snowFlake = new SnowFlake(1, 1)
+        def segmentBatch = new SegmentBatch(slot, snowFlake)
+        def segmentBatch2 = new SegmentBatch2(slot, snowFlake)
+
+        and:
+        def list = Mock.prepareValueList(800)
+        ArrayList<PersistValueMeta> returnPvmList = []
+
+        when:
+        def r = segmentBatch.splitAndTight(list, returnPvmList)
+        def first = r[0]
+        ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList = []
+        SegmentBatch2.readToCvList(cvList, first.tightBytesWithLength(), 0, 4096, 0, (short) 0)
+        then:
+        cvList.size() == 252
+
+        when:
+        def r2 = segmentBatch2.split(list, returnPvmList)
+        def first2 = r2[0]
+        ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList2 = []
+        SegmentBatch2.readToCvList(cvList2, first2.segmentBytes(), 0, 4096, 0, (short) 0)
+        then:
+        cvList2.size() == 63
     }
 }

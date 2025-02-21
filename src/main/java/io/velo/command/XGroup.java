@@ -340,7 +340,7 @@ public class XGroup extends BaseCommand {
             var content = new Hi(slaveUuid, oneSlot.getMasterUuid(), currentFo, earliestFo, chunk.getSegmentIndex());
 
             // append a skip apply, so offset will not be 0, so the migrate tool or failover manager is easier to check if slave is all caught up
-            var xSkipApply = new XSkipApply(oneSlot.getSnowFlake().nextId(), chunk.getSegmentIndex(), chunk.getMergedSegmentIndexEndLastTime());
+            var xSkipApply = new XSkipApply(oneSlot.getSnowFlake().nextId(), chunk.getSegmentIndex());
             binlog.append(xSkipApply);
             return Repl.reply(slot, replPair, hi, content);
         } catch (IOException e) {
@@ -1457,16 +1457,17 @@ public class XGroup extends BaseCommand {
         }
 
         // 1 byte for readonly
-        // 4 bytes for chunk current segment index, 4 bytes for chunk merged segment index end last time
-        // 4 bytes for need fetch file index, 8 bytes for need fetch offset
-        // 4 bytes for current file index, 8 bytes for current offset
+        // 4 bytes for chunk current segment index
+        // 4 bytes for need fetch file index
+        // 8 bytes for need fetch offset
+        // 4 bytes for current file index
+        // 8 bytes for current offset
         var chunk = oneSlot.getChunk();
 
-        var responseBytes = new byte[1 + 4 + 4 + 4 + 8 + 4 + 8 + 4 + readSegmentBytes.length];
+        var responseBytes = new byte[1 + 4 + 4 + 8 + 4 + 8 + 4 + readSegmentBytes.length];
         var responseBuffer = ByteBuffer.wrap(responseBytes);
         responseBuffer.put(isMasterReadonlyByte);
         responseBuffer.putInt(chunk.getSegmentIndex());
-        responseBuffer.putInt(chunk.getMergedSegmentIndexEndLastTime());
         responseBuffer.putInt(needFetchFileIndex);
         responseBuffer.putLong(needFetchOffset);
         responseBuffer.putInt(currentFo.fileIndex());
@@ -1541,7 +1542,6 @@ public class XGroup extends BaseCommand {
         var buffer = ByteBuffer.wrap(contentBytes);
         var isMasterReadonly = buffer.get() == 1;
         var chunkCurrentSegmentIndex = buffer.getInt();
-        var chunkMergedSegmentIndexEndLastTime = buffer.getInt();
         var fetchedFileIndex = buffer.getInt();
         var fetchedOffset = buffer.getLong();
 
@@ -1609,8 +1609,8 @@ public class XGroup extends BaseCommand {
         replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(new Binlog.FileIndexAndOffset(fetchedFileIndex, fetchedOffset + readSegmentLength));
 
 //        oneSlot.setMetaChunkSegmentIndexInt(chunkCurrentSegmentIndex, true);
-        var chunk = oneSlot.getChunk();
-        chunk.setMergedSegmentIndexEndLastTime(chunkMergedSegmentIndexEndLastTime);
+//        var chunk = oneSlot.getChunk();
+//        chunk.setSegmentIndex(chunkCurrentSegmentIndex);
 
         // catch up latest segment, delay to catch up again
         var marginCurrentOffset = Binlog.marginFileOffset(masterCurrentOffset);

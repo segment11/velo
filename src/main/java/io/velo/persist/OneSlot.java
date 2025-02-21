@@ -36,7 +36,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
-import static io.velo.persist.Chunk.*;
+import static io.velo.persist.Chunk.Flag;
+import static io.velo.persist.Chunk.SegmentFlag;
 import static io.velo.persist.FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE;
 import static io.velo.persist.SegmentBatch2.SEGMENT_HEADER_LENGTH;
 
@@ -55,7 +56,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.bigStringFiles = new BigStringFiles(slot, slotDir);
         handlersRegisteredList.add(bigStringFiles);
 
-        this.chunkMergeWorker = null;
         this.dynConfig = null;
         this.walGroupNumber = 1;
         this.walArray = new Wal[]{wal};
@@ -90,7 +90,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.chunkSegmentLength = 4096;
 
         this.bigStringFiles = null;
-        this.chunkMergeWorker = null;
         this.dynConfig = null;
         this.walGroupNumber = 1;
         this.walArray = new Wal[0];
@@ -137,8 +136,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.bigStringFiles = new BigStringFiles(slot, slotDir);
         handlersRegisteredList.add(bigStringFiles);
 
-        this.chunkMergeWorker = new ChunkMergeWorker(slot, this);
-
         var dynConfigFile = new File(slotDir, DYN_CONFIG_FILE_NAME);
         this.dynConfig = new DynConfig(slot, dynConfigFile, this);
 
@@ -156,8 +153,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.walGroupNumber = Wal.calcWalGroupNumber();
         this.walArray = new Wal[walGroupNumber];
         log.info("One slot wal group number={}, slot={}", walGroupNumber, slot);
-
-        this.chunkMergeWorker.resetThreshold(walGroupNumber);
 
         var walSharedFile = new File(slotDir, "wal.dat");
         if (!walSharedFile.exists()) {
@@ -191,6 +186,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         initLRU(false);
 
         this.keyLoader = new KeyLoader(slot, ConfForSlot.global.confBucket.bucketsPerSlot, slotDir, snowFlake, this);
+        // meta data
+        this.metaChunkSegmentFlagSeq = new MetaChunkSegmentFlagSeq(slot, slotDir);
+        this.metaChunkSegmentIndex = new MetaChunkSegmentIndex(slot, slotDir);
+
         this.binlog = new Binlog(slot, slotDir, dynConfig);
         initBigKeyTopK(10);
 
@@ -209,7 +208,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         size += chunk.estimate(sb);
         size += bigStringFiles.estimate(sb);
         size += metaChunkSegmentFlagSeq.estimate(sb);
-        size += chunkMergeWorker.estimate(sb);
         size += binlog.estimate(sb);
         for (var wal : walArray) {
             size += wal.estimate(sb);
@@ -505,7 +503,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private final int chunkSegmentLength;
 
-    private final SnowFlake snowFlake;
+    final SnowFlake snowFlake;
 
     public SnowFlake getSnowFlake() {
         return snowFlake;
@@ -602,8 +600,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     long kvLRUHitTotal = 0;
     private long kvLRUMissTotal = 0;
     private long kvLRUCvEncodedLengthTotal = 0;
-
-    final ChunkMergeWorker chunkMergeWorker;
 
     private static final String DYN_CONFIG_FILE_NAME = "dyn-config.json";
 
@@ -708,7 +704,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return chunk;
     }
 
-    private MetaChunkSegmentFlagSeq metaChunkSegmentFlagSeq;
+    MetaChunkSegmentFlagSeq metaChunkSegmentFlagSeq;
 
     public MetaChunkSegmentFlagSeq getMetaChunkSegmentFlagSeq() {
         return metaChunkSegmentFlagSeq;
@@ -722,7 +718,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @VisibleForTesting
-    int getChunkWriteSegmentIndexInt() {
+    public int getChunkWriteSegmentIndexInt() {
         return metaChunkSegmentIndex.get();
     }
 
@@ -1528,10 +1524,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.libC = libC;
         this.keyLoader.initFds(libC);
 
-        // meta data
-        this.metaChunkSegmentFlagSeq = new MetaChunkSegmentFlagSeq(slot, slotDir);
-        this.metaChunkSegmentIndex = new MetaChunkSegmentIndex(slot, slotDir);
-
         if (!ConfForGlobal.pureMemory) {
             // do every 10ms
             // for truncate file to save ssd space
@@ -1543,37 +1535,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     private void initChunk() throws IOException {
-        this.chunk = new Chunk(slot, slotDir, this, snowFlake, keyLoader);
+        this.chunk = new Chunk(slot, slotDir, this);
         chunk.initFds(libC);
-
-        var segmentIndexLastSaved = getChunkWriteSegmentIndexInt();
-
-        // write index mmap crash recovery
-        boolean isBreak = false;
-        for (int i = 0; i < ONCE_PREPARE_SEGMENT_COUNT; i++) {
-            boolean canWrite = chunk.initSegmentIndexWhenFirstStart(segmentIndexLastSaved + i);
-            int currentSegmentIndex = chunk.getSegmentIndex();
-            log.warn("Move segment to write, s={}, i={}", slot, currentSegmentIndex);
-
-            // when restart server, set persisted flag
-            if (!canWrite) {
-                log.warn("Segment can not write, s={}, i={}", slot, currentSegmentIndex);
-
-                // set persisted flag reuse_new -> need merge before use
-                updateSegmentMergeFlag(currentSegmentIndex, Flag.reuse_new.flagByte, snowFlake.nextId());
-                log.warn("Reset segment persisted when init");
-
-                setMetaChunkSegmentIndexInt(currentSegmentIndex);
-            } else {
-                setMetaChunkSegmentIndexInt(currentSegmentIndex);
-                isBreak = true;
-                break;
-            }
-        }
-
-        if (!isBreak) {
-            throw new IllegalStateException("Segment can not write after reset flag, s=" + slot + ", i=" + chunk.getSegmentIndex());
-        }
     }
 
     public boolean hasData(int beginSegmentIndex, int segmentCount) {
@@ -1672,22 +1635,20 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     @VisibleForTesting
     record BeforePersistWalExtFromMerge(@NotNull ArrayList<Integer> segmentIndexList,
-                                        @NotNull ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList,
+                                        @NotNull ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList,
                                         @NotNull ArrayList<Integer> updatedFlagPersistedSegmentIndexList) {
         boolean isEmpty() {
             return segmentIndexList.isEmpty();
         }
     }
 
-    record BeforePersistWalExt2FromMerge(@NotNull ArrayList<Integer> segmentIndexList,
-                                         @NotNull ArrayList<Wal.V> vList) {
-    }
+    private static final int ONCE_PREPARE_SEGMENT_COUNT = 32;
 
     // for performance, before persist wal, read some segment in same wal group and  merge immediately
     @VisibleForTesting
     BeforePersistWalExtFromMerge readSomeSegmentsBeforePersistWal(int walGroupIndex) {
         var currentSegmentIndex = chunk.getSegmentIndex();
-        var needMergeSegmentIndex = chunk.needMergeSegmentIndex(false, currentSegmentIndex);
+        var needMergeSegmentIndex = chunk.prevFindSegmentIndexSkipHalf(false, currentSegmentIndex);
 
         if (ConfForGlobal.pureMemory) {
             // do pre-read and merge more frequently to save memory
@@ -1708,29 +1669,29 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // * 4 make sure to find one
         int nextSegmentCount = Math.min(Math.max(walGroupNumber * 4, (chunk.maxSegmentIndex + 1) / 4), 16384);
         final int[] firstSegmentIndexWithReadSegmentCountArray = metaChunkSegmentFlagSeq.iterateAndFindThoseNeedToMerge(
-                needMergeSegmentIndex, nextSegmentCount, walGroupIndex, chunk);
+                needMergeSegmentIndex, nextSegmentCount, walGroupIndex);
 
         logMergeCount++;
         var doLog = Debug.getInstance().logMerge && logMergeCount % 1000 == 0;
 
         // always consider first 10 and last 10 segments
-        if (firstSegmentIndexWithReadSegmentCountArray[0] == NO_NEED_MERGE_SEGMENT_INDEX) {
+        if (firstSegmentIndexWithReadSegmentCountArray[0] == -1) {
             final int[] arrayLastN = metaChunkSegmentFlagSeq.iterateAndFindThoseNeedToMerge(
-                    chunk.maxSegmentIndex - ONCE_PREPARE_SEGMENT_COUNT, ONCE_PREPARE_SEGMENT_COUNT, walGroupIndex, chunk);
-            if (arrayLastN[0] != NO_NEED_MERGE_SEGMENT_INDEX) {
+                    chunk.maxSegmentIndex - ONCE_PREPARE_SEGMENT_COUNT, ONCE_PREPARE_SEGMENT_COUNT, walGroupIndex);
+            if (arrayLastN[0] != -1) {
                 firstSegmentIndexWithReadSegmentCountArray[0] = arrayLastN[0];
                 firstSegmentIndexWithReadSegmentCountArray[1] = arrayLastN[1];
             } else {
                 final int[] arrayFirstN = metaChunkSegmentFlagSeq.iterateAndFindThoseNeedToMerge(
-                        0, ONCE_PREPARE_SEGMENT_COUNT, walGroupIndex, chunk);
-                if (arrayFirstN[0] != NO_NEED_MERGE_SEGMENT_INDEX) {
+                        0, ONCE_PREPARE_SEGMENT_COUNT, walGroupIndex);
+                if (arrayFirstN[0] != -1) {
                     firstSegmentIndexWithReadSegmentCountArray[0] = arrayFirstN[0];
                     firstSegmentIndexWithReadSegmentCountArray[1] = arrayFirstN[1];
                 }
             }
         }
 
-        if (firstSegmentIndexWithReadSegmentCountArray[0] == NO_NEED_MERGE_SEGMENT_INDEX) {
+        if (firstSegmentIndexWithReadSegmentCountArray[0] == -1) {
             if (doLog) {
                 log.warn("No segment need merge when persist wal, s={}, i={}", slot, currentSegmentIndex);
             }
@@ -1742,7 +1703,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var segmentBytesBatchRead = preadForMerge(firstSegmentIndex, segmentCount);
 
         ArrayList<Integer> segmentIndexList = new ArrayList<>();
-        ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList = new ArrayList<>(BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE * 10);
+        ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList = new ArrayList<>(BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE * 10);
         ArrayList<Integer> updatedFlagPersistedSegmentIndexList = new ArrayList<>();
 
         for (int i = 0; i < segmentCount; i++) {
@@ -1753,12 +1714,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             // last segments not write at all, need skip
             if (segmentBytesBatchRead == null || relativeOffsetInBatchBytes >= segmentBytesBatchRead.length) {
                 setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted.flagByte, 0L, 0);
-
-                // clear merged but not persisted in chunk merge worker
-                ArrayList<Integer> innerSegmentIndexList = new ArrayList<>();
-                innerSegmentIndexList.add(segmentIndex);
-                chunkMergeWorker.removeMergedButNotPersisted(innerSegmentIndexList, walGroupIndex);
-
                 updatedFlagPersistedSegmentIndexList.add(segmentIndex);
 
                 if (doLog) {
@@ -1767,7 +1722,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 continue;
             }
 
-            ChunkMergeJob.readToCvList(cvList, segmentBytesBatchRead, relativeOffsetInBatchBytes, chunkSegmentLength, segmentIndex, slot);
+            SegmentBatch2.readToCvList(cvList, segmentBytesBatchRead, relativeOffsetInBatchBytes, chunkSegmentLength, segmentIndex, slot);
             segmentIndexList.add(segmentIndex);
         }
 
@@ -1802,7 +1757,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         list.sort(Comparator.comparingInt(Wal.V::bucketIndex));
 
         var ext = readSomeSegmentsBeforePersistWal(walGroupIndex);
-        var ext2 = chunkMergeWorker.getMergedButNotPersistedBeforePersistWal(walGroupIndex);
 
         KeyBucketsInOneWalGroup keyBucketsInOneWalGroup = null;
         if (ext != null) {
@@ -1821,20 +1775,20 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             int validCount = 0;
             // remove those wal exist
-            cvList.removeIf(one -> delayToKeyBucketShortValues.containsKey(one.key) || delayToKeyBucketValues.containsKey(one.key));
+            cvList.removeIf(one -> delayToKeyBucketShortValues.containsKey(one.key()) || delayToKeyBucketValues.containsKey(one.key()));
             if (!cvList.isEmpty()) {
                 // remove those expired or updated
                 keyBucketsInOneWalGroup = new KeyBucketsInOneWalGroup(slot, walGroupIndex, keyLoader);
 
                 for (var one : cvList) {
-                    var cv = one.cv;
+                    var cv = one.cv();
                     var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash(), keyLoader.bucketsPerSlot);
                     var extWalGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
                     if (extWalGroupIndex != walGroupIndex) {
                         throw new IllegalStateException("Wal group index not match, s=" + slot + ", wal group index=" + walGroupIndex + ", ext wal group index=" + extWalGroupIndex);
                     }
 
-                    var expireAtAndSeq = keyBucketsInOneWalGroup.getExpireAtAndSeq(bucketIndex, one.key.getBytes(), cv.getKeyHash());
+                    var expireAtAndSeq = keyBucketsInOneWalGroup.getExpireAtAndSeq(bucketIndex, one.key().getBytes(), cv.getKeyHash());
                     var isThisKeyExpired = expireAtAndSeq == null || expireAtAndSeq.isExpired();
                     if (isThisKeyExpired) {
                         continue;
@@ -1846,7 +1800,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     }
 
                     list.add(new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
-                            one.key, cv.encode(), true));
+                            one.key(), cv.encode(), true));
                     validCount++;
                 }
             }
@@ -1855,23 +1809,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             extCvInvalidCountTotal += invalidCount;
         }
 
-        if (ext2 != null) {
-            var vList = ext2.vList;
-            vList.removeIf(one -> delayToKeyBucketShortValues.containsKey(one.key()) || delayToKeyBucketValues.containsKey(one.key()));
-            if (!vList.isEmpty()) {
-                list.addAll(vList);
-            }
-        }
-
         if (list.size() > 1000 * 4) {
             log.warn("Ready to persist wal with merged valid cv list, too large, s={}, wal group index={}, list size={}",
                     slot, walGroupIndex, list.size());
         }
 
-        var needMergeSegmentIndexList = chunk.persist(walGroupIndex, list, false, xForBinlog, keyBucketsInOneWalGroup);
-        if (needMergeSegmentIndexList == null) {
-            throw new IllegalStateException("Persist error, need merge segment index list is null, slot=" + slot);
-        }
+        chunk.persist(walGroupIndex, list, xForBinlog, keyBucketsInOneWalGroup);
 
         if (ext != null && !ext.isEmpty()) {
             var segmentIndexList = ext.segmentIndexList;
@@ -1879,9 +1822,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             if (segmentIndexList.getLast() - segmentIndexList.getFirst() == segmentIndexList.size() - 1) {
                 setSegmentMergeFlagBatch(segmentIndexList.getFirst(), segmentIndexList.size(),
                         Flag.merged_and_persisted.flagByte, null, walGroupIndex);
-
-                // clear merged but not persisted in chunk merge worker
-                chunkMergeWorker.removeMergedButNotPersisted(segmentIndexList, walGroupIndex);
 
                 for (var segmentIndex : segmentIndexList) {
                     xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
@@ -1892,121 +1832,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 for (var segmentIndex : segmentIndexList) {
                     setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted.flagByte, 0L, walGroupIndex);
 
-                    // clear merged but not persisted in chunk merge worker
-                    ArrayList<Integer> innerSegmentIndexList = new ArrayList<>();
-                    innerSegmentIndexList.add(segmentIndex);
-                    chunkMergeWorker.removeMergedButNotPersisted(innerSegmentIndexList, walGroupIndex);
-
                     xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
                 }
             }
-
-            // do not remove, keep segment index continuous, chunk merge job will skip as flag is merged and persisted
-//                needMergeSegmentIndexList.removeIf(segmentIndexList::contains);
-        }
-
-        if (ext2 != null) {
-            var segmentIndexList = ext2.segmentIndexList;
-            // usually not continuous
-            for (var segmentIndex : segmentIndexList) {
-                setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted.flagByte, 0L, walGroupIndex);
-                xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
-            }
-
-            chunkMergeWorker.removeMergedButNotPersisted(segmentIndexList, walGroupIndex);
         }
 
         appendBinlog(xForBinlog);
-
-        if (!needMergeSegmentIndexList.isEmpty()) {
-            doMergeJob(needMergeSegmentIndexList);
-            checkFirstMergedButNotPersistedSegmentIndexTooNear();
-        }
-
-        checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(false);
-    }
-
-    @VisibleForTesting
-    void checkFirstMergedButNotPersistedSegmentIndexTooNear() {
-        if (chunkMergeWorker.isMergedSegmentSetEmpty()) {
-            return;
-        }
-
-        var currentSegmentIndex = chunk.getSegmentIndex();
-        var firstMergedButNotPersisted = chunkMergeWorker.firstMergedSegmentIndex();
-
-        // need persist merged segments immediately, or next time wal persist will not prepare ready
-        boolean needPersistMergedButNotPersisted = isNeedPersistMergedButNotPersisted(currentSegmentIndex, firstMergedButNotPersisted);
-        if (needPersistMergedButNotPersisted) {
-            log.warn("Persist merged segments immediately, s={}, begin merged segment index={}",
-                    slot, firstMergedButNotPersisted);
-            chunkMergeWorker.persistFIFOMergedCvList();
-        }
-    }
-
-    private boolean isNeedPersistMergedButNotPersisted(int currentSegmentIndex, int firstMergedButNotPersisted) {
-        boolean needPersistMergedButNotPersisted = false;
-        if (currentSegmentIndex < chunk.halfSegmentNumber) {
-            if (firstMergedButNotPersisted - currentSegmentIndex <= ONCE_PREPARE_SEGMENT_COUNT) {
-                needPersistMergedButNotPersisted = true;
-            }
-        } else {
-            if (firstMergedButNotPersisted > currentSegmentIndex &&
-                    firstMergedButNotPersisted - currentSegmentIndex <= ONCE_PREPARE_SEGMENT_COUNT) {
-                needPersistMergedButNotPersisted = true;
-            }
-
-            // recycle
-            if (firstMergedButNotPersisted < currentSegmentIndex &&
-                    chunk.maxSegmentIndex - currentSegmentIndex <= ONCE_PREPARE_SEGMENT_COUNT &&
-                    firstMergedButNotPersisted <= ONCE_PREPARE_SEGMENT_COUNT) {
-                needPersistMergedButNotPersisted = true;
-            }
-        }
-        return needPersistMergedButNotPersisted;
-    }
-
-    @MasterReset
-    public void checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(boolean isServerStart) {
-        var currentSegmentIndex = chunk.getSegmentIndex();
-
-        ArrayList<Integer> needMergeSegmentIndexList = new ArrayList<>();
-        // * 2 when recycled, from 0 again
-        for (int i = 0; i < ONCE_PREPARE_SEGMENT_COUNT * 2 + chunkMergeWorker.MERGED_SEGMENT_SIZE_THRESHOLD_ONCE_PERSIST; i++) {
-            var targetSegmentIndex = currentSegmentIndex + i;
-            if (targetSegmentIndex == chunk.maxSegmentIndex + 1) {
-                targetSegmentIndex = 0;
-            } else if (targetSegmentIndex > chunk.maxSegmentIndex + 1) {
-                // recycle
-                targetSegmentIndex = targetSegmentIndex - chunk.maxSegmentIndex - 1;
-            }
-
-            var segmentFlag = getSegmentMergeFlag(targetSegmentIndex);
-            var flagByte = segmentFlag.flagByte();
-
-            if (isServerStart && flagByte == Flag.reuse.flagByte) {
-                continue;
-            }
-
-            if (flagByte != Flag.init.flagByte && flagByte != Flag.merged_and_persisted.flagByte) {
-                needMergeSegmentIndexList.add(targetSegmentIndex);
-            }
-        }
-
-        if (needMergeSegmentIndexList.isEmpty()) {
-            return;
-        }
-
-        log.warn("Not merged and persisted next range segment index too near, s={}, begin segment index={}",
-                slot, needMergeSegmentIndexList.getFirst());
-
-        needMergeSegmentIndexList.sort(Integer::compareTo);
-        // maybe not continuous
-        var validCvCountTotal = mergeTargetSegments(needMergeSegmentIndexList, isServerStart);
-
-        if (isServerStart && validCvCountTotal > 0) {
-            chunkMergeWorker.persistAllMergedCvListInTargetSegmentIndexList(needMergeSegmentIndexList);
-        }
     }
 
     private void checkSegmentIndex(int segmentIndex) {
@@ -2051,18 +1882,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         checkSegmentIndex(segmentIndex);
         metaChunkSegmentFlagSeq.setSegmentMergeFlag(segmentIndex, flagByte, segmentSeq, walGroupIndex);
 
-        if (ConfForGlobal.pureMemory) {
-            if (Chunk.Flag.canReuse(flagByte)) {
-                chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
-                if (segmentIndex % 4096 == 0) {
-                    log.info("Clear one segment memory bytes when reuse, segment index={}, slot={}", segmentIndex, slot);
-                }
-            }
-        } else {
-            if (!Chunk.Flag.canReuse(flagByte)) {
-                var fdIndex = chunk.targetFdIndex(segmentIndex);
-                var segmentIndexTargetFd = chunk.targetSegmentIndexTargetFd(segmentIndex);
-                metaChunkSegmentFlagSeq.updateBitSetFalseForSegmentIndex(fdIndex, segmentIndexTargetFd);
+        if (ConfForGlobal.pureMemory && Flag.canReuse(flagByte)) {
+            chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
+            if (segmentIndex % 4096 == 0) {
+                log.info("Clear one segment memory bytes when reuse, segment index={}, slot={}", segmentIndex, slot);
             }
         }
     }
@@ -2076,61 +1899,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(beginSegmentIndex, segmentCount,
                 flagByte, segmentSeqList, walGroupIndex);
 
-        if (ConfForGlobal.pureMemory) {
-            if (Chunk.Flag.canReuse(flagByte)) {
-                for (int i = 0; i < segmentCount; i++) {
-                    var segmentIndex = beginSegmentIndex + i;
-                    chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
-                }
+        if (ConfForGlobal.pureMemory && Flag.canReuse(flagByte)) {
+            for (int i = 0; i < segmentCount; i++) {
+                var segmentIndex = beginSegmentIndex + i;
+                chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
             }
-        } else {
-            if (!Chunk.Flag.canReuse(flagByte)) {
-                for (int i = 0; i < segmentCount; i++) {
-                    var segmentIndex = beginSegmentIndex + i;
-                    var fdIndex = chunk.targetFdIndex(segmentIndex);
-                    var segmentIndexTargetFd = chunk.targetSegmentIndexTargetFd(segmentIndex);
-                    metaChunkSegmentFlagSeq.updateBitSetFalseForSegmentIndex(fdIndex, segmentIndexTargetFd);
-                }
-            }
-        }
-    }
-
-    @VisibleForTesting
-    int doMergeJob(@NotNull ArrayList<Integer> needMergeSegmentIndexList) {
-        var job = new ChunkMergeJob(slot, needMergeSegmentIndexList, chunkMergeWorker, snowFlake);
-        return job.run();
-    }
-
-    @VisibleForTesting
-    int doMergeJobWhenServerStart(@NotNull ArrayList<Integer> needMergeSegmentIndexList) {
-        var job = new ChunkMergeJob(slot, needMergeSegmentIndexList, chunkMergeWorker, snowFlake);
-        return job.run();
-    }
-
-    @MasterReset
-    public void persistMergingOrMergedSegmentsButNotPersisted() {
-        ArrayList<Integer> needMergeSegmentIndexList = new ArrayList<>();
-
-        this.metaChunkSegmentFlagSeq.iterateAll((segmentIndex, flagByte, segmentSeq, walGroupIndex) -> {
-            if (Chunk.Flag.isMergingOrMerged(flagByte)) {
-                log.warn("Segment not persisted after merging, s={}, i={}, flag byte={}", slot, segmentIndex, flagByte);
-                needMergeSegmentIndexList.add(segmentIndex);
-            }
-        });
-
-        if (needMergeSegmentIndexList.isEmpty()) {
-            log.warn("No segment need merge when server start, s={}", slot);
-        } else {
-            mergeTargetSegments(needMergeSegmentIndexList, true);
         }
     }
 
     @MasterReset
     public void resetAsMaster() throws IOException {
         log.warn("Repl reset as master, slot={}", slot);
-        persistMergingOrMergedSegmentsButNotPersisted();
-        checkNotMergedAndPersistedNextRangeSegmentIndexTooNear(false);
-        getMergedSegmentIndexEndLastTime();
 
         // set binlog same as old master last updated
         var lastUpdatedFileIndexAndOffset = metaChunkSegmentIndex.getMasterBinlogFileIndexAndOffset();
@@ -2182,65 +1961,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         log.warn("Repl reset binlog on false as slave, slot={}", slot);
     }
 
-    private int mergeTargetSegments(@NotNull ArrayList<Integer> needMergeSegmentIndexList, boolean isServerStart) {
-        int validCvCountTotal = 0;
-
-        var firstSegmentIndex = needMergeSegmentIndexList.getFirst();
-        var lastSegmentIndex = needMergeSegmentIndexList.getLast();
-
-        // continuous
-        if (lastSegmentIndex - firstSegmentIndex + 1 == needMergeSegmentIndexList.size()) {
-            var validCvCount = isServerStart ? doMergeJobWhenServerStart(needMergeSegmentIndexList) : doMergeJob(needMergeSegmentIndexList);
-            log.warn("Merge segments, is server start={}, s={}, i={}, end i={}, valid cv count after run={}",
-                    isServerStart, slot, firstSegmentIndex, lastSegmentIndex, validCvCount);
-            validCvCountTotal += validCvCount;
-        } else {
-            // not continuous, need split
-            ArrayList<Integer> onceList = new ArrayList<>();
-            onceList.add(firstSegmentIndex);
-
-            int last = firstSegmentIndex;
-            for (int i = 1; i < needMergeSegmentIndexList.size(); i++) {
-                var segmentIndex = needMergeSegmentIndexList.get(i);
-                if (segmentIndex - last != 1) {
-                    if (!onceList.isEmpty()) {
-                        var validCvCount = isServerStart ? doMergeJobWhenServerStart(onceList) : doMergeJob(onceList);
-                        log.warn("Merge segments, is server start={}, once list, s={}, i={}, end i={}, valid cv count after run={}",
-                                isServerStart, slot, onceList.getFirst(), onceList.getLast(), validCvCount);
-                        validCvCountTotal += validCvCount;
-                        onceList.clear();
-                    }
-                }
-                onceList.add(segmentIndex);
-                last = segmentIndex;
-            }
-
-            if (!onceList.isEmpty()) {
-                var validCvCount = isServerStart ? doMergeJobWhenServerStart(onceList) : doMergeJob(onceList);
-                log.warn("Merge segments, is server start={}, once list, s={}, i={}, end i={}, valid cv count after run={}",
-                        isServerStart, slot, onceList.getFirst(), onceList.getLast(), validCvCount);
-                validCvCountTotal += validCvCount;
-            }
-        }
-
-        return validCvCountTotal;
-    }
-
-    @MasterReset
-    public void getMergedSegmentIndexEndLastTime() {
-        if (chunkMergeWorker.getLastMergedSegmentIndex() != NO_NEED_MERGE_SEGMENT_INDEX) {
-            chunk.setMergedSegmentIndexEndLastTime(chunkMergeWorker.getLastMergedSegmentIndex());
-        } else {
-            // todo, need check
-            var mergedSegmentIndexEndLastTime = metaChunkSegmentFlagSeq.getMergedSegmentIndexEndLastTime(chunk.getSegmentIndex(), chunk.halfSegmentNumber);
-            chunk.setMergedSegmentIndexEndLastTime(mergedSegmentIndexEndLastTime);
-            chunkMergeWorker.setLastMergedSegmentIndex(mergedSegmentIndexEndLastTime);
-        }
-
-        chunk.checkMergedSegmentIndexEndLastTimeValidAfterServerStart();
-        log.info("Get merged segment index end last time, s={}, i={}", slot, chunk.getMergedSegmentIndexEndLastTime());
-    }
-
     @VisibleForTesting
     long saveMemoryExecuteTotal = 0;
     @VisibleForTesting
@@ -2258,22 +1978,22 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return;
         }
 
-        ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> cvList = new ArrayList<>(BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE * 10);
-        int expiredCount = ChunkMergeJob.readToCvList(cvList, segmentBytes, 0, chunkSegmentLength, targetSegmentIndex, slot);
+        ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList = new ArrayList<>(BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE * 10);
+        int expiredCount = SegmentBatch2.readToCvList(cvList, segmentBytes, 0, chunkSegmentLength, targetSegmentIndex, slot);
 
-        ArrayList<ChunkMergeJob.CvWithKeyAndSegmentOffset> invalidCvList = new ArrayList<>();
+        ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> invalidCvList = new ArrayList<>();
 
         for (var one : cvList) {
-            var cv = one.cv;
+            var cv = one.cv();
             var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash(), keyLoader.bucketsPerSlot);
 
-            var tmpWalValueBytes = getFromWal(one.key, bucketIndex);
+            var tmpWalValueBytes = getFromWal(one.key(), bucketIndex);
             if (tmpWalValueBytes != null) {
                 invalidCvList.add(one);
                 continue;
             }
 
-            var keyBytes = one.key.getBytes();
+            var keyBytes = one.key().getBytes();
             var keyHash32 = KeyHash.hash32(keyBytes);
             var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, keyBytes, cv.getKeyHash(), keyHash32);
             if (expireAtAndSeq == null || expireAtAndSeq.isExpired()) {
@@ -2412,10 +2132,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         if (bigStringFiles != null) {
             map.putAll(bigStringFiles.collect());
-        }
-
-        if (chunkMergeWorker != null) {
-            map.putAll(chunkMergeWorker.collect());
         }
 
         if (binlog != null) {

@@ -17,18 +17,12 @@ public class XSkipApply implements BinlogContent {
         return chunkCurrentSegmentIndex;
     }
 
-    public int getChunkMergedSegmentIndexEndLastTime() {
-        return chunkMergedSegmentIndexEndLastTime;
-    }
-
     private final long seq;
     private final int chunkCurrentSegmentIndex;
-    private final int chunkMergedSegmentIndexEndLastTime;
 
-    public XSkipApply(long seq, int chunkCurrentSegmentIndex, int chunkMergedSegmentIndexEndLastTime) {
+    public XSkipApply(long seq, int chunkCurrentSegmentIndex) {
         this.seq = seq;
         this.chunkCurrentSegmentIndex = chunkCurrentSegmentIndex;
-        this.chunkMergedSegmentIndexEndLastTime = chunkMergedSegmentIndexEndLastTime;
     }
 
     @Override
@@ -38,9 +32,10 @@ public class XSkipApply implements BinlogContent {
 
     @Override
     public int encodedLength() {
-        // 1 byte for type, 8 bytes for seq
-        // 4 bytes for chunk segment index, 4 bytes for chunk merged segment index end last time
-        return 1 + 8 + 4 + 4;
+        // 1 byte for type
+        // 8 bytes for seq
+        // 4 bytes for chunk segment index
+        return 1 + 8 + 4;
     }
 
     @Override
@@ -51,7 +46,6 @@ public class XSkipApply implements BinlogContent {
         buffer.put(type().code());
         buffer.putLong(seq);
         buffer.putInt(chunkCurrentSegmentIndex);
-        buffer.putInt(chunkMergedSegmentIndexEndLastTime);
 
         return bytes;
     }
@@ -60,8 +54,7 @@ public class XSkipApply implements BinlogContent {
         // already read type byte
         var seq = buffer.getLong();
         var chunkCurrentSegmentIndex = buffer.getInt();
-        var chunkMergedSegmentIndexEndLastTime = buffer.getInt();
-        return new XSkipApply(seq, chunkCurrentSegmentIndex, chunkMergedSegmentIndexEndLastTime);
+        return new XSkipApply(seq, chunkCurrentSegmentIndex);
     }
 
     private static final Logger log = LoggerFactory.getLogger(XSkipApply.class);
@@ -70,12 +63,11 @@ public class XSkipApply implements BinlogContent {
 
     @Override
     public void apply(short slot, ReplPair replPair) {
-        log.warn("Repl skip apply, seq={}, chunk segment index={}, chunk merged segment index end last time={}",
-                seq, chunkCurrentSegmentIndex, chunkMergedSegmentIndexEndLastTime);
+        log.warn("Repl skip apply, seq={}, chunk segment index={}",
+                seq, chunkCurrentSegmentIndex);
 
         var oneSlot = localPersist.oneSlot(slot);
         oneSlot.setMetaChunkSegmentIndexInt(chunkCurrentSegmentIndex);
-        oneSlot.getChunk().setMergedSegmentIndexEndLastTime(chunkMergedSegmentIndexEndLastTime);
 
         replPair.setSlaveCatchUpLastSeq(seq);
     }

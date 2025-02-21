@@ -12,10 +12,9 @@ import java.nio.ByteBuffer
 class XSkipApplyTest extends Specification {
     def 'test encode and decode'() {
         given:
-        def xSkipApply = new XSkipApply(1L, 0, -1)
+        def xSkipApply = new XSkipApply(1L, 0)
         println xSkipApply.seq
         println xSkipApply.chunkCurrentSegmentIndex
-        println xSkipApply.chunkMergedSegmentIndexEndLastTime
 
         expect:
         xSkipApply.type() == BinlogContent.Type.skip_apply
@@ -29,7 +28,6 @@ class XSkipApplyTest extends Specification {
         xSkipApply1.encodedLength() == encoded.length
         xSkipApply1.seq == xSkipApply.seq
         xSkipApply1.chunkCurrentSegmentIndex == xSkipApply.chunkCurrentSegmentIndex
-        xSkipApply1.chunkMergedSegmentIndexEndLastTime == xSkipApply.chunkMergedSegmentIndexEndLastTime
 
         when:
         final short slot = 0
@@ -41,8 +39,7 @@ class XSkipApplyTest extends Specification {
         xSkipApply.apply(slot, replPair)
         then:
         replPair.slaveCatchUpLastSeq == xSkipApply.seq
-        oneSlot.chunk.segmentIndex == xSkipApply.chunkCurrentSegmentIndex
-        oneSlot.chunk.mergedSegmentIndexEndLastTime == xSkipApply.chunkMergedSegmentIndexEndLastTime
+        oneSlot.getChunkWriteSegmentIndexInt() == xSkipApply.chunkCurrentSegmentIndex
 
         cleanup:
         localPersist.cleanUp()
