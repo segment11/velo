@@ -19,7 +19,7 @@ class UtilsTest extends Specification {
 
     def 'test generate random chars'() {
         given:
-        def randomChars = io.velo.util.Utils.generateRandomChars(10)
+        def randomChars = Utils.generateRandomChars(10)
         println randomChars
         expect:
         randomChars.size() == 10

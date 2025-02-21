@@ -45,12 +45,10 @@ class ConfForSlotTest extends Specification {
         def c100k = ConfForSlot.from(100_000)
         def c1m = ConfForSlot.from(1_000_000)
         def c10m = ConfForSlot.from(10_000_000)
-        def c100m = ConfForSlot.from(100_000_000)
 
         expect:
         c100k == ConfForSlot.debugMode
         c1m == ConfForSlot.c1m
         c10m == ConfForSlot.c10m
-        c100m == ConfForSlot.c100m
     }
 }

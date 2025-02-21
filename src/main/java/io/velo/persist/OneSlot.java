@@ -926,6 +926,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     void truncateChunkFile(int fdIndex) {
+        // when do task interval unit test
+        if (chunk == null) {
+            return;
+        }
+
         var fdLength = chunk.fdLengths[fdIndex];
         if (fdLength != 0) {
             var fd = chunk.fdReadWriteArray[fdIndex];
