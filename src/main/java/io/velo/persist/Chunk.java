@@ -516,6 +516,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         var costT = (System.nanoTime() - beginT) / 1000;
         updatePvmBatchCostTimeTotalUs += costT;
 
+        metaChunkSegmentFlagSeq.addSegmentIndexToTargetWalGroup(walGroupIndex, currentSegmentIndex, segments.size());
+
         // update meta, segment index for next time
         oneSlot.setMetaChunkSegmentIndexInt(segmentIndex);
         xForBinlog.setChunkSegmentIndexAfterPersist(segmentIndex);

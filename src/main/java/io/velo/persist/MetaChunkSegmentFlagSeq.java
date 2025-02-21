@@ -147,6 +147,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         }
         initBitSetValueWhenFirstStartOrClear();
 
+        this.beginSegmentIndexGroupByWalGroupIndex = new long[Wal.calcWalGroupNumber()][MARK_BEGIN_SEGMENT_INDEX_COUNT];
+        this.beginSegmentIndexLastAddIndexGroupByWalGroupIndex = new int[Wal.calcWalGroupNumber()];
+
         this.maxSegmentNumber = ConfForSlot.global.confChunk.maxSegmentNumber();
         this.allCapacity = maxSegmentNumber * ONE_LENGTH;
 
@@ -289,57 +292,40 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         return 10;
     }
 
-    public interface IterateCallBack {
-        void call(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex);
-    }
+    private static final int MARK_BEGIN_SEGMENT_INDEX_COUNT = 100;
+    private final long[][] beginSegmentIndexGroupByWalGroupIndex;
+    private final int[] beginSegmentIndexLastAddIndexGroupByWalGroupIndex;
 
-    // performance critical
-    int[] iterateAndFindThoseNeedToMerge(int beginSegmentIndex, int nextSegmentCount, int targetWalGroupIndex, int maxFindSegmentCount) {
-        var findSegmentIndexWithSegmentCount = new int[]{-1, 0};
-
-        // only find 4 segments at most, or once write too many segments for this batch
-        int maxSegmentIndex = ConfForSlot.global.confChunk.maxSegmentNumber() - 1;
-        var segmentCount = 0;
-        var end = Math.min(beginSegmentIndex + nextSegmentCount, maxSegmentNumber);
-        for (int segmentIndex = beginSegmentIndex; segmentIndex < end; segmentIndex++) {
-            var offset = segmentIndex * ONE_LENGTH;
-
-            var flagByte = inMemoryCachedByteBuffer.get(offset);
-//            var segmentSeq = inMemoryCachedByteBuffer.getLong(offset + 1);
-            var walGroupIndex = inMemoryCachedByteBuffer.getInt(offset + 1 + 8);
-            if (walGroupIndex != targetWalGroupIndex) {
-                // already find at least one segment with the same wal group index
-                if (findSegmentIndexWithSegmentCount[0] != -1) {
-                    break;
-                }
-                continue;
-            }
-
-            // merged but not persisted, also do compare again
-            if (flagByte == Chunk.Flag.new_write.flagByte || flagByte == Chunk.Flag.reuse_new.flagByte) {
-                // only set first segment index
-                if (findSegmentIndexWithSegmentCount[0] == -1) {
-                    findSegmentIndexWithSegmentCount[0] = segmentIndex;
-                }
-                segmentCount++;
-
-                var targetFdIndexFirstFind = findSegmentIndexWithSegmentCount[0] / segmentNumberPerFd;
-                var targetFdIndexThisFind = segmentIndex / segmentNumberPerFd;
-                // cross two files, exclude this find segment
-                if (targetFdIndexThisFind != targetFdIndexFirstFind) {
-                    segmentCount--;
-                    break;
-                }
-
-                int segmentCountMax = Math.min(maxFindSegmentCount, maxSegmentIndex - segmentIndex + 1);
-                if (segmentCount >= segmentCountMax) {
-                    break;
-                }
-            }
+    void addSegmentIndexToTargetWalGroup(int walGroupIndex, int beginSegmentIndex, int segmentCount) {
+        var beginSegmentIndexLastAddIndex = beginSegmentIndexLastAddIndexGroupByWalGroupIndex[walGroupIndex];
+        var next = beginSegmentIndexLastAddIndex + 1;
+        if (next == MARK_BEGIN_SEGMENT_INDEX_COUNT) {
+            next = 0;
         }
 
-        findSegmentIndexWithSegmentCount[1] = segmentCount;
-        return findSegmentIndexWithSegmentCount;
+        beginSegmentIndexGroupByWalGroupIndex[walGroupIndex][next] = (long) beginSegmentIndex << 32 | segmentCount;
+        beginSegmentIndexLastAddIndexGroupByWalGroupIndex[walGroupIndex] = next;
+    }
+
+    static final int[] NOT_FIND_SEGMENT_INDEX_AND_COUNT = new int[]{-1, 0};
+
+    int[] findThoseNeedToMerge(int walGroupIndex) {
+        var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
+        for (int i = 0; i < MARK_BEGIN_SEGMENT_INDEX_COUNT; i++) {
+            var markedLong = markedLongs[i];
+            if (markedLong != 0L) {
+                var segmentIndex = (int) (markedLong >> 32);
+                var segmentCount = (int) (markedLong & 0xFFFFFFFFL);
+                // clear
+                markedLongs[i] = 0L;
+                return new int[]{segmentIndex, segmentCount};
+            }
+        }
+        return NOT_FIND_SEGMENT_INDEX_AND_COUNT;
+    }
+
+    public interface IterateCallBack {
+        void call(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex);
     }
 
     public void iterateRange(int beginSegmentIndex, int segmentCount, @NotNull IterateCallBack callBack) {

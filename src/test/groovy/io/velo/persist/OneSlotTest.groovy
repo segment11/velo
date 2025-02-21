@@ -935,7 +935,7 @@ class OneSlotTest extends Specification {
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
-        def chunk = oneSlot.chunk
+        def metaChunkSegmentFlagSeq = oneSlot.metaChunkSegmentFlagSeq
 
         def ext = new OneSlot.BeforePersistWalExtFromMerge([], [], [])
         expect:
@@ -943,41 +943,15 @@ class OneSlotTest extends Specification {
 
         when:
         final int walGroupIndex = 0
-        Debug.instance.logMerge = true
-        oneSlot.logMergeCount = 999
-        e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
+        def e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
         then:
         e == null
 
         when:
-        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, walGroupIndex)
-        oneSlot.logMergeCount = 999
+        metaChunkSegmentFlagSeq.addSegmentIndexToTargetWalGroup(walGroupIndex, 0, 10)
         e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
         then:
-        // no segment bytes read
-        e.isEmpty()
-
-        when:
-        // last N
-        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 10, Chunk.Flag.new_write.flagByte(), 1L, walGroupIndex)
-        oneSlot.setSegmentMergeFlag(chunk.maxSegmentIndex - 9, Chunk.Flag.new_write.flagByte(), 1L, walGroupIndex)
-        e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
-        then:
-        e.isEmpty()
-
-        when:
-        ConfForGlobal.pureMemory = true
-        oneSlot.chunk.calcSegmentCountStepWhenOverHalfEstimateKeyNumber = 100
-        oneSlot.chunk.segmentIndex = 100
-        e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
-        then:
-        e == null
-
-        when:
-        oneSlot.chunk.segmentIndex = 90
-        e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
-        then:
-        e == null
+        e != null
 
         cleanup:
         ConfForGlobal.pureMemory = false

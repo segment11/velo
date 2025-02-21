@@ -1649,67 +1649,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    private static final int ONCE_PREPARE_SEGMENT_COUNT = 32;
-
-    // for performance, before persist wal, read some segment in same wal group and  merge immediately
+    // for performance, before persist wal, read some segment in same wal group and merge immediately
     @VisibleForTesting
     BeforePersistWalExtFromMerge readSomeSegmentsBeforePersistWal(int walGroupIndex) {
-        var currentSegmentIndex = chunk.getSegmentIndex();
-        var needMergeSegmentIndex = chunk.prevFindSegmentIndexSkipHalf(false, currentSegmentIndex);
-
-        if (ConfForGlobal.pureMemory) {
-            // do pre-read and merge more frequently to save memory
-            if (chunk.calcSegmentCountStepWhenOverHalfEstimateKeyNumber != 0) {
-                if (currentSegmentIndex >= chunk.calcSegmentCountStepWhenOverHalfEstimateKeyNumber) {
-                    var begin = currentSegmentIndex - chunk.calcSegmentCountStepWhenOverHalfEstimateKeyNumber - 1;
-                    if (begin < 0) {
-                        begin = 0;
-                    }
-                    needMergeSegmentIndex = begin;
-                } else {
-                    needMergeSegmentIndex = chunk.maxSegmentIndex + currentSegmentIndex - chunk.calcSegmentCountStepWhenOverHalfEstimateKeyNumber;
-                }
-            }
-        }
-
-        // find continuous segments those wal group index is same from need merge segment index
-        // * 4 make sure to find one
-        int nextSegmentCount = Math.min(Math.max(walGroupNumber * 4, (chunk.maxSegmentIndex + 1) / 4), 16384);
-        final int[] firstSegmentIndexWithReadSegmentCountArray = metaChunkSegmentFlagSeq.iterateAndFindThoseNeedToMerge(
-                needMergeSegmentIndex, nextSegmentCount,
-                walGroupIndex, chunk.maxOncePersistSegmentSize);
-
-        logMergeCount++;
-        var doLog = Debug.getInstance().logMerge && logMergeCount % 1000 == 0;
-
-        // always consider first 10 and last 10 segments
+        final int[] firstSegmentIndexWithReadSegmentCountArray = metaChunkSegmentFlagSeq.findThoseNeedToMerge(walGroupIndex);
         if (firstSegmentIndexWithReadSegmentCountArray[0] == -1) {
-            final int[] arrayLastN = metaChunkSegmentFlagSeq.iterateAndFindThoseNeedToMerge(
-                    chunk.maxSegmentIndex - ONCE_PREPARE_SEGMENT_COUNT, ONCE_PREPARE_SEGMENT_COUNT,
-                    walGroupIndex, chunk.maxOncePersistSegmentSize);
-            if (arrayLastN[0] != -1) {
-                firstSegmentIndexWithReadSegmentCountArray[0] = arrayLastN[0];
-                firstSegmentIndexWithReadSegmentCountArray[1] = arrayLastN[1];
-            } else {
-                final int[] arrayFirstN = metaChunkSegmentFlagSeq.iterateAndFindThoseNeedToMerge(
-                        0, ONCE_PREPARE_SEGMENT_COUNT,
-                        walGroupIndex, chunk.maxOncePersistSegmentSize);
-                if (arrayFirstN[0] != -1) {
-                    firstSegmentIndexWithReadSegmentCountArray[0] = arrayFirstN[0];
-                    firstSegmentIndexWithReadSegmentCountArray[1] = arrayFirstN[1];
-                }
-            }
-        }
-
-        if (firstSegmentIndexWithReadSegmentCountArray[0] == -1) {
-            if (doLog) {
-                log.warn("No segment need merge when persist wal, s={}, i={}", slot, currentSegmentIndex);
-            }
             return null;
         }
 
         var firstSegmentIndex = firstSegmentIndexWithReadSegmentCountArray[0];
-        var segmentCount = firstSegmentIndexWithReadSegmentCountArray[1];
+        // at most read 16 segments
+        var segmentCount = Math.min(16, firstSegmentIndexWithReadSegmentCountArray[1]);
         var segmentBytesBatchRead = preadForMerge(firstSegmentIndex, segmentCount);
 
         ArrayList<Integer> segmentIndexList = new ArrayList<>();
@@ -1726,9 +1676,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted.flagByte, 0L, 0);
                 updatedFlagPersistedSegmentIndexList.add(segmentIndex);
 
-                if (doLog) {
-                    log.info("Set segment flag to persisted as not write at all, s={}, i={}", slot, segmentIndex);
-                }
                 continue;
             }
 

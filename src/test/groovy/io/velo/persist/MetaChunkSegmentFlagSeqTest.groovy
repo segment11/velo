@@ -215,82 +215,40 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         one.cleanUp()
     }
 
-    def 'test iterate and find'() {
+    def 'test find those need to merge'() {
         given:
-        ConfForGlobal.pureMemory = true
+        final File slotDirTmp = new File(Consts.persistDir, 'test-slot-tmp')
+        slotDirTmp.mkdirs()
 
-        // c1m
-        def confChunk = ConfForSlot.global.confChunk
-        def segmentNumberPerFdOld = confChunk.segmentNumberPerFd
-        def fdPerChunkOld = confChunk.fdPerChunk
-        def c10mConfChunk = ConfForSlot.ConfChunk.c10m
-//        def targetConfChunk = ConfForSlot.ConfChunk.debugMode
-        confChunk.segmentNumberPerFd = c10mConfChunk.segmentNumberPerFd
-        confChunk.fdPerChunk = c10mConfChunk.fdPerChunk
-
-        def one = new MetaChunkSegmentFlagSeq(slot, slotDir)
-
-        int targetWalGroupIndex = 1
+        def one = new MetaChunkSegmentFlagSeq(slot, slotDirTmp)
 
         when:
-        def r = one.iterateAndFindThoseNeedToMerge(1024, 1024 * 10, targetWalGroupIndex, 4)
+        def r = one.findThoseNeedToMerge(0)
         then:
-        r[0] == -1
-        r[1] == 0
+        r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
 
         when:
-        one.setSegmentMergeFlag(1024, Chunk.Flag.new_write.flagByte(), 1L, targetWalGroupIndex)
-        def r2 = one.iterateAndFindThoseNeedToMerge(1024, 1024 * 10, targetWalGroupIndex, 4)
+        one.addSegmentIndexToTargetWalGroup(0, 0, 10)
+        r = one.findThoseNeedToMerge(0)
         then:
-        r2[0] == 1024
-        r2[1] == 1
+        r[0] == 0
+        r[1] == 10
 
         when:
-        one.setSegmentMergeFlag(1024, Chunk.Flag.reuse_new.flagByte(), 1L, targetWalGroupIndex)
-        r2 = one.iterateAndFindThoseNeedToMerge(1024, 1024 * 10, targetWalGroupIndex, 4)
-        then:
-        r2[0] == 1024
-        r2[1] == 1
-
-        when:
-        one.setSegmentMergeFlag(1024, Chunk.Flag.new_write.flagByte(), 1L, targetWalGroupIndex)
-        r2 = one.iterateAndFindThoseNeedToMerge(1024, 1024 * 10, targetWalGroupIndex, 4)
-        then:
-        r2[0] == 1024
-        r2[1] == 1
-
-        when:
-        10.times {
-            one.setSegmentMergeFlag(1024 + it, Chunk.Flag.reuse_new.flagByte(), 1L, targetWalGroupIndex)
+        100.times {
+            one.addSegmentIndexToTargetWalGroup(0, it * 10, 10)
         }
-        r2 = one.iterateAndFindThoseNeedToMerge(1024, 1024 * 10, targetWalGroupIndex, 4)
+        100.times {
+            // find then clear
+            one.findThoseNeedToMerge(0)
+        }
+        r = one.findThoseNeedToMerge(0)
         then:
-        r2[0] == 1024
-        // max 4
-        r2[1] == 4
-
-        when:
-        // cross fd
-        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd - 1, Chunk.Flag.reuse_new.flagByte(), 1L, targetWalGroupIndex)
-        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd, Chunk.Flag.reuse_new.flagByte(), 1L, targetWalGroupIndex)
-        r2 = one.iterateAndFindThoseNeedToMerge(confChunk.segmentNumberPerFd - 1, 1024 * 10, targetWalGroupIndex, 4)
-        then:
-        r2[0] == confChunk.segmentNumberPerFd - 1
-        r2[1] == 1
-
-        when:
-        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd - 1, Chunk.Flag.init.flagByte(), 1L, targetWalGroupIndex)
-        one.setSegmentMergeFlag(confChunk.segmentNumberPerFd, Chunk.Flag.init.flagByte(), 1L, targetWalGroupIndex)
-        r2 = one.iterateAndFindThoseNeedToMerge(confChunk.segmentNumberPerFd - 1, 1024 * 10, targetWalGroupIndex, 4)
-        then:
-        r2[0] == -1
-        r2[1] == 0
+        r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
 
         cleanup:
-        confChunk.segmentNumberPerFd = segmentNumberPerFdOld
-        confChunk.fdPerChunk = fdPerChunkOld
-        one.clear()
-        one.cleanUp()
+        slotDirTmp.deleteDir()
+        ConfForSlot.global = ConfForSlot.c1m
     }
 
     def 'test find can reuse segment index'() {
