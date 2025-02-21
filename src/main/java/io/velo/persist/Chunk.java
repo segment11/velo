@@ -374,7 +374,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             }
         }
         if (ii == -1) {
-            throw new SegmentOverflowException("Segment can not write, s=" + slot + ", i=" + segmentIndex);
+            throw new SegmentOverflowException("Segment can not write, s=" + slot + ", i=" + segmentIndex + ", size=" + segments.size());
         }
         segmentIndex = ii;
 

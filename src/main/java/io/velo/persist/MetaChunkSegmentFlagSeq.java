@@ -292,7 +292,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         return 10;
     }
 
-    private static final int MARK_BEGIN_SEGMENT_INDEX_COUNT = 100;
+    // 10m keys, 16384 wal groups, one wal group ~= 600 keys, 1 persist batch maybe 150 keys, 10 is enough
+    private static final int MARK_BEGIN_SEGMENT_INDEX_COUNT = 10;
     private final long[][] beginSegmentIndexGroupByWalGroupIndex;
     private final int[] beginSegmentIndexLastAddIndexGroupByWalGroupIndex;
 
