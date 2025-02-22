@@ -4,17 +4,32 @@ import io.netty.buffer.ByteBuf;
 import io.netty.util.ByteProcessor;
 import io.netty.util.CharsetUtil;
 
-// reuse decode by netty ByteBuf, copy from camellia-redis-proxy com.netease.nim.camellia.redis.proxy.netty.CommandDecoder
+/**
+ * A class to decode RESP (REdis Serialization Protocol) messages using Netty's ByteBuf.
+ * This implementation is adapted from Camellia Redis Proxy, specifically from the CommandDecoder class.
+ */
 public class RESP {
+    // MARKERS for different types of RESP messages
     static final byte STRING_MARKER = '+';
     static final byte BYTES_MARKER = '$';
     static final byte ARRAY_MARKER = '*';
 
+    // Maximum length of a positive long in characters
     private static final int POSITIVE_LONG_MAX_LENGTH = 19; // length of Long.MAX_VALUE
 
+    /**
+     * A private static class that implements ByteProcessor to process numeric values from ByteBuf.
+     */
     private static final class NumberProcessor implements ByteProcessor {
         private int result;
 
+        /**
+         * Process a byte to form a number.
+         *
+         * @param value The byte value to process.
+         * @return true to continue processing, false to stop.
+         * @throws IllegalArgumentException if the byte value is not a digit.
+         */
         @Override
         public boolean process(byte value) {
             if (value < '0' || value > '9') {
@@ -24,10 +39,18 @@ public class RESP {
             return true;
         }
 
+        /**
+         * Get the processed number.
+         *
+         * @return The processed number.
+         */
         public int content() {
             return result;
         }
 
+        /**
+         * Reset the number processor.
+         */
         public void reset() {
             result = 0;
         }
@@ -35,6 +58,13 @@ public class RESP {
 
     private final NumberProcessor numberProcessor = new NumberProcessor();
 
+    /**
+     * Parse a Redis number from a ByteBuf.
+     *
+     * @param in The ByteBuf containing the number.
+     * @return The parsed integer.
+     * @throws IllegalArgumentException if the number is malformed or too large.
+     */
     private int parseRedisNumber(ByteBuf in) {
         final int readableBytes = in.readableBytes();
         final boolean negative = readableBytes > 0 && in.getByte(in.readerIndex()) == '-';
@@ -57,6 +87,12 @@ public class RESP {
         return numberProcessor.content();
     }
 
+    /**
+     * Read a line from the ByteBuf until the CR LF sequence.
+     *
+     * @param in The ByteBuf to read from.
+     * @return A ByteBuf slice containing the read line without the CR LF sequence, or null if a complete line is not available.
+     */
     private ByteBuf readLine(ByteBuf in) {
         // \r\n
         if (!in.isReadable(2)) {
@@ -71,6 +107,13 @@ public class RESP {
         return data;
     }
 
+    /**
+     * Decode a RESP message from a ByteBuf.
+     *
+     * @param bb The ByteBuf containing the RESP message.
+     * @return A 2D byte array where each element is a RESP message.
+     * @throws IllegalArgumentException if the RESP message format is incorrect.
+     */
     public byte[][] decode(ByteBuf bb) {
         byte[][] bytes = null;
         outerLoop:
@@ -116,7 +159,7 @@ public class RESP {
                             break outerLoop;
                         }
                     } else {
-                        throw new IllegalArgumentException("Unexpected character： " + b);
+                        throw new IllegalArgumentException("Unexpected character: " + b);
                     }
                 }
                 break;

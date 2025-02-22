@@ -10,11 +10,23 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 
+/**
+ * A decoder for incoming requests that can handle both HTTP and RESP (REPL like) protocols.
+ * The decoder reads from a {@link ByteBufs} input and attempts to parse as many complete requests as possible.
+ */
 public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
     // in local thread
     private final RESP resp = new RESP();
     private final ReuseBufs reuseBufs = new ReuseBufs();
 
+    /**
+     * Attempts to decode a single request from the provided ByteBufs.
+     * The method checks for HTTP keywords at the beginning of the buffer, and if not found, treats the input as RESP.
+     *
+     * @param bufs the source of bytes to decode
+     * @return a decoded {@link Request} or null if there aren't enough bytes to form a complete request
+     * @throws MalformedDataException if the data in ByteBufs is malformed and cannot be decoded
+     */
     private Request tryDecodeOne(ByteBufs bufs) throws MalformedDataException {
         if (bufs.remainingBytes() <= 0) {
             return null;
@@ -29,13 +41,15 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
         boolean isHttp = false;
         boolean isRepl = false;
         Map<String, String> httpHeaders = null;
+
+        // Check if there are fewer than 6 bytes to read
         if (compositeByteBuf.readableBytes() < 6) {
             data = resp.decode(compositeByteBuf);
             if (data == null) {
                 return null;
             }
 
-            // not parse all, need wait next buffer from client
+            // Not all data is available yet; wait for more buffers
             for (var bb : data) {
                 if (bb == null) {
                     return null;
@@ -44,17 +58,19 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
         } else {
             compositeByteBuf.markReaderIndex();
 
-            var first6 = new byte[6];
+            // Read the first 6 bytes to determine the request type
+            byte[] first6 = new byte[6];
             compositeByteBuf.readBytes(first6);
-            var isGet = Arrays.equals(first6, 0, 3, HttpHeaderBody.GET, 0, 3);
-            var isPost = Arrays.equals(first6, 0, 4, HttpHeaderBody.POST, 0, 4);
-            var isPut = Arrays.equals(first6, 0, 3, HttpHeaderBody.PUT, 0, 3);
-            var isDelete = Arrays.equals(first6, 0, 6, HttpHeaderBody.DELETE, 0, 6);
+            boolean isGet = Arrays.equals(first6, 0, 3, HttpHeaderBody.GET, 0, 3);
+            boolean isPost = Arrays.equals(first6, 0, 4, HttpHeaderBody.POST, 0, 4);
+            boolean isPut = Arrays.equals(first6, 0, 3, HttpHeaderBody.PUT, 0, 3);
+            boolean isDelete = Arrays.equals(first6, 0, 6, HttpHeaderBody.DELETE, 0, 6);
             isHttp = isGet || isPost || isPut || isDelete;
             isRepl = Arrays.equals(first6, 0, 6, Repl.PROTOCOL_KEYWORD_BYTES, 0, 6);
 
             compositeByteBuf.resetReaderIndex();
 
+            // Parse request based on the protocol type
             if (isHttp) {
                 var h = new HttpHeaderBody();
                 h.feed(compositeByteBuf, compositeByteBuf.readableBytes(), 0);
@@ -64,7 +80,7 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                 httpHeaders = h.getHeaders();
 
                 if (isGet || isDelete) {
-                    // query parameters
+                    // Parse query parameters from the URL
                     var pos = h.url.indexOf("?");
                     if (pos == -1) {
                         return null;
@@ -93,12 +109,13 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                     return null;
                 }
             } else {
+                // Fallback to RESP decoding
                 data = resp.decode(compositeByteBuf);
                 if (data == null) {
                     return null;
                 }
 
-                // not parse all, need wait next buffer from client
+                // Not all data is available yet; wait for more buffers
                 for (var bb : data) {
                     if (bb == null) {
                         return null;
@@ -107,7 +124,7 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
             }
         }
 
-        // remove already consumed bytes
+        // Skip the bytes that were consumed during decoding
         int consumedN = compositeByteBuf.readerIndex() - beforeDecodeReaderIndex;
         bufs.skip(consumedN);
 
@@ -116,6 +133,13 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
         return r;
     }
 
+    /**
+     * Attempts to decode multiple requests from the provided ByteBufs until no more complete requests can be formed.
+     *
+     * @param bufs the source of bytes to decode
+     * @return a list of decoded {@link Request} objects or null if no complete requests were found
+     * @throws MalformedDataException if the data in ByteBufs is malformed and cannot be decoded
+     */
     @Override
     public @Nullable ArrayList<Request> tryDecode(ByteBufs bufs) throws MalformedDataException {
         try {
