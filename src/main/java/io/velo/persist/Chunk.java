@@ -71,7 +71,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     @VisibleForTesting
     long persistCvCountTotal;
 
-    int calcSegmentCountStepWhenOverHalfEstimateKeyNumber = 0;
+    int calcSegmentNumberWhenOverHalfEstimateKeyNumber = 0;
+    long calcCvCountWhenOverHalfSegmentCount = 0;
 
     @VisibleForTesting
     long updatePvmBatchCostTimeTotalUs;
@@ -364,17 +365,21 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         ArrayList<PersistValueMeta> pvmList = new ArrayList<>();
         var segments = ConfForSlot.global.confChunk.isSegmentUseCompression ?
                 segmentBatch.split(list, pvmList) : segmentBatch2.split(list, pvmList);
-        maxOncePersistSegmentSize = Math.max(maxOncePersistSegmentSize, segments.size());
+        assert (segments.size() <= Short.MAX_VALUE);
+        short segmentCount = (short) segments.size();
 
-        var ii = metaChunkSegmentFlagSeq.findCanReuseSegmentIndex(segmentIndex, segments.size());
+        // metric, for debug
+        maxOncePersistSegmentSize = Math.max(maxOncePersistSegmentSize, segmentCount);
+
+        var ii = metaChunkSegmentFlagSeq.findCanReuseSegmentIndex(segmentIndex, segmentCount);
         if (ii == -1) {
             if (segmentIndex != 0) {
                 // from beginning find again
-                ii = metaChunkSegmentFlagSeq.findCanReuseSegmentIndex(0, segments.size());
+                ii = metaChunkSegmentFlagSeq.findCanReuseSegmentIndex(0, segmentCount);
             }
         }
         if (ii == -1) {
-            throw new SegmentOverflowException("Segment can not write, s=" + slot + ", i=" + segmentIndex + ", size=" + segments.size());
+            throw new SegmentOverflowException("Segment can not write, s=" + slot + ", i=" + segmentIndex + ", size=" + segmentCount);
         }
         segmentIndex = ii;
 
@@ -409,12 +414,12 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                         isNewAppendAfterBatch ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
             }
 
-            oneSlot.setSegmentMergeFlagBatch(currentSegmentIndex, segments.size(),
+            oneSlot.setSegmentMergeFlagBatch(currentSegmentIndex, segmentCount,
                     isNewAppendAfterBatch ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segmentSeqListAll, walGroupIndex);
 
-            moveSegmentIndexNext(segments.size());
+            moveSegmentIndexNext(segmentCount);
         } else {
-            if (segments.size() < BATCH_ONCE_SEGMENT_COUNT_PWRITE) {
+            if (segmentCount < BATCH_ONCE_SEGMENT_COUNT_PWRITE) {
                 for (var segment : segments) {
                     int targetSegmentIndex = segment.tmpSegmentIndex() + currentSegmentIndex;
                     var bytes = segment.segmentBytes();
@@ -433,8 +438,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                 }
             } else {
                 // batch write, perf better ? need test
-                var batchCount = segments.size() / BATCH_ONCE_SEGMENT_COUNT_PWRITE;
-                var remainCount = segments.size() % BATCH_ONCE_SEGMENT_COUNT_PWRITE;
+                var batchCount = segmentCount / BATCH_ONCE_SEGMENT_COUNT_PWRITE;
+                var remainCount = segmentCount % BATCH_ONCE_SEGMENT_COUNT_PWRITE;
 
                 var tmpBatchBytes = new byte[chunkSegmentLength * BATCH_ONCE_SEGMENT_COUNT_PWRITE];
                 var buffer = ByteBuffer.wrap(tmpBatchBytes);
@@ -502,12 +507,21 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         persistCallCountTotal++;
         persistCvCountTotal += list.size();
 
-        if (calcSegmentCountStepWhenOverHalfEstimateKeyNumber == 0) {
+        if (calcSegmentNumberWhenOverHalfEstimateKeyNumber == 0) {
             if ((double) persistCvCountTotal / ConfForGlobal.estimateKeyNumber > 0.5) {
-                calcSegmentCountStepWhenOverHalfEstimateKeyNumber = segmentIndex;
-                log.warn("!!!Over half estimate key number, calc segment count step when over half estimate key number, slot={}, " +
-                                "segment count step={}, estimate key number={}",
-                        slot, calcSegmentCountStepWhenOverHalfEstimateKeyNumber, ConfForGlobal.estimateKeyNumber);
+                calcSegmentNumberWhenOverHalfEstimateKeyNumber = segmentIndex;
+                log.warn("!!!Over half estimate key number, calc segment count when over half estimate key number, slot={}, " +
+                                "segment count={}, estimate key number={}",
+                        slot, calcSegmentNumberWhenOverHalfEstimateKeyNumber, ConfForGlobal.estimateKeyNumber);
+            }
+        }
+
+        if (calcCvCountWhenOverHalfSegmentCount == 0) {
+            if (segmentIndex >= halfSegmentNumber) {
+                calcCvCountWhenOverHalfSegmentCount = persistCvCountTotal;
+                log.warn("!!!Over half segment count, calc cv count when over half segment count, slot={}, " +
+                                "persist cv count={}",
+                        slot, persistCvCountTotal);
             }
         }
 
@@ -516,11 +530,12 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         var costT = (System.nanoTime() - beginT) / 1000;
         updatePvmBatchCostTimeTotalUs += costT;
 
-        metaChunkSegmentFlagSeq.addSegmentIndexToTargetWalGroup(walGroupIndex, currentSegmentIndex, segments.size());
+        metaChunkSegmentFlagSeq.markPersistedSegmentIndexToTargetWalGroup(walGroupIndex, currentSegmentIndex, segmentCount);
 
         // update meta, segment index for next time
         oneSlot.setMetaChunkSegmentIndexInt(segmentIndex);
         xForBinlog.setChunkSegmentIndexAfterPersist(segmentIndex);
+        xForBinlog.setToFindForMergeGroupByWalGroup(new XOneWalGroupPersist.ToFindForMergeGroupByWalGroup(walGroupIndex, currentSegmentIndex, segmentCount));
     }
 
     @VisibleForTesting
@@ -667,6 +682,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         map.put("chunk_current_segment_index", (double) segmentIndex);
         map.put("chunk_max_segment_index", (double) maxSegmentIndex);
         map.put("chunk_max_once_segment_size", (double) maxOncePersistSegmentSize);
+        map.put("chunk_segment_number_when_over_half_estimate_key_number", (double) calcSegmentNumberWhenOverHalfEstimateKeyNumber);
+        map.put("chunk_cv_count_when_over_half_segment_count", (double) calcCvCountWhenOverHalfSegmentCount);
 
         if (persistCallCountTotal > 0) {
             map.put("chunk_persist_call_count_total", (double) persistCallCountTotal);

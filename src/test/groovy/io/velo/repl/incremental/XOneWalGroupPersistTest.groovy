@@ -66,6 +66,8 @@ class XOneWalGroupPersistTest extends Specification {
         x.chunkSegmentIndexAfterPersist = 100
         x.lastSegmentSeq = 1L
 
+        x.toFindForMergeGroupByWalGroup = new XOneWalGroupPersist.ToFindForMergeGroupByWalGroup(0, 1, (short) 1)
+
         def encoded = x.encodeWithType()
         def buffer = ByteBuffer.wrap(encoded)
         buffer.get()

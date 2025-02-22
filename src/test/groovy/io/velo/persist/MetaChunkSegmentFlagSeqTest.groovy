@@ -81,6 +81,21 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         one2.getInMemoryCachedBytes().length == one2.allCapacity
 
         when:
+        one2.isOverHalfSegmentNumberForFirstReuseLoop = false
+        def halfSegmentNumber = (ConfForSlot.global.confChunk.maxSegmentNumber() / 2).intValue()
+        one2.setSegmentMergeFlag(halfSegmentNumber, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        one2.setSegmentMergeFlag(halfSegmentNumber, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        then:
+        one2.isOverHalfSegmentNumberForFirstReuseLoop
+
+        when:
+        one2.isOverHalfSegmentNumberForFirstReuseLoop = false
+        List<Long> seqLongList = [1L]
+        one2.setSegmentMergeFlagBatch(halfSegmentNumber, 1, Chunk.Flag.new_write.flagByte(), seqLongList, 0)
+        then:
+        one2.isOverHalfSegmentNumberForFirstReuseLoop
+
+        when:
         boolean exception = false
         try {
             one2.overwriteInMemoryCachedBytes(new byte[one2.allCapacity + 1])
@@ -228,23 +243,63 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
 
         when:
-        one.addSegmentIndexToTargetWalGroup(0, 0, 10)
+        one.isOverHalfSegmentNumberForFirstReuseLoop = true
+        r = one.findThoseNeedToMerge(0)
+        then:
+        r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
+
+        when:
+        one.markPersistedSegmentIndexToTargetWalGroup(0, 0, (short) 10)
         r = one.findThoseNeedToMerge(0)
         then:
         r[0] == 0
-        r[1] == 10
+        r[1] == 5
+
+        when:
+        one.markPersistedSegmentIndexToTargetWalGroup(0, 0, (short) 10)
+        r = one.findThoseNeedToMerge(0)
+        then:
+        r[0] == 5
+        r[1] == 5
 
         when:
         100.times {
-            one.addSegmentIndexToTargetWalGroup(0, it * 10, 10)
+            one.markPersistedSegmentIndexToTargetWalGroup(0, it * 10, (short) 10)
         }
-        100.times {
+        200.times {
             // find then clear
             one.findThoseNeedToMerge(0)
         }
         r = one.findThoseNeedToMerge(0)
         then:
         r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
+
+        when:
+        10.times {
+            one.markPersistedSegmentIndexToTargetWalGroup(0, it, (short) 1)
+        }
+        r = one.findThoseNeedToMerge(0)
+        then:
+        r[1] == 1
+
+        when:
+        one.clear()
+        def markedCount = one.reloadMarkPersistedSegmentIndex()
+        then:
+        markedCount == 0
+
+        when:
+        one.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        one.setSegmentMergeFlag(1, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        one.setSegmentMergeFlag(2, Chunk.Flag.new_write.flagByte(), 1L, 1)
+        one.setSegmentMergeFlag(3, Chunk.Flag.new_write.flagByte(), 1L, 1)
+        one.setSegmentMergeFlag(5, Chunk.Flag.new_write.flagByte(), 1L, 2)
+        markedCount = one.reloadMarkPersistedSegmentIndex()
+        one.printMarkedPersistedSegmentIndex(0)
+        one.printMarkedPersistedSegmentIndex(1)
+        one.printMarkedPersistedSegmentIndex(2)
+        then:
+        markedCount == 3
 
         cleanup:
         slotDirTmp.deleteDir()

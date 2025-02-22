@@ -948,7 +948,8 @@ class OneSlotTest extends Specification {
         e == null
 
         when:
-        metaChunkSegmentFlagSeq.addSegmentIndexToTargetWalGroup(walGroupIndex, 0, 10)
+        metaChunkSegmentFlagSeq.isOverHalfSegmentNumberForFirstReuseLoop = true
+        metaChunkSegmentFlagSeq.markPersistedSegmentIndexToTargetWalGroup(walGroupIndex, 0, (short) 10)
         e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
         then:
         e != null

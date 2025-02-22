@@ -92,6 +92,15 @@ public class XOneWalGroupPersist implements BinlogContent {
         this.lastSegmentSeq = lastSegmentSeq;
     }
 
+    public record ToFindForMergeGroupByWalGroup(int walGroupIndex, int beginSegmentIndex, short segmentCount) {
+    }
+
+    private ToFindForMergeGroupByWalGroup toFindForMergeGroupByWalGroup;
+
+    public void setToFindForMergeGroupByWalGroup(ToFindForMergeGroupByWalGroup toFindForMergeGroupByWalGroup) {
+        this.toFindForMergeGroupByWalGroup = toFindForMergeGroupByWalGroup;
+    }
+
     @Override
     public Type type() {
         return Type.one_wal_group_persist;
@@ -162,6 +171,9 @@ public class XOneWalGroupPersist implements BinlogContent {
         // 4 bytes for chunk segment index after persist
         // 4 bytes for last segment seq
         n += 4 + 8;
+
+        // 4 bytes for wal group index, 4 bytes for begin segment index, 2 bytes for segment count
+        n += 4 + 4 + 2;
         return n;
     }
 
@@ -243,6 +255,10 @@ public class XOneWalGroupPersist implements BinlogContent {
         buffer.putInt(chunkSegmentIndexAfterPersist);
         buffer.putLong(lastSegmentSeq);
 
+        buffer.putInt(toFindForMergeGroupByWalGroup.walGroupIndex);
+        buffer.putInt(toFindForMergeGroupByWalGroup.beginSegmentIndex);
+        buffer.putShort(toFindForMergeGroupByWalGroup.segmentCount);
+
         return bytes;
     }
 
@@ -322,6 +338,12 @@ public class XOneWalGroupPersist implements BinlogContent {
         x.setChunkSegmentIndexAfterPersist(buffer.getInt());
         x.setLastSegmentSeq(buffer.getLong());
 
+        x.setToFindForMergeGroupByWalGroup(new ToFindForMergeGroupByWalGroup(
+                buffer.getInt(),
+                buffer.getInt(),
+                buffer.getShort()
+        ));
+
         if (encodedLength != x.encodedLength()) {
             throw new IllegalStateException("Invalid encoded length=" + encodedLength);
         }
@@ -374,6 +396,11 @@ public class XOneWalGroupPersist implements BinlogContent {
         if (lastSegmentSeq != 0L) {
             replPair.setSlaveCatchUpLastSeq(lastSegmentSeq);
         }
+
+        oneSlot.getMetaChunkSegmentFlagSeq().markPersistedSegmentIndexToTargetWalGroup(
+                toFindForMergeGroupByWalGroup.beginSegmentIndex,
+                toFindForMergeGroupByWalGroup.segmentCount,
+                toFindForMergeGroupByWalGroup.segmentCount);
 
         if (clearWalAfterApply) {
             var targetWal = oneSlot.getWalByBucketIndex(beginBucketIndex);

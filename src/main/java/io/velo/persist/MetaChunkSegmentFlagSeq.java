@@ -10,6 +10,8 @@ import io.velo.task.ITask;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
+import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +33,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     private final short slot;
     private final int fdPerChunk;
     private final int segmentNumberPerFd;
+    private final int halfSegmentNumber;
     private final int maxSegmentNumber;
 
     // for find those segments can reuse
@@ -45,20 +48,6 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     private final byte[] inMemoryCachedBytes;
     private final ByteBuffer inMemoryCachedByteBuffer;
     private RandomAccessFile raf;
-
-    private static void fillSegmentFlagInit(byte[] innerBytes) {
-        var initBytes = new byte[ONE_LENGTH];
-        var initBuffer = ByteBuffer.wrap(initBytes);
-        initBuffer.put(Chunk.Flag.init.flagByte);
-        initBuffer.putLong(0L);
-        initBuffer.putInt(INIT_WAL_GROUP_INDEX);
-
-        var times = innerBytes.length / ONE_LENGTH;
-        var innerBuffer = ByteBuffer.wrap(innerBytes);
-        for (int i = 0; i < times; i++) {
-            innerBuffer.put(initBytes);
-        }
-    }
 
     // for save and load
     // readonly
@@ -109,7 +98,20 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
     private static final Logger log = LoggerFactory.getLogger(MetaChunkSegmentFlagSeq.class);
 
-    private void initBitSetValueWhenFirstStartOrClear() {
+    private void fillSegmentFlagInit(byte[] innerBytes) {
+        var initBytes = new byte[ONE_LENGTH];
+        var initBuffer = ByteBuffer.wrap(initBytes);
+        initBuffer.put(Chunk.Flag.init.flagByte);
+        initBuffer.putLong(0L);
+        initBuffer.putInt(INIT_WAL_GROUP_INDEX);
+
+        var innerBuffer = ByteBuffer.wrap(innerBytes);
+        for (int i = 0; i < maxSegmentNumber; i++) {
+            innerBuffer.put(initBytes);
+        }
+    }
+
+    private void initBitSetValueAndMarkedSegmentIndexWhenFirstStartOrClear() {
         for (int i = 0; i < fdPerChunk; i++) {
             // set all true
             var bitSet = segmentCanReuseBitSet[i];
@@ -118,17 +120,40 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             var stepBy1KBitSet = stepBy1KSegmentsGroupAllMergedFlagBitSet[i];
             stepBy1KBitSet.set(0, max1KSegmentsGroupNumber, false);
         }
+
+        isOverHalfSegmentNumberForFirstReuseLoop = false;
+
+        // clear marked persisted segment index
+        for (int i = 0; i < beginSegmentIndexGroupByWalGroupIndex.length; i++) {
+            var markedLongs = beginSegmentIndexGroupByWalGroupIndex[i];
+            for (int j = 0; j < MARK_BEGIN_SEGMENT_INDEX_COUNT; j++) {
+                markedLongs[j] = 0L;
+            }
+            beginSegmentIndexMoveIndexGroupByWalGroupIndex[i] = 0;
+        }
     }
 
     private void updateCanReuseBitSetWhenOverwrite() {
         // set segment can reuse bit set
         for (int i = 0; i < fdPerChunk; i++) {
             var bitSet = segmentCanReuseBitSet[i];
+            var offset = i * segmentNumberPerFd * ONE_LENGTH;
             for (int j = 0; j < segmentNumberPerFd; j++) {
-                var offset = j * ONE_LENGTH;
                 var flagByte = inMemoryCachedBytes[offset];
                 bitSet.set(j, Chunk.Flag.canReuse(flagByte));
+                offset += ONE_LENGTH;
             }
+        }
+
+        // update is over half segment number flag
+        int offset = halfSegmentNumber * ONE_LENGTH;
+        for (int i = halfSegmentNumber; i < maxSegmentNumber; i++) {
+            var flagByte = inMemoryCachedBytes[offset];
+            if (flagByte != Chunk.Flag.init.flagByte()) {
+                isOverHalfSegmentNumberForFirstReuseLoop = true;
+                break;
+            }
+            offset += ONE_LENGTH;
         }
     }
 
@@ -145,12 +170,14 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             this.segmentCanReuseBitSet[i] = new BitSet(segmentNumberPerFd);
             this.stepBy1KSegmentsGroupAllMergedFlagBitSet[i] = new BitSet(max1KSegmentsGroupNumber);
         }
-        initBitSetValueWhenFirstStartOrClear();
 
         this.beginSegmentIndexGroupByWalGroupIndex = new long[Wal.calcWalGroupNumber()][MARK_BEGIN_SEGMENT_INDEX_COUNT];
-        this.beginSegmentIndexLastAddIndexGroupByWalGroupIndex = new int[Wal.calcWalGroupNumber()];
+        this.beginSegmentIndexMoveIndexGroupByWalGroupIndex = new int[Wal.calcWalGroupNumber()];
+
+        initBitSetValueAndMarkedSegmentIndexWhenFirstStartOrClear();
 
         this.maxSegmentNumber = ConfForSlot.global.confChunk.maxSegmentNumber();
+        this.halfSegmentNumber = maxSegmentNumber / 2;
         this.allCapacity = maxSegmentNumber * ONE_LENGTH;
 
         // max max segment number <= 512KB * 8, 512KB * 8 * 13 = 56MB
@@ -178,10 +205,11 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             log.warn("Read meta chunk segment flag seq file success, file={}, slot={}, all capacity={}KB",
                     file, slot, allCapacity / 1024);
 
-            updateCanReuseBitSetWhenOverwrite();
+            this.updateCanReuseBitSetWhenOverwrite();
         }
 
         this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
+        this.reloadMarkPersistedSegmentIndex();
 
         var initMemoryMB = allCapacity / 1024 / 1024;
         log.info("Static memory init, type={}, MB={}, slot={}", StaticMemoryPrepareBytesStats.Type.meta_chunk_segment_flag_seq, initMemoryMB, slot);
@@ -295,31 +323,116 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     // 10m keys, 16384 wal groups, one wal group ~= 600 keys, 1 persist batch maybe 150 keys, 10 is enough
     private static final int MARK_BEGIN_SEGMENT_INDEX_COUNT = 10;
     private final long[][] beginSegmentIndexGroupByWalGroupIndex;
-    private final int[] beginSegmentIndexLastAddIndexGroupByWalGroupIndex;
+    private final int[] beginSegmentIndexMoveIndexGroupByWalGroupIndex;
 
-    void addSegmentIndexToTargetWalGroup(int walGroupIndex, int beginSegmentIndex, int segmentCount) {
-        var beginSegmentIndexLastAddIndex = beginSegmentIndexLastAddIndexGroupByWalGroupIndex[walGroupIndex];
-        var next = beginSegmentIndexLastAddIndex + 1;
+    @VisibleForTesting
+    int reloadMarkPersistedSegmentIndex() {
+        int currentWalGroupIndex = INIT_WAL_GROUP_INDEX;
+        int tmpBeginSegmentIndex = -1;
+        int continueUsedSegmentCount = 0;
+
+        int markedCount = 0;
+        for (int segmentIndex = 0; segmentIndex < maxSegmentNumber; segmentIndex++) {
+            var offset = segmentIndex * ONE_LENGTH;
+
+            var flagByte = inMemoryCachedByteBuffer.get(offset);
+            var segmentSeq = inMemoryCachedByteBuffer.getLong(offset + 1);
+            var walGroupIndex = inMemoryCachedByteBuffer.getInt(offset + 1 + 8);
+
+            if (currentWalGroupIndex == INIT_WAL_GROUP_INDEX && walGroupIndex != INIT_WAL_GROUP_INDEX) {
+                currentWalGroupIndex = walGroupIndex;
+            }
+
+            if (Chunk.Flag.canReuse(flagByte) || currentWalGroupIndex != walGroupIndex) {
+                if (tmpBeginSegmentIndex != -1) {
+                    markPersistedSegmentIndexToTargetWalGroup(currentWalGroupIndex, tmpBeginSegmentIndex, (short) continueUsedSegmentCount);
+                    markedCount++;
+                }
+
+                // break
+                currentWalGroupIndex = INIT_WAL_GROUP_INDEX;
+                tmpBeginSegmentIndex = -1;
+                continueUsedSegmentCount = 0;
+            } else {
+                if (tmpBeginSegmentIndex == -1) {
+                    tmpBeginSegmentIndex = segmentIndex;
+                }
+                continueUsedSegmentCount++;
+            }
+        }
+
+        return markedCount;
+    }
+
+    @TestOnly
+    void printMarkedPersistedSegmentIndex(int walGroupIndex) {
+        var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
+        var next = beginSegmentIndexMoveIndexGroupByWalGroupIndex[walGroupIndex];
+
+        System.out.println("walGroupIndex: " + walGroupIndex);
+        for (int i = 0; i < MARK_BEGIN_SEGMENT_INDEX_COUNT; i++) {
+            var longValue = markedLongs[i];
+            if (longValue == 0L) {
+                continue;
+            }
+
+            var beginSegmentIndex = (int) (longValue >> 32);
+            var segmentCount = (short) (longValue >> 16);
+            var find2Times = (short) (longValue);
+
+            System.out.println("walGroupIndex: " + walGroupIndex + ", beginSegmentIndex: " + beginSegmentIndex + ", segmentCount: " + segmentCount + ", find2Times: " + find2Times);
+        }
+        System.out.println("next: " + next);
+    }
+
+    public void markPersistedSegmentIndexToTargetWalGroup(int walGroupIndex, int beginSegmentIndex, short segmentCount) {
+        var beginSegmentIndexMoveIndex = beginSegmentIndexMoveIndexGroupByWalGroupIndex[walGroupIndex];
+        var next = beginSegmentIndexMoveIndex + 1;
         if (next == MARK_BEGIN_SEGMENT_INDEX_COUNT) {
             next = 0;
         }
 
-        beginSegmentIndexGroupByWalGroupIndex[walGroupIndex][next] = (long) beginSegmentIndex << 32 | segmentCount;
-        beginSegmentIndexLastAddIndexGroupByWalGroupIndex[walGroupIndex] = next;
+        // once find those need merge, half of segment count, or invalid cv count is not much, for perf
+        final byte find2Times = 1;
+        beginSegmentIndexGroupByWalGroupIndex[walGroupIndex][next] = (long) beginSegmentIndex << 32 | segmentCount << 16 | find2Times;
+        beginSegmentIndexMoveIndexGroupByWalGroupIndex[walGroupIndex] = next;
     }
 
     static final int[] NOT_FIND_SEGMENT_INDEX_AND_COUNT = new int[]{-1, 0};
 
+    @VisibleForTesting
+    boolean isOverHalfSegmentNumberForFirstReuseLoop = false;
+
     int[] findThoseNeedToMerge(int walGroupIndex) {
+        if (!isOverHalfSegmentNumberForFirstReuseLoop) {
+            return NOT_FIND_SEGMENT_INDEX_AND_COUNT;
+        }
+
         var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
         for (int i = 0; i < MARK_BEGIN_SEGMENT_INDEX_COUNT; i++) {
             var markedLong = markedLongs[i];
             if (markedLong != 0L) {
                 var segmentIndex = (int) (markedLong >> 32);
-                var segmentCount = (int) (markedLong & 0xFFFFFFFFL);
-                // clear
-                markedLongs[i] = 0L;
-                return new int[]{segmentIndex, segmentCount};
+                var segmentCount = (short) (markedLong >> 16 & 0xFFFF);
+
+                if (segmentCount == 1) {
+                    // clear
+                    markedLongs[i] = 0L;
+                    return new int[]{segmentIndex, segmentCount};
+                }
+
+                var findTimes = (byte) (markedLong & 0xFF);
+                if (findTimes == 1) {
+                    short halfSegmentCount = (short) (segmentCount / 2);
+                    short leftSegmentCount = (short) (segmentCount - halfSegmentCount);
+
+                    markedLongs[i] = (long) (segmentIndex + halfSegmentCount) << 32 | leftSegmentCount << 16;
+                    return new int[]{segmentIndex, halfSegmentCount};
+                } else {
+                    // clear
+                    markedLongs[i] = 0L;
+                    return new int[]{segmentIndex, segmentCount};
+                }
             }
         }
         return NOT_FIND_SEGMENT_INDEX_AND_COUNT;
@@ -343,7 +456,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     }
 
     public void iterateAll(@NotNull IterateCallBack callBack) {
-        for (int segmentIndex = 0; segmentIndex < ConfForSlot.global.confChunk.maxSegmentNumber(); segmentIndex++) {
+        for (int segmentIndex = 0; segmentIndex < maxSegmentNumber; segmentIndex++) {
             var offset = segmentIndex * ONE_LENGTH;
 
             var flagByte = inMemoryCachedByteBuffer.get(offset);
@@ -379,6 +492,12 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         updateBitSetCanReuseForSegmentIndex(segmentIndex / segmentNumberPerFd,
                 segmentIndex % segmentNumberPerFd,
                 Chunk.Flag.canReuse(flagByte));
+
+        if (!isOverHalfSegmentNumberForFirstReuseLoop) {
+            if (segmentIndex >= halfSegmentNumber) {
+                isOverHalfSegmentNumberForFirstReuseLoop = true;
+            }
+        }
     }
 
     void setSegmentMergeFlagBatch(int beginSegmentIndex,
@@ -404,6 +523,12 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             updateBitSetCanReuseForSegmentIndex(segmentIndex / segmentNumberPerFd,
                     segmentIndex % segmentNumberPerFd,
                     canReuse);
+        }
+
+        if (!isOverHalfSegmentNumberForFirstReuseLoop) {
+            if (beginSegmentIndex >= halfSegmentNumber) {
+                isOverHalfSegmentNumberForFirstReuseLoop = true;
+            }
         }
     }
 
@@ -444,7 +569,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     void clear() {
         if (ConfForGlobal.pureMemory) {
             fillSegmentFlagInit(inMemoryCachedBytes);
-            initBitSetValueWhenFirstStartOrClear();
+            initBitSetValueAndMarkedSegmentIndexWhenFirstStartOrClear();
             System.out.println("Meta chunk segment flag seq clear done, set init flags.");
             return;
         }
@@ -455,7 +580,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             raf.seek(0);
             raf.write(tmpBytes);
             inMemoryCachedByteBuffer.position(0).put(tmpBytes);
-            initBitSetValueWhenFirstStartOrClear();
+            initBitSetValueAndMarkedSegmentIndexWhenFirstStartOrClear();
             System.out.println("Meta chunk segment flag seq clear done, set init flags.");
         } catch (IOException e) {
             throw new RuntimeException(e);

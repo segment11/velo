@@ -1658,8 +1658,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         var firstSegmentIndex = firstSegmentIndexWithReadSegmentCountArray[0];
-        // at most read 16 segments
-        var segmentCount = Math.min(16, firstSegmentIndexWithReadSegmentCountArray[1]);
+        var segmentCount = firstSegmentIndexWithReadSegmentCountArray[1];
         var segmentBytesBatchRead = preadForMerge(firstSegmentIndex, segmentCount);
 
         ArrayList<Integer> segmentIndexList = new ArrayList<>();
@@ -1776,21 +1775,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (ext != null && !ext.isEmpty()) {
             var segmentIndexList = ext.segmentIndexList;
             // continuous segment index
-            if (segmentIndexList.getLast() - segmentIndexList.getFirst() == segmentIndexList.size() - 1) {
-                setSegmentMergeFlagBatch(segmentIndexList.getFirst(), segmentIndexList.size(),
-                        Flag.merged_and_persisted.flagByte, null, walGroupIndex);
+            assert (segmentIndexList.getLast() - segmentIndexList.getFirst() == segmentIndexList.size() - 1);
 
-                for (var segmentIndex : segmentIndexList) {
-                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
-                }
-            } else {
-                // when read some segments before persist wal, meta is continuous, but segments read from chunk may be null, skip some, so is not continuous anymore
-                // usually not happen
-                for (var segmentIndex : segmentIndexList) {
-                    setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted.flagByte, 0L, walGroupIndex);
+            setSegmentMergeFlagBatch(segmentIndexList.getFirst(), segmentIndexList.size(),
+                    Flag.merged_and_persisted.flagByte, null, walGroupIndex);
 
-                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
-                }
+            for (var segmentIndex : segmentIndexList) {
+                xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
             }
         }
 
