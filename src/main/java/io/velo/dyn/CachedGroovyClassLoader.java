@@ -16,13 +16,22 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * A singleton class that provides a cached Groovy class loader.
+ * This class ensures that Groovy scripts are only compiled once and cached for subsequent executions.
+ */
 public class CachedGroovyClassLoader {
-    // singleton
+    // Singleton instance
     private CachedGroovyClassLoader() {
     }
 
     private static final CachedGroovyClassLoader instance = new CachedGroovyClassLoader();
 
+    /**
+     * Returns the singleton instance of CachedGroovyClassLoader.
+     *
+     * @return the singleton instance of CachedGroovyClassLoader
+     */
     public static CachedGroovyClassLoader getInstance() {
         return instance;
     }
@@ -31,6 +40,11 @@ public class CachedGroovyClassLoader {
 
     private volatile GroovyClassLoader gcl;
 
+    /**
+     * Returns the GroovyClassLoader instance.
+     *
+     * @return the GroovyClassLoader instance
+     */
     public GroovyClassLoader getGcl() {
         return gcl;
     }
@@ -38,6 +52,13 @@ public class CachedGroovyClassLoader {
     final static String GROOVY_FILE_EXT = ".groovy";
     final static String GROOVY_FILE_ENCODING = StandardCharsets.UTF_8.name();
 
+    /**
+     * Initializes the GroovyClassLoader with the given class loader, classpath, and compiler configuration.
+     *
+     * @param parentClassLoader the parent ClassLoader to use; if null, the class loader of CachedGroovyClassLoader is used
+     * @param classpath         a string containing paths to add to the classpath, separated by colons
+     * @param config            the CompilerConfiguration to use; if null, a default configuration is used
+     */
     public synchronized void init(ClassLoader parentClassLoader, String classpath, CompilerConfiguration config) {
         // already initialized
         if (gcl != null) {
@@ -61,10 +82,23 @@ public class CachedGroovyClassLoader {
         }
     }
 
+    /**
+     * Evaluates a Groovy script with the given script text.
+     *
+     * @param scriptText the Groovy script text to evaluate
+     * @return the result of the script execution
+     */
     public Object eval(String scriptText) {
         return eval(scriptText, null);
     }
 
+    /**
+     * Evaluates a Groovy script with the given script text and variables.
+     *
+     * @param scriptText the Groovy script text to evaluate
+     * @param variables  a map of variables to pass to the script
+     * @return the result of the script execution
+     */
     public Object eval(String scriptText, Map<String, Object> variables) {
         var clz = gcl.parseClass(scriptText);
         Script script;
@@ -84,6 +118,9 @@ public class CachedGroovyClassLoader {
         return script.run();
     }
 
+    /**
+     * A custom implementation of GroovyClassLoader that caches loaded classes to improve performance.
+     */
     private static class Loader extends GroovyClassLoader {
         Loader(ClassLoader loader, CompilerConfiguration config) {
             super(loader, config);
@@ -94,21 +131,45 @@ public class CachedGroovyClassLoader {
         private final Map<String, Long> lastModified = new HashMap<>();
         private final Map<String, Class<?>> classLoaded = new HashMap<>();
 
+        /**
+         * Checks if a file has been modified since it was last loaded.
+         *
+         * @param f the file to check
+         * @return true if the file has been modified, false otherwise
+         */
         private boolean isModified(File f) {
             var l = lastModified.get(f.getAbsolutePath());
             return l != null && l != f.lastModified();
         }
 
+        /**
+         * Logs the classes currently loaded in the class cache.
+         *
+         * @param x the map of class names to class objects
+         */
         private void logClassLoaded(Map<String, Class> x) {
             for (var entry : x.entrySet()) {
                 log.debug("{}:{}", entry.getKey(), entry.getValue());
             }
         }
 
+        /**
+         * Checks if a file path matches the target class name.
+         *
+         * @param filePath  the file path to check
+         * @param className the target class name
+         * @return true if the file path matches the target class name, false otherwise
+         */
         private static boolean isFileMatchTargetClass(String filePath, String className) {
             return filePath.replace(GROOVY_FILE_EXT, "").replaceAll("/", ".").endsWith(className);
         }
 
+        /**
+         * Retrieves a class from the cache if it exists and is not modified.
+         *
+         * @param source the GroovyCodeSource for the class
+         * @return the cached class if available, null otherwise
+         */
         private Class<?> getFromCache(GroovyCodeSource source) {
             Class<?> r;
             synchronized (classCache) {
@@ -125,6 +186,14 @@ public class CachedGroovyClassLoader {
             return r;
         }
 
+        /**
+         * Parses a Groovy class from the given GroovyCodeSource, caching it if necessary.
+         *
+         * @param codeSource        the GroovyCodeSource containing the script text
+         * @param shouldCacheSource whether to cache the source code; should always be false in this implementation
+         * @return the parsed Groovy class
+         * @throws CompilationFailedException if the script compilation fails
+         */
         @Override
         public Class<?> parseClass(GroovyCodeSource codeSource, boolean shouldCacheSource) throws CompilationFailedException {
             if (log.isDebugEnabled()) {
