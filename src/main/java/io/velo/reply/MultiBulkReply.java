@@ -4,9 +4,16 @@ import io.activej.bytebuf.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.jetbrains.annotations.TestOnly;
 
+/**
+ * Represents a multi-bulk reply in the RESP (REdis Serialization Protocol) format.
+ * A multi-bulk reply is a collection of replies and is used to represent an array of values in RESP.
+ */
 public class MultiBulkReply implements Reply {
     private static final byte[] EMPTY_HTTP_BODY_BYTES = "[]".getBytes();
 
+    /**
+     * Represents a null reply for multi-bulk replies, encoded in RESP3 format.
+     */
     public static final Reply NULL = new Reply() {
         private static final byte[] RESP3_NULL_ARRAY_BYTES = "*-1\r\n".getBytes();
 
@@ -21,6 +28,9 @@ public class MultiBulkReply implements Reply {
         }
     };
 
+    /**
+     * Represents an empty multi-bulk reply, encoded in RESP2 format.
+     */
     public static final Reply EMPTY = new Reply() {
         private static final byte[] RESP2_EMPTY_ARRAY_BYTES = "*0\r\n".getBytes();
 
@@ -42,20 +52,46 @@ public class MultiBulkReply implements Reply {
         }
     };
 
+    /**
+     * A special multi-bulk reply used for SCAN command, consisting of a BulkReply.ZERO and an EMPTY reply.
+     */
     public static final MultiBulkReply SCAN_EMPTY = new MultiBulkReply(new Reply[]{BulkReply.ZERO, EMPTY});
 
+    /**
+     * The marker byte for a multi-bulk reply in RESP format.
+     */
     private static final byte MARKER = '*';
 
+    /**
+     * The replies contained in this multi-bulk reply.
+     */
     private final Reply[] replies;
 
+    /**
+     * Retrieves the replies contained in this multi-bulk reply.
+     *
+     * @return an array of {@link Reply} objects.
+     */
     public Reply[] getReplies() {
         return replies;
     }
 
+    /**
+     * Constructs a new MultiBulkReply with the given array of replies.
+     *
+     * @param replies the replies to be contained in this multi-bulk reply.
+     */
     public MultiBulkReply(Reply[] replies) {
         this.replies = replies;
     }
 
+    /**
+     * Dumps the multi-bulk reply to a StringBuilder for testing purposes.
+     *
+     * @param sb        the StringBuilder to append the dump to.
+     * @param nestCount the level of nesting for indentation.
+     * @return always returns true.
+     */
     @TestOnly
     @Override
     public boolean dumpForTest(StringBuilder sb, int nestCount) {
@@ -76,6 +112,11 @@ public class MultiBulkReply implements Reply {
         return true;
     }
 
+    /**
+     * Returns a {@link ByteBuf} containing the multi-bulk reply encoded in RESP format.
+     *
+     * @return a {@link ByteBuf} with the encoded multi-bulk reply.
+     */
     @Override
     public ByteBuf buffer() {
         // 256 bytes
@@ -93,6 +134,12 @@ public class MultiBulkReply implements Reply {
         return ByteBuf.wrap(buf.array(), 0, buf.writerIndex());
     }
 
+    /**
+     * Returns a {@link ByteBuf} containing the multi-bulk reply encoded in HTTP format.
+     * Current implementation delegates to {@link #buffer()}.
+     *
+     * @return a {@link ByteBuf} with the encoded multi-bulk reply.
+     */
     @Override
     public ByteBuf bufferAsHttp() {
         return buffer();
