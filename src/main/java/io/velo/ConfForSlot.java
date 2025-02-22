@@ -3,10 +3,13 @@ package io.velo;
 import io.velo.persist.FdReadWrite;
 import io.velo.persist.KeyBucket;
 import io.velo.persist.LocalPersist;
+import io.velo.persist.Wal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 
 import static io.velo.persist.LocalPersist.PAGE_SIZE;
 
@@ -203,6 +206,22 @@ public enum ConfForSlot {
          */
         public final ConfLru lruPerFd = new ConfLru(0);
 
+
+        /**
+         * Checks if the bucket configuration is valid.
+         */
+        public void checkIfValid() {
+            if (bucketsPerSlot > KeyBucket.MAX_BUCKETS_PER_SLOT) {
+                throw new IllegalArgumentException("Bucket count per slot too large, bucket count per slot should be less than " + KeyBucket.MAX_BUCKETS_PER_SLOT);
+            }
+            if (bucketsPerSlot % 1024 != 0) {
+                throw new IllegalArgumentException("Bucket count per slot should be multiple of 1024");
+            }
+            if (initialSplitNumber != 1 && initialSplitNumber != 3) {
+                throw new IllegalArgumentException("Initial split number too large, initial split number should be 1 or 3");
+            }
+        }
+
         @Override
         public String toString() {
             return "ConfBucket{" +
@@ -242,17 +261,28 @@ public enum ConfForSlot {
         /**
          * Number of segments per file descriptor.
          */
-        public int segmentNumberPerFd;
+        public int segmentNumberPerFd = 256 * 1024;
 
         /**
          * Number of file descriptors per chunk.
          */
-        public byte fdPerChunk;
+        public byte fdPerChunk = 1;
 
         /**
          * Length of each segment.
          */
-        public int segmentLength;
+        public int segmentLength = 4096;
+
+        /**
+         * List of valid segment lengths.
+         */
+        public static final List<Integer> VALID_SEGMENT_LENGTH_LIST = Arrays.asList(
+                4096,
+                8192,
+                16384,
+                32768,
+                65536
+        );
 
         /**
          * Flag to indicate if segments should use compression.
@@ -274,9 +304,36 @@ public enum ConfForSlot {
         }
 
         /**
+         * Checks if the chunk configuration is valid.
+         */
+        public void checkIfValid() {
+            if (fdPerChunk > ConfForSlot.ConfChunk.MAX_FD_PER_CHUNK) {
+                throw new IllegalArgumentException("Chunk fd per chunk too large, fd per chunk should be less than " + ConfForSlot.ConfChunk.MAX_FD_PER_CHUNK);
+            }
+
+            if (!ConfForSlot.ConfChunk.VALID_SEGMENT_LENGTH_LIST.contains(segmentLength)) {
+                throw new IllegalArgumentException("Chunk segment length invalid, chunk segment length should be one of " + ConfForSlot.ConfChunk.VALID_SEGMENT_LENGTH_LIST);
+            }
+            ConfForSlot.ConfChunk.REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * segmentLength];
+
+            if (ConfForGlobal.estimateOneValueLength > segmentLength / 10) {
+                throw new IllegalArgumentException("Chunk segment length too small, chunk segment length should be larger than " + ConfForGlobal.estimateOneValueLength * 10);
+            }
+
+            // check if chunk file number is enough for all key values encoded, considering invalid need merge values
+            int estimateOneValueEncodedLength = (int) (ConfForGlobal.estimateOneValueLength * 1.5);
+            int estimateChunkCanStoreValueNumber = maxSegmentNumber() * segmentLength / estimateOneValueEncodedLength;
+            // keep 2 times space for chunk file, so pre-read merged segments invalid number is high, for performance
+            if (estimateChunkCanStoreValueNumber < ConfForGlobal.estimateKeyNumber * 2) {
+                throw new IllegalArgumentException("Chunk segment number too small, chunk segment number should be larger than " + ConfForGlobal.estimateKeyNumber * 2 +
+                        ", configured chunk segment number is " + maxSegmentNumber());
+            }
+        }
+
+        /**
          * Empty bytes for once write.
          */
-        public static final byte[] REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4096];
+        public static byte[] REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4096];
 
         @Override
         public String toString() {
@@ -339,6 +396,15 @@ public enum ConfForSlot {
          */
         public double checkAtLeastDoPersistOnceSizeRate = 0.8;
 
+        /**
+         * Checks if the WAL configuration is valid.
+         */
+        public void checkIfValid() {
+            if (!Wal.VALID_ONE_CHARGE_BUCKET_NUMBER_LIST.contains(oneChargeBucketNumber)) {
+                throw new IllegalArgumentException("Wal one charge bucket number invalid, wal one charge bucket number should be in " + Wal.VALID_ONE_CHARGE_BUCKET_NUMBER_LIST);
+            }
+        }
+
         @Override
         public String toString() {
             return "ConfWal{" +
@@ -358,12 +424,12 @@ public enum ConfForSlot {
         /**
          * Length of one segment in the binlog.
          */
-        public final int binlogOneSegmentLength = 1024 * 1024;
+        public int binlogOneSegmentLength = 1024 * 1024;
 
         /**
          * Maximum length of one binlog file.
          */
-        public final int binlogOneFileMaxLength = 512 * 1024 * 1024;
+        public int binlogOneFileMaxLength = 512 * 1024 * 1024;
 
         /**
          * Maximum count of segments in the read cache.
@@ -389,6 +455,13 @@ public enum ConfForSlot {
          * Batch size for iterating keys.
          */
         public int iterateKeysOneBatchSize = 10000;
+
+        /**
+         * Checks if the replication configuration is valid.
+         */
+        public void checkIfValid() {
+
+        }
 
         @Override
         public String toString() {

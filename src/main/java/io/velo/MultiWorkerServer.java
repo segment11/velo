@@ -38,15 +38,12 @@ import io.prometheus.client.hotspot.GarbageCollectorExports;
 import io.prometheus.client.hotspot.MemoryPoolsExports;
 import io.velo.acl.AclUsers;
 import io.velo.acl.Category;
-import io.velo.acl.U;
 import io.velo.decode.HttpHeaderBody;
 import io.velo.decode.Request;
 import io.velo.decode.RequestDecoder;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
-import io.velo.persist.KeyBucket;
 import io.velo.persist.LocalPersist;
-import io.velo.persist.Wal;
 import io.velo.repl.LeaderSelector;
 import io.velo.repl.ReplPair;
 import io.velo.repl.cluster.Shard;
@@ -959,14 +956,9 @@ public class MultiWorkerServer extends Launcher {
             // global conf
             ConfForGlobal.estimateKeyNumber = config.get(ofLong(), "estimateKeyNumber", 1_000_000L);
             log.warn("Global config, estimateKeyNumber={}", ConfForGlobal.estimateKeyNumber);
-            if (ConfForGlobal.estimateKeyNumber > 10_000_000) {
-                throw new IllegalArgumentException("Estimate key number must be less or equal 10_000_000");
-            }
-
+            ConfForGlobal.estimateOneValueLength = config.get(ofInteger(), "estimateOneValueLength", 200);
+            log.warn("Global config, estimateOneValueLength={}", ConfForGlobal.estimateOneValueLength);
             ConfForGlobal.keyAnalysisNumberPercent = config.get(ofInteger(), "keyAnalysisNumberPercent", 1);
-            if (ConfForGlobal.keyAnalysisNumberPercent < 1 || ConfForGlobal.keyAnalysisNumberPercent > 100) {
-                throw new IllegalArgumentException("Key analysis number percent must be between 1 and 100");
-            }
             log.warn("Global config, keyAnalysisNumberPercent={}", ConfForGlobal.keyAnalysisNumberPercent);
 
             ConfForGlobal.datacenterId = config.get(ofLong(), "datacenterId", 0L);
@@ -990,9 +982,6 @@ public class MultiWorkerServer extends Launcher {
             log.warn("Global config, isUseDirectIO={}", ConfForGlobal.isUseDirectIO);
 
             ConfForGlobal.PASSWORD = config.get(ofString(), "password", null);
-            if (ConfForGlobal.PASSWORD != null) {
-                AclUsers.getInstance().upInsert(U.DEFAULT_USER, u -> u.setPassword(U.Password.plain(ConfForGlobal.PASSWORD)));
-            }
 
             ConfForGlobal.pureMemory = config.get(ofBoolean(), "pureMemory", false);
             ConfForGlobal.pureMemoryV2 = config.get(ofBoolean(), "pureMemoryV2", false);
@@ -1042,6 +1031,7 @@ public class MultiWorkerServer extends Launcher {
                 });
             }
             log.warn("Global config, initDynConfigItems={}", ConfForGlobal.initDynConfigItems);
+            ConfForGlobal.checkIfValid();
 
             DictMap.TO_COMPRESS_MIN_DATA_LENGTH = config.get(ofInteger(), "toCompressMinDataLength", 64);
 
@@ -1077,16 +1067,9 @@ public class MultiWorkerServer extends Launcher {
             if (config.getChild("bucket.bucketsPerSlot").hasValue()) {
                 c.confBucket.bucketsPerSlot = config.get(ofInteger(), "bucket.bucketsPerSlot");
             }
-            if (c.confBucket.bucketsPerSlot > KeyBucket.MAX_BUCKETS_PER_SLOT) {
-                throw new IllegalArgumentException("Bucket count per slot too large, bucket count per slot should be less than " + KeyBucket.MAX_BUCKETS_PER_SLOT);
-            }
-            if (c.confBucket.bucketsPerSlot % 1024 != 0) {
-                throw new IllegalArgumentException("Bucket count per slot should be multiple of 1024");
-            }
             if (config.getChild("bucket.initialSplitNumber").hasValue()) {
                 c.confBucket.initialSplitNumber = config.get(ofInteger(), "bucket.initialSplitNumber").byteValue();
             }
-
             if (config.getChild("bucket.lruPerFd.percent").hasValue()) {
                 var percentValue = config.get(ofInteger(), "bucket.lruPerFd.percent");
                 if (percentValue < 0 || percentValue > 100) {
@@ -1094,6 +1077,7 @@ public class MultiWorkerServer extends Launcher {
                 }
                 c.confBucket.lruPerFd.maxSize = percentValue / 100 * c.confBucket.bucketsPerSlot;
             }
+            c.confBucket.checkIfValid();
 
             // override chunk conf
             if (config.getChild("chunk.segmentNumberPerFd").hasValue()) {
@@ -1102,47 +1086,34 @@ public class MultiWorkerServer extends Launcher {
             if (config.getChild("chunk.fdPerChunk").hasValue()) {
                 c.confChunk.fdPerChunk = Byte.parseByte(config.get("chunk.fdPerChunk"));
             }
-            if (c.confChunk.fdPerChunk > ConfForSlot.ConfChunk.MAX_FD_PER_CHUNK) {
-                throw new IllegalArgumentException("Chunk fd per chunk too large, fd per chunk should be less than " + ConfForSlot.ConfChunk.MAX_FD_PER_CHUNK);
-            }
-
             if (config.getChild("chunk.segmentLength").hasValue()) {
                 c.confChunk.segmentLength = config.get(ofInteger(), "chunk.segmentLength");
             }
             c.confChunk.isSegmentUseCompression = config.get(ofBoolean(), "chunk.isSegmentUseCompression", false);
-            log.warn("Chunk segment use compression={}", c.confChunk.isSegmentUseCompression);
-
-            if (config.getChild("chunk.lruPerFd.maxSize").hasValue()) {
-                c.confChunk.lruPerFd.maxSize = config.get(ofInteger(), "chunk.lruPerFd.maxSize");
-            }
+            c.confChunk.lruPerFd.maxSize = config.get(ofInteger(), "chunk.lruPerFd.maxSize", 0);
+            c.confChunk.checkIfValid();
 
             // override wal conf
-            if (config.getChild("wal.oneChargeBucketNumber").hasValue()) {
-                c.confWal.oneChargeBucketNumber = config.get(ofInteger(), "wal.oneChargeBucketNumber");
-            }
-            if (!Wal.VALID_ONE_CHARGE_BUCKET_NUMBER_LIST.contains(c.confWal.oneChargeBucketNumber)) {
-                throw new IllegalArgumentException("Wal one charge bucket number invalid, wal one charge bucket number should be in " + Wal.VALID_ONE_CHARGE_BUCKET_NUMBER_LIST);
-            }
-
-            if (config.getChild("wal.valueSizeTrigger").hasValue()) {
-                c.confWal.valueSizeTrigger = config.get(ofInteger(), "wal.valueSizeTrigger");
-            }
-            if (config.getChild("wal.shortValueSizeTrigger").hasValue()) {
-                c.confWal.shortValueSizeTrigger = config.get(ofInteger(), "wal.shortValueSizeTrigger");
-            }
+            c.confWal.oneChargeBucketNumber = config.get(ofInteger(), "wal.oneChargeBucketNumber", 32);
+            c.confWal.valueSizeTrigger = config.get(ofInteger(), "wal.valueSizeTrigger", 200);
+            c.confWal.shortValueSizeTrigger = config.get(ofInteger(), "wal.shortValueSizeTrigger", 200);
             c.confWal.atLeastDoPersistOnceIntervalMs = config.get(ofInteger(), "wal.atLeastDoPersistOnceIntervalMs", 2);
             c.confWal.checkAtLeastDoPersistOnceSizeRate = config.get(ofDouble(), "wal.checkAtLeastDoPersistOnceSizeRate", 0.8);
+            c.confWal.checkIfValid();
 
-            if (config.getChild("repl.binlogForReadCacheSegmentMaxCount").hasValue()) {
-                c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount").shortValue();
-            }
+            // override repl conf
+            c.confRepl.binlogOneSegmentLength = config.get(ofInteger(), "repl.binlogOneSegmentLength", 1024 * 1024);
+            c.confRepl.binlogOneFileMaxLength = config.get(ofInteger(), "repl.binlogOneFileMaxLength", 512 * 1024 * 1024);
+            c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount", 100).shortValue();
+            c.confRepl.binlogFileKeepMaxCount = config.get(ofInteger(), "repl.binlogFileKeepMaxCount", 10).shortValue();
+            c.confRepl.catchUpOffsetMinDiff = config.get(ofInteger(), "repl.catchUpOffsetMinDiff", 1024 * 1024);
+            c.confRepl.catchUpIntervalMillis = config.get(ofInteger(), "repl.catchUpIntervalMillis", 100);
+            c.confRepl.iterateKeysOneBatchSize = config.get(ofInteger(), "repl.iterateKeysOneBatchSize", 10000);
+            c.confRepl.checkIfValid();
 
-            if (config.getChild("big.string.lru.maxSize").hasValue()) {
-                c.lruBigString.maxSize = config.get(ofInteger(), "big.string.lru.maxSize");
-            }
-            if (config.getChild("kv.lru.maxSize").hasValue()) {
-                c.lruKeyAndCompressedValueEncoded.maxSize = config.get(ofInteger(), "kv.lru.maxSize");
-            }
+            // override other conf
+            c.lruBigString.maxSize = config.get(ofInteger(), "big.string.lru.maxSize", 1000);
+            c.lruKeyAndCompressedValueEncoded.maxSize = config.get(ofInteger(), "kv.lru.maxSize", 100_000);
 
             // important log
             logger.info("!!!!!!\n\nConfForSlot={}\n\n", c);

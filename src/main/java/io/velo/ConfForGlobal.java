@@ -1,5 +1,8 @@
 package io.velo;
 
+import io.velo.acl.AclUsers;
+import io.velo.acl.U;
+
 import java.util.HashMap;
 
 /**
@@ -17,18 +20,23 @@ public class ConfForGlobal {
      * For snowflake ID generator.
      * Identifier for the datacenter.
      */
-    public static long datacenterId;
+    public static long datacenterId = 0L;
 
     /**
      * For snowflake ID generator.
      * Identifier for the machine.
      */
-    public static long machineId;
+    public static long machineId = 0L;
 
     /**
      * Estimated number of keys in one slot.
      */
-    public static long estimateKeyNumber;
+    public static long estimateKeyNumber = 1_000_000L;
+
+    /**
+     * Estimated length of one value.
+     */
+    public static int estimateOneValueLength = 200;
 
     /**
      * Percentage of keys to analyze for statistics (default is 1%).
@@ -63,12 +71,12 @@ public class ConfForGlobal {
     /**
      * Network listen addresses.
      */
-    public static String netListenAddresses;
+    public static String netListenAddresses = "localhost:7379";
 
     /**
      * Flag to indicate if direct I/O should be used.
      */
-    public static boolean isUseDirectIO;
+    public static boolean isUseDirectIO = false;
 
     /**
      * Directory path for data storage (default is "/tmp/velo-data").
@@ -108,7 +116,7 @@ public class ConfForGlobal {
     /**
      * Zookeeper connection string.
      */
-    public static String zookeeperConnectString;
+    public static String zookeeperConnectString = "localhost:2181";
 
     /**
      * Session timeout for Zookeeper in milliseconds (default is 30000 ms).
@@ -184,4 +192,21 @@ public class ConfForGlobal {
      * Initial dynamic configuration items.
      */
     public static final HashMap<String, String> initDynConfigItems = new HashMap<>();
+
+    /**
+     * Check if the configuration is valid.
+     */
+    public static void checkIfValid() {
+        if (estimateKeyNumber > 10_000_000) {
+            throw new IllegalArgumentException("Estimate key number must be less or equal 10_000_000");
+        }
+
+        if (keyAnalysisNumberPercent < 1 || keyAnalysisNumberPercent > 100) {
+            throw new IllegalArgumentException("Key analysis number percent must be between 1 and 100");
+        }
+
+        if (ConfForGlobal.PASSWORD != null) {
+            AclUsers.getInstance().upInsert(U.DEFAULT_USER, u -> u.setPassword(U.Password.plain(ConfForGlobal.PASSWORD)));
+        }
+    }
 }
