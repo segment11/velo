@@ -253,6 +253,27 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r = one.findThoseNeedToMerge(0)
         then:
         r[0] == 0
+        r[1] == 10
+
+        when:
+        one.markPersistedSegmentIndexToTargetWalGroup(0, 0, (short) 34)
+        r = one.findThoseNeedToMerge(0)
+        then:
+        r[0] == 0
+        r[1] == 17
+
+        when:
+        r = one.findThoseNeedToMerge(0)
+        then:
+        r[0] == 17
+        r[1] == 17
+
+        when:
+        one.preReadFindTimesForOncePersist = 1
+        one.markPersistedSegmentIndexToTargetWalGroup(0, 0, (short) 10)
+        r = one.findThoseNeedToMerge(0)
+        then:
+        r[0] == 0
         r[1] == 5
 
         when:

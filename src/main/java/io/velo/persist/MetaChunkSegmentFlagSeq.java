@@ -320,8 +320,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         return 10;
     }
 
-    // 10m keys, 16384 wal groups, one wal group ~= 600 keys, 1 persist batch maybe 150 keys, 10 is enough
-    private static final int MARK_BEGIN_SEGMENT_INDEX_COUNT = 10;
+    // 10m keys, 16384 wal groups, one wal group ~= 600 keys, 1 persist batch maybe 150 keys, 4 batch may persist all keys in a loop
+    private static final int MARK_BEGIN_SEGMENT_INDEX_COUNT = 100;
     private final long[][] beginSegmentIndexGroupByWalGroupIndex;
     private final int[] beginSegmentIndexMoveIndexGroupByWalGroupIndex;
 
@@ -385,6 +385,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         System.out.println("next: " + next);
     }
 
+    // once find those need merge, half of full, or invalid cv count is not much, for perf
+    @VisibleForTesting
+    byte preReadFindTimesForOncePersist = 0;
+
     public void markPersistedSegmentIndexToTargetWalGroup(int walGroupIndex, int beginSegmentIndex, short segmentCount) {
         var beginSegmentIndexMoveIndex = beginSegmentIndexMoveIndexGroupByWalGroupIndex[walGroupIndex];
         var next = beginSegmentIndexMoveIndex + 1;
@@ -392,9 +396,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             next = 0;
         }
 
-        // once find those need merge, half of segment count, or invalid cv count is not much, for perf
-        final byte find2Times = 1;
-        beginSegmentIndexGroupByWalGroupIndex[walGroupIndex][next] = (long) beginSegmentIndex << 32 | segmentCount << 16 | find2Times;
+        // make sure already pre-read and cleared
+        assert (beginSegmentIndexGroupByWalGroupIndex[walGroupIndex][next] == 0L);
+
+        beginSegmentIndexGroupByWalGroupIndex[walGroupIndex][next] = (long) beginSegmentIndex << 32 | segmentCount << 16 | preReadFindTimesForOncePersist;
         beginSegmentIndexMoveIndexGroupByWalGroupIndex[walGroupIndex] = next;
     }
 
@@ -422,6 +427,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
                 }
 
                 var findTimes = (byte) (markedLong & 0xFF);
+                if (segmentCount > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE) {
+                    findTimes = 1;
+                }
+
                 if (findTimes == 1) {
                     short halfSegmentCount = (short) (segmentCount / 2);
                     short leftSegmentCount = (short) (segmentCount - halfSegmentCount);
