@@ -218,8 +218,13 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
     @Override
     public long estimate(@NotNull StringBuilder sb) {
-        sb.append("Meta chunk segment flag seq: ").append(allCapacity).append("\n");
-        return allCapacity;
+        // object header 16B, about 20 fields most are int or long
+        long size = allCapacity + 16 * 10;
+        // bit set size
+        // need not accurate
+        size += fdPerChunk * ((long) segmentNumberPerFd / 8 + 16 * 10);
+        sb.append("Meta chunk segment flag seq: ").append(size).append("\n");
+        return size;
     }
 
     void updateBitSetCanReuseForSegmentIndex(int fdIndex, int targetSegmentIndex, boolean canReuse) {

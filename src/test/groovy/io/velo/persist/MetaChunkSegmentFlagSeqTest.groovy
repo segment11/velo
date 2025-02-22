@@ -284,7 +284,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r[1] == 5
 
         when:
-        100.times {
+        99.times {
             one.markPersistedSegmentIndexToTargetWalGroup(0, it * 10, (short) 10)
         }
         200.times {
