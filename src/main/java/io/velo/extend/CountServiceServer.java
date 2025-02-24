@@ -50,16 +50,40 @@ import static io.activej.inject.module.Modules.combine;
 import static io.activej.launchers.initializers.Initializers.ofEventloop;
 import static io.activej.launchers.initializers.Initializers.ofPrimaryServer;
 
+/**
+ * A server that manages and handles requests for a count service.
+ * This server uses a worker pool to handle network connections and count service operations.
+ */
 public abstract class CountServiceServer extends Launcher {
     private static final int DEFAULT_NET_WORKERS = 2;
 
+    /**
+     * The number of network workers.
+     */
     int netWorkers;
+
+    /**
+     * An array of event loops for network workers.
+     */
     Eventloop[] netWorkerEventloopArray;
+
+    /**
+     * An array of count services, one for each network worker.
+     */
     CountService[] countServices;
+
+    /**
+     * An array of thread IDs for network workers.
+     */
     long[] threadIdArray;
 
     private static final Logger log = LoggerFactory.getLogger(CountServiceServer.class);
 
+    /**
+     * Asynchronously reads the count service state from the last saved files for all slots.
+     *
+     * @return true if all read operations are successful, false otherwise
+     */
     boolean lazyReadFromFile() {
         var beginT = System.currentTimeMillis();
         CompletableFuture<Boolean>[] fArray = new CompletableFuture[countServices.length];
@@ -83,35 +107,64 @@ public abstract class CountServiceServer extends Launcher {
         return isEveryOk;
     }
 
+    /**
+     * The properties file name for configuration.
+     */
     public static final String PROPERTIES_FILE = "velo-count-service.properties";
 
+    /**
+     * The primary server instance.
+     */
     @Inject
     PrimaryServer primaryServer;
 
+    /**
+     * Provides the primary NioReactor.
+     *
+     * @param config the configuration object
+     * @return the primary NioReactor
+     */
     @Provides
     NioReactor primaryReactor(Config config) {
         return Eventloop.builder().initialize(ofEventloop(config.getChild("eventloop.primary"))).build();
     }
 
+    /**
+     * Provides the worker NioReactor.
+     *
+     * @param workerId             the worker ID
+     * @param throttlingController the optional throttling controller
+     * @param config               the configuration object
+     * @return the worker NioReactor
+     */
     @Provides
     @Worker
     NioReactor workerReactor(@WorkerId int workerId, OptionalDependency<ThrottlingController> throttlingController, Config config) {
-        var netHandleEventloop = Eventloop.builder().initialize(ofEventloop(config.getChild("eventloop.worker"))).withInspector(throttlingController.orElse(null)).build();
+        var netHandleEventloop = Eventloop.builder()
+                .initialize(ofEventloop(config.getChild("eventloop.worker")))
+                .withInspector(throttlingController.orElse(null))
+                .build();
 
         netWorkerEventloopArray[workerId] = netHandleEventloop;
         return netHandleEventloop;
     }
 
+    /**
+     * Provides the worker pool.
+     *
+     * @param workerPools the worker pools
+     * @param persistDir  the persistence directory
+     * @param config      the configuration object
+     * @return the worker pool
+     */
     @Provides
     WorkerPool workerPool(WorkerPools workerPools, File persistDir, Config config) {
         var netWorkersGiven = config.get(ofInteger(), "netWorkers", DEFAULT_NET_WORKERS);
         netWorkers = netWorkersGiven;
         netWorkerEventloopArray = new Eventloop[netWorkersGiven];
-
         countServices = new CountService[netWorkersGiven];
 
         var initBytesArraySize = config.get(ofInteger(), "initBytesArraySize", 1024 * 1024);
-//        var useCompress = config.get(ofBoolean(), "useCompress", false);
         final var useCompress = false;
         for (int i = 0; i < netWorkersGiven; i++) {
             countServices[i] = new CountService(initBytesArraySize, useCompress);
@@ -122,18 +175,50 @@ public abstract class CountServiceServer extends Launcher {
         return workerPools.createPool(netWorkersGiven);
     }
 
+    /**
+     * Provides the primary server.
+     *
+     * @param primaryReactor the primary reactor
+     * @param workerServers  the list of worker servers
+     * @param config         the configuration object
+     * @return the primary server
+     */
     @Provides
     PrimaryServer primaryServer(NioReactor primaryReactor, WorkerPool.Instances<SimpleServer> workerServers, Config config) {
-        return PrimaryServer.builder(primaryReactor, workerServers.getList()).initialize(ofPrimaryServer(config.getChild("net"))).build();
+        return PrimaryServer.builder(primaryReactor, workerServers.getList())
+                .initialize(ofPrimaryServer(config.getChild("net")))
+                .build();
     }
 
+    /**
+     * Provides the configuration object.
+     *
+     * @return the configuration object
+     */
     @Provides
     Config config() {
-        return Config.create().with("net.listenAddresses", Config.ofValue(ofInetSocketAddress(), new InetSocketAddress(7379))).overrideWith(ofClassPathProperties(PROPERTIES_FILE, true)).overrideWith(ofSystemProperties("velo-count-service"));
+        return Config.create()
+                .with("net.listenAddresses", Config.ofValue(ofInetSocketAddress(), new InetSocketAddress(7379)))
+                .overrideWith(ofClassPathProperties(PROPERTIES_FILE, true))
+                .overrideWith(ofSystemProperties("velo-count-service"));
     }
 
+    /**
+     * Handles a single request.
+     *
+     * @param request the request to handle
+     * @param socket  the TCP socket associated with the request
+     * @return a promise of the response as a ByteBuf
+     */
     abstract Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket);
 
+    /**
+     * Handles a pipeline of requests.
+     *
+     * @param pipeline the pipeline of requests
+     * @param socket   the TCP socket associated with the requests
+     * @return a promise of the combined response as a ByteBuf
+     */
     private Promise<ByteBuf> handlePipeline(ArrayList<Request> pipeline, ITcpSocket socket) {
         if (pipeline == null) {
             return Promise.of(null);
@@ -162,29 +247,72 @@ public abstract class CountServiceServer extends Launcher {
         });
     }
 
+    /**
+     * Provides the worker server.
+     *
+     * @param reactor         the NioReactor for the worker
+     * @param socketInspector the socket inspector
+     * @param config          the configuration object
+     * @return the worker server
+     */
     @Provides
     @Worker
     SimpleServer workerServer(NioReactor reactor, SocketInspector socketInspector, Config config) {
-        return SimpleServer.builder(reactor, socket -> BinaryChannelSupplier.of(ChannelSuppliers.ofSocket(socket)).decodeStream(new RequestDecoder()).mapAsync(pipeline -> handlePipeline(pipeline, socket)).streamTo(ChannelConsumers.ofSocket(socket))).withSocketInspector(socketInspector).build();
+        return SimpleServer.builder(reactor, socket ->
+                        BinaryChannelSupplier.of(ChannelSuppliers.ofSocket(socket))
+                                .decodeStream(new RequestDecoder())
+                                .mapAsync(pipeline -> handlePipeline(pipeline, socket))
+                                .streamTo(ChannelConsumers.ofSocket(socket)))
+                .withSocketInspector(socketInspector)
+                .build();
     }
 
+    /**
+     * Gets the module configuration for the application.
+     *
+     * @return the module configuration
+     */
     @Override
     protected final Module getModule() {
-        return combine(ServiceGraphModule.create(), WorkerPoolModule.create(), ConfigModule.builder().withEffectiveConfigLogger().build(), getBusinessLogicModule());
+        return combine(
+                ServiceGraphModule.create(),
+                WorkerPoolModule.create(),
+                ConfigModule.builder().withEffectiveConfigLogger().build(),
+                getBusinessLogicModule()
+        );
     }
 
+    /**
+     * Gets the business logic module configuration.
+     *
+     * @return the business logic module configuration
+     */
     protected Module getBusinessLogicModule() {
         return Module.empty();
     }
 
+    /**
+     * Runs the server.
+     *
+     * @throws Exception if an error occurs during server execution
+     */
     @Override
     protected void run() throws Exception {
         awaitShutdown();
     }
 
+    /**
+     * The socket inspector.
+     */
     @Inject
     SocketInspector socketInspector;
 
+    /**
+     * Provides the socket inspector.
+     *
+     * @param config the configuration object
+     * @return the socket inspector
+     */
     @Provides
     SocketInspector socketInspector(Config config) {
         int maxConnections = config.get(ofInteger(), "maxConnections", 1000);
@@ -194,9 +322,18 @@ public abstract class CountServiceServer extends Launcher {
         return r;
     }
 
+    /**
+     * The persistence directory.
+     */
     @Inject
     File persistDir;
 
+    /**
+     * Provides the persistence directory.
+     *
+     * @param config the configuration object
+     * @return the persistence directory
+     */
     @Provides
     File persistDir(Config config) {
         var dirPath = config.get(ofString(), "dir", "/tmp/velo-count-service-data");
@@ -219,6 +356,11 @@ public abstract class CountServiceServer extends Launcher {
         return persistDir;
     }
 
+    /**
+     * Stops the server and performs cleanup operations.
+     *
+     * @throws Exception if an error occurs during shutdown
+     */
     @Override
     protected void onStop() throws Exception {
         if (socketInspector != null) {
@@ -245,20 +387,11 @@ public abstract class CountServiceServer extends Launcher {
         }
     }
 
-    /*
-    start server:
-    java -Xmx2g -Xms2g -XX:+UseZGC -XX:+ZGenerational -Dvelo-count-service-netWorkers=2 -Dvelo-count-service-initBytesArraySize=1048576 -Dvelo-count-service-maxConnections=1000 -cp velo-1.0.0.jar io.velo.extend.CountServiceServer
-    run benchmark
-    memtier_benchmark -h localhost -p 7379 -c 4 -n 1000000 --key-prefix=key: --command="incrby __key__ 5" --hide-histogram
-    memtier_benchmark -h localhost -p 7379 -c 4 -n 1000000 --key-prefix=key: --command="get __key__" --hide-histogram
-    result:
-    20w+ qps
-    incrby:
-    p99 0.2ms
-    p999 0.6ms
-    get:
-    p99 0.2ms
-    p999 1ms
+    /**
+     * The main method to start the server.
+     *
+     * @param args the command-line arguments
+     * @throws Exception if an error occurs during server launch
      */
     public static void main(String[] args) throws Exception {
         Launcher launcher = new CountServiceServer() {
@@ -401,18 +534,6 @@ public abstract class CountServiceServer extends Launcher {
                     return Promises.all(promises).then(($, e) -> e != null ?
                             Promise.of(new ErrorReply(e.getMessage()).buffer())
                             : Promise.of(OKReply.INSTANCE.buffer()));
-
-//                    SettablePromise<Reply> finalPromise = new SettablePromise<>();
-//                    Promises.all(promises).whenComplete((r, e) -> {
-//                        if (e != null) {
-//                            log.error("save error={}", e.getMessage());
-//                            finalPromise.setException(e);
-//                            return;
-//                        }
-//
-//                        finalPromise.set(OKReply.INSTANCE);
-//                    });
-//                    return finalPromise.then(reply -> Promise.of(reply.buffer()));
                 }
 
                 return Promise.of(NilReply.INSTANCE.buffer());
