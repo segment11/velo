@@ -8,21 +8,45 @@ import org.jetbrains.annotations.TestOnly;
 import java.nio.ByteBuffer;
 import java.util.TreeMap;
 
+/**
+ * Represents the binary log content for persisting a single WAL (Write-Ahead Log) group in the Velo replication system.
+ * This class encapsulates all the necessary information required for both the master to create the binlog entry
+ * and the slave to apply the corresponding operation during replication.
+ */
 public class XOneWalGroupPersist implements BinlogContent {
     private boolean isShortValue;
     private boolean clearWalAfterApply;
     private final int walGroupIndex;
 
+    /**
+     * Sets whether the value to be persisted is a short value.
+     * This method is intended for testing purposes only.
+     *
+     * @param isShortValue true if the value is a short value, false otherwise.
+     */
     @TestOnly
     public void setShortValue(boolean isShortValue) {
         this.isShortValue = isShortValue;
     }
 
+    /**
+     * Sets whether the WAL should be cleared after applying the operation.
+     * This method is intended for testing purposes only.
+     *
+     * @param clearWalAfterApply true if the WAL should be cleared, false otherwise.
+     */
     @TestOnly
     public void setClearWalAfterApply(boolean clearWalAfterApply) {
         this.clearWalAfterApply = clearWalAfterApply;
     }
 
+    /**
+     * Constructs a new XOneWalGroupPersist object with the specified parameters.
+     *
+     * @param isShortValue       true if the value to be persisted is a short value, false otherwise.
+     * @param clearWalAfterApply true if the WAL should be cleared after applying the operation, false otherwise.
+     * @param walGroupIndex      The index of the WAL group to be persisted.
+     */
     public XOneWalGroupPersist(boolean isShortValue, boolean clearWalAfterApply, int walGroupIndex) {
         this.isShortValue = isShortValue;
         this.clearWalAfterApply = clearWalAfterApply;
@@ -31,72 +55,143 @@ public class XOneWalGroupPersist implements BinlogContent {
 
     private int beginBucketIndex;
 
+    /**
+     * Sets the beginning bucket index for the WAL group.
+     *
+     * @param beginBucketIndex The beginning bucket index.
+     */
     public void setBeginBucketIndex(int beginBucketIndex) {
         this.beginBucketIndex = beginBucketIndex;
     }
 
     private short[] keyCountForStatsTmp;
 
+    /**
+     * Sets the array of key counts for statistical purposes.
+     *
+     * @param keyCountForStatsTmp The array of key counts.
+     */
     public void setKeyCountForStatsTmp(short[] keyCountForStatsTmp) {
         this.keyCountForStatsTmp = keyCountForStatsTmp;
     }
 
     private byte[][] recordXBytesArray;
 
+    /**
+     * Sets the array of record bytes.
+     *
+     * @param recordXBytesArray The array of record bytes.
+     */
     public void setRecordXBytesArray(byte[][] recordXBytesArray) {
         this.recordXBytesArray = recordXBytesArray;
     }
 
     private byte[][] sharedBytesListBySplitIndex;
 
+    /**
+     * Sets the array of shared bytes by split index.
+     *
+     * @param sharedBytesListBySplitIndex The array of shared bytes.
+     */
     public void setSharedBytesListBySplitIndex(byte[][] sharedBytesListBySplitIndex) {
         this.sharedBytesListBySplitIndex = sharedBytesListBySplitIndex;
     }
 
     private long[] oneWalGroupSeqArrayBySplitIndex;
 
+    /**
+     * Sets the array of WAL group sequences by split index.
+     *
+     * @param oneWalGroupSeqArrayBySplitIndex The array of WAL group sequences.
+     */
     public void setOneWalGroupSeqArrayBySplitIndex(long[] oneWalGroupSeqArrayBySplitIndex) {
         this.oneWalGroupSeqArrayBySplitIndex = oneWalGroupSeqArrayBySplitIndex;
     }
 
     private byte[] splitNumberAfterPut;
 
+    /**
+     * Sets the split number after the put operation.
+     *
+     * @param splitNumberAfterPut The split number.
+     */
     public void setSplitNumberAfterPut(byte[] splitNumberAfterPut) {
         this.splitNumberAfterPut = splitNumberAfterPut;
     }
 
+    /**
+     * Record to hold segment flag and sequence number.
+     *
+     * @param flagByte The flag byte.
+     * @param seq      The sequence number.
+     */
     record SegmentFlagWithSeq(byte flagByte, long seq) {
     }
 
     private final TreeMap<Integer, SegmentFlagWithSeq> updatedChunkSegmentFlagWithSeqMap = new TreeMap<>();
 
+    /**
+     * Adds a segment flag with sequence number to the map.
+     *
+     * @param segmentIndex The segment index.
+     * @param flagByte     The flag byte.
+     * @param seq          The sequence number.
+     */
     public void putUpdatedChunkSegmentFlagWithSeq(int segmentIndex, byte flagByte, long seq) {
         updatedChunkSegmentFlagWithSeqMap.put(segmentIndex, new SegmentFlagWithSeq(flagByte, seq));
     }
 
     private final TreeMap<Integer, byte[]> updatedChunkSegmentBytesMap = new TreeMap<>();
 
+    /**
+     * Adds segment bytes to the map.
+     *
+     * @param segmentIndex The segment index.
+     * @param bytes        The segment bytes.
+     */
     public void putUpdatedChunkSegmentBytes(int segmentIndex, byte[] bytes) {
         updatedChunkSegmentBytesMap.put(segmentIndex, bytes);
     }
 
     private int chunkSegmentIndexAfterPersist;
 
+    /**
+     * Sets the chunk segment index after persisting.
+     *
+     * @param chunkSegmentIndexAfterPersist The chunk segment index.
+     */
     public void setChunkSegmentIndexAfterPersist(int chunkSegmentIndexAfterPersist) {
         this.chunkSegmentIndexAfterPersist = chunkSegmentIndexAfterPersist;
     }
 
     private long lastSegmentSeq;
 
+    /**
+     * Sets the last segment sequence number.
+     *
+     * @param lastSegmentSeq The last segment sequence number.
+     */
     public void setLastSegmentSeq(long lastSegmentSeq) {
         this.lastSegmentSeq = lastSegmentSeq;
     }
 
+    /**
+     * Record to hold information for merging a group by WAL group.
+     *
+     * @param walGroupIndex     The index of the WAL group.
+     * @param beginSegmentIndex The beginning segment index.
+     * @param segmentCount      The number of segments.
+     */
     public record ToFindForMergeGroupByWalGroup(int walGroupIndex, int beginSegmentIndex, short segmentCount) {
     }
 
     private ToFindForMergeGroupByWalGroup toFindForMergeGroupByWalGroup;
 
+    /**
+     * Sets the information for merging a group by WAL group.
+     *
+     * @param toFindForMergeGroupByWalGroup The merge group information.
+     */
     public void setToFindForMergeGroupByWalGroup(ToFindForMergeGroupByWalGroup toFindForMergeGroupByWalGroup) {
         this.toFindForMergeGroupByWalGroup = toFindForMergeGroupByWalGroup;
     }
@@ -177,6 +272,11 @@ public class XOneWalGroupPersist implements BinlogContent {
         return n;
     }
 
+    /**
+     * Encodes this binlog content into a byte array, including the type byte and length check.
+     *
+     * @return The byte array representation of this binlog content.
+     */
     @Override
     public byte[] encodeWithType() {
         var bytes = new byte[encodedLength()];
@@ -262,6 +362,13 @@ public class XOneWalGroupPersist implements BinlogContent {
         return bytes;
     }
 
+    /**
+     * Decodes a binlog content from the provided ByteBuffer.
+     *
+     * @param buffer The ByteBuffer containing the encoded binlog content.
+     * @return The decoded XOneWalGroupPersist object.
+     * @throws IllegalStateException If the encoded length does not match the expected length.
+     */
     public static XOneWalGroupPersist decodeFrom(ByteBuffer buffer) {
         // already read type byte
         var encodedLength = buffer.getInt();
@@ -352,6 +459,12 @@ public class XOneWalGroupPersist implements BinlogContent {
 
     private final LocalPersist localPersist = LocalPersist.getInstance();
 
+    /**
+     * Applies this binlog content to the specified replication slot and repl pair.
+     *
+     * @param slot     The replication slot to which this content is applied.
+     * @param replPair The repl pair associated with this replication session.
+     */
     @Override
     public void apply(short slot, ReplPair replPair) {
         var oneSlot = localPersist.oneSlot(slot);

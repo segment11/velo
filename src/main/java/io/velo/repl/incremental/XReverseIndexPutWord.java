@@ -8,11 +8,39 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Represents the binary log content for a reverse index put word operation in the Velo replication system.
+ * This class encapsulates the necessary information required for both the master to create the binlog entry
+ * and the slave to apply the corresponding operation during replication.
+ */
 public class XReverseIndexPutWord implements BinlogContent {
     private final String lowerCaseWord;
-
     private final long longId;
 
+    /**
+     * Retrieves the lower case word associated with this reverse index operation.
+     *
+     * @return The lower case word.
+     */
+    public String getLowerCaseWord() {
+        return lowerCaseWord;
+    }
+
+    /**
+     * Retrieves the long ID associated with this reverse index operation.
+     *
+     * @return The long ID.
+     */
+    public long getLongId() {
+        return longId;
+    }
+
+    /**
+     * Constructs a new XReverseIndexPutWord object with the specified lower case word and long ID.
+     *
+     * @param lowerCaseWord The lower case word associated with the operation.
+     * @param longId        The long ID associated with the operation.
+     */
     public XReverseIndexPutWord(String lowerCaseWord, long longId) {
         this.lowerCaseWord = lowerCaseWord;
         this.longId = longId;
@@ -20,11 +48,21 @@ public class XReverseIndexPutWord implements BinlogContent {
 
     private static final Logger log = LoggerFactory.getLogger(XReverseIndexPutWord.class);
 
+    /**
+     * Returns the type of this binlog content.
+     *
+     * @return The type of this binlog content.
+     */
     @Override
     public Type type() {
         return Type.reverse_index_put_word;
     }
 
+    /**
+     * Calculates the total number of bytes required to encode this binlog content.
+     *
+     * @return The total number of bytes required for encoding.
+     */
     @Override
     public int encodedLength() {
         // 1 byte for type, 4 bytes for encoded length for check
@@ -32,6 +70,11 @@ public class XReverseIndexPutWord implements BinlogContent {
         return 1 + 4 + 8 + 2 + lowerCaseWord.length();
     }
 
+    /**
+     * Encodes this binlog content into a byte array, including the type byte and length check.
+     *
+     * @return The byte array representation of this binlog content.
+     */
     @Override
     public byte[] encodeWithType() {
         var bytes = new byte[encodedLength()];
@@ -46,6 +89,12 @@ public class XReverseIndexPutWord implements BinlogContent {
         return bytes;
     }
 
+    /**
+     * Decodes a binlog content from the provided ByteBuffer.
+     *
+     * @param buffer The ByteBuffer containing the encoded binlog content.
+     * @return The decoded XReverseIndexPutWord object.
+     */
     public static XReverseIndexPutWord decodeFrom(ByteBuffer buffer) {
         // already read type byte
         var encodedLength = buffer.getInt();
@@ -61,6 +110,13 @@ public class XReverseIndexPutWord implements BinlogContent {
 
     private final LocalPersist localPersist = LocalPersist.getInstance();
 
+    /**
+     * Applies this binlog content to the specified replication slot and repl pair.
+     * This method submits a job to update the reverse index by putting the word and adding the long ID.
+     *
+     * @param slot     The replication slot to which this content is applied.
+     * @param replPair The repl pair associated with this replication session.
+     */
     @Override
     public void apply(short slot, ReplPair replPair) {
         var oneSlot = localPersist.oneSlot(slot);

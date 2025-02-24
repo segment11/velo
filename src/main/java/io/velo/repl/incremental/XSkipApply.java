@@ -8,28 +8,66 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Represents a binary log content object that skips the application of a certain sequence.
+ * This is used in the replication process to handle scenarios where certain changes can be skipped.
+ */
 public class XSkipApply implements BinlogContent {
-    public long getSeq() {
-        return seq;
-    }
 
-    public int getChunkCurrentSegmentIndex() {
-        return chunkCurrentSegmentIndex;
-    }
-
+    /**
+     * The sequence number that this skip apply instruction refers to.
+     */
     private final long seq;
+
+    /**
+     * The current segment index of the chunk that this skip apply instruction refers to.
+     */
     private final int chunkCurrentSegmentIndex;
 
+    /**
+     * Constructs a new XSkipApply instance with the given sequence number and chunk segment index.
+     *
+     * @param seq                      The sequence number to skip.
+     * @param chunkCurrentSegmentIndex The current segment index of the chunk to skip.
+     */
     public XSkipApply(long seq, int chunkCurrentSegmentIndex) {
         this.seq = seq;
         this.chunkCurrentSegmentIndex = chunkCurrentSegmentIndex;
     }
 
+    /**
+     * Returns the sequence number associated with this skip apply instruction.
+     *
+     * @return The sequence number.
+     */
+    public long getSeq() {
+        return seq;
+    }
+
+    /**
+     * Returns the current segment index of the chunk associated with this skip apply instruction.
+     *
+     * @return The chunk segment index.
+     */
+    public int getChunkCurrentSegmentIndex() {
+        return chunkCurrentSegmentIndex;
+    }
+
+    /**
+     * Returns the type of this binlog content, which is {@link Type#skip_apply}.
+     *
+     * @return The type of this binlog content.
+     */
     @Override
     public Type type() {
         return Type.skip_apply;
     }
 
+    /**
+     * Returns the length of this object when encoded, including the type byte.
+     *
+     * @return The encoded length.
+     */
     @Override
     public int encodedLength() {
         // 1 byte for type
@@ -38,6 +76,11 @@ public class XSkipApply implements BinlogContent {
         return 1 + 8 + 4;
     }
 
+    /**
+     * Encodes this object into a byte array, including the type byte.
+     *
+     * @return The encoded byte array.
+     */
     @Override
     public byte[] encodeWithType() {
         var bytes = new byte[encodedLength()];
@@ -50,6 +93,12 @@ public class XSkipApply implements BinlogContent {
         return bytes;
     }
 
+    /**
+     * Decodes an XSkipApply object from a ByteBuffer that has already read the type byte.
+     *
+     * @param buffer The ByteBuffer containing the encoded XSkipApply data.
+     * @return A new XSkipApply instance decoded from the buffer.
+     */
     public static XSkipApply decodeFrom(ByteBuffer buffer) {
         // already read type byte
         var seq = buffer.getLong();
@@ -57,10 +106,23 @@ public class XSkipApply implements BinlogContent {
         return new XSkipApply(seq, chunkCurrentSegmentIndex);
     }
 
+    /**
+     * Logger for logging messages related to this class.
+     */
     private static final Logger log = LoggerFactory.getLogger(XSkipApply.class);
 
+    /**
+     * The LocalPersist instance used to interact with the local data store.
+     */
     private final LocalPersist localPersist = LocalPersist.getInstance();
 
+    /**
+     * Applies this skip apply instruction to the specified slot and replication pair.
+     * This logs a warning, updates the slot's chunk segment index, and sets the last sequence caught up by the slave.
+     *
+     * @param slot     The slot number to apply the skip instruction to.
+     * @param replPair The replication pair involved in the replication process.
+     */
     @Override
     public void apply(short slot, ReplPair replPair) {
         log.warn("Repl skip apply, seq={}, chunk segment index={}",
