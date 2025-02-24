@@ -46,6 +46,13 @@ import static io.activej.inject.module.Modules.combine;
 import static io.activej.launchers.initializers.Initializers.ofEventloop;
 import static io.activej.launchers.initializers.Initializers.ofPrimaryServer;
 
+/**
+ * This is the server part of the e2e test. It is a multi-threaded server that handles RESP (REdis Serialization Protocol)
+ * requests from the client, particularly for SET and GET commands for benchmarking purposes.
+ * <p>
+ * The server leverages ActiveJ's asynchronous capabilities, including event loops, worker pools, and non-blocking I/O operations.
+ * </p>
+ */
 public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
     private static final int DEFAULT_NET_WORKERS = 2;
 
@@ -60,6 +67,12 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
     @Inject
     PrimaryServer primaryServer;
 
+    /**
+     * Provides the NIO reactor for the primary event loop.
+     *
+     * @param config the configuration object
+     * @return a new NioReactor instance configured as the primary reactor
+     */
     @Provides
     NioReactor primaryReactor(Config config) {
         return Eventloop.builder()
@@ -67,6 +80,14 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
                 .build();
     }
 
+    /**
+     * Provides the NIO reactor for worker event loops.
+     *
+     * @param workerId             the unique identifier for the worker
+     * @param throttlingController optional throttling controller
+     * @param config               the configuration object
+     * @return a new NioReactor instance configured as a worker reactor
+     */
     @Provides
     @Worker
     NioReactor workerReactor(@WorkerId int workerId, OptionalDependency<ThrottlingController> throttlingController, Config config) {
@@ -79,6 +100,13 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
         return netHandleEventloop;
     }
 
+    /**
+     * Provides a worker pool with a specified number of net workers.
+     *
+     * @param workerPools the worker pool manager
+     * @param config      the configuration object
+     * @return a new WorkerPool instance with the specified number of net workers
+     */
     @Provides
     WorkerPool workerPool(WorkerPools workerPools, Config config) {
         var netWorkersGiven = config.get(ofInteger(), "netWorkers", DEFAULT_NET_WORKERS);
@@ -95,6 +123,14 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
         return workerPools.createPool(netWorkersGiven);
     }
 
+    /**
+     * Provides the primary server instance, which coordinates net workers.
+     *
+     * @param primaryReactor the primary event loop reactor
+     * @param workerServers  the instances of worker servers
+     * @param config         the configuration object
+     * @return a new PrimaryServer instance
+     */
     @Provides
     PrimaryServer primaryServer(NioReactor primaryReactor, WorkerPool.Instances<SimpleServer> workerServers, Config config) {
         return PrimaryServer.builder(primaryReactor, workerServers.getList())
@@ -102,6 +138,11 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
                 .build();
     }
 
+    /**
+     * Provides the configuration for the server, including default and overridden values.
+     *
+     * @return a new Config instance configured for the server
+     */
     @Provides
     Config config() {
         return Config.create()
@@ -110,8 +151,24 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
                 .overrideWith(ofSystemProperties("velo-e2e-test"));
     }
 
+    /**
+     * Abstract method to handle an individual request. Each subclass must implement this method to define
+     * how requests are processed and responses are generated.
+     *
+     * @param request the request object to be handled
+     * @param socket  the TCP socket from which the request originated
+     * @return a Promise containing the response buffer
+     */
     abstract Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket);
 
+    /**
+     * Handles a pipeline of requests by applying the {@link #handleRequest(Request, ITcpSocket)} method to each request.
+     * If the pipeline contains multiple requests, it handles each request asynchronously and combines the responses.
+     *
+     * @param pipeline the list of requests to be processed
+     * @param socket   the TCP socket associated with the pipeline
+     * @return a Promise containing the combined response buffer
+     */
     private Promise<ByteBuf> handlePipeline(ArrayList<Request> pipeline, ITcpSocket socket) {
         if (pipeline == null) {
             return Promise.of(null);
@@ -141,6 +198,13 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
                 });
     }
 
+    /**
+     * Provides a simple server instance that will handle incoming TCP connections and requests.
+     *
+     * @param reactor the worker reactor
+     * @param config  the configuration object
+     * @return a new SimpleServer instance
+     */
     @Provides
     @Worker
     SimpleServer workerServer(NioReactor reactor, Config config) {
@@ -152,6 +216,12 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
                 .build();
     }
 
+    /**
+     * Returns the module that binds and configures the components of the server. This includes the service graph,
+     * worker pools, and configuration module.
+     *
+     * @return a Module instance containing the server's components and configurations
+     */
     @Override
     protected final Module getModule() {
         return combine(
@@ -164,36 +234,45 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
         );
     }
 
+    /**
+     * Returns the business logic module that may contain additional bindings and configurations
+     * specific to the server's processing logic.
+     *
+     * @return a Module instance containing the business logic
+     */
     protected Module getBusinessLogicModule() {
         return Module.empty();
     }
 
+    /**
+     * Starts the server and awaits shutdown. This method is called when the server is launched.
+     *
+     * @throws Exception if an error occurs during the server's startup or processing
+     */
     @Override
     protected void run() throws Exception {
         awaitShutdown();
     }
 
-    /*
-    start server:
-    java -Xmx2g -Xms2g -XX:+UseZGC -XX:+ZGenerational -Dvelo-e2e-test-netWorkers=2 -DuseThreadLocalMap=true -cp velo-1.0.0.jar io.velo.perf.E2ePerfTestMultiNetWorkerServer
-    run benchmark
-    redis-benchmark -p 7379 -r 1000000 -n 10000000 -c 2 -d 200 -t set --threads 1 -P 10
-    result:
-    60w+ qps
-    p999 0.2ms
-    p9999 1ms
-    TIPS:
-    when -DuseThreadLocalMap=true, the performance is better than -DuseThreadLocalMap=false
+    /**
+     * Main entry point for the server application. It initializes the server with the number of net workers and
+     * the mode of using a thread-local map based on system properties. It then launches the server.
+     *
+     * @param args command-line arguments
+     * @throws Exception if an error occurs during the server's launch
      */
     public static void main(String[] args) throws Exception {
         Launcher launcher = new E2ePerfTestMultiNetWorkerServer() {
             private static final boolean isUseThreadLocalMap;
 
             static {
-                isUseThreadLocalMap = "true".equals(System.getProperty("useThreadLocalMap"));
+                isUseThreadLocalMap = "true".equals(System.getProperty("useThreadLocalMap", "false"));
                 System.out.println("use thread local map: " + isUseThreadLocalMap);
             }
 
+            /**
+             * Called when the server starts. Initializes the thread ID array with the thread IDs of the net worker event loops.
+             */
             @Override
             protected void onStart() throws Exception {
                 threadIdArray = new long[netWorkerEventloopArray.length];
@@ -205,6 +284,12 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
                 }
             }
 
+            /**
+             * Returns the thread-local map associated with the current thread.
+             *
+             * @return a HashMap<String, byte[]> instance representing the thread-local map
+             * @throws IllegalStateException if the thread-local map is not found
+             */
             HashMap<String, byte[]> threadLocalMap() {
                 var threadId = Thread.currentThread().threadId();
                 for (int i = 0; i < threadIdArray.length; i++) {
@@ -215,6 +300,14 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
                 throw new IllegalStateException("thread local map not found");
             }
 
+            /**
+             * Handles an individual request by determining the command type and processing accordingly.
+             * Supports "ping", "set", and "get" commands.
+             *
+             * @param request the request object to be handled
+             * @param socket  the TCP socket associated with the request
+             * @return a Promise containing the response buffer
+             */
             @Override
             Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
                 var cmd = request.cmd();

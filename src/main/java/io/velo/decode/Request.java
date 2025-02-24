@@ -25,7 +25,7 @@ public class Request {
     private final boolean isHttp;
 
     /**
-     * Indicates whether the request is a REPL (Read-Eval-Print Loop) request.
+     * Indicates whether the request is a REPL (slave-master-replication) request.
      */
     private final boolean isRepl;
 
