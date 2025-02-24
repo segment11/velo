@@ -14,24 +14,60 @@ import java.util.ArrayList;
 import static io.velo.CompressedValue.NO_EXPIRE;
 import static io.velo.persist.KeyLoader.KEY_BUCKET_ONE_COST_SIZE;
 
+/**
+ * A data structure that holds key-value pairs optimized for storage and retrieval.
+ * Each key-value pair is stored in a cell, and a key bucket can hold multiple cells.
+ * The `KeyBucket` class provides methods for adding, updating, deleting, and retrieving key-value pairs,
+ * as well as handling expired or deleted entries.
+ */
 public class KeyBucket {
+    /**
+     * Initial capacity of the key bucket, representing the number of cells.
+     */
     public static final short INIT_CAPACITY = 48;
+    /**
+     * Default number of buckets per slot, used in data partitioning.
+     */
     public static final int DEFAULT_BUCKETS_PER_SLOT = 16384 * 4;
-    // if big, wal will cost too much memory
+    /**
+     * Maximum number of buckets per slot, limited to the maximum count per file descriptor.
+     * If big, wal will cost too much memory.
+     */
     public static final int MAX_BUCKETS_PER_SLOT = KeyLoader.MAX_KEY_BUCKET_COUNT_PER_FD;
 
-    // readonly
+    /**
+     * An empty byte array with a size of `KEY_BUCKET_ONE_COST_SIZE` used for initializing key buckets.
+     * Read only.
+     */
     static final byte[] EMPTY_BYTES = new byte[KeyLoader.KEY_BUCKET_ONE_COST_SIZE];
 
-    // key length short 2 + key length <= 32 + value length byte 1 + (pvm length 12 or short value case encoded number 17 / string 25 ) <= 60
-    // if key length > 32, refer CompressedValue.KEY_MAX_LENGTH, one key may cost 2 cells
-    // for example, big string cv is short value, encoded length = 48, if key length = 16, will cost 2 cells
+
+    /**
+     * The maximum length of a single cell, considering metadata and value length.
+     * key length short 2 + key length <= 32 + value length byte 1 + (pvm length 12 or short value case encoded number 17 / string 25 ) <= 60
+     * if key length > 32, refer CompressedValue.KEY_MAX_LENGTH, one key may cost 2 cells
+     * for example, big string cv is short value, encoded length = 48, if key length = 16, will cost 2 cells
+     */
     private static final int ONE_CELL_LENGTH = 60;
+    /**
+     * The length of the hash value stored in each cell.
+     */
     private static final int HASH_VALUE_LENGTH = 8;
+    /**
+     * The length of the expiration time stored in each cell.
+     */
     private static final int EXPIRE_AT_VALUE_LENGTH = 8;
+    /**
+     * The length of the sequence number stored in each cell.
+     */
     private static final int SEQ_VALUE_LENGTH = 8;
+    /**
+     * The total length of metadata stored in each cell (hash value, expiration time, and sequence number).
+     */
     private static final int ONE_CELL_META_LENGTH = HASH_VALUE_LENGTH + EXPIRE_AT_VALUE_LENGTH + SEQ_VALUE_LENGTH;
-    // seq long + size short + cell count short
+    /**
+     * The length of the header in bytes, including sequence number, size, and cell count.
+     */
     private static final int HEADER_LENGTH = 8 + 2 + 2;
 
     // just make sure one page size 4096 can contain all cells when refactoring
@@ -46,16 +82,31 @@ public class KeyBucket {
     short size;
     short cellCost;
 
+    /**
+     * The last update sequence number for this key bucket.
+     */
     @VisibleForTesting
     long lastUpdateSeq;
     private byte lastUpdateSplitNumber;
 
     private final SnowFlake snowFlake;
 
+    /**
+     * Calculate the offset for a given cell index.
+     *
+     * @param cellIndex the index of the cell.
+     * @return the offset in bytes for the given cell index.
+     */
     private int oneCellOffset(int cellIndex) {
         return HEADER_LENGTH + capacity * ONE_CELL_META_LENGTH + cellIndex * ONE_CELL_LENGTH;
     }
 
+    /**
+     * Calculate the meta index for a given cell index.
+     *
+     * @param cellIndex the index of the cell.
+     * @return the meta index in bytes for the given cell index.
+     */
     private int metaIndex(int cellIndex) {
         return HEADER_LENGTH + cellIndex * ONE_CELL_META_LENGTH;
     }
@@ -68,10 +119,20 @@ public class KeyBucket {
     final byte splitIndex;
     byte splitNumber;
 
+    /**
+     * Get the split number of this key bucket.
+     *
+     * @return the split number.
+     */
     public byte getSplitNumber() {
         return splitNumber;
     }
 
+    /**
+     * Get the split index of this key bucket.
+     *
+     * @return the split index.
+     */
     public byte getSplitIndex() {
         return splitIndex;
     }
@@ -94,11 +155,18 @@ public class KeyBucket {
     final byte[] bytes;
     final int position;
 
+    /**
+     * Check if this key bucket shares bytes with another key bucket.
+     *
+     * @return true if the bytes are shared, false otherwise.
+     */
     boolean isSharedBytes() {
         return bytes.length != KEY_BUCKET_ONE_COST_SIZE;
     }
 
-    // for put all exists and new added after rehash
+    /**
+     * Clear all key-value pairs in this key bucket.
+     */
     public void clearAll() {
         this.buffer.position(0).put(EMPTY_BYTES);
         this.size = 0;
@@ -107,10 +175,31 @@ public class KeyBucket {
         this.lastUpdateSplitNumber = 0;
     }
 
+    /**
+     * Create a new key bucket with the specified parameters.
+     *
+     * @param slot        the slot number of this key bucket.
+     * @param bucketIndex the index of this key bucket in the slot.
+     * @param splitIndex  the split index.
+     * @param splitNumber the split number.
+     * @param bytes       the byte array containing the key-value pairs.
+     * @param snowFlake   a SnowFlake instance for generating unique sequence numbers.
+     */
     public KeyBucket(short slot, int bucketIndex, byte splitIndex, byte splitNumber, @Nullable byte[] bytes, @NotNull SnowFlake snowFlake) {
         this(slot, bucketIndex, splitIndex, splitNumber, bytes, 0, snowFlake);
     }
 
+    /**
+     * Create a new key bucket with the specified parameters.
+     *
+     * @param slot        the slot number of this key bucket.
+     * @param bucketIndex the index of this key bucket in the slot.
+     * @param splitIndex  the split index.
+     * @param splitNumber the split number.
+     * @param sharedBytes the shared byte array containing the key-value pairs.
+     * @param position    the position in the shared byte array.
+     * @param snowFlake   a SnowFlake instance for generating unique sequence numbers.
+     */
     public KeyBucket(short slot, int bucketIndex, byte splitIndex, byte splitNumber, @Nullable byte[] sharedBytes, int position, @NotNull SnowFlake snowFlake) {
         this.slot = slot;
         this.bucketIndex = bucketIndex;
@@ -162,10 +251,27 @@ public class KeyBucket {
         }
     }
 
+    /**
+     * Interface for callbacks during key-value pair iteration.
+     */
     public interface IterateCallBack {
+        /**
+         * Callback method for each key-value pair.
+         *
+         * @param keyHash    the hash value of the key.
+         * @param expireAt   the expiration time.
+         * @param seq        the sequence number.
+         * @param keyBytes   the byte array of the key.
+         * @param valueBytes the byte array of the value.
+         */
         void call(long keyHash, long expireAt, long seq, byte[] keyBytes, byte[] valueBytes);
     }
 
+    /**
+     * Iterate over all key-value pairs in this key bucket and call the callback for each pair.
+     *
+     * @param callBack the callback to be called for each key-value pair.
+     */
     public void iterate(@NotNull IterateCallBack callBack) {
         for (int cellIndex = 0; cellIndex < capacity; cellIndex++) {
             int metaIndex = metaIndex(cellIndex);
@@ -185,6 +291,12 @@ public class KeyBucket {
     private record KeyBytesAndValueBytes(byte[] keyBytes, byte[] valueBytes) {
     }
 
+    /**
+     * Retrieve the key and value bytes from a specific cell.
+     *
+     * @param cellIndex the index of the cell.
+     * @return a record containing the key and value bytes.
+     */
     private KeyBytesAndValueBytes getFromOneCell(int cellIndex) {
         buffer.position(oneCellOffset(cellIndex));
 
@@ -207,11 +319,24 @@ public class KeyBucket {
         return new KeyBytesAndValueBytes(keyBytes, valueBytes);
     }
 
+    /**
+     * Record containing metadata about a key-value pair.
+     */
     record KVMeta(int offset, short keyLength, byte valueLength) {
+        /**
+         * Calculate the offset of the value bytes.
+         *
+         * @return the offset of the value bytes.
+         */
         int valueOffset() {
             return offset + Short.BYTES + keyLength + Byte.BYTES;
         }
 
+        /**
+         * Calculate the number of cells required to store the key-value pair.
+         *
+         * @return the number of cells.
+         */
         int cellCount() {
             int keyWithValueBytesLength = Short.BYTES + keyLength + Byte.BYTES + valueLength;
             int cellCount = keyWithValueBytesLength / ONE_CELL_LENGTH;
@@ -221,6 +346,13 @@ public class KeyBucket {
             return cellCount;
         }
 
+        /**
+         * Calculate the number of cells required to store a key-value pair with the given key and value lengths.
+         *
+         * @param keyLength   the length of the key.
+         * @param valueLength the length of the value.
+         * @return the number of cells.
+         */
         static int calcCellCount(short keyLength, byte valueLength) {
             int keyWithValueBytesLength = Short.BYTES + keyLength + Byte.BYTES + valueLength;
             int cellCount = keyWithValueBytesLength / ONE_CELL_LENGTH;
@@ -242,11 +374,20 @@ public class KeyBucket {
 
     private final ByteBuffer buffer;
 
+    /**
+     * Update the metadata of this key bucket (sequence number, size, and cell cost).
+     */
     public void putMeta() {
         updateSeq();
         buffer.position(0).putLong(lastUpdateSeq).putShort(size).putShort(cellCost);
     }
 
+    /**
+     * Encode this key bucket into a byte array.
+     *
+     * @param doUpdateSeq if true, update the sequence number before encoding.
+     * @return the byte array representation of this key bucket.
+     */
     public byte[] encode(boolean doUpdateSeq) {
         if (doUpdateSeq) {
             updateSeq();
@@ -262,19 +403,45 @@ public class KeyBucket {
         }
     }
 
+    /**
+     * Interface for callbacks when a key-value pair is expired or deleted.
+     */
     public interface CvExpiredOrDeletedCallBack {
+        /**
+         * Callback method for expired key-value pairs.
+         *
+         * @param key           the key.
+         * @param shortStringCv the CompressedValue of the expired key-value pair.
+         */
         void handle(@NotNull String key, @NotNull CompressedValue shortStringCv);
 
+        /**
+         * Callback method for deleted key-value pairs.
+         *
+         * @param key the key.
+         * @param cv  the PersistValueMeta of the deleted key-value pair.
+         */
         void handle(@NotNull String key, @NotNull PersistValueMeta cv);
     }
 
     CvExpiredOrDeletedCallBack cvExpiredOrDeletedCallBack;
 
+    /**
+     * Clear an expired or deleted key-value pair at the specified cell index.
+     *
+     * @param i the cell index.
+     */
     @VisibleForTesting
     void clearOneExpiredOrDeleted(int i) {
         clearOneExpiredOrDeleted(i, null);
     }
 
+    /**
+     * Clear an expired or deleted key-value pair at the specified cell index.
+     *
+     * @param i                 the cell index.
+     * @param kvBytesAlreadyGet the key-value bytes if already retrieved.
+     */
     private void clearOneExpiredOrDeleted(int i, @Nullable KeyBytesAndValueBytes kvBytesAlreadyGet) {
         if (i >= capacity) {
             throw new IllegalArgumentException("i >= capacity");
@@ -306,7 +473,10 @@ public class KeyBucket {
         cellCost -= cellCount;
     }
 
-    void clearAllExpired() {
+    /**
+     * Clear all expired key-value pairs in this key bucket.
+     */
+    public void clearAllExpired() {
         for (int i = 0; i < capacity; i++) {
             int metaIndex = metaIndex(i);
             var cellHashValue = buffer.getLong(metaIndex);
@@ -321,6 +491,11 @@ public class KeyBucket {
         }
     }
 
+    /**
+     * Print all key-value pairs in this key bucket.
+     *
+     * @return a string representation of all key-value pairs.
+     */
     @TestOnly
     String allPrint() {
         var sb = new StringBuilder();
@@ -332,6 +507,9 @@ public class KeyBucket {
         return sb.toString();
     }
 
+    /**
+     * Update the sequence number of this key bucket.
+     */
     @VisibleForTesting
     void updateSeq() {
         long seq = snowFlake.nextId();
@@ -343,17 +521,53 @@ public class KeyBucket {
     private record CanPutResult(boolean flag, boolean isUpdate) {
     }
 
+    /**
+     * Record containing the result of a put operation.
+     */
     public record DoPutResult(boolean isPut, boolean isUpdate) {
     }
 
+    /**
+     * Add or update a key-value pair in this key bucket.
+     *
+     * @param keyBytes   the byte array of the key.
+     * @param keyHash    the hash value of the key.
+     * @param expireAt   the expiration time.
+     * @param seq        the sequence number.
+     * @param valueBytes the byte array of the value.
+     * @return the result of the put operation.
+     */
     public DoPutResult put(byte[] keyBytes, long keyHash, long expireAt, long seq, byte[] valueBytes) {
         return put(keyBytes, keyHash, expireAt, seq, valueBytes, true);
     }
 
+    /**
+     * Adds or updates a key-value pair in this key bucket.
+     *
+     * @param keyBytes    the byte array of the key.
+     * @param keyHash     the hash value of the key.
+     * @param expireAt    the expiration time.
+     * @param seq         the sequence number.
+     * @param valueBytes  the byte array of the value.
+     * @param doUpdateSeq if true, update the sequence number after putting the key-value pair.
+     * @return the result of the put operation, indicating whether the operation was successful and if it was an update.
+     */
     public DoPutResult put(byte[] keyBytes, long keyHash, long expireAt, long seq, byte[] valueBytes, boolean doUpdateSeq) {
         return put(keyBytes, keyHash, expireAt, seq, valueBytes, doUpdateSeq, true);
     }
 
+    /**
+     * Private method to add or update a key-value pair in this key bucket.
+     *
+     * @param keyBytes               the byte array of the key.
+     * @param keyHash                the hash value of the key.
+     * @param expireAt               the expiration time.
+     * @param seq                    the sequence number.
+     * @param valueBytes             the byte array of the value.
+     * @param doUpdateSeq            if true, update the sequence number after putting the key-value pair.
+     * @param doDeleteTargetKeyFirst if true, delete the target key before putting the new key-value pair.
+     * @return the result of the put operation, indicating whether the operation was successful and if it was an update.
+     */
     private DoPutResult put(byte[] keyBytes, long keyHash, long expireAt, long seq, byte[] valueBytes, boolean doUpdateSeq, boolean doDeleteTargetKeyFirst) {
         if (valueBytes.length > Byte.MAX_VALUE) {
             throw new IllegalArgumentException("Value bytes too large, value length=" + valueBytes.length);
@@ -400,6 +614,10 @@ public class KeyBucket {
         return new DoPutResult(true, isUpdate);
     }
 
+    /**
+     * Re-puts all key-value pairs in this key bucket. This method is used when there is no available space for a new entry,
+     * so it clears the current entries and re-inserts them in order to make space.
+     */
     @VisibleForTesting
     void rePutAll() {
         ArrayList<PersistValueMeta> tmpList = new ArrayList<>(INIT_CAPACITY);
@@ -424,6 +642,17 @@ public class KeyBucket {
         }
     }
 
+    /**
+     * Puts a key-value pair into the specified cell index.
+     *
+     * @param putToCellIndex the index of the cell where the key-value pair should be placed.
+     * @param cellCount      the number of cells required for storing the key-value pair.
+     * @param keyHash        the hash value of the key.
+     * @param expireAt       the expiration time.
+     * @param seq            the sequence number.
+     * @param keyBytes       the byte array of the key.
+     * @param valueBytes     the byte array of the value.
+     */
     private void putTo(int putToCellIndex, int cellCount, long keyHash, long expireAt, long seq, byte[] keyBytes, byte[] valueBytes) {
         int metaIndex = metaIndex(putToCellIndex);
         buffer.putLong(metaIndex, keyHash);
@@ -463,6 +692,15 @@ public class KeyBucket {
         buffer.put(valueBytes);
     }
 
+    /**
+     * Checks if a key-value pair can be put into the specified cell index.
+     *
+     * @param keyBytes  the byte array of the key.
+     * @param keyHash   the hash value of the key.
+     * @param cellIndex the index of the cell to check.
+     * @param cellCount the number of cells required for storing the key-value pair.
+     * @return a CanPutResult object indicating whether the key-value pair can be put and if it's an update.
+     */
     private CanPutResult canPut(byte[] keyBytes, long keyHash, int cellIndex, int cellCount) {
         int metaIndex = metaIndex(cellIndex);
         var cellHashValue = buffer.getLong(metaIndex);
@@ -497,6 +735,14 @@ public class KeyBucket {
         }
     }
 
+    /**
+     * Checks if a range of cells starting from the specified index is available for putting a key-value pair.
+     *
+     * @param cellIndex   the starting index of the cell.
+     * @param cellCount   the number of cells to check.
+     * @param isForUpdate if true, checks for updating an existing key-value pair.
+     * @return true if the cells are available, false otherwise.
+     */
     @VisibleForTesting
     boolean isCellAvailableN(int cellIndex, int cellCount, boolean isForUpdate) {
         for (int i = 0; i < cellCount; i++) {
@@ -518,12 +764,27 @@ public class KeyBucket {
         return true;
     }
 
+    /**
+     * Record containing the expiration time and sequence number of a key-value pair.
+     */
     public record ExpireAtAndSeq(long expireAt, long seq) {
+        /**
+         * Checks if the key-value pair has expired.
+         *
+         * @return true if the key-value pair has expired, false otherwise.
+         */
         boolean isExpired() {
             return expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis();
         }
     }
 
+    /**
+     * Retrieves the expiration time and sequence number of a key-value pair by its key.
+     *
+     * @param keyBytes the byte array of the key.
+     * @param keyHash  the hash value of the key.
+     * @return an ExpireAtAndSeq object containing the expiration time and sequence number, or null if the key does not exist.
+     */
     public ExpireAtAndSeq getExpireAtAndSeqByKey(byte[] keyBytes, long keyHash) {
         if (size == 0) {
             return null;
@@ -539,6 +800,14 @@ public class KeyBucket {
         return null;
     }
 
+    /**
+     * Retrieves the expiration time and sequence number of a key-value pair by its key and cell index.
+     *
+     * @param keyBytes  the byte array of the key.
+     * @param keyHash   the hash value of the key.
+     * @param cellIndex the index of the cell.
+     * @return an ExpireAtAndSeq object containing the expiration time and sequence number, or null if the key does not exist.
+     */
     private ExpireAtAndSeq getExpireAtAndSeqByKeyWithCellIndex(byte[] keyBytes, long keyHash, int cellIndex) {
         int metaIndex = metaIndex(cellIndex);
         var cellHashValue = buffer.getLong(metaIndex);
@@ -562,12 +831,27 @@ public class KeyBucket {
         return new ExpireAtAndSeq(expireAt, seq);
     }
 
+    /**
+     * Record containing the value bytes, expiration time, and sequence number of a key-value pair.
+     */
     public record ValueBytesWithExpireAtAndSeq(byte[] valueBytes, long expireAt, long seq) {
+        /**
+         * Checks if the key-value pair has expired.
+         *
+         * @return true if the key-value pair has expired, false otherwise.
+         */
         boolean isExpired() {
             return expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis();
         }
     }
 
+    /**
+     * Retrieves the value bytes, expiration time, and sequence number of a key-value pair by its key.
+     *
+     * @param keyBytes the byte array of the key.
+     * @param keyHash  the hash value of the key.
+     * @return a ValueBytesWithExpireAtAndSeq object containing the value bytes, expiration time, and sequence number, or null if the key does not exist.
+     */
     public ValueBytesWithExpireAtAndSeq getValueXByKey(byte[] keyBytes, long keyHash) {
         if (size == 0) {
             return null;
@@ -583,6 +867,14 @@ public class KeyBucket {
         return null;
     }
 
+    /**
+     * Retrieves the value bytes, expiration time, and sequence number of a key-value pair by its key and cell index.
+     *
+     * @param keyBytes  the byte array of the key.
+     * @param keyHash   the hash value of the key.
+     * @param cellIndex the index of the cell.
+     * @return a ValueBytesWithExpireAtAndSeq object containing the value bytes, expiration time, and sequence number, or null if the key does not exist.
+     */
     private ValueBytesWithExpireAtAndSeq getValueXByKeyWithCellIndex(byte[] keyBytes, long keyHash, int cellIndex) {
         int metaIndex = metaIndex(cellIndex);
         var cellHashValue = buffer.getLong(metaIndex);
@@ -608,6 +900,12 @@ public class KeyBucket {
         return new ValueBytesWithExpireAtAndSeq(valueBytes, expireAt, seq);
     }
 
+    /**
+     * Clears a range of cells starting from the specified index.
+     *
+     * @param beginCellIndex the starting index of the cell.
+     * @param cellCount      the number of cells to clear.
+     */
     private void clearCell(int beginCellIndex, int cellCount) {
         for (int i = 0; i < cellCount; i++) {
             var nextCellIndex = beginCellIndex + i;
@@ -624,6 +922,14 @@ public class KeyBucket {
         buffer.put(beginCellOffset, bytes0);
     }
 
+    /**
+     * Deletes a key-value pair by its key.
+     *
+     * @param keyBytes    the byte array of the key.
+     * @param keyHash     the hash value of the key.
+     * @param doUpdateSeq if true, update the sequence number after deleting the key-value pair.
+     * @return true if the key-value pair was successfully deleted, false otherwise.
+     */
     public boolean del(byte[] keyBytes, long keyHash, boolean doUpdateSeq) {
         if (size == 0) {
             return false;
@@ -665,6 +971,13 @@ public class KeyBucket {
         return isDeleted;
     }
 
+    /**
+     * Check if the key is match in the cell.
+     *
+     * @param keyBytes the byte array of the key.
+     * @param offset   the offset of the cell.
+     * @return the KVMeta object if the key is match, null otherwise.
+     */
     private KVMeta keyMatch(byte[] keyBytes, int offset) {
         // compare key length first
         if (keyBytes.length != buffer.getShort(offset)) {
