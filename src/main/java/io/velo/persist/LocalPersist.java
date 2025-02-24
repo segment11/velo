@@ -27,25 +27,56 @@ import java.util.function.Function;
 
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
 
+/**
+ * LocalPersist manages the local storage and operations for the persistence layer.
+ * It uses multiple slots to distribute the data and handles various operations like
+ * initializing slots, reading from WAL (Write-Ahead Log), and cleaning up resources.
+ */
 public class LocalPersist implements NeedCleanUp {
+    /**
+     * The size of a page in bytes, defined by the system's page manager.
+     */
     public static final int PAGE_SIZE = (int) PageManager.getInstance().pageSize();
+
+    /**
+     * The protection flags for memory pages, allowing read, write, and execution.
+     */
     public static final int PROTECTION = PageManager.PROT_READ | PageManager.PROT_WRITE | PageManager.PROT_EXEC;
+
+    /**
+     * The default number of slots used for data distribution.
+     */
     public static final short DEFAULT_SLOT_NUMBER = 4;
 
-    // 16384, todo
     // 1024 slots, one slot max 100 million keys, 100 million * 1024 = 102.4 billion keys
     // one slot cost 50-100GB, all cost will be 50-100TB
+    /**
+     * The maximum number of slots allowed.
+     * This is set to 1024, allowing for a large number of keys across slots.
+     */
     public static final short MAX_SLOT_NUMBER = 1024;
 
-    // singleton
+    /**
+     * Singleton instance of LocalPersist.
+     * Ensures that only one instance is created and used throughout the application.
+     */
     private static final LocalPersist instance = new LocalPersist();
 
+    /**
+     * Retrieves the singleton instance of LocalPersist.
+     *
+     * @return the singleton instance
+     */
     public static LocalPersist getInstance() {
         return instance;
     }
 
     private static final Logger log = LoggerFactory.getLogger(LocalPersist.class);
 
+    /**
+     * Private constructor to prevent instantiation from outside the class.
+     * Initializes the LibC library loader for C library.
+     */
     private LocalPersist() {
         System.setProperty("jnr.ffi.asm.enabled", "false");
         libC = LibraryLoader.create(LibC.class).load("c");
@@ -55,14 +86,33 @@ public class LocalPersist implements NeedCleanUp {
 
     private OneSlot[] oneSlots;
 
+    /**
+     * Retrieves all the slots.
+     *
+     * @return an array of OneSlot instances
+     */
     public OneSlot[] oneSlots() {
         return oneSlots;
     }
 
+    /**
+     * Retrieves a specific slot by its index.
+     *
+     * @param slot the index of the slot to retrieve
+     * @return the OneSlot instance at the specified index
+     */
     public OneSlot oneSlot(short slot) {
         return oneSlots[slot];
     }
 
+    /**
+     * Performs an operation in all slots asynchronously.
+     *
+     * @param fnApplyOneSlot the function to apply to each slot
+     * @param fn             a function to aggregate the results from all slots
+     * @param <R>            the type of result from fnApplyOneSlot
+     * @return an AsyncReply containing the aggregated results
+     */
     public <R> AsyncReply doSthInSlots(@NotNull Function<OneSlot, R> fnApplyOneSlot, @NotNull Function<ArrayList<R>, Reply> fn) {
         Promise<R>[] promises = new Promise[oneSlots.length];
         for (int i = 0; i < oneSlots.length; i++) {
@@ -91,6 +141,13 @@ public class LocalPersist implements NeedCleanUp {
         return asyncReply;
     }
 
+    /**
+     * Adds a new slot for testing purposes.
+     * This method is intended for test environments only.
+     *
+     * @param slot      the index of the slot to add
+     * @param eventloop the Eventloop instance associated with the new slot
+     */
     @TestOnly
     public void addOneSlot(short slot, @NotNull Eventloop eventloop) {
         try {
@@ -106,6 +163,12 @@ public class LocalPersist implements NeedCleanUp {
         this.oneSlots[slot] = oneSlot;
     }
 
+    /**
+     * Adds a new slot for testing purposes without an Eventloop.
+     * This method is intended for test environments only.
+     *
+     * @param slot the index of the slot to add
+     */
     @TestOnly
     public void addOneSlotForTest2(short slot) {
         var oneSlot = new OneSlot(slot);
@@ -116,6 +179,16 @@ public class LocalPersist implements NeedCleanUp {
     private File persistDir;
     private Config persistConfig;
 
+    /**
+     * Initializes the slots with the given parameters.
+     *
+     * @param netWorkers    the number of network workers
+     * @param slotNumber    the number of slots to initialize
+     * @param snowFlakes    array of SnowFlake instances for generating unique identifiers
+     * @param persistDir    the directory for persistence storage
+     * @param persistConfig the configuration for persistence
+     * @throws IOException if an I/O error occurs during initialization
+     */
     public void initSlots(byte netWorkers, short slotNumber,
                           @NotNull SnowFlake[] snowFlakes,
                           @NotNull File persistDir,
@@ -139,6 +212,11 @@ public class LocalPersist implements NeedCleanUp {
         initSlotsAgainAfterMultiShardLoadedOrChanged();
     }
 
+    /**
+     * Reinitializes slots after MultiShard is loaded or changed.
+     *
+     * @throws IOException if an I/O error occurs during reinitialization
+     */
     public void initSlotsAgainAfterMultiShardLoadedOrChanged() throws IOException {
         var firstOneSlot = firstOneSlot();
 
@@ -159,6 +237,11 @@ public class LocalPersist implements NeedCleanUp {
         }
     }
 
+    /**
+     * Performs WAL read asynchronously for each slot.
+     *
+     * @return true if all WAL reads were successful, false otherwise
+     */
     public boolean walLazyReadFromFile() {
         var beginT = System.currentTimeMillis();
         CompletableFuture<Boolean>[] fArray = new CompletableFuture[oneSlots.length];
@@ -184,10 +267,21 @@ public class LocalPersist implements NeedCleanUp {
 
     private boolean isHashSaveMemberTogether;
 
+    /**
+     * Checks if hash saving is set to save members together.
+     *
+     * @return true if hash saving is set to save members together, false otherwise
+     */
     public boolean getIsHashSaveMemberTogether() {
         return isHashSaveMemberTogether;
     }
 
+    /**
+     * Sets the flag for saving members together in hashes.
+     * This method is intended for test environments only.
+     *
+     * @param hashSaveMemberTogether the flag value to set
+     */
     @TestOnly
     public void setHashSaveMemberTogether(boolean hashSaveMemberTogether) {
         isHashSaveMemberTogether = hashSaveMemberTogether;
@@ -195,10 +289,19 @@ public class LocalPersist implements NeedCleanUp {
 
     private boolean isDebugMode = false;
 
+    /**
+     * Checks if the system is in debug mode.
+     *
+     * @return true if in debug mode, false otherwise
+     */
     public boolean isDebugMode() {
         return isDebugMode;
     }
 
+    /**
+     * Activates debug mode for the system.
+     * Also activates debug mode for each slot.
+     */
     public void debugMode() {
         isDebugMode = true;
         for (var oneSlot : oneSlots) {
@@ -206,11 +309,23 @@ public class LocalPersist implements NeedCleanUp {
         }
     }
 
+    /**
+     * Fixes the thread ID for a specific slot.
+     *
+     * @param slot     the index of the slot
+     * @param threadId the new thread ID to set
+     */
     public void fixSlotThreadId(short slot, long threadId) {
         oneSlots[slot].threadIdProtectedForSafe = threadId;
         log.warn("Fix slot thread id, s={}, tid={}", slot, threadId);
     }
 
+    /**
+     * Retrieves the first slot associated with the current thread.
+     *
+     * @return the first OneSlot associated with the current thread
+     * @throws IllegalStateException if no slot is associated with the current thread
+     */
     public OneSlot currentThreadFirstOneSlot() {
         for (var oneSlot : oneSlots) {
             if (oneSlot.threadIdProtectedForSafe == Thread.currentThread().threadId()) {
@@ -220,6 +335,11 @@ public class LocalPersist implements NeedCleanUp {
         throw new IllegalStateException("No one slot for current thread");
     }
 
+    /**
+     * Retrieves the first slot to handle client requests.
+     *
+     * @return the first OneSlot to handle client requests, or null if not found
+     */
     public @Nullable OneSlot firstOneSlot() {
         if (!ConfForGlobal.clusterEnabled) {
             return oneSlots[0];
@@ -241,10 +361,20 @@ public class LocalPersist implements NeedCleanUp {
 
     private IndexHandlerPool indexHandlerPool;
 
+    /**
+     * Retrieves the IndexHandlerPool instance.
+     *
+     * @return the IndexHandlerPool instance
+     */
     public IndexHandlerPool getIndexHandlerPool() {
         return indexHandlerPool;
     }
 
+    /**
+     * Starts the IndexHandlerPool.
+     *
+     * @throws IOException if an I/O error occurs during startup
+     */
     public void startIndexHandlerPool() throws IOException {
         this.indexHandlerPool = new IndexHandlerPool(ConfForGlobal.indexWorkers, persistDir, persistConfig);
         this.indexHandlerPool.start();
@@ -252,30 +382,59 @@ public class LocalPersist implements NeedCleanUp {
 
     private volatile boolean isAsSlaveFirstSlotFetchedExistsAllDone = false;
 
+    /**
+     * Checks if the first slot fetch for a slave is complete.
+     *
+     * @return true if the fetch is complete, false otherwise
+     */
     public boolean isAsSlaveFirstSlotFetchedExistsAllDone() {
         return isAsSlaveFirstSlotFetchedExistsAllDone;
     }
 
+    /**
+     * Sets the flag indicating whether the first slot fetch for a slave is complete.
+     *
+     * @param asSlaveFirstSlotFetchedExistsAllDone the flag value to set
+     */
     public void setAsSlaveFirstSlotFetchedExistsAllDone(boolean asSlaveFirstSlotFetchedExistsAllDone) {
         isAsSlaveFirstSlotFetchedExistsAllDone = asSlaveFirstSlotFetchedExistsAllDone;
     }
 
     private MultiShard multiShard;
 
+    /**
+     * Retrieves the MultiShard instance.
+     *
+     * @return the MultiShard instance
+     */
     public MultiShard getMultiShard() {
         return multiShard;
     }
 
     private SocketInspector socketInspector;
 
+    /**
+     * Retrieves the SocketInspector instance.
+     *
+     * @return the SocketInspector instance
+     */
     public SocketInspector getSocketInspector() {
         return socketInspector;
     }
 
+    /**
+     * Sets the SocketInspector instance.
+     *
+     * @param socketInspector the SocketInspector instance to set
+     */
     public void setSocketInspector(@Nullable SocketInspector socketInspector) {
         this.socketInspector = socketInspector;
     }
 
+    /**
+     * Cleans up resources used by LocalPersist.
+     * Cleans up each slot and the IndexHandlerPool.
+     */
     @Override
     public void cleanUp() {
         for (var oneSlot : oneSlots) {
