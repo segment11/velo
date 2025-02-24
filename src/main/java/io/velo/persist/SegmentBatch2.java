@@ -14,30 +14,56 @@ import org.jetbrains.annotations.VisibleForTesting;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-// do not compress
+/**
+ * Represents a batch of data segments for persistence. Each segment contains a header and a list of key-value pairs.
+ * This class is responsible for managing the encoding, compression, and splitting of these segments.
+ * This is for no segment compression mode.
+ */
 public class SegmentBatch2 implements InSlotMetricCollector {
-    // seq long + segment type byte + cv number int + crc int
+
+    /**
+     * Constants for the segment header structure.
+     * seq long + segment type byte + cv number int + crc int
+     */
     public static final int SEGMENT_HEADER_LENGTH = 8 + 1 + 4 + 4;
 
+    // byte array to hold the segment data
     private final byte[] bytes;
+    // ByteBuffer for reading and writing data into the byte array
     private final ByteBuffer buffer;
+    // slot number associated with this segment batch
     private final short slot;
 
+    // Snowflake ID generator for segment sequences
     private final SnowFlake snowFlake;
 
+    // Total batch count for testing and metrics
     @VisibleForTesting
     long batchCountTotal;
+    // Total key-value count in all batches for testing and metrics
     private long batchKvCountTotal;
 
+    /**
+     * Constructs a new SegmentBatch2 instance for a specific slot and SnowFlake ID generator.
+     *
+     * @param slot      The slot number associated with this segment batch.
+     * @param snowFlake The SnowFlake ID generator for segment sequences.
+     */
     public SegmentBatch2(short slot, SnowFlake snowFlake) {
         this.slot = slot;
 
+        // Initialize the byte array and ByteBuffer for segment data
         this.bytes = new byte[ConfForSlot.global.confChunk.segmentLength];
         this.buffer = ByteBuffer.wrap(bytes);
 
         this.snowFlake = snowFlake;
     }
 
+    /**
+     * Collects and returns metrics related to the segment batches.
+     *
+     * @return A map containing various metrics about the segment batches.
+     */
     @Override
     public Map<String, Double> collect() {
         var map = new HashMap<String, Double>();
@@ -51,6 +77,9 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         return map;
     }
 
+    /**
+     * Represents a segment with its byte data, an index, and a sequence number.
+     */
     @VisibleForTesting
     record SegmentBytesWithIndex(byte[] segmentBytes, int tmpSegmentIndex, long segmentSeq) {
         @Override
@@ -63,8 +92,14 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         }
     }
 
-    ArrayList<SegmentBytesWithIndex> split(@NotNull ArrayList<Wal.V> list,
-                                           @NotNull ArrayList<PersistValueMeta> returnPvmList) {
+    /**
+     * Splits a list of write-ahead log entries into segments according to their combined length.
+     *
+     * @param list          The list of write-ahead log entries to be split into segments.
+     * @param returnPvmList A list to store metadata about the persisted values.
+     * @return A list of segments with their byte data, indices, and sequence numbers.
+     */
+    ArrayList<SegmentBytesWithIndex> split(@NotNull ArrayList<Wal.V> list, @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         ArrayList<SegmentBytesWithIndex> result = new ArrayList<>(100);
         ArrayList<Wal.V> onceList = new ArrayList<>(100);
 
@@ -93,6 +128,14 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         return result;
     }
 
+    /**
+     * Compresses a list of write-ahead log entries into a single segment.
+     *
+     * @param list            The list of write-ahead log entries to be compressed.
+     * @param tmpSegmentIndex The temporary segment index.
+     * @param returnPvmList   A list to store metadata about the persisted values.
+     * @return A segment with its byte data, index, and sequence number.
+     */
     private SegmentBytesWithIndex compressAsSegment(@NotNull ArrayList<Wal.V> list,
                                                     int tmpSegmentIndex,
                                                     @NotNull ArrayList<PersistValueMeta> returnPvmList) {
@@ -110,6 +153,15 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         return new SegmentBytesWithIndex(copyBytes, tmpSegmentIndex, segmentSeq);
     }
 
+    /**
+     * Encodes a list of write-ahead log entries into the provided ByteBuffer.
+     *
+     * @param list            The list of write-ahead log entries to be encoded.
+     * @param buffer          The ByteBuffer to write the encoded data into.
+     * @param returnPvmList   A list to store metadata about the persisted values.
+     * @param tmpSegmentIndex The temporary segment index.
+     * @param segmentSeq      The segment sequence number.
+     */
     static void encodeToBuffer(@NotNull ArrayList<Wal.V> list,
                                @NotNull ByteBuffer buffer,
                                @NotNull ArrayList<PersistValueMeta> returnPvmList,
@@ -172,10 +224,16 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         buffer.putInt(8 + 1 + 4, segmentCrc32);
     }
 
+    /**
+     * Callback interface for processing key-value pairs in a segment.
+     */
     public interface CvCallback {
         void callback(@NotNull String key, @NotNull CompressedValue cv, int offsetInThisSegment);
     }
 
+    /**
+     * Debug implementation of CvCallback for printing key-value pairs.
+     */
     @TestOnly
     static class ForDebugCvCallback implements CvCallback {
         @Override
@@ -184,10 +242,24 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         }
     }
 
+    /**
+     * Iterates over key-value pairs in a segment and applies a callback to each pair.
+     *
+     * @param segmentBytes The byte array containing the segment data.
+     * @param cvCallback   The callback to be applied to each key-value pair.
+     */
     public static void iterateFromSegmentBytes(byte[] segmentBytes, @NotNull CvCallback cvCallback) {
         iterateFromSegmentBytes(segmentBytes, 0, segmentBytes.length, cvCallback);
     }
 
+    /**
+     * Iterates over key-value pairs in a segment and applies a callback to each pair.
+     *
+     * @param segmentBytes The byte array containing the segment data.
+     * @param offset       The starting offset within the segment data.
+     * @param length       The length of the segment data to process.
+     * @param cvCallback   The callback to be applied to each key-value pair.
+     */
     public static void iterateFromSegmentBytes(byte[] segmentBytes, int offset, int length, @NotNull CvCallback cvCallback) {
         var buf = Unpooled.wrappedBuffer(segmentBytes, offset, length).slice();
         // for crc check
@@ -247,19 +319,44 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         }
     }
 
+    /**
+     * Checks if the segment bytes represent a TIGHT segment type.
+     *
+     * @param segmentBytes The byte array containing the segment data.
+     * @param offset       The starting offset within the segment data.
+     * @return true if the segment type is TIGHT, false otherwise.
+     */
     static boolean isSegmentBytesTight(byte[] segmentBytes, int offset) {
         // seq long + segment type byte
         return segmentBytes[offset + 8] == Chunk.SegmentType.TIGHT.val;
     }
 
+    /**
+     * Checks if the segment bytes represent a SLIM segment type.
+     *
+     * @param segmentBytes The byte array containing the segment data.
+     * @param offset       The starting offset within the segment data.
+     * @return true if the segment type is SLIM, false otherwise.
+     */
     static boolean isSegmentBytesSlim(byte[] segmentBytes, int offset) {
         // seq long + segment type byte
         return segmentBytes[offset + 8] == Chunk.SegmentType.SLIM.val;
     }
 
+    /**
+     * A record to hold key and value bytes extracted from a segment.
+     */
     record KeyBytesAndValueBytesInSegment(byte[] keyBytes, byte[] valueBytes) {
     }
 
+    /**
+     * Extracts key and value bytes from a SLIM segment based on sub-block index and segment offset.
+     *
+     * @param segmentBytesSlim The byte array containing the SLIM segment data.
+     * @param subBlockIndex    The sub-block index to search for.
+     * @param segmentOffset    The segment offset to search for.
+     * @return A KeyBytesAndValueBytesInSegment object containing the key and value bytes, or null if not found.
+     */
     static KeyBytesAndValueBytesInSegment getKeyBytesAndValueBytesInSegmentBytesSlim(byte[] segmentBytesSlim, byte subBlockIndex, int segmentOffset) {
         var buffer = ByteBuffer.wrap(segmentBytesSlim);
 
@@ -289,7 +386,13 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         return null;
     }
 
-    // probe liner encode and search
+    /**
+     * Encodes a list of valid CV entries into a SLIM segment format.
+     * Probe liner encode and search.
+     *
+     * @param invalidCvList The list of CvWithKeyAndSegmentOffset objects to encode.
+     * @return A byte array representing the encoded SLIM segment, or null if the encoded size exceeds the segment length limit.
+     */
     static byte[] encodeValidCvListSlim(List<CvWithKeyAndSegmentOffset> invalidCvList) {
         var lastOneSeqAsSegmentSeq = invalidCvList.getLast().cv.getSeq();
         int bytesLengthN = SEGMENT_HEADER_LENGTH;
@@ -349,8 +452,17 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         return bytes;
     }
 
+    /**
+     * A record representing a compressed value with its associated key, segment offset, segment index, and sub-block index.
+     *
+     * @param cv            The compressed value.
+     * @param key           The key associated with the compressed value.
+     * @param segmentOffset The segment offset of the key value pair.
+     * @param segmentIndex  The segment index of the key value pair.
+     * @param subBlockIndex The sub-block index of the key value pair.
+     */
     public record CvWithKeyAndSegmentOffset(CompressedValue cv, String key, int segmentOffset, int segmentIndex,
-                                     byte subBlockIndex) {
+                                            byte subBlockIndex) {
         public String shortString() {
             return "k=" + key + ", s=" + segmentIndex + ", sbi=" + subBlockIndex + ", so=" + segmentOffset;
         }
@@ -366,7 +478,17 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         }
     }
 
-    // return expired count
+    /**
+     * Reads segment bytes and populates a list of CvWithKeyAndSegmentOffset objects, excluding expired entries.
+     *
+     * @param cvList                     The list to populate with CvWithKeyAndSegmentOffset objects.
+     * @param segmentBytesBatchRead      The byte array containing the segment data.
+     * @param relativeOffsetInBatchBytes The starting offset within the segment data.
+     * @param chunkSegmentLength         The length of each chunk segment.
+     * @param segmentIndex               The segment index.
+     * @param slot                       The slot number associated with this segment batch.
+     * @return The count of expired entries encountered during processing.
+     */
     static int readToCvList(ArrayList<CvWithKeyAndSegmentOffset> cvList, byte[] segmentBytesBatchRead, int relativeOffsetInBatchBytes,
                             int chunkSegmentLength, int segmentIndex, short slot) {
         final int[] expiredCountArray = {0};
