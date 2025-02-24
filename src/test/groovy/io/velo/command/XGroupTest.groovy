@@ -470,7 +470,7 @@ class XGroupTest extends Specification {
         10.times {
             keyAnalysisHandler.addKey('key:' + (it.toString().padLeft(12, '0')), valueBytesInit)
         }
-        data4[2][0] = ReplType.exists_keys.code
+        data4[2][0] = ReplType.exists_keys_for_analysis.code
         contentBytes = new byte[4]
         data4[3] = contentBytes
         def asyncReply = x.handleRepl()
@@ -501,7 +501,7 @@ class XGroupTest extends Specification {
         ByteBuffer.wrap(data4[1]).putShort((short) 1)
         r = x.handleRepl()
         then:
-        r.isReplType(ReplType.s_exists_keys)
+        r.isReplType(ReplType.s_exists_keys_for_analysis)
 
         // stat_key_count_in_buckets
         when:
@@ -1000,7 +1000,7 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         // next step
-        r.isReplType(ReplType.exists_keys)
+        r.isReplType(ReplType.exists_keys_for_analysis)
 
         when:
         ConfForGlobal.pureMemoryV2 = true
@@ -1032,12 +1032,12 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         // next step
-        r.isReplType(ReplType.exists_keys)
+        r.isReplType(ReplType.exists_keys_for_analysis)
 
         // s_exists_keys
         when:
         ConfForGlobal.pureMemoryV2 = false
-        data4[2][0] = ReplType.s_exists_keys.code
+        data4[2][0] = ReplType.s_exists_keys_for_analysis.code
         contentBytes = new byte[2 + 4 + 4]
         data4[3] = contentBytes
         r = x.handleRepl()
@@ -1062,7 +1062,7 @@ class XGroupTest extends Specification {
         ConfForSlot.global.confRepl.iterateKeysOneBatchSize = 1
         r = x.handleRepl()
         then:
-        r.isReplType(ReplType.exists_keys)
+        r.isReplType(ReplType.exists_keys_for_analysis)
 
         // s_stat_key_count_in_buckets
         when:

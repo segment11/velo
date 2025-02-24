@@ -280,7 +280,7 @@ public class XGroup extends BaseCommand {
             }
             case exists_reverse_index -> exists_reverse_index(slot, contentBytes);
             case s_exists_reverse_index -> s_exists_reverse_index(slot, contentBytes);
-            case exists_keys -> exists_keys(slot, contentBytes);
+            case exists_keys_for_analysis -> exists_keys_for_analysis(slot, contentBytes);
             case exists_wal -> exists_wal(slot, contentBytes);
             case exists_chunk_segments -> exists_chunk_segments(slot, contentBytes);
             case exists_key_buckets -> exists_key_buckets(slot, contentBytes);
@@ -291,7 +291,7 @@ public class XGroup extends BaseCommand {
             case exists_dict -> exists_dict(slot, contentBytes);
             case exists_all_done -> exists_all_done(slot, contentBytes);
             case catch_up -> catch_up(slot, contentBytes);
-            case s_exists_keys -> s_exists_keys(slot, contentBytes);
+            case s_exists_keys_for_analysis -> s_exists_keys_for_analysis(slot, contentBytes);
             case s_exists_wal -> s_exists_wal(slot, contentBytes);
             case s_exists_chunk_segments -> s_exists_chunk_segments(slot, contentBytes);
             case s_exists_key_buckets -> s_exists_key_buckets(slot, contentBytes);
@@ -613,12 +613,12 @@ public class XGroup extends BaseCommand {
     }
 
     // use rocksdb backup engine better, but need copy too many files
-    Reply exists_keys(short slot, byte[] contentBytes) {
+    Reply exists_keys_for_analysis(short slot, byte[] contentBytes) {
         // server received from client
         if (slot != localPersist.firstOneSlot().slot()) {
             // not first slot, skip
             log.warn("Repl master skip iterate keys when slave slot is not the first slot, slot={}", slot);
-            return Repl.reply(slot, replPair, s_exists_keys, new RawBytesContent(new byte[2]));
+            return Repl.reply(slot, replPair, s_exists_keys_for_analysis, new RawBytesContent(new byte[2]));
         }
 
         var buffer = ByteBuffer.wrap(contentBytes);
@@ -654,7 +654,7 @@ public class XGroup extends BaseCommand {
                 return;
             }
 
-            finalPromise.set(Repl.reply(slot, replPair, s_exists_keys, new RawBytesContent(os.toByteArray())));
+            finalPromise.set(Repl.reply(slot, replPair, s_exists_keys_for_analysis, new RawBytesContent(os.toByteArray())));
         });
 
         return asyncReply;
@@ -670,7 +670,7 @@ public class XGroup extends BaseCommand {
         return Repl.reply(slot, replPair, exists_chunk_segments, content);
     }
 
-    Repl.ReplReply s_exists_keys(short slot, byte[] contentBytes) {
+    Repl.ReplReply s_exists_keys_for_analysis(short slot, byte[] contentBytes) {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
         if (buffer.getShort() == 0) {
@@ -689,7 +689,7 @@ public class XGroup extends BaseCommand {
                 var requestBuffer = ByteBuffer.wrap(requestBytes);
                 requestBuffer.putInt(lastKeyBytes.length);
                 requestBuffer.put(lastKeyBytes);
-                return Repl.reply(slot, replPair, exists_keys, new RawBytesContent(requestBytes));
+                return Repl.reply(slot, replPair, exists_keys_for_analysis, new RawBytesContent(requestBytes));
             }
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
@@ -1064,9 +1064,9 @@ public class XGroup extends BaseCommand {
         }
 
         if (isAllReceived) {
-            log.warn("Repl slave fetch data, go to step: {}, slot={}", exists_keys.name(), slot);
+            log.warn("Repl slave fetch data, go to step: {}, slot={}", exists_keys_for_analysis.name(), slot);
             var requestBytes = new byte[4];
-            return Repl.reply(slot, replPair, exists_keys, new RawBytesContent(requestBytes));
+            return Repl.reply(slot, replPair, exists_keys_for_analysis, new RawBytesContent(requestBytes));
         } else {
             var nextSplitIndex = isLastBatchInThisSplit ? splitIndex + 1 : splitIndex;
             var nextBeginBucketIndex = isLastBatchInThisSplit ? 0 : beginBucketIndex + oneChargeBucketNumber;
