@@ -15,13 +15,23 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Class representing a group of key buckets in a write-ahead log group (WAL).
+ * This class manages the key buckets within a specific slot and a specific WAL group.
+ */
 public class KeyBucketsInOneWalGroup {
+    /**
+     * Constructs a KeyBucketsInOneWalGroup instance.
+     *
+     * @param slot          The slot number to which the key buckets belong.
+     * @param walGroupIndex The index of the WAL group.
+     * @param keyLoader     The KeyLoader instance used to load key data.
+     */
     public KeyBucketsInOneWalGroup(short slot, int walGroupIndex, @NotNull KeyLoader keyLoader) {
         this.slot = slot;
         this.keyLoader = keyLoader;
 
-        var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
-        this.oneChargeBucketNumber = oneChargeBucketNumber;
+        this.oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
         this.keyCountForStatsTmp = new short[oneChargeBucketNumber];
         this.beginBucketIndex = oneChargeBucketNumber * walGroupIndex;
 
@@ -98,6 +108,14 @@ public class KeyBucketsInOneWalGroup {
         }
     }
 
+    /**
+     * Retrieves the expiration time and sequence number for a given key.
+     *
+     * @param bucketIndex The index of the bucket.
+     * @param keyBytes    The key bytes.
+     * @param keyHash     The hash of the key.
+     * @return The expiration time and sequence number.
+     */
     KeyBucket.ExpireAtAndSeq getExpireAtAndSeq(int bucketIndex, byte[] keyBytes, long keyHash) {
         if (ConfForGlobal.pureMemoryV2) {
             return keyLoader.getExpireAtAndSeqByKey(bucketIndex, keyBytes, keyHash, KeyHash.hash32(keyBytes));
@@ -120,6 +138,14 @@ public class KeyBucketsInOneWalGroup {
         return keyBucket.getExpireAtAndSeqByKey(keyBytes, keyHash);
     }
 
+    /**
+     * Retrieves the value, expiration time, and sequence number for a given key.
+     *
+     * @param bucketIndex The index of the bucket.
+     * @param keyBytes    The key bytes.
+     * @param keyHash     The hash of the key.
+     * @return The value, expiration time, and sequence number.
+     */
     KeyBucket.ValueBytesWithExpireAtAndSeq getValueX(int bucketIndex, byte[] keyBytes, long keyHash) {
         if (ConfForGlobal.pureMemoryV2) {
             return keyLoader.getValueXByKey(bucketIndex, keyBytes, keyHash, KeyHash.hash32(keyBytes));
@@ -142,6 +168,11 @@ public class KeyBucketsInOneWalGroup {
         return keyBucket.getValueXByKey(keyBytes, keyHash);
     }
 
+    /**
+     * Writes changes to the key buckets and returns the updated shared bytes.
+     *
+     * @return The updated shared bytes.
+     */
     byte[][] writeAfterPutBatch() {
         byte maxSplitNumberTmp = 1;
         for (int i = 0; i < oneChargeBucketNumber; i++) {
@@ -202,6 +233,14 @@ public class KeyBucketsInOneWalGroup {
     @VisibleForTesting
     final boolean[] isUpdatedBySplitIndex = new boolean[KeyLoader.MAX_SPLIT_NUMBER];
 
+    /**
+     * Puts a list of PersistValueMeta objects into the target bucket after clearing it if split is needed.
+     *
+     * @param needAddNewList List of PersistValueMeta objects to add.
+     * @param needUpdateList List of PersistValueMeta objects to update.
+     * @param needDeleteList List of PersistValueMeta objects to delete.
+     * @param bucketIndex    The index of the bucket.
+     */
     @VisibleForTesting
     void putPvmListToTargetBucketAfterClearAllIfSplit(@NotNull List<PersistValueMeta> needAddNewList,
                                                       @NotNull List<PersistValueMeta> needUpdateList,
@@ -259,6 +298,12 @@ public class KeyBucketsInOneWalGroup {
         }
     }
 
+    /**
+     * Puts a list of PersistValueMeta objects into the target bucket.
+     *
+     * @param pvmListThisBucket List of PersistValueMeta objects.
+     * @param bucketIndex       The index of the bucket.
+     */
     @VisibleForTesting
     void putPvmListToTargetBucket(@NotNull List<PersistValueMeta> pvmListThisBucket, Integer bucketIndex) {
         int relativeBucketIndex = bucketIndex - beginBucketIndex;
@@ -333,6 +378,17 @@ public class KeyBucketsInOneWalGroup {
         putPvmListToTargetBucketAfterClearAllIfSplit(needAddNewList, needUpdateList, needDeleteList, bucketIndex);
     }
 
+    /**
+     * Checks if the bucket needs to be split based on the given PersistValueMeta list.
+     *
+     * @param pvmListThisBucket  List of PersistValueMeta objects.
+     * @param needAddNewList     List to store keys that need to be added.
+     * @param needUpdateList     List to store keys that need to be updated.
+     * @param needDeleteList     List to store keys that need to be deleted.
+     * @param bucketIndex        The index of the bucket.
+     * @param currentSplitNumber The current split number of the bucket.
+     * @return The number of splits needed.
+     */
     @VisibleForTesting
     int checkIfNeedSplit(@NotNull List<PersistValueMeta> pvmListThisBucket,
                          @NotNull List<PersistValueMeta> needAddNewList,
@@ -475,6 +531,11 @@ public class KeyBucketsInOneWalGroup {
         }
     }
 
+    /**
+     * Puts a list of PersistValueMeta objects.
+     *
+     * @param pvmList List of PersistValueMeta objects.
+     */
     void putAllPvmList(@NotNull ArrayList<PersistValueMeta> pvmList) {
         // group by bucket index
         var pvmListGroupByBucketIndex = pvmList.stream().collect(Collectors.groupingBy(pvm -> pvm.bucketIndex));
@@ -486,6 +547,11 @@ public class KeyBucketsInOneWalGroup {
         }
     }
 
+    /**
+     * Puts a list of Wal.V objects.
+     *
+     * @param shortValueList List of Wal.V objects.
+     */
     void putAll(@NotNull Collection<Wal.V> shortValueList) {
         var pvmList = new ArrayList<PersistValueMeta>();
         for (var v : shortValueList) {
@@ -494,6 +560,12 @@ public class KeyBucketsInOneWalGroup {
         putAllPvmList(pvmList);
     }
 
+    /**
+     * Transfer Wal.V to PersistValueMeta
+     *
+     * @param v Wal.V object
+     * @return PersistValueMeta object
+     */
     @VisibleForTesting
     static PersistValueMeta transferWalV(@NotNull Wal.V v) {
         var pvm = new PersistValueMeta();
