@@ -12,13 +12,25 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * A singleton class that manages and caches Jedis pools. This class provides methods to create and retrieve
+ * Jedis pools for a given host and port, and ensures that resources are properly cleaned up.
+ *
+ * @since 1.0.0
+ */
 public class JedisPoolHolder implements NeedCleanUp {
-    // singleton
+    // Singleton instance
     private JedisPoolHolder() {
     }
 
     private static final JedisPoolHolder instance = new JedisPoolHolder();
 
+    /**
+     * Returns the singleton instance of JedisPoolHolder.
+     *
+     * @return The singleton instance of JedisPoolHolder.
+     * @since 1.0.0
+     */
     public static JedisPoolHolder getInstance() {
         return instance;
     }
@@ -27,6 +39,15 @@ public class JedisPoolHolder implements NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(JedisPoolHolder.class);
 
+    /**
+     * Creates a Jedis pool for the specified host and port. If a pool already exists for the given host and port,
+     * it returns the existing pool.
+     *
+     * @param host The Redis server host.
+     * @param port The Redis server port.
+     * @return The Jedis pool for the specified host and port.
+     * @since 1.0.0
+     */
     public synchronized JedisPool create(String host, int port) {
         var key = host + ":" + port;
         var client = cached.get(key);
@@ -50,15 +71,30 @@ public class JedisPoolHolder implements NeedCleanUp {
         return one;
     }
 
+    /**
+     * Cleans up all cached Jedis pools by closing them and clearing the cache.
+     *
+     * @since 1.0.0
+     */
     @Override
     public void cleanUp() {
         for (var pool : cached.values()) {
             pool.close();
-            System.out.println("Close jedis pool");
+            log.info("Close jedis pool");
         }
         cached.clear();
     }
 
+    /**
+     * Executes a callback using the provided Jedis pool. This method ensures that the Jedis resource is properly
+     * closed after the callback execution.
+     *
+     * @param jedisPool The Jedis pool to use.
+     * @param callback  The callback to execute.
+     * @param <R>       The type of result returned by the callback.
+     * @return The result of the callback execution.
+     * @since 1.0.0
+     */
     public static <R> R exe(JedisPool jedisPool, JedisCallback<R> callback) {
         Jedis jedis = jedisPool.getResource();
         try {
