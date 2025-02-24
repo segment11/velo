@@ -39,7 +39,7 @@ zipped ratio: 0.2547949245
             zippedLongArr.add(longArray[i])
         }
         println 'shard cursor: ' + zippedLongArr.shardCursor
-        println 'shard size: ' + zippedLongArr.shardSize
+        println 'shard count: ' + zippedLongArr.shardCount
 
         long zippedBytesN = zippedLongArr.totalBytesUsed
         println 'zipped ram: ' + RamUsageEstimator.humanReadableUnits(zippedBytesN)
