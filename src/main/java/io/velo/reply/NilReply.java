@@ -4,7 +4,7 @@ import io.activej.bytebuf.ByteBuf;
 import org.jetbrains.annotations.TestOnly;
 
 /**
- * Represents a NIL (null) reply in the context of a protocol, such as RESP (REdis Serialization Protocol).
+ * Represents a NIL (null) reply in the context of a protocol, such as RESP (Redis Serialization Protocol).
  * This class provides methods to get the NIL reply in different formats, including RESP2, RESP3, and HTTP.
  */
 public class NilReply implements Reply {

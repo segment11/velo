@@ -47,7 +47,7 @@ import static io.activej.launchers.initializers.Initializers.ofEventloop;
 import static io.activej.launchers.initializers.Initializers.ofPrimaryServer;
 
 /**
- * This is the server part of the e2e test. It is a multi-threaded server that handles RESP (REdis Serialization Protocol)
+ * This is the server part of the e2e test. It is a multi-threaded server that handles RESP (Redis Serialization Protocol)
  * requests from the client, particularly for SET and GET commands for benchmarking purposes.
  * <p>
  * The server leverages ActiveJ's asynchronous capabilities, including event loops, worker pools, and non-blocking I/O operations.

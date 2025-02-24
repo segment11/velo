@@ -5,7 +5,7 @@ import io.netty.buffer.Unpooled;
 import org.jetbrains.annotations.TestOnly;
 
 /**
- * Represents a multi-bulk reply in the RESP (REdis Serialization Protocol) format.
+ * Represents a multi-bulk reply in the RESP (Redis Serialization Protocol) format.
  * A multi-bulk reply is a collection of replies and is used to represent an array of values in RESP.
  */
 public class MultiBulkReply implements Reply {

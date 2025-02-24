@@ -5,7 +5,7 @@ import io.netty.util.ByteProcessor;
 import io.netty.util.CharsetUtil;
 
 /**
- * A class to decode RESP (REdis Serialization Protocol) messages using Netty's ByteBuf.
+ * A class to decode RESP (Redis Serialization Protocol) messages using Netty's ByteBuf.
  * This implementation is adapted from Camellia Redis Proxy, specifically from the CommandDecoder class.
  */
 public class RESP {

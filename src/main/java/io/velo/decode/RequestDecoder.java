@@ -11,7 +11,7 @@ import java.util.Arrays;
 import java.util.Map;
 
 /**
- * A decoder for incoming requests that can handle both HTTP and RESP (REPL like) protocols.
+ * A decoder for incoming requests that can handle both HTTP and RESP (Redis Serialization Protocol) protocols.
  * The decoder reads from a {@link ByteBufs} input and attempts to parse as many complete requests as possible.
  */
 public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
