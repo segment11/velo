@@ -14,7 +14,12 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-// for slave check if key buckets need fetch from master, compare with seq
+/**
+ * Manages the sequence numbers for different WAL (Write-Ahead Log) groups within a slot.
+ * This class provides in-memory caching and file storage for sequence numbers, depending on the configuration.
+ * It allows retrieval and update of sequence numbers for specific WAL groups.
+ * This is used for replication, check if one WAL group sequence match, then can skip the WAL replication step.
+ */
 public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
     private static final String META_ONE_WAL_GROUP_SEQ_FILE = "meta_one_wal_group_seq.dat";
 
@@ -25,15 +30,25 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
     private final ByteBuffer inMemoryCachedByteBuffer;
     private RandomAccessFile raf;
 
-    // for save and load
-    // readonly
+    /**
+     * Retrieves the in-memory cached bytes representing sequence numbers.
+     * For save and reload.
+     *
+     * @return A copy of the in-memory cached bytes.
+     */
     byte[] getInMemoryCachedBytes() {
         var dst = new byte[inMemoryCachedBytes.length];
         inMemoryCachedByteBuffer.position(0).get(dst);
         return dst;
     }
 
-    // for save and load
+    /**
+     * Overwrites the in-memory cached bytes with the provided bytes.
+     * For save and reload.
+     *
+     * @param bytes The bytes to overwrite the in-memory cache with.
+     * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
+     */
     void overwriteInMemoryCachedBytes(byte[] bytes) {
         if (bytes.length != inMemoryCachedBytes.length) {
             throw new IllegalArgumentException("Meta one wal group seq, bytes length not match");
@@ -44,6 +59,14 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(MetaOneWalGroupSeq.class);
 
+    /**
+     * Constructs a new instance of MetaOneWalGroupSeq.
+     * Initializes the in-memory cache and file storage for sequence numbers based on the provided slot and slot directory.
+     *
+     * @param slot    The slot index.
+     * @param slotDir The directory where the slot data is stored.
+     * @throws IOException If an I/O error occurs during file operations.
+     */
     public MetaOneWalGroupSeq(short slot, @NotNull File slotDir) throws IOException {
         this.walGroupNumber = Wal.calcWalGroupNumber();
         // 8 bytes long seq for each one wal group, each split index
@@ -83,17 +106,39 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
         this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
     }
 
+    /**
+     * Estimates the capacity used by this instance.
+     *
+     * @param sb The StringBuilder to append the estimate details.
+     * @return The estimated capacity.
+     */
     @Override
     public long estimate(@NotNull StringBuilder sb) {
         sb.append("Meta one wal group seq file: ").append(allCapacity).append("\n");
         return allCapacity;
     }
 
+    /**
+     * Retrieves the sequence number for a specific WAL group and split index.
+     *
+     * @param oneWalGroupIndex The index of the WAL group.
+     * @param splitIndex       The split index.
+     * @return The sequence number for the specified WAL group and split.
+     */
     long get(int oneWalGroupIndex, byte splitIndex) {
         var offset = 8 * oneWalGroupIndex + 8 * walGroupNumber * splitIndex;
         return inMemoryCachedByteBuffer.getLong(offset);
     }
 
+    /**
+     * Sets the sequence number for a specific WAL group and split index.
+     * If the configuration is set for pure memory operations, it directly updates the in-memory cache.
+     * Otherwise, it writes the sequence number to the file and updates the in-memory cache.
+     *
+     * @param oneWalGroupIndex The index of the WAL group.
+     * @param splitIndex       The split index.
+     * @param seq              The sequence number to set.
+     */
     @SlaveNeedReplay
     void set(int oneWalGroupIndex, byte splitIndex, long seq) {
         var offset = 8 * oneWalGroupIndex + 8 * walGroupNumber * splitIndex;
@@ -111,6 +156,10 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
+    /**
+     * Clears the sequence numbers in memory and on file if not operating in pure memory mode.
+     * Resets the in-memory cache to zero.
+     */
     void clear() {
         if (ConfForGlobal.pureMemory) {
             Arrays.fill(inMemoryCachedBytes, (byte) 0);
@@ -127,6 +176,11 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
+    /**
+     * Cleans up the resources used by this instance.
+     * If operating in pure memory mode, no action is taken.
+     * Otherwise, it closes the RandomAccessFile.
+     */
     @Override
     public void cleanUp() {
         if (ConfForGlobal.pureMemory) {
