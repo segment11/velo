@@ -24,12 +24,22 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Abstract base class for handling Velo commands.
+ * This class provides core functionalities for parsing command data, handling slots, and interacting with the persistence layer.
+ */
 @ThreadNeedLocal
 public abstract class BaseCommand {
+    /**
+     * Functional interface to determine if an index in the command data array contains a key.
+     */
     protected interface IsKeyBytes {
         boolean isKeyBytes(int i);
     }
 
+    /**
+     * Implementation of IsKeyBytes that checks if a specific index contains a key.
+     */
     protected static final class GivenKeyIndex implements IsKeyBytes {
         private final int index;
 
@@ -43,6 +53,9 @@ public abstract class BaseCommand {
         }
     }
 
+    /**
+     * Implementation of IsKeyBytes that checks if indices within a range contain keys.
+     */
     protected static final class FromToKeyIndex implements IsKeyBytes {
         private final int from;
         private final int to;
@@ -60,6 +73,9 @@ public abstract class BaseCommand {
         }
     }
 
+    /**
+     * Predefined IsKeyBytes instances for common use cases.
+     */
     protected static final IsKeyBytes KeyIndex1 = new GivenKeyIndex(1);
     protected static final IsKeyBytes KeyIndex2 = new GivenKeyIndex(2);
     protected static final IsKeyBytes KeyIndex1And2 = new FromToKeyIndex(1, 2, 1);

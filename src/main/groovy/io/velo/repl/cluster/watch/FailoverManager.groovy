@@ -16,49 +16,99 @@ import org.jetbrains.annotations.VisibleForTesting
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentSkipListSet
 
+/**
+ * The FailoverManager class is responsible for managing failover operations in a cluster environment.
+ * It monitors the status of cluster nodes, detects failures, and performs failover if necessary.
+ */
 @CompileStatic
 @Slf4j
 @Singleton
 class FailoverManager {
+    /**
+     * The base path in Zookeeper where cluster metadata is stored.
+     */
     String zookeeperVeloMetaBasePath
 
-    // host and port, only master
+    /**
+     * A map that stores the status of cluster endpoints, grouped by cluster name.
+     */
     private final Map<String, Map<HostAndPort, OneEndpointStatus>> oneEndpointStatusMapByClusterName = [:]
 
+    /**
+     * Returns a copy of the map that stores the status of cluster endpoints, grouped by cluster name.
+     * @return A copy of the map of cluster endpoint statuses.
+     */
     synchronized Map<String, Map<HostAndPort, OneEndpointStatus>> getOneEndpointStatusMapByClusterName() {
         return new HashMap<String, Map<HostAndPort, OneEndpointStatus>>(oneEndpointStatusMapByClusterName)
     }
 
+    /**
+     * Clears the map that stores the status of cluster endpoints, grouped by cluster name.
+     * Intended for testing purposes only.
+     */
     @TestOnly
     void clearOneEndpointStatusMapByClusterName() {
         oneEndpointStatusMapByClusterName.clear()
     }
 
+    /**
+     * A concurrent map that stores the status of cluster endpoints posted by slaves, grouped by slave listen address.
+     */
     private final ConcurrentHashMap<String, Map<String, Map<HostAndPort, OneEndpointStatus>>> oneEndpointStatusMapByClusterNamePostBySlave = new ConcurrentHashMap<>()
 
+    /**
+     * Adds the status of cluster endpoints posted by a slave to the map.
+     * @param slaveListenAddress The listen address of the slave.
+     * @param oneEndpointStatusMapByClusterName The map of cluster endpoint statuses posted by the slave.
+     */
     void addOneEndpointStatusMapByClusterNamePostBySlave(String slaveListenAddress, Map<String, Map<HostAndPort, OneEndpointStatus>> oneEndpointStatusMapByClusterName) {
         oneEndpointStatusMapByClusterNamePostBySlave[slaveListenAddress] = oneEndpointStatusMapByClusterName
     }
 
+    /**
+     * Clears the map that stores the status of cluster endpoints posted by slaves.
+     * Intended for testing purposes only.
+     */
     @TestOnly
     void clearOneEndpointStatusMapByClusterNamePostBySlave() {
         oneEndpointStatusMapByClusterNamePostBySlave.clear()
     }
 
+    /**
+     * A concurrent skip list set that stores cluster names to be skipped by the failover manager.
+     */
     private ConcurrentSkipListSet<String> skipOneClusterNameSet = []
 
+    /**
+     * Returns the set of cluster names to be skipped by the failover manager.
+     * @return The set of cluster names to be skipped.
+     */
     ConcurrentSkipListSet<String> getSkipOneClusterNameSet() {
         return skipOneClusterNameSet
     }
 
+    /**
+     * Adds a cluster name to the set of cluster names to be skipped.
+     * @param oneClusterName The name of the cluster to be skipped.
+     */
     void addSkipOneClusterName(String oneClusterName) {
         skipOneClusterNameSet.add(oneClusterName)
     }
 
+    /**
+     * Removes a cluster name from the set of cluster names to be skipped.
+     * @param oneClusterName The name of the cluster to be removed from the skip list.
+     */
     void removeSkipOneClusterName(String oneClusterName) {
         skipOneClusterNameSet.remove(oneClusterName)
     }
 
+    /**
+     * Adds a new cluster metadata to the map of cluster endpoint statuses.
+     * Intended for testing purposes only.
+     * @param oneClusterName The name of the cluster.
+     * @param masterHostAndPortList The list of host and port pairs for the master nodes.
+     */
     @TestOnly
     synchronized void addOneMeta(String oneClusterName, List<HostAndPort> masterHostAndPortList) {
         Map<HostAndPort, OneEndpointStatus> newOneEndpointStatusMap = [:]
@@ -68,6 +118,11 @@ class FailoverManager {
         oneEndpointStatusMapByClusterName[oneClusterName] = newOneEndpointStatusMap
     }
 
+    /**
+     * Adds a new cluster metadata to the map of cluster endpoint statuses and updates the metadata in Zookeeper.
+     * @param oneClusterName The name of the cluster.
+     * @param masterHostAndPortList The list of host and port pairs for the master nodes.
+     */
     synchronized void addOneMetaToZookeeper(String oneClusterName, List<HostAndPort> masterHostAndPortList) {
         Map<HostAndPort, OneEndpointStatus> newOneEndpointStatusMap = [:]
         masterHostAndPortList.each { hostAndPort ->
@@ -93,6 +148,10 @@ class FailoverManager {
         log.warn 'failover manager update zookeeper one cluster meta success, cluster name={}', oneClusterName
     }
 
+    /**
+     * Removes a cluster metadata from the map of cluster endpoint statuses and updates Zookeeper.
+     * @param oneClusterName The name of the cluster.
+     */
     synchronized void removeOneMetaFromZookeeper(String oneClusterName) {
         oneEndpointStatusMapByClusterName.remove(oneClusterName)
 
@@ -105,6 +164,11 @@ class FailoverManager {
         log.warn 'failover manager remove zookeeper one cluster meta success, cluster name={}', oneClusterName
     }
 
+    /**
+     * Updates the cluster metadata in Zookeeper after performing a failover.
+     * @param oneClusterName The name of the cluster.
+     * @param shards The list of shards in the cluster.
+     */
     @VisibleForTesting
     void updateZookeeperOneMetaAfterDoFailover(String oneClusterName, List<Shard> shards) {
         log.warn 'failover manager update zookeeper one cluster meta after do failover, cluster name={}', oneClusterName
@@ -119,9 +183,17 @@ class FailoverManager {
         }
     }
 
+    /**
+     * The prefix for the Zookeeper node name that indicates a delayed restart check for a failed host and port.
+     */
     @VisibleForTesting
     static final String DELAY_RESTART_CHECK_FOR_FAILED_HOST_AND_PORT_NODE_NAME_PREFIX = 'delay_restart_'
 
+    /**
+     * Adds a Zookeeper node to indicate a delayed restart check for a failed host and port.
+     * @param failHostAndPort The host and port of the failed node.
+     * @param clusterxNodesArgs The clusterx nodes argument string.
+     */
     @VisibleForTesting
     void addDelayRestartCheckForFailedHostAndPortNode(HostAndPort failHostAndPort, String clusterxNodesArgs) {
         log.warn 'failover manager add delay restart check for failed host and port node, host and port={}:{}', failHostAndPort.host, failHostAndPort.port
@@ -137,6 +209,10 @@ class FailoverManager {
         }
     }
 
+    /**
+     * Checks if a server has restarted and performs the necessary set nodes operation.
+     * @param nodeName The name of the Zookeeper node.
+     */
     @VisibleForTesting
     void checkIfServerRestartAndThenSetNodes(String nodeName) {
         def array = nodeName.substring(DELAY_RESTART_CHECK_FOR_FAILED_HOST_AND_PORT_NODE_NAME_PREFIX.length()).split(':')
@@ -185,6 +261,9 @@ class FailoverManager {
         }
     }
 
+    /**
+     * Checks the status of the cluster and performs failover if necessary.
+     */
     void checkFailover() {
         def leaderSelector = LeaderSelector.instance
         def client = leaderSelector.client
@@ -245,9 +324,15 @@ class FailoverManager {
         postStatusToLeader()
     }
 
+    /**
+     * The loop count for the checkFailover method.
+     */
     @VisibleForTesting
     int loopCount = 0
 
+    /**
+     * Posts the status of the cluster endpoints to the leader.
+     */
     void postStatusToLeader() {
         loopCount++
 
@@ -282,6 +367,9 @@ class FailoverManager {
         }
     }
 
+    /**
+     * Performs failover if necessary based on the endpoint status.
+     */
     @VisibleForTesting
     void doFailoverIfNeed() {
         for (entry in oneEndpointStatusMapByClusterName.entrySet()) {
@@ -327,6 +415,11 @@ class FailoverManager {
         }
     }
 
+    /**
+     * Performs a failover for the specified cluster and host and port.
+     * @param oneClusterName The name of the cluster.
+     * @param failHostAndPort The host and port of the failed node.
+     */
     @VisibleForTesting
     void doFailover(String oneClusterName, HostAndPort failHostAndPort) {
         log.warn 'failover manager do failover, cluster name={}, fail host and port={}:{}', oneClusterName, failHostAndPort.host, failHostAndPort.port
@@ -360,6 +453,13 @@ class FailoverManager {
     @TestOnly
     boolean mockSetNodes
 
+    /**
+     * Performs a failover for a shard in the specified cluster.
+     * Intended for testing purposes only.
+     * @param oneClusterName
+     * @param failHostAndPort
+     * @param lines
+     */
     @VisibleForTesting
     void doFailoverOneShard(String oneClusterName, HostAndPort failHostAndPort, List<String> lines) {
         ArrayList<Shard> shards = []
