@@ -595,7 +595,6 @@ public abstract class BaseCommand {
             }
 
             cv.setCompressedData(bigStringBytes);
-            cv.setCompressedLength(bigStringBytes.length);
             cv.setDictSeqOrSpType(realDictSeq);
         }
 
@@ -944,7 +943,6 @@ public abstract class BaseCommand {
             cvRaw.setDictSeqOrSpType(spType);
             cvRaw.setKeyHash(slotWithKeyHash.keyHash);
             cvRaw.setExpireAt(expireAt);
-            cvRaw.setCompressedLength(valueBytes.length);
             cvRaw.setCompressedData(valueBytes);
 
             putToOneSlot(slot, key, slotWithKeyHash, cvRaw);

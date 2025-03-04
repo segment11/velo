@@ -186,7 +186,6 @@ class CompressedValueTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
         cv.keyHash = 123L
         cv.compressedData = new byte[10]
-        cv.compressedLength = 10
 
         def cv2 = new CompressedValue()
         cv2.seq = 123L
@@ -194,7 +193,6 @@ class CompressedValueTest extends Specification {
         cv2.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
         cv2.keyHash = 123L
         cv2.compressedData = null
-        cv2.compressedLength = 0
 
         when:
         def encoded = cv.encode()
@@ -342,7 +340,6 @@ class CompressedValueTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
         cv.keyHash = KeyHash.hash(keyBytes)
         cv.compressedData = new byte[10]
-        cv.compressedLength = 10
 
         when:
         def encoded = cv.encode()
@@ -363,7 +360,6 @@ class CompressedValueTest extends Specification {
         exception
 
         when:
-        cv.compressedLength = 0
         cv.compressedData = null
         encoded = cv.encode()
         cvDecode = CompressedValue.decode(Unpooled.wrappedBuffer(encoded), keyBytes, cv.keyHash)

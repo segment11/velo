@@ -80,7 +80,6 @@ public class OneSlotRead {
 
             cv.setDictSeqOrSpType(CompressedValue.NULL_DICT_SEQ);
             cv.setCompressedData(INIT_VALUE.getBytes());
-            cv.setCompressedLength(INIT_VALUE.length());
 
             oneSlot.put(key, s.bucketIndex(), cv);
         }

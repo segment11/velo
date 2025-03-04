@@ -430,7 +430,6 @@ class ManageCommand extends BaseCommand {
                 cv.seq = seq
                 cv.keyHash = s.keyHash()
                 cv.compressedData = mockValueBytes
-                cv.compressedLength = mockValueBytes.length
                 vList.add(new Wal.V(seq, s.bucketIndex(), s.keyHash(),
                         CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
                         s.rawKey(), cv.encode(), false))

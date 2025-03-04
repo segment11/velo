@@ -643,7 +643,6 @@ sunionstore
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = 'foobar'.bytes
-        cv.compressedLength = 6
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = sGroup.execute('setbit a 1 0')
         then:
@@ -775,7 +774,6 @@ sunionstore
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = '1234567890'.bytes
-        cv.compressedLength = 10
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = sGroup.setrange()
         then:
@@ -843,7 +841,6 @@ sunionstore
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = '1234567890'.bytes
-        cv.compressedLength = 10
 
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = sGroup.strlen()

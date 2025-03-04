@@ -291,7 +291,6 @@ class RequestHandlerTest extends Specification {
         when:
         def cv = new CompressedValue()
         cv.compressedData = new byte[10]
-        cv.compressedLength = 10
         cv.keyHash = sKey.keyHash()
         oneSlot.put(key, sKey.bucketIndex(), cv)
         getData2[1] = key.bytes

@@ -143,7 +143,7 @@ class SegmentBatch2Test extends Specification {
         ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList = []
         SegmentBatch2.readToCvList(cvList, first.tightBytesWithLength(), 0, 4096, 0, (short) 0)
         then:
-        cvList.size() == 252
+        cvList.size() == 268
 
         when:
         def r2 = segmentBatch2.split(list, returnPvmList)
@@ -151,6 +151,6 @@ class SegmentBatch2Test extends Specification {
         ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList2 = []
         SegmentBatch2.readToCvList(cvList2, first2.segmentBytes(), 0, 4096, 0, (short) 0)
         then:
-        cvList2.size() == 63
+        cvList2.size() == 67
     }
 }

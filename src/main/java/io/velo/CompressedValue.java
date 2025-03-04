@@ -198,34 +198,23 @@ public class CompressedValue {
      */
     public int getUncompressedLength() {
         if (!isCompressed()) {
-            return compressedLength;
+            return getCompressedLength();
         }
 
         return (int) Zstd.getFrameContentSize(compressedData);
     }
 
     /**
-     * Compressed data length in bytes. If not compressed, this is raw data length.
+     * Returns the length of the compressed data.  If not compressed, this is raw data length.
      * Only use 24 bits.
-     */
-    private int compressedLength;
-
-    /**
-     * Returns the length of the compressed data.
      *
      * @return The length of the compressed data.
      */
     public int getCompressedLength() {
-        return compressedLength;
-    }
-
-    /**
-     * Sets the compressed data length.
-     *
-     * @param compressedLength Must match the actual compressed data length.
-     */
-    public void setCompressedLength(int compressedLength) {
-        this.compressedLength = compressedLength;
+        if (compressedData == null) {
+            return 0;
+        }
+        return compressedData.length;
     }
 
     /**
@@ -527,14 +516,14 @@ public class CompressedValue {
                 ", expireAt=" + expireAt +
                 ", dictSeqOrSpType=" + dictSeqOrSpType +
                 ", keyHash=" + keyHash +
-                ", compressedLength=" + compressedLength +
+                ", compressedLength=" + getCompressedLength() +
                 '}';
     }
 
     private byte[] compressedData;
 
     /**
-     * Returns the compressed data.
+     * Returns the compressed data. If not compressed, this is raw data.
      *
      * @return The compressed data.
      */
@@ -614,6 +603,7 @@ public class CompressedValue {
      * @return {@code true} if the first 20 bytes (or full length if shorter) match.
      */
     public boolean isIgnoreCompression(byte[] data) {
+        assert compressedData != null;
         if (compressedData.length != data.length) {
             return false;
         }
@@ -631,6 +621,7 @@ public class CompressedValue {
      * @return Decompressed data.
      */
     public byte[] decompress(@Nullable Dict dict) {
+        assert compressedData != null;
         var dst = new byte[(int) Zstd.getFrameContentSize(compressedData)];
         int r;
         if (dict == null || dict == Dict.SELF_ZSTD_DICT) {
@@ -669,7 +660,6 @@ public class CompressedValue {
         if (compressedSize > data.length) {
             // No need to compress.
             cv.compressedData = data;
-            cv.compressedLength = data.length;
             return cv;
         }
 
@@ -683,7 +673,6 @@ public class CompressedValue {
             cv.compressedData = dst;
         }
 
-        cv.compressedLength = compressedSize;
         return cv;
     }
 
@@ -715,7 +704,7 @@ public class CompressedValue {
      * @return Total byte length required for serialization.
      */
     public int encodedLength() {
-        return VALUE_HEADER_LENGTH + compressedLength;
+        return VALUE_HEADER_LENGTH + getCompressedLength();
     }
 
     /**
@@ -770,8 +759,8 @@ public class CompressedValue {
         buf.writeLong(expireAt);
         buf.writeLong(keyHash);
         buf.writeInt(dictSeqOrSpType);
-        buf.writeInt(compressedLength);
-        if (compressedData != null && compressedLength > 0) {
+        buf.writeInt(getCompressedLength());
+        if (compressedData != null) {
             buf.write(compressedData);
         }
         return bytes;
@@ -787,8 +776,8 @@ public class CompressedValue {
         buf.writeLong(expireAt);
         buf.writeLong(keyHash);
         buf.writeInt(dictSeqOrSpType);
-        buf.writeInt(compressedLength);
-        if (compressedData != null && compressedLength > 0) {
+        buf.writeInt(getCompressedLength());
+        if (compressedData != null) {
             buf.write(compressedData);
         }
     }
@@ -802,7 +791,6 @@ public class CompressedValue {
      */
     public byte[] encodeAsBigStringMeta(long uuid) {
         // UUID + dict int.
-        compressedLength = 8 + 4;
         compressedData = new byte[12];
         ByteBuffer.wrap(compressedData).putLong(uuid).putInt(dictSeqOrSpType);
 
@@ -812,7 +800,7 @@ public class CompressedValue {
         buf.writeLong(expireAt);
         buf.writeLong(keyHash);
         buf.writeInt(SP_TYPE_BIG_STRING);
-        buf.writeInt(compressedLength);
+        buf.writeInt(getCompressedLength());
         buf.write(compressedData);
 
         return bytes;
@@ -847,7 +835,6 @@ public class CompressedValue {
             cv.seq = buf.readLong();
             cv.compressedData = new byte[buf.readableBytes()];
             buf.readBytes(cv.compressedData);
-            cv.compressedLength = cv.compressedData.length;
             return cv;
         }
 
@@ -861,24 +848,24 @@ public class CompressedValue {
         }
 
         if (keyHash != 0 && cv.keyHash != keyHash) {
-            cv.compressedLength = buf.readInt();
-            if (cv.compressedLength > 0) {
-                buf.skipBytes(cv.compressedLength);
+            var compressedLength = buf.readInt();
+            if (compressedLength > 0) {
+                buf.skipBytes(compressedLength);
             }
 
             // why ? todo: check
-            log.warn("Key hash not match, key={}, seq={}, compressedLength={}, keyHash={}, keyHash={}",
-                    new String(keyBytes), cv.seq, cv.compressedLength, keyHash, cv.keyHash);
+            log.warn("Key hash not match, key={}, seq={}, compressedLength={}, keyHash={}, persisted keyHash={}",
+                    new String(keyBytes), cv.seq, compressedLength, keyHash, cv.keyHash);
             throw new IllegalStateException("Key hash not match, key=" + new String(keyBytes) +
                     ", seq=" + cv.seq +
-                    ", cvEncodedLength=" + cv.compressedLength +
+                    ", compressedLength=" + compressedLength +
                     ", keyHash=" + keyHash +
                     ", persisted keyHash=" + cv.keyHash);
         }
 
-        cv.compressedLength = buf.readInt();
-        if (cv.compressedLength > 0) {
-            cv.compressedData = new byte[cv.compressedLength];
+        var compressedLength = buf.readInt();
+        if (compressedLength > 0) {
+            cv.compressedData = new byte[compressedLength];
             buf.readBytes(cv.compressedData);
         }
         return cv;

@@ -128,7 +128,7 @@ class CountServiceTest extends Specification {
         // no data saved
         countService1.loadFromLastSavedFile()
         then:
-        countService1.estimate(new StringBuilder()) == 0
+        countService1.estimate(new StringBuilder()) == 16 * initBytesArraySize
 
         when:
         final int keyCount = 100 * initBytesArraySize

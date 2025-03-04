@@ -411,7 +411,6 @@ class BGroupTest extends Specification {
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = 'foobar'.bytes
-        cv.compressedLength = 6
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = bGroup.execute('bitcount a')
         then:
@@ -492,7 +491,6 @@ class BGroupTest extends Specification {
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = 'foobar'.bytes
-        cv.compressedLength = 6
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = bGroup.execute('bitpos a 0')
         then:

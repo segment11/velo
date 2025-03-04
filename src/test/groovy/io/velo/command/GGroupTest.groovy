@@ -138,7 +138,6 @@ class GGroupTest extends Specification {
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = 'foobar'.bytes
-        cv.compressedLength = 6
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = gGroup.execute('getbit a 0')
         then:
@@ -340,7 +339,6 @@ class GGroupTest extends Specification {
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = 'abc'.bytes
-        cv.compressedLength = 3
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = gGroup.execute('getrange a 0 1')
         then:
@@ -380,7 +378,6 @@ class GGroupTest extends Specification {
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = 'abc'.bytes
-        cv.compressedLength = 3
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = gGroup.getset()
         then:

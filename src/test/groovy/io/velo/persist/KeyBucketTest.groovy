@@ -392,7 +392,6 @@ class KeyBucketTest extends Specification {
         def cell2Cv = new CompressedValue()
         cell2Cv.keyHash = KeyHash.hash(cell2Key.bytes)
         cell2Cv.compressedData = new byte[30]
-        cell2Cv.compressedLength = 30
         // will trigger re-put all
         keyBucket.put(cell2Key.bytes, 100L, 0, 100L, cell2Cv.encode())
         then:

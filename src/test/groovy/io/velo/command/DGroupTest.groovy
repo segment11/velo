@@ -196,7 +196,6 @@ class DGroupTest extends Specification {
         def cv = new CompressedValue()
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_BYTE
         cv.compressedData = new byte[1]
-        cv.compressedLength = 1
         inMemoryGetSet.put(slot, 'key', 0, cv)
         reply = dGroup.debug()
         then:
@@ -206,7 +205,6 @@ class DGroupTest extends Specification {
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_DOUBLE
         cv.compressedData = new byte[8]
-        cv.compressedLength = 8
         reply = dGroup.debug()
         then:
         reply instanceof BulkReply
@@ -399,7 +397,6 @@ class DGroupTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_BYTE
         // 0
         cv.compressedData = new byte[1]
-        cv.compressedLength = 1
         inMemoryGetSet.put(slot, 'a', 0, cv)
         def reply = dGroup.decrBy(1, 0)
         then:
@@ -437,7 +434,6 @@ class DGroupTest extends Specification {
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        cv.compressedLength = 4
         cv.compressedData = '1234'.bytes
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = dGroup.decrBy(1, 0)
@@ -448,7 +444,6 @@ class DGroupTest extends Specification {
         when:
         // float
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_DOUBLE
-        cv.compressedLength = 8
         def doubleBytes = new byte[8]
         ByteBuffer.wrap(doubleBytes).putDouble(1.1)
         cv.compressedData = doubleBytes
@@ -460,7 +455,6 @@ class DGroupTest extends Specification {
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
-        cv.compressedLength = 3
         cv.compressedData = '1.1'.bytes
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = dGroup.decrBy(0, 1)

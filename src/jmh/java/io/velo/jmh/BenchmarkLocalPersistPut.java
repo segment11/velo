@@ -191,7 +191,6 @@ TIPS: 512MB write buffer for each slot, so the real write qps is in logs. (100w 
             cv.setKeyHash(s.keyHash());
             cv.setExpireAt(CompressedValue.NO_EXPIRE);
             cv.setDictSeqOrSpType(CompressedValue.NULL_DICT_SEQ);
-            cv.setCompressedLength(valueBytes.length);
             cv.setCompressedData(valueBytes);
 
             oneSlot.put(key, s.bucketIndex(), cv);
