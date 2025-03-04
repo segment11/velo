@@ -66,7 +66,8 @@ public class KeyBucket {
      */
     private static final int ONE_CELL_META_LENGTH = HASH_VALUE_LENGTH + EXPIRE_AT_VALUE_LENGTH + SEQ_VALUE_LENGTH;
     /**
-     * The length of the header in bytes, including sequence number, size, and cell count.
+     * The length of the header in bytes
+     * seq long + size short + cell count short
      */
     private static final int HEADER_LENGTH = 8 + 2 + 2;
 

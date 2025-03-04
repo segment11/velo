@@ -21,7 +21,8 @@ public class RedisHH {
     public static final byte[] PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX = "h_not_hh_".getBytes();
 
     /**
-     * The length of the header in bytes, which includes size, dict sequence, body bytes length, and CRC.
+     * The length of the header in bytes
+     * size short + dict seq int + body length int + crc int
      */
     @VisibleForTesting
     static final int HEADER_LENGTH = 2 + 4 + 4 + 4;

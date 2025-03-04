@@ -31,7 +31,8 @@ public class RedisZSet {
     public static short ZSET_MEMBER_MAX_LENGTH = 255;
 
     /**
-     * The length of the header in bytes, which includes size, dict sequence, body bytes length, and CRC.
+     * The length of the header in bytes
+     * size short + dict seq int + body length int + crc int
      */
     @VisibleForTesting
     static final int HEADER_LENGTH = 2 + 4 + 4 + 4;

@@ -153,7 +153,8 @@ public class SegmentBatch implements InSlotMetricCollector {
      */
     public static final int MAX_BLOCK_NUMBER = 4;
     /**
-     * Length of the segment header: seq long + segment type bit + total bytes length int + each sub block * (offset short + length short).
+     * Length of the segment header.
+     * seq long + segment type bit + total bytes length int + each sub block * (offset short + length short).
      */
     private static final int HEADER_LENGTH = 8 + 1 + 4 + MAX_BLOCK_NUMBER * (2 + 2);
 

@@ -46,8 +46,10 @@ public class ReverseIndexChunk implements NeedCleanUp {
     // when meta index words clear, all fill byte 0, segment index = 0 will never be used
     private static final int HEADER_FOR_META_LENGTH = HEADER_USED_SEGMENT_COUNT * ONE_WORD_HOLD_ONE_SEGMENT_LENGTH_KB * 1024;
 
-    // 4 bytes int for segment index, 4 bytes int for write index, 4 bytes short for word length, 32 bytes for word
-    // one fd = 8192 words, 8192 * (4 + 4 + 4 + 32) = 8192 * 44 = 360448, max 4 fd = need 1.4MB
+    /**
+     * segment index int + write index int + word length short + 32 bytes for word
+     * one fd = 8192 words, 8192 * (4 + 4 + 4 + 32) = 8192 * 44 = 360448, max 4 fd = need 1.4MB
+     */
     private static final int ONE_SEGMENT_INDEX_META_LENGTH = 4 + 4 + 4 + 32;
 
     @VisibleForTesting

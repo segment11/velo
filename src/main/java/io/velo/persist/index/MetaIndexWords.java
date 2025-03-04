@@ -83,7 +83,9 @@ public class MetaIndexWords implements NeedCleanUp {
 
     private static final int ONE_GROUP_OFFSET;
 
-    // 2 bytes for real word length, 4 bytes for int id, 4 bytes for segment index, 4 bytes for total count
+    /**
+     * real word length short + int id + segment index int + total count int
+     */
     private static final int ONE_WORD_META_LENGTH = 2 + 4 + 4 + 4;
 
     static {

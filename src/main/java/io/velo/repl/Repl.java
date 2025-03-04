@@ -23,7 +23,7 @@ public class Repl {
 
     /**
      * Length of the header in the REPL protocol.
-     * Includes protocol keyword, slave UUID (8 bytes), slot (2 bytes), type (2 bytes), and length (4 bytes).
+     * Includes protocol keyword, slave uuid long + slot short + type short + content length int.
      */
     public static final int HEADER_LENGTH = PROTOCOL_KEYWORD_BYTES.length + 8 + 2 + 2 + 4;
 

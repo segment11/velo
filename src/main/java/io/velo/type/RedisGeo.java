@@ -338,8 +338,11 @@ public class RedisGeo {
         return buf;
     }
 
+    /**
+     * The length of the header in bytes
+     * size short + body length int + crc int
+     */
     @VisibleForTesting
-    // size short + body bytes length int + crc int
     static final int HEADER_LENGTH = 2 + 4 + 4;
 
     /**

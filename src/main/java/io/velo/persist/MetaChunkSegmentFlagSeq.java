@@ -31,7 +31,9 @@ import java.util.List;
  */
 public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, ITask {
     private static final String META_CHUNK_SEGMENT_SEQ_FLAG_FILE = "meta_chunk_segment_flag_seq.dat";
-    // flag byte + seq long + wal group index int
+    /**
+     * flag byte + seq long + wal group index int
+     */
     public static final int ONE_LENGTH = 1 + 8 + 4;
 
     public static final int INIT_WAL_GROUP_INDEX = -1;

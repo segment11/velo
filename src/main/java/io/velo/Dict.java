@@ -405,6 +405,7 @@ public class Dict implements Serializable {
 
     /**
      * Length of the encoded dictionary header.
+     * dict seq int + createdTime long + keyPrefix length short + dict length short
      */
     private static final int ENCODED_HEADER_LENGTH = 4 + 8 + 2 + 2;
 

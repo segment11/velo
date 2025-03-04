@@ -24,7 +24,8 @@ public class RedisList {
     public static short LIST_MAX_SIZE = Short.MAX_VALUE;
 
     /**
-     * The length of the header in bytes, which includes size, dict sequence, body bytes length, and CRC.
+     * The length of the header in bytes
+     * size short + dict seq int + body length int + crc int
      */
     @VisibleForTesting
     static final int HEADER_LENGTH = 2 + 4 + 4 + 4;

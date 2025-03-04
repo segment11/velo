@@ -92,6 +92,7 @@ public class Wal implements InMemoryEstimate {
 
         /**
          * The length of the encoded header for this log entry.
+         * seq long + bucketIndex int + keyHash long + expireAt long + spType int + keyLength short + key bytes + cvEncodedLength int + cvEncoded bytes
          */
         private static final int ENCODED_HEADER_LENGTH = 8 + 4 + 8 + 8 + 4 + 2 + 4;
 
