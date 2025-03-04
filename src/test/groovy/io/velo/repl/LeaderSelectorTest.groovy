@@ -23,8 +23,10 @@ class LeaderSelectorTest extends Specification {
         leaderSelector.cleanUp()
         leaderSelector.masterAddressLocalMocked = null
 
+        boolean doThisCase = Consts.checkConnectAvailable()
+
         expect:
-        leaderSelector.tryConnectAndGetMasterListenAddress() == null
+        doThisCase ? leaderSelector.tryConnectAndGetMasterListenAddress() == null : true
 
         when:
         def testListenAddress = 'localhost:7379'
@@ -51,7 +53,6 @@ class LeaderSelectorTest extends Specification {
         ConfForGlobal.zookeeperRootPath = '/velo/cluster-test'
         ConfForGlobal.netListenAddresses = testListenAddress
 
-        boolean doThisCase = Consts.checkConnectAvailable()
         if (!doThisCase) {
             ConfForGlobal.zookeeperConnectString = null
             println 'zookeeper not running, skip'

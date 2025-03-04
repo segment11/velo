@@ -18,7 +18,7 @@ class OneEndpointStatusTest extends Specification {
         status.isPingOk()
 
         when:
-        5.times {
+        10.times {
             status.addStatus(OneEndpointStatus.Status.PING_FAIL)
         }
         println status
