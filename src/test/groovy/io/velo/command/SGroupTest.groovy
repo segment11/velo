@@ -2282,7 +2282,7 @@ sunionstore
         }.result
 
         cleanup:
-        oneSlot.cleanUp()
+        localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
 }

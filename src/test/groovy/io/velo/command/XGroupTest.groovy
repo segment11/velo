@@ -195,7 +195,7 @@ class XGroupTest extends Specification {
         reply instanceof ErrorReply
 
         cleanup:
-        oneSlot.cleanUp()
+        localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
 
@@ -1469,7 +1469,7 @@ class XGroupTest extends Specification {
         XGroup.skipTryCatchUpAgainAfterSlaveTcpClientClosed
 
         cleanup:
-        oneSlot.cleanUp()
+        localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
 
