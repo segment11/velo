@@ -430,7 +430,6 @@ class OneSlotTest extends Specification {
             cv.keyHash = s.keyHash()
             cv.compressedData = new byte[length]
             cv.compressedLength = length
-            cv.uncompressedLength = length
             cv.seq = oneSlot.snowFlake.nextId()
 
             if (random.nextInt(10) == 1) {
@@ -656,7 +655,6 @@ class OneSlotTest extends Specification {
         cv.keyHash = sKey.keyHash()
         cv.compressedData = new byte[10]
         cv.compressedLength = 10
-        cv.uncompressedLength = 10
         cv.expireAt = System.currentTimeMillis()
         oneSlot.put(key, sKey.bucketIndex(), cv)
         then:
@@ -703,7 +701,6 @@ class OneSlotTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
         cv.compressedData = new byte[CompressedValue.SP_TYPE_SHORT_STRING_MIN_LEN * 100]
         cv.compressedLength = cv.compressedData.length
-        cv.uncompressedLength = cv.compressedData.length
         cv.expireAt = CompressedValue.NO_EXPIRE
         // make sure do persist
         100.times {
@@ -768,7 +765,6 @@ class OneSlotTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
         cv.compressedData = new byte[CompressedValue.SP_TYPE_SHORT_STRING_MIN_LEN * 100]
         cv.compressedLength = cv.compressedData.length
-        cv.uncompressedLength = cv.compressedData.length
         cv.expireAt = CompressedValue.NO_EXPIRE
         oneSlot.put(key, sKey.bucketIndex(), cv)
         then:
@@ -1131,7 +1127,6 @@ class OneSlotTest extends Specification {
         firstCv.keyHash = firstS.keyHash()
         firstCv.compressedData = new byte[10]
         firstCv.compressedLength = 10
-        firstCv.uncompressedLength = 10
         firstCv.seq = oneSlot.snowFlake.nextId()
         oneSlot.put(firstKey, firstS.bucketIndex(), firstCv)
         // clear wal for test

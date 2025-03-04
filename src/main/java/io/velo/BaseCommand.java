@@ -806,6 +806,7 @@ public abstract class BaseCommand {
                 var indexHandlerPool = localPersist.getIndexHandlerPool();
                 if (indexHandlerPool != null) {
                     var shortType = KeyLoader.transferToShortType(cv.getDictSeqOrSpType());
+                    // compressed / uncompressed length only use 24 bits
                     var valueLengthHigh24WithShortTypeLow8 = cv.getUncompressedLength() << 8 | shortType;
                     indexHandlerPool.getKeyAnalysisHandler().addKey(slotWithKeyHash.rawKey, valueLengthHigh24WithShortTypeLow8);
                 }
@@ -943,7 +944,6 @@ public abstract class BaseCommand {
             cvRaw.setDictSeqOrSpType(spType);
             cvRaw.setKeyHash(slotWithKeyHash.keyHash);
             cvRaw.setExpireAt(expireAt);
-            cvRaw.setUncompressedLength(valueBytes.length);
             cvRaw.setCompressedLength(valueBytes.length);
             cvRaw.setCompressedData(valueBytes);
 

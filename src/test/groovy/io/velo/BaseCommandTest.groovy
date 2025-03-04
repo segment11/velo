@@ -346,7 +346,6 @@ class BaseCommandTest extends Specification {
         cvForTypeList.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         cvForTypeList.compressedData = new RedisList().encode()
         cvForTypeList.compressedLength = cvForTypeList.compressedLength
-        cvForTypeList.uncompressedLength = cvForTypeList.compressedLength
         cvForTypeList.keyHash = sKeyForTypeList.keyHash()
         inMemoryGetSet.put(slot, keyForTypeList, sKeyForTypeList.bucketIndex(), cvForTypeList)
         boolean exception = false
@@ -526,7 +525,6 @@ class BaseCommandTest extends Specification {
         def cv = new CompressedValue()
         cv.compressedData = value.bytes
         cv.compressedLength = value.length()
-        cv.uncompressedLength = value.length()
         cv.keyHash = sKey.keyHash()
         cv.expireAt = CompressedValue.NO_EXPIRE
         c.setCv(key.bytes, cv, null)
@@ -545,7 +543,6 @@ class BaseCommandTest extends Specification {
         def longValueBytes = ('aaaaabbbbbccccc' * 20).bytes
         c.byPassGetSet = inMemoryGetSet
         cv.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
-        cv.uncompressedLength = longValueBytes.length
         cv.compressedData = Zstd.compress(longValueBytes, 3)
         cv.compressedLength = cv.compressedData.length
         c.setCv(key.bytes, cv, sKey)
@@ -565,7 +562,6 @@ class BaseCommandTest extends Specification {
         ByteBuffer.wrap(intBytes).putInt(1)
         cv.compressedData = intBytes
         cv.compressedLength = intBytes.length
-        cv.uncompressedLength = intBytes.length
         c.setCv(key.bytes, cv, sKey)
         then:
         inMemoryGetSet.getBuf(slot, key.bytes, sKey.bucketIndex(), sKey.keyHash()).cv().numberValue() == 1

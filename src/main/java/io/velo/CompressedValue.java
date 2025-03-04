@@ -91,8 +91,9 @@ public class CompressedValue {
 
     /**
      * Header sizes for serialization.
+     * seq long + expireAt long + keyHash long + dictSeqOrSpType int + compressedLength int
      */
-    public static final int VALUE_HEADER_LENGTH = 8 + 8 + 4 + 8 + 4 + 4;
+    public static final int VALUE_HEADER_LENGTH = 8 + 8 + 4 + 8 + 4;
     public static final int KEY_HEADER_LENGTH = 2;
 
     /**
@@ -191,30 +192,21 @@ public class CompressedValue {
     }
 
     /**
-     * Original uncompressed data length in bytes.
-     */
-    private int uncompressedLength;
-
-    /**
      * Returns the length of the original data before compression.
      *
      * @return The length of the original data before compression.
      */
     public int getUncompressedLength() {
-        return uncompressedLength;
+        if (!isCompressed()) {
+            return compressedLength;
+        }
+
+        return (int) Zstd.getFrameContentSize(compressedData);
     }
 
     /**
-     * Sets the original data length.
-     *
-     * @param uncompressedLength Must match the actual uncompressed data length.
-     */
-    public void setUncompressedLength(int uncompressedLength) {
-        this.uncompressedLength = uncompressedLength;
-    }
-
-    /**
-     * Compressed data length in bytes.
+     * Compressed data length in bytes. If not compressed, this is raw data length.
+     * Only use 24 bits.
      */
     private int compressedLength;
 
@@ -535,7 +527,6 @@ public class CompressedValue {
                 ", expireAt=" + expireAt +
                 ", dictSeqOrSpType=" + dictSeqOrSpType +
                 ", keyHash=" + keyHash +
-                ", uncompressedLength=" + uncompressedLength +
                 ", compressedLength=" + compressedLength +
                 '}';
     }
@@ -640,7 +631,7 @@ public class CompressedValue {
      * @return Decompressed data.
      */
     public byte[] decompress(@Nullable Dict dict) {
-        var dst = new byte[uncompressedLength];
+        var dst = new byte[(int) Zstd.getFrameContentSize(compressedData)];
         int r;
         if (dict == null || dict == Dict.SELF_ZSTD_DICT) {
             r = (int) Zstd.decompress(dst, compressedData);
@@ -693,7 +684,6 @@ public class CompressedValue {
         }
 
         cv.compressedLength = compressedSize;
-        cv.uncompressedLength = data.length;
         return cv;
     }
 
@@ -778,9 +768,8 @@ public class CompressedValue {
         var buf = ByteBuf.wrapForWriting(bytes);
         buf.writeLong(seq);
         buf.writeLong(expireAt);
-        buf.writeInt(dictSeqOrSpType);
         buf.writeLong(keyHash);
-        buf.writeInt(uncompressedLength);
+        buf.writeInt(dictSeqOrSpType);
         buf.writeInt(compressedLength);
         if (compressedData != null && compressedLength > 0) {
             buf.write(compressedData);
@@ -796,9 +785,8 @@ public class CompressedValue {
     public void encodeTo(ByteBuf buf) {
         buf.writeLong(seq);
         buf.writeLong(expireAt);
-        buf.writeInt(dictSeqOrSpType);
         buf.writeLong(keyHash);
-        buf.writeInt(uncompressedLength);
+        buf.writeInt(dictSeqOrSpType);
         buf.writeInt(compressedLength);
         if (compressedData != null && compressedLength > 0) {
             buf.write(compressedData);
@@ -822,10 +810,8 @@ public class CompressedValue {
         var buf = ByteBuf.wrapForWriting(bytes);
         buf.writeLong(seq);
         buf.writeLong(expireAt);
-        buf.writeInt(SP_TYPE_BIG_STRING);
         buf.writeLong(keyHash);
-        // Big string raw bytes length.
-        buf.writeInt(uncompressedLength);
+        buf.writeInt(SP_TYPE_BIG_STRING);
         buf.writeInt(compressedLength);
         buf.write(compressedData);
 
@@ -862,38 +848,34 @@ public class CompressedValue {
             cv.compressedData = new byte[buf.readableBytes()];
             buf.readBytes(cv.compressedData);
             cv.compressedLength = cv.compressedData.length;
-            cv.uncompressedLength = cv.compressedLength;
             return cv;
         }
 
         cv.seq = buf.readLong();
         cv.expireAt = buf.readLong();
-        cv.dictSeqOrSpType = buf.readInt();
         cv.keyHash = buf.readLong();
+        cv.dictSeqOrSpType = buf.readInt();
 
         if (keyHash == 0 && keyBytes != null) {
             keyHash = KeyHash.hash(keyBytes);
         }
 
         if (keyHash != 0 && cv.keyHash != keyHash) {
-            cv.uncompressedLength = buf.readInt();
             cv.compressedLength = buf.readInt();
             if (cv.compressedLength > 0) {
                 buf.skipBytes(cv.compressedLength);
             }
 
             // why ? todo: check
-            log.warn("Key hash not match, key={}, seq={}, uncompressedLength={}, cvEncodedLength={}, keyHash={}, persisted keyHash={}",
-                    new String(keyBytes), cv.seq, cv.uncompressedLength, cv.compressedLength, keyHash, cv.keyHash);
+            log.warn("Key hash not match, key={}, seq={}, compressedLength={}, keyHash={}, keyHash={}",
+                    new String(keyBytes), cv.seq, cv.compressedLength, keyHash, cv.keyHash);
             throw new IllegalStateException("Key hash not match, key=" + new String(keyBytes) +
                     ", seq=" + cv.seq +
-                    ", uncompressedLength=" + cv.uncompressedLength +
                     ", cvEncodedLength=" + cv.compressedLength +
                     ", keyHash=" + keyHash +
                     ", persisted keyHash=" + cv.keyHash);
         }
 
-        cv.uncompressedLength = buf.readInt();
         cv.compressedLength = buf.readInt();
         if (cv.compressedLength > 0) {
             cv.compressedData = new byte[cv.compressedLength];

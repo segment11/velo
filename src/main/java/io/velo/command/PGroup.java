@@ -187,7 +187,6 @@ public class PGroup extends BaseCommand {
         cv.setSeq(snowFlake.nextId());
         cv.setDictSeqOrSpType(CompressedValue.SP_TYPE_HLL);
         cv.setKeyHash(s.keyHash());
-        cv.setUncompressedLength(encoded.length);
         cv.setCompressedLength(compressed.length);
         cv.setCompressedData(compressed);
         putToOneSlot(s.slot(), s.rawKey(), s, cv);

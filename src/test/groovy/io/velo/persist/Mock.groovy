@@ -56,7 +56,6 @@ class Mock {
             cv.keyHash = keyHash
             cv.compressedData = new byte[10]
             cv.compressedLength = 10
-            cv.uncompressedLength = 10
 
             def v = new Wal.V(it, bucketIndex, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
                     key, cv.encode(), false)
@@ -77,7 +76,6 @@ class Mock {
             cv.keyHash = it
             cv.compressedData = new byte[10]
             cv.compressedLength = 10
-            cv.uncompressedLength = 10
             compressedValueList << cv
         }
         compressedValueList
@@ -88,7 +86,6 @@ class Mock {
         cv.keyHash = KeyHash.hash(key.bytes)
         cv.compressedData = value.bytes
         cv.compressedLength = value.length()
-        cv.uncompressedLength = value.length()
         cv.encodeAsShortString()
     }
 

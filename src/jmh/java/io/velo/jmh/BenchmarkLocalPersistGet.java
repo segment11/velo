@@ -194,7 +194,6 @@ public class BenchmarkLocalPersistGet {
                 cv.setExpireAt(CompressedValue.NO_EXPIRE);
                 cv.setDictSeqOrSpType(CompressedValue.NULL_DICT_SEQ);
                 cv.setCompressedLength(valueBytes.length);
-                cv.setUncompressedLength(valueBytes.length);
                 cv.setCompressedData(valueBytes);
 
                 oneSlot.put(key, s.bucketIndex(), cv);

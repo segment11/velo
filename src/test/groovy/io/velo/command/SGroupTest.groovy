@@ -776,7 +776,6 @@ sunionstore
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = '1234567890'.bytes
         cv.compressedLength = 10
-        cv.uncompressedLength = 10
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = sGroup.setrange()
         then:
@@ -845,7 +844,6 @@ sunionstore
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = '1234567890'.bytes
         cv.compressedLength = 10
-        cv.uncompressedLength = 10
 
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = sGroup.strlen()

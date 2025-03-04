@@ -759,6 +759,7 @@ public class SGroup extends BaseCommand {
         if (cv == null) {
             return IntegerReply.REPLY_0;
         }
+
         return new IntegerReply(cv.getUncompressedLength());
     }
 

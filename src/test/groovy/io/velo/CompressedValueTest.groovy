@@ -187,7 +187,6 @@ class CompressedValueTest extends Specification {
         cv.keyHash = 123L
         cv.compressedData = new byte[10]
         cv.compressedLength = 10
-        cv.uncompressedLength = 10
 
         def cv2 = new CompressedValue()
         cv2.seq = 123L
@@ -196,7 +195,6 @@ class CompressedValueTest extends Specification {
         cv2.keyHash = 123L
         cv2.compressedData = null
         cv2.compressedLength = 0
-        cv2.uncompressedLength = 0
 
         when:
         def encoded = cv.encode()
@@ -213,7 +211,6 @@ class CompressedValueTest extends Specification {
         cvDecode.dictSeqOrSpType == cv.dictSeqOrSpType
         cvDecode.keyHash == cv.keyHash
         cvDecode.compressedLength == cv.compressedLength
-        cvDecode.uncompressedLength == cv.uncompressedLength
         Arrays.equals(cvDecode.compressedData, cv.compressedData)
         encoded.length == cv.encodedLength()
         buf.tail() == cv.encodedLength()
@@ -346,7 +343,6 @@ class CompressedValueTest extends Specification {
         cv.keyHash = KeyHash.hash(keyBytes)
         cv.compressedData = new byte[10]
         cv.compressedLength = 10
-        cv.uncompressedLength = 10
 
         when:
         def encoded = cv.encode()
@@ -368,7 +364,6 @@ class CompressedValueTest extends Specification {
 
         when:
         cv.compressedLength = 0
-        cv.uncompressedLength = 0
         cv.compressedData = null
         encoded = cv.encode()
         cvDecode = CompressedValue.decode(Unpooled.wrappedBuffer(encoded), keyBytes, cv.keyHash)
