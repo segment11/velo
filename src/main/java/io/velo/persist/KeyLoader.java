@@ -35,13 +35,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     public static final int KEY_BUCKET_ONE_COST_SIZE = PAGE_NUMBER_PER_BUCKET * LocalPersist.PAGE_SIZE;
 
     /**
-     * The maximum number of key buckets per file descriptor (FD).
-     * Each file descriptor can hold up to this many key buckets.
-     * one split index one file, one split file max 2GB, 2 * 1024 * 1024 / 4 = 524288
-     */
-    static final int MAX_KEY_BUCKET_COUNT_PER_FD = 2 * 1024 * 1024 / 4;
-
-    /**
      * Constructor for KeyLoader used in unit testing.
      *
      * @param slot           The slot number.

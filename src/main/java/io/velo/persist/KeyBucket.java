@@ -30,10 +30,9 @@ public class KeyBucket {
      */
     public static final int DEFAULT_BUCKETS_PER_SLOT = 16384 * 4;
     /**
-     * Maximum number of buckets per slot, limited to the maximum count per file descriptor.
-     * If big, wal will cost too much memory.
+     * Max number of buckets per slot, used in data partitioning.
      */
-    public static final int MAX_BUCKETS_PER_SLOT = KeyLoader.MAX_KEY_BUCKET_COUNT_PER_FD;
+    public static final int MAX_BUCKETS_PER_SLOT = 16384 * 16;
 
     /**
      * An empty byte array with a size of `KEY_BUCKET_ONE_COST_SIZE` used for initializing key buckets.

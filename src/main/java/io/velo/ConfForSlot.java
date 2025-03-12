@@ -322,10 +322,10 @@ public enum ConfForSlot {
 
             // check if chunk file number is enough for all key values encoded, considering invalid need merge values
             int estimateOneValueEncodedLength = (int) (ConfForGlobal.estimateOneValueLength * 1.5);
-            int estimateChunkCanStoreValueNumber = maxSegmentNumber() * segmentLength / estimateOneValueEncodedLength;
+            long estimateChunkCanStoreValueNumber = (long) maxSegmentNumber() * segmentLength / estimateOneValueEncodedLength;
             // keep 2 times space for chunk file, so pre-read merged segments invalid number is high, for performance
-            if (estimateChunkCanStoreValueNumber < ConfForGlobal.estimateKeyNumber * 2) {
-                throw new IllegalArgumentException("Chunk segment number too small, chunk segment number should be larger than " + ConfForGlobal.estimateKeyNumber * 2 +
+            if (estimateChunkCanStoreValueNumber < ConfForGlobal.estimateKeyNumber) {
+                throw new IllegalArgumentException("Chunk segment number too small, chunk segments can store key value number should be larger than " + ConfForGlobal.estimateKeyNumber +
                         ", configured chunk segment number is " + maxSegmentNumber());
             }
         }

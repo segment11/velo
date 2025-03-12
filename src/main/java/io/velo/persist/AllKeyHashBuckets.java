@@ -61,14 +61,7 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
         final int arrayLength;
         final int initCapacity;
         if (ConfForGlobal.pureMemoryV2) {
-            if (bucketsPerSlot <= 64 * 1024) {
-                // cache line size * 2
-                initCapacity = 128;
-            } else if (bucketsPerSlot <= 256 * 1024) {
-                initCapacity = 256;
-            } else {
-                initCapacity = 512;
-            }
+            initCapacity = 64;
             arrayLength = bucketsPerSlot;
         } else {
             // always init for easy test, cost less memory
