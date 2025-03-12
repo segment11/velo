@@ -72,17 +72,10 @@ class FGroupTest extends Specification {
         fGroup.from(BaseCommand.mockAGroup())
 
         when:
-        ConfForGlobal.zookeeperConnectString = null
-        def reply = fGroup.failover()
-        then:
-        reply instanceof ErrorReply
-
-        when:
-        ConfForGlobal.zookeeperConnectString = 'localhost:2181'
         def localPersist = LocalPersist.instance
         LocalPersistTest.prepareLocalPersist()
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        reply = fGroup.failover()
+        def reply = fGroup.failover()
         then:
         // no slave
         reply instanceof ErrorReply

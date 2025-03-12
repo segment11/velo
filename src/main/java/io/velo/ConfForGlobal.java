@@ -116,7 +116,7 @@ public class ConfForGlobal {
     /**
      * Zookeeper connection string.
      */
-    public static String zookeeperConnectString = "localhost:2181";
+    public static String zookeeperConnectString;
 
     /**
      * Session timeout for Zookeeper in milliseconds (default is 30000 ms).

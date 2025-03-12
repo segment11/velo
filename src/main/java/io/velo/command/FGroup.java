@@ -42,10 +42,6 @@ public class FGroup extends BaseCommand {
             return OKReply.INSTANCE;
         }
 
-        if (ConfForGlobal.zookeeperConnectString == null) {
-            return new ErrorReply("zookeeper connect string is null");
-        }
-
 //        if (!LeaderSelector.getInstance().hasLeadership()) {
 //            return new ErrorReply("not leader");
 //        }
