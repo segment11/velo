@@ -88,6 +88,19 @@ class InfoCommandTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test memory'() {
+        given:
+        def iGroup = new IGroup('info', null, null)
+        iGroup.from(BaseCommand.mockAGroup())
+        def infoCommand = new InfoCommand(iGroup)
+
+        when:
+        def reply = infoCommand.execute('info memory')
+        then:
+        reply instanceof BulkReply
+        new String((reply as BulkReply).raw).contains('total_system_memory:')
+    }
+
     def 'test replication'() {
         given:
         def data2 = new byte[2][]

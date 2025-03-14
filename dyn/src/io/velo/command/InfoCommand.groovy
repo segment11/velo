@@ -9,6 +9,10 @@ import io.velo.repl.ReplPair
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.Reply
+import org.apache.lucene.util.RamUsageEstimator
+import oshi.SystemInfo
+
+import java.lang.management.ManagementFactory
 
 @CompileStatic
 class InfoCommand extends BaseCommand {
@@ -38,6 +42,8 @@ class InfoCommand extends BaseCommand {
 
             if ('keyspace' == section) {
                 return keyspace()
+            } else if ('memory' == section) {
+                return memory()
             } else if ('replication' == section) {
                 return replication()
             } else if ('server' == section) {
@@ -89,6 +95,41 @@ db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
         list << new Tuple2("slave${slaveIndex}", state)
 
         list
+    }
+
+    private static Reply memory() {
+        def memoryMXBean = ManagementFactory.getMemoryMXBean()
+        def heapMemoryUsage = memoryMXBean.heapMemoryUsage
+        def nonHeapMemoryUsage = memoryMXBean.nonHeapMemoryUsage
+
+        def totalUsed = heapMemoryUsage.used + nonHeapMemoryUsage.used
+        def totalUsedHumanReadable = RamUsageEstimator.humanReadableUnits(totalUsed).replace(' ', '')
+
+        // nonHeapMemoryUsage.max may == -1
+        def totalMax = heapMemoryUsage.max + nonHeapMemoryUsage.max
+        def totalMaxHumanReadable = RamUsageEstimator.humanReadableUnits(totalMax).replace(' ', '')
+
+        def usedPercent = (totalUsed / totalMax) * 100
+
+        def si = new SystemInfo()
+        def globalMemory = si.hardware.memory
+        long totalPhysicalMemory = globalMemory.total
+        def totalPhysicalMemoryHumanReadable = RamUsageEstimator.humanReadableUnits(totalPhysicalMemory).replace(' ', '')
+
+        String r = """# Memory
+used_memory:${totalUsed}
+used_memory_human:${totalUsedHumanReadable}
+used_memory_rss:${totalUsed}
+used_memory_rss_human:${totalUsedHumanReadable}
+used_memory_peak:${totalMax}
+used_memory_peak_human:${totalMaxHumanReadable}
+used_memory_peak_perc:${usedPercent.round(2)}%
+total_system_memory:${totalPhysicalMemory}
+total_system_memory_human:${totalPhysicalMemoryHumanReadable}
+maxmemory:${totalMax}
+maxmemory_human:${totalMaxHumanReadable}
+"""
+        new BulkReply(r.bytes)
     }
 
     private Reply replication() {
