@@ -54,20 +54,25 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     public static final int O_DIRECT;
 
     static {
-        var extendConfigFile = Paths.get("velo_extend.properties").toFile();
-        if (extendConfigFile.exists()) {
-            final String key = "o_direct";
-            try {
-                var lines = Files.readLines(extendConfigFile, Charset.defaultCharset());
-                var line = lines.stream().filter(l -> l.startsWith(key)).findFirst().orElseThrow();
-                var value = line.split("=")[1].trim();
-                O_DIRECT = Integer.parseInt(value);
-                System.out.println("Load O_DIRECT=" + O_DIRECT);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+        var oDirectIntStr = System.getenv("O_DIRECT");
+        if (oDirectIntStr != null) {
+            O_DIRECT = Integer.parseInt(oDirectIntStr);
         } else {
-            O_DIRECT = 0x4000;
+            var extendConfigFile = Paths.get("velo_extend.properties").toFile();
+            if (extendConfigFile.exists()) {
+                final String key = "o_direct";
+                try {
+                    var lines = Files.readLines(extendConfigFile, Charset.defaultCharset());
+                    var line = lines.stream().filter(l -> l.startsWith(key)).findFirst().orElseThrow();
+                    var value = line.split("=")[1].trim();
+                    O_DIRECT = Integer.parseInt(value);
+                    System.out.println("Load O_DIRECT=" + O_DIRECT);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            } else {
+                O_DIRECT = 0x4000;
+            }
         }
     }
 
