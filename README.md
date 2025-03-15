@@ -26,7 +26,13 @@ Details refer to https://github.com/segment11/velo/blob/main/doc/redis_command_s
 
 ## Get started
 
-### Build
+### Run in docker
+
+```shell
+docker run -d --name velo -p 7379:7379 -v $(pwd)/velo-data:/var/lib/velo montplex/velo:1.0.0
+```
+
+### Or build from source and run
 
 Prepare the environment:
 
