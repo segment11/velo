@@ -288,7 +288,7 @@ public class HGroup extends BaseCommand {
         replies[12] = new BulkReply("modules".getBytes());
         replies[13] = MultiBulkReply.EMPTY;
 
-        return new MultiBulkReply(replies, isResp3);
+        return new MultiBulkReply(replies, isResp3, false);
     }
 
     @VisibleForTesting

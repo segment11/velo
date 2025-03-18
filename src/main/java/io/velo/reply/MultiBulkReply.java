@@ -62,6 +62,7 @@ public class MultiBulkReply implements Reply {
      */
     private static final byte MARKER = '*';
     private static final byte MARKER_MAP = '%';
+    private static final byte MARKER_SET = '~';
 
     /**
      * The replies contained in this multi-bulk reply.
@@ -69,6 +70,8 @@ public class MultiBulkReply implements Reply {
     private final Reply[] replies;
 
     private final boolean isMap;
+
+    private final boolean isSet;
 
     /**
      * Retrieves the replies contained in this multi-bulk reply.
@@ -79,9 +82,10 @@ public class MultiBulkReply implements Reply {
         return replies;
     }
 
-    public MultiBulkReply(Reply[] replies, boolean isMap) {
+    public MultiBulkReply(Reply[] replies, boolean isMap, boolean isSet) {
         this.replies = replies;
         this.isMap = isMap;
+        this.isSet = isSet;
 
         assert !isMap || (replies != null && replies.length % 2 == 0);
     }
@@ -92,7 +96,7 @@ public class MultiBulkReply implements Reply {
      * @param replies the replies to be contained in this multi-bulk reply.
      */
     public MultiBulkReply(Reply[] replies) {
-        this(replies, false);
+        this(replies, false, false);
     }
 
     /**
@@ -148,7 +152,7 @@ public class MultiBulkReply implements Reply {
     public ByteBuf bufferAsResp3() {
         // 256 bytes
         var buf = Unpooled.buffer();
-        buf.writeByte(isMap ? MARKER_MAP : MARKER);
+        buf.writeByte(isMap ? MARKER_MAP : (isSet ? MARKER_SET : MARKER));
         if (replies == null) {
             buf.writeBytes(BulkReply.NEG_ONE_WITH_CRLF);
         } else {

@@ -97,7 +97,8 @@ class RESPReplyTest extends Specification {
                 BoolReply.T
         ]
         then:
-        new MultiBulkReply(repliesMap, true).bufferAsResp3().asArray() == '%2\r\n+key1\r\n+value1\r\n+key2\r\n#t\r\n'.bytes
+        new MultiBulkReply(repliesMap, true, false).bufferAsResp3().asArray() == '%2\r\n+key1\r\n+value1\r\n+key2\r\n#t\r\n'.bytes
+        new MultiBulkReply(repliesMap, false, true).bufferAsResp3().asArray() == '~4\r\n+key1\r\n+value1\r\n+key2\r\n#t\r\n'.bytes
     }
 
     def 'test async reply'() {
