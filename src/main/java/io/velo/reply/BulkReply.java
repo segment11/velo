@@ -66,6 +66,7 @@ public class BulkReply implements Reply {
      * Marker byte for the start of a bulk reply in the Redis protocol.
      */
     public static final byte MARKER = '$';
+    public static final byte MARKER_RESP3 = '+';
 
     public static final byte[] CRLF = new byte[]{CR, LF};
 
@@ -156,6 +157,21 @@ public class BulkReply implements Reply {
             bb.write(raw);
             bb.write(CRLF);
         }
+        return bb;
+    }
+
+    @Override
+    public ByteBuf bufferAsResp3() {
+        int size = raw != null ? raw.length : 0;
+
+        int len = 1 + size + 2;
+        var bytes = new byte[len];
+        var bb = ByteBuf.wrapForWriting(bytes);
+        bb.writeByte(MARKER_RESP3);
+        if (size != 0) {
+            bb.write(raw);
+        }
+        bb.write(CRLF);
         return bb;
     }
 

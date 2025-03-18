@@ -250,40 +250,45 @@ public class HGroup extends BaseCommand {
 
     @VisibleForTesting
     Reply hello() {
-        if (data.length == 1) {
-            var replies = new Reply[14];
-            replies[0] = new BulkReply("server".getBytes());
-            replies[1] = new BulkReply("velo".getBytes());
-            replies[2] = new BulkReply("version".getBytes());
-            replies[3] = new BulkReply("1.0.0".getBytes());
-            replies[4] = new BulkReply("proto".getBytes());
-            replies[5] = new BulkReply("1".getBytes());
-            replies[6] = new BulkReply("id".getBytes());
-            replies[7] = new BulkReply("1".getBytes());
-            replies[8] = new BulkReply("mode".getBytes());
-            replies[9] = new BulkReply("standalone".getBytes());
-
-            replies[10] = new BulkReply("role".getBytes());
-            var firstOneSlot = localPersist.currentThreadFirstOneSlot();
-            var isSlave = firstOneSlot.isAsSlave();
-            replies[11] = new BulkReply(isSlave ? "slave".getBytes() : "master".getBytes());
-
-            replies[12] = new BulkReply("modules".getBytes());
-            replies[13] = MultiBulkReply.EMPTY;
-
-            return new MultiBulkReply(replies);
-        } else {
-            var protover = new String(data[1]);
-            if ("3".equals(protover)) {
+        boolean isResp3 = SocketInspector.isResp3(socket);
+        if (data.length > 1) {
+            var ver = new String(data[1]);
+            if ("3".equals(ver)) {
                 SocketInspector.setResp3(socket, true);
-                return OKReply.INSTANCE;
-            } else if ("2".equals(protover)) {
+                isResp3 = true;
+            } else if ("2".equals(ver)) {
                 SocketInspector.setResp3(socket, false);
-                return OKReply.INSTANCE;
+                isResp3 = false;
             } else {
                 return ErrorReply.SYNTAX;
             }
         }
+
+//        if (data.length > 2) {
+        // support auth / setname, todo
+//        }
+
+        var replies = new Reply[14];
+        replies[0] = new BulkReply("server".getBytes());
+        replies[1] = new BulkReply("velo".getBytes());
+        replies[2] = new BulkReply("version".getBytes());
+        replies[3] = new BulkReply("1.0.0".getBytes());
+        replies[4] = new BulkReply("proto".getBytes());
+        replies[5] = new IntegerReply(1);
+        replies[6] = new BulkReply("id".getBytes());
+        replies[7] = new IntegerReply(1);
+        replies[8] = new BulkReply("mode".getBytes());
+        replies[9] = new BulkReply(ConfForGlobal.clusterEnabled ? "cluster".getBytes() : "standalone".getBytes());
+
+        replies[10] = new BulkReply("role".getBytes());
+        var firstOneSlot = localPersist.currentThreadFirstOneSlot();
+        var isSlave = firstOneSlot.isAsSlave();
+        replies[11] = new BulkReply(isSlave ? "slave".getBytes() : "master".getBytes());
+
+        replies[12] = new BulkReply("modules".getBytes());
+        replies[13] = MultiBulkReply.EMPTY;
+
+        return new MultiBulkReply(replies, isResp3);
     }
 
     @VisibleForTesting

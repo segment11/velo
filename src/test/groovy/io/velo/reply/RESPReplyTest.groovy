@@ -10,6 +10,7 @@ class RESPReplyTest extends Specification {
         PongReply.INSTANCE.buffer().asArray() == "+PONG\r\n".bytes
         EmptyReply.INSTANCE.buffer().asArray().length == 0
         NilReply.INSTANCE.buffer().asArray() == "\$-1\r\n".bytes
+        NilReply.INSTANCE.bufferAsResp3().asArray() == "_\r\n".bytes
         IntegerReply.REPLY_0.buffer().asArray() == ":0\r\n".bytes
         IntegerReply.REPLY_1.buffer().asArray() == ":1\r\n".bytes
         MultiBulkReply.EMPTY.buffer().asArray() == "*0\r\n".bytes
@@ -19,6 +20,10 @@ class RESPReplyTest extends Specification {
         MultiBulkReply.EMPTY.dumpForTest(new StringBuilder(), 0)
         MultiBulkReply.SCAN_EMPTY.dumpForTest(new StringBuilder(), 1)
         ErrorReply.clusterMoved(100, 'localhost', 6380).message == 'MOVED 100 localhost:6380'
+        Reply.DUMP_REPLY.buffer() == null
+        Reply.DUMP_REPLY.bufferAsResp3() == null
+        Reply.DUMP_REPLY.bufferAsHttp() == null
+        Reply.DUMP_REPLY.dumpForTest(null, 0)
     }
 
     def 'test static as http'() {
@@ -66,16 +71,33 @@ class RESPReplyTest extends Specification {
         new BulkReply(1L).raw == '1'.bytes
         new BulkReply(1.0d).raw == '1.0'.bytes
         new BulkReply('bulk'.bytes).buffer().asArray() == "\$4\r\nbulk\r\n".bytes
+        new BulkReply('bulk'.bytes).bufferAsResp3().asArray() == "+bulk\r\n".bytes
+        new BulkReply(''.bytes).bufferAsResp3().asArray() == "+\r\n".bytes
+        new BulkReply(null).bufferAsResp3().asArray() == "+\r\n".bytes
         new BulkReply('bulk'.bytes).bufferAsHttp().asArray() == "bulk".bytes
         new BulkReply('bulk'.bytes).dumpForTest(new StringBuilder(), 0)
 
         new MultiBulkReply(null).buffer().asArray() == "*-1\r\n".bytes
+        new MultiBulkReply(null).bufferAsResp3().asArray() == "*-1\r\n".bytes
         Reply[] replies = [
                 new BulkReply('bulk1'.bytes),
-                new BulkReply('bulk2'.bytes)
+                BoolReply.T,
+                new DoubleReply(1.0)
         ]
-        new MultiBulkReply(replies).buffer().asArray() == "*2\r\n\$5\r\nbulk1\r\n\$5\r\nbulk2\r\n".bytes
+        new MultiBulkReply(replies).buffer().asArray() == '*3\r\n$5\r\nbulk1\r\n$4\r\ntrue\r\n$4\r\n1.00\r\n'.bytes
+        new MultiBulkReply(replies).bufferAsResp3().asArray() == '*3\r\n+bulk1\r\n#t\r\n,1.00\r\n'.bytes
+        new MultiBulkReply(replies).bufferAsResp3().asArray() == '*3\r\n+bulk1\r\n#t\r\n,1.00\r\n'.bytes
         new MultiBulkReply(replies).bufferAsHttp() != null
+
+        when:
+        Reply[] repliesMap = [
+                new BulkReply('key1'.bytes),
+                new BulkReply('value1'.bytes),
+                new BulkReply('key2'.bytes),
+                BoolReply.T
+        ]
+        then:
+        new MultiBulkReply(repliesMap, true).bufferAsResp3().asArray() == '%2\r\n+key1\r\n+value1\r\n+key2\r\n#t\r\n'.bytes
     }
 
     def 'test async reply'() {

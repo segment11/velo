@@ -46,4 +46,15 @@ public interface Reply {
     default boolean dumpForTest(StringBuilder sb, int nestCount) {
         return true;
     }
+
+    @TestOnly
+    class DumpReply implements Reply {
+        @Override
+        public ByteBuf buffer() {
+            return null;
+        }
+    }
+
+    @TestOnly
+    static final Reply DUMP_REPLY = new DumpReply();
 }

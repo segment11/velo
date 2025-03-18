@@ -346,12 +346,12 @@ class HGroupTest extends Specification {
         when:
         def reply = hGroup.execute('hello 2')
         then:
-        reply == OKReply.INSTANCE
+        reply instanceof MultiBulkReply
 
         when:
         reply = hGroup.execute('hello 3')
         then:
-        reply == OKReply.INSTANCE
+        reply instanceof MultiBulkReply
 
         when:
         reply = hGroup.execute('hello 4')

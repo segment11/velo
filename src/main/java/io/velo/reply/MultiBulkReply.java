@@ -61,11 +61,14 @@ public class MultiBulkReply implements Reply {
      * The marker byte for a multi-bulk reply in RESP format.
      */
     private static final byte MARKER = '*';
+    private static final byte MARKER_MAP = '%';
 
     /**
      * The replies contained in this multi-bulk reply.
      */
     private final Reply[] replies;
+
+    private final boolean isMap;
 
     /**
      * Retrieves the replies contained in this multi-bulk reply.
@@ -76,13 +79,20 @@ public class MultiBulkReply implements Reply {
         return replies;
     }
 
+    public MultiBulkReply(Reply[] replies, boolean isMap) {
+        this.replies = replies;
+        this.isMap = isMap;
+
+        assert !isMap || (replies != null && replies.length % 2 == 0);
+    }
+
     /**
      * Constructs a new MultiBulkReply with the given array of replies.
      *
      * @param replies the replies to be contained in this multi-bulk reply.
      */
     public MultiBulkReply(Reply[] replies) {
-        this.replies = replies;
+        this(replies, false);
     }
 
     /**
@@ -128,6 +138,23 @@ public class MultiBulkReply implements Reply {
             buf.writeBytes(BulkReply.numToBytes(replies.length, true));
             for (var reply : replies) {
                 var subBuffer = reply.buffer();
+                buf.writeBytes(subBuffer.array(), subBuffer.head(), subBuffer.tail() - subBuffer.head());
+            }
+        }
+        return ByteBuf.wrap(buf.array(), 0, buf.writerIndex());
+    }
+
+    @Override
+    public ByteBuf bufferAsResp3() {
+        // 256 bytes
+        var buf = Unpooled.buffer();
+        buf.writeByte(isMap ? MARKER_MAP : MARKER);
+        if (replies == null) {
+            buf.writeBytes(BulkReply.NEG_ONE_WITH_CRLF);
+        } else {
+            buf.writeBytes(BulkReply.numToBytes(isMap ? replies.length / 2 : replies.length, true));
+            for (var reply : replies) {
+                var subBuffer = reply.bufferAsResp3();
                 buf.writeBytes(subBuffer.array(), subBuffer.head(), subBuffer.tail() - subBuffer.head());
             }
         }

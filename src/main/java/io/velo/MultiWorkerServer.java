@@ -381,8 +381,6 @@ public class MultiWorkerServer extends Launcher {
         }
 
         var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
-        var isResp3 = veloUserData.isResp3;
-        var replyMode = veloUserData.replyMode;
 
         var firstSlot = request.getSingleSlot();
         if (firstSlot == Request.SLOT_CAN_HANDLE_BY_ANY_WORKER) {
@@ -396,16 +394,16 @@ public class MultiWorkerServer extends Launcher {
             if (reply == null) {
                 return Promise.of(null);
             }
-            if (replyMode != VeloUserDataInSocket.ReplyMode.on) {
+            if (veloUserData.replyMode != VeloUserDataInSocket.ReplyMode.on) {
                 return Promise.of(ByteBuf.empty());
             }
 
             if (reply instanceof AsyncReply) {
-                return transferAsyncReply(request, (AsyncReply) reply, isResp3);
+                return transferAsyncReply(request, (AsyncReply) reply, veloUserData.isResp3);
             } else {
                 return request.isHttp() ?
                         Promise.of(wrapHttpResponse(reply)) :
-                        Promise.of(isResp3 ? reply.bufferAsResp3() : reply.buffer());
+                        Promise.of(veloUserData.isResp3 ? reply.bufferAsResp3() : reply.buffer());
             }
         }
 
