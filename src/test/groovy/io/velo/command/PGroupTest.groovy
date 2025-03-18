@@ -396,6 +396,10 @@ class PGroupTest extends Specification {
         and:
         LocalPersist.instance.socketInspector = new SocketInspector()
 
+        and:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+
         when:
         def reply = _PGroup.publish(data3, null)
         then:
@@ -404,17 +408,16 @@ class PGroupTest extends Specification {
 
         when:
         def socket = SocketInspectorTest.mockTcpSocket()
-        AclUsers.instance.initForTest()
-        AclUsers.instance.upInsert('default') {
-            it.addRPubSub(true, RPubSub.fromLiteral('&special_channel'))
+        aclUsers.upInsert('default') {u ->
+            u.addRPubSub(true, RPubSub.fromLiteral('&special_channel'))
         }
         reply = _PGroup.publish(data3, socket)
         then:
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        AclUsers.instance.upInsert('default') {
-            it.on = false
+        aclUsers.upInsert('default') {u ->
+            u.on = false
         }
         reply = _PGroup.publish(data3, socket)
         then:

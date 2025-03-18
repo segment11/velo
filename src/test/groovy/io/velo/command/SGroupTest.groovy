@@ -2190,6 +2190,10 @@ sunionstore
         def sGroup = new SGroup('subscribe', data4, socket)
         sGroup.from(BaseCommand.mockAGroup())
 
+        and:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+
         when:
         LocalPersist.instance.socketInspector = new SocketInspector()
         def reply = sGroup.subscribe(false)
@@ -2198,17 +2202,16 @@ sunionstore
         ((MultiBulkReply) reply).replies.length == 3 * 3
 
         when:
-        AclUsers.instance.initForTest()
-        AclUsers.instance.upInsert('default') {
-            it.addRPubSub(true, RPubSub.fromLiteral('&special_channel'))
+        aclUsers.upInsert('default') {u ->
+            u.addRPubSub(true, RPubSub.fromLiteral('&special_channel'))
         }
         reply = sGroup.subscribe(false)
         then:
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        AclUsers.instance.upInsert('default') {
-            it.on = false
+        aclUsers.upInsert('default') {u ->
+            u.on = false
         }
         reply = sGroup.subscribe(false)
         then:

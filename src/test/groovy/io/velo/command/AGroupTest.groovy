@@ -173,8 +173,8 @@ class AGroupTest extends Specification {
         ((IntegerReply) reply).integer == 0
 
         when:
-        aclUsers.upInsert('a') {
-            it.password = U.Password.NO_PASSWORD
+        aclUsers.upInsert('a') {u ->
+            u.password = U.Password.NO_PASSWORD
         }
         reply = aGroup.execute('acl deluser a')
         then:
@@ -190,25 +190,25 @@ class AGroupTest extends Specification {
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        aclUsers.upInsert('a') {
-            it.on = false
-            it.password = U.Password.NO_PASSWORD
+        aclUsers.upInsert('a') {u ->
+            u.on = false
+            u.password = U.Password.NO_PASSWORD
         }
         reply = aGroup.execute('acl dryrun a get a')
         then:
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        aclUsers.upInsert('a') {
-            it.on = true
+        aclUsers.upInsert('a') {u ->
+            u.on = true
         }
         reply = aGroup.execute('acl dryrun a get a')
         then:
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        aclUsers.upInsert('a') {
-            it.addRCmd(true, RCmd.fromLiteral('+get'))
+        aclUsers.upInsert('a') {u ->
+            u.addRCmd(true, RCmd.fromLiteral('+get'))
         }
         reply = aGroup.execute('acl dryrun a get a')
         then:
