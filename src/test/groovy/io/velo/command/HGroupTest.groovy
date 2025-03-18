@@ -3,6 +3,8 @@ package io.velo.command
 import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.SocketInspectorTest
+import io.velo.acl.AclUsers
+import io.velo.acl.U
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
@@ -355,6 +357,55 @@ class HGroupTest extends Specification {
 
         when:
         reply = hGroup.execute('hello 4')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = hGroup.execute('hello 2 setname test')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hello 2 setname')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+        reply = hGroup.execute('hello 2 auth user0 pass0')
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        when:
+        aclUsers.upInsert('user0') {u ->
+            u.on = false
+            u.password = U.Password.NO_PASSWORD
+        }
+        reply = hGroup.execute('hello 2 auth user0 pass0')
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        when:
+        aclUsers.upInsert('user0') {u ->
+            u.on = true
+            u.password = U.Password.plain('pass000')
+        }
+        reply = hGroup.execute('hello 2 auth user0 pass0')
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        when:
+        aclUsers.upInsert('user0') {u ->
+            u.on = true
+            u.password = U.Password.plain('pass0')
+        }
+        reply = hGroup.execute('hello 2 auth user0 pass0')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hello 2 auth')
         then:
         reply == ErrorReply.SYNTAX
 

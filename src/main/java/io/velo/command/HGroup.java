@@ -2,6 +2,7 @@ package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.*;
+import io.velo.acl.AclUsers;
 import io.velo.persist.KeyLoader;
 import io.velo.reply.*;
 import io.velo.type.RedisHH;
@@ -251,6 +252,7 @@ public class HGroup extends BaseCommand {
     @VisibleForTesting
     Reply hello() {
         boolean isResp3 = SocketInspector.isResp3(socket);
+        boolean isResp3Old = isResp3;
         if (data.length > 1) {
             var ver = new String(data[1]);
             if ("3".equals(ver)) {
@@ -260,13 +262,53 @@ public class HGroup extends BaseCommand {
                 SocketInspector.setResp3(socket, false);
                 isResp3 = false;
             } else {
-                return ErrorReply.SYNTAX;
+                return new ErrorReply("Server protover not support: " + ver);
             }
         }
 
-//        if (data.length > 2) {
-        // support auth / setname, todo
-//        }
+        if (data.length > 2) {
+            for (int i = 2; i < data.length; i++) {
+                var arg = new String(data[i]).toLowerCase();
+                if ("auth".equals(arg)) {
+                    if (i + 2 >= data.length) {
+                        return ErrorReply.SYNTAX;
+                    }
+
+                    var user = new String(data[i + 1]);
+                    var password = new String(data[i + 2]);
+
+                    // acl check
+                    var aclUsers = AclUsers.getInstance();
+                    var u = aclUsers.get(user);
+                    if (u == null) {
+                        SocketInspector.setResp3(socket, isResp3Old);
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    if (!u.isOn()) {
+                        SocketInspector.setResp3(socket, isResp3Old);
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    if (!u.checkPassword(password)) {
+                        SocketInspector.setResp3(socket, isResp3Old);
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    SocketInspector.setAuthUser(socket, user);
+                    i += 2;
+                } else if ("setname".equals(arg)) {
+                    if (i + 1 >= data.length) {
+                        return ErrorReply.SYNTAX;
+                    }
+
+                    var clientName = new String(data[i + 1]);
+                    var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
+                    veloUserData.setClientName(clientName);
+                    i += 1;
+                }
+            }
+        }
 
         var replies = new Reply[14];
         replies[0] = new BulkReply("server".getBytes());
@@ -274,16 +316,17 @@ public class HGroup extends BaseCommand {
         replies[2] = new BulkReply("version".getBytes());
         replies[3] = new BulkReply("1.0.0".getBytes());
         replies[4] = new BulkReply("proto".getBytes());
-        replies[5] = new IntegerReply(1);
+        replies[5] = new IntegerReply(3);
         replies[6] = new BulkReply("id".getBytes());
-        replies[7] = new IntegerReply(1);
+        replies[7] = new IntegerReply(socket.hashCode());
         replies[8] = new BulkReply("mode".getBytes());
+        // no sentinel
         replies[9] = new BulkReply(ConfForGlobal.clusterEnabled ? "cluster".getBytes() : "standalone".getBytes());
 
         replies[10] = new BulkReply("role".getBytes());
         var firstOneSlot = localPersist.currentThreadFirstOneSlot();
         var isSlave = firstOneSlot.isAsSlave();
-        replies[11] = new BulkReply(isSlave ? "slave".getBytes() : "master".getBytes());
+        replies[11] = new BulkReply(isSlave ? "replica".getBytes() : "master".getBytes());
 
         replies[12] = new BulkReply("modules".getBytes());
         replies[13] = MultiBulkReply.EMPTY;
