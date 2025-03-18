@@ -42,6 +42,7 @@ public class RequestHandler {
     private static final String ECHO_COMMAND = "echo";
     private static final String PING_COMMAND = "ping";
     public static final String AUTH_COMMAND = "auth";
+    public static final String HELLO_COMMAND = "hello";
     private static final String GET_COMMAND = "get";
     private static final String SET_COMMAND = "set";
     private static final String QUIT_COMMAND = "quit";
@@ -576,7 +577,10 @@ public class RequestHandler {
             }
 
             if (SocketInspector.getAuthUser(socket) == null && ConfForGlobal.PASSWORD != null) {
-                return ErrorReply.NO_AUTH;
+                // hello can do auth
+                if (!cmd.equals(HELLO_COMMAND)) {
+                    return ErrorReply.NO_AUTH;
+                }
             }
 
             if (cmd.equals(GET_COMMAND)) {
