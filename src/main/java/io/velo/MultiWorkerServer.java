@@ -613,11 +613,16 @@ public class MultiWorkerServer extends Launcher {
         }
         log.warn("Config will be loaded from={}", givenConfigFilePath);
 
-        return Config.create()
+        var c = Config.create()
                 .with("net.listenAddresses", Config.ofValue(ofInetSocketAddress(), new InetSocketAddress(PORT)))
                 .overrideWith(ofClassPathProperties(PROPERTIES_FILE, true))
                 .overrideWith(ofProperties(givenConfigFilePath, true))
                 .overrideWith(ofSystemProperties("velo-config"));
+
+        var applicationSettingsConfig = c.getChild("applicationSettings");
+        applicationSettingsConfig.getChildren().forEach((k, v) -> v.getChildren().forEach((k1, v1) -> System.setProperty(k + "." + k1, v1.getValue())));
+
+        return c;
     }
 
     /**
