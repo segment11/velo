@@ -723,7 +723,12 @@ public abstract class BaseCommand {
      * @param expireAt             Given expire time
      */
     public void setNumber(byte[] keyBytes, Number value, SlotWithKeyHash slotWithKeyHashReuse, long expireAt) {
-        if (value instanceof Short) {
+        if (value instanceof Byte) {
+            byte byteValue = value.byteValue();
+            var newValueBytes = new byte[1];
+            newValueBytes[0] = byteValue;
+            set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_BYTE, expireAt);
+        } else if (value instanceof Short) {
             short shortValue = value.shortValue();
             if (shortValue <= Byte.MAX_VALUE && shortValue >= Byte.MIN_VALUE) {
                 var newValueBytes = new byte[1];
@@ -788,7 +793,7 @@ public abstract class BaseCommand {
     public void setCv(byte[] keyBytes, CompressedValue cv, SlotWithKeyHash slotWithKeyHashReuse) {
         var slotWithKeyHash = slotWithKeyHashReuse != null ? slotWithKeyHashReuse : slot(keyBytes);
         if (cv.isTypeNumber()) {
-            setNumber(keyBytes, cv.numberValue(), slotWithKeyHash);
+            setNumber(keyBytes, cv.numberValue(), slotWithKeyHash, cv.getExpireAt());
         } else {
             // update to new seq
             cv.setSeq(snowFlake.nextId());
