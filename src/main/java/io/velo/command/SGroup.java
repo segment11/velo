@@ -581,7 +581,7 @@ public class SGroup extends BaseCommand {
         CompressedValue cv = null;
         if (isReturnExist || isNx || isXx || isKeepTtl) {
             cv = getCv(keyBytes, slotWithKeyHash);
-            boolean isOldExist = cv != null;
+            boolean isOldExist = cv != null && !cv.isExpired();
             if (isNx && isOldExist) {
                 return NilReply.INSTANCE;
             }
