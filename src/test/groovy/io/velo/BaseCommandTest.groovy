@@ -404,6 +404,11 @@ class BaseCommandTest extends Specification {
         c.get(key.bytes, sKey).length == 1
 
         when:
+        c.setNumber(key.bytes, Byte.valueOf((byte) 127), sKey, CompressedValue.NO_EXPIRE)
+        then:
+        c.get(key.bytes, sKey).length == 3
+
+        when:
         c.setNumber(key.bytes, (short) 200, sKey, CompressedValue.NO_EXPIRE)
         then:
         c.get(key.bytes, sKey).length == 3
