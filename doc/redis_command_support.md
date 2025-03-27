@@ -268,6 +268,7 @@
 - [√] INCRBYFLOAT
 - [√] MGET
 - [√] MSET
+- [√] MSETNX
 - [√] PEXPIRE
 - [√] PEXPIREAT
 - [√] PEXPIRETIME

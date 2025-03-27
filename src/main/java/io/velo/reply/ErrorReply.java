@@ -15,6 +15,16 @@ public class ErrorReply implements Reply {
     public static final ErrorReply FORMAT = new ErrorReply("format");
 
     /**
+     * Generates a wrong number of arguments error reply for a given command.
+     *
+     * @param cmd given command
+     * @return the error reply
+     */
+    public static ErrorReply WRONG_NUMBER(String cmd) {
+        return new ErrorReply("*wrong number of arguments for '" + cmd + "' command");
+    }
+
+    /**
      * Error reply indicating that a dictionary is missing.
      */
     public static final ErrorReply DICT_MISSING = new ErrorReply("dict missing");

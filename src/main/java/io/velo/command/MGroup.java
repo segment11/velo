@@ -34,7 +34,7 @@ public class MGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
-        if ("mset".equals(cmd)) {
+        if ("mset".equals(cmd) || "msetnx".equals(cmd)) {
             if (data.length < 3 || data.length % 2 == 0) {
                 return slotWithKeyHashList;
             }
@@ -66,7 +66,11 @@ public class MGroup extends BaseCommand {
         }
 
         if ("mset".equals(cmd)) {
-            return mset();
+            return mset(false);
+        }
+
+        if ("msetnx".equals(cmd)) {
+            return mset(true);
         }
 
         if ("migrate".equals(cmd)) {
@@ -174,19 +178,27 @@ public class MGroup extends BaseCommand {
     }
 
     @VisibleForTesting
-    Reply mset() {
+    Reply mset(boolean isNx) {
         if (data.length < 3 || data.length % 2 == 0) {
             return ErrorReply.FORMAT;
         }
 
         if (!isCrossRequestWorker) {
+            int setNumber = 0;
             for (int i = 1, j = 0; i < data.length; i += 2, j++) {
                 var keyBytes = data[i];
                 var valueBytes = data[i + 1];
                 var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-                set(keyBytes, valueBytes, slotWithKeyHash);
+                if (isNx) {
+                    if (!exists(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), slotWithKeyHash.rawKey(), slotWithKeyHash.keyHash(), slotWithKeyHash.keyHash32())) {
+                        setNumber++;
+                        set(keyBytes, valueBytes, slotWithKeyHash);
+                    }
+                } else {
+                    set(keyBytes, valueBytes, slotWithKeyHash);
+                }
             }
-            return OKReply.INSTANCE;
+            return isNx ? new IntegerReply(setNumber) : OKReply.INSTANCE;
         }
 
         ArrayList<KeyValueBytesAndSlotWithKeyHash> list = new ArrayList<>();
@@ -197,17 +209,27 @@ public class MGroup extends BaseCommand {
             list.add(new KeyValueBytesAndSlotWithKeyHash(keyBytes, valueBytes, slotWithKeyHash));
         }
 
-        ArrayList<Promise<Void>> promises = new ArrayList<>();
+        ArrayList<Promise<Integer>> promises = new ArrayList<>();
         var groupBySlot = list.stream().collect(Collectors.groupingBy(one -> one.slotWithKeyHash.slot()));
         for (var entry : groupBySlot.entrySet()) {
             var slot = entry.getKey();
             var subList = entry.getValue();
 
             var oneSlot = localPersist.oneSlot(slot);
-            var p = oneSlot.asyncRun(() -> {
+            var p = oneSlot.asyncCall(() -> {
+                int setNumber = 0;
                 for (var one : subList) {
-                    set(one.keyBytes, one.valueBytes, one.slotWithKeyHash);
+                    if (isNx) {
+                        var s = one.slotWithKeyHash;
+                        if (!exists(s.slot(), s.bucketIndex(), s.rawKey(), s.keyHash(), s.keyHash32())) {
+                            setNumber++;
+                            set(one.keyBytes, one.valueBytes, one.slotWithKeyHash);
+                        }
+                    } else {
+                        set(one.keyBytes, one.valueBytes, one.slotWithKeyHash);
+                    }
                 }
+                return setNumber;
             });
             promises.add(p);
         }
@@ -222,7 +244,12 @@ public class MGroup extends BaseCommand {
                 return;
             }
 
-            finalPromise.set(OKReply.INSTANCE);
+            var setNumber = 0;
+            for (var p : promises) {
+                setNumber += p.getResult();
+            }
+
+            finalPromise.set(isNx ? new IntegerReply(setNumber) : OKReply.INSTANCE);
         });
 
         return asyncReply;

@@ -401,6 +401,10 @@ public class MultiWorkerServer extends Launcher {
             if (reply instanceof AsyncReply) {
                 return transferAsyncReply(request, (AsyncReply) reply, veloUserData.isResp3);
             } else {
+                if (reply == ErrorReply.FORMAT) {
+                    reply = ErrorReply.WRONG_NUMBER(request.cmd());
+                }
+
                 return request.isHttp() ?
                         Promise.of(wrapHttpResponse(reply)) :
                         Promise.of(veloUserData.isResp3 ? reply.bufferAsResp3() : reply.buffer());
@@ -458,6 +462,10 @@ public class MultiWorkerServer extends Launcher {
             if (reply instanceof AsyncReply) {
                 return transferAsyncReply(request, (AsyncReply) reply, isResp3);
             } else {
+                if (reply == ErrorReply.FORMAT) {
+                    reply = ErrorReply.WRONG_NUMBER(request.cmd());
+                }
+
                 return Promise.of(
                         request.isHttp() ?
                                 wrapHttpResponse(reply) :
@@ -481,6 +489,10 @@ public class MultiWorkerServer extends Launcher {
             if (e != null) {
                 var errorReply = new ErrorReply(e.getMessage());
                 return request.isHttp() ? wrapHttpResponse(errorReply) : errorReply.buffer();
+            }
+
+            if (r == ErrorReply.FORMAT) {
+                r = ErrorReply.WRONG_NUMBER(request.cmd());
             }
 
             return request.isHttp() ?
