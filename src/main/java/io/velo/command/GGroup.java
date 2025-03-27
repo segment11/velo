@@ -279,12 +279,14 @@ public class GGroup extends BaseCommand {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         // not only for type string, other types will be overwritten
         var valueBytesExist = get(keyBytes, slotWithKeyHash);
-        if (valueBytesExist == null) {
-            return NilReply.INSTANCE;
-        }
 
         set(keyBytes, valueBytes, slotWithKeyHash);
-        return new BulkReply(valueBytesExist);
+
+        if (valueBytesExist == null) {
+            return NilReply.INSTANCE;
+        } else {
+            return new BulkReply(valueBytesExist);
+        }
     }
 
     private Reply geo() {

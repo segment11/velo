@@ -359,35 +359,31 @@ class GGroupTest extends Specification {
 
     def 'test getset'() {
         given:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'value'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def gGroup = new GGroup('getset', data3, null)
+        def gGroup = new GGroup('getset', null, null)
         gGroup.byPassGetSet = inMemoryGetSet
         gGroup.from(BaseCommand.mockAGroup())
 
         when:
-        gGroup.slotWithKeyHashListParsed = _GGroup.parseSlots('getset', data3, gGroup.slotNumber)
-        def reply = gGroup.getset()
+        def reply = gGroup.execute('getset a value')
         then:
         reply == NilReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, 0L).cv().compressedData == 'value'.bytes
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = 'abc'.bytes
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = gGroup.getset()
+        reply = gGroup.execute('getset a value2')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == 'abc'.bytes
 
         when:
-        def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
+        def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, 0L)
         then:
-        bufOrCv.cv().compressedData == 'value'.bytes
+        bufOrCv.cv().compressedData == 'value2'.bytes
     }
 
     def 'test geoadd'() {
