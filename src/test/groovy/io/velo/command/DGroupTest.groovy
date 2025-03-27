@@ -260,6 +260,13 @@ class DGroupTest extends Specification {
         new String(((BulkReply) reply).raw).contains(':unknown')
 
         when:
+        data3[1] = 'log'.bytes
+        data3[2] = 'test xxx'.bytes
+        reply = dGroup.debug()
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
         data3[1] = '_'.bytes
         reply = dGroup.debug()
         then:

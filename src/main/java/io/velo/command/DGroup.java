@@ -158,6 +158,10 @@ public class DGroup extends BaseCommand {
             } else {
                 return new BulkReply(wrapEncodingType("unknown", cv).getBytes());
             }
+        } else if ("log".equals(subCmd)) {
+            final String prefix = "DEBUG LOG:";
+            log.info("{} {}", prefix, new String(data[2]));
+            return OKReply.INSTANCE;
         }
 
         return NilReply.INSTANCE;
