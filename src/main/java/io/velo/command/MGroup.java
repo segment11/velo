@@ -100,10 +100,11 @@ public class MGroup extends BaseCommand {
             for (int i = 1, j = 0; i < data.length; i++, j++) {
                 var keyBytes = data[i];
                 var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-                var valueBytes = get(keyBytes, slotWithKeyHash);
-                if (valueBytes == null) {
+                var cv = getCv(keyBytes, slotWithKeyHash);
+                if (cv == null || !cv.isTypeString()) {
                     replies[j] = NilReply.INSTANCE;
                 } else {
+                    var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
                     replies[j] = new BulkReply(valueBytes);
                 }
             }
@@ -127,7 +128,13 @@ public class MGroup extends BaseCommand {
             var p = oneSlot.asyncCall(() -> {
                 ArrayList<ValueBytesAndIndex> valueList = new ArrayList<>();
                 for (var one : subList) {
-                    var valueBytes = get(one.keyBytes, one.slotWithKeyHash);
+                    var cv = getCv(one.keyBytes, one.slotWithKeyHash);
+                    byte[] valueBytes;
+                    if (cv == null || !cv.isTypeString()) {
+                        valueBytes = null;
+                    } else {
+                        valueBytes = getValueBytesByCv(cv, one.keyBytes, one.slotWithKeyHash);
+                    }
                     valueList.add(new ValueBytesAndIndex(valueBytes, one.index));
                 }
                 return valueList;
