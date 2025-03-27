@@ -66,11 +66,11 @@ public class MGroup extends BaseCommand {
         }
 
         if ("mset".equals(cmd)) {
-            return mset(false);
+            return mset();
         }
 
         if ("msetnx".equals(cmd)) {
-            return mset(true);
+            return msetnx();
         }
 
         if ("migrate".equals(cmd)) {
@@ -178,27 +178,19 @@ public class MGroup extends BaseCommand {
     }
 
     @VisibleForTesting
-    Reply mset(boolean isNx) {
+    Reply mset() {
         if (data.length < 3 || data.length % 2 == 0) {
             return ErrorReply.FORMAT;
         }
 
         if (!isCrossRequestWorker) {
-            int setNumber = 0;
             for (int i = 1, j = 0; i < data.length; i += 2, j++) {
                 var keyBytes = data[i];
                 var valueBytes = data[i + 1];
-                var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-                if (isNx) {
-                    if (!exists(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), slotWithKeyHash.rawKey(), slotWithKeyHash.keyHash(), slotWithKeyHash.keyHash32())) {
-                        setNumber++;
-                        set(keyBytes, valueBytes, slotWithKeyHash);
-                    }
-                } else {
-                    set(keyBytes, valueBytes, slotWithKeyHash);
-                }
+                var s = slotWithKeyHashListParsed.get(j);
+                set(keyBytes, valueBytes, s);
             }
-            return isNx ? new IntegerReply(setNumber) : OKReply.INSTANCE;
+            return OKReply.INSTANCE;
         }
 
         ArrayList<KeyValueBytesAndSlotWithKeyHash> list = new ArrayList<>();
@@ -209,27 +201,17 @@ public class MGroup extends BaseCommand {
             list.add(new KeyValueBytesAndSlotWithKeyHash(keyBytes, valueBytes, slotWithKeyHash));
         }
 
-        ArrayList<Promise<Integer>> promises = new ArrayList<>();
+        ArrayList<Promise<Void>> promises = new ArrayList<>();
         var groupBySlot = list.stream().collect(Collectors.groupingBy(one -> one.slotWithKeyHash.slot()));
         for (var entry : groupBySlot.entrySet()) {
             var slot = entry.getKey();
             var subList = entry.getValue();
 
             var oneSlot = localPersist.oneSlot(slot);
-            var p = oneSlot.asyncCall(() -> {
-                int setNumber = 0;
+            var p = oneSlot.asyncRun(() -> {
                 for (var one : subList) {
-                    if (isNx) {
-                        var s = one.slotWithKeyHash;
-                        if (!exists(s.slot(), s.bucketIndex(), s.rawKey(), s.keyHash(), s.keyHash32())) {
-                            setNumber++;
-                            set(one.keyBytes, one.valueBytes, one.slotWithKeyHash);
-                        }
-                    } else {
-                        set(one.keyBytes, one.valueBytes, one.slotWithKeyHash);
-                    }
+                    set(one.keyBytes, one.valueBytes, one.slotWithKeyHash);
                 }
-                return setNumber;
             });
             promises.add(p);
         }
@@ -244,12 +226,91 @@ public class MGroup extends BaseCommand {
                 return;
             }
 
-            var setNumber = 0;
-            for (var p : promises) {
-                setNumber += p.getResult();
+            finalPromise.set(OKReply.INSTANCE);
+        });
+
+        return asyncReply;
+    }
+
+    @VisibleForTesting
+    Reply msetnx() {
+        if (data.length < 3 || data.length % 2 == 0) {
+            return ErrorReply.FORMAT;
+        }
+
+        if (!isCrossRequestWorker) {
+            for (int i = 1, j = 0; i < data.length; i += 2, j++) {
+                var s = slotWithKeyHashListParsed.get(j);
+                if (exists(s.slot(), s.bucketIndex(), s.rawKey(), s.keyHash(), s.keyHash32())) {
+                    return IntegerReply.REPLY_0;
+                }
             }
 
-            finalPromise.set(isNx ? new IntegerReply(setNumber) : OKReply.INSTANCE);
+            for (int i = 1, j = 0; i < data.length; i += 2, j++) {
+                var keyBytes = data[i];
+                var valueBytes = data[i + 1];
+                var s = slotWithKeyHashListParsed.get(j);
+                set(keyBytes, valueBytes, s);
+            }
+            return IntegerReply.REPLY_1;
+        }
+
+        ArrayList<KeyValueBytesAndSlotWithKeyHash> list = new ArrayList<>();
+        for (int i = 1, j = 0; i < data.length; i += 2, j++) {
+            var keyBytes = data[i];
+            var valueBytes = data[i + 1];
+            var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
+            list.add(new KeyValueBytesAndSlotWithKeyHash(keyBytes, valueBytes, slotWithKeyHash));
+        }
+
+        ArrayList<Promise<Boolean>> anyKeyExistsPromises = new ArrayList<>();
+        var groupBySlot = list.stream().collect(Collectors.groupingBy(one -> one.slotWithKeyHash.slot()));
+        for (var entry : groupBySlot.entrySet()) {
+            var slot = entry.getKey();
+            var subList = entry.getValue();
+
+            var oneSlot = localPersist.oneSlot(slot);
+            var p = oneSlot.asyncCall(() -> {
+                for (var one : subList) {
+                    var s = one.slotWithKeyHash;
+                    if (exists(s.slot(), s.bucketIndex(), s.rawKey(), s.keyHash(), s.keyHash32())) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+            anyKeyExistsPromises.add(p);
+        }
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        Promises.all(anyKeyExistsPromises).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error("msetnx error={}", e.getMessage());
+                finalPromise.setException(e);
+                return;
+            }
+
+            var anyKeyExists = anyKeyExistsPromises.stream().anyMatch(Promise::getResult);
+            if (anyKeyExists) {
+                finalPromise.set(IntegerReply.REPLY_0);
+                return;
+            }
+
+            for (var entry : groupBySlot.entrySet()) {
+                var slot = entry.getKey();
+                var subList = entry.getValue();
+
+                var oneSlot = localPersist.oneSlot(slot);
+                oneSlot.asyncRun(() -> {
+                    for (var one : subList) {
+                        set(one.keyBytes, one.valueBytes, one.slotWithKeyHash);
+                    }
+                });
+            }
+
+            finalPromise.set(IntegerReply.REPLY_1);
         });
 
         return asyncReply;

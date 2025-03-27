@@ -206,7 +206,7 @@ class MGroupTest extends Specification {
         mGroup.slotWithKeyHashListParsed = _MGroup.parseSlots('mset', data5, mGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
-        def reply = mGroup.mset(false)
+        def reply = mGroup.mset()
         then:
         reply == OKReply.INSTANCE
 
@@ -233,7 +233,7 @@ class MGroupTest extends Specification {
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
         mGroup.crossRequestWorker = true
-        reply = mGroup.mset(false)
+        reply = mGroup.mset()
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -251,7 +251,7 @@ class MGroupTest extends Specification {
         when:
         def data4 = new byte[4][]
         mGroup.data = data4
-        reply = mGroup.mset(false)
+        reply = mGroup.mset()
         then:
         reply == ErrorReply.FORMAT
 
@@ -279,10 +279,9 @@ class MGroupTest extends Specification {
         mGroup.slotWithKeyHashListParsed = _MGroup.parseSlots('msetnx', data5, mGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
-        def reply = mGroup.mset(true)
+        def reply = mGroup.msetnx()
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 2
+        reply == IntegerReply.REPLY_1
 
         when:
         def valA = mGroup.get('a'.bytes, mGroup.slotWithKeyHashListParsed[0])
@@ -292,9 +291,14 @@ class MGroupTest extends Specification {
         valB == '2'.bytes
 
         when:
+        reply = mGroup.msetnx()
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
         data5[1] = 'aa'.bytes
         data5[2] = '11'.bytes
-        data5[3] = 'b'.bytes
+        data5[3] = 'bb'.bytes
         data5[4] = '22'.bytes
         mGroup.slotWithKeyHashListParsed = _MGroup.parseSlots('msetnx', data5, mGroup.slotNumber)
         def eventloop = Eventloop.builder()
@@ -310,25 +314,41 @@ class MGroupTest extends Specification {
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
         mGroup.crossRequestWorker = true
-        reply = mGroup.mset(true)
+        reply = mGroup.msetnx()
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
         ((AsyncReply) reply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && (result as IntegerReply).integer == 1
+            reply == IntegerReply.REPLY_1
         }.result
 
         when:
         valA = mGroup.get('aa'.bytes, mGroup.slotWithKeyHashListParsed[0])
-        valB = mGroup.get('b'.bytes, mGroup.slotWithKeyHashListParsed[1])
+        valB = mGroup.get('bb'.bytes, mGroup.slotWithKeyHashListParsed[1])
         then:
         valA == '11'.bytes
-        valB == '2'.bytes
+        valB == '22'.bytes
+
+        when:
+        // aa already exists
+        data5[1] = 'aa'.bytes
+        data5[2] = '11'.bytes
+        data5[3] = 'cc'.bytes
+        data5[4] = '33'.bytes
+        mGroup.slotWithKeyHashListParsed = _MGroup.parseSlots('msetnx', data5, mGroup.slotNumber)
+        mGroup.crossRequestWorker = true
+        reply = mGroup.msetnx()
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            reply == IntegerReply.REPLY_0
+        }.result
 
         when:
         def data4 = new byte[4][]
         mGroup.data = data4
-        reply = mGroup.mset(true)
+        reply = mGroup.msetnx()
         then:
         reply == ErrorReply.FORMAT
 
