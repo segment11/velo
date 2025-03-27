@@ -609,6 +609,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     public static final byte typeAsByteSet = 3;
     public static final byte typeAsByteZSet = 4;
     public static final byte typeAsByteHash = 5;
+    public static final byte typeAsByteStream = 6;
 
     /**
      * Converts a CompressedValue type to its corresponding short type byte.
@@ -617,7 +618,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @return The corresponding short type byte.
      */
     public static byte transferToShortType(int spType) {
-        if (CompressedValue.isTypeString(spType)) {
+        if (CompressedValue.isTypeString(spType) || CompressedValue.isGeo(spType) || CompressedValue.isBloomFilter(spType)) {
             return typeAsByteString;
         } else if (CompressedValue.isList(spType)) {
             return typeAsByteList;
@@ -627,6 +628,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return typeAsByteZSet;
         } else if (CompressedValue.isHash(spType)) {
             return typeAsByteHash;
+        } else if (CompressedValue.isStream(spType)) {
+            return typeAsByteStream;
         } else {
             return typeAsByteIgnore;
         }

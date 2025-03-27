@@ -561,6 +561,9 @@ class KeyLoaderTest extends Specification {
         KeyLoader.transferToShortType(CompressedValue.SP_TYPE_SET) == KeyLoader.typeAsByteSet
         KeyLoader.transferToShortType(CompressedValue.SP_TYPE_ZSET) == KeyLoader.typeAsByteZSet
         KeyLoader.transferToShortType(CompressedValue.NULL_DICT_SEQ) == KeyLoader.typeAsByteString
+        KeyLoader.transferToShortType(CompressedValue.SP_TYPE_GEO) == KeyLoader.typeAsByteString
+        KeyLoader.transferToShortType(CompressedValue.SP_TYPE_BLOOM_BITMAP) == KeyLoader.typeAsByteString
+        KeyLoader.transferToShortType(CompressedValue.SP_TYPE_STREAM) == KeyLoader.typeAsByteStream
         KeyLoader.transferToShortType(Integer.MIN_VALUE) == KeyLoader.typeAsByteIgnore
         KeyLoader.isKeyMatch('aaa', null)
         KeyLoader.isKeyMatch('aaa', '*')
