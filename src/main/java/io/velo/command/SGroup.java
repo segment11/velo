@@ -760,7 +760,12 @@ public class SGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
-        return new IntegerReply(cv.getUncompressedLength());
+        if (cv.isTypeNumber()) {
+            var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+            return new IntegerReply(valueBytes.length);
+        } else {
+            return new IntegerReply(cv.getUncompressedLength());
+        }
     }
 
     @VisibleForTesting

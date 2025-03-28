@@ -15,6 +15,7 @@ import io.velo.type.RedisList
 import io.velo.type.RedisZSet
 import spock.lang.Specification
 
+import java.nio.ByteBuffer
 import java.time.Duration
 
 class SGroupTest extends Specification {
@@ -847,6 +848,16 @@ sunionstore
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 10
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_INT
+        cv.compressedData = new byte[4]
+        ByteBuffer.wrap(cv.compressedData).putInt(123456)
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.strlen()
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 6
     }
 
     def 'test select'() {
@@ -2202,7 +2213,7 @@ sunionstore
         ((MultiBulkReply) reply).replies.length == 3 * 3
 
         when:
-        aclUsers.upInsert('default') {u ->
+        aclUsers.upInsert('default') { u ->
             u.addRPubSub(true, RPubSub.fromLiteral('&special_channel'))
         }
         reply = sGroup.subscribe(false)
@@ -2210,7 +2221,7 @@ sunionstore
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        aclUsers.upInsert('default') {u ->
+        aclUsers.upInsert('default') { u ->
             u.on = false
         }
         reply = sGroup.subscribe(false)
