@@ -10,6 +10,7 @@ import io.velo.ConfForGlobal;
 import io.velo.persist.LocalPersist;
 import io.velo.reply.*;
 import io.velo.type.RedisBF;
+import io.velo.type.RedisBitSet;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -266,18 +267,18 @@ public class BGroup extends BaseCommand {
             return new IntegerReply(-1);
         }
 
-        var bitset = BitSet.valueOf(valueBytes);
+        var bs = new RedisBitSet(valueBytes);
         int pos = -1;
         if (isIndexUseBit) {
             for (int i = startEndWith.start(); i <= startEndWith.end(); i++) {
-                if ((bitset.get(i) && isBit1) || (!bitset.get(i) && !isBit1)) {
+                if ((bs.get(i) && isBit1) || (!bs.get(i) && !isBit1)) {
                     pos = i;
                     break;
                 }
             }
         } else {
             for (int i = startEndWith.start() * 8; i <= (startEndWith.end() + 1) * 8 - 1; i++) {
-                if ((bitset.get(i) && isBit1) || (!bitset.get(i) && !isBit1)) {
+                if ((bs.get(i) && isBit1) || (!bs.get(i) && !isBit1)) {
                     pos = i;
                     break;
                 }

@@ -5,6 +5,7 @@ import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.reply.*;
+import io.velo.type.RedisBitSet;
 import io.velo.type.RedisGeo;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -120,15 +121,8 @@ public class GGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
-        int byteIndex = offset / 8;
-        int bitIndex = offset % 8;
-        if (byteIndex >= valueBytes.length) {
-            return IntegerReply.REPLY_0;
-        }
-
-        byte b = valueBytes[byteIndex];
-        int bit = (b >> bitIndex) & 1;
-        return bit == 1 ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+        var bs = new RedisBitSet(valueBytes);
+        return bs.get(offset) ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
     }
 
     @VisibleForTesting

@@ -11,6 +11,7 @@ import io.velo.persist.KeyLoader;
 import io.velo.persist.ScanCursor;
 import io.velo.repl.LeaderSelector;
 import io.velo.reply.*;
+import io.velo.type.RedisBitSet;
 import io.velo.type.RedisHashKeys;
 import io.velo.type.RedisList;
 import io.velo.type.RedisZSet;
@@ -657,35 +658,18 @@ public class SGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var valueBytesExist = get(keyBytes, slotWithKeyHash);
-        byte[] valueBytesNew;
-        if (valueBytesExist == null) {
-            int len = (offset + 1) / 8;
-            if ((offset + 1) % 8 != 0) {
-                len++;
-            }
-            valueBytesNew = new byte[len];
-        } else {
-            int len = valueBytesExist.length;
-            if (len * 8 <= offset) {
-                byte[] valueBytesNewTmp = new byte[offset / 8 + 1];
-                System.arraycopy(valueBytesExist, 0, valueBytesNewTmp, 0, valueBytesExist.length);
-                valueBytesNew = valueBytesNewTmp;
-            } else {
-                valueBytesNew = valueBytesExist;
-            }
+        var valueBytes = get(keyBytes, slotWithKeyHash);
+        var bs = new RedisBitSet(valueBytes);
+        var result = bs.set(offset, isBit1);
+
+        if (result.isExpanded() || result.isChanged()) {
+            set(keyBytes, bs.getValueBytes(), slotWithKeyHash);
         }
 
-        var bitSet = BitSet.valueOf(valueBytesNew);
-        var isNotChange = bitSet.get(offset) == isBit1;
-        if (isNotChange) {
+        if (!result.isChanged()) {
             return isBit1 ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
-        } else {
-            var oldIsBit1 = bitSet.get(offset);
-            bitSet.set(offset, isBit1);
-            set(keyBytes, bitSet.toByteArray(), slotWithKeyHash);
-            return oldIsBit1 ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
         }
+        return result.isOldBit1() ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
     }
 
     @VisibleForTesting
