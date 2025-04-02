@@ -1256,7 +1256,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 os.writeInt(SaveBytesType.wal.i);
                 os.writeInt(wal.groupIndex);
                 os.writeBoolean(true);
-                var writeBytes = wal.writeToSavedBytes(true);
+                var writeBytes = wal.writeToSavedBytes(true, false);
                 os.writeInt(writeBytes.length);
                 os.write(writeBytes);
             }
@@ -1266,7 +1266,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 os.writeInt(SaveBytesType.wal.i);
                 os.writeInt(wal.groupIndex);
                 os.writeBoolean(false);
-                var writeBytes = wal.writeToSavedBytes(false);
+                var writeBytes = wal.writeToSavedBytes(false, false);
                 os.writeInt(writeBytes.length);
                 os.write(writeBytes);
             }

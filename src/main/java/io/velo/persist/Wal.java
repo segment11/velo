@@ -482,7 +482,7 @@ public class Wal implements InMemoryEstimate {
         return readBytesToList(isShortValue ? delayToKeyBucketShortValues : delayToKeyBucketValues, isShortValue, readBytes, 0, readBytes.length);
     }
 
-    byte[] writeToSavedBytes(boolean isShortValue) throws IOException {
+    byte[] writeToSavedBytes(boolean isShortValue, boolean isEndAppend0ForBreak) throws IOException {
         var map = isShortValue ? delayToKeyBucketShortValues : delayToKeyBucketValues;
 
         var bos = new ByteArrayOutputStream();
@@ -490,6 +490,12 @@ public class Wal implements InMemoryEstimate {
             var encoded = entry.getValue().encode();
             bos.write(encoded);
         }
+
+        // for read break
+        if (isEndAppend0ForBreak) {
+            bos.write(new byte[4]);
+        }
+
         return bos.toByteArray();
     }
 
@@ -725,6 +731,35 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
+     * Re-write to file for one group
+     *
+     * @param isValueShort true if the value is short, false otherwise.
+     * @return new offset
+     */
+    private int reWriteOneGroup(boolean isValueShort) {
+        try {
+            var writeBytes = writeToSavedBytes(isValueShort, true);
+            assert writeBytes.length > 4 && writeBytes.length <= ONE_GROUP_BUFFER_SIZE;
+
+            // 4 bytes for int 0
+            int newOffset = writeBytes.length - 4;
+            var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
+            if (isValueShort) {
+                walSharedFileShortValue.seek(targetGroupBeginOffset);
+                walSharedFileShortValue.write(writeBytes);
+                writePositionShortValue = newOffset;
+            } else {
+                walSharedFile.seek(targetGroupBeginOffset);
+                walSharedFile.write(writeBytes);
+                writePosition = newOffset;
+            }
+            return newOffset;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
      * Puts a log entry into the WAL.
      *
      * @param isValueShort      true if the value is short, false otherwise.
@@ -739,12 +774,29 @@ public class Wal implements InMemoryEstimate {
 
         var encodeLength = v.encodeLength();
         if (offset + encodeLength > ONE_GROUP_BUFFER_SIZE) {
-            needPersistCountTotal++;
+            boolean needPersist = true;
             var keyCount = isValueShort ? delayToKeyBucketShortValues.size() : delayToKeyBucketValues.size();
-            needPersistKvCountTotal += keyCount;
-            needPersistOffsetTotal += offset;
+            // hot data, keep in wal
+            if (keyCount < (isValueShort ? ConfForSlot.global.confWal.shortValueSizeTrigger / 10 : ConfForSlot.global.confWal.valueSizeTrigger / 10)) {
+                var newOffset = reWriteOneGroup(isValueShort);
+                if (newOffset + encodeLength > ONE_GROUP_BUFFER_SIZE) {
+                    needPersistCountTotal++;
+                    needPersistKvCountTotal += keyCount;
+                    needPersistOffsetTotal += offset;
 
-            return new PutResult(true, isValueShort, v, 0);
+                    return new PutResult(true, isValueShort, v, 0);
+                }
+
+                needPersist = false;
+            }
+
+            if (needPersist) {
+                needPersistCountTotal++;
+                needPersistKvCountTotal += keyCount;
+                needPersistOffsetTotal += offset;
+
+                return new PutResult(true, isValueShort, v, 0);
+            }
         }
 
         var bulkLoad = Debug.getInstance().bulkLoad;
@@ -822,8 +874,8 @@ public class Wal implements InMemoryEstimate {
         // 4 bytes for value write position and short value write position
         // 8 bytes for last seq and 8 bytes short value last seq
         // value encoded + short value encoded
-        int n = 4 + 4 + (4 + 4) + (8 + 8) + ONE_GROUP_BUFFER_SIZE * 2;
         int realDataOffset = 4 + 4 + (4 + 4) + (8 + 8);
+        int n = realDataOffset + ONE_GROUP_BUFFER_SIZE * 2;
 
         var bytes = new byte[n];
         var buffer = ByteBuffer.wrap(bytes);

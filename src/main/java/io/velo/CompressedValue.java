@@ -87,6 +87,7 @@ public class CompressedValue {
      * Size limits.
      */
     public static final short KEY_MAX_LENGTH = 256;    // Maximum allowed key size
+    // must < Wal.ONE_GROUP_BUFFER_SIZE
     public static final int VALUE_MAX_LENGTH = 65536;  // Maximum compressed value size
 
     /**

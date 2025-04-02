@@ -36,6 +36,11 @@ class WalTest extends Specification {
         then:
         vExpired.isExpired()
         !vExpired.isRemove()
+
+        when:
+        def vNotExpired = new Wal.V(1, 0, 0, System.currentTimeMillis() + 1000, 0, 'a', 'a'.bytes, true)
+        then:
+        !vNotExpired.isExpired()
     }
 
     def 'put and get'() {
@@ -170,8 +175,8 @@ class WalTest extends Specification {
         n11 == 0
 
         when:
-        def bytes1 = wal.writeToSavedBytes(true)
-        def bytes11 = wal.writeToSavedBytes(false)
+        def bytes1 = wal.writeToSavedBytes(true, false)
+        def bytes11 = wal.writeToSavedBytes(false, true)
         n1 = wal.readFromSavedBytes(bytes1, true)
         n11 = wal.readFromSavedBytes(bytes11, false)
         then:
@@ -231,6 +236,17 @@ class WalTest extends Specification {
         }
         then:
         exception
+
+        // rewrite
+        when:
+        def shortV = Mock.prepareValueList(1)[0]
+        List<Wal.PutResult> resultList = []
+        1000.times {
+            resultList << wal.put(true, 'short00', shortV)
+            resultList << wal.put(false, 'normal00', shortV)
+        }
+        then:
+        resultList.every { !it.needPersist() }
 
         // put from x (slave replay / apply)
         when:
