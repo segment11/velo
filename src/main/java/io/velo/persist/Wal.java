@@ -3,6 +3,7 @@ package io.velo.persist;
 import io.velo.*;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
+import io.velo.repl.incremental.XWalRewrite;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -207,11 +208,12 @@ public class Wal implements InMemoryEstimate {
      * @param snowFlake               the SnowFlake instance for generating unique IDs.
      * @throws IOException if an I/O error occurs.
      */
-    public Wal(short slot, int groupIndex,
+    public Wal(short slot, OneSlot oneSlot, int groupIndex,
                @NullableOnlyTest RandomAccessFile walSharedFile,
                @NullableOnlyTest RandomAccessFile walSharedFileShortValue,
                @NotNull SnowFlake snowFlake) throws IOException {
         this.slot = slot;
+        this.oneSlot = oneSlot;
         this.groupIndex = groupIndex;
         this.walSharedFile = walSharedFile;
         this.walSharedFileShortValue = walSharedFileShortValue;
@@ -306,7 +308,18 @@ public class Wal implements InMemoryEstimate {
     @VisibleForTesting
     int writePositionShortValue;
 
+    @TestOnly
+    public int getWritePosition() {
+        return writePosition;
+    }
+
+    @TestOnly
+    public int getWritePositionShortValue() {
+        return writePositionShortValue;
+    }
+
     private final short slot;
+    private final OneSlot oneSlot;
     final int groupIndex;
 
     /**
@@ -731,14 +744,15 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Re-write to file for one group
+     * Rewrite to file for one group
      *
      * @param isValueShort true if the value is short, false otherwise.
      * @return new offset
      */
-    private int reWriteOneGroup(boolean isValueShort) {
+    @SlaveNeedReplay
+    private int rewriteOneGroup(boolean isValueShort, byte[] writeBytesFromMasterIfIsReplay) {
         try {
-            var writeBytes = writeToSavedBytes(isValueShort, true);
+            var writeBytes = writeBytesFromMasterIfIsReplay != null ? writeBytesFromMasterIfIsReplay : writeToSavedBytes(isValueShort, true);
             assert writeBytes.length > 4 && writeBytes.length <= ONE_GROUP_BUFFER_SIZE;
 
             // 4 bytes for int 0
@@ -753,10 +767,20 @@ public class Wal implements InMemoryEstimate {
                 walSharedFile.write(writeBytes);
                 writePosition = newOffset;
             }
+
+            if (writeBytesFromMasterIfIsReplay == null) {
+                oneSlot.appendBinlog(new XWalRewrite(isValueShort, groupIndex, writeBytes));
+            }
+
             return newOffset;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @SlaveReplay
+    public void rewriteOneGroupFromMaster(boolean isValueShort, byte[] bytes) {
+        rewriteOneGroup(isValueShort, bytes);
     }
 
     /**
@@ -778,7 +802,7 @@ public class Wal implements InMemoryEstimate {
             var keyCount = isValueShort ? delayToKeyBucketShortValues.size() : delayToKeyBucketValues.size();
             // hot data, keep in wal
             if (keyCount < (isValueShort ? ConfForSlot.global.confWal.shortValueSizeTrigger / 10 : ConfForSlot.global.confWal.valueSizeTrigger / 10)) {
-                var newOffset = reWriteOneGroup(isValueShort);
+                var newOffset = rewriteOneGroup(isValueShort, null);
                 if (newOffset + encodeLength > ONE_GROUP_BUFFER_SIZE) {
                     needPersistCountTotal++;
                     needPersistKvCountTotal += keyCount;

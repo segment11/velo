@@ -204,7 +204,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         long initMemoryN = 0;
         for (int i = 0; i < walGroupNumber; i++) {
-            var wal = new Wal(slot, i, raf, rafShortValue, snowFlake);
+            var wal = new Wal(slot, this, i, raf, rafShortValue, snowFlake);
             walArray[i] = wal;
             initMemoryN += wal.initMemoryN;
         }

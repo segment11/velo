@@ -7,7 +7,9 @@ import java.nio.ByteBuffer;
 public interface BinlogContent {
     enum Type {
         // code need > 0
-        wal((byte) 1), one_wal_group_persist((byte) 2), chunk_segment_flag_update((byte) 3), chunk_segment_slim_update((byte) 4),
+        wal((byte) 1), wal_rewrite((byte) 11),
+        one_wal_group_persist((byte) 2),
+        chunk_segment_flag_update((byte) 3), chunk_segment_slim_update((byte) 4),
         big_strings((byte) 10), dict((byte) 100), reverse_index_put_word((byte) 101), skip_apply((byte) 111),
         dyn_config(Byte.MAX_VALUE), flush(Byte.MIN_VALUE);
 
@@ -33,6 +35,7 @@ public interface BinlogContent {
         BinlogContent decodeFrom(ByteBuffer buffer) {
             return switch (this) {
                 case wal -> XWalV.decodeFrom(buffer);
+                case wal_rewrite -> XWalRewrite.decodeFrom(buffer);
                 case one_wal_group_persist -> XOneWalGroupPersist.decodeFrom(buffer);
                 case chunk_segment_flag_update -> XChunkSegmentFlagUpdate.decodeFrom(buffer);
                 case chunk_segment_slim_update -> XChunkSegmentSlimUpdate.decodeFrom(buffer);

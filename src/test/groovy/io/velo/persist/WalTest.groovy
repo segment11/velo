@@ -70,8 +70,9 @@ class WalTest extends Specification {
         def raf = new RandomAccessFile(file, 'rw')
         def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
         def snowFlake = new SnowFlake(1, 1)
-        def wal = new Wal(slot, 0, raf, rafShortValue, snowFlake)
-        def wal2 = new Wal(slot, 1, raf, rafShortValue, snowFlake)
+        def oneSlot = new OneSlot((short) 0)
+        def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+        def wal2 = new Wal(slot, oneSlot, 1, raf, rafShortValue, snowFlake)
         println 'Wal: ' + wal
         println 'Wal2: ' + wal2
         println 'in memory size estimate: ' + wal.estimate(new StringBuilder())
@@ -82,6 +83,8 @@ class WalTest extends Specification {
         Wal.calcWalGroupNumber() == 4096 / 32
         wal.lastSeqAfterPut == 0
         wal.lastSeqShortValueAfterPut == 0
+        wal.writePosition == 0
+        wal.writePositionShortValue == 0
 
         when:
         wal.lazyReadFromFile()
@@ -201,8 +204,8 @@ class WalTest extends Specification {
         // repl import exists batch from master
         when:
         ConfForGlobal.pureMemory = false
-        def wal11 = new Wal(slot, 0, raf, rafShortValue, snowFlake)
-        def wal22 = new Wal(slot, 0, raf, rafShortValue, snowFlake)
+        def wal11 = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+        def wal22 = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
         wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1)
         wal22.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes2)
         then:
@@ -272,6 +275,11 @@ class WalTest extends Specification {
         wal.lastSeqAfterPut == 0
         wal.lastSeqShortValueAfterPut == 0
 
+        when:
+        wal.rewriteOneGroupFromMaster(false, new byte[100 + 4])
+        then:
+        wal.writePosition == 100
+
         cleanup:
         wal.clear()
         wal.clear(false)
@@ -288,7 +296,7 @@ class WalTest extends Specification {
         ConfForGlobal.pureMemory = true
 
         def snowFlake = new SnowFlake(1, 1)
-        def wal = new Wal(slot, 0, null, null, snowFlake)
+        def wal = new Wal(slot, null, 0, null, null, snowFlake)
 
         def key = 'test-key'
         def shortV = new Wal.V(1, 0, 0, 0, 0, key, 'short-value'.bytes, false)
@@ -402,7 +410,7 @@ class WalTest extends Specification {
         ConfForGlobal.pureMemory = true
 
         def snowFlake = new SnowFlake(1, 1)
-        def wal = new Wal(slot, 0, null, null, snowFlake)
+        def wal = new Wal(slot, null, 0, null, null, snowFlake)
 
         expect:
         wal.inWalKeys().isEmpty()
