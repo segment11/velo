@@ -783,6 +783,9 @@ public class Wal implements InMemoryEstimate {
         rewriteOneGroup(isValueShort, bytes);
     }
 
+    @VisibleForTesting
+    boolean isOnRewrite = true;
+
     /**
      * Puts a log entry into the WAL.
      *
@@ -801,7 +804,7 @@ public class Wal implements InMemoryEstimate {
             boolean needPersist = true;
             var keyCount = isValueShort ? delayToKeyBucketShortValues.size() : delayToKeyBucketValues.size();
             // hot data, keep in wal
-            if (keyCount < (isValueShort ? ConfForSlot.global.confWal.shortValueSizeTrigger / 10 : ConfForSlot.global.confWal.valueSizeTrigger / 10)) {
+            if (keyCount < (isValueShort ? ConfForSlot.global.confWal.shortValueSizeTrigger / 10 : ConfForSlot.global.confWal.valueSizeTrigger / 10) && isOnRewrite) {
                 var newOffset = rewriteOneGroup(isValueShort, null);
                 if (newOffset + encodeLength > ONE_GROUP_BUFFER_SIZE) {
                     needPersistCountTotal++;

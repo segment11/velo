@@ -698,6 +698,16 @@ class OneSlotTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
         cv.compressedData = new byte[CompressedValue.SP_TYPE_SHORT_STRING_MIN_LEN * 100]
         cv.expireAt = CompressedValue.NO_EXPIRE
+        // hot key always in wal cache
+        100.times {
+            oneSlot.put(key, sKey.bucketIndex(), cv)
+        }
+        oneSlot.getWalByBucketIndex(sKey.bucketIndex()).clear()
+        then:
+        oneSlot.get(key.bytes, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) == null
+
+        when:
+        oneSlot.getWalByBucketIndex(sKey.bucketIndex()).isOnRewrite = false
         // make sure do persist
         100.times {
             oneSlot.put(key, sKey.bucketIndex(), cv)

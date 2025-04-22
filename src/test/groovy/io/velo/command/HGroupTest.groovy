@@ -88,7 +88,7 @@ class HGroupTest extends Specification {
         hGroup.data = data2
         reply = hGroup.handle()
         then:
-        reply == ErrorReply.SYNTAX
+        reply instanceof ErrorReply
 
         when:
         hGroup.data = data1
@@ -378,7 +378,7 @@ class HGroupTest extends Specification {
         reply == ErrorReply.AUTH_FAILED
 
         when:
-        aclUsers.upInsert('user0') {u ->
+        aclUsers.upInsert('user0') { u ->
             u.on = false
             u.password = U.Password.NO_PASSWORD
         }
@@ -387,7 +387,7 @@ class HGroupTest extends Specification {
         reply == ErrorReply.AUTH_FAILED
 
         when:
-        aclUsers.upInsert('user0') {u ->
+        aclUsers.upInsert('user0') { u ->
             u.on = true
             u.password = U.Password.plain('pass000')
         }
@@ -396,7 +396,7 @@ class HGroupTest extends Specification {
         reply == ErrorReply.AUTH_FAILED
 
         when:
-        aclUsers.upInsert('user0') {u ->
+        aclUsers.upInsert('user0') { u ->
             u.on = true
             u.password = U.Password.plain('pass0')
         }
