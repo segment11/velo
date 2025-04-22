@@ -1,4 +1,4 @@
-package io.velo.persist.index;
+package io.velo.extend;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

@@ -5,7 +5,6 @@ import io.velo.KeyHash;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.persist.CanSaveAndLoad;
 import io.velo.persist.InMemoryEstimate;
-import io.velo.persist.index.BetaExtend;
 import io.velo.proto.CountListProto;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
