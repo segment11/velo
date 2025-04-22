@@ -3,6 +3,8 @@ package io.velo.reply;
 import io.activej.bytebuf.ByteBuf;
 import org.jetbrains.annotations.TestOnly;
 
+import java.util.Arrays;
+
 /**
  * Represents a bulk reply in the Redis protocol.
  * A bulk reply is used to send data in a binary-safe format.
@@ -52,6 +54,25 @@ public class BulkReply implements Reply {
      */
     public BulkReply(double d) {
         this.raw = String.valueOf(d).getBytes();
+    }
+
+    /**
+     * Checks if two BulkReply instances are equal.
+     *
+     * @param obj the object to compare to
+     * @return true if the objects are equal, false otherwise
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+
+        var that = (BulkReply) obj;
+        return Arrays.equals(raw, that.raw);
     }
 
     /**

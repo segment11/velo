@@ -77,6 +77,9 @@ class RESPReplyTest extends Specification {
         new BulkReply(null).bufferAsResp3().asArray() == "+\r\n".bytes
         new BulkReply('bulk'.bytes).bufferAsHttp().asArray() == "bulk".bytes
         new BulkReply('bulk'.bytes).dumpForTest(new StringBuilder(), 0)
+        !new BulkReply(1L).equals(null)
+        !new BulkReply(1L).equals(new Object())
+        !new BulkReply(1L).equals(new BulkReply(2L))
 
         new MultiBulkReply(null).buffer().asArray() == "*-1\r\n".bytes
         new MultiBulkReply(null).bufferAsResp3().asArray() == "*-1\r\n".bytes
@@ -89,6 +92,13 @@ class RESPReplyTest extends Specification {
         new MultiBulkReply(replies).bufferAsResp3().asArray() == '*3\r\n+bulk1\r\n#t\r\n,1.00\r\n'.bytes
         new MultiBulkReply(replies).bufferAsResp3().asArray() == '*3\r\n+bulk1\r\n#t\r\n,1.00\r\n'.bytes
         new MultiBulkReply(replies).bufferAsHttp() != null
+
+        when:
+        def b0 = new BulkReply(0)
+        def b00 = new BulkReply(0)
+        then:
+        b0.equals(b0)
+        b0.equals(b00)
 
         when:
         Reply[] repliesMap = [

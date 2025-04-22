@@ -89,9 +89,8 @@ db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
     private static List<Tuple2<String, Object>> slaveConnectState(ReplPair replPairAsSlave, int slaveIndex) {
         List<Tuple2<String, Object>> list = []
 
-        def slaveFo = replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset
         def state = "ip=${replPairAsSlave.host},port=${replPairAsSlave.port}," +
-                "state=${replPairAsSlave.isLinkUp() ? 'online' : 'offline'},offset=${slaveFo ? slaveFo.asReplOffset() : 0},lag=1"
+                "state=${replPairAsSlave.isLinkUp() ? 'online' : 'offline'},offset=${replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset},lag=1"
         list << new Tuple2("slave${slaveIndex}", state)
 
         list
@@ -160,9 +159,8 @@ maxmemory_human:${totalMaxHumanReadable}
             def masterFo = replPairAsSlave.masterBinlogCurrentFileIndexAndOffset
             list << new Tuple2('master_repl_offset', masterFo ? masterFo.asReplOffset() : 0)
 
-            def slaveFo = replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset
-            list << new Tuple2('slave_read_repl_offset', slaveFo ? slaveFo.asReplOffset() : 0)
-            list << new Tuple2('slave_repl_offset', slaveFo ? slaveFo.asReplOffset() : 0)
+            list << new Tuple2('slave_read_repl_offset', replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset)
+            list << new Tuple2('slave_repl_offset', replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset)
 
             list << new Tuple2('slave_read_only', firstOneSlot.isReadonly() ? 1 : 0)
             list << new Tuple2('slave_priority', ValkeyRawConfSupport.replicaPriority)
@@ -173,7 +171,7 @@ maxmemory_human:${totalMaxHumanReadable}
             list << new Tuple2('repl_backlog_active', 1)
             list << new Tuple2('repl_backlog_size', 1048576)
             list << new Tuple2('repl_backlog_first_byte_offset', 1)
-            list << new Tuple2('repl_backlog_histlen', slaveFo ? slaveFo.asReplOffset() : 0)
+            list << new Tuple2('repl_backlog_histlen', replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset)
         } else {
             def hostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
             list << new Tuple2('master_host', hostAndPort.host())
@@ -186,24 +184,22 @@ maxmemory_human:${totalMaxHumanReadable}
                 list << new Tuple2('master_replid', firstReplPair.slaveUuid.toString().padLeft(40, '0'))
                 list << new Tuple2('master_repl_offset', firstOneSlot.binlog.currentReplOffset())
 
-                def slaveFo = firstReplPair.slaveLastCatchUpBinlogFileIndexAndOffset
                 // for redis 6.x compat
                 list << new Tuple2('master_link_status', firstReplPair.isLinkUp() ? 'up' : 'down')
-                list << new Tuple2('slave_repl_offset', slaveFo ? slaveFo.asReplOffset() : 0)
+                list << new Tuple2('slave_repl_offset', firstReplPair.slaveLastCatchUpBinlogAsReplOffset)
 
                 if (replPairAsMasterList.size() > 1) {
                     def secondReplPair = replPairAsMasterList.get(1)
-                    def slaveFo2 = secondReplPair.slaveLastCatchUpBinlogFileIndexAndOffset
 
                     list.addAll slaveConnectState(secondReplPair, 1)
                     list << new Tuple2('master_replid2', secondReplPair.slaveUuid.toString().padLeft(40, '0'))
-                    list << new Tuple2('second_repl_offset', slaveFo2 ? slaveFo2.asReplOffset() : 0)
+                    list << new Tuple2('second_repl_offset', secondReplPair.slaveLastCatchUpBinlogAsReplOffset)
                 } else {
                     list << new Tuple2('master_replid2', '0' * 40)
                     list << new Tuple2('second_repl_offset', -1)
                 }
 
-                list << new Tuple2('repl_backlog_histlen', slaveFo ? slaveFo.asReplOffset() : 0)
+                list << new Tuple2('repl_backlog_histlen', firstReplPair.slaveLastCatchUpBinlogAsReplOffset)
             } else {
                 list << new Tuple2('master_replid', '0' * 40)
                 list << new Tuple2('master_replid2', '0' * 40)

@@ -1,13 +1,10 @@
 package io.velo.command
 
 import io.activej.eventloop.Eventloop
-import io.velo.BaseCommand
-import io.velo.CompressedValue
-import io.velo.ConfForSlot
-import io.velo.Debug
-import io.velo.SocketInspectorTest
+import io.velo.*
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
+import io.velo.repl.ReplPairTest
 import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.reply.*
 import io.velo.type.RedisList
@@ -127,6 +124,12 @@ class RGroupTest extends Specification {
         reply = rGroup.handle()
         then:
         reply == ErrorReply.FORMAT
+
+        when:
+        rGroup.cmd = 'role'
+        reply = rGroup.handle()
+        then:
+        reply instanceof MultiBulkReply
 
         when:
         rGroup.cmd = 'rpop'
@@ -351,6 +354,50 @@ class RGroupTest extends Specification {
 
         cleanup:
         VeloRDBImporter.DEBUG = false
+    }
+
+    def 'test role'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def rGroup = new RGroup(null, null, null)
+        rGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = rGroup.role()
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies[0] == new BulkReply('master'.bytes)
+        ((MultiBulkReply) reply).replies[1] == IntegerReply.REPLY_0
+        ((MultiBulkReply) reply).replies[2] == MultiBulkReply.EMPTY
+
+        when:
+        def replPairAsMaster = ReplPairTest.mockAsMaster()
+        oneSlot.replPairs.add(replPairAsMaster)
+        reply = rGroup.role()
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies[0] == new BulkReply('master'.bytes)
+        ((MultiBulkReply) reply).replies[2] instanceof MultiBulkReply
+        ((MultiBulkReply) ((MultiBulkReply) reply).replies[2]).replies[0] instanceof MultiBulkReply
+
+        when:
+        oneSlot.replPairs.clear()
+        def replPairAsSlave = ReplPairTest.mockAsSlave(0L, oneSlot.masterUuid)
+        oneSlot.replPairs.add(replPairAsSlave)
+        reply = rGroup.role()
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 5
+        ((MultiBulkReply) reply).replies[0] == new BulkReply('slave'.bytes)
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test rpop'() {

@@ -93,6 +93,10 @@ public class RGroup extends BaseCommand {
             return restore();
         }
 
+        if ("role".equals(cmd)) {
+            return role();
+        }
+
         if ("rpop".equals(cmd)) {
             var lGroup = new LGroup(cmd, data, socket);
             lGroup.from(this);
@@ -374,6 +378,53 @@ public class RGroup extends BaseCommand {
         } catch (Exception e) {
             log.error("Restore error", e);
             return new ErrorReply(e.getMessage());
+        }
+    }
+
+    @VisibleForTesting
+    Reply role() {
+        var firstOneSlot = localPersist.currentThreadFirstOneSlot();
+        var isSelfSlave = firstOneSlot.isAsSlave();
+
+        if (!isSelfSlave) {
+            var slaveReplPairList = firstOneSlot.getSlaveReplPairListSelfAsMaster();
+            // no slaves
+            if (slaveReplPairList.isEmpty()) {
+                return new MultiBulkReply(new Reply[]{
+                        new BulkReply("master".getBytes()),
+                        IntegerReply.REPLY_0,
+                        MultiBulkReply.EMPTY
+                });
+            } else {
+                var array = slaveReplPairList.stream().map(x -> new MultiBulkReply(new Reply[]{
+                        new BulkReply(x.getHost().getBytes()),
+                        new BulkReply(x.getPort()),
+                        new BulkReply(x.getSlaveLastCatchUpBinlogAsReplOffset())
+                })).toArray();
+                var replies = new Reply[array.length];
+                for (int i = 0; i < array.length; i++) {
+                    replies[i] = (MultiBulkReply) array[i];
+                }
+
+                return new MultiBulkReply(new Reply[]{
+                        new BulkReply("master".getBytes()),
+                        new IntegerReply(firstOneSlot.getBinlog().currentReplOffset()),
+                        new MultiBulkReply(replies)
+                });
+            }
+        } else {
+            // as slave
+            var replPair = firstOneSlot.getOnlyOneReplPairAsSlave();
+            assert replPair != null;
+
+            var replies = new Reply[]{
+                    new BulkReply("slave".getBytes()),
+                    new BulkReply(replPair.getHost().getBytes()),
+                    new IntegerReply(replPair.getPort()),
+                    new BulkReply("connected".getBytes()),
+                    new IntegerReply(replPair.getSlaveLastCatchUpBinlogAsReplOffset())
+            };
+            return new MultiBulkReply(replies);
         }
     }
 

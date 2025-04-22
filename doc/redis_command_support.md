@@ -190,7 +190,7 @@
 - [√] INFO
 - [√] LASTSAVE
 - [x] LATENCY
-- [x] ROLE
+- [√] ROLE
 - [√] SAVE
 - [√] TIME
 

@@ -334,6 +334,18 @@ public class ReplPair {
     }
 
     /**
+     * Gets the REPL offset of the last binlog file index and offset that the slave has caught up to.
+     *
+     * @return The REPL offset of the last binlog file index and offset.
+     */
+    public long getSlaveLastCatchUpBinlogAsReplOffset() {
+        if (slaveLastCatchUpBinlogFileIndexAndOffset == null) {
+            return 0L;
+        }
+        return slaveLastCatchUpBinlogFileIndexAndOffset.asReplOffset();
+    }
+
+    /**
      * Sets the last binlog file index and offset that the slave has caught up to.
      *
      * @param slaveLastCatchUpBinlogFileIndexAndOffset The binlog file index and offset to set.

@@ -312,8 +312,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return masterUuid;
     }
 
+    private final ArrayList<ReplPair> replPairs = new ArrayList<>();
+
     @VisibleForTesting
-    final ArrayList<ReplPair> replPairs = new ArrayList<>();
+    public ArrayList<ReplPair> getReplPairs() {
+        return replPairs;
+    }
 
     /**
      * Checks if the OneSlot is operating as a slave in any replication pairs.

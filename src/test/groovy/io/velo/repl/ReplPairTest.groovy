@@ -87,6 +87,7 @@ class ReplPairTest extends Specification {
 
         replPairAsSlave.slaveCatchUpLastSeq == 1000L
         replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset == null
+        replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset == 0L
         replPairAsSlave.masterBinlogCurrentFileIndexAndOffset == null
         replPairAsSlave.fetchedBytesLengthTotal == 1000L
         !replPairAsSlave.masterReadonly
@@ -120,6 +121,11 @@ class ReplPairTest extends Specification {
         replPairAsMaster != replPairAsMaster11
         replPairAsMaster.equals(replPairAsMaster)
         !replPairAsMaster.linkUp
+
+        when:
+        replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset = new Binlog.FileIndexAndOffset(0, 0)
+        then:
+        replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset == 0L
 
         when:
         replPairAsMaster.isSendBye = true
