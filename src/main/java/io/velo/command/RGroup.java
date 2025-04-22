@@ -381,8 +381,19 @@ public class RGroup extends BaseCommand {
         }
     }
 
+    private static final MultiBulkReply ROLE_AS_MASTER_REPLY = new MultiBulkReply(new Reply[]{
+            new BulkReply("master".getBytes()),
+            IntegerReply.REPLY_0,
+            MultiBulkReply.EMPTY
+    });
+
     @VisibleForTesting
     Reply role() {
+        if (localPersist.oneSlots() == null) {
+            // for unit test
+            return ROLE_AS_MASTER_REPLY;
+        }
+
         var firstOneSlot = localPersist.currentThreadFirstOneSlot();
         var isSelfSlave = firstOneSlot.isAsSlave();
 
@@ -390,11 +401,7 @@ public class RGroup extends BaseCommand {
             var slaveReplPairList = firstOneSlot.getSlaveReplPairListSelfAsMaster();
             // no slaves
             if (slaveReplPairList.isEmpty()) {
-                return new MultiBulkReply(new Reply[]{
-                        new BulkReply("master".getBytes()),
-                        IntegerReply.REPLY_0,
-                        MultiBulkReply.EMPTY
-                });
+                return ROLE_AS_MASTER_REPLY;
             } else {
                 var array = slaveReplPairList.stream().map(x -> new MultiBulkReply(new Reply[]{
                         new BulkReply(x.getHost().getBytes()),
