@@ -4,6 +4,7 @@ import io.activej.common.function.RunnableEx;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
 import io.velo.NeedCleanUp;
+import io.velo.extend.BetaExtend;
 import io.velo.repl.MasterReset;
 import io.velo.repl.SlaveReset;
 import org.jetbrains.annotations.TestOnly;

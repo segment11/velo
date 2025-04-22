@@ -31,7 +31,7 @@ class XGroupTest extends Specification {
         mockData(reply)
     }
 
-    private byte[][] mockData(ReplReply reply) {
+    private static byte[][] mockData(ReplReply reply) {
         def nettyBuf = Unpooled.wrappedBuffer(reply.buffer().array())
         Repl.decode(nettyBuf)
     }
@@ -937,7 +937,7 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         // next step
-        r.isReplType(ReplType.exists_reverse_index)
+        r.isReplType(ReplType.exists_all_done)
 
         // fetch exists key buckets
         when:
@@ -1467,127 +1467,6 @@ class XGroupTest extends Specification {
         XGroup.tryCatchUpAgainAfterSlaveTcpClientClosed(replPair, contentBytes)
         then:
         XGroup.skipTryCatchUpAgainAfterSlaveTcpClientClosed
-
-        cleanup:
-        localPersist.cleanUp()
-        Consts.persistDir.deleteDir()
-    }
-
-    def 'test exists_reverse_index'() {
-        given:
-        def data4 = new byte[4][]
-        def xGroup = new XGroup(null, data4, null)
-        xGroup.replPair = ReplPairTest.mockAsMaster()
-
-        and:
-        ConfForGlobal.netListenAddresses = 'localhost:6379'
-
-        LocalPersistTest.prepareLocalPersist()
-        def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-
-        def eventloopCurrent = Eventloop.builder()
-                .withCurrentThread()
-                .withIdleInterval(Duration.ofMillis(100))
-                .build()
-
-        and:
-        ConfForGlobal.indexWorkers = (byte) 1
-        localPersist.startIndexHandlerPool()
-        Thread.sleep(1000)
-
-        when:
-        def contentBytes = new byte[1 + 4 + 4]
-        def requestBuffer = ByteBuffer.wrap(contentBytes)
-        requestBuffer.put(XGroup.reverseIndexByteAsForMetaIndexWords)
-        def r = xGroup.exists_reverse_index(slot, contentBytes)
-        eventloopCurrent.run()
-        Thread.sleep(200)
-        then:
-        r instanceof AsyncReply
-
-        when:
-        requestBuffer.position(0)
-        requestBuffer.put(XGroup.reverseIndexByteAsForChunk)
-        r = xGroup.exists_reverse_index(slot, contentBytes)
-        eventloopCurrent.run()
-        Thread.sleep(200)
-        then:
-        r instanceof AsyncReply
-
-        when:
-        def contentBytes2 = new byte[1 + 4 + 4 + XGroup.INDEX_EXISTS_WORDS_ONCE_READ_LENGTH]
-        def requestBuffer2 = ByteBuffer.wrap(contentBytes2)
-        requestBuffer2.put(XGroup.reverseIndexByteAsForMetaIndexWords)
-        def r2 = xGroup.s_exists_reverse_index(slot, contentBytes2) as ReplReply
-        eventloopCurrent.run()
-        Thread.sleep(200)
-        then:
-        r2.isEmpty()
-
-        when:
-        // last batch for words
-        def contentBytes22 = new byte[1 + 4 + 4 + 1024]
-        def requestBuffer22 = ByteBuffer.wrap(contentBytes22)
-        requestBuffer22.put(XGroup.reverseIndexByteAsForMetaIndexWords)
-        requestBuffer22.put((byte) 0)
-        requestBuffer22.putInt(0)
-        def r22 = xGroup.s_exists_reverse_index(slot, contentBytes22) as ReplReply
-        eventloopCurrent.run()
-        Thread.sleep(200)
-        then:
-        r22.isEmpty()
-
-        when:
-        requestBuffer2.position(0)
-        requestBuffer2.put(XGroup.reverseIndexByteAsForChunk)
-        r2 = xGroup.s_exists_reverse_index(slot, contentBytes2) as ReplReply
-        eventloopCurrent.run()
-        Thread.sleep(200)
-        then:
-        r2.isEmpty()
-
-        when:
-        // last batch for chunk
-        requestBuffer2.position(0)
-        requestBuffer2.put(XGroup.reverseIndexByteAsForChunk)
-        requestBuffer2.put((byte) 0)
-        requestBuffer2.putInt(localPersist.indexHandlerPool.chunkMaxSegmentNumber - 1)
-        r2 = xGroup.s_exists_reverse_index(slot, contentBytes2) as ReplReply
-        eventloopCurrent.run()
-        Thread.sleep(200)
-        then:
-        r2.isEmpty()
-
-        when:
-        // more than one index worker
-        localPersist.indexHandlerPool.cleanUp()
-        ConfForGlobal.indexWorkers = (byte) 2
-        localPersist.startIndexHandlerPool()
-        Thread.sleep(1000)
-
-        // last batch for index worker 0 for words
-        requestBuffer22.position(0)
-        requestBuffer22.put(XGroup.reverseIndexByteAsForMetaIndexWords)
-        requestBuffer22.put((byte) 0)
-        requestBuffer22.putInt(0)
-        r22 = xGroup.s_exists_reverse_index(slot, contentBytes22) as ReplReply
-        eventloopCurrent.run()
-        Thread.sleep(200)
-        then:
-        r22.isEmpty()
-
-        when:
-        // last batch for index worker 0 for chunk
-        requestBuffer2.position(0)
-        requestBuffer2.put(XGroup.reverseIndexByteAsForChunk)
-        requestBuffer2.put((byte) 0)
-        requestBuffer2.putInt(localPersist.indexHandlerPool.chunkMaxSegmentNumber - 1)
-        r2 = xGroup.s_exists_reverse_index(slot, contentBytes2) as ReplReply
-        eventloopCurrent.run()
-        Thread.sleep(200)
-        then:
-        r2.isEmpty()
 
         cleanup:
         localPersist.cleanUp()

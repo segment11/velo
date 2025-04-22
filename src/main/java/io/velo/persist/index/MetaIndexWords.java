@@ -2,6 +2,7 @@ package io.velo.persist.index;
 
 import io.velo.ConfForGlobal;
 import io.velo.NeedCleanUp;
+import io.velo.extend.BetaExtend;
 import io.velo.repl.MasterReset;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;

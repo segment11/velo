@@ -2,6 +2,7 @@ package io.velo.persist.index;
 
 import io.velo.NeedCleanUp;
 import io.velo.SnowFlake;
+import io.velo.extend.BetaExtend;
 import io.velo.repl.MasterReset;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.TestOnly;

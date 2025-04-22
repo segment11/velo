@@ -71,22 +71,6 @@ public enum ReplType {
     test(true, true, (byte) 100),
 
     /**
-     * Request to master for fetching exists reverse index data.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 49.
-     */
-    exists_reverse_index(false, true, (byte) 49),
-
-    /**
-     * Response to slave for fetching exists reverse index data.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 50.
-     */
-    s_exists_reverse_index(false, true, (byte) 50),
-
-    /**
      * Request to master for fetching exists keys for analysis.
      * It's before slave all catch up.
      * It's sent by a slave.
