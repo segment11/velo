@@ -802,13 +802,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param beginScanSeq  The sequence number to start scanning from.
      * @return A ScanCursorWithReturnKeys object containing the scan cursor and the list of keys found.
      */
-    public ScanCursorWithReturnKeys scan(final int walGroupIndex,
-                                         final byte splitIndex,
-                                         final short skipCount,
-                                         final byte typeAsByte,
-                                         final @Nullable String matchPattern,
-                                         final int count,
-                                         final long beginScanSeq) {
+    public @NotNull ScanCursorWithReturnKeys scan(final int walGroupIndex,
+                                                  final byte splitIndex,
+                                                  final short skipCount,
+                                                  final byte typeAsByte,
+                                                  final @Nullable String matchPattern,
+                                                  final int count,
+                                                  final long beginScanSeq) {
         final ArrayList<String> keys = new ArrayList<>(count);
         final var inWalKeys = oneSlot.getWalByGroupIndex(walGroupIndex).inWalKeys();
 
@@ -835,22 +835,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 }
 
                 if (i == maxSplitNumber - 1 && j == walGroupNumber - 1) {
-                    var lastOneSlot = LocalPersist.getInstance().lastOneSlot();
-                    var isLastSlot = lastOneSlot == null || slot == lastOneSlot.slot();
-                    if (isLastSlot) {
-                        return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
-                    } else {
-                        var nextOneSlot = LocalPersist.getInstance().nextOneSlot(slot);
-                        if (nextOneSlot == null) {
-                            return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
-                        } else {
-                            var scanCursorTmp = new ScanCursor((short) (slot + 1), 0, (short) 0, (short) 0, (byte) 0);
-                            return new ScanCursorWithReturnKeys(scanCursorTmp, keys);
-                        }
-                    }
+                    return scanNextSlotResult(keys);
                 }
 
-                if (readCount > onceScanMaxReadCount) {
+                if (readCount >= onceScanMaxReadCount) {
                     var isLastSkipIndex = i == maxSplitNumber - 1;
 
                     var scanCursorTmp = isLastSkipIndex ?
@@ -860,7 +848,23 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 }
             }
         }
-        return null;
+        return scanNextSlotResult(keys);
+    }
+
+    private @NotNull ScanCursorWithReturnKeys scanNextSlotResult(ArrayList<String> keys) {
+        var lastOneSlot = LocalPersist.getInstance().lastOneSlot();
+        var isLastSlot = lastOneSlot == null || slot == lastOneSlot.slot();
+        if (isLastSlot) {
+            return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
+        } else {
+            var nextOneSlot = LocalPersist.getInstance().nextOneSlot(slot);
+            if (nextOneSlot == null) {
+                return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
+            } else {
+                var scanCursorTmp = new ScanCursor((short) (slot + 1), 0, (short) 0, (short) 0, (byte) 0);
+                return new ScanCursorWithReturnKeys(scanCursorTmp, keys);
+            }
+        }
     }
 
     /**

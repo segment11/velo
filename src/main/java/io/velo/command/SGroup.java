@@ -236,9 +236,7 @@ public class SGroup extends BaseCommand {
     }
 
     private MultiBulkReply scanResultToReply(KeyLoader.ScanCursorWithReturnKeys r, VeloUserDataInSocket veloUserData, int count) {
-        var keys = r.keys();
-        assert (!keys.isEmpty());
-        if (keys.size() < count) {
+        if (r.scanCursor() == ScanCursor.END) {
             // reach the end
             veloUserData.setLastScanAssignCursor(0);
             veloUserData.setBeginScanSeq(0);
@@ -246,15 +244,20 @@ public class SGroup extends BaseCommand {
             veloUserData.setLastScanAssignCursor(r.scanCursor().toLong());
         }
 
+        var keys = r.keys();
         var replies = new Reply[2];
         replies[0] = new BulkReply(r.scanCursor().toLong());
 
-        var keysReplies = new Reply[keys.size()];
-        replies[1] = new MultiBulkReply(keysReplies);
+        if (keys.isEmpty()) {
+            replies[1] = MultiBulkReply.EMPTY;
+        } else {
+            var keysReplies = new Reply[keys.size()];
+            replies[1] = new MultiBulkReply(keysReplies);
 
-        int i = 0;
-        for (var key : keys) {
-            keysReplies[i++] = new BulkReply(key.getBytes());
+            int i = 0;
+            for (var key : keys) {
+                keysReplies[i++] = new BulkReply(key.getBytes());
+            }
         }
         return new MultiBulkReply(replies);
     }
@@ -374,24 +377,8 @@ public class SGroup extends BaseCommand {
         var r = keyLoader.scan(scanCursor.walGroupIndex(), scanCursor.splitIndex(), scanCursor.keyBucketsSkipCount(),
                 typeAsByte, matchPattern, leftCount, veloUserData.getBeginScanSeq());
 
-        if (r == null || r.keys().isEmpty()) {
-            if (rWal != null) {
-                // only return wal scan result
-                var rAll = new KeyLoader.ScanCursorWithReturnKeys(ScanCursor.END, rWal.keys());
-                var finalReply = scanResultToReply(rAll, veloUserData, count);
-                // overwrite, reach the end
-                veloUserData.setLastScanAssignCursor(0L);
-                return finalReply;
-            } else {
-                // reach the end
-                veloUserData.setLastScanAssignCursor(0L);
-                return MultiBulkReply.SCAN_EMPTY;
-            }
-        } else {
-            if (rWal != null) {
-                // merged keys from wal scan
-                r.keys().addAll(rWal.keys());
-            }
+        if (rWal != null) {
+            r.keys().addAll(rWal.keys());
         }
 
         return scanResultToReply(r, veloUserData, count);

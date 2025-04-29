@@ -337,15 +337,14 @@ sunionstore
         ((MultiBulkReply) reply).replies.length == 2
         ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
         ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 10
-        ScanCursor.fromLong(veloUserData.lastScanAssignCursor) == ScanCursor.END
 
         when:
         // wal key values clear
         wal.clear()
         reply = sGroup.scan()
         then:
-        reply == MultiBulkReply.SCAN_EMPTY
-        ScanCursor.fromLong(veloUserData.lastScanAssignCursor) == ScanCursor.END
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies[1] == MultiBulkReply.EMPTY
 
         when:
         // count, invalid integer
