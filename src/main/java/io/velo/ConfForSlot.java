@@ -202,6 +202,11 @@ public enum ConfForSlot {
         public byte initialSplitNumber;
 
         /**
+         * For performance, when do scan, once max read count.
+         */
+        public int onceScanMaxReadCount = 100;
+
+        /**
          * Configuration for LRU cache per file descriptor.
          */
         public final ConfLru lruPerFd = new ConfLru(0);
@@ -220,6 +225,9 @@ public enum ConfForSlot {
             if (initialSplitNumber != 1 && initialSplitNumber != 3) {
                 throw new IllegalArgumentException("Initial split number too large, initial split number should be 1 or 3");
             }
+            if (onceScanMaxReadCount <= 0 || onceScanMaxReadCount > 100) {
+                throw new IllegalArgumentException("Once scan max read count should be between 1 and 100");
+            }
         }
 
         @Override
@@ -227,6 +235,7 @@ public enum ConfForSlot {
             return "ConfBucket{" +
                     "bucketsPerSlot=" + bucketsPerSlot +
                     ", initialSplitNumber=" + initialSplitNumber +
+                    ", onceScanMaxReadCount=" + onceScanMaxReadCount +
                     ", lruPerFd=" + lruPerFd +
                     '}';
         }

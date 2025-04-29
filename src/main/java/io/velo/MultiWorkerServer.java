@@ -1085,6 +1085,9 @@ public class MultiWorkerServer extends Launcher {
             if (config.getChild("bucket.initialSplitNumber").hasValue()) {
                 c.confBucket.initialSplitNumber = config.get(ofInteger(), "bucket.initialSplitNumber").byteValue();
             }
+            if (config.getChild("bucket.onceScanMaxReadCount").hasValue()) {
+                c.confBucket.onceScanMaxReadCount = config.get(ofInteger(), "bucket.onceScanMaxReadCount").byteValue();
+            }
             if (config.getChild("bucket.lruPerFd.percent").hasValue()) {
                 var percentValue = config.get(ofInteger(), "bucket.lruPerFd.percent");
                 if (percentValue < 0 || percentValue > 100) {

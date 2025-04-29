@@ -584,6 +584,13 @@ class KeyLoaderTest extends Specification {
         // no keys put yet
         def r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
         then:
+        r.scanCursor().isWalIterateEnd()
+
+        when:
+        // scan all key buckets until to the end
+        ConfForSlot.global.confBucket.onceScanMaxReadCount = ConfForSlot.global.confBucket.initialSplitNumber * Wal.calcWalGroupNumber()
+        r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
+        then:
         r.scanCursor() == ScanCursor.END
 
         when:

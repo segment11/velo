@@ -815,6 +815,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         var walGroupNumber = Wal.calcWalGroupNumber();
         var maxSplitNumber = metaKeyBucketSplitNumber.maxSplitNumber();
 
+        // for perf, do not read too many, just return empty key list, redis client will do scan again and use last cursor
+        final int onceScanMaxReadCount = ConfForSlot.global.confBucket.onceScanMaxReadCount;
+        int readCount = 0;
+
         final int[] countArray = new int[]{count};
         for (int j = walGroupIndex; j < walGroupNumber; j++) {
             for (int i = 0; i < maxSplitNumber; i++) {
@@ -823,15 +827,24 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 }
 
                 final var skipCountInThisWalGroupThisSplitIndex = i == splitIndex && j == walGroupIndex ? skipCount : 0;
-
                 var scanCursor = readKeysToList(keys, j, (byte) i, skipCountInThisWalGroupThisSplitIndex,
                         typeAsByte, matchPattern, countArray, beginScanSeq, inWalKeys);
+                readCount++;
                 if (scanCursor != null) {
                     return new ScanCursorWithReturnKeys(scanCursor, keys);
                 }
 
                 if (i == maxSplitNumber - 1 && j == walGroupNumber - 1) {
                     return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
+                }
+
+                if (readCount > onceScanMaxReadCount) {
+                    var isLastSkipIndex = i == maxSplitNumber - 1;
+
+                    var scanCursorTmp = isLastSkipIndex ?
+                            new ScanCursor(slot, j + 1, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0) :
+                            new ScanCursor(slot, j, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) (i + 1));
+                    return new ScanCursorWithReturnKeys(scanCursorTmp, keys);
                 }
             }
         }

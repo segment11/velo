@@ -86,6 +86,30 @@ class ConfForSlotTest extends Specification {
 
         when:
         exception = false
+        c.confBucket.onceScanMaxReadCount = 0
+        try {
+            c.confBucket.checkIfValid()
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        c.confBucket.onceScanMaxReadCount = 200
+        try {
+            c.confBucket.checkIfValid()
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
         c.confChunk.fdPerChunk = 32
         try {
             c.confChunk.checkIfValid()
