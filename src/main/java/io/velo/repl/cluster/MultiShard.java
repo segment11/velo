@@ -176,4 +176,35 @@ vars currentEpoch 0 lastVoteEpoch 0
         }
         return min;
     }
+
+    public Integer lastToClientSlot() {
+        Integer max = null;
+        for (var shard : shards) {
+            var list = shard.getMultiSlotRange().getList();
+            if (list.isEmpty()) {
+                continue;
+            }
+
+            var lastSlot = list.getLast().getEnd();
+            if (max == null || lastSlot > max) {
+                max = lastSlot;
+            }
+        }
+        return max;
+    }
+
+    public Integer nextToClientSlot(int toClientSlot) {
+        for (var shard : shards) {
+            var list = shard.getMultiSlotRange().getList();
+            if (list.isEmpty()) {
+                continue;
+            }
+
+            var firstSlot = list.getFirst().begin;
+            if (firstSlot > toClientSlot) {
+                return firstSlot;
+            }
+        }
+        return null;
+    }
 }

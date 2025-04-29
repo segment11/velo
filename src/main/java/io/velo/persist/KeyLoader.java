@@ -835,7 +835,19 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 }
 
                 if (i == maxSplitNumber - 1 && j == walGroupNumber - 1) {
-                    return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
+                    var lastOneSlot = LocalPersist.getInstance().lastOneSlot();
+                    var isLastSlot = lastOneSlot == null || slot == lastOneSlot.slot();
+                    if (isLastSlot) {
+                        return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
+                    } else {
+                        var nextOneSlot = LocalPersist.getInstance().nextOneSlot(slot);
+                        if (nextOneSlot == null) {
+                            return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
+                        } else {
+                            var scanCursorTmp = new ScanCursor((short) (slot + 1), 0, (short) 0, (short) 0, (byte) 0);
+                            return new ScanCursorWithReturnKeys(scanCursorTmp, keys);
+                        }
+                    }
                 }
 
                 if (readCount > onceScanMaxReadCount) {

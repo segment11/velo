@@ -345,12 +345,39 @@ public class LocalPersist implements NeedCleanUp {
             return oneSlots[0];
         }
 
-        var firstToClientSlot = multiShard == null ? null : multiShard.firstToClientSlot();
-        if (firstToClientSlot == null) {
+        var toClientSlot = multiShard == null ? null : multiShard.firstToClientSlot();
+        return getInnerOneSlotByToClientSlot(toClientSlot);
+    }
+
+    public @Nullable OneSlot lastOneSlot() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return oneSlots[oneSlots.length - 1];
+        }
+
+        var toClientSlot = multiShard == null ? null : multiShard.lastToClientSlot();
+        return getInnerOneSlotByToClientSlot(toClientSlot);
+    }
+
+    public @Nullable OneSlot nextOneSlot(short slot) {
+        if (!ConfForGlobal.clusterEnabled) {
+            return oneSlots[slot + 1];
+        }
+
+        var eachInnerSlotChargeToClientSlotNumber = MultiShard.TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber;
+        var toClientSlotNext = multiShard.nextToClientSlot(slot * eachInnerSlotChargeToClientSlotNumber);
+        if (toClientSlotNext == null) {
+            return null;
+        }
+        return getInnerOneSlotByToClientSlot(toClientSlotNext);
+    }
+
+    @Nullable
+    private OneSlot getInnerOneSlotByToClientSlot(Integer toClientSlot) {
+        if (toClientSlot == null) {
             return null;
         }
 
-        var slot = MultiShard.asInnerSlotByToClientSlot(firstToClientSlot);
+        var slot = MultiShard.asInnerSlotByToClientSlot(toClientSlot);
         for (var oneSlot : oneSlots) {
             if (oneSlot.slot() == slot) {
                 return oneSlot;

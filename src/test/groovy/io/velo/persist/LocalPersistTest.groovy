@@ -81,6 +81,8 @@ class LocalPersistTest extends Specification {
         ConfForGlobal.clusterEnabled = false
         then:
         localPersist.firstOneSlot() == localPersist.oneSlots()[0]
+        localPersist.lastOneSlot() == localPersist.oneSlots()[1]
+        localPersist.nextOneSlot((short) 0) == localPersist.oneSlots()[1]
 
         when:
         ConfForGlobal.clusterEnabled = true
@@ -88,11 +90,15 @@ class LocalPersistTest extends Specification {
         localPersist.multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7380)])
         then:
         localPersist.firstOneSlot() == null
+        localPersist.lastOneSlot() == null
+        localPersist.nextOneSlot((short) 0) == null
 
         when:
         localPersist.multiShard.shards[0].multiSlotRange.addSingle(8192, 16383)
         then:
         localPersist.firstOneSlot() == localPersist.oneSlots()[1]
+        localPersist.lastOneSlot() == localPersist.oneSlots()[1]
+        localPersist.nextOneSlot((short) 0) == localPersist.oneSlots()[1]
 
         when:
         boolean exception = false

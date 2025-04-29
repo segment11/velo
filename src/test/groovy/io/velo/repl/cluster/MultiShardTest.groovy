@@ -60,11 +60,16 @@ class MultiShardTest extends Specification {
         multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7380)])
         then:
         multiShard.firstToClientSlot() == null
+        multiShard.lastToClientSlot() == null
+        multiShard.nextToClientSlot(0) == null
 
         when:
         multiShard.shards[0].multiSlotRange.addSingle(1024, 2047)
         then:
         multiShard.firstToClientSlot() == 1024
+        multiShard.lastToClientSlot() == 2047
+        multiShard.nextToClientSlot(0) == 1024
+        multiShard.nextToClientSlot(1024) == null
 
         when:
         multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7381)])
@@ -73,6 +78,8 @@ class MultiShardTest extends Specification {
         multiShard.shards[2].multiSlotRange.addSingle(0, 1023)
         then:
         multiShard.firstToClientSlot() == 0
+        multiShard.lastToClientSlot() == 3071
+        multiShard.nextToClientSlot(1024) == 2048
 
         when:
         multiShard.reset(false)
