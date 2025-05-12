@@ -1,6 +1,7 @@
 package io.velo.monitor;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.PriorityQueue;
 
 /**
@@ -83,7 +84,7 @@ public class BigKeyTopK {
      */
     public BigKeyTopK(int k) {
         this.k = k;
-        this.queue = new PriorityQueue<>(k, (a, b) -> Integer.compare(a.length, b.length));
+        this.queue = new PriorityQueue<>(k, Comparator.comparingInt(a -> a.length));
     }
 
     /**
