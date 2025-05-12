@@ -173,6 +173,9 @@ public class MultiBulkReply implements Reply {
      */
     @Override
     public ByteBuf bufferAsHttp() {
-        return buffer();
+        var buf = buffer();
+        // replace \r\n
+        var string = new String(buf.array(), buf.head(), buf.tail() - buf.head());
+        return ByteBuf.wrapForReading(string.replaceAll("\r\n", "\n").getBytes());
     }
 }
