@@ -26,11 +26,11 @@ public class HttpHeaderBody {
     /**
      * The HTTP 200 OK header prefix.
      */
-    public static final byte[] HEADER_PREFIX_200 = "HTTP/1.1 200 OK\r\nCache-Control: no-cache, no-store\r\nContent-Length: ".getBytes();
+    public static final byte[] HEADER_PREFIX_200 = "HTTP/1.1 200 OK\r\nCache-Control: no-cache, no-store\r\nContent-Type: text/plain\r\nContent-Length: ".getBytes();
     /**
      * The HTTP 404 Not Found header prefix.
      */
-    public static final byte[] HEADER_PREFIX_404 = "HTTP/1.1 404 Not Found\r\nContent-Length: ".getBytes();
+    public static final byte[] HEADER_PREFIX_404 = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: ".getBytes();
     /**
      * The default body for a 404 response.
      */
@@ -38,11 +38,11 @@ public class HttpHeaderBody {
     /**
      * The HTTP 500 Internal Server Error header prefix.
      */
-    public static final byte[] HEADER_PREFIX_500 = "HTTP/1.1 500 Internal Server Error\r\nCache-Control: no-cache, no-store\r\nContent-Length: ".getBytes();
+    public static final byte[] HEADER_PREFIX_500 = "HTTP/1.1 500 Internal Server Error\r\nCache-Control: no-cache, no-store\r\nContent-Type: text/plain\r\nContent-Length: ".getBytes();
     /**
      * The HTTP 401 Unauthorized header.
      */
-    public static final byte[] HEADER_401 = "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"Access to the staging site\"\r\nContent-Length: 0\r\n\r\n".getBytes();
+    public static final byte[] HEADER_401 = "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"Access to the staging site\"\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n".getBytes();
     /**
      * The suffix for HTTP headers.
      */
