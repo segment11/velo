@@ -319,8 +319,9 @@ public class DictMap implements NeedCleanUp {
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
 
             for (var entry : cacheDict.entrySet()) {
+                var keyPrefixOrSuffix = entry.getKey();
                 var dict = entry.getValue();
-                var labelValues = List.of(entry.getKey());
+                var labelValues = List.of(keyPrefixOrSuffix);
 
                 var compressedCount = dict.compressedCountTotal.sum();
                 var compressedRatio = dict.compressedRatio();
