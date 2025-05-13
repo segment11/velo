@@ -2671,6 +2671,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             map.put("global_subscribe_client_count", new SimpleGauge.ValueWithLabelValues((double) socketInspector.subscribeClientCount(), labelValues));
             map.put("global_blocking_client_count", new SimpleGauge.ValueWithLabelValues((double) BlockingList.blockingClientCount(), labelValues));
 
+            // net in / out bytes
+            map.put("global_net_in_bytes", new SimpleGauge.ValueWithLabelValues((double) socketInspector.netInBytesLength(), labelValues));
+            map.put("global_net_out_bytes", new SimpleGauge.ValueWithLabelValues((double) socketInspector.netOutBytesLength(), labelValues));
+
+            // lru prepare bytes
             map.put("lru_prepare_mb_fd_key_bucket_all_slots", new SimpleGauge.ValueWithLabelValues(
                     (double) LRUPrepareBytesStats.sum(LRUPrepareBytesStats.Type.fd_key_bucket), labelValues));
             map.put("lru_prepare_mb_fd_chunk_data_all_slots", new SimpleGauge.ValueWithLabelValues(

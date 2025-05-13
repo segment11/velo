@@ -80,6 +80,14 @@ class SocketInspectorTest extends Specification {
         def inspector = new SocketInspector()
         def socket = mockTcpSocket()
 
+        and:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        inspector.initByNetWorkerEventloopArray(eventloopArray)
+
         when:
         MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
         inspector.connectedClientCountArray = [0]
@@ -96,6 +104,8 @@ class SocketInspectorTest extends Specification {
         inspector.onWriteError(socket, null)
         then:
         inspector.lookup(SocketInspector.class) == null
+        inspector.netInBytesLength() == 0
+        inspector.netOutBytesLength() == 10
 
         when:
         XGroup.skipTryCatchUpAgainAfterSlaveTcpClientClosed = true

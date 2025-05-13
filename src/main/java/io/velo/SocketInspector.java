@@ -210,6 +210,45 @@ public class SocketInspector implements TcpSocket.Inspector {
     int[] connectedClientCountArray;
 
     /**
+     * Array of network input bytes lengths for each network worker.
+     * for stats
+     */
+    @ThreadNeedLocal
+    long[] netInBytesLengthArray;
+    /**
+     * Array of network output bytes lengths for each network worker.
+     * for stats
+     */
+    @ThreadNeedLocal
+    long[] netOutBytesLengthArray;
+
+    /**
+     * Gets the total network input bytes length across all network workers.
+     *
+     * @return The total network input bytes length.
+     */
+    public long netInBytesLength() {
+        var total = 0L;
+        for (var i = 0; i < netInBytesLengthArray.length; i++) {
+            total += netInBytesLengthArray[i];
+        }
+        return total;
+    }
+
+    /**
+     * Gets the total network output bytes length across all network workers.
+     *
+     * @return The total network output bytes length.
+     */
+    public long netOutBytesLength() {
+        var total = 0L;
+        for (var i = 0; i < netOutBytesLengthArray.length; i++) {
+            total += netOutBytesLengthArray[i];
+        }
+        return total;
+    }
+
+    /**
      * Initializes the inspector with the given event loop array.
      *
      * @param netWorkerEventloopArray the array of event loops
@@ -217,6 +256,9 @@ public class SocketInspector implements TcpSocket.Inspector {
     void initByNetWorkerEventloopArray(Eventloop[] netWorkerEventloopArray) {
         this.netWorkerEventloopArray = netWorkerEventloopArray;
         this.connectedClientCountArray = new int[netWorkerEventloopArray.length];
+
+        this.netInBytesLengthArray = new long[netWorkerEventloopArray.length];
+        this.netOutBytesLengthArray = new long[netWorkerEventloopArray.length];
     }
 
     /**
@@ -537,7 +579,8 @@ public class SocketInspector implements TcpSocket.Inspector {
         log.debug("Inspector on connect, remote address={}", remoteAddress);
         socketMap.put(remoteAddress, socket);
 
-        connectedClientCountArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()]++;
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        connectedClientCountArray[threadIndex]++;
     }
 
     @Override
@@ -547,8 +590,11 @@ public class SocketInspector implements TcpSocket.Inspector {
 
     @Override
     public void onRead(TcpSocket socket, ByteBuf buf) {
-//        log.debug("Inspector on read, remote address={}, buf size={}", socket.getRemoteAddress(), buf.readRemaining());
-        createUserDataIfNotSet(socket).netInBytesLength += buf.readRemaining();
+        var bytes = buf.readRemaining();
+        createUserDataIfNotSet(socket).netInBytesLength += bytes;
+
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        netInBytesLengthArray[threadIndex] += bytes;
     }
 
     @Override
@@ -569,6 +615,9 @@ public class SocketInspector implements TcpSocket.Inspector {
     @Override
     public void onWrite(TcpSocket socket, ByteBuf buf, int bytes) {
         createUserDataIfNotSet(socket).netOutBytesLength += bytes;
+
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        netOutBytesLengthArray[threadIndex] += bytes;
     }
 
     @Override
@@ -600,7 +649,8 @@ public class SocketInspector implements TcpSocket.Inspector {
         // remove from subscribe by channel
         subscribeByChannel.forEach((channel, sockets) -> sockets.remove(socket));
 
-        connectedClientCountArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()]--;
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        connectedClientCountArray[threadIndex]--;
     }
 
     @Override
