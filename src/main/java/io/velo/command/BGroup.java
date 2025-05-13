@@ -7,18 +7,15 @@ import io.activej.reactor.Reactor;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
-import io.velo.persist.LocalPersist;
 import io.velo.reply.*;
 import io.velo.type.RedisBF;
 import io.velo.type.RedisBitSet;
-import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collections;
 
 public class BGroup extends BaseCommand {
     public BGroup(String cmd, byte[][] data, ITcpSocket socket) {
@@ -749,130 +746,6 @@ public class BGroup extends BaseCommand {
         return OKReply.INSTANCE;
     }
 
-    public record DstKeyAndDstLeftWhenMove(byte[] dstKeyBytes, SlotWithKeyHash dstSlotWithKeyHash, boolean dstLeft) {
-    }
-
-    public record PromiseWithLeftOrRightAndCreatedTime(SettablePromise<Reply> settablePromise,
-                                                       boolean isLeft,
-                                                       long createdTime,
-                                                       DstKeyAndDstLeftWhenMove xx) {
-    }
-
-    private static final ConcurrentHashMap<String, List<PromiseWithLeftOrRightAndCreatedTime>> blockingListPromisesByKey = new ConcurrentHashMap<>();
-
-
-    public static byte[][] setReplyIfBlockingListExist(String key, byte[][] elementValueBytesArray) {
-        return setReplyIfBlockingListExist(key, elementValueBytesArray, null);
-    }
-
-    public static byte[][] setReplyIfBlockingListExist(String key, byte[][] elementValueBytesArray, BaseCommand baseCommand) {
-        var blockingListPromises = blockingListPromisesByKey.get(key);
-        if (blockingListPromises == null || blockingListPromises.isEmpty()) {
-            return null;
-        }
-
-        var it = blockingListPromises.iterator();
-        int leftI = 0;
-        int rightI = 0;
-        while (it.hasNext()) {
-            var promise = it.next();
-            if (promise.settablePromise.isComplete()) {
-                it.remove();
-                continue;
-            }
-
-            if (promise.isLeft) {
-                if (leftI >= elementValueBytesArray.length) {
-                    break;
-                }
-
-                var leftValueBytes = elementValueBytesArray[leftI];
-                // already reset by other promise
-                if (leftValueBytes == null) {
-                    break;
-                }
-
-                elementValueBytesArray[leftI] = null;
-                leftI++;
-
-                var xx = promise.xx();
-                if (xx != null) {
-                    // do move
-                    var dstSlot = xx.dstSlotWithKeyHash.slot();
-                    var dstOneSlot = LocalPersist.getInstance().oneSlot(dstSlot);
-
-                    var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
-                    rGroup.from(baseCommand);
-                    dstOneSlot.asyncRun(() -> rGroup.moveDstCallback(xx.dstKeyBytes, xx.dstSlotWithKeyHash, xx.dstLeft, leftValueBytes, promise.settablePromise::set));
-                } else {
-                    var replies = new Reply[2];
-                    replies[0] = new BulkReply(key.getBytes());
-                    replies[1] = new BulkReply(leftValueBytes);
-                    promise.settablePromise.set(new MultiBulkReply(replies));
-                }
-            } else {
-                var index = elementValueBytesArray.length - 1 - rightI;
-                if (index < 0) {
-                    break;
-                }
-
-                var rightValueBytes = elementValueBytesArray[index];
-                // already reset by other promise
-                if (rightValueBytes == null) {
-                    break;
-                }
-
-                elementValueBytesArray[index] = null;
-                rightI++;
-
-                var xx = promise.xx();
-                if (xx != null) {
-                    // do move
-                    var dstSlot = xx.dstSlotWithKeyHash.slot();
-                    var dstOneSlot = LocalPersist.getInstance().oneSlot(dstSlot);
-
-                    var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
-                    rGroup.from(baseCommand);
-                    dstOneSlot.asyncRun(() -> rGroup.moveDstCallback(xx.dstKeyBytes, xx.dstSlotWithKeyHash, xx.dstLeft, rightValueBytes, promise.settablePromise::set));
-                } else {
-                    var replies = new Reply[2];
-                    replies[0] = new BulkReply(key.getBytes());
-                    replies[1] = new BulkReply(rightValueBytes);
-                    promise.settablePromise.set(new MultiBulkReply(replies));
-                }
-            }
-        }
-
-        var returnValueBytesArray = new byte[elementValueBytesArray.length - leftI - rightI][];
-        if (returnValueBytesArray.length == 0) {
-            return new byte[0][];
-        }
-
-        System.arraycopy(elementValueBytesArray, leftI, returnValueBytesArray, 0, returnValueBytesArray.length);
-        return returnValueBytesArray;
-    }
-
-    static PromiseWithLeftOrRightAndCreatedTime addBlockingListPromiseByKey(String key, SettablePromise<Reply> promise, boolean isLeft) {
-        return addBlockingListPromiseByKey(key, promise, isLeft, null);
-    }
-
-    static PromiseWithLeftOrRightAndCreatedTime addBlockingListPromiseByKey(String key, SettablePromise<Reply> promise, boolean isLeft, DstKeyAndDstLeftWhenMove xx) {
-        var one = new PromiseWithLeftOrRightAndCreatedTime(promise, isLeft, System.currentTimeMillis(), xx);
-        blockingListPromisesByKey.computeIfAbsent(key, k -> new ArrayList<>()).add(one);
-        return one;
-    }
-
-    static void removeBlockingListPromiseByKey(String key, PromiseWithLeftOrRightAndCreatedTime one) {
-        var blockingListPromises = blockingListPromisesByKey.get(key);
-        if (blockingListPromises != null) {
-            blockingListPromises.remove(one);
-        }
-    }
-
-    @TestOnly
-    static void clearBlockingListPromisesForAllKeys() {
-        blockingListPromisesByKey.clear();
-    }
 
     // max 1 hour check
     static final int MAX_TIMEOUT_SECONDS = 3600;
@@ -960,9 +833,9 @@ public class BGroup extends BaseCommand {
                     if (isNoWait) {
                         finalPromise.set(NilReply.INSTANCE);
                     } else {
-                        var one = new PromiseWithLeftOrRightAndCreatedTime(finalPromise, isLeft, System.currentTimeMillis(), null);
+                        var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, isLeft, System.currentTimeMillis(), null);
                         for (var key : keys) {
-                            blockingListPromisesByKey.computeIfAbsent(key, k -> new ArrayList<>()).add(one);
+                            BlockingList.blockingListPromisesByKey.computeIfAbsent(key, k -> Collections.synchronizedList(new ArrayList<>())).add(one);
                         }
 
                         var reactor = Reactor.getCurrentReactor();
@@ -971,7 +844,7 @@ public class BGroup extends BaseCommand {
                                 finalPromise.set(NilReply.INSTANCE);
                                 // remove form blocking list
                                 for (var key : keys) {
-                                    blockingListPromisesByKey.get(key).remove(one);
+                                    BlockingList.blockingListPromisesByKey.get(key).remove(one);
                                 }
                             }
                         });
@@ -989,15 +862,15 @@ public class BGroup extends BaseCommand {
                 var asyncReply = new AsyncReply(finalPromise);
 
                 var firstKey = keys.getFirst();
-                var one = new PromiseWithLeftOrRightAndCreatedTime(finalPromise, isLeft, System.currentTimeMillis(), null);
-                blockingListPromisesByKey.computeIfAbsent(firstKey, k -> new ArrayList<>()).add(one);
+                var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, isLeft, System.currentTimeMillis(), null);
+                BlockingList.blockingListPromisesByKey.computeIfAbsent(firstKey, k -> Collections.synchronizedList(new ArrayList<>())).add(one);
 
                 var reactor = Reactor.getCurrentReactor();
                 reactor.delay(timeoutSeconds * 1000, () -> {
                     if (!finalPromise.isComplete()) {
                         finalPromise.set(NilReply.INSTANCE);
                         // remove form blocking list
-                        blockingListPromisesByKey.get(firstKey).remove(one);
+                        BlockingList.blockingListPromisesByKey.get(firstKey).remove(one);
                     }
                 });
 

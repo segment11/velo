@@ -570,7 +570,7 @@ public class LGroup extends BaseCommand {
         }
 
         var key = new String(keyBytes);
-        var afterPopValueBytesArray = BGroup.setReplyIfBlockingListExist(key, valueBytesArr, this);
+        var afterPopValueBytesArray = BlockingList.setReplyIfBlockingListExist(key, valueBytesArr, this);
         // no blocking for this key
         if (afterPopValueBytesArray == null) {
             return addToList(keyBytes, valueBytesArr, addFirst, false, false, null, needKeyExist);

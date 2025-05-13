@@ -502,19 +502,19 @@ public class RGroup extends BaseCommand {
 
     private AsyncReply doBlockWhenMove(String srcKey, boolean srcLeft, int timeoutSeconds,
                                        byte[] dstKeyBytes, SlotWithKeyHash dstSlotWithKeyHash, boolean dstLeft) {
-        var xx = new BGroup.DstKeyAndDstLeftWhenMove(dstKeyBytes, dstSlotWithKeyHash, dstLeft);
+        var xx = new BlockingList.DstKeyAndDstLeftWhenMove(dstKeyBytes, dstSlotWithKeyHash, dstLeft);
 
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        var one = BGroup.addBlockingListPromiseByKey(srcKey, finalPromise, srcLeft, xx);
+        var one = BlockingList.addBlockingListPromiseByKey(srcKey, finalPromise, srcLeft, xx);
 
         var reactor = Reactor.getCurrentReactor();
-        reactor.delay(timeoutSeconds * 1000, () -> {
+        reactor.delay(timeoutSeconds * 1000L, () -> {
             if (!finalPromise.isComplete()) {
                 finalPromise.set(NilReply.INSTANCE);
                 // remove form blocking list
-                BGroup.removeBlockingListPromiseByKey(srcKey, one);
+                BlockingList.removeBlockingListPromiseByKey(srcKey, one);
             }
         });
 
