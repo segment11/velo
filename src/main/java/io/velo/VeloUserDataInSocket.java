@@ -8,6 +8,35 @@ import io.velo.repl.ReplPair;
  */
 public class VeloUserDataInSocket {
     /**
+     * The time when the client was established.
+     */
+    long connectedTimeMillis = System.currentTimeMillis();
+
+    /**
+     * The time when the last command was sent.
+     */
+    long lastSendCommandTimeMillis = System.currentTimeMillis();
+
+    /**
+     * The last command sent by the client.
+     */
+    String lastSendCommand = null;
+
+    /**
+     * The number of commands sent by the client.
+     */
+    long sendCommandCount = 0;
+
+    /**
+     * The number of bytes sent from the client.
+     */
+    long netInBytesLength = 0;
+    /**
+     * The number of bytes sent to the client.
+     */
+    long netOutBytesLength = 0;
+
+    /**
      * The authenticated user associated with the socket connection.
      */
     String authUser = null;

@@ -55,6 +55,20 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
+     * Updates the last send command for a socket.
+     *
+     * @param socket           the socket to update
+     * @param lastSendCommand  the last send command
+     * @param sendCommandCount the number of send commands this time
+     */
+    public static void updateLastSendCommand(ITcpSocket socket, String lastSendCommand, long sendCommandCount) {
+        var veloUserData = createUserDataIfNotSet(socket);
+        veloUserData.lastSendCommandTimeMillis = System.currentTimeMillis();
+        veloUserData.lastSendCommand = lastSendCommand;
+        veloUserData.sendCommandCount += sendCommandCount;
+    }
+
+    /**
      * Checks if the socket uses RESP3 protocol.
      *
      * @param socket the socket to check
@@ -130,6 +144,52 @@ public class SocketInspector implements TcpSocket.Inspector {
 
         var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
         return veloUserData == null ? null : veloUserData.authUser;
+    }
+
+    /**
+     * For command client info / list
+     *
+     * @param socket the client socket
+     * @return the client info reply, refer to <a href="https://redis.io/docs/latest/commands/client-info/">client info</a>
+     */
+    public static String getClientInfo(ITcpSocket socket) {
+        var veloUserData = createUserDataIfNotSet(socket);
+        var remoteAddress = ((TcpSocket) socket).getRemoteAddress();
+
+        var sb = new StringBuilder();
+        sb.append("id=");
+        sb.append(socket.hashCode());
+        sb.append(" addr=");
+        sb.append(remoteAddress);
+        sb.append(" laddr=");
+        sb.append(ConfForGlobal.netListenAddresses);
+        sb.append(" fd=");
+        // use id as fd
+        sb.append(socket.hashCode());
+        sb.append(" name=");
+        if (veloUserData.getClientName() != null) {
+            sb.append(veloUserData.getClientName());
+        }
+        sb.append(" age=");
+        sb.append((System.currentTimeMillis() - veloUserData.connectedTimeMillis) / 1000);
+        sb.append(" idle=");
+        sb.append((System.currentTimeMillis() - veloUserData.lastSendCommandTimeMillis) / 1000);
+        // fake data
+        sb.append(" flags=N db=0 sub=0 psub=0 ssub=0 multi=-1 watch=0 qbuf=1024 qbuf-free=10240 argv-mem=1024 multi-mem=0 rbs=1024 rbp=0 obl=0 oll=0 omem=0 tot-mem=10240 events=r");
+        sb.append(" cmd=");
+        sb.append(veloUserData.lastSendCommand);
+        sb.append(" user=");
+        sb.append(veloUserData.authUser == null ? "default" : veloUserData.authUser);
+        sb.append(" redir=-1 resp=");
+        sb.append(veloUserData.isResp3 ? "3" : "2");
+        sb.append(" lib-name= lib-ver= tot-net-in=");
+        sb.append(veloUserData.netInBytesLength);
+        sb.append(" tot-net-out=");
+        sb.append(veloUserData.netOutBytesLength);
+        sb.append(" tot-cmds=");
+        sb.append(veloUserData.sendCommandCount);
+        sb.append("\n");
+        return sb.toString();
     }
 
     /**
@@ -458,8 +518,8 @@ public class SocketInspector implements TcpSocket.Inspector {
             return;
         }
 
-        var veloUserData = (VeloUserDataInSocket) socket.getUserData();
-        if (veloUserData != null && veloUserData.replPairAsSlaveInTcpClient != null) {
+        var veloUserData = createUserDataIfNotSet(socket);
+        if (veloUserData.replPairAsSlaveInTcpClient != null) {
             // this socket is a slave connection master
             // need not check max connections
             var remoteAddress = socket.getRemoteAddress();
@@ -488,6 +548,7 @@ public class SocketInspector implements TcpSocket.Inspector {
     @Override
     public void onRead(TcpSocket socket, ByteBuf buf) {
 //        log.debug("Inspector on read, remote address={}, buf size={}", socket.getRemoteAddress(), buf.readRemaining());
+        createUserDataIfNotSet(socket).netInBytesLength += buf.readRemaining();
     }
 
     @Override
@@ -507,7 +568,7 @@ public class SocketInspector implements TcpSocket.Inspector {
 
     @Override
     public void onWrite(TcpSocket socket, ByteBuf buf, int bytes) {
-
+        createUserDataIfNotSet(socket).netOutBytesLength += bytes;
     }
 
     @Override

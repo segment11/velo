@@ -514,6 +514,8 @@ public class MultiWorkerServer extends Launcher {
             return Promise.of(null);
         }
 
+        SocketInspector.updateLastSendCommand(socket, pipeline.getLast().cmd(), pipeline.size());
+
         var u = BaseCommand.getAuthU(socket);
 
         for (var request : pipeline) {

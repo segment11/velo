@@ -10,6 +10,12 @@ class VeloUserDataInSocketTest extends Specification {
         def two = new VeloUserDataInSocket(ReplPairTest.mockAsSlave())
 
         expect:
+        one.connectedTimeMillis > 0L
+        one.lastSendCommandTimeMillis > 0L
+        one.lastSendCommand == null
+        one.sendCommandCount == 0L
+        one.netInBytesLength == 0L
+        one.netOutBytesLength == 0L
         !one.isResp3
         one.authUser == null
         !one.isConnectionReadonly

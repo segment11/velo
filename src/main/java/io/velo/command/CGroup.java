@@ -79,6 +79,11 @@ public class CGroup extends BaseCommand {
             return new IntegerReply(socket.hashCode());
         }
 
+        if ("info".equals(subCmd)) {
+            var clientInfo = SocketInspector.getClientInfo(socket);
+            return new BulkReply(clientInfo.getBytes());
+        }
+
         if ("reply".equals(subCmd)) {
             if (data.length != 3) {
                 return ErrorReply.FORMAT;
@@ -104,8 +109,9 @@ public class CGroup extends BaseCommand {
                 return ErrorReply.FORMAT;
             }
 
+            var clientName = new String(data[2]);
             var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
-            veloUserData.setClientName(new String(data[2]));
+            veloUserData.setClientName(clientName);
             return OKReply.INSTANCE;
         }
 

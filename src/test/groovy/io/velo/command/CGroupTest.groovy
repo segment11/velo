@@ -92,6 +92,11 @@ class CGroupTest extends Specification {
         reply instanceof IntegerReply
 
         when:
+        reply = cGroup.execute('client info')
+        then:
+        reply instanceof BulkReply
+
+        when:
         reply = cGroup.execute('client reply on')
         then:
         reply == OKReply.INSTANCE

@@ -1,6 +1,7 @@
 package io.velo
 
 import io.activej.async.callback.AsyncComputation
+import io.activej.bytebuf.ByteBuf
 import io.activej.common.function.SupplierEx
 import io.activej.eventloop.Eventloop
 import io.activej.net.socket.tcp.TcpSocket
@@ -21,6 +22,7 @@ class SocketInspectorTest extends Specification {
     def 'test base'() {
         given:
         def socket = mockTcpSocket()
+        SocketInspector.updateLastSendCommand(socket, "", 1)
 
         expect:
         !SocketInspector.isResp3(null)
@@ -64,6 +66,13 @@ class SocketInspectorTest extends Specification {
         SocketInspector.setAuthUser(socket, 'default')
         then:
         SocketInspector.getAuthUser(socket) == 'default'
+
+        when:
+        def veloUserData = SocketInspector.createUserDataIfNotSet(socket)
+        veloUserData.clientName = 'test_client'
+        def clientInfo = SocketInspector.getClientInfo(socket)
+        then:
+        clientInfo != null
     }
 
     def 'test connect'() {
@@ -79,7 +88,7 @@ class SocketInspectorTest extends Specification {
         inspector.subscribe('test_channel', false, socket)
         inspector.onDisconnect(socket)
         inspector.onReadTimeout(socket)
-        inspector.onRead(socket, null)
+        inspector.onRead(socket, ByteBuf.empty())
         inspector.onReadEndOfStream(socket)
         inspector.onReadError(socket, null)
         inspector.onWriteTimeout(socket)
