@@ -181,7 +181,8 @@ public class RequestHandler {
      * @return the multi-shard shadow
      */
     static MultiShardShadow getMultiShardShadow() {
-        return multiShardShadows[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()];
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        return multiShardShadows[threadIndex];
     }
 
     private final BaseCommand[] commandGroups = new BaseCommand[26];

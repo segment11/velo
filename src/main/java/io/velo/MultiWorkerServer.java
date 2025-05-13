@@ -388,7 +388,8 @@ public class MultiWorkerServer extends Launcher {
             if (requestHandlerArray.length == 1) {
                 targetHandler = requestHandlerArray[0];
             } else {
-                targetHandler = requestHandlerArray[STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()];
+                var threadIndex = STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+                targetHandler = requestHandlerArray[threadIndex];
             }
             var reply = targetHandler.handle(request, socket);
             if (reply == null) {

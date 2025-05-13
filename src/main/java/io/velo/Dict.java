@@ -292,7 +292,8 @@ public class Dict implements Serializable {
      * @return the compressed byte array
      */
     public byte[] compressByteArray(byte[] src) {
-        var r = ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compress(src);
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var r = ctxCompressArray[threadIndex].compress(src);
         compressedCountTotal.add(1);
         compressBytesTotal.add(src.length);
         compressedBytesTotal.add(r.length);
@@ -310,7 +311,8 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination array
      */
     public int compressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
-        var n = ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var n = ctxCompressArray[threadIndex].compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
         compressedCountTotal.add(1);
         compressBytesTotal.add(length);
         compressedBytesTotal.add(n);
@@ -328,7 +330,8 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination array
      */
     public int decompressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
-        return decompressCtxArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].decompressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        return decompressCtxArray[threadIndex].decompressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
     }
 
     /**
@@ -343,7 +346,8 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination buffer
      */
     public int compressByteBuffer(ByteBuffer dstBuffer, int dstOffset, int dstSize, ByteBuffer srcBuffer, int srcOffset, int length) {
-        var n = ctxCompressArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].compressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var n = ctxCompressArray[threadIndex].compressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
         compressedCountTotal.add(1);
         compressBytesTotal.add(length);
         compressedBytesTotal.add(n);
@@ -362,7 +366,8 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination buffer
      */
     public int decompressByteBuffer(ByteBuffer dstBuffer, int dstOffset, int dstSize, ByteBuffer srcBuffer, int srcOffset, int length) {
-        return decompressCtxArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()].decompressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        return decompressCtxArray[threadIndex].decompressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
     }
 
     /**
