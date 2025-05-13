@@ -186,10 +186,15 @@ public class BulkReply implements Reply {
         // check if is simple string
         var isAllSimpleChar = true;
         if (raw != null) {
-            for (byte b : raw) {
-                if (b < 0x20 || b > 0x7E) {
-                    isAllSimpleChar = false;
-                    break;
+            final int simpleStringMaxLength = 32;
+            if (raw.length > simpleStringMaxLength) {
+                isAllSimpleChar = false;
+            } else {
+                for (byte b : raw) {
+                    if (b < 0x20 || b > 0x7E) {
+                        isAllSimpleChar = false;
+                        break;
+                    }
                 }
             }
         }
