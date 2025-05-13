@@ -183,6 +183,20 @@ public class BulkReply implements Reply {
 
     @Override
     public ByteBuf bufferAsResp3() {
+        // check if is simple string
+        var isAllSimpleChar = true;
+        if (raw != null) {
+            for (byte b : raw) {
+                if (b < 0x20 || b > 0x7E) {
+                    isAllSimpleChar = false;
+                    break;
+                }
+            }
+        }
+        if (!isAllSimpleChar) {
+            return buffer();
+        }
+
         int size = raw != null ? raw.length : 0;
 
         int len = 1 + size + 2;
