@@ -2644,7 +2644,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             // only first slot show global metrics
             var firstOneSlot = LocalPersist.getInstance().firstOneSlot();
-            if (firstOneSlot == null || slot == firstOneSlot.slot) {
+            if (firstOneSlot == null || slot != firstOneSlot.slot) {
                 return map;
             }
 
