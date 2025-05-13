@@ -77,7 +77,7 @@ public class BlockingList {
      * @param baseCommand            base command
      * @return list values exclude sent to blocking clients
      */
-    public static byte[][] setReplyIfBlockingListExist(String key, byte[][] elementValueBytesArray, BaseCommand baseCommand) {
+    public synchronized static byte[][] setReplyIfBlockingListExist(String key, byte[][] elementValueBytesArray, BaseCommand baseCommand) {
         var blockingListPromises = blockingListPromisesByKey.get(key);
         if (blockingListPromises == null || blockingListPromises.isEmpty()) {
             return null;
@@ -122,6 +122,7 @@ public class BlockingList {
                     replies[1] = new BulkReply(leftValueBytes);
                     promise.settablePromise.set(new MultiBulkReply(replies));
                 }
+                it.remove();
             } else {
                 var index = elementValueBytesArray.length - 1 - rightI;
                 if (index < 0) {
@@ -152,6 +153,7 @@ public class BlockingList {
                     replies[1] = new BulkReply(rightValueBytes);
                     promise.settablePromise.set(new MultiBulkReply(replies));
                 }
+                it.remove();
             }
         }
 
