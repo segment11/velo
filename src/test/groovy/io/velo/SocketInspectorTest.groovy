@@ -171,7 +171,9 @@ class SocketInspectorTest extends Specification {
         !one.isMatch('test_channel2')
         two.isMatch('test_channel')
         two.isMatch('test_channel2')
+        inspector.connectedClientCount() == 0
         inspector.allSubscribeOnes().isEmpty()
+        inspector.subscribeClientCount() == 0
 
         when:
         def channel = 'test_channel'
@@ -186,6 +188,7 @@ class SocketInspectorTest extends Specification {
         n = inspector.subscribe(channel, false, socket)
         then:
         n == 1
+        inspector.subscribeClientCount() == 1
         inspector.subscribeSocketCount(channel, false) == 1
         inspector.allSubscribeOnes().size() == 1
         inspector.filterSubscribeOnesByChannel(channel, false).getFirst().channel == channel

@@ -9,6 +9,7 @@ import io.activej.promise.Promise;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.velo.*;
+import io.velo.command.BlockingList;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.metric.SimpleGauge;
 import io.velo.monitor.BigKeyTopK;
@@ -2663,6 +2664,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             map.put("global_chunk_fd_per_chunk", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confChunk.fdPerChunk, labelValues));
             map.put("global_chunk_segment_length", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confChunk.segmentLength, labelValues));
             map.put("global_wal_one_charge_bucket_number", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confWal.oneChargeBucketNumber, labelValues));
+
+            // connected clients
+            var socketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector;
+            map.put("global_connected_client_count", new SimpleGauge.ValueWithLabelValues((double) socketInspector.connectedClientCount(), labelValues));
+            map.put("global_subscribe_client_count", new SimpleGauge.ValueWithLabelValues((double) socketInspector.subscribeClientCount(), labelValues));
+            map.put("global_blocking_client_count", new SimpleGauge.ValueWithLabelValues((double) BlockingList.blockingClientCount(), labelValues));
 
             map.put("lru_prepare_mb_fd_key_bucket_all_slots", new SimpleGauge.ValueWithLabelValues(
                     (double) LRUPrepareBytesStats.sum(LRUPrepareBytesStats.Type.fd_key_bucket), labelValues));

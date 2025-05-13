@@ -241,12 +241,21 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
-     * Map of socket addresses to TCP sockets.
+     * Map of socket addresses to TCP sockets. For connected clients.
      */
     public final ConcurrentHashMap<InetSocketAddress, TcpSocket> socketMap = new ConcurrentHashMap<>();
 
     /**
-     * Map of channels to subscribed sockets.
+     * Returns the total number of connected clients.
+     *
+     * @return the total number of connected clients
+     */
+    public int connectedClientCount() {
+        return socketMap.size();
+    }
+
+    /**
+     * Map of channels to subscribed sockets. Long means thread id.
      */
     private final ConcurrentHashMap<ChannelAndIsPattern, ConcurrentHashMap<ITcpSocket, Long>> subscribeByChannel = new ConcurrentHashMap<>();
 
@@ -257,6 +266,19 @@ public class SocketInspector implements TcpSocket.Inspector {
      */
     public ArrayList<ChannelAndIsPattern> allSubscribeOnes() {
         return new ArrayList<>(subscribeByChannel.keySet());
+    }
+
+    /**
+     * Returns the total number of subscribed clients.
+     *
+     * @return the total number of subscribed clients
+     */
+    public int subscribeClientCount() {
+        var total = 0;
+        for (var one : subscribeByChannel.values()) {
+            total += one.size();
+        }
+        return total;
     }
 
     /**
@@ -452,7 +474,7 @@ public class SocketInspector implements TcpSocket.Inspector {
         }
 
         var remoteAddress = socket.getRemoteAddress();
-        log.info("Inspector on connect, remote address={}", remoteAddress);
+        log.debug("Inspector on connect, remote address={}", remoteAddress);
         socketMap.put(remoteAddress, socket);
 
         connectedClientCountArray[MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread()]++;
@@ -511,7 +533,7 @@ public class SocketInspector implements TcpSocket.Inspector {
             return;
         }
 
-        log.info("Inspector on disconnect, remote address={}", remoteAddress);
+        log.debug("Inspector on disconnect, remote address={}", remoteAddress);
         socketMap.remove(remoteAddress);
 
         // remove from subscribe by channel
