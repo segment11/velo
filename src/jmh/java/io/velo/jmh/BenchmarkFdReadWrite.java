@@ -39,7 +39,7 @@ public class BenchmarkFdReadWrite {
         System.setProperty("jnr.ffi.asm.enabled", "false");
         libC = LibraryLoader.create(LibC.class).load("c");
 
-        ConfForSlot.global = ConfForSlot.c100m;
+        ConfForSlot.global = ConfForSlot.c10m;
 
         var dir = new File(dirPath);
         if (!dir.exists()) {
