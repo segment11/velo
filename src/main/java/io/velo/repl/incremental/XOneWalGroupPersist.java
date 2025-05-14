@@ -524,4 +524,9 @@ public class XOneWalGroupPersist implements BinlogContent {
             }
         }
     }
+
+    @Override
+    public boolean isSkipWhenAllSlavesInCatchUpState() {
+        return true;
+    }
 }

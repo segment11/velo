@@ -110,4 +110,9 @@ public class XWalRewrite implements BinlogContent {
         var targetWal = oneSlot.getWalByGroupIndex(groupIndex);
         targetWal.rewriteOneGroupFromMaster(isValueShort, writeBytes);
     }
+
+    @Override
+    public boolean isSkipWhenAllSlavesInCatchUpState() {
+        return true;
+    }
 }

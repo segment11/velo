@@ -288,11 +288,18 @@ class OneSlotTest extends Specification {
         replPairAsMaster0.sendBye = true
         then:
         oneSlot.getReplPairAsMaster(11L) == null
+        oneSlot.isAsMasterAndAllSlavesInCatchUpState()
 
         when:
         replPairAsMaster0.sendBye = false
         then:
         oneSlot.getReplPairAsMaster(11L) != null
+        !oneSlot.isAsMasterAndAllSlavesInCatchUpState()
+
+        when:
+        replPairAsMaster0.slaveLastCatchUpBinlogFileIndexAndOffset = new Binlog.FileIndexAndOffset(1, 1)
+        then:
+        oneSlot.isAsMasterAndAllSlavesInCatchUpState()
 
         when:
         oneSlot.metaChunkSegmentIndex = new MetaChunkSegmentIndex(slot, oneSlot.slotDir)
@@ -522,6 +529,14 @@ class OneSlotTest extends Specification {
         rBigString != null
 
         when:
+        def inspector = new SocketInspector()
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        inspector.initByNetWorkerEventloopArray(eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
         oneSlot.extCvListCheckCountTotal = 1
         oneSlot.extCvValidCountTotal = 1
         oneSlot.extCvInvalidCountTotal = 1
@@ -626,7 +641,7 @@ class OneSlotTest extends Specification {
         def sKey = BaseCommand.slot(key.bytes, slotNumber)
 
         def v = Mock.prepareValueList(1)[0]
-        def xWalV = new XWalV(v, true, 0)
+        def xWalV = new XWalV(v, true, 0, false)
         oneSlot.appendBinlog(xWalV)
 
         expect:

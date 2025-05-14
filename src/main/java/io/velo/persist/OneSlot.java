@@ -343,6 +343,29 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     /**
+     * Checks if the OneSlot is operating as a master and all its slave replication pairs are in catch-up state.
+     *
+     * @return true if operating as a master and all slaves are in catch-up state, false otherwise
+     */
+    @VisibleForTesting
+    boolean isAsMasterAndAllSlavesInCatchUpState() {
+        boolean allSlavesInCatchUpState = true;
+        for (var replPair : replPairs) {
+            if (replPair.isSendBye()) {
+                continue;
+            }
+
+            if (replPair.isAsMaster()) {
+                if (replPair.getSlaveLastCatchUpBinlogAsReplOffset() == 0) {
+                    allSlavesInCatchUpState = false;
+                    break;
+                }
+            }
+        }
+        return allSlavesInCatchUpState;
+    }
+
+    /**
      * Returns the list of replication pairs where OneSlot is the master.
      *
      * @return the list of replication pairs
@@ -1092,6 +1115,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      */
     public void appendBinlog(@NotNull BinlogContent content) {
         if (binlog != null) {
+            if (isAsMasterAndAllSlavesInCatchUpState() && content.isSkipWhenAllSlavesInCatchUpState()) {
+                return;
+            }
+
             try {
                 binlog.append(content);
             } catch (IOException e) {
@@ -1833,7 +1860,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (putResult.needPersist()) {
             doPersist(walGroupIndex, key, putResult);
         } else {
-            var xWalV = new XWalV(putResult.needPutV(), putResult.isValueShort(), putResult.offset());
+            var isOnlyPut = isAsMasterAndAllSlavesInCatchUpState();
+            var xWalV = new XWalV(putResult.needPutV(), putResult.isValueShort(), putResult.offset(), isOnlyPut);
             appendBinlog(xWalV);
         }
     }
@@ -1941,7 +1969,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var putResult = targetWal.put(isValueShort, key, v, lastPersistTimeMs);
         if (!putResult.needPersist()) {
-            var xWalV = new XWalV(v, isValueShort, putResult.offset());
+            var isOnlyPut = isAsMasterAndAllSlavesInCatchUpState();
+            var xWalV = new XWalV(v, isValueShort, putResult.offset(), isOnlyPut);
             appendBinlog(xWalV);
 
             return;
@@ -1975,7 +2004,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (needPutV != null) {
             targetWal.put(putResult.isValueShort(), key, needPutV, lastPersistTimeMs);
 
-            var xWalV = new XWalV(needPutV, putResult.isValueShort(), putResult.offset());
+            var isOnlyPut = isAsMasterAndAllSlavesInCatchUpState();
+            var xWalV = new XWalV(needPutV, putResult.isValueShort(), putResult.offset(), isOnlyPut);
             appendBinlog(xWalV);
         }
     }

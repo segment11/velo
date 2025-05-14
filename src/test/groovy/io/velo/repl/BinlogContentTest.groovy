@@ -33,7 +33,7 @@ class BinlogContentTest extends Specification {
 
         when:
         def v = Mock.prepareValueList(1)[0]
-        def xWalV = new XWalV(v, true, 0)
+        def xWalV = new XWalV(v, true, 0, false)
         def encoded = xWalV.encodeWithType()
         def buffer = ByteBuffer.wrap(encoded)
         def xWalV11 = BinlogContent.Type.fromCode(buffer.get()).decodeFrom(buffer) as XWalV
@@ -71,6 +71,7 @@ class BinlogContentTest extends Specification {
         buffer = ByteBuffer.wrap(encoded)
         def xFlush2 = BinlogContent.Type.fromCode(buffer.get()).decodeFrom(buffer) as XFlush
         then:
+        !xFlush.isSkipWhenAllSlavesInCatchUpState()
         xFlush2.encodedLength() == encoded.length
     }
 }

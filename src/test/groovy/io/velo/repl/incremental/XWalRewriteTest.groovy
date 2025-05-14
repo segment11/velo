@@ -18,6 +18,7 @@ class XWalRewriteTest extends Specification {
 
         expect:
         x.type() == BinlogContent.Type.wal_rewrite
+        x.isSkipWhenAllSlavesInCatchUpState()
         x.encodedLength() == 14 + 104
 
         when:

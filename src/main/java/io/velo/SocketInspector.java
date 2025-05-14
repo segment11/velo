@@ -253,7 +253,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      *
      * @param netWorkerEventloopArray the array of event loops
      */
-    void initByNetWorkerEventloopArray(Eventloop[] netWorkerEventloopArray) {
+    public void initByNetWorkerEventloopArray(Eventloop[] netWorkerEventloopArray) {
         this.netWorkerEventloopArray = netWorkerEventloopArray;
         this.connectedClientCountArray = new int[netWorkerEventloopArray.length];
 

@@ -42,6 +42,7 @@ class XOneWalGroupPersistTest extends Specification {
 
         expect:
         x.type() == BinlogContent.Type.one_wal_group_persist
+        x.isSkipWhenAllSlavesInCatchUpState()
 
         when:
         x.beginBucketIndex = 0
