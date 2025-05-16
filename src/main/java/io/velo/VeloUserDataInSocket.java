@@ -47,6 +47,34 @@ public class VeloUserDataInSocket {
     boolean isResp3 = false;
 
     /**
+     * The name of the library used by the client.
+     */
+    String libName = null;
+
+    /**
+     * Sets the name of the library used by the client.
+     *
+     * @param libName The name of the library used by the client.
+     */
+    public void setLibName(String libName) {
+        this.libName = libName;
+    }
+
+    /**
+     * The version of the library used by the client.
+     */
+    String libVer = null;
+
+    /**
+     * Sets the version of the library used by the client.
+     *
+     * @param libVer The version of the library used by the client.
+     */
+    public void setLibVer(String libVer) {
+        this.libVer = libVer;
+    }
+
+    /**
      * Indicates whether the connection is read-only.
      */
     boolean isConnectionReadonly = false;

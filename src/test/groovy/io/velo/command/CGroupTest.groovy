@@ -114,7 +114,17 @@ class CGroupTest extends Specification {
         when:
         reply = cGroup.execute('client setinfo')
         then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = cGroup.execute('client setinfo lib-name Jedis lib-ver 4.3')
+        then:
         reply == OKReply.INSTANCE
+
+        when:
+        reply = cGroup.execute('client setinfo lib-version 1.0')
+        then:
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = cGroup.execute('client getname')

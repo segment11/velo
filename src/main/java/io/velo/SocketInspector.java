@@ -182,7 +182,11 @@ public class SocketInspector implements TcpSocket.Inspector {
         sb.append(veloUserData.authUser == null ? "default" : veloUserData.authUser);
         sb.append(" redir=-1 resp=");
         sb.append(veloUserData.isResp3 ? "3" : "2");
-        sb.append(" lib-name= lib-ver= tot-net-in=");
+        sb.append(" lib-name=");
+        sb.append(veloUserData.libName == null ? "" : veloUserData.libName);
+        sb.append(" lib-ver=");
+        sb.append(veloUserData.libVer == null ? "" : veloUserData.libVer);
+        sb.append(" tot-net-in=");
         sb.append(veloUserData.netInBytesLength);
         sb.append(" tot-net-out=");
         sb.append(veloUserData.netOutBytesLength);

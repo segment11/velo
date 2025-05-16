@@ -101,6 +101,25 @@ public class CGroup extends BaseCommand {
         }
 
         if ("setinfo".equals(subCmd)) {
+            if (data.length != 4 && data.length != 6) {
+                return ErrorReply.FORMAT;
+            }
+
+            var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
+
+            final String optionLibName = "lib-name";
+            final String optionLibVer = "lib-ver";
+            for (int i = 2; i < data.length; i += 2) {
+                var option = new String(data[i]).toLowerCase();
+                if (optionLibName.equals(option)) {
+                    veloUserData.setLibName(new String(data[i + 1]));
+                } else if (optionLibVer.equals(option)) {
+                    veloUserData.setLibVer(new String(data[i + 1]));
+                } else {
+                    return ErrorReply.SYNTAX;
+                }
+            }
+
             return OKReply.INSTANCE;
         }
 

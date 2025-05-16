@@ -16,8 +16,10 @@ class VeloUserDataInSocketTest extends Specification {
         one.sendCommandCount == 0L
         one.netInBytesLength == 0L
         one.netOutBytesLength == 0L
-        !one.isResp3
         one.authUser == null
+        !one.isResp3
+        one.libName == null
+        one.libVer == null
         !one.isConnectionReadonly
         one.replyMode == VeloUserDataInSocket.ReplyMode.on
         one.lastScanAssignCursor == 0
@@ -34,10 +36,14 @@ class VeloUserDataInSocketTest extends Specification {
         one.lastScanAssignCursor = 1
         one.beginScanSeq = 1
         one.clientName = 'xxx'
+        one.libName = 'Jedis'
+        one.libVer = '4.3'
         then:
         one.replyMode == VeloUserDataInSocket.ReplyMode.off
         one.lastScanAssignCursor == 1
         one.beginScanSeq == 1
         one.clientName == 'xxx'
+        one.libName == 'Jedis'
+        one.libVer == '4.3'
     }
 }
