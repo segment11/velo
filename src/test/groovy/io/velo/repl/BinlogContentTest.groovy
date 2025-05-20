@@ -38,7 +38,7 @@ class BinlogContentTest extends Specification {
         def buffer = ByteBuffer.wrap(encoded)
         def xWalV11 = BinlogContent.Type.fromCode(buffer.get()).decodeFrom(buffer) as XWalV
         then:
-        xWalV11.v.encode() == v.encode()
+        xWalV11.v.encode(false) == v.encode(false)
 
         when:
         def uuid = 1L

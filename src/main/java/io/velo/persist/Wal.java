@@ -110,12 +110,13 @@ public class Wal implements InMemoryEstimate {
         /**
          * Encodes this log entry into a byte array.
          *
+         * @param isEndAppend0ForBreak whether to add 0 int to the end, for read break.
          * @return the byte array representation of this log entry.
          */
-        public byte[] encode() {
+        public byte[] encode(boolean isEndAppend0ForBreak) {
             int vLength = ENCODED_HEADER_LENGTH + key.length() + cvEncoded.length;
             // 4 -> vLength
-            var bytes = new byte[4 + vLength];
+            var bytes = new byte[4 + vLength + (isEndAppend0ForBreak ? 4 : 0)];
             var buffer = ByteBuffer.wrap(bytes);
 
             buffer.putInt(vLength);
@@ -128,6 +129,9 @@ public class Wal implements InMemoryEstimate {
             buffer.put(key.getBytes());
             buffer.putInt(cvEncoded.length);
             buffer.put(cvEncoded);
+            if (isEndAppend0ForBreak) {
+                buffer.putInt(0);
+            }
             return bytes;
         }
 
@@ -500,7 +504,7 @@ public class Wal implements InMemoryEstimate {
 
         var bos = new ByteArrayOutputStream();
         for (var entry : map.entrySet()) {
-            var encoded = entry.getValue().encode();
+            var encoded = entry.getValue().encode(false);
             bos.write(encoded);
         }
 
@@ -731,7 +735,11 @@ public class Wal implements InMemoryEstimate {
         var raf = isValueShort ? walSharedFileShortValue : walSharedFile;
         try {
             raf.seek(targetGroupBeginOffset + offset);
-            raf.write(v.encode());
+            if (offset + v.encodeLength() < ONE_GROUP_BUFFER_SIZE - 4) {
+                raf.write(v.encode(true));
+            } else {
+                raf.write(v.encode(false));
+            }
         } catch (IOException e) {
             log.error("Write to file error", e);
             throw new RuntimeException("Write to file error=" + e.getMessage());
@@ -916,14 +924,14 @@ public class Wal implements InMemoryEstimate {
         if (ConfForGlobal.pureMemory) {
             for (var entry : delayToKeyBucketValues.entrySet()) {
                 var v = entry.getValue();
-                var encodedBytes = v.encode();
+                var encodedBytes = v.encode(false);
                 buffer.put(encodedBytes);
             }
 
             buffer.position(realDataOffset + ONE_GROUP_BUFFER_SIZE);
             for (var entry : delayToKeyBucketShortValues.entrySet()) {
                 var v = entry.getValue();
-                var encodedBytes = v.encode();
+                var encodedBytes = v.encode(false);
                 buffer.put(encodedBytes);
             }
 

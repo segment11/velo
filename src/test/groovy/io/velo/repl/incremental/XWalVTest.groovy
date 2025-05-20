@@ -35,12 +35,12 @@ class XWalVTest extends Specification {
         def xWalV22 = XWalV.decodeFrom(buffer2)
         then:
         xWalV11.encodedLength() == encoded.length
-        xWalV11.v.encode() == v.encode()
+        xWalV11.v.encode(false) == v.encode(false)
         xWalV11.isValueShort() == xWalV.isValueShort()
         xWalV11.offset == xWalV.offset
         xWalV11.isOnlyPut() == xWalV.isOnlyPut()
         xWalV22.encodedLength() == encoded2.length
-        xWalV22.v.encode() == v.encode()
+        xWalV22.v.encode(true) == v.encode(true)
         xWalV22.isValueShort() == xWalV2.isValueShort()
         xWalV22.offset == xWalV2.offset
         xWalV22.isOnlyPut() == xWalV2.isOnlyPut()

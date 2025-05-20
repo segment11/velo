@@ -128,7 +128,8 @@ class WalTest extends Specification {
 
         when:
         boolean exception = false
-        def v1Encoded = v1.encode()
+        def v1Encoded = v1.encode(false)
+        def v1Encoded_end0 = v1.encode(true)
         def v1Buffer = ByteBuffer.wrap(v1Encoded)
         v1Buffer.putShort(36, (CompressedValue.KEY_MAX_LENGTH + 1).shortValue())
         try {
