@@ -59,7 +59,7 @@ public class Wal implements InMemoryEstimate {
          * @return a string representation of this log entry.
          */
         @Override
-        public String toString() {
+        public @NotNull String toString() {
             return "V{" +
                     ", seq=" + seq +
                     ", bucketIndex=" + bucketIndex +

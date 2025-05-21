@@ -83,7 +83,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     @VisibleForTesting
     record SegmentBytesWithIndex(byte[] segmentBytes, int tmpSegmentIndex, long segmentSeq) {
         @Override
-        public String toString() {
+        public @NotNull String toString() {
             return "SegmentCompressedBytesWithIndex{" +
                     "tmpSegmentIndex=" + tmpSegmentIndex +
                     ", segmentSeq=" + segmentSeq +
@@ -468,7 +468,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         }
 
         @Override
-        public String toString() {
+        public @NotNull String toString() {
             return "CvWithKeyAndSegmentOffset{" +
                     "key='" + key + '\'' +
                     ", segmentOffset=" + segmentOffset +

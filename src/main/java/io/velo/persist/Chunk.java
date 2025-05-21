@@ -502,7 +502,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
          * @return a string representation of this segment flag
          */
         @Override
-        public String toString() {
+        public @NotNull String toString() {
             return "SegmentFlag{" +
                     "flagByte=" + flagByte +
                     ", segmentSeq=" + segmentSeq +

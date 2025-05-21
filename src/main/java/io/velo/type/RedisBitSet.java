@@ -1,5 +1,7 @@
 package io.velo.type;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * A class representing a Redis BitSet that can dynamically expand, and do bite operations.
  * Redis BitSet is Big-Endian. Java BitSet is Little-Endian.
@@ -55,7 +57,7 @@ public class RedisBitSet {
      */
     public record SetResult(boolean isExpanded, boolean isChanged, boolean isOldBit1) {
         @Override
-        public String toString() {
+        public @NotNull String toString() {
             return "SetResult{" +
                     "isExpanded=" + isExpanded +
                     ", isChanged=" + isChanged +

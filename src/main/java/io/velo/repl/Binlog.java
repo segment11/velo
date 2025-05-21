@@ -40,7 +40,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     record BytesWithFileIndexAndOffset(byte[] bytes, int fileIndex,
                                        long offset) implements Comparable<BytesWithFileIndexAndOffset> {
         @Override
-        public String toString() {
+        public @NotNull String toString() {
             return "BytesWithFileIndexAndOffset{" +
                     "fileIndex=" + fileIndex +
                     ", offset=" + offset +
@@ -59,7 +59,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     public record FileIndexAndOffset(int fileIndex, long offset) {
         @Override
-        public String toString() {
+        public @NotNull String toString() {
             return "FileIndexAndOffset{" +
                     "fileIndex=" + fileIndex +
                     ", offset=" + offset +

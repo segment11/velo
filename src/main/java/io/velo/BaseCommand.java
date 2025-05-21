@@ -409,7 +409,7 @@ public abstract class BaseCommand {
     public record SlotWithKeyHash(short slot, short toClientSlot, int bucketIndex,
                                   long keyHash, int keyHash32, String rawKey) {
         @Override
-        public String toString() {
+        public @NotNull String toString() {
             return "SlotWithKeyHash{" +
                     "slot=" + slot +
                     ", toClientSlot=" + toClientSlot +
@@ -953,7 +953,7 @@ public abstract class BaseCommand {
             putToOneSlot(slot, key, slotWithKeyHash, cvRaw);
 
             if (ConfForGlobal.isValueSetUseCompression && ConfForGlobal.isOnDynTrainDictForCompression) {
-                // add train sample list
+                // add to the train sample list
                 if (sampleToTrainList.size() < trainSampleListMaxSize) {
                     if (preferDoCompress) {
                         var kv = new TrainSampleJob.TrainSampleKV(key, null, cvRaw.getSeq(), valueBytes);

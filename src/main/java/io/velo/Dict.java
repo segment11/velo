@@ -2,6 +2,7 @@ package io.velo;
 
 import com.github.luben.zstd.ZstdCompressCtx;
 import com.github.luben.zstd.ZstdDecompressCtx;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -457,7 +458,7 @@ public class Dict implements Serializable {
          * @return a string representation of the dictionary with key prefix or suffix
          */
         @Override
-        public String toString() {
+        public @NotNull String toString() {
             return "DictWithKeyPrefixOrSuffix{" +
                     "keyPrefixOrSuffix='" + keyPrefixOrSuffix + '\'' +
                     ", dict=" + dict +

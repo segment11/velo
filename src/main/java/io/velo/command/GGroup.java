@@ -346,7 +346,6 @@ public class GGroup extends BaseCommand {
     }
 
     private record GeoItem(double lon, double lat, String member) {
-
     }
 
     private RedisGeo getRedisGeo(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
