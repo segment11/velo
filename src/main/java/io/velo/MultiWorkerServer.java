@@ -95,13 +95,14 @@ public class MultiWorkerServer extends Launcher {
 
     /**
      * Maximum number of network workers.
+     * Usually network threads = slot worker threads * 2.
      */
-    static final int MAX_NET_WORKERS = 16;
+    static final int MAX_NET_WORKERS = 32;
 
     /**
      * Maximum number of slot workers.
      */
-    static final int MAX_SLOT_WORKERS = 128;
+    static final int MAX_SLOT_WORKERS = 32;
 
     /**
      * Maximum number of index workers.
