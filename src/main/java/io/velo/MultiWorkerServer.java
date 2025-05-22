@@ -801,7 +801,13 @@ public class MultiWorkerServer extends Launcher {
         UP_TIME = System.currentTimeMillis();
         STATIC_GLOBAL_V.resetInfoServer(configInject);
 
-        var isWarmUpWhenStart = configInject.get(ofBoolean(), "bucket.lruPerFd.isWarmUpWhenStart", false);
+        var c = ConfForSlot.global;
+        boolean isWarmUpWhenStart;
+        if (c.confBucket.lruPerFd.maxSize == c.confBucket.bucketsPerSlot) {
+            isWarmUpWhenStart = true;
+        } else {
+            isWarmUpWhenStart = configInject.get(ofBoolean(), "bucket.lruPerFd.isWarmUpWhenStart", false);
+        }
         if (isWarmUpWhenStart) {
             var oneSlots = localPersist.oneSlots();
 
