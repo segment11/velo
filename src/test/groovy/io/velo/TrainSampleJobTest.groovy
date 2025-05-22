@@ -1,6 +1,6 @@
 package io.velo
 
-import com.github.luben.zstd.Zstd
+
 import spock.lang.Specification
 
 class TrainSampleJobTest extends Specification {
@@ -72,7 +72,7 @@ class TrainSampleJobTest extends Specification {
         when:
         def dict = result.cacheDict().get('key:')
         dict.initCtx()
-        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
         def cv = CompressedValue.compress(sampleValueBytes, dict)
         def decompressBytes = cv.decompress(dict)
         then:

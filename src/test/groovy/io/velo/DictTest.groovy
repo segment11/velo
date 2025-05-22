@@ -186,7 +186,7 @@ class DictTest extends Specification {
 
     def 'test init ctx'() {
         given:
-        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
         def dictMap = DictMap.instance
         dictMap.initDictMap(Consts.testDir)
 

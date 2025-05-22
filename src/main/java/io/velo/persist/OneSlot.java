@@ -125,7 +125,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.bigKeyTopK = null;
         this.saveFileNameWhenPureMemory = "slot_" + slot + "_saved.dat";
 
-        this.netWorkerEventloop = eventloop;
+        this.slotWorkerEventloop = eventloop;
     }
 
     /**
@@ -425,7 +425,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (doMockWhenCreateReplPairAsSlave) {
             log.info("Repl create repl pair as slave, mock, host={}, port={}, slot={}", host, port, slot);
         } else {
-            replPair.initAsSlave(netWorkerEventloop, requestHandler);
+            replPair.initAsSlave(slotWorkerEventloop, requestHandler);
             log.warn("Repl create repl pair as slave, host={}, port={}, slot={}", host, port, slot);
         }
         replPairs.add(replPair);
@@ -559,15 +559,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     /**
-     * Sets the event loop for network operations.
+     * Sets the event loop for slot operations.
      *
-     * @param netWorkerEventloop the event loop
+     * @param slotWorkerEventloop the event loop
      */
-    public void setNetWorkerEventloop(Eventloop netWorkerEventloop) {
-        this.netWorkerEventloop = netWorkerEventloop;
+    public void setSlotWorkerEventloop(Eventloop slotWorkerEventloop) {
+        this.slotWorkerEventloop = slotWorkerEventloop;
     }
 
-    private Eventloop netWorkerEventloop;
+    private Eventloop slotWorkerEventloop;
 
     /**
      * Sets the request handler for processing requests.
@@ -597,7 +597,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
-        return Promise.ofFuture(netWorkerEventloop.submit(runnableEx));
+        return Promise.ofFuture(slotWorkerEventloop.submit(runnableEx));
     }
 
     /**
@@ -617,7 +617,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
-        return Promise.ofFuture(netWorkerEventloop.submit(AsyncComputation.of(supplierEx)));
+        return Promise.ofFuture(slotWorkerEventloop.submit(AsyncComputation.of(supplierEx)));
     }
 
     /**
@@ -628,11 +628,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      */
     public void delayRun(int millis, @NotNull Runnable runnable) {
         // for unit test
-        if (netWorkerEventloop == null) {
+        if (slotWorkerEventloop == null) {
             return;
         }
 
-        netWorkerEventloop.delay(millis, runnable);
+        slotWorkerEventloop.delay(millis, runnable);
     }
 
     final ArrayList<HandlerWhenCvExpiredOrDeleted> handlersRegisteredList = new ArrayList<>();
@@ -2687,6 +2687,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             // global config for one slot
             map.put("global_estimate_key_number", new SimpleGauge.ValueWithLabelValues((double) ConfForGlobal.estimateKeyNumber, labelValues));
             map.put("global_slot_number", new SimpleGauge.ValueWithLabelValues((double) slotNumber, labelValues));
+            map.put("global_net_workers", new SimpleGauge.ValueWithLabelValues((double) ConfForGlobal.netWorkers, labelValues));
+            map.put("global_slot_workers", new SimpleGauge.ValueWithLabelValues((double) ConfForGlobal.slotWorkers, labelValues));
             map.put("global_key_buckets_per_slot", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confBucket.bucketsPerSlot, labelValues));
             map.put("global_key_initial_split_number", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confBucket.initialSplitNumber, labelValues));
             map.put("global_key_once_scan_max_read_count", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confBucket.onceScanMaxReadCount, labelValues));

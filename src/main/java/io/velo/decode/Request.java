@@ -98,7 +98,7 @@ public class Request {
      * @return the result of the ACL check
      */
     public U.CheckCmdAndKeyResult isAclCheckOk() {
-        // just when do unit test
+        // for unit test case
         if (u == null) {
             return U.CheckCmdAndKeyResult.TRUE;
         }

@@ -55,7 +55,7 @@ public class RequestHandler {
     final byte workerId;
     private final String workerIdStr;
     @VisibleForTesting
-    final byte netWorkers;
+    final byte slotWorkers;
     @VisibleForTesting
     final short slotNumber;
     @VisibleForTesting
@@ -89,7 +89,7 @@ public class RequestHandler {
     public String toString() {
         return "RequestHandler{" +
                 "workerId=" + workerId +
-                ", netWorkers=" + netWorkers +
+                ", slotWorkers=" + slotWorkers +
                 ", slotNumber=" + slotNumber +
                 ", localTest=" + localTest +
                 ", sampleToTrainList.size=" + sampleToTrainList.size() +
@@ -100,16 +100,16 @@ public class RequestHandler {
     /**
      * Constructs a new RequestHandler.
      *
-     * @param workerId   the worker ID
-     * @param netWorkers the number of network workers
-     * @param slotNumber the slot number
-     * @param snowFlake  the SnowFlake instance
-     * @param config     the configuration object
+     * @param workerId    the worker ID
+     * @param slotWorkers the number of network workers
+     * @param slotNumber  the slot number
+     * @param snowFlake   the SnowFlake instance
+     * @param config      the configuration object
      */
-    public RequestHandler(byte workerId, byte netWorkers, short slotNumber, SnowFlake snowFlake, Config config) {
+    public RequestHandler(byte workerId, byte slotWorkers, short slotNumber, SnowFlake snowFlake, Config config) {
         this.workerId = workerId;
         this.workerIdStr = String.valueOf(workerId);
-        this.netWorkers = netWorkers;
+        this.slotWorkers = slotWorkers;
         this.slotNumber = slotNumber;
         this.snowFlake = snowFlake;
 
@@ -132,7 +132,7 @@ public class RequestHandler {
 
         var requestConfig = config.getChild("request");
 
-        this.compressStats = new CompressStats("net_worker_" + workerId, "net_");
+        this.compressStats = new CompressStats("slot_worker_" + workerId, "slot_");
         // compress and train sample dict requestConfig
         this.trainSampleListMaxSize = requestConfig.get(toInt, "trainSampleListMaxSize", 1000);
 
@@ -150,11 +150,11 @@ public class RequestHandler {
     /**
      * Initializes the multi-shard shadows.
      *
-     * @param netWorkers the number of network workers
+     * @param slotWorkers the number of slot workers
      */
-    public static void initMultiShardShadows(byte netWorkers) {
-        multiShardShadows = new MultiShardShadow[netWorkers];
-        for (int i = 0; i < netWorkers; i++) {
+    public static void initMultiShardShadows(byte slotWorkers) {
+        multiShardShadows = new MultiShardShadow[slotWorkers];
+        for (int i = 0; i < slotWorkers; i++) {
             multiShardShadows[i] = new MultiShardShadow();
         }
     }
@@ -181,7 +181,7 @@ public class RequestHandler {
      * @return the multi-shard shadow
      */
     static MultiShardShadow getMultiShardShadow() {
-        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
         return multiShardShadows[threadIndex];
     }
 
@@ -739,10 +739,7 @@ public class RequestHandler {
         requestHandlerGauge.addRawGetter(() -> {
             var labelValues = List.of(workerIdStr);
 
-            var connectedClientCount = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.connectedClientCountArray[workerId];
-
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
-            map.put("request_connected_client_count", new SimpleGauge.ValueWithLabelValues((double) connectedClientCount, labelValues));
             map.put("request_sample_to_train_size", new SimpleGauge.ValueWithLabelValues((double) sampleToTrainList.size(), labelValues));
             return map;
         });

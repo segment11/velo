@@ -27,8 +27,9 @@ class MultiWorkerServerTest extends Specification {
     final short slot1 = 1
     final byte workerId0 = 0
     final byte workerId1 = 1
-    final byte netWorkers = 2
     final short slotNumber = 2
+    final byte slotWorkers = 2
+    final byte netWorkers = 2
 
     def 'test mock inject and handle'() {
         // only for coverage
@@ -36,12 +37,14 @@ class MultiWorkerServerTest extends Specification {
         def dirFile = new File('/tmp/velo-data')
         def config = Config.create()
                 .with('slotNumber', slotNumber.toString())
+                .with('slotWorkers', slotWorkers.toString())
                 .with('netWorkers', netWorkers.toString())
                 .with("net.listenAddresses", "localhost:7379")
 
         dirFile.deleteDir()
 
         def m = new MultiWorkerServer()
+        m.slotWorkerEventloopArray = new Eventloop[2]
         m.netWorkerEventloopArray = new Eventloop[2]
         m.requestHandlerArray = new RequestHandler[2]
         m.scheduleRunnableArray = new TaskRunnable[2]
@@ -58,9 +61,8 @@ class MultiWorkerServerTest extends Specification {
         dirFile3.exists()
         m.STATIC_GLOBAL_V.socketInspector == null
         m.primaryReactor(config) != null
-        m.workerReactor(workerId0, OptionalDependency.empty(), config) != null
-        // need use activej inject mock, todo
         m.workerPool(null, config) == null
+        m.workerReactor(workerId0, OptionalDependency.empty(), config) != null
         m.config() != null
         snowFlakes != null
         m.getModule() != null
@@ -141,6 +143,8 @@ class MultiWorkerServerTest extends Specification {
             eventloop1.run()
         }
         Thread.sleep(100)
+        m.slotWorkerEventloopArray[0] = eventloop0
+        m.slotWorkerEventloopArray[1] = eventloop1
         m.netWorkerEventloopArray[0] = eventloop0
         m.netWorkerEventloopArray[1] = eventloop1
         m.socketInspector = new SocketInspector()
@@ -230,8 +234,8 @@ class MultiWorkerServerTest extends Specification {
         p != null
 
         when:
-        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
-        // ping need not parse slots, any net worker can handle it
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
+        // ping need not parse slots, any slot worker can handle it
         def pingData = new byte[1][]
         pingData[0] = 'ping'.bytes
         def pingRequest = new Request(pingData, false, false)
@@ -447,6 +451,20 @@ class MultiWorkerServerTest extends Specification {
 
         when:
         exception = false
+        def config77 = Config.create()
+                .with("slotNumber", "4")
+                .with("slotWorkers", '3')
+        try {
+            m1.beforeCreateHandler(c, snowFlakes1, config77)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
         def config44 = Config.create()
                 .with("indexWorkers", (MultiWorkerServer.MAX_INDEX_WORKERS + 1).toString())
         try {
@@ -602,19 +620,18 @@ class MultiWorkerServerTest extends Specification {
         def staticGlobalV = MultiWorkerServer.STATIC_GLOBAL_V
 
         when:
+        staticGlobalV.slotWorkerThreadIds = [-1L]
         staticGlobalV.netWorkerThreadIds = [-1L]
         then:
-        staticGlobalV.threadLocalIndexByCurrentThread == -1
+        staticGlobalV.slotThreadLocalIndexByCurrentThread == -1
+        staticGlobalV.netThreadLocalIndexByCurrentThread == -1
 
         when:
+        staticGlobalV.slotWorkerThreadIds = [Thread.currentThread().threadId()]
         staticGlobalV.netWorkerThreadIds = [Thread.currentThread().threadId()]
         then:
-        staticGlobalV.threadLocalIndexByCurrentThread == 0
-
-        when:
-        def i = staticGlobalV.getThreadLocalIndexByCurrentThread()
-        then:
-        i == 0
+        staticGlobalV.slotThreadLocalIndexByCurrentThread == 0
+        staticGlobalV.netThreadLocalIndexByCurrentThread == 0
 
         when:
         ConfForGlobal.netListenAddresses = 'localhost:7379'
@@ -635,12 +652,12 @@ class MultiWorkerServerTest extends Specification {
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         RequestHandler.initMultiShardShadows((byte) 1)
-        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
         def snowFlake = new SnowFlake(1, 1)
         def requestHandler = new RequestHandler(workerId0, netWorkers, slotNumber, snowFlake, Config.create())
         m.requestHandlerArray = new RequestHandler[1]
         m.requestHandlerArray[0] = requestHandler
-        m.netWorkerThreadIds = MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds
+        m.slotWorkerThreadIds = MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds
 
         and:
         Consts.persistDir.mkdirs()

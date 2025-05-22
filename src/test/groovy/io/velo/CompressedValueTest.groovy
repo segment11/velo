@@ -423,7 +423,7 @@ class CompressedValueTest extends Specification {
         def result = job.train()
         def dict = result.cacheDict().get('key:')
         dict.initCtx()
-        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
         def cv4 = CompressedValue.compress(rawBytes, dict)
         then:
         cv4.compressedLength < rawBytes.length

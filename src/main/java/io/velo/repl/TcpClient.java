@@ -24,21 +24,21 @@ import java.util.concurrent.Callable;
  */
 public class TcpClient implements NeedCleanUp {
     private final short slot;
-    private final Eventloop netWorkerEventloop;
+    private final Eventloop slotWorkerEventloop;
     private final RequestHandler requestHandler;
     private final ReplPair replPair;
 
     /**
      * Constructs a new TcpClient with the specified parameters.
      *
-     * @param slot               The slot identifier for this client.
-     * @param netWorkerEventloop The event loop to be used for handling network operations.
-     * @param requestHandler     The request handler for processing incoming requests.
-     * @param replPair           The pair of REPLs associated with this client.
+     * @param slot                The slot identifier for this client.
+     * @param slotWorkerEventloop The event loop to be used for handling slot operations.
+     * @param requestHandler      The request handler for processing incoming requests.
+     * @param replPair            The pair of REPLs associated with this client.
      */
-    public TcpClient(short slot, Eventloop netWorkerEventloop, RequestHandler requestHandler, ReplPair replPair) {
+    public TcpClient(short slot, Eventloop slotWorkerEventloop, RequestHandler requestHandler, ReplPair replPair) {
         this.slot = slot;
-        this.netWorkerEventloop = netWorkerEventloop;
+        this.slotWorkerEventloop = slotWorkerEventloop;
         this.requestHandler = requestHandler;
         this.replPair = replPair;
     }
@@ -119,7 +119,7 @@ public class TcpClient implements NeedCleanUp {
      * @param connectedCallback A callback to be called when the connection is established.
      */
     public void connect(String host, int port, Callable<ByteBuf> connectedCallback) {
-        TcpSocket.connect(netWorkerEventloop, new InetSocketAddress(host, port))
+        TcpSocket.connect(slotWorkerEventloop, new InetSocketAddress(host, port))
                 .whenResult(socket -> {
                     log.info("Connected to server at {}:{}, slot={}", host, port, slot);
 

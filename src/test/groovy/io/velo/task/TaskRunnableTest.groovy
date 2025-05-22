@@ -27,7 +27,7 @@ class TaskRunnableTest extends Specification {
                 .build()
         eventloop.keepAlive(true)
 
-        taskRunnable.netWorkerEventloop = eventloop
+        taskRunnable.slotWorkerEventloop = eventloop
         taskRunnable.requestHandler = null
 
         when:

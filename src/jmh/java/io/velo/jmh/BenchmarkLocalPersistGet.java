@@ -34,9 +34,9 @@ public class BenchmarkLocalPersistGet {
 
     short slotNumber = 4;
 
-    byte netWorkers = 4;
+    byte slotWorkers = 4;
 
-    private Eventloop[] netWorkerEventloopArray;
+    private Eventloop[] slotWorkerEventloopArray;
 
     private AtomicInteger putCount = new AtomicInteger();
     private AtomicInteger getCount = new AtomicInteger();
@@ -54,22 +54,22 @@ public class BenchmarkLocalPersistGet {
         // todo, change here
         ConfForSlot.global = ConfForSlot.c10m;
 
-        netWorkerEventloopArray = new Eventloop[netWorkers];
-        for (int i = 0; i < netWorkers; i++) {
+        slotWorkerEventloopArray = new Eventloop[slotWorkers];
+        for (int i = 0; i < slotWorkers; i++) {
             var eventloop = Eventloop.builder()
-                    .withThreadName("net-worker-" + i)
+                    .withThreadName("slot-worker-" + i)
                     .withIdleInterval(Duration.ofMillis(10))
                     .build();
             eventloop.keepAlive(true);
-            netWorkerEventloopArray[i] = eventloop;
+            slotWorkerEventloopArray[i] = eventloop;
 
             new Thread(eventloop).start();
             Thread.sleep(100);
-            System.out.println("net worker event loop started, thread id: " + eventloop.getEventloopThread().threadId());
+            System.out.println("slot worker event loop started, thread id: " + eventloop.getEventloopThread().threadId());
         }
 
         ConfForGlobal.netListenAddresses = "127.0.0.1:7379";
-        RequestHandler.initMultiShardShadows(netWorkers);
+        RequestHandler.initMultiShardShadows(slotWorkers);
 
         if (persistDir.exists()) {
             FileUtils.deleteDirectory(persistDir);
@@ -77,25 +77,25 @@ public class BenchmarkLocalPersistGet {
             System.out.println("delete and recreate persist dir");
         }
 
-        var snowFlakes = new SnowFlake[netWorkers];
-        for (int i = 0; i < netWorkers; i++) {
+        var snowFlakes = new SnowFlake[slotWorkers];
+        for (int i = 0; i < slotWorkers; i++) {
             snowFlakes[i] = new SnowFlake(ConfForGlobal.datacenterId, (ConfForGlobal.machineId << 8) | i);
         }
-        localPersist.initSlots(netWorkers, slotNumber, snowFlakes, persistDir, Config.create());
+        localPersist.initSlots(slotWorkers, slotNumber, snowFlakes, persistDir, Config.create());
         System.out.println("init local persist slots");
 
-        for (int i = 0; i < netWorkers; i++) {
+        for (int i = 0; i < slotWorkers; i++) {
             for (var oneSlot : localPersist.oneSlots()) {
-                if (oneSlot.slot() % netWorkers == i) {
-                    oneSlot.setNetWorkerEventloop(netWorkerEventloopArray[i]);
-                    System.out.printf("set net worker event loop for slot=%d, net worker id=%d\n", oneSlot.slot(), i);
+                if (oneSlot.slot() % slotWorkers == i) {
+                    oneSlot.setSlotWorkerEventloop(slotWorkerEventloopArray[i]);
+                    System.out.printf("set slot worker event loop for slot=%d, slot worker id=%d\n", oneSlot.slot(), i);
                 }
             }
         }
 
         for (short slot = 0; slot < slotNumber; slot++) {
-            int i = slot % netWorkers;
-            localPersist.fixSlotThreadId(slot, netWorkerEventloopArray[i].getEventloopThread().threadId());
+            int i = slot % slotWorkers;
+            localPersist.fixSlotThreadId(slot, slotWorkerEventloopArray[i].getEventloopThread().threadId());
         }
 
         beginTimeMs = System.currentTimeMillis();
@@ -141,10 +141,10 @@ public class BenchmarkLocalPersistGet {
 
         isAfterTearDown = true;
 
-        for (var eventloop : netWorkerEventloopArray) {
+        for (var eventloop : slotWorkerEventloopArray) {
             eventloop.breakEventloop();
         }
-        System.out.println("break net worker event loops");
+        System.out.println("break slot worker event loops");
 
         // print stats
         var currentThreadId = Thread.currentThread().threadId();
@@ -159,7 +159,7 @@ public class BenchmarkLocalPersistGet {
             System.out.println(sb);
         }
 
-        System.out.println("wait 10s when break net worker event loops and then clean up local persist");
+        System.out.println("wait 10s when break slot worker event loops and then clean up local persist");
         Thread.sleep(1000 * 10);
 
         localPersist.cleanUp();
@@ -181,7 +181,7 @@ public class BenchmarkLocalPersistGet {
             var key = keys[random.nextInt(keyNumber)];
             var s = BaseCommand.slot(key.getBytes(), slotNumber);
             var oneSlot = localPersist.oneSlot(s.slot());
-            var eventloop = netWorkerEventloopArray[s.slot() % netWorkers];
+            var eventloop = slotWorkerEventloopArray[s.slot() % slotWorkers];
 
             eventloop.submit(() -> {
                 if (isAfterTearDown) {
@@ -229,7 +229,7 @@ TIPS: 512MB write buffer for each slot, so the real write qps is in logs. (100w 
         var key = keys[random.nextInt(keyNumber)];
         var s = BaseCommand.slot(key.getBytes(), slotNumber);
         var oneSlot = localPersist.oneSlot(s.slot());
-        var eventloop = netWorkerEventloopArray[s.slot() % netWorkers];
+        var eventloop = slotWorkerEventloopArray[s.slot() % slotWorkers];
 
         eventloop.submit(() -> {
             if (isAfterTearDown) {

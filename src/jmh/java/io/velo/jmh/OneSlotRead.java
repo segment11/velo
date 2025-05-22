@@ -21,8 +21,8 @@ public class OneSlotRead {
     @Param({"1000000"})
     int initKeyNumber = 1_000_000;
 
-    final int netWorkers = 1;
     final short slotNumber = 1;
+    final int slotWorkers = 1;
     final short slot = 0;
 
     final File persistDir = new File("/tmp/velo-data/test-jmh-persist/");
@@ -48,13 +48,13 @@ public class OneSlotRead {
 
         var localPersist = LocalPersist.getInstance();
 
-        RequestHandler.initMultiShardShadows((byte) netWorkers);
+        RequestHandler.initMultiShardShadows((byte) slotWorkers);
 
-        var snowFlakes = new SnowFlake[netWorkers];
-        for (int i = 0; i < netWorkers; i++) {
+        var snowFlakes = new SnowFlake[slotWorkers];
+        for (int i = 0; i < slotWorkers; i++) {
             snowFlakes[i] = new SnowFlake(i + 1, 1);
         }
-        localPersist.initSlots((byte) netWorkers, slotNumber, snowFlakes, persistDir, Config.create());
+        localPersist.initSlots((byte) slotWorkers, slotNumber, snowFlakes, persistDir, Config.create());
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId());
 
         var snowFlake = snowFlakes[0];

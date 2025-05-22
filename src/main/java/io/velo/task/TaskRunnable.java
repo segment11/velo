@@ -8,29 +8,29 @@ import org.jetbrains.annotations.VisibleForTesting;
 import java.util.ArrayList;
 
 /**
- * A Runnable implementation that represents a task for a network worker.
+ * A Runnable implementation that represents a task for a slot worker.
  * It processes tasks associated with specific slots and runs them in a loop.
  */
 public class TaskRunnable implements Runnable {
     /**
-     * The ID of the network worker.
+     * The ID of the slot worker.
      */
-    private final byte netWorkerId;
+    private final byte slotWorkerId;
 
     /**
-     * The total number of network workers.
+     * The total number of slot workers.
      */
-    private final byte netWorkers;
+    private final byte slotWorkers;
 
     /**
-     * Constructs a TaskRunnable with the specified network worker ID and total number of network workers.
+     * Constructs a TaskRunnable with the specified slot worker ID and total number of slot workers.
      *
-     * @param netWorkerId The ID of the network worker.
-     * @param netWorkers  The total number of network workers.
+     * @param slotWorkerId The ID of the slot worker.
+     * @param slotWorkers  The total number of slot workers.
      */
-    public TaskRunnable(byte netWorkerId, byte netWorkers) {
-        this.netWorkerId = netWorkerId;
-        this.netWorkers = netWorkers;
+    public TaskRunnable(byte slotWorkerId, byte slotWorkers) {
+        this.slotWorkerId = slotWorkerId;
+        this.slotWorkers = slotWorkers;
     }
 
     /**
@@ -47,36 +47,36 @@ public class TaskRunnable implements Runnable {
      */
     public void chargeOneSlots(OneSlot[] oneSlots) {
         for (var oneSlot : oneSlots) {
-            if (oneSlot.slot() % netWorkers == netWorkerId) {
+            if (oneSlot.slot() % slotWorkers == slotWorkerId) {
                 this.oneSlots.add(oneSlot);
 
-                oneSlot.setNetWorkerEventloop(netWorkerEventloop);
+                oneSlot.setSlotWorkerEventloop(slotWorkerEventloop);
                 oneSlot.setRequestHandler(requestHandler);
             }
         }
     }
 
     /**
-     * The event loop for this network worker.
+     * The event loop for this slot worker.
      */
-    private Eventloop netWorkerEventloop;
+    private Eventloop slotWorkerEventloop;
 
     /**
-     * Sets the event loop for this network worker.
+     * Sets the event loop for this slot worker.
      *
-     * @param netWorkerEventloop The event loop to be used.
+     * @param slotWorkerEventloop The event loop to be used.
      */
-    public void setNetWorkerEventloop(Eventloop netWorkerEventloop) {
-        this.netWorkerEventloop = netWorkerEventloop;
+    public void setSlotWorkerEventloop(Eventloop slotWorkerEventloop) {
+        this.slotWorkerEventloop = slotWorkerEventloop;
     }
 
     /**
-     * The request handler used by this network worker.
+     * The request handler used by this slot worker.
      */
     private RequestHandler requestHandler;
 
     /**
-     * Sets the request handler for this network worker.
+     * Sets the request handler for this slot worker.
      *
      * @param requestHandler The request handler to be used.
      */
@@ -105,7 +105,7 @@ public class TaskRunnable implements Runnable {
         }
 
         final long INTERVAL_MS = 10L;
-        netWorkerEventloop.delay(INTERVAL_MS, this);
+        slotWorkerEventloop.delay(INTERVAL_MS, this);
     }
 
     /**
@@ -119,6 +119,6 @@ public class TaskRunnable implements Runnable {
      */
     public void stop() {
         isStopped = true;
-        System.out.println("Task delay stopped for net worker eventloop, net worker id=" + netWorkerId);
+        System.out.println("Task delay stopped for slot worker eventloop, slot worker id=" + slotWorkerId);
     }
 }

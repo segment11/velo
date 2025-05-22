@@ -44,7 +44,7 @@ public class AclUsers {
      * Array of event loops, each associated with a network worker thread.
      */
     @ThreadNeedLocal
-    private Eventloop[] netWorkerEventloopArray;
+    private Eventloop[] slotWorkerEventloopArray;
 
     /**
      * Array of inner instances, each corresponding to a specific thread.
@@ -53,20 +53,20 @@ public class AclUsers {
     private Inner[] inners;
 
     /**
-     * Initializes the AclUsers instance with event loops associated with network worker threads.
+     * Initializes the AclUsers instance with event loops associated with slot worker threads.
      *
-     * @param netWorkerEventloopArray Array of Eventloop instances.
+     * @param slotWorkerEventloopArray Array of Eventloop instances.
      */
-    public void initByNetWorkerEventloopArray(Eventloop[] netWorkerEventloopArray) {
-        this.netWorkerEventloopArray = netWorkerEventloopArray;
+    public void initBySlotWorkerEventloopArray(Eventloop[] slotWorkerEventloopArray) {
+        this.slotWorkerEventloopArray = slotWorkerEventloopArray;
 
-        inners = new Inner[netWorkerEventloopArray.length];
-        for (int i = 0; i < netWorkerEventloopArray.length; i++) {
-            var eventloop = netWorkerEventloopArray[i];
+        inners = new Inner[slotWorkerEventloopArray.length];
+        for (int i = 0; i < slotWorkerEventloopArray.length; i++) {
+            var eventloop = slotWorkerEventloopArray[i];
             var eventloopThread = eventloop.getEventloopThread();
             inners[i] = new Inner(eventloopThread != null ? eventloopThread.threadId() : Thread.currentThread().threadId());
         }
-        log.info("Acl users init by net worker eventloop array");
+        log.info("Acl users init by slot worker eventloop array");
     }
 
     /**
@@ -197,7 +197,7 @@ public class AclUsers {
             if (inner.expectThreadId == currentThreadId) {
                 doInTargetEventloop.doSth(inner);
             } else {
-                var targetEventloop = netWorkerEventloopArray[i];
+                var targetEventloop = slotWorkerEventloopArray[i];
                 targetEventloop.execute(() -> {
                     doInTargetEventloop.doSth(inner);
                 });

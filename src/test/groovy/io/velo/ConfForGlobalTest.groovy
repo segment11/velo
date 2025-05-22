@@ -24,6 +24,7 @@ class ConfForGlobalTest extends Specification {
         println ConfForGlobal.pureMemory
         println ConfForGlobal.pureMemoryV2
         println ConfForGlobal.slotNumber
+        println ConfForGlobal.slotWorkers
         println ConfForGlobal.netWorkers
         println ConfForGlobal.eventLoopIdleMillis
 

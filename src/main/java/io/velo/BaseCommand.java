@@ -188,7 +188,7 @@ public abstract class BaseCommand {
     }
 
     protected byte workerId;
-    protected byte netWorkers;
+    protected byte slotWorkers;
 
     @TestOnly
     public short getSlotNumber() {
@@ -262,8 +262,8 @@ public abstract class BaseCommand {
     }
 
     @TestOnly
-    public static AGroup mockAGroup(byte workerId, byte netWorkers, short slotNumber) {
-        return mockAGroup(workerId, netWorkers, slotNumber, new CompressStats("mock", "net_"),
+    public static AGroup mockAGroup(byte workerId, byte slotWorkers, short slotNumber) {
+        return mockAGroup(workerId, slotWorkers, slotNumber, new CompressStats("mock", "worker_"),
                 Zstd.defaultCompressionLevel(), 100, new SnowFlake(1, 1),
                 new TrainSampleJob(workerId), new ArrayList<>(),
                 false, 0, new ArrayList<>(),
@@ -271,14 +271,14 @@ public abstract class BaseCommand {
     }
 
     @TestOnly
-    public static AGroup mockAGroup(byte workerId, byte netWorkers, short slotNumber, CompressStats compressStats,
+    public static AGroup mockAGroup(byte workerId, byte slotWorkers, short slotNumber, CompressStats compressStats,
                                     int compressLevel, int trainSampleListMaxSize, SnowFlake snowFlake,
                                     TrainSampleJob trainSampleJob, List<TrainSampleJob.TrainSampleKV> sampleToTrainList,
                                     boolean localTest, int localTestRandomValueListSize, ArrayList<byte[]> localTestRandomValueList,
                                     ArrayList<SlotWithKeyHash> slotWithKeyHashListParsed, boolean isCrossRequestWorker) {
         var aGroup = new AGroup("append", new byte[][]{new byte[0], new byte[0], new byte[0]}, null);
         aGroup.workerId = workerId;
-        aGroup.netWorkers = netWorkers;
+        aGroup.slotWorkers = slotWorkers;
         aGroup.slotNumber = slotNumber;
 
         aGroup.compressStats = compressStats;
@@ -309,7 +309,7 @@ public abstract class BaseCommand {
     public void from(BaseCommand other) {
         this.requestHandler = other.requestHandler;
 
-        this.netWorkers = other.netWorkers;
+        this.slotWorkers = other.slotWorkers;
         this.slotNumber = other.slotNumber;
 
         this.compressStats = other.compressStats;
@@ -343,7 +343,7 @@ public abstract class BaseCommand {
     public BaseCommand init(RequestHandler requestHandler, Request request) {
         this.requestHandler = requestHandler;
 
-        this.netWorkers = requestHandler.netWorkers;
+        this.slotWorkers = requestHandler.slotWorkers;
         this.slotNumber = requestHandler.slotNumber;
 
         this.compressStats = requestHandler.compressStats;

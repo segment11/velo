@@ -3,7 +3,6 @@ package io.velo;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.Tuple2;
 import io.activej.async.callback.AsyncComputation;
-import io.activej.async.function.AsyncSupplier;
 import io.activej.bytebuf.ByteBuf;
 import io.activej.config.Config;
 import io.activej.config.ConfigModule;
@@ -69,6 +68,8 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 
 import static io.activej.config.Config.*;
@@ -96,12 +97,17 @@ public class MultiWorkerServer extends Launcher {
     /**
      * Maximum number of network workers.
      */
-    static final int MAX_NET_WORKERS = 128;
+    static final int MAX_NET_WORKERS = 16;
+
+    /**
+     * Maximum number of slot workers.
+     */
+    static final int MAX_SLOT_WORKERS = 128;
 
     /**
      * Maximum number of index workers.
      */
-    static final int MAX_INDEX_WORKERS = 64;
+    static final int MAX_INDEX_WORKERS = 16;
 
     /**
      * Primary server for handling incoming connections.
@@ -117,10 +123,16 @@ public class MultiWorkerServer extends Launcher {
     RequestHandler[] requestHandlerArray;
 
     /**
-     * Array of event loops for network workers.
+     * Array of event loops for net workers.
      */
     @ThreadNeedLocal
     Eventloop[] netWorkerEventloopArray;
+
+    /**
+     * Array of event loops for slot workers.
+     */
+    @ThreadNeedLocal
+    Eventloop[] slotWorkerEventloopArray;
 
     /**
      * Socket inspector for managing socket connections.
@@ -221,7 +233,7 @@ public class MultiWorkerServer extends Launcher {
         int netWorkers = config.get(ofInteger(), "netWorkers", 1);
         netWorkerEventloopArray = new Eventloop[netWorkers];
 
-        // for unit test coverage
+        // for unit test mock
         if (workerPools == null) {
             return null;
         }
@@ -289,7 +301,7 @@ public class MultiWorkerServer extends Launcher {
      */
     @VisibleForTesting
     ErrorReply checkClusterSlot(ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList) {
-        // check if cross shards or not my shard
+        // check if cross-shards or not my shard
         var multiShardShadow = RequestHandler.getMultiShardShadow();
         var mySelfShard = multiShardShadow.getMySelfShard();
 
@@ -361,10 +373,10 @@ public class MultiWorkerServer extends Launcher {
             }
         }
 
-        // some cmd already set cross slot flag
+        // some cmd already set cross-slot flag
         if (!request.isCrossRequestWorker()) {
             if (slotWithKeyHashList != null && slotWithKeyHashList.size() > 1 && !request.isRepl()) {
-                // check if cross threads
+                // check if cross-threads
                 int expectRequestWorkerId = -1;
                 for (var slotWithKeyHash : slotWithKeyHashList) {
                     int slot = slotWithKeyHash.slot();
@@ -383,14 +395,8 @@ public class MultiWorkerServer extends Launcher {
         var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
 
         var firstSlot = request.getSingleSlot();
-        if (firstSlot == Request.SLOT_CAN_HANDLE_BY_ANY_WORKER) {
-            RequestHandler targetHandler;
-            if (requestHandlerArray.length == 1) {
-                targetHandler = requestHandlerArray[0];
-            } else {
-                var threadIndex = STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
-                targetHandler = requestHandlerArray[threadIndex];
-            }
+        if (isReuseNetWorkerEventloop) {
+            var targetHandler = requestHandlerArray[0];
             var reply = targetHandler.handle(request, socket);
             if (reply == null) {
                 return Promise.of(null);
@@ -412,16 +418,18 @@ public class MultiWorkerServer extends Launcher {
             }
         }
 
-        int i = firstSlot % requestHandlerArray.length;
-        var targetHandler = requestHandlerArray[i];
-
-        var currentThreadId = Thread.currentThread().threadId();
-        if (currentThreadId == netWorkerThreadIds[i]) {
-            return getByteBufPromiseByOtherEventloop(request, socket, targetHandler, null);
+        RequestHandler targetHandler;
+        int i;
+        if (firstSlot == Request.SLOT_CAN_HANDLE_BY_ANY_WORKER) {
+            i = new Random().nextInt(requestHandlerArray.length);
+            targetHandler = requestHandlerArray[i];
         } else {
-            var otherNetWorkerEventloop = netWorkerEventloopArray[i];
-            return getByteBufPromiseByOtherEventloop(request, socket, targetHandler, otherNetWorkerEventloop);
+            i = firstSlot % requestHandlerArray.length;
+            targetHandler = requestHandlerArray[i];
         }
+
+        var otherNetWorkerEventloop = slotWorkerEventloopArray[i];
+        return getByteBufPromiseByOtherEventloop(request, socket, targetHandler, otherNetWorkerEventloop);
     }
 
     /**
@@ -449,8 +457,7 @@ public class MultiWorkerServer extends Launcher {
         var isResp3 = veloUserData.isResp3;
         var replyMode = veloUserData.replyMode;
 
-        var p = targetEventloop == null ? Promises.first(AsyncSupplier.of(() -> targetHandler.handle(request, socket))) :
-                Promise.ofFuture(targetEventloop.submit(AsyncComputation.of(() -> targetHandler.handle(request, socket))));
+        var p = Promise.ofFuture(targetEventloop.submit(AsyncComputation.of(() -> targetHandler.handle(request, socket))));
 
         return p.then(reply -> {
             if (reply == null) {
@@ -649,10 +656,10 @@ public class MultiWorkerServer extends Launcher {
      */
     @Provides
     SnowFlake[] snowFlakes(ConfForSlot confForSlot, Config config) {
-        int netWorkers = config.get(ofInteger(), "netWorkers", 1);
-        var snowFlakes = new SnowFlake[netWorkers];
+        int slotWorkers = config.get(ofInteger(), "slotWorkers", 1);
+        var snowFlakes = new SnowFlake[slotWorkers];
 
-        for (int i = 0; i < netWorkers; i++) {
+        for (int i = 0; i < slotWorkers; i++) {
             snowFlakes[i] = new SnowFlake(ConfForGlobal.datacenterId, (ConfForGlobal.machineId << 8) | i);
         }
         return snowFlakes;
@@ -714,22 +721,27 @@ public class MultiWorkerServer extends Launcher {
     /**
      * Configures the event loop as a scheduler.
      *
-     * @param netWorkerEventloop the event loop for the network worker
-     * @param index              the index of the network worker
+     * @param slotWorkerEventloop the event loop for the slot worker
+     * @param index               the index of the slot worker
      */
-    private void eventloopAsScheduler(Eventloop netWorkerEventloop, int index) {
+    private void eventloopAsScheduler(Eventloop slotWorkerEventloop, int index) {
         var taskRunnable = scheduleRunnableArray[index];
-        taskRunnable.setNetWorkerEventloop(netWorkerEventloop);
+        taskRunnable.setSlotWorkerEventloop(slotWorkerEventloop);
         taskRunnable.setRequestHandler(requestHandlerArray[index]);
 
         taskRunnable.chargeOneSlots(LocalPersist.getInstance().oneSlots());
 
         // interval 1s
-        netWorkerEventloop.delay(1000L, taskRunnable);
+        slotWorkerEventloop.delay(1000L, taskRunnable);
     }
 
     @VisibleForTesting
+    long[] slotWorkerThreadIds;
+
+    @VisibleForTesting
     long[] netWorkerThreadIds;
+
+    private boolean isReuseNetWorkerEventloop = false;
 
     /**
      * Starts the application.
@@ -738,24 +750,66 @@ public class MultiWorkerServer extends Launcher {
      */
     @Override
     protected void onStart() throws Exception {
-        netWorkerThreadIds = new long[netWorkerEventloopArray.length];
+        // already checked in beforeCreateHandler
+        int slotWorkers = configInject.get(ofInteger(), "slotWorkers", 1);
+        int netWorkers = configInject.get(ofInteger(), "netWorkers", 1);
 
-        for (int i = 0; i < netWorkerEventloopArray.length; i++) {
-            var netWorkerEventloop = netWorkerEventloopArray[i];
-            assert netWorkerEventloop.getEventloopThread() != null;
-            netWorkerThreadIds[i] = netWorkerEventloop.getEventloopThread().threadId();
+        slotWorkerEventloopArray = new Eventloop[slotWorkers];
+        slotWorkerThreadIds = new long[slotWorkers];
+
+        // reuse networker thread
+        if (slotWorkers == 1 && netWorkers == 1) {
+            isReuseNetWorkerEventloop = true;
+            logger.warn("Slot worker reuse net worker");
+
+            var eventloop = netWorkerEventloopArray[0];
+            slotWorkerEventloopArray[0] = eventloop;
+            // networker eventloop is already running
+            assert eventloop != null && eventloop.getEventloopThread() != null;
+            slotWorkerThreadIds[0] = eventloop.getEventloopThread().threadId();
 
             // start schedule
-            eventloopAsScheduler(netWorkerEventloop, i);
-        }
-        logger.info("Net worker eventloop scheduler started");
+            eventloopAsScheduler(eventloop, 0);
+        } else {
+            for (int i = 0; i < slotWorkers; i++) {
+                var eventloop = Eventloop.builder()
+                        .withThreadName("slot-worker-" + i)
+                        .withIdleInterval(Duration.ofMillis(10))
+                        .build();
+                eventloop.keepAlive(true);
 
+                var waitLatch = new CountDownLatch(1);
+                final long[] threadIdArray = new long[1];
+                new Thread(() -> {
+                    threadIdArray[0] = Thread.currentThread().threadId();
+                    logger.info("Slot worker eventloop thread created, thread id: {}", threadIdArray[0]);
+                    waitLatch.countDown();
+                    eventloop.run();
+                }).start();
+                waitLatch.await();
+
+                slotWorkerEventloopArray[i] = eventloop;
+                slotWorkerThreadIds[i] = threadIdArray[0];
+
+                // start schedule
+                eventloopAsScheduler(eventloop, i);
+            }
+        }
+        logger.info("Slot worker eventloop scheduler started");
+
+        netWorkerThreadIds = new long[netWorkers];
+        for (int i = 0; i < netWorkers; i++) {
+            var eventloop = netWorkerEventloopArray[i];
+            netWorkerThreadIds[i] = eventloop.getEventloopThread().threadId();
+        }
+
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = slotWorkerThreadIds;
         MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = netWorkerThreadIds;
-        AclUsers.getInstance().initByNetWorkerEventloopArray(netWorkerEventloopArray);
+        AclUsers.getInstance().initBySlotWorkerEventloopArray(slotWorkerEventloopArray);
 
         // start primary schedule
         primaryScheduleRunnable = new PrimaryTaskRunnable(loopCount -> {
-            // load and execute groovy script if changed, every 10s
+            // load and execute groovy scripts if changed, every 10s
             if (loopCount % 10 == 0) {
                 // will not throw exception
                 refreshLoader.refresh();
@@ -779,12 +833,12 @@ public class MultiWorkerServer extends Launcher {
         int slotNumber = configInject.get(ofInteger(), "slotNumber", (int) LocalPersist.DEFAULT_SLOT_NUMBER);
         for (short slot = 0; slot < slotNumber; slot++) {
             int i = slot % requestHandlerArray.length;
-            localPersist.fixSlotThreadId(slot, netWorkerThreadIds[i]);
+            localPersist.fixSlotThreadId(slot, slotWorkerThreadIds[i]);
         }
 
         localPersist.startIndexHandlerPool();
 
-        socketInspector.initByNetWorkerEventloopArray(netWorkerEventloopArray);
+        socketInspector.initByNetWorkerEventloopArray(slotWorkerEventloopArray, netWorkerEventloopArray);
         localPersist.setSocketInspector(socketInspector);
 
         var isWalLazyReadOk = localPersist.walLazyReadFromFile();
@@ -940,10 +994,30 @@ public class MultiWorkerServer extends Launcher {
             localPersist.cleanUp();
             DictMap.getInstance().cleanUp();
 
-            for (var netWorkerEventloop : netWorkerEventloopArray) {
-                System.out.println("Net worker eventloop wake up");
+            if (!isReuseNetWorkerEventloop) {
+                for (int i = 0; i < slotWorkerEventloopArray.length; i++) {
+                    var slotWorkerEventloop = slotWorkerEventloopArray[i];
+                    slotWorkerEventloop.breakEventloop();
+
+                    System.out.println("Slot worker " + i + " eventloop wake up");
+                    int finalI = i;
+                    slotWorkerEventloop.execute(() -> {
+                        System.out.println("Slot worker " + finalI + " eventloop stopping");
+                    });
+                }
+            }
+
+            for (int i = 0; i < netWorkerEventloopArray.length; i++) {
+                var netWorkerEventloop = netWorkerEventloopArray[i];
+                // for unit test mock
+                if (netWorkerEventloop == null) {
+                    continue;
+                }
+
+                System.out.println("Net worker " + i + " eventloop wake up");
+                int finalI = i;
                 netWorkerEventloop.execute(() -> {
-                    System.out.println("Net worker eventloop stopping");
+                    System.out.println("Net worker " + finalI + " eventloop stopping");
                 });
             }
 
@@ -1171,11 +1245,11 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.slotNumber = (short) slotNumber;
             log.warn("Global config, slotNumber={}", ConfForGlobal.slotNumber);
 
+            var cpuNumber = Runtime.getRuntime().availableProcessors();
             int netWorkers = config.get(ofInteger(), "netWorkers", 1);
             if (netWorkers > MAX_NET_WORKERS) {
                 throw new IllegalArgumentException("Net workers too large, net workers should be less than " + MAX_NET_WORKERS);
             }
-            var cpuNumber = Runtime.getRuntime().availableProcessors();
             if (netWorkers > cpuNumber) {
                 throw new IllegalArgumentException("Net workers should be less or equal to cpu number");
             }
@@ -1187,6 +1261,22 @@ public class MultiWorkerServer extends Launcher {
             }
             ConfForGlobal.netWorkers = (byte) netWorkers;
             log.warn("Global config, netWorkers={}", ConfForGlobal.netWorkers);
+
+            int slotWorkers = config.get(ofInteger(), "slotWorkers", 1);
+            if (slotWorkers > MAX_SLOT_WORKERS) {
+                throw new IllegalArgumentException("Slot workers too large, slot workers should be less than " + MAX_SLOT_WORKERS);
+            }
+            if (slotWorkers > cpuNumber) {
+                throw new IllegalArgumentException("Slot workers should be less or equal to cpu number");
+            }
+            if (slotNumber < slotWorkers) {
+                throw new IllegalArgumentException("Slot workers should <= slot number");
+            }
+            if (slotNumber % slotWorkers != 0) {
+                throw new IllegalArgumentException("Slot number should be multiple of slot workers");
+            }
+            ConfForGlobal.slotWorkers = (byte) slotWorkers;
+            log.warn("Global config, slotWorkers={}", ConfForGlobal.slotWorkers);
 
             int indexWorkers = config.get(ofInteger(), "indexWorkers", 1);
             if (indexWorkers > MAX_INDEX_WORKERS) {
@@ -1231,28 +1321,28 @@ public class MultiWorkerServer extends Launcher {
         @Provides
         RequestHandler[] requestHandlerArray(SnowFlake[] snowFlakes, Integer beforeCreateHandler, Config config) {
             int slotNumber = config.get(ofInteger(), "slotNumber", (int) LocalPersist.DEFAULT_SLOT_NUMBER);
-            int netWorkers = config.get(ofInteger(), "netWorkers", 1);
+            int slotWorkers = config.get(ofInteger(), "slotWorkers", 1);
 
-            var list = new RequestHandler[netWorkers];
-            for (int i = 0; i < netWorkers; i++) {
-                list[i] = new RequestHandler((byte) i, (byte) netWorkers, (short) slotNumber, snowFlakes[i], config);
+            var list = new RequestHandler[slotWorkers];
+            for (int i = 0; i < slotWorkers; i++) {
+                list[i] = new RequestHandler((byte) i, (byte) slotWorkers, (short) slotNumber, snowFlakes[i], config);
             }
             return list;
         }
 
         /**
-         * Provides an array of task runnables.
+         * Provides an array of task runnable.
          *
          * @param beforeCreateHandler the result of the handler initialization
          * @param config              the configuration object
-         * @return an array of task runnables
+         * @return an array of task runnable
          */
         @Provides
         TaskRunnable[] scheduleRunnableArray(Integer beforeCreateHandler, Config config) {
-            int netWorkers = config.get(ofInteger(), "netWorkers", 1);
-            var list = new TaskRunnable[netWorkers];
-            for (int i = 0; i < netWorkers; i++) {
-                list[i] = new TaskRunnable((byte) i, (byte) netWorkers);
+            int slotWorkers = config.get(ofInteger(), "slotWorkers", 1);
+            var list = new TaskRunnable[slotWorkers];
+            for (int i = 0; i < slotWorkers; i++) {
+                list[i] = new TaskRunnable((byte) i, (byte) slotWorkers);
             }
             return list;
         }
@@ -1288,6 +1378,12 @@ public class MultiWorkerServer extends Launcher {
          * The socket inspector for managing socket connections.
          */
         public SocketInspector socketInspector;
+
+        /**
+         * Array of slot worker thread IDs.
+         * This array is immutable.
+         */
+        public long[] slotWorkerThreadIds;
 
         /**
          * Array of network worker thread IDs.
@@ -1335,12 +1431,28 @@ public class MultiWorkerServer extends Launcher {
             infoServerList.add(new Tuple2<>("listener0", "name=tcp,bind=" + arr[0] + ",port=" + arr[1]));
             infoServerList.add(new Tuple2<>("server_time_usec", String.valueOf(UP_TIME * 1000)));
 
-            var netWorkers = config.get(ofInteger(), "netWorkers", 1);
-            infoServerList.add(new Tuple2<>("io_threads_active", netWorkers.toString()));
+            var slotWorkers = config.get(ofInteger(), "slotWorkers", 1);
+            infoServerList.add(new Tuple2<>("io_threads_active", slotWorkers.toString()));
 
             long processId = ProcessHandle.current().pid();
             infoServerList.add(new Tuple2<>("process_id", String.valueOf(processId)));
             infoServerList.add(new Tuple2<>("process_supervised", "no"));
+        }
+
+        /**
+         * Gets the index of the current thread in the slot worker thread IDs array.
+         * This method uses an array for performance reasons instead of a hashtable.
+         *
+         * @return the index of the current thread, or -1 if not found
+         */
+        public int getSlotThreadLocalIndexByCurrentThread() {
+            var currentThreadId = Thread.currentThread().threadId();
+            for (int i = 0; i < slotWorkerThreadIds.length; i++) {
+                if (currentThreadId == slotWorkerThreadIds[i]) {
+                    return i;
+                }
+            }
+            return -1;
         }
 
         /**
@@ -1349,7 +1461,7 @@ public class MultiWorkerServer extends Launcher {
          *
          * @return the index of the current thread, or -1 if not found
          */
-        public int getThreadLocalIndexByCurrentThread() {
+        public int getNetThreadLocalIndexByCurrentThread() {
             var currentThreadId = Thread.currentThread().threadId();
             for (int i = 0; i < netWorkerThreadIds.length; i++) {
                 if (currentThreadId == netWorkerThreadIds[i]) {

@@ -356,7 +356,7 @@ class OneSlotTest extends Specification {
         Thread.start {
             eventloop.run()
         }
-        oneSlot.netWorkerEventloop = eventloop
+        oneSlot.slotWorkerEventloop = eventloop
         oneSlot.requestHandler = requestHandler
         Thread.sleep(100)
         oneSlot.threadIdProtectedForSafe = eventloop.eventloopThread.threadId()
@@ -399,7 +399,7 @@ class OneSlotTest extends Specification {
         array[0] == 1
 
         when:
-        oneSlot.netWorkerEventloop = eventloopCurrent
+        oneSlot.slotWorkerEventloop = eventloopCurrent
         oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()
         def p11 = oneSlot.asyncRun { println 'async run' }
         eventloopCurrent.run()
@@ -535,7 +535,7 @@ class OneSlotTest extends Specification {
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
         Eventloop[] eventloopArray = [eventloopCurrent]
-        inspector.initByNetWorkerEventloopArray(eventloopArray)
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
         oneSlot.extCvListCheckCountTotal = 1
         oneSlot.extCvValidCountTotal = 1

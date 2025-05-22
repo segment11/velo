@@ -185,7 +185,7 @@ class BaseCommandTest extends Specification {
         c.snowFlake = null
         then:
         c.workerId == 0
-        c.netWorkers == 1
+        c.slotWorkers == 1
         c.slotNumber == 1
         c.slot('key3{x}'.bytes).slot() == BaseCommand.slot('key3{x}'.bytes, 1).slot()
 
@@ -683,7 +683,7 @@ class BaseCommandTest extends Specification {
 
         and:
         FileUtils.forceMkdir(Consts.testDir)
-        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
         def dictMap = DictMap.instance
         dictMap.initDictMap(Consts.testDir)
         if (dictMap.dictSize() != 0) {

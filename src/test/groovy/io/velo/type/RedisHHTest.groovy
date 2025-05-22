@@ -223,7 +223,7 @@ class RedisHHTest extends Specification {
         dictMap.initDictMap(Consts.testDir)
         dictMap.putDict('key:', dictTrained)
 
-        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
         def encoded2 = rh.encode(dictTrained)
         def rh3 = RedisHH.decode(encoded2, false)
         then:

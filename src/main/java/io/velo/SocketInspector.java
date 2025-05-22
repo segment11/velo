@@ -75,7 +75,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @return true if the socket uses RESP3, false otherwise
      */
     public static boolean isResp3(ITcpSocket socket) {
-        // just when do unit test
+        // for unit test case
         if (socket == null) {
             return false;
         }
@@ -101,7 +101,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @return true if the connection is read-only, false otherwise
      */
     public static boolean isConnectionReadonly(ITcpSocket socket) {
-        // just when do unit test
+        // for unit test case
         if (socket == null) {
             return false;
         }
@@ -137,7 +137,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @return the authenticated user, or null if not set
      */
     public static String getAuthUser(ITcpSocket socket) {
-        // just when do unit test
+        // for unit test case
         if (socket == null) {
             return null;
         }
@@ -202,10 +202,10 @@ public class SocketInspector implements TcpSocket.Inspector {
     public volatile boolean isServerStopped = false;
 
     /**
-     * Array of event loops for network workers.
+     * Array of event loops for slot workers.
      */
     @ThreadNeedLocal
-    private Eventloop[] netWorkerEventloopArray;
+    private Eventloop[] slotWorkerEventloopArray;
 
     /**
      * Array of connected client counts for each network worker.
@@ -233,8 +233,8 @@ public class SocketInspector implements TcpSocket.Inspector {
      */
     public long netInBytesLength() {
         var total = 0L;
-        for (var i = 0; i < netInBytesLengthArray.length; i++) {
-            total += netInBytesLengthArray[i];
+        for (long l : netInBytesLengthArray) {
+            total += l;
         }
         return total;
     }
@@ -246,8 +246,8 @@ public class SocketInspector implements TcpSocket.Inspector {
      */
     public long netOutBytesLength() {
         var total = 0L;
-        for (var i = 0; i < netOutBytesLengthArray.length; i++) {
-            total += netOutBytesLengthArray[i];
+        for (long l : netOutBytesLengthArray) {
+            total += l;
         }
         return total;
     }
@@ -255,12 +255,13 @@ public class SocketInspector implements TcpSocket.Inspector {
     /**
      * Initializes the inspector with the given event loop array.
      *
-     * @param netWorkerEventloopArray the array of event loops
+     * @param slotWorkerEventloopArray the array of slot event loops
+     * @param netWorkerEventloopArray  the array of net event loops
      */
-    public void initByNetWorkerEventloopArray(Eventloop[] netWorkerEventloopArray) {
-        this.netWorkerEventloopArray = netWorkerEventloopArray;
-        this.connectedClientCountArray = new int[netWorkerEventloopArray.length];
+    public void initByNetWorkerEventloopArray(Eventloop[] slotWorkerEventloopArray, Eventloop[] netWorkerEventloopArray) {
+        this.slotWorkerEventloopArray = slotWorkerEventloopArray;
 
+        this.connectedClientCountArray = new int[netWorkerEventloopArray.length];
         this.netInBytesLengthArray = new long[netWorkerEventloopArray.length];
         this.netOutBytesLengthArray = new long[netWorkerEventloopArray.length];
     }
@@ -512,7 +513,7 @@ public class SocketInspector implements TcpSocket.Inspector {
             if (Thread.currentThread().threadId() == threadId) {
                 callback.doWithSocket(socket, reply);
             } else {
-                for (var eventloop : netWorkerEventloopArray) {
+                for (var eventloop : slotWorkerEventloopArray) {
                     assert eventloop.getEventloopThread() != null;
                     if (eventloop.getEventloopThread().threadId() == threadId) {
                         eventloop.execute(() -> callback.doWithSocket(socket, reply));
@@ -583,7 +584,7 @@ public class SocketInspector implements TcpSocket.Inspector {
         log.debug("Inspector on connect, remote address={}", remoteAddress);
         socketMap.put(remoteAddress, socket);
 
-        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
         connectedClientCountArray[threadIndex]++;
     }
 
@@ -597,7 +598,7 @@ public class SocketInspector implements TcpSocket.Inspector {
         var bytes = buf.readRemaining();
         createUserDataIfNotSet(socket).netInBytesLength += bytes;
 
-        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
         netInBytesLengthArray[threadIndex] += bytes;
     }
 
@@ -620,7 +621,7 @@ public class SocketInspector implements TcpSocket.Inspector {
     public void onWrite(TcpSocket socket, ByteBuf buf, int bytes) {
         createUserDataIfNotSet(socket).netOutBytesLength += bytes;
 
-        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
         netOutBytesLengthArray[threadIndex] += bytes;
     }
 
@@ -653,7 +654,7 @@ public class SocketInspector implements TcpSocket.Inspector {
         // remove from subscribe by channel
         subscribeByChannel.forEach((channel, sockets) -> sockets.remove(socket));
 
-        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
         connectedClientCountArray[threadIndex]--;
     }
 

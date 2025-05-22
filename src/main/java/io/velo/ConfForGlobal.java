@@ -104,6 +104,11 @@ public class ConfForGlobal {
     public static byte netWorkers = 1;
 
     /**
+     * Number of slot workers (default is 1).
+     */
+    public static byte slotWorkers = 1;
+
+    /**
      * Number of index workers (default is 1).
      */
     public static byte indexWorkers = 1;

@@ -247,21 +247,21 @@ public class Dict implements Serializable {
      */
     void initCtx() {
         if (decompressCtxArray == null) {
-            decompressCtxArray = new ZstdDecompressCtx[ConfForGlobal.netWorkers];
+            decompressCtxArray = new ZstdDecompressCtx[ConfForGlobal.slotWorkers];
             for (int i = 0; i < decompressCtxArray.length; i++) {
                 decompressCtxArray[i] = new ZstdDecompressCtx();
                 decompressCtxArray[i].loadDict(dictBytes);
             }
-            log.info("Dict init decompress ctx, dict bytes length={}, net workers={}", dictBytes.length, decompressCtxArray.length);
+            log.info("Dict init decompress ctx, dict bytes length={}, slot workers={}", dictBytes.length, decompressCtxArray.length);
         }
 
         if (ctxCompressArray == null) {
-            ctxCompressArray = new ZstdCompressCtx[ConfForGlobal.netWorkers];
+            ctxCompressArray = new ZstdCompressCtx[ConfForGlobal.slotWorkers];
             for (int i = 0; i < ctxCompressArray.length; i++) {
                 ctxCompressArray[i] = new ZstdCompressCtx();
                 ctxCompressArray[i].loadDict(dictBytes);
             }
-            log.info("Dict init compress ctx, dict bytes length={}, net workers={}", dictBytes.length, ctxCompressArray.length);
+            log.info("Dict init compress ctx, dict bytes length={}, slot workers={}", dictBytes.length, ctxCompressArray.length);
         }
     }
 
@@ -273,7 +273,7 @@ public class Dict implements Serializable {
             for (var zstdDecompressCtx : decompressCtxArray) {
                 zstdDecompressCtx.close();
             }
-            log.warn("Dict close decompress ctx, dict bytes length={}, net workers={}", dictBytes.length, decompressCtxArray.length);
+            log.warn("Dict close decompress ctx, dict bytes length={}, slot workers={}", dictBytes.length, decompressCtxArray.length);
             decompressCtxArray = null;
         }
 
@@ -281,7 +281,7 @@ public class Dict implements Serializable {
             for (var zstdCompressCtx : ctxCompressArray) {
                 zstdCompressCtx.close();
             }
-            log.warn("Dict close compress ctx, dict bytes length={}, net workers={}", dictBytes.length, ctxCompressArray.length);
+            log.warn("Dict close compress ctx, dict bytes length={}, slot workers={}", dictBytes.length, ctxCompressArray.length);
             ctxCompressArray = null;
         }
     }
@@ -293,7 +293,7 @@ public class Dict implements Serializable {
      * @return the compressed byte array
      */
     public byte[] compressByteArray(byte[] src) {
-        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
         var r = ctxCompressArray[threadIndex].compress(src);
         compressedCountTotal.add(1);
         compressBytesTotal.add(src.length);
@@ -312,7 +312,7 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination array
      */
     public int compressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
-        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
         var n = ctxCompressArray[threadIndex].compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
         compressedCountTotal.add(1);
         compressBytesTotal.add(length);
@@ -331,7 +331,7 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination array
      */
     public int decompressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
-        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
         return decompressCtxArray[threadIndex].decompressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
     }
 
@@ -347,7 +347,7 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination buffer
      */
     public int compressByteBuffer(ByteBuffer dstBuffer, int dstOffset, int dstSize, ByteBuffer srcBuffer, int srcOffset, int length) {
-        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
         var n = ctxCompressArray[threadIndex].compressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
         compressedCountTotal.add(1);
         compressBytesTotal.add(length);
@@ -367,7 +367,7 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination buffer
      */
     public int decompressByteBuffer(ByteBuffer dstBuffer, int dstOffset, int dstSize, ByteBuffer srcBuffer, int srcOffset, int length) {
-        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getThreadLocalIndexByCurrentThread();
+        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
         return decompressCtxArray[threadIndex].decompressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
     }
 

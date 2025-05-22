@@ -86,9 +86,10 @@ class SocketInspectorTest extends Specification {
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
         Eventloop[] eventloopArray = [eventloopCurrent]
-        inspector.initByNetWorkerEventloopArray(eventloopArray)
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
 
         when:
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
         MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
         inspector.connectedClientCountArray = [0]
         inspector.onConnect(socket)
@@ -169,7 +170,7 @@ class SocketInspectorTest extends Specification {
         Thread.sleep(1000)
 
         Eventloop[] eventloopArray = [eventloop2, eventloop]
-        inspector.initByNetWorkerEventloopArray(eventloopArray)
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
 
         def one = new SocketInspector.ChannelAndIsPattern('test_channel', false)
         def one1 = new SocketInspector.ChannelAndIsPattern('test_channel', false)

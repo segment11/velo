@@ -622,7 +622,7 @@ class RGroupTest extends Specification {
         }
         Thread.sleep(100)
         localPersist.fixSlotThreadId(s2.slot(), eventloop.eventloopThread.threadId())
-        localPersist.oneSlot(s2.slot()).netWorkerEventloop = eventloop
+        localPersist.oneSlot(s2.slot()).slotWorkerEventloop = eventloop
         rl.addFirst('1'.bytes)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)

@@ -215,7 +215,7 @@ class VGroupTest extends Specification {
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
 
-        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
 
         and:
         ConfForGlobal.indexWorkers = (byte) 1

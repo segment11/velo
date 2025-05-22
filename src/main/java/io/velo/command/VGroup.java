@@ -167,11 +167,11 @@ public class VGroup extends BaseCommand {
             boolean isCrossRequestWorker = false;
             var slotWithKeyHashList = mGroup.parseSlots("mget", dd, slotNumber);
             if (slotWithKeyHashList != null && slotWithKeyHashList.size() > 1) {
-                // check if cross threads
+                // check if cross-threads
                 int expectRequestWorkerId = -1;
                 for (var slotWithKeyHash : slotWithKeyHashList) {
                     int slot = slotWithKeyHash.slot();
-                    var expectRequestWorkerIdInner = slot % ConfForGlobal.netWorkers;
+                    var expectRequestWorkerIdInner = slot % ConfForGlobal.slotWorkers;
                     if (expectRequestWorkerId == -1) {
                         expectRequestWorkerId = expectRequestWorkerIdInner;
                     }
@@ -187,10 +187,10 @@ public class VGroup extends BaseCommand {
             assert slotWithKeyHashList != null;
             var first = slotWithKeyHashList.getFirst();
             var firstSlot = first.slot();
-            int ii = firstSlot % ConfForGlobal.netWorkers;
+            int ii = firstSlot % ConfForGlobal.slotWorkers;
 
             var currentThreadId = Thread.currentThread().threadId();
-            var expectThreadId = MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds[ii];
+            var expectThreadId = MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds[ii];
             if (currentThreadId == expectThreadId) {
                 setReplyWhenAsyncMget(mGroup, isCrossRequestWorker, finalPromise);
                 return;

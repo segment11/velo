@@ -202,7 +202,7 @@ public class CGroup extends BaseCommand {
 
         var dstSlotWithKeyHash = slotWithKeyHashListParsed.getLast();
         if (isCrossRequestWorker) {
-            // current net worker is src key slot's net worker
+            // current slot worker is src key slot's slot worker
             var dstSlot = dstSlotWithKeyHash.slot();
             var dstOneSlot = localPersist.oneSlot(dstSlot);
 

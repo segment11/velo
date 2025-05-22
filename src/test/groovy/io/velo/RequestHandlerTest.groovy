@@ -28,8 +28,17 @@ class RequestHandlerTest extends Specification {
 
     def 'test handle'() {
         given:
-        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
-        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.connectedClientCountArray = [0]
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+
         def snowFlake = new SnowFlake(1, 1)
         def requestHandler = new RequestHandler(workerId, netWorkers, slotNumber, snowFlake, Config.create())
         println requestHandler
@@ -38,12 +47,6 @@ class RequestHandlerTest extends Specification {
         def config2 = Config.create().with('localTest', 'true')
         def requestHandler2 = new RequestHandler(workerId, netWorkers, slotNumber, snowFlake, config2)
 
-        def eventloopCurrent = Eventloop.builder()
-                .withCurrentThread()
-                .withIdleInterval(Duration.ofMillis(100))
-                .build()
-        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
-
         def localPersist = LocalPersist.instance
         LocalPersistTest.prepareLocalPersist()
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
@@ -51,7 +54,7 @@ class RequestHandlerTest extends Specification {
 
         expect:
         requestHandler.workerId == workerId
-        requestHandler.netWorkers == netWorkers
+        requestHandler.slotWorkers == netWorkers
         requestHandler.slotNumber == slotNumber
         requestHandler.snowFlake == snowFlake
         requestHandler2.localTestRandomValueList.size() > 0
@@ -551,7 +554,7 @@ class RequestHandlerTest extends Specification {
         Consts.persistDir.mkdirs()
         ConfForGlobal.netListenAddresses = 'localhost:7379'
         RequestHandler.initMultiShardShadows((byte) 2)
-        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
 
         when:
         def multiShard = new MultiShard(Consts.persistDir)
