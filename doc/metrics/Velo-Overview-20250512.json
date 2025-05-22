@@ -1225,7 +1225,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "fd_read_time_avg_us{instance=\"$instance\"}",
+          "expr": "fd_c_0_read_time_avg_us{instance=\"$instance\"}",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "read/slot-{{slot}}",
@@ -1240,7 +1240,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "fd_write_time_avg_us{instance=\"$instance\"}",
+          "expr": "fd_c_0_write_time_avg_us{instance=\"$instance\"}",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
