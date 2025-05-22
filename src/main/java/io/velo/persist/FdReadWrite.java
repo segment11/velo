@@ -126,63 +126,65 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      */
     @Override
     public Map<String, Double> collect() {
+        final String prefix = "fd_" + (isChunkFd ? "c_" : "k_") + fdIndex + "_";
+
         var map = new HashMap<String, Double>();
-        map.put("fd_write_index", (double) writeIndex);
+        map.put(prefix + "write_index", (double) writeIndex);
 
         if (afterPreadCompressCountTotal > 0) {
-            map.put("fd_after_pread_compress_time_total_us", (double) afterPreadCompressTimeTotalUs);
-            map.put("fd_after_pread_compress_count_total", (double) afterPreadCompressCountTotal);
+            map.put(prefix + "after_pread_compress_time_total_us", (double) afterPreadCompressTimeTotalUs);
+            map.put(prefix + "after_pread_compress_count_total", (double) afterPreadCompressCountTotal);
             double avgUs = (double) afterPreadCompressTimeTotalUs / afterPreadCompressCountTotal;
-            map.put("fd_after_pread_compress_time_avg_us", avgUs);
+            map.put(prefix + "after_pread_compress_time_avg_us", avgUs);
 
             // compress ratio
             double compressRatio = (double) afterPreadCompressedBytesTotalLength / afterPreadCompressBytesTotalLength;
-            map.put("fd_after_pread_compress_ratio", compressRatio);
+            map.put(prefix + "after_pread_compress_ratio", compressRatio);
         }
 
         if (keyBucketSharedBytesCompressCountTotal > 0) {
-            map.put("fd_key_bucket_shared_bytes_compress_time_total_us", (double) keyBucketSharedBytesCompressTimeTotalUs);
-            map.put("fd_key_bucket_shared_bytes_compress_count_total", (double) keyBucketSharedBytesCompressCountTotal);
+            map.put(prefix + "key_bucket_shared_bytes_compress_time_total_us", (double) keyBucketSharedBytesCompressTimeTotalUs);
+            map.put(prefix + "key_bucket_shared_bytes_compress_count_total", (double) keyBucketSharedBytesCompressCountTotal);
             double avgUs = (double) keyBucketSharedBytesCompressTimeTotalUs / keyBucketSharedBytesCompressCountTotal;
-            map.put("fd_key_bucket_shared_bytes_compress_time_avg_us", avgUs);
+            map.put(prefix + "key_bucket_shared_bytes_compress_time_avg_us", avgUs);
 
             // compress ratio
             double compressRatio = (double) keyBucketSharedBytesAfterCompressedBytesTotal / keyBucketSharedBytesBeforeCompressedBytesTotal;
-            map.put("fd_key_bucket_shared_bytes_compress_ratio", compressRatio);
+            map.put(prefix + "key_bucket_shared_bytes_compress_ratio", compressRatio);
         }
 
         if (keyBucketSharedBytesDecompressCountTotal > 0) {
-            map.put("fd_key_bucket_shared_bytes_decompress_time_total_us", (double) keyBucketSharedBytesDecompressTimeTotalUs);
-            map.put("fd_key_bucket_shared_bytes_decompress_count_total", (double) keyBucketSharedBytesDecompressCountTotal);
+            map.put(prefix + "key_bucket_shared_bytes_decompress_time_total_us", (double) keyBucketSharedBytesDecompressTimeTotalUs);
+            map.put(prefix + "key_bucket_shared_bytes_decompress_count_total", (double) keyBucketSharedBytesDecompressCountTotal);
             double avgUs = (double) keyBucketSharedBytesDecompressTimeTotalUs / keyBucketSharedBytesDecompressCountTotal;
-            map.put("fd_key_bucket_shared_bytes_decompress_time_avg_us", avgUs);
+            map.put(prefix + "key_bucket_shared_bytes_decompress_time_avg_us", avgUs);
         }
 
         if (readCountTotal > 0) {
-            map.put("fd_read_bytes_total", (double) readBytesTotal);
-            map.put("fd_read_time_total_us", (double) readTimeTotalUs);
-            map.put("fd_read_count_total", (double) readCountTotal);
-            map.put("fd_read_time_avg_us", (double) readTimeTotalUs / readCountTotal);
+            map.put(prefix + "read_bytes_total", (double) readBytesTotal);
+            map.put(prefix + "read_time_total_us", (double) readTimeTotalUs);
+            map.put(prefix + "read_count_total", (double) readCountTotal);
+            map.put(prefix + "read_time_avg_us", (double) readTimeTotalUs / readCountTotal);
         }
 
         if (writeCountTotal > 0) {
-            map.put("fd_write_bytes_total", (double) writeBytesTotal);
-            map.put("fd_write_time_total_us", (double) writeTimeTotalUs);
-            map.put("fd_write_count_total", (double) writeCountTotal);
-            map.put("fd_write_time_avg_us", (double) writeTimeTotalUs / writeCountTotal);
+            map.put(prefix + "write_bytes_total", (double) writeBytesTotal);
+            map.put(prefix + "write_time_total_us", (double) writeTimeTotalUs);
+            map.put(prefix + "write_count_total", (double) writeCountTotal);
+            map.put(prefix + "write_time_avg_us", (double) writeTimeTotalUs / writeCountTotal);
         }
 
         if (lruHitCounter > 0) {
-            map.put("fd_lru_hit_counter", (double) lruHitCounter);
+            map.put(prefix + "lru_hit_counter", (double) lruHitCounter);
 
-            map.put("fd_after_lru_read_decompress_time_total_us", (double) afterLRUReadDecompressTimeTotalUs);
-            map.put("fd_after_lru_read_decompress_time_avg_us", (double) afterLRUReadDecompressTimeTotalUs / lruHitCounter);
+            map.put(prefix + "after_lru_read_decompress_time_total_us", (double) afterLRUReadDecompressTimeTotalUs);
+            map.put(prefix + "after_lru_read_decompress_time_avg_us", (double) afterLRUReadDecompressTimeTotalUs / lruHitCounter);
 
             var hitMissTotal = lruHitCounter + lruMissCounter;
-            map.put("fd_lru_hit_ratio", (double) lruHitCounter / hitMissTotal);
+            map.put(prefix + "lru_hit_ratio", (double) lruHitCounter / hitMissTotal);
         }
         if (lruMissCounter > 0) {
-            map.put("fd_lru_miss_counter", (double) lruMissCounter);
+            map.put(prefix + "lru_miss_counter", (double) lruMissCounter);
         }
 
         return map;
@@ -425,6 +427,11 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     private boolean isChunkFd;
 
     /**
+     * The index of a group fd array.
+     */
+    private int fdIndex;
+
+    /**
      * The number of segments to batch read during the merge process.
      */
     static final int BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE = 32;
@@ -594,11 +601,13 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * Initializes the byte buffers for read and write operations.
      *
      * @param isChunkFd true if this is a chunk fd, false if it is a key bucket fd.
+     * @param fdIndex   the index of array.
      */
-    public void initByteBuffers(boolean isChunkFd) {
+    public void initByteBuffers(boolean isChunkFd, int fdIndex) {
         var oneInnerLength = isChunkFd ? ConfForSlot.global.confChunk.segmentLength : KeyLoader.KEY_BUCKET_ONE_COST_SIZE;
         this.oneInnerLength = oneInnerLength;
         this.isChunkFd = isChunkFd;
+        this.fdIndex = fdIndex;
 
         initLRU(isChunkFd, oneInnerLength);
 

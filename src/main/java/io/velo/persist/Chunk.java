@@ -184,7 +184,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             fdLengths[i] = (int) file.length();
 
             var fdReadWrite = new FdReadWrite(slot, name, libC, file);
-            fdReadWrite.initByteBuffers(true);
+            fdReadWrite.initByteBuffers(true, i);
 
             this.fdReadWriteArray[i] = fdReadWrite;
         }

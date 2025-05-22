@@ -56,7 +56,7 @@ public class BenchmarkFdReadWrite {
             FileInit.append2GBFile(file, true);
 
             var fdReadWrite = new FdReadWrite((short) 0, "test" + i, libC, file);
-            fdReadWrite.initByteBuffers(false);
+            fdReadWrite.initByteBuffers(false, i);
             fdReadWriteList.add(fdReadWrite);
         }
     }

@@ -257,11 +257,12 @@ class ChunkTest extends Specification {
 
         when:
         ConfForGlobal.pureMemory = true
-        chunk.fdReadWriteArray[0].initByteBuffers(true)
+        chunk.fdReadWriteArray[0].initByteBuffers(true, 0)
         println 'mock pure memory chunk append segments bytes, fd: ' + chunk.fdReadWriteArray[0].name
-        for (frw in oneSlot.keyLoader.fdReadWriteArray) {
+        for (i in 0..<oneSlot.keyLoader.fdReadWriteArray.length) {
+            def frw = oneSlot.keyLoader.fdReadWriteArray[i]
             if (frw != null) {
-                frw.initByteBuffers(false)
+                frw.initByteBuffers(false, i)
                 println 'mock pure memory key loader set key buckets bytes, fd: ' + frw.name
             }
         }
@@ -396,8 +397,9 @@ class ChunkTest extends Specification {
 
         when:
         ConfForGlobal.pureMemory = true
-        for (fdReadWrite in chunk.fdReadWriteArray) {
-            fdReadWrite.initByteBuffers(true)
+        for (i in 0..<chunk.fdReadWriteArray.length) {
+            def frw = chunk.fdReadWriteArray[i]
+            frw.initByteBuffers(true, i)
         }
         chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1)
         then:

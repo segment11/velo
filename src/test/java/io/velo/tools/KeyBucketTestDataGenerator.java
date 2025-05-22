@@ -36,7 +36,7 @@ public class KeyBucketTestDataGenerator implements TestDataGenerator, WalVDataGe
             // prometheus metric labels use _ instead of -
             var name = "key_bucket_split_" + splitIndex + "_slot_" + slot;
             FdReadWrite fdReadWrite = new FdReadWrite(slot, name, libC, file);
-            fdReadWrite.initByteBuffers(false);
+            fdReadWrite.initByteBuffers(false, splitIndex);
             fdReadWriteArray[splitIndex] = fdReadWrite;
         }
 

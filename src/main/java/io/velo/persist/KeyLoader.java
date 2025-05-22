@@ -530,7 +530,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            fdReadWrite.initByteBuffers(false);
+            fdReadWrite.initByteBuffers(false, splitIndex);
 
             fdReadWriteArray[splitIndex] = fdReadWrite;
         }
