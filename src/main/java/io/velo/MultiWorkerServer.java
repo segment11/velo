@@ -54,9 +54,8 @@ import io.velo.reply.Reply;
 import io.velo.task.PrimaryTaskRunnable;
 import io.velo.task.TaskRunnable;
 import jnr.ffi.Platform;
-import net.openhft.affinity.AffinityStrategies;
-import net.openhft.affinity.AffinityThreadFactory;
 import org.apache.commons.net.telnet.TelnetClient;
+import org.apache.lucene.util.NamedThreadFactory;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -373,7 +372,7 @@ public class MultiWorkerServer extends Launcher {
             }
         }
 
-        // some cmd already set cross-slot flag
+        // some cmd already set a cross-slot flag
         if (!request.isCrossRequestWorker()) {
             if (slotWithKeyHashList != null && slotWithKeyHashList.size() > 1 && !request.isRepl()) {
                 // check if cross-threads
@@ -685,11 +684,10 @@ public class MultiWorkerServer extends Launcher {
      */
     @Override
     protected final Module getModule() {
-        var affinityThreadFactory = new AffinityThreadFactory("net-worker",
-                AffinityStrategies.SAME_SOCKET, AffinityStrategies.DIFFERENT_CORE);
+        var threadFactory = new NamedThreadFactory("net-worker");
         return combine(
                 ServiceGraphModule.builder()
-                        .with(Eventloop.class, ServiceAdapters.forEventloop(affinityThreadFactory))
+                        .with(Eventloop.class, ServiceAdapters.forEventloop(threadFactory))
                         .build(),
                 WorkerPoolModule.create(),
                 ConfigModule.builder()
