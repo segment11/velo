@@ -870,6 +870,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
         var walGroupNumber = Wal.calcWalGroupNumber();
 
+        long readN = 0;
+        long compressedN = 0;
         int n = 0;
         for (int i = 0; i < walGroupNumber; i++) {
             var beginBucketIndex = i * oneChargeBucketNumber;
@@ -892,6 +894,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
                 var bytes = Arrays.copyOfRange(sharedBytes, start, end);
                 var compressedBytes = Zstd.compress(bytes);
+                readN += oneInnerLength;
+                compressedN += compressedBytes.length;
 
                 oneInnerBytesByIndexLRU.put(bucketIndex, compressedBytes);
                 n++;
@@ -901,6 +905,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
                 }
             }
         }
+        log.warn("Warm up key bucket fd, name={}, read bytes={}, compressed bytes={}, compressed ratio={}", name,
+                readN, compressedN, (double) compressedN / readN);
 
         // n should be ConfForSlot.global.confBucket.bucketsPerSlot
         return n;
