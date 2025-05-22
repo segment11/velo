@@ -862,15 +862,10 @@ public class MultiWorkerServer extends Launcher {
             isWarmUpWhenStart = configInject.get(ofBoolean(), "bucket.lruPerFd.isWarmUpWhenStart", false);
         }
         if (isWarmUpWhenStart) {
-            var oneSlots = localPersist.oneSlots();
-
-            var beginT = System.currentTimeMillis();
-            for (var oneSlot : oneSlots) {
-                var n = oneSlot.warmUp();
-                log.info("Warm up slot={}, warm up n={}", oneSlot.slot(), n);
+            var isWarmUpOk = localPersist.warmUp();
+            if (!isWarmUpOk) {
+                throw new RuntimeException("Warm up failed");
             }
-            var costT = System.currentTimeMillis() - beginT;
-            log.info("Warm up cost time={}ms", costT);
         }
     }
 

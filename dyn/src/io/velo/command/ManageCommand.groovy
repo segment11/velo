@@ -305,7 +305,7 @@ class ManageCommand extends BaseCommand {
             oneSlot.canRead = false
             return new BulkReply(('slot ' + slot + ' set not can read').bytes)
         } else if (subSubCmd == 'key-buckets-warm-up') {
-            def n = oneSlot.warmUp()
+            def n = oneSlot.warmUp().get()
             return new IntegerReply(n)
         } else if (subSubCmd == 'mock-data') {
             if (data.length != 7) {

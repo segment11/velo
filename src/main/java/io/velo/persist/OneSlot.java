@@ -1605,12 +1605,26 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     /**
-     * Warms up the OneSlot by preloading data.
+     * Warms up the OneSlot key buckets by preloading data asynchronously.
      *
-     * @return the number of keys preloaded
+     * @return the promise representing the number of keys preloaded
      */
-    public int warmUp() {
-        return keyLoader.warmUp();
+    public CompletableFuture<Integer> warmUp() {
+        var waitF = new CompletableFuture<Integer>();
+        // just run once
+        new Thread(() -> {
+            log.info("Start a single thread to read all key buckets from file for better cache hit, slot={}", slot);
+            try {
+                int n = keyLoader.warmUp();
+                waitF.complete(n);
+            } catch (Exception e) {
+                log.error("Slot read all key buckets from file for better cache hit error for slot=" + slot, e);
+                waitF.completeExceptionally(e);
+            } finally {
+                log.info("End slot read all key buckets from file for better cache hit, slot={}", slot);
+            }
+        }).start();
+        return waitF;
     }
 
     public record BufOrCompressedValue(@Nullable ByteBuf buf, @Nullable CompressedValue cv) {

@@ -265,6 +265,34 @@ public class LocalPersist implements NeedCleanUp {
         return isEveryOk;
     }
 
+    /**
+     * Perform warm up asynchronously for each slot.
+     *
+     * @return true if warm up was successful for all slots, false otherwise
+     */
+    public boolean warmUp() {
+        var beginT = System.currentTimeMillis();
+        CompletableFuture<Integer>[] fArray = new CompletableFuture[oneSlots.length];
+        for (int i = 0; i < oneSlots.length; i++) {
+            var oneSlot = oneSlots[i];
+            fArray[i] = oneSlot.warmUp();
+        }
+
+        log.info("Wait for all slots key buckets read from file done");
+        CompletableFuture.allOf(fArray).join();
+        var endT = System.currentTimeMillis();
+        log.info("All slots key buckets read from file done, cost={}ms", endT - beginT);
+
+        var isEveryOk = true;
+        for (var f : fArray) {
+            if (f.isCompletedExceptionally()) {
+                isEveryOk = false;
+                break;
+            }
+        }
+        return isEveryOk;
+    }
+
     private boolean isHashSaveMemberTogether;
 
     /**

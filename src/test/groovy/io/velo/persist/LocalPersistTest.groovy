@@ -113,9 +113,11 @@ class LocalPersistTest extends Specification {
         exception
 
         when:
-        def isOk = localPersist.walLazyReadFromFile()
+        def isOkWalLazyRead = localPersist.walLazyReadFromFile()
+        def isOkWarmUp = localPersist.warmUp()
         then:
-        isOk
+        isOkWalLazyRead
+        isOkWarmUp
 
         cleanup:
         ConfForGlobal.clusterEnabled = false

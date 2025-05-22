@@ -557,8 +557,10 @@ class OneSlotTest extends Specification {
         1 == 1
 
         when:
-        def n = oneSlot.warmUp()
+        def t = oneSlot.walLazyReadFromFile().get()
+        def n = oneSlot.warmUp().get()
         then:
+        t
         n >= 0
 
         cleanup:
