@@ -1157,7 +1157,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param valueBytesLength the length of the value
      */
     public void monitorBigKeyByValueLength(byte[] keyBytes, int valueBytesLength) {
-        bigKeyTopK.add(keyBytes, valueBytesLength);
+        if (valueBytesLength >= BIG_KEY_LENGTH_CHECK) {
+            bigKeyTopK.add(keyBytes, valueBytesLength);
+        }
     }
 
     private final String saveFileNameWhenPureMemory;

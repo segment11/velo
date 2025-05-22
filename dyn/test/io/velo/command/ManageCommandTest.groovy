@@ -607,7 +607,7 @@ class ManageCommandTest extends Specification {
         def oneSlot = localPersist.oneSlot(slot)
 
         when:
-        oneSlot.monitorBigKeyByValueLength('test'.bytes, 1024)
+        oneSlot.monitorBigKeyByValueLength('test'.bytes, 2048)
         data5[1] = 'slot'.bytes
         data5[2] = '0'.bytes
         data5[3] = 'view-metrics'.bytes

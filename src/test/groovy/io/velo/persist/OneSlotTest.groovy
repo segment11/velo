@@ -118,7 +118,7 @@ class OneSlotTest extends Specification {
         // test big key top k init
         oneSlot.dynConfig.update(BigKeyTopK.KEY_IN_DYN_CONFIG, '100')
         oneSlot.initBigKeyTopK(10)
-        oneSlot.monitorBigKeyByValueLength('test'.bytes, 1024)
+        oneSlot.monitorBigKeyByValueLength('test'.bytes, 2048)
         then:
         oneSlot.bigKeyTopK != null
         oneSlot.bigKeyTopK.size() == 1
