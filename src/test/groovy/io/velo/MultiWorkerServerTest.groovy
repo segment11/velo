@@ -645,8 +645,19 @@ class MultiWorkerServerTest extends Specification {
     def 'test cluster slot cross shards'() {
         given:
         ConfForGlobal.clusterEnabled = true
+        def eventloop0 = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop0.keepAlive(true)
+        Thread.start {
+            eventloop0.run()
+        }
+        Thread.sleep(100)
+
         def m = new MultiWorkerServer()
         m.isMockHandle = true
+        m.slotWorkerEventloopArray = new Eventloop[1]
+        m.slotWorkerEventloopArray[0] = eventloop0
 
         and:
         LocalPersistTest.prepareLocalPersist()
