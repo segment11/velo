@@ -655,10 +655,10 @@ public class MultiWorkerServer extends Launcher {
      */
     @Provides
     SnowFlake[] snowFlakes(ConfForSlot confForSlot, Config config) {
-        int slotWorkers = config.get(ofInteger(), "slotWorkers", 1);
-        var snowFlakes = new SnowFlake[slotWorkers];
+        int slotNumber = config.get(ofInteger(), "slotNumber", (int) LocalPersist.DEFAULT_SLOT_NUMBER);
+        var snowFlakes = new SnowFlake[slotNumber];
 
-        for (int i = 0; i < slotWorkers; i++) {
+        for (int i = 0; i < slotNumber; i++) {
             snowFlakes[i] = new SnowFlake(ConfForGlobal.datacenterId, (ConfForGlobal.machineId << 8) | i);
         }
         return snowFlakes;
