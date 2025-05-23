@@ -64,6 +64,10 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -151,13 +155,18 @@ public class MultiWorkerServer extends Launcher {
      */
     private static final Logger log = LoggerFactory.getLogger(MultiWorkerServer.class);
 
+    private static File pidFile;
+    private static FileLock pidFileLock;
+    private static FileChannel pidFileChannel;
+    private static final String PID_FILE_NAME = "velo.pid";
+
     /**
      * Returns the directory file based on the configuration.
      *
      * @param config the configuration
      * @return the directory file
      */
-    static File dirFile(Config config) {
+    static File dirFile(Config config, boolean doFileLock) {
         var dirPath = config.get(ofString(), "dir", "/tmp/velo-data");
         ConfForGlobal.dirPath = dirPath;
         log.warn("Global config, dirPath={}", dirPath);
@@ -166,9 +175,30 @@ public class MultiWorkerServer extends Launcher {
         if (!dirFile.exists()) {
             boolean isOk = dirFile.mkdirs();
             if (!isOk) {
-                throw new RuntimeException("Create dir " + dirFile.getAbsolutePath() + " failed");
+                throw new RuntimeException("Create dir " + dirPath + " failed");
             }
         }
+
+        if (doFileLock) {
+            pidFile = new File(dirFile, PID_FILE_NAME);
+            try {
+                pidFileChannel = FileChannel.open(pidFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                pidFileLock = pidFileChannel.tryLock();
+                if (pidFileLock == null) {
+                    throw new RuntimeException("File lock check failed, please check the dir " + dirPath);
+                }
+
+                long processId = ProcessHandle.current().pid();
+                var bytes = String.valueOf(processId).getBytes();
+                var buffer = ByteBuffer.wrap(bytes);
+                int n = pidFileChannel.write(buffer);
+                log.warn("File lock check ok, the dir {}, pid={}, write n={}", dirPath, processId, n);
+            } catch (Exception e) {
+                log.error("File lock check failed, please check the dir {}, error={}", dirPath, e.getMessage());
+                throw new RuntimeException(e);
+            }
+        }
+
         var persistDir = new File(dirFile, "persist");
         if (!persistDir.exists()) {
             boolean isOk = persistDir.mkdirs();
@@ -176,6 +206,7 @@ public class MultiWorkerServer extends Launcher {
                 throw new RuntimeException("Create dir " + persistDir.getAbsolutePath() + " failed");
             }
         }
+
         return dirFile;
     }
 
@@ -782,7 +813,7 @@ public class MultiWorkerServer extends Launcher {
                 final long[] threadIdArray = new long[1];
                 new Thread(() -> {
                     threadIdArray[0] = Thread.currentThread().threadId();
-                    logger.info("Slot worker eventloop thread created, thread id: {}", threadIdArray[0]);
+                    logger.info("Slot worker eventloop thread created, thread id={}", threadIdArray[0]);
                     waitLatch.countDown();
                     eventloop.run();
                 }).start();
@@ -1031,6 +1062,19 @@ public class MultiWorkerServer extends Launcher {
             System.err.println("Stop error=" + e.getMessage());
             e.printStackTrace();
             throw e;
+        } finally {
+            // release file lock
+            if (pidFileLock != null) {
+                try {
+                    pidFileLock.release();
+                    pidFileChannel.close();
+                    if (!pidFile.delete()) {
+                        System.err.println("Delete pid file failed, file=" + pidFile.getAbsolutePath());
+                    }
+                } catch (IOException e) {
+                    System.err.println("Release file lock error=" + e.getMessage());
+                }
+            }
         }
     }
 
@@ -1289,7 +1333,8 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.indexWorkers = (byte) indexWorkers;
             log.warn("Global config, indexWorkers={}", ConfForGlobal.indexWorkers);
 
-            var dirFile = dirFile(config);
+            var doFileLock = config.get(ofBoolean(), "doFileLock", true);
+            var dirFile = dirFile(config, doFileLock);
 
             var dictMap = DictMap.getInstance();
             dictMap.initDictMap(dirFile);

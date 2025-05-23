@@ -36,6 +36,7 @@ class MultiWorkerServerTest extends Specification {
         given:
         def dirFile = new File('/tmp/velo-data')
         def config = Config.create()
+                .with('doFileLock', "false")
                 .with('slotNumber', slotNumber.toString())
                 .with('slotWorkers', slotWorkers.toString())
                 .with('netWorkers', netWorkers.toString())
@@ -51,8 +52,8 @@ class MultiWorkerServerTest extends Specification {
         m.refreshLoader = m.refreshLoader()
         println MultiWorkerServer.UP_TIME
 
-        def dirFile2 = m.dirFile(config)
-        def dirFile3 = m.dirFile(config)
+        def dirFile2 = m.dirFile(config, true)
+        def dirFile3 = m.dirFile(config, false)
 
         def snowFlakes = m.snowFlakes(ConfForSlot.global, config)
 
@@ -67,6 +68,17 @@ class MultiWorkerServerTest extends Specification {
         snowFlakes != null
         m.getModule() != null
         m.getBusinessLogicModule() != null
+
+        when:
+        boolean hasException = false
+        try {
+            m.dirFile(config, true)
+        } catch (Exception e) {
+            println e.message
+            hasException = true
+        }
+        then:
+        hasException
 
         when:
         MultiWorkerServer.MAIN_ARGS = ['/etc/velo.properties']
@@ -312,6 +324,7 @@ class MultiWorkerServerTest extends Specification {
         when:
         def cc = ConfForSlot.global
         def configX = Config.create()
+                .with('doFileLock', "false")
                 .with("net.listenAddresses", "localhost:7379")
                 .with("debugMode", "true")
                 .with("pureMemory", "true")
