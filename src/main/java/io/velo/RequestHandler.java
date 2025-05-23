@@ -46,8 +46,6 @@ public class RequestHandler {
     private static final String GET_COMMAND = "get";
     private static final String SET_COMMAND = "set";
     private static final String QUIT_COMMAND = "quit";
-    private static final String ERROR_FOR_STAT_AS_COMMAND = "x_error";
-    private static final String READONLY_FOR_STAT_AS_COMMAND = "x_readonly";
 
     public static final String AS_KEY_GET_SLOT_RANGE_IN_CURRENT_CONNECTION_THREAD_LOCALLY = "x_slot_range";
 
@@ -262,6 +260,7 @@ public class RequestHandler {
                 var key = new String(keyBytes);
                 if (key.startsWith(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH)) {
                     var dataTransfer = transferDataForXGroup(key);
+                    // x index position is 23
                     var slotWithKeyHashListForXGroup = commandGroups[23].parseSlots(
                             XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH, dataTransfer, request.getSlotNumber());
                     request.setSlotWithKeyHashList(slotWithKeyHashListForXGroup);
@@ -279,7 +278,6 @@ public class RequestHandler {
     private static final String URL_QUERY_FOR_HAPROXY_FILTER_MASTER_OR_SLAVE = "master_or_slave";
     private static final String URL_QUERY_FOR_HAPROXY_FILTER_SLAVE = "slave";
     private static final String URL_QUERY_FOR_HAPROXY_FILTER_SLAVE_WITH_ZONE = "slave_with_zone";
-    private static final String URL_QUERY_FOR_CMD_STAT_COUNT = "cmd_stat_count";
     private static final String HEADER_NAME_FOR_BASIC_AUTH = "Authorization";
 
     /**
@@ -299,63 +297,6 @@ public class RequestHandler {
         return dataTransfer;
     }
 
-    // request time summary already include all cmd, for all handlers
-    // all cmd count is less than 1k, so need no rehash
-    private final HashMap<String, Long> cmdStatCountMap = new HashMap<>(1000);
-
-    /**
-     * Increases the command stat count for the given command.
-     *
-     * @param cmd the command
-     * @return the new command stat count
-     */
-    @VisibleForTesting
-    long increaseCmdStatArray(String cmd) {
-        var count = cmdStatCountMap.getOrDefault(cmd, 0L);
-        count++;
-        cmdStatCountMap.put(cmd, count);
-        return count;
-    }
-
-    /**
-     * Gets the command stat as a Prometheus format string.
-     *
-     * @return the command stat as a Prometheus format string
-     */
-    @VisibleForTesting
-    String cmdStatAsPrometheusFormatString() {
-        var sb = new StringBuilder();
-        for (var entry : cmdStatCountMap.entrySet()) {
-            sb.append("cmd_stat_count{cmd=\"").append(entry.getKey()).append("\",worker_id=\"").append(workerIdStr).append("\"} ").append(entry.getValue()).append("\n");
-        }
-        return sb.toString();
-    }
-
-    /**
-     * Gets the total command stat count.
-     *
-     * @return the total command stat count
-     */
-    @TestOnly
-    long cmdStatCountTotal() {
-        long total = 0;
-        for (var entry : cmdStatCountMap.entrySet()) {
-            total += entry.getValue();
-        }
-        return total;
-    }
-
-    /**
-     * Gets the command count stat for the given command.
-     *
-     * @param cmd the command
-     * @return the command count stat
-     */
-    @VisibleForTesting
-    long getCmdCountStat(String cmd) {
-        return cmdStatCountMap.getOrDefault(cmd, 0L);
-    }
-
     private static final Summary requestTimeSummary = Summary.build()
             .name("request_time")
             .help("Request time in seconds.")
@@ -365,6 +306,8 @@ public class RequestHandler {
             .quantile(0.99, 0.001)
             .quantile(0.999, 0.001)
             .register();
+
+    private final Debug debug = Debug.getInstance();
 
     /**
      * Handles the given request.
@@ -454,17 +397,6 @@ public class RequestHandler {
                     return NilReply.INSTANCE;
                 }
             }
-
-            // cmd_stat_count or cmd_stat_count=cmd or cmd_stat_count=all
-            if (firstDataString.startsWith(URL_QUERY_FOR_CMD_STAT_COUNT)) {
-                var cmd = firstDataString.length() <= (URL_QUERY_FOR_CMD_STAT_COUNT.length() + 1) ? "all" :
-                        firstDataString.substring(URL_QUERY_FOR_CMD_STAT_COUNT.length() + 1);
-                if ("all".equals(cmd)) {
-                    return new BulkReply(cmdStatAsPrometheusFormatString().getBytes());
-                } else {
-                    return new BulkReply(getCmdCountStat(cmd));
-                }
-            }
         }
 
         if (data[0] == null) {
@@ -476,8 +408,6 @@ public class RequestHandler {
         var requestTimer = requestTimeSummary.labels(cmd).startTimer();
         try {
             if (cmd.equals(ECHO_COMMAND)) {
-                increaseCmdStatArray(ECHO_COMMAND);
-
                 if (data.length == 2) {
                     return new BulkReply(data[1]);
                 } else {
@@ -486,8 +416,6 @@ public class RequestHandler {
             }
 
             if (cmd.equals(PING_COMMAND)) {
-                increaseCmdStatArray(PING_COMMAND);
-
                 if (data.length == 1) {
                     return PongReply.INSTANCE;
                 } else {
@@ -496,7 +424,7 @@ public class RequestHandler {
                 }
             }
 
-            var doLogCmd = Debug.getInstance().logCmd;
+            var doLogCmd = debug.logCmd;
             if (doLogCmd) {
                 if (data.length == 1) {
                     log.info("Request cmd={}", cmd);
@@ -548,8 +476,6 @@ public class RequestHandler {
                 }
             } else {
                 if (cmd.equals(AUTH_COMMAND)) {
-                    increaseCmdStatArray(AUTH_COMMAND);
-
                     if (data.length != 2 && data.length != 3) {
                         return ErrorReply.FORMAT;
                     }
@@ -585,8 +511,6 @@ public class RequestHandler {
             }
 
             if (cmd.equals(GET_COMMAND)) {
-                increaseCmdStatArray(GET_COMMAND);
-
                 if (data.length != 2) {
                     return ErrorReply.FORMAT;
                 }
@@ -606,7 +530,6 @@ public class RequestHandler {
                     try {
                         return xGroup.handle();
                     } catch (Exception e) {
-                        increaseCmdStatArray(ERROR_FOR_STAT_AS_COMMAND);
                         log.error("XGroup handle error", e);
                         return new ErrorReply(e.getMessage());
                     }
@@ -655,12 +578,10 @@ public class RequestHandler {
                     var bytes = gGroup.get(keyBytes, slotWithKeyHashList.getFirst(), true);
                     return bytes != null ? new BulkReply(bytes) : NilReply.INSTANCE;
                 } catch (TypeMismatchException e) {
-                    increaseCmdStatArray(ERROR_FOR_STAT_AS_COMMAND);
                     return new ErrorReply(e.getMessage());
                 } catch (DictMissingException e) {
                     return ErrorReply.DICT_MISSING;
                 } catch (Exception e) {
-                    increaseCmdStatArray(ERROR_FOR_STAT_AS_COMMAND);
                     log.error("Get error, key={}", new String(keyBytes), e);
                     return new ErrorReply(e.getMessage());
                 }
@@ -669,8 +590,6 @@ public class RequestHandler {
             // for short
             // full set command handle in SGroup
             if (cmd.equals(SET_COMMAND) && data.length == 3) {
-                increaseCmdStatArray(SET_COMMAND);
-
                 var keyBytes = data[1];
                 if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
                     return ErrorReply.KEY_TOO_LONG;
@@ -686,10 +605,8 @@ public class RequestHandler {
                 try {
                     sGroup.set(keyBytes, valueBytes, sGroup.slotWithKeyHashListParsed.getFirst());
                 } catch (ReadonlyException e) {
-                    increaseCmdStatArray(READONLY_FOR_STAT_AS_COMMAND);
                     return ErrorReply.READONLY;
                 } catch (Exception e) {
-                    increaseCmdStatArray(ERROR_FOR_STAT_AS_COMMAND);
                     log.error("Set error, key={}", new String(keyBytes), e);
                     return new ErrorReply(e.getMessage());
                 }
@@ -708,17 +625,11 @@ public class RequestHandler {
 
             var commandGroup = commandGroups[firstByte - 'a'];
             try {
-                increaseCmdStatArray(cmd);
-
-                commandGroup.setCmd(cmd);
-                commandGroup.setData(data);
-                commandGroup.setSocket(socket);
+                commandGroup.update(cmd, data, socket);
                 return commandGroup.init(this, request).handle();
             } catch (ReadonlyException e) {
-                increaseCmdStatArray(READONLY_FOR_STAT_AS_COMMAND);
                 return ErrorReply.READONLY;
             } catch (Exception e) {
-                increaseCmdStatArray(ERROR_FOR_STAT_AS_COMMAND);
                 log.error("Request handle error", e);
                 return new ErrorReply(e.getMessage());
             }

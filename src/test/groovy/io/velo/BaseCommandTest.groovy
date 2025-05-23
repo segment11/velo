@@ -163,6 +163,7 @@ class BaseCommandTest extends Specification {
         c.cmd = 'get'
         c.data = data2
         c.socket = null
+        c.update('get', data2, null)
         c.localTest = false
         c.localTestRandomValueList = null
 

@@ -151,6 +151,19 @@ public abstract class BaseCommand {
     }
 
     /**
+     * Update the command string, data array, and network socket connection. Reuse this object in the same thread.
+     *
+     * @param cmd    The command string received from the client
+     * @param data   All data array received from the client including command
+     * @param socket The TCP socket connection to the client
+     */
+    void update(String cmd, byte[][] data, ITcpSocket socket) {
+        this.cmd = cmd;
+        this.data = data;
+        this.socket = socket;
+    }
+
+    /**
      * Constructs a BaseCommand instance with the provided command string, data array, and network socket connection.
      *
      * @param cmd    The command string received from the client
