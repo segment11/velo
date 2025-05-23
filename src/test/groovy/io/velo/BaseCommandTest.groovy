@@ -84,13 +84,6 @@ class BaseCommandTest extends Specification {
         BaseCommand.slot(k11.bytes, 16384).slot() == JedisClusterCRC16.getSlot(k11.bytes)
 
         when:
-        def ss1 = BaseCommand.calSlotInRedisClientWhenNeedBetterPerf(k11.bytes, 1024, ConfForSlot.global.confBucket.bucketsPerSlot)
-        def ss3 = BaseCommand.calSlotInRedisClientWhenNeedBetterPerf(k3.bytes, 1024, ConfForSlot.global.confBucket.bucketsPerSlot)
-        then:
-        ss1 > 0
-        ss3 > 0
-
-        when:
         def socket = SocketInspectorTest.mockTcpSocket()
         then:
         BaseCommand.getAuthU(socket) == U.INIT_DEFAULT_U

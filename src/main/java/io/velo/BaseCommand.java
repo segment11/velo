@@ -439,31 +439,6 @@ public abstract class BaseCommand {
     }
 
     /**
-     * For one redis client connection, can send commands by keys, and Velo server can always do not cross worker (thread), for perf better.
-     *
-     * @param keyBytes       The key bytes
-     * @param slotNumber     Velo server slot number
-     * @param bucketsPerSlot Velo server configure buckets per slot
-     * @return The slot number for the given key
-     */
-    public static short calSlotInRedisClientWhenNeedBetterPerf(byte[] keyBytes, int slotNumber, int bucketsPerSlot) {
-        final int halfSlotNumber = slotNumber / 2;
-        final int x = halfSlotNumber * bucketsPerSlot;
-
-        var tagHash = tagHash(keyBytes);
-        if (tagHash != 0L) {
-            var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) & (halfSlotNumber - 1));
-            var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-            return (short) slot;
-        }
-
-        var keyHash = KeyHash.hash(keyBytes);
-        var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) & (halfSlotNumber - 1));
-        var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-        return (short) slot;
-    }
-
-    /**
      * Calculates slot assignment and hash information for a key.
      *
      * @param keyBytes   Original key bytes
