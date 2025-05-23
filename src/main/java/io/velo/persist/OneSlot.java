@@ -1388,13 +1388,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     log.info("Task {} run, slot={}, loop count={}", name(), slot, loopCount);
                 }
 
+                boolean isAsMaster = false;
                 for (var replPair : replPairs) {
                     if (replPair.isSendBye()) {
                         continue;
                     }
 
                     if (!replPair.isAsMaster()) {
-                        // only slave need send ping
+                        // only slave needs to send ping
                         replPair.ping();
 
                         var toFetchBigStringUuids = replPair.doingFetchBigStringUuid();
@@ -1405,7 +1406,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                             log.info("Repl do fetch incremental big string, to server={}, uuid={}, slot={}",
                                     replPair.getHostAndPort(), toFetchBigStringUuids, slot);
                         }
+                    } else {
+                        isAsMaster = true;
                     }
+                }
+
+                if (isAsMaster) {
+                    var xUpdateSeq = new XUpdateSeq(snowFlake.getLastNextId(), System.currentTimeMillis());
+                    appendBinlog(xUpdateSeq);
                 }
 
                 if (!delayNeedCloseReplPairs.isEmpty()) {
@@ -2080,7 +2088,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             this.binlog.truncateAll();
         }
 
-        appendBinlog(new XFlush());
+        var xFlush = new XFlush();
+        appendBinlog(xFlush);
     }
 
     /**
@@ -2826,6 +2835,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (replPairAsSlave != null) {
             map.put("repl_as_slave_is_all_caught_up", (double) (replPairAsSlave.isAllCaughtUp() ? 1 : 0));
             map.put("repl_as_slave_catch_up_last_seq", (double) replPairAsSlave.getSlaveCatchUpLastSeq());
+            map.put("repl_as_slave_catch_up_last_time_millis_in_master", (double) replPairAsSlave.getSlaveCatchUpLastTimeMillisInMaster());
+            map.put("repl_as_slave_catch_up_last_time_millis_diff", (double) replPairAsSlave.getSlaveCatchUpLastTimeMillisDiff());
             map.put("repl_as_slave_is_link_up", (double) (replPairAsSlave.isLinkUp() ? 1 : 0));
             map.put("repl_as_slave_fetched_bytes_total", (double) replPairAsSlave.getFetchedBytesLengthTotal());
             map.put("repl_as_slave_is_master_readonly", (double) (replPairAsSlave.isMasterReadonly() ? 1 : 0));

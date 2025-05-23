@@ -68,6 +68,7 @@ class ReplPairTest extends Specification {
         println replPairAsSlave.statsCountForReplTypeAsString
 
         replPairAsSlave.slaveCatchUpLastSeq = 1000L
+        replPairAsSlave.slaveCatchUpLastTimeMillis = System.currentTimeMillis() - 1000L
         replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset = null
         replPairAsSlave.masterBinlogCurrentFileIndexAndOffset = null
         replPairAsSlave.increaseFetchedBytesLength(1000)
@@ -86,6 +87,8 @@ class ReplPairTest extends Specification {
         replPairAsMaster.lastPingGetTimestamp == 0L
 
         replPairAsSlave.slaveCatchUpLastSeq == 1000L
+        replPairAsSlave.slaveCatchUpLastTimeMillisInMaster > 0L
+        replPairAsSlave.slaveCatchUpLastTimeMillisDiff >= 1000L
         replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset == null
         replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset == 0L
         replPairAsSlave.masterBinlogCurrentFileIndexAndOffset == null

@@ -636,7 +636,8 @@ class XGroupTest extends Specification {
         when:
         def vList = Mock.prepareValueList(10)
         for (v in vList) {
-            oneSlot.appendBinlog(new XWalV(v))
+            def xWalV = new XWalV(v)
+            oneSlot.appendBinlog(xWalV)
         }
         // read segment bytes < one segment length
         r = x.handleRepl()

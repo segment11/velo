@@ -320,6 +320,40 @@ public class ReplPair {
         this.slaveCatchUpLastSeq = slaveCatchUpLastSeq;
     }
 
+    @ForSlaveField
+    private long slaveCatchUpLastTimeMillisInMaster;
+
+    /**
+     * Gets the last time the slave caught up to in milliseconds in the master.
+     *
+     * @return The last time the slave caught up to in milliseconds in the master.
+     */
+    public long getSlaveCatchUpLastTimeMillisInMaster() {
+        return slaveCatchUpLastTimeMillisInMaster;
+    }
+
+    @ForSlaveField
+    private long slaveCatchUpLastTimeMillisInSlave;
+
+    /**
+     * Sets the last time the slave caught up to in milliseconds in the master.
+     *
+     * @param slaveCatchUpLastTimeMillisInMaster The last time the slave caught up to in milliseconds in the master.
+     */
+    public void setSlaveCatchUpLastTimeMillis(long slaveCatchUpLastTimeMillisInMaster) {
+        this.slaveCatchUpLastTimeMillisInMaster = slaveCatchUpLastTimeMillisInMaster;
+        this.slaveCatchUpLastTimeMillisInSlave = System.currentTimeMillis();
+    }
+
+    /**
+     * Gets the difference between the last time the slave caught up to in milliseconds in the slave and the master.
+     *
+     * @return The difference between the last time the slave caught up to in milliseconds in the slave and the master.
+     */
+    public long getSlaveCatchUpLastTimeMillisDiff() {
+        return slaveCatchUpLastTimeMillisInSlave - slaveCatchUpLastTimeMillisInMaster;
+    }
+
     @ForMasterField
     @ForSlaveField
     private Binlog.FileIndexAndOffset slaveLastCatchUpBinlogFileIndexAndOffset;

@@ -336,7 +336,8 @@ public class VGroup extends BaseCommand {
                 oneSlot.submitIndexJobDone();
 
                 // write binlog
-                oneSlot.appendBinlog(new XReverseIndexPutWord(lowerCaseWord, longId));
+                var xReverseIndexPutWord = new XReverseIndexPutWord(lowerCaseWord, longId);
+                oneSlot.appendBinlog(xReverseIndexPutWord);
             });
         }
 

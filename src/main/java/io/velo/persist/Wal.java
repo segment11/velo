@@ -777,7 +777,8 @@ public class Wal implements InMemoryEstimate {
             }
 
             if (writeBytesFromMasterIfIsReplay == null) {
-                oneSlot.appendBinlog(new XWalRewrite(isValueShort, groupIndex, writeBytes));
+                var xWalRewrite = new XWalRewrite(isValueShort, groupIndex, writeBytes);
+                oneSlot.appendBinlog(xWalRewrite);
             }
 
             return newOffset;
