@@ -198,7 +198,7 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
                 innerLoopCount++;
             }
         }
-        log.info("Key analysis task one batch iterate from {} to {}, iterate count: {}, tmp save top k size: {}, counts group by prefix:\n{}",
+        log.info("Key analysis task one batch iterate from {} to {}, iterate count={}, tmp save top k size={}, counts group by prefix:\n{}",
                 fromKey, new String(lastIterateKeyBytes), count, topKPrefixCounts.size(), sb);
 
         if (count < onceIterateKeyCount) {

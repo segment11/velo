@@ -517,7 +517,7 @@ public class XGroup extends BaseCommand {
     private Repl.ReplReply nextStepToGetFirstChunkSegment(short slot) {
         var oneSlot = localPersist.oneSlot(slot);
         var metaChunkSegmentFlagSeq = oneSlot.getMetaChunkSegmentFlagSeq();
-        log.warn("Repl slave fetch data, go to step: {}, slot={}", exists_chunk_segments.name(), slot);
+        log.warn("Repl slave fetch data, go to step={}, slot={}", exists_chunk_segments.name(), slot);
         var segmentCount = FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD;
         var metaBytes = metaChunkSegmentFlagSeq.getOneBatch(0, segmentCount);
         var content = new ToMasterExistsChunkSegments(0, segmentCount, metaBytes);
@@ -732,7 +732,7 @@ public class XGroup extends BaseCommand {
                         Chunk.Flag.init.flagByte(), null, MetaChunkSegmentFlagSeq.INIT_WAL_GROUP_INDEX);
 
                 // next step, fetch exists wal
-                log.warn("Repl slave fetch data, go to step: {}, slot={}", exists_wal.name(), slot);
+                log.warn("Repl slave fetch data, go to step={}, slot={}", exists_wal.name(), slot);
                 return Repl.reply(slot, replPair, exists_wal, requestExistsWal(oneSlot, 0));
             } else if (chunkSegmentsLength == 0) {
                 log.warn("Repl slave fetch exists chunk segments batch all bytes 0, begin segment index={}, slot={}", beginSegmentIndex, slot);
@@ -762,7 +762,7 @@ public class XGroup extends BaseCommand {
         boolean isLastBatch = maxSegmentNumber == beginSegmentIndex + segmentCount;
         if (isLastBatch) {
             // next step, fetch exists wal
-            log.warn("Repl slave fetch data, go to step: {}, slot={}", exists_wal.name(), slot);
+            log.warn("Repl slave fetch data, go to step={}, slot={}", exists_wal.name(), slot);
             return Repl.reply(slot, replPair, exists_wal, requestExistsWal(oneSlot, 0));
         } else {
             var nextBatchBeginSegmentIndex = beginSegmentIndex + segmentCount;
@@ -905,7 +905,7 @@ public class XGroup extends BaseCommand {
         }
 
         if (isAllReceived) {
-            log.warn("Repl slave fetch data, go to step: {}, slot={}", exists_keys_for_analysis.name(), slot);
+            log.warn("Repl slave fetch data, go to step={}, slot={}", exists_keys_for_analysis.name(), slot);
             var requestBytes = new byte[4];
             return Repl.reply(slot, replPair, exists_keys_for_analysis, new RawBytesContent(requestBytes));
         } else {
@@ -955,7 +955,7 @@ public class XGroup extends BaseCommand {
         keyLoader.overwriteStatKeyCountInBucketsBytesFromMasterExists(contentBytes);
 
         // next step, fetch exists key buckets
-        log.warn("Repl slave fetch data, go to step: {}, slot={}", exists_key_buckets.name(), slot);
+        log.warn("Repl slave fetch data, go to step={}, slot={}", exists_key_buckets.name(), slot);
         var requestBytes = new byte[1 + 4 + 8];
         var requestBuffer = ByteBuffer.wrap(requestBytes);
         requestBuffer.put((byte) 0);
@@ -984,7 +984,7 @@ public class XGroup extends BaseCommand {
         keyLoader.overwriteMetaKeyBucketSplitNumberBytesFromMasterExists(contentBytes);
 
         // next step, fetch exists key buckets
-        log.warn("Repl slave fetch data, go to step: {}, slot={}", stat_key_count_in_buckets.name(), slot);
+        log.warn("Repl slave fetch data, go to step={}, slot={}", stat_key_count_in_buckets.name(), slot);
         return Repl.reply(slot, replPair, stat_key_count_in_buckets, NextStepContent.INSTANCE);
     }
 
@@ -1067,7 +1067,7 @@ public class XGroup extends BaseCommand {
         // empty content means no big string
         if (NextStepContent.isNextStep(contentBytes)) {
             // next step, fetch meta key bucket split number
-            log.warn("Repl slave fetch data, go to step: {}, slot={}", meta_key_bucket_split_number.name(), slot);
+            log.warn("Repl slave fetch data, go to step={}, slot={}", meta_key_bucket_split_number.name(), slot);
             return Repl.reply(slot, replPair, meta_key_bucket_split_number, NextStepContent.INSTANCE);
         }
 
@@ -1077,7 +1077,7 @@ public class XGroup extends BaseCommand {
 
         if (bigStringCount == 0) {
             // next step, fetch meta key bucket split number
-            log.warn("Repl slave fetch data, go to step: {}, slot={}", meta_key_bucket_split_number.name(), slot);
+            log.warn("Repl slave fetch data, go to step={}, slot={}", meta_key_bucket_split_number.name(), slot);
             return Repl.reply(slot, replPair, meta_key_bucket_split_number, NextStepContent.INSTANCE);
         }
         log.warn("Repl slave fetch exists big string, master sent big string count={}, slot={}", bigStringCount, slot);
@@ -1101,7 +1101,7 @@ public class XGroup extends BaseCommand {
 
         if (isSendAllOnce) {
             // next step, fetch meta key bucket split number
-            log.warn("Repl slave fetch data, go to step: {}, slot={}", meta_key_bucket_split_number.name(), slot);
+            log.warn("Repl slave fetch data, go to step={}, slot={}", meta_key_bucket_split_number.name(), slot);
             return Repl.reply(slot, replPair, meta_key_bucket_split_number, NextStepContent.INSTANCE);
         } else {
             return fetchExistsBigString(slot, oneSlot);
@@ -1185,7 +1185,7 @@ public class XGroup extends BaseCommand {
         }
 
         // next step, fetch big string
-        log.warn("Repl slave fetch data, go to step: {}, slot={}", exists_big_string.name(), slot);
+        log.warn("Repl slave fetch data, go to step={}, slot={}", exists_big_string.name(), slot);
         return fetchExistsBigString(slot, oneSlot);
     }
 

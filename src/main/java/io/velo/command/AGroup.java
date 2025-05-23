@@ -134,12 +134,12 @@ public class AGroup extends BaseCommand {
             var user = new String(data[2]);
             var u = aclUsers.get(user);
             if (u == null) {
-                log.error("Acl dryrun no such user: {}", user);
+                log.error("Acl dryrun no such user={}", user);
                 return ErrorReply.ACL_PERMIT_LIMIT;
             }
 
             if (!u.isOn()) {
-                log.error("Acl dryrun user is off: {}", user);
+                log.error("Acl dryrun user is off={}", user);
                 return ErrorReply.ACL_PERMIT_LIMIT;
             }
 
@@ -230,10 +230,10 @@ public class AGroup extends BaseCommand {
                     users.add(u);
                 }
             } catch (IOException e) {
-                log.error("Read acl file error: {}", e.getMessage());
+                log.error("Read acl file error={}", e.getMessage());
                 return new ErrorReply("read acl file error: " + e.getMessage());
             } catch (IllegalArgumentException e) {
-                log.error("Parse acl file error: {}", e.getMessage());
+                log.error("Parse acl file error={}", e.getMessage());
                 return new ErrorReply("parse acl file error: " + e.getMessage());
             }
 
@@ -381,7 +381,7 @@ public class AGroup extends BaseCommand {
                 });
                 return OKReply.INSTANCE;
             } catch (AclInvalidRuleException e) {
-                log.error("Set user error: {}", e.getMessage());
+                log.error("Set user error={}", e.getMessage());
                 return ErrorReply.ACL_SETUSER_RULE_INVALID;
             }
         } else if ("users".equals(subCmd)) {

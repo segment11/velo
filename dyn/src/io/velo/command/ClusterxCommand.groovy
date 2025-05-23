@@ -225,7 +225,7 @@ migrating_state:ok
             TreeSet<Integer> add = []
             mySelfShard.multiSlotRange.removeOrAddSet(toClientSlots, add)
 
-            log.warn 'Cluster delete slots success, slots: {}, node: {}', toClientSlots, mySelfNode.nodeId()
+            log.warn 'Cluster delete slots success, slots={}, node={}', toClientSlots, mySelfNode.nodeId()
             multiShard.saveMeta()
             return OK
         }
@@ -242,7 +242,7 @@ migrating_state:ok
             mySelfShard.multiSlotRange.addOneSlot(toClientSlot)
         }
 
-        log.warn 'Cluster add slots success, slots: {}, node: {}', toClientSlots, mySelfNode.nodeId()
+        log.warn 'Cluster add slots success, slots={}, node={}', toClientSlots, mySelfNode.nodeId()
         multiShard.saveMeta()
         OK
     }

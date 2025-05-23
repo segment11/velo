@@ -209,7 +209,7 @@ public class IGroup extends BaseCommand {
             try {
                 schema = MessageTypeParser.parseMessageType(Files.readString(schemaFile.toPath()));
             } catch (IOException e) {
-                log.error("schema file: {} read error", schemaFile.getAbsolutePath(), e);
+                log.error("schema file={} read error", schemaFile.getAbsolutePath(), e);
                 return new ErrorReply("schema file: " + schemaFile.getAbsolutePath() + " read error");
             }
         }
@@ -289,7 +289,7 @@ public class IGroup extends BaseCommand {
                             }
                         }
                     } catch (IOException e) {
-                        log.error("read file error, file: {}", file.getName(), e);
+                        log.error("read file error, file={}", file.getName(), e);
                     }
                 } else {
                     // parquet file
@@ -329,7 +329,7 @@ public class IGroup extends BaseCommand {
                             set(key.getBytes(), objectMapper.writeValueAsBytes(map), s);
                         }
                     } catch (IOException e) {
-                        log.error("read parquet file error, file: {}", file.getName(), e);
+                        log.error("read parquet file error, file={}", file.getName(), e);
                     }
                 }
             }

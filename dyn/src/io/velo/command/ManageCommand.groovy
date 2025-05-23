@@ -590,7 +590,7 @@ class ManageCommand extends BaseCommand {
                     .with('keyAnalysis', config)
 
             localPersist.indexHandlerPool.keyAnalysisHandler.resetInnerTask(persistConfig)
-            log.warn 'Manage index reload-key-analysis-task, items: {}', map
+            log.warn 'Manage index reload-key-analysis-task, items={}', map
             return OKReply.INSTANCE
         }
 
