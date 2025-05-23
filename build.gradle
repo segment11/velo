@@ -153,10 +153,11 @@ jmh {
     iterations = 1
     fork = 1
     jmhVersion = '1.36'
+    zip64 = true
 
     // change here to run target jmh tests
 //    includes = ['OneSlotRead*']
-    includes = ['BenchmarkLocalPersistGet*']
+    includes = ['SlotCalc*']
 }
 
 protobuf {
