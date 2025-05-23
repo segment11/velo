@@ -149,6 +149,8 @@ public abstract class BaseCommand {
         this.socket = socket;
     }
 
+    protected static final AclUsers aclUsers = AclUsers.getInstance();
+
     /**
      * Gets the Acl user object associated with the network socket connection.
      *
@@ -157,7 +159,7 @@ public abstract class BaseCommand {
      */
     public static @NotNull U getAuthU(ITcpSocket socket0) {
         var authUser = SocketInspector.getAuthUser(socket0);
-        return authUser == null ? U.INIT_DEFAULT_U : AclUsers.getInstance().get(authUser);
+        return authUser == null ? U.INIT_DEFAULT_U : aclUsers.get(authUser);
     }
 
     protected @NotNull U getAuthU() {

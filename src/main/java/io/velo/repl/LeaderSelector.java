@@ -345,7 +345,8 @@ public class LeaderSelector implements NeedCleanUp {
             }
 
             // publish switch master to clients
-            var oldMasterHostAndPort = ReplPair.parseHostAndPort(LeaderSelector.getInstance().lastGetMasterListenAddressAsSlave);
+            var leaderSelector = LeaderSelector.getInstance();
+            var oldMasterHostAndPort = ReplPair.parseHostAndPort(leaderSelector.lastGetMasterListenAddressAsSlave);
             var selfAsMasterHostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses);
             if (oldMasterHostAndPort == null) {
                 oldMasterHostAndPort = selfAsMasterHostAndPort;
@@ -360,7 +361,8 @@ public class LeaderSelector implements NeedCleanUp {
         log.debug("Repl reset self as slave begin, check new master global config first, self={}", ConfForGlobal.netListenAddresses);
         // sync, perf bad
         try {
-            var jedisPool = JedisPoolHolder.getInstance().create(host, port);
+            var jedisPoolHolder = JedisPoolHolder.getInstance();
+            var jedisPool = jedisPoolHolder.create(host, port);
             // may be null
             var jsonStr = JedisPoolHolder.exe(jedisPool, jedis -> {
                 var pong = jedis.ping();
@@ -481,7 +483,8 @@ public class LeaderSelector implements NeedCleanUp {
             return masterAddressLocalMocked;
         }
 
-        var jedisPool = JedisPoolHolder.getInstance().create(host, port);
+        var jedisPoolHolder = JedisPoolHolder.getInstance();
+        var jedisPool = jedisPoolHolder.create(host, port);
         return JedisPoolHolder.exe(jedisPool, jedis ->
                 // refer to XGroup handle
                 // key will be transferred to x_repl slot 0 get_first_slave_listen_address, refer to request handler

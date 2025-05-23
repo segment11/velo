@@ -309,6 +309,8 @@ public class RequestHandler {
 
     private final Debug debug = Debug.getInstance();
 
+    private final AclUsers aclUsers = AclUsers.getInstance();
+
     /**
      * Handles the given request.
      *
@@ -352,48 +354,49 @@ public class RequestHandler {
                 return ErrorReply.FORMAT;
             }
 
+            var leaderSelector = LeaderSelector.getInstance();
             var firstDataString = new String(firstDataBytes);
-            if (firstDataString.equals(URL_QUERY_FOR_HAPROXY_FILTER_MASTER)) {
-                var isMaster = LeaderSelector.getInstance().hasLeadership();
-                if (isMaster) {
-                    // will response 200 status code
-                    return new BulkReply("master".getBytes());
-                } else {
-                    // will response 404 status code
-                    return NilReply.INSTANCE;
+            switch (firstDataString) {
+                case URL_QUERY_FOR_HAPROXY_FILTER_MASTER -> {
+                    var isMaster = leaderSelector.hasLeadership();
+                    if (isMaster) {
+                        // will response 200 status
+                        return new BulkReply("master".getBytes());
+                    } else {
+                        // will response 404 status
+                        return NilReply.INSTANCE;
+                    }
                 }
-            }
-
-            if (firstDataString.equals(URL_QUERY_FOR_HAPROXY_FILTER_MASTER_OR_SLAVE)) {
-                // will response 200 status code
-                return new BulkReply("master or slave".getBytes());
-            }
-
-            if (firstDataString.equals(URL_QUERY_FOR_HAPROXY_FILTER_SLAVE)) {
-                var isMaster = LeaderSelector.getInstance().hasLeadership();
-                if (!isMaster) {
-                    // will response 200 status code
-                    return new BulkReply("slave".getBytes());
-                } else {
-                    // will response 404 status code
-                    return NilReply.INSTANCE;
+                case URL_QUERY_FOR_HAPROXY_FILTER_MASTER_OR_SLAVE -> {
+                    // will response 200 status
+                    return new BulkReply("master or slave".getBytes());
+                }
+                case URL_QUERY_FOR_HAPROXY_FILTER_SLAVE -> {
+                    var isMaster = leaderSelector.hasLeadership();
+                    if (!isMaster) {
+                        // will response 200 status
+                        return new BulkReply("slave".getBytes());
+                    } else {
+                        // will response 404 status
+                        return NilReply.INSTANCE;
+                    }
                 }
             }
 
             if (firstDataString.startsWith(URL_QUERY_FOR_HAPROXY_FILTER_SLAVE_WITH_ZONE)) {
                 // eg. slave_with_zone=zone1
                 var targetZone = firstDataString.substring(URL_QUERY_FOR_HAPROXY_FILTER_SLAVE_WITH_ZONE.length() + 1);
-                var isMaster = LeaderSelector.getInstance().hasLeadership();
+                var isMaster = leaderSelector.hasLeadership();
                 if (isMaster) {
-                    // will response 404 status code
+                    // will response 404 status
                     return NilReply.INSTANCE;
                 }
 
                 if (targetZone.equals(ConfForGlobal.targetAvailableZone)) {
-                    // will response 200 status code
+                    // will response 200 status
                     return new BulkReply(("slave with zone " + targetZone).getBytes());
                 } else {
-                    // will response 404 status code
+                    // will response 404 status
                     return NilReply.INSTANCE;
                 }
             }
@@ -457,7 +460,6 @@ public class RequestHandler {
                     var user = auth.substring(0, auth.indexOf(':'));
                     var passwordRaw = auth.substring(auth.indexOf(':') + 1);
 
-                    var aclUsers = AclUsers.getInstance();
                     var u = aclUsers.get(user);
                     if (u == null) {
                         return ErrorReply.AUTH_FAILED;
@@ -484,7 +486,6 @@ public class RequestHandler {
                     var passwordRaw = new String(data[data.length - 1]);
 
                     // acl check
-                    var aclUsers = AclUsers.getInstance();
                     var u = aclUsers.get(user);
                     if (u == null) {
                         return ErrorReply.AUTH_FAILED;

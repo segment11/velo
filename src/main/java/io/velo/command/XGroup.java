@@ -446,7 +446,6 @@ public class XGroup extends BaseCommand {
 
         // begin to fetch exist data from master
         // first fetch dict
-        var dictMap = DictMap.getInstance();
         var cacheDictBySeqCopy = dictMap.getCacheDictBySeqCopy();
         if (cacheDictBySeqCopy.isEmpty()) {
             return Repl.reply(slot, replPair, exists_dict, NextStepContent.INSTANCE);
@@ -1140,10 +1139,9 @@ public class XGroup extends BaseCommand {
         }
         log.warn("Repl master fetch exists dict, slave sent dict seq list={}, slot={}", sentDictSeqList, slot);
 
-        var dictMap = DictMap.getInstance();
         var cacheDictCopy = dictMap.getCacheDictCopy();
         var cacheDictBySeqCopy = dictMap.getCacheDictBySeqCopy();
-        // master always send global zstd dict to slave
+        // master always sends global zstd dict to slave
         cacheDictCopy.put(Dict.GLOBAL_ZSTD_DICT_KEY, Dict.GLOBAL_ZSTD_DICT);
         cacheDictBySeqCopy.put(Dict.GLOBAL_ZSTD_DICT_SEQ, Dict.GLOBAL_ZSTD_DICT);
 
@@ -1159,7 +1157,6 @@ public class XGroup extends BaseCommand {
         var dictCount = buffer.getInt();
         log.warn("Repl slave fetch exists dict, master sent dict count={}, slot={}", dictCount, slot);
 
-        var dictMap = DictMap.getInstance();
         // decode
         try {
             for (int i = 0; i < dictCount; i++) {
@@ -1516,9 +1513,10 @@ public class XGroup extends BaseCommand {
 
         }
         var log = LoggerFactory.getLogger(XGroup.class);
+        var localPersist = LocalPersist.getInstance();
 
         final var targetSlot = replPairAsSlave.getSlot();
-        var oneSlot = LocalPersist.getInstance().oneSlot(targetSlot);
+        var oneSlot = localPersist.oneSlot(targetSlot);
         oneSlot.asyncRun(() -> {
             var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();
 
@@ -1545,7 +1543,8 @@ public class XGroup extends BaseCommand {
                 resultBytes = mockResultBytes;
             } else {
                 // use jedis to get data sync, because need try to connect to master
-                var jedisPool = JedisPoolHolder.getInstance().create(replPairAsSlave.getHost(), replPairAsSlave.getPort());
+                var jedisPoolHolder = JedisPoolHolder.getInstance();
+                var jedisPool = jedisPoolHolder.create(replPairAsSlave.getHost(), replPairAsSlave.getPort());
                 try {
                     resultBytes = JedisPoolHolder.exe(jedisPool, jedis -> {
                         var pong = jedis.ping();

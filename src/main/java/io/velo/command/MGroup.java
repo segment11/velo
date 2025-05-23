@@ -23,6 +23,8 @@ public class MGroup extends BaseCommand {
         super(cmd, data, socket);
     }
 
+    private final CachedGroovyClassLoader cl = CachedGroovyClassLoader.getInstance();
+
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
@@ -50,7 +52,7 @@ public class MGroup extends BaseCommand {
             variables.put("data", data);
             variables.put("slotNumber", slotNumber);
 
-            return (ArrayList<SlotWithKeyHash>) CachedGroovyClassLoader.getInstance().eval(scriptText, variables);
+            return (ArrayList<SlotWithKeyHash>) cl.eval(scriptText, variables);
         }
 
         return slotWithKeyHashList;
@@ -494,6 +496,6 @@ public class MGroup extends BaseCommand {
 
         var variables = new HashMap<String, Object>();
         variables.put("mGroup", this);
-        return (Reply) CachedGroovyClassLoader.getInstance().eval(scriptText, variables);
+        return (Reply) cl.eval(scriptText, variables);
     }
 }

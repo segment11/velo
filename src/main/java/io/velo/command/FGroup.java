@@ -2,7 +2,6 @@ package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.BaseCommand;
-import io.velo.ConfForGlobal;
 import io.velo.repl.LeaderSelector;
 import io.velo.reply.ErrorReply;
 import io.velo.reply.NilReply;
@@ -42,7 +41,8 @@ public class FGroup extends BaseCommand {
             return OKReply.INSTANCE;
         }
 
-//        if (!LeaderSelector.getInstance().hasLeadership()) {
+//        var leaderSelector = LeaderSelector.getInstance();
+//        if (!leaderSelector.hasLeadership()) {
 //            return new ErrorReply("not leader");
 //        }
 
@@ -80,7 +80,8 @@ public class FGroup extends BaseCommand {
                 throw new RuntimeException(e);
             }
         }, resultList -> {
-            LeaderSelector.getInstance().stopLeaderLatch();
+            var leaderSelector = LeaderSelector.getInstance();
+            leaderSelector.stopLeaderLatch();
             log.warn("Repl leader latch stopped");
             // later self will start leader latch again and make self as slave
 

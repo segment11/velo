@@ -259,7 +259,8 @@ public class RGroup extends BaseCommand {
         var ttl = new String(ttlBytes);
 
         // for debug
-        if (Debug.getInstance().logRestore) {
+        var debug = Debug.getInstance();
+        if (debug.logRestore) {
             log.info("key={}", key);
             log.info("ttl={}", ttl);
         }

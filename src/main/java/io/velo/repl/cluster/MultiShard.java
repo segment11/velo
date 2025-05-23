@@ -158,7 +158,8 @@ vars currentEpoch 0 lastVoteEpoch 0
 
         RequestHandler.updateMultiShardShadows(this);
 
-        LocalPersist.getInstance().initSlotsAgainAfterMultiShardLoadedOrChanged();
+        var localPersist = LocalPersist.getInstance();
+        localPersist.initSlotsAgainAfterMultiShardLoadedOrChanged();
     }
 
     public Integer firstToClientSlot() {

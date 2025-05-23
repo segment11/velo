@@ -278,7 +278,6 @@ public class HGroup extends BaseCommand {
                     var password = new String(data[i + 2]);
 
                     // acl check
-                    var aclUsers = AclUsers.getInstance();
                     var u = aclUsers.get(user);
                     if (u == null) {
                         SocketInspector.setResp3(socket, isResp3Old);

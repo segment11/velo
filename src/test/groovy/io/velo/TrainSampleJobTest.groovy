@@ -79,7 +79,7 @@ class TrainSampleJobTest extends Specification {
         Arrays.equals(sampleValueBytes, decompressBytes)
 
         when:
-        Debug.getInstance().logTrainDict = true
+        Debug.instance.logTrainDict = true
         sampleToTrainList.clear()
         10.times {
             sampleToTrainList << new TrainSampleJob.TrainSampleKV("key:$it", null, snowFlake.nextId(), sampleValueBytes)
@@ -91,7 +91,7 @@ class TrainSampleJobTest extends Specification {
         result == null
 
         when:
-        Debug.getInstance().logTrainDict = true
+        Debug.instance.logTrainDict = true
         job.trainCount = 99
         // skip train, sample count not enough
         result = job.train()

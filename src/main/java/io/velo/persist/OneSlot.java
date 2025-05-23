@@ -673,7 +673,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @return the promise representing the asynchronous computation
      */
     public Promise<Void> submitIndexToTargetWorkerJobRun(byte indexWorkerId, @NotNull Consumer<IndexHandler> consumer) {
-        var indexHandlerPool = LocalPersist.getInstance().getIndexHandlerPool();
+        var localPersist = LocalPersist.getInstance();
+        var indexHandlerPool = localPersist.getIndexHandlerPool();
         return indexHandlerPool.run(indexWorkerId, consumer);
     }
 
@@ -687,7 +688,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public Promise<Void> submitIndexJobRun(@NotNull String lowerCaseWord, @NotNull Consumer<IndexHandler> consumer) {
         pendingSubmitIndexJobRunCount++;
 
-        var indexHandlerPool = LocalPersist.getInstance().getIndexHandlerPool();
+        var localPersist = LocalPersist.getInstance();
+        var indexHandlerPool = localPersist.getIndexHandlerPool();
         var indexWorkerId = indexHandlerPool.getChargeWorkerIdByWordKeyHash(KeyHash.hash(lowerCaseWord.getBytes()));
         return indexHandlerPool.run(indexWorkerId, consumer);
     }
@@ -1530,7 +1532,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             @Override
             public void run() {
                 // reduce log
-                var firstOneSlot = LocalPersist.getInstance().firstOneSlot();
+                var localPersist = LocalPersist.getInstance();
+                var firstOneSlot = localPersist.firstOneSlot();
                 if (firstOneSlot != null && slot == firstOneSlot.slot) {
                     log.info("Debug task run, slot={}, loop count={}", slot, loopCount);
                 }
@@ -2679,6 +2682,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         globalGauge.register();
     }
 
+    private final DictMap dictMap = DictMap.getInstance();
+
     /**
      * Initializes global metrics collection by registering a raw getter that provides
      * various global metrics such as uptime, dictionary size, configuration parameters,
@@ -2688,8 +2693,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         globalGauge.addRawGetter(() -> {
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
 
-            // only first slot show global metrics
-            var firstOneSlot = LocalPersist.getInstance().firstOneSlot();
+            // only the first slot shows global metrics
+            var localPersist = LocalPersist.getInstance();
+            var firstOneSlot = localPersist.firstOneSlot();
             if (firstOneSlot == null || slot != firstOneSlot.slot) {
                 return map;
             }
@@ -2699,7 +2705,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             // only show global
             map.put("global_up_time", new SimpleGauge.ValueWithLabelValues((double) MultiWorkerServer.UP_TIME, labelValues));
-            map.put("global_dict_size", new SimpleGauge.ValueWithLabelValues((double) DictMap.getInstance().dictSize(), labelValues));
+            map.put("global_dict_size", new SimpleGauge.ValueWithLabelValues((double) dictMap.dictSize(), labelValues));
             // global config for one slot
             map.put("global_estimate_key_number", new SimpleGauge.ValueWithLabelValues((double) ConfForGlobal.estimateKeyNumber, labelValues));
             map.put("global_slot_number", new SimpleGauge.ValueWithLabelValues((double) slotNumber, labelValues));

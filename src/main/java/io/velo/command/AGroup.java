@@ -119,7 +119,6 @@ public class AGroup extends BaseCommand {
                 userList.add(user);
             }
 
-            var aclUsers = AclUsers.getInstance();
             int count = 0;
             for (var user : userList) {
                 if (aclUsers.delete(user)) {
@@ -133,7 +132,6 @@ public class AGroup extends BaseCommand {
             }
 
             var user = new String(data[2]);
-            var aclUsers = AclUsers.getInstance();
             var u = aclUsers.get(user);
             if (u == null) {
                 log.error("Acl dryrun no such user: {}", user);
@@ -189,7 +187,6 @@ public class AGroup extends BaseCommand {
             }
 
             var user = new String(data[2]);
-            var aclUsers = AclUsers.getInstance();
             var u = aclUsers.get(user);
             if (u == null) {
                 return NilReply.INSTANCE;
@@ -201,7 +198,6 @@ public class AGroup extends BaseCommand {
                 return ErrorReply.SYNTAX;
             }
 
-            var aclUsers = AclUsers.getInstance();
             var users = aclUsers.getInner().getUsers();
 
             var replies = new Reply[users.size()];
@@ -246,7 +242,6 @@ public class AGroup extends BaseCommand {
                 return new ErrorReply("no default user in acl file");
             }
 
-            var aclUsers = AclUsers.getInstance();
             aclUsers.replaceUsers(users);
             return OKReply.INSTANCE;
         } else if ("log".equals(subCmd)) {
@@ -305,7 +300,6 @@ public class AGroup extends BaseCommand {
                 }
             }
 
-            var aclUsers = AclUsers.getInstance();
             var users = aclUsers.getInner().getUsers();
             var lines = new ArrayList<String>();
             for (var u : users) {
@@ -324,8 +318,6 @@ public class AGroup extends BaseCommand {
             }
 
             var user = new String(data[2]);
-
-            var aclUsers = AclUsers.getInstance();
 
             try {
                 aclUsers.upInsert(user, u -> {
@@ -397,7 +389,6 @@ public class AGroup extends BaseCommand {
                 return ErrorReply.SYNTAX;
             }
 
-            var aclUsers = AclUsers.getInstance();
             var users = aclUsers.getInner().getUsers();
 
             var replies = new Reply[users.size()];

@@ -232,6 +232,8 @@ public class TrainSampleJob {
         }
     }
 
+    private final Debug debug = Debug.getInstance();
+
     /**
      * Trains dictionaries for the samples in the list.
      *
@@ -239,7 +241,7 @@ public class TrainSampleJob {
      */
     public TrainSampleResult train() {
         trainCount++;
-        if (trainCount % 100 == 0 || Debug.getInstance().logTrainDict) {
+        if (trainCount % 100 == 0 || debug.logTrainDict) {
             log.info("Train sample, worker {} train sample list size={}, dict size={}, i am alive",
                     workerId, sampleToTrainListCopy.size(), cacheDict.size());
         }

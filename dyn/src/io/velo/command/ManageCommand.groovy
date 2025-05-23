@@ -914,12 +914,13 @@ class ManageCommand extends BaseCommand {
             def val = new String(data[4])
             def isOn = val == '1' || val == 'true'
 
+            def debug = Debug.getInstance()
             switch (field) {
-                case 'logCmd' -> Debug.getInstance().logCmd = isOn
-                case 'logMerge' -> Debug.getInstance().logMerge = isOn
-                case 'logTrainDict' -> Debug.getInstance().logTrainDict = isOn
-                case 'logRestore' -> Debug.getInstance().logRestore = isOn
-                case 'bulkLoad' -> Debug.getInstance().bulkLoad = isOn
+                case 'logCmd' -> debug.logCmd = isOn
+                case 'logMerge' -> debug.logMerge = isOn
+                case 'logTrainDict' -> debug.logTrainDict = isOn
+                case 'logRestore' -> debug.logRestore = isOn
+                case 'bulkLoad' -> debug.bulkLoad = isOn
                 default -> {
                     log.warn 'Manage unknown debug field={}', field
                 }

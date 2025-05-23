@@ -385,6 +385,8 @@ public class SGroup extends BaseCommand {
         return scanResultToReply(r, veloUserData, count);
     }
 
+    private final CachedGroovyClassLoader cl = CachedGroovyClassLoader.getInstance();
+
     private Reply sentinel() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
@@ -394,7 +396,7 @@ public class SGroup extends BaseCommand {
 
         var variables = new HashMap<String, Object>();
         variables.put("sGroup", this);
-        return (Reply) CachedGroovyClassLoader.getInstance().eval(scriptText, variables);
+        return (Reply) cl.eval(scriptText, variables);
     }
 
     private static final String IPV4_REGEX =

@@ -69,6 +69,8 @@ public class BlockingList {
         return setReplyIfBlockingListExist(key, elementValueBytesArray, null);
     }
 
+    private static final LocalPersist localPersist = LocalPersist.getInstance();
+
     /**
      * Set reply to blocking clients when list values are added
      *
@@ -111,7 +113,7 @@ public class BlockingList {
                 if (xx != null) {
                     // do move
                     var dstSlot = xx.dstSlotWithKeyHash.slot();
-                    var dstOneSlot = LocalPersist.getInstance().oneSlot(dstSlot);
+                    var dstOneSlot = localPersist.oneSlot(dstSlot);
 
                     var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
                     rGroup.from(baseCommand);
@@ -142,7 +144,7 @@ public class BlockingList {
                 if (xx != null) {
                     // do move
                     var dstSlot = xx.dstSlotWithKeyHash.slot();
-                    var dstOneSlot = LocalPersist.getInstance().oneSlot(dstSlot);
+                    var dstOneSlot = localPersist.oneSlot(dstSlot);
 
                     var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
                     rGroup.from(baseCommand);

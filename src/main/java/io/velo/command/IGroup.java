@@ -104,6 +104,8 @@ public class IGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
+    private final CachedGroovyClassLoader cl = CachedGroovyClassLoader.getInstance();
+
     private Reply info() {
         if (data.length != 1 && data.length != 2) {
             return ErrorReply.FORMAT;
@@ -113,7 +115,7 @@ public class IGroup extends BaseCommand {
 
         var variables = new HashMap<String, Object>();
         variables.put("iGroup", this);
-        return (Reply) CachedGroovyClassLoader.getInstance().eval(scriptText, variables);
+        return (Reply) cl.eval(scriptText, variables);
     }
 
     private static String getPairValue(String pair) {
@@ -212,7 +214,8 @@ public class IGroup extends BaseCommand {
             }
         }
 
-        Debug.getInstance().bulkLoad = true;
+        var debug = Debug.getInstance();
+        debug.bulkLoad = true;
         log.warn("Ingest start, set bulk load to true");
 
         int finalKeyFieldIndex = keyFieldIndex;
@@ -340,7 +343,7 @@ public class IGroup extends BaseCommand {
                 replies[i] = new BulkReply(str.getBytes());
             }
 
-            Debug.getInstance().bulkLoad = false;
+            debug.bulkLoad = false;
             log.warn("Ingest end, set bulk load to false");
 
             return new MultiBulkReply(replies);

@@ -305,6 +305,8 @@ public class RedisHH {
         }
     }
 
+    private static final DictMap dictMap = DictMap.getInstance();
+
     /**
      * Decompresses a byte array using the specified dictionary sequence.
      *
@@ -324,7 +326,7 @@ public class RedisHH {
             }
             return ByteBuffer.wrap(bodyBytes);
         } else {
-            var dict = DictMap.getInstance().getDictBySeq(dictSeq);
+            var dict = dictMap.getDictBySeq(dictSeq);
             if (dict == null) {
                 throw new DictMissingException("Dict not found, dict seq=" + dictSeq);
             }

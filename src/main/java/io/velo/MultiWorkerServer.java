@@ -673,9 +673,9 @@ public class MultiWorkerServer extends Launcher {
     @Provides
     RefreshLoader refreshLoader() {
         var classpath = Utils.projectPath("/dyn/src");
-        CachedGroovyClassLoader.getInstance().init(GroovyClassLoader.class.getClassLoader(), classpath, null);
-        return RefreshLoader.create(CachedGroovyClassLoader.getInstance().getGcl())
-                .addDir(Utils.projectPath("/dyn/src/io/velo"));
+        var cl = CachedGroovyClassLoader.getInstance();
+        cl.init(GroovyClassLoader.class.getClassLoader(), classpath, null);
+        return RefreshLoader.create(cl.getGcl()).addDir(Utils.projectPath("/dyn/src/io/velo"));
     }
 
     /**
@@ -728,7 +728,8 @@ public class MultiWorkerServer extends Launcher {
         taskRunnable.setSlotWorkerEventloop(slotWorkerEventloop);
         taskRunnable.setRequestHandler(requestHandlerArray[index]);
 
-        taskRunnable.chargeOneSlots(LocalPersist.getInstance().oneSlots());
+        var localPersist = LocalPersist.getInstance();
+        taskRunnable.chargeOneSlots(localPersist.oneSlots());
 
         // interval 1s
         slotWorkerEventloop.delay(1000L, taskRunnable);
@@ -804,7 +805,9 @@ public class MultiWorkerServer extends Launcher {
 
         MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = slotWorkerThreadIds;
         MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = netWorkerThreadIds;
-        AclUsers.getInstance().initBySlotWorkerEventloopArray(slotWorkerEventloopArray);
+
+        var aclUsers = AclUsers.getInstance();
+        aclUsers.initBySlotWorkerEventloopArray(slotWorkerEventloopArray);
 
         // start primary schedule
         primaryScheduleRunnable = new PrimaryTaskRunnable(loopCount -> {
@@ -981,12 +984,16 @@ public class MultiWorkerServer extends Launcher {
                 }
             }
 
-            LeaderSelector.getInstance().cleanUp();
-            JedisPoolHolder.getInstance().cleanUp();
+            var leaderSelector = LeaderSelector.getInstance();
+            leaderSelector.cleanUp();
+            var jedisPoolHolder = JedisPoolHolder.getInstance();
+            jedisPoolHolder.cleanUp();
 
             // close local persist
             localPersist.cleanUp();
-            DictMap.getInstance().cleanUp();
+
+            var dictMap = DictMap.getInstance();
+            dictMap.cleanUp();
 
             if (!isReuseNetWorkerEventloop) {
                 for (int i = 0; i < slotWorkerEventloopArray.length; i++) {
@@ -1148,12 +1155,12 @@ public class MultiWorkerServer extends Launcher {
                 c.confWal.shortValueSizeTrigger = ConfForSlot.ConfWal.debugMode.shortValueSizeTrigger;
             }
 
-            var debugInstance = Debug.getInstance();
-            debugInstance.logCmd = config.get(ofBoolean(), "debugLogCmd", false);
-            debugInstance.logMerge = config.get(ofBoolean(), "debugLogMerge", false);
-            debugInstance.logTrainDict = config.get(ofBoolean(), "debugLogTrainDict", false);
-            debugInstance.logRestore = config.get(ofBoolean(), "debugLogRestore", false);
-            debugInstance.bulkLoad = config.get(ofBoolean(), "bulkLoad", false);
+            var debug = Debug.getInstance();
+            debug.logCmd = config.get(ofBoolean(), "debugLogCmd", false);
+            debug.logMerge = config.get(ofBoolean(), "debugLogMerge", false);
+            debug.logTrainDict = config.get(ofBoolean(), "debugLogTrainDict", false);
+            debug.logRestore = config.get(ofBoolean(), "debugLogRestore", false);
+            debug.bulkLoad = config.get(ofBoolean(), "bulkLoad", false);
 
             // override bucket conf
             if (config.getChild("bucket.bucketsPerSlot").hasValue()) {
@@ -1284,7 +1291,8 @@ public class MultiWorkerServer extends Launcher {
 
             var dirFile = dirFile(config);
 
-            DictMap.getInstance().initDictMap(dirFile);
+            var dictMap = DictMap.getInstance();
+            dictMap.initDictMap(dirFile);
 
             TrainSampleJob.setDictKeyPrefixEndIndex(config.get(ofInteger(), "toTrainDictWhenKeyPrefixEndIndex", 5));
 
@@ -1293,12 +1301,13 @@ public class MultiWorkerServer extends Launcher {
             // init local persist
             // already created when inject
             var persistDir = new File(dirFile, "persist");
-            LocalPersist.getInstance().initSlots((byte) netWorkers, (short) slotNumber, snowFlakes, persistDir,
+            var localPersist = LocalPersist.getInstance();
+            localPersist.initSlots((byte) netWorkers, (short) slotNumber, snowFlakes, persistDir,
                     config.getChild("persist"));
 
             boolean debugMode = config.get(ofBoolean(), "debugMode", false);
             if (debugMode) {
-                LocalPersist.getInstance().debugMode();
+                localPersist.debugMode();
             }
 
             return 0;

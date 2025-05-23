@@ -139,6 +139,8 @@ public class CGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
+    private final CachedGroovyClassLoader cl = CachedGroovyClassLoader.getInstance();
+
     @VisibleForTesting
     Reply clusterx() {
         if (data.length < 2) {
@@ -149,7 +151,7 @@ public class CGroup extends BaseCommand {
 
         var variables = new HashMap<String, Object>();
         variables.put("cGroup", this);
-        return (Reply) CachedGroovyClassLoader.getInstance().eval(scriptText, variables);
+        return (Reply) cl.eval(scriptText, variables);
     }
 
     @VisibleForTesting
@@ -162,7 +164,7 @@ public class CGroup extends BaseCommand {
 
         var variables = new HashMap<String, Object>();
         variables.put("cGroup", this);
-        return (Reply) CachedGroovyClassLoader.getInstance().eval(scriptText, variables);
+        return (Reply) cl.eval(scriptText, variables);
     }
 
     @VisibleForTesting
@@ -175,7 +177,7 @@ public class CGroup extends BaseCommand {
 
         var variables = new HashMap<String, Object>();
         variables.put("cGroup", this);
-        return (Reply) CachedGroovyClassLoader.getInstance().eval(scriptText, variables);
+        return (Reply) cl.eval(scriptText, variables);
     }
 
     @VisibleForTesting

@@ -118,6 +118,8 @@ class FailoverManager {
         oneEndpointStatusMapByClusterName[oneClusterName] = newOneEndpointStatusMap
     }
 
+    private final LeaderSelector leaderSelector = LeaderSelector.instance
+
     /**
      * Adds a new cluster metadata to the map of cluster endpoint statuses and updates the metadata in Zookeeper.
      * @param oneClusterName The name of the cluster.
@@ -135,9 +137,7 @@ class FailoverManager {
         oneClusterMeta.masterHostAndPortList = masterHostAndPortList
         def data = objectMapper.writeValueAsString(oneClusterMeta)
 
-        def leaderSelector = LeaderSelector.instance
         def client = leaderSelector.client
-
         // zookeeperVeloMetaBasePath already exists
         def nodeStat = client.checkExists().forPath(zookeeperVeloMetaBasePath + '/' + oneClusterName)
         if (nodeStat == null) {
@@ -155,7 +155,6 @@ class FailoverManager {
     synchronized void removeOneMetaFromZookeeper(String oneClusterName) {
         oneEndpointStatusMapByClusterName.remove(oneClusterName)
 
-        def leaderSelector = LeaderSelector.instance
         def client = leaderSelector.client
         def nodeStat = client.checkExists().forPath(zookeeperVeloMetaBasePath + '/' + oneClusterName)
         if (nodeStat != null) {
@@ -199,7 +198,6 @@ class FailoverManager {
         log.warn 'failover manager add delay restart check for failed host and port node, host and port={}:{}', failHostAndPort.host, failHostAndPort.port
         def path = zookeeperVeloMetaBasePath + '/' + DELAY_RESTART_CHECK_FOR_FAILED_HOST_AND_PORT_NODE_NAME_PREFIX + failHostAndPort.toString()
 
-        def leaderSelector = LeaderSelector.instance
         def client = leaderSelector.client
         def nodeStat = client.checkExists().forPath(path)
         if (nodeStat == null) {
@@ -208,6 +206,8 @@ class FailoverManager {
             client.setData().forPath(path, clusterxNodesArgs.bytes)
         }
     }
+
+    private final JedisPoolHolder jedisPoolHolder = JedisPoolHolder.instance
 
     /**
      * Checks if a server has restarted and performs the necessary set nodes operation.
@@ -218,7 +218,7 @@ class FailoverManager {
         def array = nodeName.substring(DELAY_RESTART_CHECK_FOR_FAILED_HOST_AND_PORT_NODE_NAME_PREFIX.length()).split(':')
         def hostAndPort = new HostAndPort(array[0], array[1] as int)
         try {
-            def jedisPool = JedisPoolHolder.instance.create(hostAndPort.host, hostAndPort.port)
+            def jedisPool = jedisPoolHolder.create(hostAndPort.host, hostAndPort.port)
             JedisPoolHolder.exe(jedisPool) { jedis ->
                 jedis.ping()
             }
@@ -228,12 +228,10 @@ class FailoverManager {
             return
         }
 
-        def leaderSelector = LeaderSelector.instance
         def client = leaderSelector.client
-
         try {
             def clusterxNodesArgs = new String(client.getData().forPath(zookeeperVeloMetaBasePath + '/' + nodeName))
-            def jedisPool = JedisPoolHolder.instance.create(hostAndPort.host, hostAndPort.port)
+            def jedisPool = jedisPoolHolder.create(hostAndPort.host, hostAndPort.port)
             String result
             if (mockSetNodes) {
                 result = 'OK'
@@ -265,7 +263,6 @@ class FailoverManager {
      * Checks the status of the cluster and performs failover if necessary.
      */
     void checkFailover() {
-        def leaderSelector = LeaderSelector.instance
         def client = leaderSelector.client
         if (client == null) {
             // not init yet
@@ -308,7 +305,7 @@ class FailoverManager {
                     }
 
                     try {
-                        def jedisPool = JedisPoolHolder.instance.create(hostAndPort.host, hostAndPort.port)
+                        def jedisPool = jedisPoolHolder.create(hostAndPort.host, hostAndPort.port)
                         JedisPoolHolder.exe(jedisPool) { jedis ->
                             jedis.ping()
                         }
@@ -336,7 +333,6 @@ class FailoverManager {
     void postStatusToLeader() {
         loopCount++
 
-        def leaderSelector = LeaderSelector.instance
         def isSelfLeader = leaderSelector.hasLeadership()
         if (isSelfLeader) {
             if (loopCount % 10 == 0) {
@@ -439,7 +435,7 @@ class FailoverManager {
 
             log.warn 'failover manager do failover, cluster name={}, query cluster nodes by target host and port={}:{}',
                     oneClusterName, hostAndPort.host, hostAndPort.port
-            def jedisPool = JedisPoolHolder.instance.create(hostAndPort.host, hostAndPort.port)
+            def jedisPool = jedisPoolHolder.create(hostAndPort.host, hostAndPort.port)
             def r = JedisPoolHolder.exe(jedisPool) { jedis ->
                 jedis.clusterNodes()
             }
@@ -589,7 +585,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             if (mockSetNodes) {
                 result = 'OK'
             } else {
-                def jedisPool = JedisPoolHolder.instance.create(hostAndPort.host, hostAndPort.port)
+                def jedisPool = jedisPoolHolder.create(hostAndPort.host, hostAndPort.port)
                 result = JedisPoolHolder.exe(jedisPool) { jedis ->
                     def command = new ExtendProtocolCommand('clusterx')
                     byte[] r = jedis.sendCommand(command, 'setnodes'.bytes, clusterxNodesArgs.bytes) as byte[]

@@ -113,7 +113,7 @@ class EGroupTest extends Specification {
 
         when:
         def classpath = Utils.projectPath("/dyn/src")
-        CachedGroovyClassLoader.getInstance().init(GroovyClassLoader.getClass().classLoader, classpath, null)
+        CachedGroovyClassLoader.instance.init(GroovyClassLoader.getClass().classLoader, classpath, null)
         eGroup.cmd = 'extend'
         reply = eGroup.handle()
         then:

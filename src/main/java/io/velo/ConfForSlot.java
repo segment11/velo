@@ -102,8 +102,10 @@ public enum ConfForSlot {
         map.put("wal.oneChargeBucketNumber", confWal.oneChargeBucketNumber);
         map.put("repl.binlogOneSegmentLength", confRepl.binlogOneSegmentLength);
         map.put("repl.binlogOneFileMaxLength", confRepl.binlogOneFileMaxLength);
-        // hash save mode need be same as master
-        map.put("persist.isHashSaveMemberTogether", LocalPersist.getInstance().getIsHashSaveMemberTogether());
+
+        // hash save mode needs to be the same as master
+        var localPersist = LocalPersist.getInstance();
+        map.put("persist.isHashSaveMemberTogether", localPersist.getIsHashSaveMemberTogether());
         return map;
     }
 

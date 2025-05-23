@@ -852,12 +852,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     private @NotNull ScanCursorWithReturnKeys scanNextSlotResult(ArrayList<String> keys) {
-        var lastOneSlot = LocalPersist.getInstance().lastOneSlot();
+        var localPersist = LocalPersist.getInstance();
+        var lastOneSlot = localPersist.lastOneSlot();
         var isLastSlot = lastOneSlot == null || slot == lastOneSlot.slot();
         if (isLastSlot) {
             return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
         } else {
-            var nextOneSlot = LocalPersist.getInstance().nextOneSlot(slot);
+            var nextOneSlot = localPersist.nextOneSlot(slot);
             if (nextOneSlot == null) {
                 return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
             } else {

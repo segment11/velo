@@ -211,7 +211,8 @@ public class ConfForGlobal {
         }
 
         if (ConfForGlobal.PASSWORD != null) {
-            AclUsers.getInstance().upInsert(U.DEFAULT_USER, u -> u.setPassword(U.Password.plain(ConfForGlobal.PASSWORD)));
+            var aclUsers = AclUsers.getInstance();
+            aclUsers.upInsert(U.DEFAULT_USER, u -> u.setPassword(U.Password.plain(ConfForGlobal.PASSWORD)));
         }
     }
 }

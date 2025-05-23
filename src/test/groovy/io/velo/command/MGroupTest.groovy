@@ -111,7 +111,7 @@ class MGroupTest extends Specification {
 
         when:
         def classpath = Utils.projectPath("/dyn/src")
-        CachedGroovyClassLoader.getInstance().init(GroovyClassLoader.getClass().classLoader, classpath, null)
+        CachedGroovyClassLoader.instance.init(GroovyClassLoader.getClass().classLoader, classpath, null)
         mGroup.cmd = 'manage'
         reply = mGroup.handle()
         then:

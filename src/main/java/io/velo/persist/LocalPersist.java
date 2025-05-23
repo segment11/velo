@@ -212,8 +212,10 @@ public class LocalPersist implements NeedCleanUp {
         initSlotsAgainAfterMultiShardLoadedOrChanged();
     }
 
+    private final DictMap dictMap = DictMap.getInstance();
+
     /**
-     * Reinitializes slots after MultiShard is loaded or changed.
+     * Reinitialized slots after MultiShard is loaded or changed.
      *
      * @throws IOException if an I/O error occurs during reinitialization
      */
@@ -225,7 +227,7 @@ public class LocalPersist implements NeedCleanUp {
 
             // set dict map binlog same as the first slot binlog
             if (firstOneSlot != null && oneSlot.slot() == firstOneSlot.slot()) {
-                DictMap.getInstance().setBinlog(oneSlot.getBinlog());
+                dictMap.setBinlog(oneSlot.getBinlog());
                 log.warn("Set dict map binlog to slot={}", oneSlot.slot());
 
                 if (!ConfForGlobal.initDynConfigItems.isEmpty()) {
