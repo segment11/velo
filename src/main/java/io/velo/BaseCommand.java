@@ -10,6 +10,7 @@ import io.velo.mock.ByPassGetSet;
 import io.velo.persist.KeyLoader;
 import io.velo.persist.LocalPersist;
 import io.velo.persist.OneSlot;
+import io.velo.persist.ReadonlyException;
 import io.velo.repl.cluster.MultiShard;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.NotNull;
@@ -957,6 +958,8 @@ public abstract class BaseCommand {
             var oneSlot = localPersist.oneSlot(slot);
             try {
                 oneSlot.put(key, slotWithKeyHash.bucketIndex, cv);
+            } catch (ReadonlyException e) {
+                log.warn("Set but server is readonly, key={}", key);
             } catch (Exception e) {
                 log.error("Set error, key={}, message={}", key, e.getMessage());
                 throw e;
