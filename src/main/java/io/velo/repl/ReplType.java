@@ -71,14 +71,6 @@ public enum ReplType {
     test(true, true, (byte) 100),
 
     /**
-     * Request to master for fetching exists keys for analysis.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 18.
-     */
-    exists_keys_for_analysis(false, true, (byte) 18),
-
-    /**
      * Request to master for fetching exists write-ahead log entries.
      * It's before slave all catch up.
      * It's sent by a slave.
@@ -157,14 +149,6 @@ public enum ReplType {
      * code byte value 27.
      */
     catch_up(true, true, (byte) 27),
-
-    /**
-     * Response to slave for fetching exists keys for analysis.
-     * It's before slave all catch up.
-     * It's sent by a master.
-     * code byte value 28.
-     */
-    s_exists_keys_for_analysis(false, false, (byte) 28),
 
     /**
      * Response to slave for fetching exists write-ahead log entries.

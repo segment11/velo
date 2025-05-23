@@ -11,7 +11,6 @@ import io.velo.repl.content.Hi
 import io.velo.repl.content.Ping
 import io.velo.repl.content.Pong
 import io.velo.repl.incremental.XWalV
-import io.velo.reply.AsyncReply
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.NilReply
@@ -353,7 +352,7 @@ class XGroupTest extends Specification {
         when:
         requestBuffer.position(0)
         // no log, skip
-        requestBuffer.putInt(99)
+        requestBuffer.putInt(999)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_wal)
@@ -387,7 +386,7 @@ class XGroupTest extends Specification {
         when:
         requestBuffer.position(0)
         // no log, no skip
-        requestBuffer.putInt(99)
+        requestBuffer.putInt(999)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_wal)
@@ -395,7 +394,7 @@ class XGroupTest extends Specification {
         when:
         requestBuffer.position(0)
         // trigger log, no skip
-        requestBuffer.putInt(100)
+        requestBuffer.putInt(1000)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_wal)
@@ -461,47 +460,6 @@ class XGroupTest extends Specification {
         then:
         r.isReplType(ReplType.s_exists_key_buckets)
         r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8 + (4 + (4 + 472) * ConfForSlot.global.confWal.oneChargeBucketNumber)
-
-        // exists_keys
-        when:
-        ConfForGlobal.pureMemoryV2 = false
-        def keyAnalysisHandler = localPersist.indexHandlerPool.keyAnalysisHandler
-        int valueBytesInit = 10 << 8
-        10.times {
-            keyAnalysisHandler.addKey('key:' + (it.toString().padLeft(12, '0')), valueBytesInit)
-        }
-        data4[2][0] = ReplType.exists_keys_for_analysis.code
-        contentBytes = new byte[4]
-        data4[3] = contentBytes
-        def asyncReply = x.handleRepl()
-        eventloopCurrent.run()
-        Thread.sleep(200)
-        then:
-        asyncReply instanceof AsyncReply
-//        (asyncReply as AsyncReply).settablePromise.whenResult { result ->
-//            result instanceof ReplReply &&
-//                    (result as ReplReply).isReplType(ReplType.s_exists_keys)
-//        }.result
-
-
-        when:
-        contentBytes = new byte[4 + 16]
-        requestBuffer = ByteBuffer.wrap(contentBytes)
-        requestBuffer.putInt(16)
-        requestBuffer.put('key:000000000001'.bytes)
-        data4[3] = contentBytes
-        asyncReply = x.handleRepl()
-        eventloopCurrent.run()
-        Thread.sleep(200)
-        then:
-        asyncReply instanceof AsyncReply
-
-        when:
-        // slot 1
-        ByteBuffer.wrap(data4[1]).putShort((short) 1)
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.s_exists_keys_for_analysis)
 
         // stat_key_count_in_buckets
         when:
@@ -912,7 +870,7 @@ class XGroupTest extends Specification {
         // skip, no log
         contentBytes = new byte[4]
         requestBuffer = ByteBuffer.wrap(contentBytes)
-        requestBuffer.putInt(99)
+        requestBuffer.putInt(999)
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
@@ -923,7 +881,7 @@ class XGroupTest extends Specification {
         // skip, trigger log
         contentBytes = new byte[4]
         requestBuffer = ByteBuffer.wrap(contentBytes)
-        requestBuffer.putInt(100)
+        requestBuffer.putInt(1000)
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
@@ -960,12 +918,12 @@ class XGroupTest extends Specification {
         then:
         r.isReplType(ReplType.exists_key_buckets)
 
-        when:
-        // is skip flag false
-        requestBuffer.put(1 + 1 + 4, (byte) 0)
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.exists_key_buckets)
+//        when:
+//        // is skip flag false
+//        requestBuffer.put(1 + 1 + 4, (byte) 0)
+//        r = x.handleRepl()
+//        then:
+//        r.isReplType(ReplType.exists_key_buckets)
 
         when:
         contentBytes = new byte[1 + 1 + 4 + 1 + 8 + 4096 * ConfForSlot.global.confWal.oneChargeBucketNumber]
@@ -989,7 +947,7 @@ class XGroupTest extends Specification {
         // last batch in split index 0
         // max split number
         requestBuffer.put(1, (byte) 3)
-        requestBuffer.putInt(1 + 1, ConfForSlot.global.confBucket.bucketsPerSlot - ConfForSlot.global.confWal.oneChargeBucketNumber)
+        requestBuffer.putInt(1 + 1, ConfForSlot.global.confWal.oneChargeBucketNumber * 1024 - ConfForSlot.global.confWal.oneChargeBucketNumber)
         r = x.handleRepl()
         then:
         // delay fetch next batch
@@ -998,10 +956,11 @@ class XGroupTest extends Specification {
         when:
         // last batch in split index 2
         requestBuffer.put(0, (byte) 2)
+        requestBuffer.putInt(1 + 1, ConfForSlot.global.confBucket.bucketsPerSlot - ConfForSlot.global.confWal.oneChargeBucketNumber)
         r = x.handleRepl()
         then:
         // next step
-        r.isReplType(ReplType.exists_keys_for_analysis)
+        r.isReplType(ReplType.exists_chunk_segments)
 
         when:
         ConfForGlobal.pureMemoryV2 = true
@@ -1033,29 +992,6 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         // next step
-        r.isReplType(ReplType.exists_keys_for_analysis)
-
-        // s_exists_keys
-        when:
-        ConfForGlobal.pureMemoryV2 = false
-        data4[2][0] = ReplType.s_exists_keys_for_analysis.code
-        contentBytes = new byte[2 + 4 + 4]
-        data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        // not keys in rocksdb
-        // next step
-        r.isReplType(ReplType.exists_chunk_segments)
-
-        when:
-        requestBuffer = ByteBuffer.wrap(contentBytes)
-        requestBuffer.putShort((short) 4)
-        requestBuffer.put('1234'.bytes)
-        requestBuffer.putInt(1)
-        r = x.handleRepl()
-        then:
-        // test only one key value, less one batch key count, means master already reply last batch
-        // next step
         r.isReplType(ReplType.exists_chunk_segments)
 
         when:
@@ -1063,7 +999,7 @@ class XGroupTest extends Specification {
         ConfForSlot.global.confRepl.iterateKeysOneBatchSize = 1
         r = x.handleRepl()
         then:
-        r.isReplType(ReplType.exists_keys_for_analysis)
+        r.isReplType(ReplType.exists_chunk_segments)
 
         // s_stat_key_count_in_buckets
         when:

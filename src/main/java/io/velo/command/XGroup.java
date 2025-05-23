@@ -4,9 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
-import io.activej.promise.SettablePromise;
 import io.netty.buffer.Unpooled;
-import io.velo.*;
+import io.velo.BaseCommand;
+import io.velo.ConfForGlobal;
+import io.velo.ConfForSlot;
+import io.velo.Dict;
 import io.velo.persist.*;
 import io.velo.repl.Binlog;
 import io.velo.repl.Repl;
@@ -15,16 +17,21 @@ import io.velo.repl.ReplType;
 import io.velo.repl.content.*;
 import io.velo.repl.incremental.XSkipApply;
 import io.velo.repl.support.JedisPoolHolder;
-import io.velo.reply.*;
+import io.velo.reply.BulkReply;
+import io.velo.reply.ErrorReply;
+import io.velo.reply.NilReply;
+import io.velo.reply.Reply;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.concurrent.ExecutionException;
 
 import static io.velo.repl.ReplType.*;
 
@@ -278,7 +285,6 @@ public class XGroup extends BaseCommand {
                 oneSlot.addDelayNeedCloseReplPair(replPair);
                 yield Repl.emptyReply();
             }
-            case exists_keys_for_analysis -> exists_keys_for_analysis(slot, contentBytes);
             case exists_wal -> exists_wal(slot, contentBytes);
             case exists_chunk_segments -> exists_chunk_segments(slot, contentBytes);
             case exists_key_buckets -> exists_key_buckets(slot, contentBytes);
@@ -289,7 +295,6 @@ public class XGroup extends BaseCommand {
             case exists_dict -> exists_dict(slot, contentBytes);
             case exists_all_done -> exists_all_done(slot, contentBytes);
             case catch_up -> catch_up(slot, contentBytes);
-            case s_exists_keys_for_analysis -> s_exists_keys_for_analysis(slot, contentBytes);
             case s_exists_wal -> s_exists_wal(slot, contentBytes);
             case s_exists_chunk_segments -> s_exists_chunk_segments(slot, contentBytes);
             case s_exists_key_buckets -> s_exists_key_buckets(slot, contentBytes);
@@ -461,95 +466,6 @@ public class XGroup extends BaseCommand {
         }
     }
 
-    // use rocksdb backup engine better, but need copy too many files
-    Reply exists_keys_for_analysis(short slot, byte[] contentBytes) {
-        // server received from client
-        if (slot != localPersist.firstOneSlot().slot()) {
-            // not first slot, skip
-            log.warn("Repl master skip iterate keys when slave slot is not the first slot, slot={}", slot);
-            return Repl.reply(slot, replPair, s_exists_keys_for_analysis, new RawBytesContent(new byte[2]));
-        }
-
-        var buffer = ByteBuffer.wrap(contentBytes);
-        var beginKeyBytesLength = buffer.getInt();
-        byte[] beginKeyBytes = null;
-        if (beginKeyBytesLength != 0) {
-            beginKeyBytes = new byte[beginKeyBytesLength];
-            buffer.get(beginKeyBytes);
-        }
-
-        SettablePromise<Reply> finalPromise = new SettablePromise<>();
-        var asyncReply = new AsyncReply(finalPromise);
-
-        var keyAnalysisHandler = localPersist.getIndexHandlerPool().getKeyAnalysisHandler();
-        var os = new ByteArrayOutputStream(ConfForSlot.global.confRepl.iterateKeysOneBatchSize * 32);
-        var dataOs = new DataOutputStream(os);
-        var f = keyAnalysisHandler.iterateKeys(beginKeyBytes, ConfForSlot.global.confRepl.iterateKeysOneBatchSize, false,
-                (keyBytes, valueBytesAsInt) -> {
-                    try {
-                        dataOs.writeShort((short) keyBytes.length);
-                        dataOs.write(keyBytes);
-                        dataOs.writeInt(valueBytesAsInt);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
-
-        f.whenComplete((ignore, e) -> {
-            if (e != null) {
-                var message = "Repl master iterate keys error, slot=" + slot;
-                log.error(message, e);
-                finalPromise.set(Repl.error(slot, replPair, message + ", error=" + e.getMessage()));
-                return;
-            }
-
-            if (dataOs.size() == 0) {
-                log.warn("Repl master has no keys to analysis.");
-                finalPromise.set(Repl.reply(slot, replPair, s_exists_keys_for_analysis, new RawBytesContent(new byte[2])));
-            } else {
-                finalPromise.set(Repl.reply(slot, replPair, s_exists_keys_for_analysis, new RawBytesContent(os.toByteArray())));
-            }
-        });
-
-        return asyncReply;
-    }
-
-    private Repl.ReplReply nextStepToGetFirstChunkSegment(short slot) {
-        var oneSlot = localPersist.oneSlot(slot);
-        var metaChunkSegmentFlagSeq = oneSlot.getMetaChunkSegmentFlagSeq();
-        log.warn("Repl slave fetch data, go to step={}, slot={}", exists_chunk_segments.name(), slot);
-        var segmentCount = FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD;
-        var metaBytes = metaChunkSegmentFlagSeq.getOneBatch(0, segmentCount);
-        var content = new ToMasterExistsChunkSegments(0, segmentCount, metaBytes);
-        return Repl.reply(slot, replPair, exists_chunk_segments, content);
-    }
-
-    Repl.ReplReply s_exists_keys_for_analysis(short slot, byte[] contentBytes) {
-        // client received from server
-        var buffer = ByteBuffer.wrap(contentBytes);
-        if (buffer.getShort() == 0) {
-            return nextStepToGetFirstChunkSegment(slot);
-        }
-
-        var keyAnalysisHandler = localPersist.getIndexHandlerPool().getKeyAnalysisHandler();
-        var f = keyAnalysisHandler.addBatch(contentBytes);
-        try {
-            var result = f.get();
-            if (result.keyCount() < ConfForSlot.global.confRepl.iterateKeysOneBatchSize) {
-                return nextStepToGetFirstChunkSegment(slot);
-            } else {
-                var lastKeyBytes = result.lastKeyBytes();
-                var requestBytes = new byte[4 + lastKeyBytes.length];
-                var requestBuffer = ByteBuffer.wrap(requestBytes);
-                requestBuffer.putInt(lastKeyBytes.length);
-                requestBuffer.put(lastKeyBytes);
-                return Repl.reply(slot, replPair, exists_keys_for_analysis, new RawBytesContent(requestBytes));
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     @VisibleForTesting
     Repl.ReplReply exists_wal(short slot, byte[] contentBytes) {
         // server received from client
@@ -569,7 +485,7 @@ public class XGroup extends BaseCommand {
         var targetWal = oneSlot.getWalByGroupIndex(groupIndex);
 
         if (lastSeqAfterPut == targetWal.getLastSeqAfterPut() && lastSeqShortValueAfterPut == targetWal.getLastSeqShortValueAfterPut()) {
-            if (groupIndex % 100 == 0) {
+            if (groupIndex % 1000 == 0) {
                 log.warn("Repl master skip send wal exists bytes, group index={}, slot={}", groupIndex, slot);
             }
 
@@ -579,7 +495,7 @@ public class XGroup extends BaseCommand {
             responseBuffer.putInt(groupIndex);
             return Repl.reply(slot, replPair, s_exists_wal, new RawBytesContent(responseBytes));
         } else {
-            if (groupIndex % 100 == 0) {
+            if (groupIndex % 1000 == 0) {
                 log.warn("Repl master will fetch exists wal, group index={}, slot={}", groupIndex, slot);
             }
         }
@@ -611,7 +527,7 @@ public class XGroup extends BaseCommand {
         } else {
             // skip
             replPair.increaseStatsCountWhenSlaveSkipFetch(s_exists_wal);
-            if (groupIndex % 100 == 0) {
+            if (groupIndex % 1000 == 0) {
                 log.info("Repl slave skip update wal exists bytes, group index={}, slot={}", groupIndex, slot);
             }
         }
@@ -622,7 +538,7 @@ public class XGroup extends BaseCommand {
             return Repl.reply(slot, replPair, exists_all_done, NextStepContent.INSTANCE);
         } else {
             var nextGroupIndex = groupIndex + 1;
-            if (nextGroupIndex % 100 == 0) {
+            if (nextGroupIndex % 1000 == 0) {
                 // delay
                 oneSlot.delayRun(1000, () -> {
                     replPair.write(exists_wal, requestExistsWal(oneSlot, nextGroupIndex));
@@ -789,7 +705,7 @@ public class XGroup extends BaseCommand {
         var oneWalGroupSeq = buffer.getLong();
 
         var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
-        if (beginBucketIndex % (oneChargeBucketNumber * 100) == 0) {
+        if (beginBucketIndex % (oneChargeBucketNumber * 1024) == 0) {
             log.warn("Repl master fetch exists key buckets, split index={}, begin bucket index={}, slot={}",
                     splitIndex, beginBucketIndex, slot);
         }
@@ -856,7 +772,7 @@ public class XGroup extends BaseCommand {
         var leftLength = buffer.remaining();
 
         var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
-        if (beginBucketIndex % (oneChargeBucketNumber * 100) == 0) {
+        if (beginBucketIndex % (oneChargeBucketNumber * 1024) == 0) {
             log.warn("Repl slave ready to fetch exists key buckets, split index={}, begin bucket index={}, slot={}",
                     splitIndex, beginBucketIndex, slot);
         }
@@ -905,9 +821,12 @@ public class XGroup extends BaseCommand {
         }
 
         if (isAllReceived) {
-            log.warn("Repl slave fetch data, go to step={}, slot={}", exists_keys_for_analysis.name(), slot);
-            var requestBytes = new byte[4];
-            return Repl.reply(slot, replPair, exists_keys_for_analysis, new RawBytesContent(requestBytes));
+            log.warn("Repl slave fetch data, go to step={}, slot={}", exists_chunk_segments.name(), slot);
+            var metaChunkSegmentFlagSeq = oneSlot.getMetaChunkSegmentFlagSeq();
+            var segmentCount = FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD;
+            var metaBytes = metaChunkSegmentFlagSeq.getOneBatch(0, segmentCount);
+            var content = new ToMasterExistsChunkSegments(0, segmentCount, metaBytes);
+            return Repl.reply(slot, replPair, exists_chunk_segments, content);
         } else {
             var nextSplitIndex = isLastBatchInThisSplit ? splitIndex + 1 : splitIndex;
             var nextBeginBucketIndex = isLastBatchInThisSplit ? 0 : beginBucketIndex + oneChargeBucketNumber;
@@ -925,7 +844,7 @@ public class XGroup extends BaseCommand {
             requestBuffer.putLong(slaveOneWalGroupSeq);
             var content = new RawBytesContent(requestBytes);
 
-            if (nextBeginBucketIndex % (oneChargeBucketNumber * 100) == 0) {
+            if (nextBeginBucketIndex % (oneChargeBucketNumber * 1024) == 0) {
                 oneSlot.delayRun(100, () -> {
                     replPair.write(exists_key_buckets, content);
                 });
@@ -943,7 +862,7 @@ public class XGroup extends BaseCommand {
         var oneSlot = localPersist.oneSlot(slot);
         var keyLoader = oneSlot.getKeyLoader();
         var bytes = keyLoader.getStatKeyCountInBucketsBytesToSlaveExists();
-        log.warn("Repl master fetch stat key count in key buckets, slot={}", slot);
+        log.warn("Repl master fetch stat key count in key buckets, slot={}, bytes length={}", slot, bytes.length);
         return Repl.reply(slot, replPair, s_stat_key_count_in_buckets, new RawBytesContent(bytes));
     }
 
