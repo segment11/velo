@@ -794,6 +794,8 @@ public class Wal implements InMemoryEstimate {
     @VisibleForTesting
     boolean isOnRewrite = true;
 
+    private final Debug debug = Debug.getInstance();
+
     /**
      * Puts a log entry into the WAL.
      *
@@ -834,9 +836,8 @@ public class Wal implements InMemoryEstimate {
             }
         }
 
-        var bulkLoad = Debug.getInstance().bulkLoad;
         // bulk load need not wal write
-        if (!ConfForGlobal.pureMemory && !bulkLoad) {
+        if (!ConfForGlobal.pureMemory && !debug.bulkLoad) {
             putVToFile(v, isValueShort, offset, targetGroupBeginOffset);
         }
         if (isValueShort) {
