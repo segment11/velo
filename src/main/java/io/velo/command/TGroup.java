@@ -34,7 +34,7 @@ public class TGroup extends BaseCommand {
             if (data.length != 2) {
                 return slotWithKeyHashList;
             }
-            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
             return slotWithKeyHashList;
         }
 

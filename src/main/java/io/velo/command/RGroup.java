@@ -29,7 +29,8 @@ public class RGroup extends BaseCommand {
             if (data.length != 3) {
                 return slotWithKeyHashList;
             }
-            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1And2);
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
+            slotWithKeyHashList.add(slot(data[2], slotNumber));
             return slotWithKeyHashList;
         }
 
@@ -37,7 +38,7 @@ public class RGroup extends BaseCommand {
             if (data.length < 4) {
                 return slotWithKeyHashList;
             }
-            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
             return slotWithKeyHashList;
         }
 
@@ -45,7 +46,7 @@ public class RGroup extends BaseCommand {
             if (data.length != 2 && data.length != 3) {
                 return slotWithKeyHashList;
             }
-            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
             return slotWithKeyHashList;
         }
 
@@ -53,7 +54,7 @@ public class RGroup extends BaseCommand {
             if (data.length < 3) {
                 return slotWithKeyHashList;
             }
-            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
             return slotWithKeyHashList;
         }
 

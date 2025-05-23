@@ -31,32 +31,9 @@ import java.util.List;
 @ThreadNeedLocal
 public abstract class BaseCommand {
     /**
-     * Functional interface to determine if an index in the command data array contains a key.
-     */
-    protected interface IsKeyBytes {
-        boolean isKeyBytes(int i);
-    }
-
-    /**
-     * Implementation of IsKeyBytes that checks if a specific index contains a key.
-     */
-    protected static final class GivenKeyIndex implements IsKeyBytes {
-        private final int index;
-
-        public GivenKeyIndex(int index) {
-            this.index = index;
-        }
-
-        @Override
-        public boolean isKeyBytes(int i) {
-            return i == index;
-        }
-    }
-
-    /**
      * Implementation of IsKeyBytes that checks if indices within a range contain keys.
      */
-    protected static final class FromToKeyIndex implements IsKeyBytes {
+    protected static final class FromToKeyIndex {
         private final int from;
         private final int to;
         private final int step;
@@ -67,7 +44,6 @@ public abstract class BaseCommand {
             this.step = step;
         }
 
-        @Override
         public boolean isKeyBytes(int i) {
             return i >= from && (to == -1 || i <= to) && (step == 1 || (i - from) % step == 0);
         }
@@ -76,13 +52,10 @@ public abstract class BaseCommand {
     /**
      * Predefined IsKeyBytes instances for common use cases.
      */
-    protected static final IsKeyBytes KeyIndex1 = new GivenKeyIndex(1);
-    protected static final IsKeyBytes KeyIndex2 = new GivenKeyIndex(2);
-    protected static final IsKeyBytes KeyIndex1And2 = new FromToKeyIndex(1, 2, 1);
-    protected static final IsKeyBytes KeyIndexBegin1 = new FromToKeyIndex(1, -1, 1);
-    protected static final IsKeyBytes KeyIndexBegin1Step2 = new FromToKeyIndex(1, -1, 2);
-    protected static final IsKeyBytes KeyIndexBegin2 = new FromToKeyIndex(2, -1, 1);
-    protected static final IsKeyBytes KeyIndexBegin2Step2 = new FromToKeyIndex(2, -1, 2);
+    protected static final FromToKeyIndex KeyIndexBegin1 = new FromToKeyIndex(1, -1, 1);
+    protected static final FromToKeyIndex KeyIndexBegin1Step2 = new FromToKeyIndex(1, -1, 2);
+    protected static final FromToKeyIndex KeyIndexBegin2 = new FromToKeyIndex(2, -1, 1);
+    protected static final FromToKeyIndex KeyIndexBegin2Step2 = new FromToKeyIndex(2, -1, 2);
 
     /**
      * Adds slot-key hash mappings for relevant keys in the command data array.
@@ -93,7 +66,7 @@ public abstract class BaseCommand {
      * @param isKeyBytes          Predicate to determine which array indices contain keys
      */
     protected static void addToSlotWithKeyHashList(ArrayList<SlotWithKeyHash> slotWithKeyHashList,
-                                                   byte[][] data, int slotNumber, IsKeyBytes isKeyBytes) {
+                                                   byte[][] data, int slotNumber, FromToKeyIndex isKeyBytes) {
         for (int i = 1; i < data.length; i++) {
             if (isKeyBytes.isKeyBytes(i)) {
                 var keyBytes = data[i];

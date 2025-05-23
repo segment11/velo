@@ -115,14 +115,6 @@ class BaseCommandTest extends Specification {
 
     def 'test key index'() {
         expect:
-        BaseCommand.KeyIndex1.isKeyBytes(1)
-        !BaseCommand.KeyIndex1.isKeyBytes(2)
-        BaseCommand.KeyIndex2.isKeyBytes(2)
-        !BaseCommand.KeyIndex2.isKeyBytes(1)
-        BaseCommand.KeyIndex1And2.isKeyBytes(1)
-        BaseCommand.KeyIndex1And2.isKeyBytes(2)
-        !BaseCommand.KeyIndex1And2.isKeyBytes(3)
-
         BaseCommand.KeyIndexBegin1.isKeyBytes(1)
         BaseCommand.KeyIndexBegin1.isKeyBytes(2)
 
@@ -146,9 +138,9 @@ class BaseCommandTest extends Specification {
         data3[1] = 'key'.bytes
         data3[2] = 'key2'.bytes
         ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList = []
-        BaseCommand.addToSlotWithKeyHashList(slotWithKeyHashList, data3, slotNumber, BaseCommand.KeyIndex1)
+        BaseCommand.addToSlotWithKeyHashList(slotWithKeyHashList, data3, slotNumber, BaseCommand.KeyIndexBegin1)
         then:
-        slotWithKeyHashList.size() == 1
+        slotWithKeyHashList.size() == 2
     }
 
     def 'test init'() {

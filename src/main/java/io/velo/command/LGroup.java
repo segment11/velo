@@ -24,7 +24,8 @@ public class LGroup extends BaseCommand {
             if (data.length != 5 && data.length != 6) {
                 return slotWithKeyHashList;
             }
-            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1And2);
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
+            slotWithKeyHashList.add(slot(data[2], slotNumber));
             return slotWithKeyHashList;
         }
 
@@ -36,7 +37,7 @@ public class LGroup extends BaseCommand {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
-            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndex1);
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
             return slotWithKeyHashList;
         }
 
