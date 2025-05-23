@@ -3,6 +3,7 @@ package io.velo.decode;
 import io.activej.bytebuf.ByteBufs;
 import io.activej.common.exception.MalformedDataException;
 import io.activej.csp.binary.decoder.ByteBufsDecoder;
+import io.netty.buffer.Unpooled;
 import io.velo.repl.Repl;
 import org.jetbrains.annotations.Nullable;
 
@@ -17,7 +18,6 @@ import java.util.Map;
 public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
     // in local thread
     private final RESP resp = new RESP();
-    private final ReuseBufs reuseBufs = new ReuseBufs();
 
     /**
      * Attempts to decode a single request from the provided ByteBufs.
@@ -28,47 +28,44 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
      * @throws MalformedDataException if the data in ByteBufs is malformed and cannot be decoded
      */
     private Request tryDecodeOne(ByteBufs bufs) throws MalformedDataException {
-        if (bufs.remainingBytes() <= 0) {
+        io.netty.buffer.CompositeByteBuf compositeByteBuf = Unpooled.compositeBuffer();
+        int capacity = 0;
+        for (var buf : bufs) {
+            int remainingN = buf.readRemaining();
+            if (remainingN > 0) {
+                capacity += remainingN;
+                compositeByteBuf.addComponent(true, Unpooled.wrappedBuffer(buf.array(), buf.head(), remainingN));
+            }
+        }
+        if (capacity == 0) {
             return null;
         }
 
-        reuseBufs.refresh(bufs);
-        var compositeByteBuf = reuseBufs.compositeByteBuf;
-        var beforeDecodeReaderIndex = compositeByteBuf.readerIndex();
+        compositeByteBuf.readerIndex(0);
+        compositeByteBuf.writerIndex(capacity).capacity(capacity);
 
         // check first 6 bytes, http or repl at least 6 bytes
         byte[][] data;
         boolean isHttp = false;
         boolean isRepl = false;
         Map<String, String> httpHeaders = null;
-
-        // Check if there are fewer than 6 bytes to read
-        if (compositeByteBuf.readableBytes() < 6) {
+        if (capacity < 6) {
             data = resp.decode(compositeByteBuf);
             if (data == null) {
                 return null;
             }
-
-            // Not all data is available yet; wait for more buffers
-            for (var bb : data) {
-                if (bb == null) {
-                    return null;
-                }
-            }
         } else {
-            compositeByteBuf.markReaderIndex();
-
-            // Read the first 6 bytes to determine the request type
-            byte[] first6 = new byte[6];
+            var first6 = new byte[6];
             compositeByteBuf.readBytes(first6);
-            boolean isGet = Arrays.equals(first6, 0, 3, HttpHeaderBody.GET, 0, 3);
-            boolean isPost = Arrays.equals(first6, 0, 4, HttpHeaderBody.POST, 0, 4);
-            boolean isPut = Arrays.equals(first6, 0, 3, HttpHeaderBody.PUT, 0, 3);
-            boolean isDelete = Arrays.equals(first6, 0, 6, HttpHeaderBody.DELETE, 0, 6);
+            var isGet = Arrays.equals(first6, 0, 3, HttpHeaderBody.GET, 0, 3);
+            var isPost = Arrays.equals(first6, 0, 4, HttpHeaderBody.POST, 0, 4);
+            var isPut = Arrays.equals(first6, 0, 3, HttpHeaderBody.PUT, 0, 3);
+            var isDelete = Arrays.equals(first6, 0, 6, HttpHeaderBody.DELETE, 0, 6);
             isHttp = isGet || isPost || isPut || isDelete;
             isRepl = Arrays.equals(first6, 0, 6, Repl.PROTOCOL_KEYWORD_BYTES, 0, 6);
 
-            compositeByteBuf.resetReaderIndex();
+            // set reader index back
+            compositeByteBuf.readerIndex(0);
 
             // Parse request based on the protocol type
             if (isHttp) {
@@ -124,8 +121,8 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
             }
         }
 
-        // Skip the bytes that were consumed during decoding
-        int consumedN = compositeByteBuf.readerIndex() - beforeDecodeReaderIndex;
+        // Skip the bytes those were consumed during decoding
+        int consumedN = compositeByteBuf.readerIndex();
         bufs.skip(consumedN);
 
         var r = new Request(data, isHttp, isRepl);
