@@ -11,4 +11,5 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.SOURCE)
 @Target({ElementType.TYPE, ElementType.FIELD})
 public @interface ThreadNeedLocal {
+    String type() default "slot";
 }

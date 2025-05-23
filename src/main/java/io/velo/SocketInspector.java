@@ -210,20 +210,20 @@ public class SocketInspector implements TcpSocket.Inspector {
     /**
      * Array of connected client counts for each network worker.
      */
-    @ThreadNeedLocal
+    @ThreadNeedLocal(type = "net")
     int[] connectedClientCountArray;
 
     /**
      * Array of network input bytes lengths for each network worker.
      * for stats
      */
-    @ThreadNeedLocal
+    @ThreadNeedLocal(type = "net")
     long[] netInBytesLengthArray;
     /**
      * Array of network output bytes lengths for each network worker.
      * for stats
      */
-    @ThreadNeedLocal
+    @ThreadNeedLocal(type = "net")
     long[] netOutBytesLengthArray;
 
     /**
@@ -362,7 +362,7 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
-     * Map of channels to subscribed sockets. Long means thread id.
+     * Map of channels to subscribed sockets. Long means slot eventloop thread id.
      */
     private final ConcurrentHashMap<ChannelAndIsPattern, ConcurrentHashMap<ITcpSocket, Long>> subscribeByChannel = new ConcurrentHashMap<>();
 
