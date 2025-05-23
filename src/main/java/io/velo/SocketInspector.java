@@ -223,7 +223,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      * Array of network output bytes lengths for each network worker.
      * for stats
      */
-    @ThreadNeedLocal(type = "net")
+    @ThreadNeedLocal(type = "net,slot")
     long[] netOutBytesLengthArray;
 
     /**
@@ -263,7 +263,7 @@ public class SocketInspector implements TcpSocket.Inspector {
 
         this.connectedClientCountArray = new int[netWorkerEventloopArray.length];
         this.netInBytesLengthArray = new long[netWorkerEventloopArray.length];
-        this.netOutBytesLengthArray = new long[netWorkerEventloopArray.length];
+        this.netOutBytesLengthArray = new long[netWorkerEventloopArray.length + slotWorkerEventloopArray.length];
     }
 
     /**
@@ -622,7 +622,12 @@ public class SocketInspector implements TcpSocket.Inspector {
         createUserDataIfNotSet(socket).netOutBytesLength += bytes;
 
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
-        netOutBytesLengthArray[threadIndex] += bytes;
+        if (threadIndex != -1) {
+            netOutBytesLengthArray[threadIndex] += bytes;
+        } else {
+            threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
+            netOutBytesLengthArray[ConfForGlobal.netWorkers + threadIndex] += bytes;
+        }
     }
 
     @Override
