@@ -1411,7 +1411,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     }
                 }
 
-                if (isAsMaster) {
+                // add update seq binlog every 100ms
+                if (isAsMaster && loopCount % 10 == 0) {
                     var xUpdateSeq = new XUpdateSeq(snowFlake.getLastNextId(), System.currentTimeMillis());
                     appendBinlog(xUpdateSeq);
                 }
