@@ -58,6 +58,21 @@ public class SnowFlake {
      */
     private final static long TIMESTAMP_LEFT = DATACENTER_LEFT + DATACENTER_BIT;
 
+    static {
+        // println static variables
+        System.out.println("SnowFlake config:");
+        System.out.println("START_STAMP=" + START_STAMP);
+        System.out.println("SEQUENCE_BIT=" + SEQUENCE_BIT);
+        System.out.println("MACHINE_BIT=" + MACHINE_BIT);
+        System.out.println("DATACENTER_BIT=" + DATACENTER_BIT);
+        System.out.println("MAX_DATACENTER_NUM=" + MAX_DATACENTER_NUM);
+        System.out.println("MAX_MACHINE_NUM=" + MAX_MACHINE_NUM);
+        System.out.println("MAX_SEQUENCE=" + MAX_SEQUENCE);
+        System.out.println("MACHINE_LEFT=" + MACHINE_LEFT);
+        System.out.println("DATACENTER_LEFT=" + DATACENTER_LEFT);
+        System.out.println("TIMESTAMP_LEFT=" + TIMESTAMP_LEFT);
+    }
+
     /**
      * Datacenter ID.
      */
@@ -88,10 +103,10 @@ public class SnowFlake {
      */
     public SnowFlake(long datacenterId, long machineId) {
         if (datacenterId > MAX_DATACENTER_NUM || datacenterId < 0) {
-            throw new IllegalArgumentException("Parameter datacenterId can't be greater than MAX_DATACENTER_NUM or less than 0");
+            throw new IllegalArgumentException("Parameter datacenterId can't be greater than MAX_DATACENTER_NUM or less than 0, datacenterId=" + datacenterId);
         }
         if (machineId > MAX_MACHINE_NUM || machineId < 0) {
-            throw new IllegalArgumentException("Parameter machineId can't be greater than MAX_MACHINE_NUM or less than 0");
+            throw new IllegalArgumentException("Parameter machineId can't be greater than MAX_MACHINE_NUM or less than 0, machineId=" + machineId);
         }
         this.datacenterId = datacenterId;
         this.machineId = machineId;

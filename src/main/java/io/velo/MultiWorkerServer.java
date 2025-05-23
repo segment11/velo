@@ -660,7 +660,7 @@ public class MultiWorkerServer extends Launcher {
         var snowFlakes = new SnowFlake[slotNumber];
 
         for (int i = 0; i < slotNumber; i++) {
-            snowFlakes[i] = new SnowFlake(ConfForGlobal.datacenterId, (ConfForGlobal.machineId << 8) | i);
+            snowFlakes[i] = new SnowFlake(ConfForGlobal.datacenterId, ConfForGlobal.machineId);
         }
         return snowFlakes;
     }
