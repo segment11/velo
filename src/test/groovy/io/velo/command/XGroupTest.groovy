@@ -801,7 +801,7 @@ class XGroupTest extends Specification {
         when:
         requestBuffer.position(0)
         // next batch will delay run
-        requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 9)
+        requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 99)
         r = x.handleRepl()
         then:
         r.isEmpty()

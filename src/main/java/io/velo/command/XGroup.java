@@ -570,7 +570,7 @@ public class XGroup extends BaseCommand {
         var beginSegmentIndex = buffer.getInt();
         var segmentCount = buffer.getInt();
 
-        if (beginSegmentIndex % (segmentCount * 10) == 0) {
+        if (beginSegmentIndex % (segmentCount * 100) == 0) {
             log.warn("Repl master fetch exists chunk segments, begin segment index={}, segment count={}, slot={}",
                     beginSegmentIndex, segmentCount, slot);
         }
@@ -621,7 +621,7 @@ public class XGroup extends BaseCommand {
         var segmentCount = buffer.getInt();
         // segmentCount == FdReadWrite.REPL_ONCE_INNER_COUNT
 
-        if (beginSegmentIndex % (segmentCount * 10) == 0) {
+        if (beginSegmentIndex % (segmentCount * 100) == 0) {
             log.warn("Repl slave ready to fetch exists chunk segments, begin segment index={}, segment count={}, slot={}",
                     beginSegmentIndex, segmentCount, slot);
         }
@@ -685,7 +685,7 @@ public class XGroup extends BaseCommand {
             var nextBatchMetaBytes = metaChunkSegmentFlagSeq.getOneBatch(nextBatchBeginSegmentIndex, segmentCount);
             var content = new ToMasterExistsChunkSegments(nextBatchBeginSegmentIndex, segmentCount, nextBatchMetaBytes);
 
-            if (nextBatchBeginSegmentIndex % (segmentCount * 10) == 0) {
+            if (nextBatchBeginSegmentIndex % (segmentCount * 100) == 0) {
                 oneSlot.delayRun(100, () -> {
                     replPair.write(exists_chunk_segments, content);
                 });
