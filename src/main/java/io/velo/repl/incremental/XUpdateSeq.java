@@ -118,8 +118,6 @@ public class XUpdateSeq implements BinlogContent {
      */
     @Override
     public void apply(short slot, ReplPair replPair) {
-        log.warn("Repl update seq, seq={}, time millis={}", seq, timeMillis);
-
         replPair.setSlaveCatchUpLastSeq(seq);
         replPair.setSlaveCatchUpLastTimeMillis(timeMillis);
     }
