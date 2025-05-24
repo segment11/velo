@@ -10,9 +10,9 @@ import io.netty.util.CharsetUtil;
  */
 public class RESP {
     // MARKERS for different types of RESP messages
-    static final byte STRING_MARKER = '+';
-    static final byte BYTES_MARKER = '$';
-    static final byte ARRAY_MARKER = '*';
+    private static final byte STRING_MARKER = '+';
+    private static final byte BYTES_MARKER = '$';
+    private static final byte ARRAY_MARKER = '*';
 
     // Maximum length of a positive long in characters
     private static final int POSITIVE_LONG_MAX_LENGTH = 19; // length of Long.MAX_VALUE
