@@ -54,6 +54,13 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
             if (data == null) {
                 return null;
             }
+
+            // Not all data is available yet; wait for more buffers
+            for (var bb : data) {
+                if (bb == null) {
+                    return null;
+                }
+            }
         } else {
             var first6 = new byte[6];
             compositeByteBuf.readBytes(first6);
