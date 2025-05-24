@@ -625,7 +625,9 @@ public class SocketInspector implements TcpSocket.Inspector {
         if (threadIndex != -1) {
             netOutBytesLengthArray[threadIndex] += bytes;
         } else {
+            // when async reply, slot eventloop trigger write
             threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
+            assert threadIndex != -1;
             netOutBytesLengthArray[ConfForGlobal.netWorkers + threadIndex] += bytes;
         }
     }
