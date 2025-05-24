@@ -116,7 +116,7 @@ public class ConfForGlobal {
     /**
      * Idle time in milliseconds for event loops (default is 10 ms).
      */
-    public static int eventLoopIdleMillis = 10;
+    public static int eventloopIdleMillis = 10;
 
     /**
      * Zookeeper connection string.

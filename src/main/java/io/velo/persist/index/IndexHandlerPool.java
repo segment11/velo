@@ -88,7 +88,7 @@ public class IndexHandlerPool implements NeedCleanUp {
         for (int i = 0; i < indexWorkers; i++) {
             var eventloop = Eventloop.builder()
                     .withThreadName("index-worker-" + i)
-                    .withIdleInterval(Duration.ofMillis(ConfForGlobal.eventLoopIdleMillis))
+                    .withIdleInterval(Duration.ofMillis(ConfForGlobal.eventloopIdleMillis))
                     .build();
             workerEventloopArray[i] = eventloop;
 

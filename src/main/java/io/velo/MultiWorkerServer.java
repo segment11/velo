@@ -221,7 +221,7 @@ public class MultiWorkerServer extends Launcher {
         // default 10ms
         var primaryEventloop = Eventloop.builder()
                 .withThreadName("primary")
-                .withIdleInterval(Duration.ofMillis(ConfForGlobal.eventLoopIdleMillis))
+                .withIdleInterval(Duration.ofMillis(ConfForGlobal.eventloopIdleMillis))
                 .initialize(Initializers.ofEventloop(config.getChild("eventloop.primary")))
                 .build();
 
@@ -242,7 +242,7 @@ public class MultiWorkerServer extends Launcher {
     NioReactor workerReactor(@WorkerId int workerId, OptionalDependency<ThrottlingController> throttlingController, Config config) {
         var netHandleEventloop = Eventloop.builder()
                 .withThreadName("net-worker-" + workerId)
-                .withIdleInterval(Duration.ofMillis(ConfForGlobal.eventLoopIdleMillis))
+                .withIdleInterval(Duration.ofMillis(ConfForGlobal.eventloopIdleMillis))
                 .initialize(ofEventloop(config.getChild("net.eventloop.worker")))
                 .withInspector(throttlingController.orElse(null))
                 .build();
@@ -805,7 +805,7 @@ public class MultiWorkerServer extends Launcher {
             for (int i = 0; i < slotWorkers; i++) {
                 var eventloop = Eventloop.builder()
                         .withThreadName("slot-worker-" + i)
-                        .withIdleInterval(Duration.ofMillis(10))
+                        .withIdleInterval(Duration.ofMillis(ConfForGlobal.eventloopIdleMillis))
                         .build();
                 eventloop.keepAlive(true);
 
@@ -1116,10 +1116,13 @@ public class MultiWorkerServer extends Launcher {
             log.warn("Global config, isOnDynTrainDictForCompression={}", ConfForGlobal.isOnDynTrainDictForCompression);
             log.warn("Global config, isPureMemoryModeKeyBucketsUseCompression={}", ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression);
 
-            ConfForGlobal.netListenAddresses = config.get(ofString(), "net.listenAddresses", "localhost:" + PORT);
+            ConfForGlobal.netListenAddresses = config.get(ofString(), "net.listenAddresses", "0.0.0.0:" + PORT);
             logger.info("Net listen addresses={}", ConfForGlobal.netListenAddresses);
-            ConfForGlobal.eventLoopIdleMillis = config.get(ofInteger(), "eventloop.idleMillis", 10);
-            log.warn("Global config, eventLoopIdleMillis={}", ConfForGlobal.eventLoopIdleMillis);
+            ConfForGlobal.eventloopIdleMillis = config.get(ofInteger(), "eventloop.idleMillis", 10);
+            log.warn("Global config, eventLoopIdleMillis={}", ConfForGlobal.eventloopIdleMillis);
+            if (ConfForGlobal.eventloopIdleMillis < 10 || ConfForGlobal.eventloopIdleMillis > 100) {
+                throw new IllegalArgumentException("Eventloop idle millis must be between 10 and 100");
+            }
 
             ConfForGlobal.isUseDirectIO = config.get(ofBoolean(), "persist.isUseDirectIO", false);
             log.warn("Global config, isUseDirectIO={}", ConfForGlobal.isUseDirectIO);

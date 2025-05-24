@@ -26,7 +26,7 @@ class ConfForGlobalTest extends Specification {
         println ConfForGlobal.slotNumber
         println ConfForGlobal.slotWorkers
         println ConfForGlobal.netWorkers
-        println ConfForGlobal.eventLoopIdleMillis
+        println ConfForGlobal.eventloopIdleMillis
 
         println ConfForGlobal.zookeeperConnectString
         println ConfForGlobal.zookeeperSessionTimeoutMs
