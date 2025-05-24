@@ -909,7 +909,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
                 oneInnerBytesByIndexLRU.put(bucketIndex, compressedBytes);
                 n++;
 
-                if (n % 10240 == 0) {
+                if (n % (1024 * 10 * 4) == 0) {
                     log.info("Warm up key bucket fd, name={}, bucket index={}, n={}", name, bucketIndex, n);
                 }
             }
