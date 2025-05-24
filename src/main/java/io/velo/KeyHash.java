@@ -3,6 +3,7 @@ package io.velo;
 import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHash64;
 import net.jpountz.xxhash.XXHashFactory;
+import org.jetbrains.annotations.TestOnly;
 
 /**
  * Provides utility methods for hashing keys using XXHash algorithms.
@@ -38,6 +39,7 @@ public class KeyHash {
     /**
      * Fixed prefix key bytes used for unit testing.
      */
+    @TestOnly
     private static final byte[] fixedPrefixKeyBytesForTest = "xh!".getBytes();
 
     /**
