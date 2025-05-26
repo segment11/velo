@@ -1,6 +1,7 @@
 package io.velo.command;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.velo.rdb.RedisLzf;
 import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
@@ -10,36 +11,30 @@ import io.velo.type.RedisZSet;
 import java.nio.ByteBuffer;
 
 public class VeloRDBImporter implements RDBImporter {
-    public static boolean DEBUG = false;
+    // Redis RDB type constants
+    private static final int RDB_TYPE_STRING = 0;
+    private static final int RDB_TYPE_LIST = 1;
+    private static final int RDB_TYPE_SET = 2;
+    private static final int RDB_TYPE_ZSET = 3;
+    private static final int RDB_TYPE_ZSET2 = 5;
+    private static final int RDB_TYPE_HASH = 4;
+
+    private static final int RDB_TYPE_HASH_ZIP_MAP = 9;
+    private static final int RDB_TYPE_LIST_ZIP_LIST = 10;
+    private static final int RDB_TYPE_SET_INT_SET = 11;
+    private static final int RDB_TYPE_ZSET_ZIP_LIST = 12;
+    private static final int RDB_TYPE_HASH_ZIP_LIST = 13;
+    private static final int RDB_TYPE_LIST_QUICK_LIST = 14;
+    private static final int RDB_TYPE_STREAM_LIST_PACK = 15;
+    private static final int RDB_TYPE_HASH_LIST_PACK = 16;
+    private static final int RDB_TYPE_ZSET_LIST_PACK = 17;
+    private static final int RDB_TYPE_LIST_QUICK_LIST2 = 18;
+    private static final int RDB_TYPE_STREAM_LIST_PACK2 = 19;
+    private static final int RDB_TYPE_SET_LIST_PACK = 20;
+    private static final int RDB_TYPE_STREAM_LIST_PACK3 = 21;
 
     @Override
     public void restore(ByteBuf buf, RDBCallback callback) {
-        if (DEBUG) {
-            callback.onInteger(123);
-            callback.onString("test_value".getBytes());
-
-            var rhh = new RedisHH();
-            rhh.put("test_key", "test_value".getBytes());
-            callback.onHash(rhh);
-
-            var rl = new RedisList();
-            rl.addLast("abc".getBytes());
-            rl.addLast("xyz".getBytes());
-            callback.onList(rl);
-
-            var rhk = new RedisHashKeys();
-            rhk.add("member0");
-            rhk.add("member1");
-            callback.onSet(rhk);
-
-            var rz = new RedisZSet();
-            rz.add(1.0, "member0");
-            rz.add(2.0, "member1");
-            callback.onZSet(rz);
-
-            return;
-        }
-
         // Redis DUMP/RESTORE format: <type><value-bytes><rdb-version><crc64>
         int len = buf.readableBytes();
         if (len < 11) { // at least 1 type + 2 version + 8 crc64
@@ -51,11 +46,7 @@ public class VeloRDBImporter implements RDBImporter {
         // CRC64: last 8 bytes (little-endian)
         long expectedCrc = buf.getLongLE(len - 8);
 
-        // Only support type 0 (string)
         int type = buf.getUnsignedByte(0);
-        if (type != 0) {
-            throw new IllegalArgumentException("Only string type (0) supported, got type: " + type);
-        }
 
         // Value bytes: from after type (offset 1) up to footer (len - 11)
         int valueLen = len - 11;
@@ -70,10 +61,107 @@ public class VeloRDBImporter implements RDBImporter {
 //            throw new IllegalArgumentException("CRC64 mismatch: expected " + expectedCrc + ", got " + actualCrc);
 //        }
 
-        // Now decode the string (RDB string encoding)
+        // Now decode the serialized value
         buf.readerIndex(1).writerIndex(len - 10);
-        var decoded = decodeRdbString(buf);
-        callback.onString(decoded);
+
+        switch (type) {
+            case RDB_TYPE_STRING:
+                var decoded = decodeRdbString(buf);
+                callback.onString(decoded);
+                break;
+            case RDB_TYPE_LIST:
+                var list = new RedisList();
+                var listSize = decodeLength(buf, new int[1]);
+                for (int i = 0; i < (int) listSize; i++) {
+                    list.addLast(decodeRdbString(buf));
+                }
+                callback.onList(list);
+                break;
+            case RDB_TYPE_LIST_ZIP_LIST:
+                var listZipList = new RedisList();
+                var listBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+                var listZipListSize = listBuf.readShortLE();
+                for (int i = 0; i < listZipListSize; i++) {
+                    listZipList.addLast(decodeRdbString(listBuf));
+                }
+                break;
+            case RDB_TYPE_LIST_QUICK_LIST, RDB_TYPE_LIST_QUICK_LIST2:
+                var listQuickList = new RedisList();
+                var count = decodeLength(buf, new int[1]);
+                for (int i = 0; i < count; i++) {
+                    decodeListZipList(buf, listQuickList);
+                }
+                callback.onList(listQuickList);
+                break;
+            case RDB_TYPE_SET:
+                var set = new RedisHashKeys();
+                var setSize = decodeLength(buf, new int[1]);
+                for (int i = 0; i < (int) setSize; i++) {
+                    set.add(new String(decodeRdbString(buf)));
+                }
+                callback.onSet(set);
+                break;
+            case RDB_TYPE_SET_INT_SET:
+                var setIntSet = new RedisHashKeys();
+                decodeIntSet(buf, setIntSet);
+                callback.onSet(setIntSet);
+                break;
+            case RDB_TYPE_SET_LIST_PACK:
+                var setListPack = new RedisHashKeys();
+                decodeSetListPack(buf, setListPack);
+                callback.onSet(setListPack);
+                break;
+            case RDB_TYPE_ZSET, RDB_TYPE_ZSET2:
+                var zset = new RedisZSet();
+                decodeZSet(buf, type, zset);
+                callback.onZSet(zset);
+                break;
+            case RDB_TYPE_ZSET_ZIP_LIST:
+                var zsetZipList = new RedisZSet();
+                decodeZSetZipList(buf, zsetZipList);
+                callback.onZSet(zsetZipList);
+                break;
+            case RDB_TYPE_ZSET_LIST_PACK:
+                var zsetListPack = new RedisZSet();
+                decodeZSetListPack(buf, zsetListPack);
+                callback.onZSet(zsetListPack);
+                break;
+            case RDB_TYPE_HASH:
+                var hash = new RedisHH();
+                var hashSize = decodeLength(buf, new int[1]);
+                for (int i = 0; i < (int) hashSize; i++) {
+                    var field = new String(decodeRdbString(buf));
+                    var value = decodeRdbString(buf);
+                    hash.put(field, value);
+                }
+                callback.onHash(hash);
+                break;
+            case RDB_TYPE_HASH_ZIP_MAP:
+                var hashZipMap = new RedisHH();
+                decodeHashZipMap(buf, hashZipMap);
+                callback.onHash(hashZipMap);
+                break;
+            case RDB_TYPE_HASH_ZIP_LIST:
+                var hashZipList = new RedisHH();
+                var hashBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+                short hashZipListSize = hashBuf.readShortLE();
+                for (int i = 0; i < (int) hashZipListSize; i += 2) {
+                    var field = new String(decodeRdbString(hashBuf));
+                    var value = decodeRdbString(hashBuf);
+                    hashZipList.put(field, value);
+                }
+                callback.onHash(hashZipList);
+                break;
+            case RDB_TYPE_HASH_LIST_PACK:
+                var hashListPack = new RedisHH();
+                decodeHashListPack(buf, hashListPack);
+                callback.onHash(hashListPack);
+                break;
+            case RDB_TYPE_STREAM_LIST_PACK, RDB_TYPE_STREAM_LIST_PACK2, RDB_TYPE_STREAM_LIST_PACK3:
+                throw new IllegalArgumentException("Unsupported type stream yet: " + type);
+            default:
+                throw new IllegalArgumentException("Unsupported type: " + type);
+        }
     }
 
     // Utility: decode RDB string (length-prefixed, integer, or LZF-compressed)
@@ -147,4 +235,113 @@ public class VeloRDBImporter implements RDBImporter {
             }
         }
     }
+
+    private void decodeListZipList(ByteBuf buf, RedisList list) {
+        int bytes = buf.readIntLE();
+        int tail = buf.readIntLE();
+        int size = buf.readShortLE();
+
+        for (int i = 0; i < size; i++) {
+            list.addLast(decodeRdbString(buf));
+        }
+    }
+
+    private void decodeIntSet(ByteBuf buf, RedisHashKeys set) {
+        int encoding = buf.readIntLE();
+        int size = buf.readIntLE();
+        if (size == 0) {
+            throw new IllegalArgumentException("Invalid intset encoding");
+        }
+
+        for (int i = 0; i < size; i++) {
+            long value;
+            if (encoding == 2) {
+                value = buf.readShortLE();
+            } else if (encoding == 4) {
+                value = buf.readIntLE();
+            } else if (encoding == 8) {
+                value = buf.readLongLE();
+            } else {
+                throw new IllegalArgumentException("Unknown intset encoding: " + encoding);
+            }
+            set.add(String.valueOf(value));
+        }
+    }
+
+    private void decodeSetListPack(ByteBuf buf, RedisHashKeys set) {
+        // todo
+    }
+
+    private void decodeZSet(ByteBuf buf, int type, RedisZSet zset) {
+        var zsetLen = decodeLength(buf, new int[1]);
+        for (int i = 0; i < (int) zsetLen; i++) {
+            var member = new String(decodeRdbString(buf));
+            double score;
+            if (type == RDB_TYPE_ZSET) {
+                var lenForDouble = buf.readChar();
+                if (lenForDouble == 255) {
+                    score = Double.NEGATIVE_INFINITY;
+                } else if (lenForDouble == 254) {
+                    score = Double.POSITIVE_INFINITY;
+                } else if (lenForDouble == 253) {
+                    score = Double.NaN;
+                } else {
+                    var x = new byte[lenForDouble];
+                    buf.readBytes(x);
+                    score = Double.parseDouble(new String(x));
+                }
+            } else {
+                score = buf.readDouble();
+            }
+            zset.add(score, member);
+        }
+    }
+
+    private void decodeZSetZipList(ByteBuf buf, RedisZSet zset) {
+        var zsetBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+
+        int size = zsetBuf.readShortLE();
+        for (int i = 0; i < size; i += 2) {
+            var member = new String(decodeRdbString(zsetBuf));
+            var doubleStr = new String(decodeRdbString(zsetBuf));
+            double score = Double.parseDouble(doubleStr);
+            zset.add(score, member);
+        }
+    }
+
+    private void decodeZSetListPack(ByteBuf buf, RedisZSet zset) {
+        // todo
+    }
+
+    private void decodeHashZipMap(ByteBuf buf, RedisHH hash) {
+        var hashBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+
+        int size = hashBuf.readUnsignedByte();
+        if (size == 0xFF) {
+            size = hashBuf.readIntLE();
+        }
+
+        for (int i = 0; i < size; i++) {
+            int fieldLen = hashBuf.readUnsignedByte();
+            if (fieldLen == 0xFF) break;
+
+            var field = new byte[fieldLen];
+            hashBuf.readBytes(field);
+
+            int valueLen = hashBuf.readUnsignedByte();
+            if (valueLen == 0xFF) {
+                valueLen = hashBuf.readIntLE();
+            }
+
+            var value = new byte[valueLen];
+            hashBuf.readBytes(value);
+
+            hash.put(new String(field), value);
+        }
+    }
+
+    private void decodeHashListPack(ByteBuf buf, RedisHH hash) {
+        // todo
+    }
+
 }
