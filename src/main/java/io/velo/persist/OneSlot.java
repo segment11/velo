@@ -31,6 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.lang.management.ManagementFactory;
+import java.lang.management.OperatingSystemMXBean;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -2681,6 +2683,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
+    private final static OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
+
     /**
      * Global gauge for collecting global metrics.
      * Metrics collected here are shared across all slots.
@@ -2764,6 +2768,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     (double) StaticMemoryPrepareBytesStats.sum(StaticMemoryPrepareBytesStats.Type.meta_chunk_segment_flag_seq), labelValues));
             map.put("static_memory_prepare_mb_fd_read_write_buffer_all_slots", new SimpleGauge.ValueWithLabelValues(
                     (double) StaticMemoryPrepareBytesStats.sum(StaticMemoryPrepareBytesStats.Type.fd_read_write_buffer), labelValues));
+
+            map.put("global_system_load_average", new SimpleGauge.ValueWithLabelValues(osBean.getSystemLoadAverage(), labelValues));
 
             return map;
         });

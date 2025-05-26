@@ -35,6 +35,7 @@ import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.hotspot.BufferPoolsExports;
 import io.prometheus.client.hotspot.GarbageCollectorExports;
 import io.prometheus.client.hotspot.MemoryPoolsExports;
+import io.prometheus.client.hotspot.StandardExports;
 import io.velo.acl.AclUsers;
 import io.velo.acl.Category;
 import io.velo.decode.HttpHeaderBody;
@@ -880,6 +881,7 @@ public class MultiWorkerServer extends Launcher {
         }
 
         // metrics
+        CollectorRegistry.defaultRegistry.register(new StandardExports());
         CollectorRegistry.defaultRegistry.register(new BufferPoolsExports());
         CollectorRegistry.defaultRegistry.register(new MemoryPoolsExports());
         CollectorRegistry.defaultRegistry.register(new GarbageCollectorExports());
