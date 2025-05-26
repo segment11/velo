@@ -7,8 +7,11 @@ import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
 import io.velo.type.RedisList;
 import io.velo.type.RedisZSet;
+import io.velo.type.encode.ListPack;
+import io.velo.type.encode.ZipList;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 
 public class VeloRDBImporter implements RDBImporter {
     // Redis RDB type constants
@@ -87,10 +90,7 @@ public class VeloRDBImporter implements RDBImporter {
                 break;
             case RDB_TYPE_LIST_QUICK_LIST, RDB_TYPE_LIST_QUICK_LIST2:
                 var listQuickList = new RedisList();
-                var count = decodeLength(buf, new int[1]);
-                for (int i = 0; i < count; i++) {
-                    decodeListZipList(buf, listQuickList);
-                }
+                decodeListQuickList(buf, type, listQuickList);
                 callback.onList(listQuickList);
                 break;
             case RDB_TYPE_SET:
@@ -236,13 +236,41 @@ public class VeloRDBImporter implements RDBImporter {
         }
     }
 
-    private void decodeListZipList(ByteBuf buf, RedisList list) {
-        int bytes = buf.readIntLE();
-        int tail = buf.readIntLE();
-        int size = buf.readShortLE();
+    // Quick list node encoding
+    private static final int QuickListNodeContainerPlain = 1;
+    private static final int QuickListNodeContainerPacked = 2;
 
-        for (int i = 0; i < size; i++) {
-            list.addLast(decodeRdbString(buf));
+    private void decodeListQuickList(ByteBuf buf, int type, RedisList list) {
+        long len = decodeLength(buf, new int[1]);
+
+        long container = QuickListNodeContainerPacked;
+        for (int i = 0; i < (int) len; i++) {
+            if (type == RDB_TYPE_LIST_QUICK_LIST2) {
+                container = decodeLength(buf, new int[1]);
+                if (container != QuickListNodeContainerPlain && container != QuickListNodeContainerPacked) {
+                    throw new IllegalArgumentException("Unknown quick list node container type: " + container);
+                }
+            }
+
+            if (container == QuickListNodeContainerPlain) {
+                var element = decodeRdbString(buf);
+                list.addLast(element);
+                continue;
+            }
+
+            var encodedBytes = decodeRdbString(buf);
+            List<byte[]> decodedList;
+            if (type == RDB_TYPE_LIST_QUICK_LIST2) {
+                // list pack
+                var listPackBuf = Unpooled.wrappedBuffer(encodedBytes);
+                decodedList = ListPack.decode(listPackBuf);
+            } else {
+                // zip list
+                var zipListBuf = Unpooled.wrappedBuffer(encodedBytes);
+                decodedList = ZipList.decode(zipListBuf);
+            }
+
+            list.getList().addAll(decodedList);
         }
     }
 
