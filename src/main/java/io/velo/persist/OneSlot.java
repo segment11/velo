@@ -930,6 +930,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     // index is group index
     private final Wal[] walArray;
 
+    private long walWriteIndex;
+    private long walShortValueWriteIndex;
+
     /**
      * Reads WAL data from files asynchronously.
      *
@@ -1022,7 +1025,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     private LibC libC;
-    private Chunk chunk;
+    Chunk chunk;
 
     /**
      * Returns the Chunk component used for managing segments.
@@ -1970,8 +1973,18 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             } else {
                 cvEncoded = cv.encodeAsShortString();
             }
+
+            // for metrics update
+            if (walShortValueWriteIndex < targetWal.fileToWriteIndex) {
+                walShortValueWriteIndex = targetWal.fileToWriteIndex;
+            }
         } else {
             cvEncoded = cv.encode();
+
+            // for metrics update
+            if (walWriteIndex < targetWal.fileToWriteIndex) {
+                walWriteIndex = targetWal.fileToWriteIndex;
+            }
         }
         var v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
                 key, cvEncoded, isFromMerge);
@@ -2059,6 +2072,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             try {
                 raf.setLength(0);
                 rafShortValue.setLength(0);
+
+                walWriteIndex = 0L;
+                walShortValueWriteIndex = 0L;
             } catch (IOException e) {
                 throw new RuntimeException("Flush wal raf error", e);
             }
@@ -2704,6 +2720,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * memory preparation statistics, and more.
      */
     void initMetricsCollect() {
+        log.warn("Init global metrics collect, slot={}", slot);
         globalGauge.addRawGetter(() -> {
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
 
@@ -2795,6 +2812,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         if (walArray != null && walArray.length > 0) {
             map.put("wal_key_count", (double) getWalKeyCount());
+            map.put("wal_disk_usage", (double) (walWriteIndex + walShortValueWriteIndex));
 
             // only show first wal group
             var firstWalGroup = walArray[0];
@@ -2815,10 +2833,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         if (bigStringFiles != null) {
             map.putAll(bigStringFiles.collect());
+            map.put("big_string_files_disk_usage", (double) bigStringFiles.diskUsage);
         }
 
         if (binlog != null) {
             map.put("binlog_current_offset_from_the_beginning", (double) binlog.currentReplOffset());
+            map.put("binlog_disk_usage", (double) binlog.getDiskUsage());
         }
 
         if (bigKeyTopK != null) {

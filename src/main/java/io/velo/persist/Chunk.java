@@ -559,8 +559,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             segmentSeqListAll.add(segment.segmentSeq());
         }
 
-        boolean isNewAppendAfterBatch;
-
         var fdIndex = targetFdIndex();
         var segmentIndexTargetFd = targetSegmentIndexTargetFd();
 
@@ -568,7 +566,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         var fdReadWrite = fdReadWriteArray[fdIndex];
 
         if (ConfForGlobal.pureMemory) {
-            isNewAppendAfterBatch = fdReadWrite.isTargetSegmentIndexNullInMemory(segmentIndexTargetFd);
+            var isNewAppendAfterBatch = fdReadWrite.isTargetSegmentIndexNullInMemory(segmentIndexTargetFd);
             for (var segment : segments) {
                 int targetSegmentIndex = segment.tmpSegmentIndex() + currentSegmentIndex;
                 var bytes = segment.segmentBytes();
@@ -589,7 +587,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                     int targetSegmentIndex = segment.tmpSegmentIndex() + currentSegmentIndex;
                     var bytes = segment.segmentBytes();
                     boolean isNewAppend = writeSegments(bytes, 1);
-                    isNewAppendAfterBatch = isNewAppend;
 
                     // need set segment flag so that merge worker can merge
                     oneSlot.setSegmentMergeFlag(targetSegmentIndex,
@@ -632,7 +629,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                     }
 
                     boolean isNewAppend = writeSegments(tmpBatchBytes, BATCH_ONCE_SEGMENT_COUNT_PWRITE);
-                    isNewAppendAfterBatch = isNewAppend;
 
                     // need set segment flag so that merge worker can merge
                     oneSlot.setSegmentMergeFlagBatch(segmentIndex, BATCH_ONCE_SEGMENT_COUNT_PWRITE,
@@ -653,7 +649,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                     var bytes = leftSegment.segmentBytes();
                     int targetSegmentIndex = leftSegment.tmpSegmentIndex() + currentSegmentIndex;
                     boolean isNewAppend = writeSegments(bytes, 1);
-                    isNewAppendAfterBatch = isNewAppend;
 
                     xForBinlog.putUpdatedChunkSegmentBytes(targetSegmentIndex, bytes);
                     xForBinlog.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex,
@@ -942,13 +937,18 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             map.putAll(segmentBatch2.collect());
         }
 
+        var diskUsage = 0L;
         if (fdReadWriteArray != null) {
             for (var fdReadWrite : fdReadWriteArray) {
                 if (fdReadWrite != null) {
+                    diskUsage += fdReadWrite.writeIndex;
                     map.putAll(fdReadWrite.collect());
                 }
             }
         }
+
+        diskUsage += metaChunkSegmentFlagSeq.allCapacity;
+        map.put("chunk_disk_usage", (double) diskUsage);
 
         return map;
     }

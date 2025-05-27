@@ -36,6 +36,12 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     private static final String BINLOG_DIR_NAME = "binlog";
 
+    private long diskUsage = 0L;
+
+    public long getDiskUsage() {
+        return diskUsage;
+    }
+
     @VisibleForTesting
     record BytesWithFileIndexAndOffset(byte[] bytes, int fileIndex,
                                        long offset) implements Comparable<BytesWithFileIndexAndOffset> {
@@ -118,6 +124,10 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             latestFile = files.getLast();
             this.currentFileIndex = fileIndex(latestFile);
             this.currentFileOffset = latestFile.length();
+
+            for (var file : files) {
+                this.diskUsage += file.length();
+            }
         } else {
             // begin from 0
             latestFile = new File(binlogDir, fileName());
@@ -359,6 +369,8 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                 raf.write(padding);
                 currentFileOffset += padding.length;
 
+                diskUsage += padding.length;
+
                 tempAppendSegmentBuffer.put(padding);
                 addForReadCacheSegmentBytes(currentFileIndex, currentFileOffset - oneSegmentLength, null);
                 clearByteBuffer();
@@ -372,6 +384,8 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         raf.seek(currentFileOffset);
         raf.write(encoded);
         currentFileOffset += encoded.length;
+
+        diskUsage += encoded.length;
 
         tempAppendSegmentBuffer.put(encoded);
 
@@ -400,6 +414,8 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             raf.seek(toFileOffset);
             raf.write(oneSegmentBytes);
 
+            diskUsage += oneSegmentBytes.length;
+
             // because when master reset, self will write binlog from wal
             // need margin so can use a new beginning segment
             currentFileOffset = toFileOffset + binlogOneSegmentLength;
@@ -414,6 +430,8 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
             prevRaf.seek(toFileOffset);
             prevRaf.write(oneSegmentBytes);
+
+            diskUsage += oneSegmentBytes.length;
 
             if (currentFileIndex < toFileIndex) {
                 IOUtils.closeQuietly(raf);
@@ -472,10 +490,12 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                 log.info("Repl close binlog old raf success, file index={}, slot={}", firstFileIndex, slot);
             }
 
+            var fileLength = firstFile.length();
             if (!firstFile.delete()) {
                 log.error("Repl delete binlog file error, file={}, slot={}", firstFile.getName(), slot);
             } else {
                 log.info("Repl delete binlog file success, file={}, slot={}", firstFile.getName(), slot);
+                diskUsage -= fileLength;
             }
         }
     }
@@ -663,10 +683,12 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                 continue;
             }
 
+            var fileLength = file.length();
             if (!file.delete()) {
                 log.error("Repl delete binlog file error, file={}, slot={}", file.getName(), slot);
             } else {
                 log.info("Repl delete binlog file success, file={}, slot={}", file.getName(), slot);
+                diskUsage -= fileLength;
             }
         }
     }

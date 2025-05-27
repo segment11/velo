@@ -225,6 +225,8 @@ public class Wal implements InMemoryEstimate {
 
         this.delayToKeyBucketValues = new HashMap<>();
         this.delayToKeyBucketShortValues = new HashMap<>();
+
+        this.fileToWriteIndex = (long) ONE_GROUP_BUFFER_SIZE * (groupIndex + 1);
     }
 
     /**
@@ -354,6 +356,8 @@ public class Wal implements InMemoryEstimate {
     HashMap<String, V> delayToKeyBucketValues;
     @SlaveNeedReplay
     HashMap<String, V> delayToKeyBucketShortValues;
+
+    final long fileToWriteIndex;
 
     /**
      * Gets the last sequence number after a put operation.

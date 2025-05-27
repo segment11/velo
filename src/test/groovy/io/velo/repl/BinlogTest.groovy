@@ -45,6 +45,7 @@ class BinlogTest extends Specification {
         println binlog.currentFileIndexAndOffset()
         println binlog.earliestFileIndexAndOffset()
         println binlog.currentReplOffset()
+        println binlog.diskUsage
         println 'in memory size estimate: ' + binlog.estimate(new StringBuilder())
 
         final File slotDir2 = new File('/tmp/velo-data/test-persist/test-slot2')

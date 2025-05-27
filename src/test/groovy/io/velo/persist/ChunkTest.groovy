@@ -45,6 +45,7 @@ class ChunkTest extends Specification {
         def confChunk = ConfForSlot.global.confChunk
 
         println chunk
+        println chunk.maxSegmentIndex
 
         when:
         chunk.collect()

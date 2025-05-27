@@ -1395,14 +1395,20 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         map.put("key_loader_bucket_count", (double) bucketsPerSlot);
         map.put("persist_key_count", (double) getKeyCount());
 
+        var diskUsage = 0L;
         if (fdReadWriteArray != null) {
             for (var fdReadWrite : fdReadWriteArray) {
-                if (fdReadWrite == null) {
-                    continue;
+                if (fdReadWrite != null) {
+                    diskUsage += fdReadWrite.writeIndex;
+                    map.putAll(fdReadWrite.collect());
                 }
-                map.putAll(fdReadWrite.collect());
             }
         }
+
+        diskUsage += metaKeyBucketSplitNumber.allCapacity;
+        diskUsage += metaOneWalGroupSeq.allCapacity;
+        diskUsage += statKeyCountInBuckets.allCapacity;
+        map.put("key_loader_disk_usage", (double) diskUsage);
 
         return map;
     }

@@ -34,6 +34,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     private final short slot;
     final File bigStringDir;
 
+    long diskUsage = 0L;
+
     private static final String BIG_STRING_DIR_NAME = "big-string";
 
     /**
@@ -99,6 +101,12 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
         var files = bigStringDir.listFiles();
         bigStringFilesCount = files != null ? files.length : 0;
+
+        if (files != null) {
+            for (var file : files) {
+                diskUsage += file.length();
+            }
+        }
     }
 
     /**
@@ -184,7 +192,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @param uuid UUID of the big string file.
      * @return Bytes of the big string file or null if not found.
      */
-    @NotNull
     public byte[] getBigStringBytes(long uuid) {
         return getBigStringBytes(uuid, false);
     }
@@ -196,7 +203,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @param doLRUCache Whether to cache the bytes in the LRU cache.
      * @return Bytes of the big string file or null if not found.
      */
-    @NotNull
     public byte[] getBigStringBytes(long uuid, boolean doLRUCache) {
         if (ConfForGlobal.pureMemory) {
             return allBytesByUuid.get(uuid);
@@ -220,7 +226,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @param uuid UUID of the big string file.
      * @return Bytes of the big string file or null if the file doesn't exist or an error occurs.
      */
-    @Nullable
     private byte[] readBigStringBytes(long uuid) {
         var file = new File(bigStringDir, String.valueOf(uuid));
         if (!file.exists()) {
@@ -246,7 +251,10 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      */
     public boolean writeBigStringBytes(long uuid, @NotNull String key, byte[] bytes) {
         if (ConfForGlobal.pureMemory) {
-            allBytesByUuid.put(uuid, bytes);
+            var r = allBytesByUuid.put(uuid, bytes);
+            if (r == null) {
+                bigStringFilesCount++;
+            }
             return true;
         }
 
@@ -254,6 +262,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         try {
             FileUtils.writeByteArrayToFile(file, bytes);
             bigStringFilesCount++;
+            diskUsage += bytes.length;
             return true;
         } catch (IOException e) {
             log.error("Write big string file error, uuid={}, key={}, slot={}", uuid, key, slot, e);
@@ -281,6 +290,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         var file = new File(bigStringDir, String.valueOf(uuid));
         if (file.exists()) {
             bigStringFilesCount--;
+            diskUsage -= file.length();
             return file.delete();
         } else {
             return true;
@@ -304,6 +314,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             FileUtils.cleanDirectory(bigStringDir);
             log.warn("Delete all big string files, slot={}", slot);
             bigStringFilesCount = 0;
+            diskUsage = 0L;
         } catch (IOException e) {
             log.error("Delete all big string files error, slot={}", slot, e);
         }
