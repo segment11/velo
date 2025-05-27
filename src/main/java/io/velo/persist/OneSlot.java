@@ -195,6 +195,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var lruMemoryRequireMBWriteInWal = walSharedFile.length() / 1024 / 1024;
         log.info("LRU prepare, type={}, MB={}, slot={}", LRUPrepareBytesStats.Type.kv_write_in_wal, lruMemoryRequireMBWriteInWal, slot);
         LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.kv_write_in_wal, slotStr, (int) lruMemoryRequireMBWriteInWal, false);
+        this.walWriteIndex = this.raf.length();
 
         var walSharedFileShortValue = new File(slotDir, "wal-short-value.dat");
         if (!walSharedFileShortValue.exists()) {
@@ -204,6 +205,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var lruMemoryRequireMBWriteInWal2 = walSharedFileShortValue.length() / 1024 / 1024;
         log.info("LRU prepare, type={}, short value, MB={}, slot={}", LRUPrepareBytesStats.Type.kv_write_in_wal, lruMemoryRequireMBWriteInWal2, slot);
         LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.kv_write_in_wal, slotStr, (int) lruMemoryRequireMBWriteInWal2, false);
+        this.walShortValueWriteIndex = this.rafShortValue.length();
 
         long initMemoryN = 0;
         for (int i = 0; i < walGroupNumber; i++) {
