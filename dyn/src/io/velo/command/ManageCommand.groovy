@@ -917,7 +917,6 @@ class ManageCommand extends BaseCommand {
             def debug = Debug.getInstance()
             switch (field) {
                 case 'logCmd' -> debug.logCmd = isOn
-                case 'logMerge' -> debug.logMerge = isOn
                 case 'logTrainDict' -> debug.logTrainDict = isOn
                 case 'logRestore' -> debug.logRestore = isOn
                 case 'bulkLoad' -> debug.bulkLoad = isOn

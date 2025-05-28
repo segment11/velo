@@ -16,8 +16,6 @@ public class Debug {
 
     public boolean logCmd = false;
 
-    public boolean logMerge = false;
-
     public boolean logTrainDict = false;
 
     public boolean logRestore = false;
