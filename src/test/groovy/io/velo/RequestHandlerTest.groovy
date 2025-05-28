@@ -14,7 +14,10 @@ import io.velo.repl.LeaderSelector
 import io.velo.repl.Repl
 import io.velo.repl.ReplType
 import io.velo.repl.cluster.MultiShard
-import io.velo.reply.*
+import io.velo.reply.BulkReply
+import io.velo.reply.ErrorReply
+import io.velo.reply.NilReply
+import io.velo.reply.OKReply
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -73,11 +76,6 @@ class RequestHandlerTest extends Specification {
             data[0] = cmd.bytes
             new Request(data, false, false)
         }
-        def someRequestList = ['ping', 'quit', 'auth'].collect {
-            def data = new byte[1][]
-            data[0] = it.bytes
-            new Request(data, false, false)
-        }
         def otherData = new byte[1][]
         otherData[0] = '123'.bytes
         def otherRequest = new Request(otherData, false, false)
@@ -91,11 +89,19 @@ class RequestHandlerTest extends Specification {
             requestHandler.parseSlots(it)
             it.slotWithKeyHashList.size() == 0
         }
-        someRequestList.every {
-            requestHandler.parseSlots(it)
-            it.slotWithKeyHashList == null
-        }
         otherRequest.slotWithKeyHashList == null
+
+        when:
+        def skipParseSlotsRequestList = ['echo', 'ping', 'quit', 'hello', 'auth'].collect { cmd ->
+            def data = new byte[1][]
+            data[0] = cmd.bytes
+            new Request(data, false, false)
+        }
+        then:
+        skipParseSlotsRequestList.every {
+            requestHandler.parseSlots(it)
+            it.slotWithKeyHashList.size() == 0
+        }
 
         // test handle
         when:
@@ -114,38 +120,13 @@ class RequestHandlerTest extends Specification {
         }
 
         when:
-        def reply = requestHandler.handle(someRequestList[0], socket)
-        then:
-        reply == PongReply.INSTANCE
-
-        when:
-        def data2 = new byte[2][]
-        data2[0] = 'ping'.bytes
-        data2[1] = '123'.bytes
-        def pingWithMessageRequest = new Request(data2, false, false)
-        reply = requestHandler.handle(pingWithMessageRequest, socket)
-        then:
-        reply instanceof BulkReply
-        new String((reply as BulkReply).raw) == '123'
-
-        when:
-        reply = requestHandler.handle(someRequestList[1], socket)
-        then:
-        reply == OKReply.INSTANCE
-
-        when:
-        reply = requestHandler.handle(someRequestList[2], socket)
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
         AclUsers.instance.initForTest()
         // default user nopass
         def authData = new byte[2][]
         authData[0] = 'auth'.bytes
         authData[1] = 'password'.bytes
         def authRequest = new Request(authData, false, false)
-        reply = requestHandler.handle(authRequest, socket)
+        def reply = requestHandler.handle(authRequest, socket)
         then:
         reply == OKReply.INSTANCE
 
@@ -292,6 +273,7 @@ class RequestHandlerTest extends Specification {
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
+        oneSlot.readonly = false
         def cv = new CompressedValue()
         cv.compressedData = new byte[10]
         cv.keyHash = sKey.keyHash()

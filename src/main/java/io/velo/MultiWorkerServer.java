@@ -48,10 +48,7 @@ import io.velo.repl.LeaderSelector;
 import io.velo.repl.ReplPair;
 import io.velo.repl.cluster.Shard;
 import io.velo.repl.support.JedisPoolHolder;
-import io.velo.reply.AsyncReply;
-import io.velo.reply.ErrorReply;
-import io.velo.reply.NilReply;
-import io.velo.reply.Reply;
+import io.velo.reply.*;
 import io.velo.task.PrimaryTaskRunnable;
 import io.velo.task.TaskRunnable;
 import jnr.ffi.Platform;
@@ -81,6 +78,7 @@ import static io.activej.config.converter.ConfigConverters.*;
 import static io.activej.inject.module.Modules.combine;
 import static io.activej.launchers.initializers.Initializers.ofEventloop;
 import static io.activej.launchers.initializers.Initializers.ofPrimaryServer;
+import static io.velo.RequestHandler.*;
 import static org.slf4j.LoggerFactory.getLogger;
 
 /**
@@ -376,6 +374,49 @@ public class MultiWorkerServer extends Launcher {
         return null;
     }
 
+    private final Debug debug = Debug.getInstance();
+
+    private Promise<ByteBuf> handleFast(Request request, ITcpSocket socket) {
+        var cmd = request.cmd();
+        var data = request.getData();
+        switch (cmd) {
+            case ECHO_COMMAND -> {
+                if (data.length == 2) {
+                    return Promise.of(new BulkReply(data[1]).buffer());
+                } else {
+                    return Promise.of(ErrorReply.FORMAT.buffer());
+                }
+            }
+            case PING_COMMAND -> {
+                if (data.length == 1) {
+                    return Promise.of(PongReply.INSTANCE.buffer());
+                } else {
+                    var messageBytes = data[1];
+                    return Promise.of(new BulkReply(messageBytes).buffer());
+                }
+            }
+            case QUIT_COMMAND -> {
+                socket.close();
+                return Promise.of(OKReply.INSTANCE.buffer());
+            }
+        }
+
+        if (debug.logCmd) {
+            if (data.length == 1) {
+                log.info("Request cmd={}", cmd);
+            } else {
+                var sb = new StringBuilder();
+                sb.append("Request cmd=").append(cmd).append(" ");
+                for (int i = 1; i < data.length; i++) {
+                    sb.append(new String(data[i])).append(" ");
+                }
+                log.info(sb.toString());
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Handles a single request from a client socket.
      *
@@ -384,6 +425,11 @@ public class MultiWorkerServer extends Launcher {
      * @return a promise of the response as a ByteBuf
      */
     Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
+        var r = handleFast(request, socket);
+        if (r != null) {
+            return r;
+        }
+
         var isAclCheckOk = request.isAclCheckOk();
         if (!isAclCheckOk.asBoolean()) {
             return Promise.of(
@@ -1206,7 +1252,6 @@ public class MultiWorkerServer extends Launcher {
 
             var debug = Debug.getInstance();
             debug.logCmd = config.get(ofBoolean(), "debugLogCmd", false);
-            debug.logMerge = config.get(ofBoolean(), "debugLogMerge", false);
             debug.logTrainDict = config.get(ofBoolean(), "debugLogTrainDict", false);
             debug.logRestore = config.get(ofBoolean(), "debugLogRestore", false);
             debug.bulkLoad = config.get(ofBoolean(), "bulkLoad", false);

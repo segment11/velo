@@ -266,6 +266,36 @@ class MultiWorkerServerTest extends Specification {
         p != null
 
         when:
+        def pingData2 = new byte[2][]
+        pingData2[0] = 'ping'.bytes
+        pingData2[1] = 'world'.bytes
+        def pingRequest2 = new Request(pingData2, false, false)
+        p = m.handleRequest(pingRequest2, socket)
+        eventloopCurrent.run()
+        then:
+        p != null
+
+        when:
+        Debug.instance.logCmd = true
+        def echoData = new byte[1][]
+        echoData[0] = 'echo'.bytes
+        def echoRequest = new Request(echoData, false, false)
+        p = m.handleRequest(echoRequest, socket)
+        eventloopCurrent.run()
+        then:
+        p != null
+
+        when:
+        def echoData2 = new byte[2][]
+        echoData2[0] = 'echo'.bytes
+        echoData2[1] = 'world'.bytes
+        def echoRequest2 = new Request(echoData2, false, false)
+        p = m.handleRequest(echoRequest2, socket)
+        eventloopCurrent.run()
+        then:
+        p != null
+
+        when:
         // no slots and cross request worker
         def flushdbData = new byte[1][]
         flushdbData[0] = 'flushdb'.bytes

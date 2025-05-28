@@ -39,13 +39,13 @@ import static io.activej.config.converter.ConfigConverters.ofInteger;
 public class RequestHandler {
     private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
 
-    private static final String ECHO_COMMAND = "echo";
-    private static final String PING_COMMAND = "ping";
+    static final String ECHO_COMMAND = "echo";
+    static final String PING_COMMAND = "ping";
+    static final String QUIT_COMMAND = "quit";
+    private static final String HELLO_COMMAND = "hello";
     public static final String AUTH_COMMAND = "auth";
-    public static final String HELLO_COMMAND = "hello";
     private static final String GET_COMMAND = "get";
     private static final String SET_COMMAND = "set";
-    private static final String QUIT_COMMAND = "quit";
 
     public static final String AS_KEY_GET_SLOT_RANGE_IN_CURRENT_CONNECTION_THREAD_LOCALLY = "x_slot_range";
 
@@ -232,6 +232,8 @@ public class RequestHandler {
         return commandGroups[firstByte - 'a'];
     }
 
+    private final ArrayList<BaseCommand.SlotWithKeyHash> emptySlotWithKeyHashList = new ArrayList<>();
+
     /**
      * Parses the slots for the given request.
      * This method is not thread safe.
@@ -240,7 +242,12 @@ public class RequestHandler {
      */
     public void parseSlots(@NotNull Request request) {
         var cmd = request.cmd();
-        if (cmd.equals(PING_COMMAND) || cmd.equals(QUIT_COMMAND) || cmd.equals(AUTH_COMMAND)) {
+        if (cmd.equals(ECHO_COMMAND)
+                || cmd.equals(PING_COMMAND)
+                || cmd.equals(QUIT_COMMAND)
+                || cmd.equals(HELLO_COMMAND)
+                || cmd.equals(AUTH_COMMAND)) {
+            request.setSlotWithKeyHashList(emptySlotWithKeyHashList);
             return;
         }
 
@@ -329,7 +336,7 @@ public class RequestHandler {
             var xGroup = new XGroup(null, data, socket);
             xGroup.init(this, request);
 
-            // try catch in handle repl method
+            // try to catch in handle repl method
             return xGroup.handleRepl();
         }
 
@@ -410,42 +417,6 @@ public class RequestHandler {
 
         var requestTimer = requestTimeSummary.labels(cmd).startTimer();
         try {
-            if (cmd.equals(ECHO_COMMAND)) {
-                if (data.length == 2) {
-                    return new BulkReply(data[1]);
-                } else {
-                    return ErrorReply.FORMAT;
-                }
-            }
-
-            if (cmd.equals(PING_COMMAND)) {
-                if (data.length == 1) {
-                    return PongReply.INSTANCE;
-                } else {
-                    var messageBytes = data[1];
-                    return new BulkReply(messageBytes);
-                }
-            }
-
-            var doLogCmd = debug.logCmd;
-            if (doLogCmd) {
-                if (data.length == 1) {
-                    log.info("Request cmd={}", cmd);
-                } else {
-                    var sb = new StringBuilder();
-                    sb.append("Request cmd=").append(cmd).append(" ");
-                    for (int i = 1; i < data.length; i++) {
-                        sb.append(new String(data[i])).append(" ");
-                    }
-                    log.info(sb.toString());
-                }
-            }
-
-            if (cmd.equals(QUIT_COMMAND)) {
-                socket.close();
-                return OKReply.INSTANCE;
-            }
-
             // http basic auth
             if (request.isHttp()) {
                 if (SocketInspector.getAuthUser(socket) == null && ConfForGlobal.PASSWORD != null) {
@@ -606,6 +577,7 @@ public class RequestHandler {
                 try {
                     sGroup.set(keyBytes, valueBytes, sGroup.slotWithKeyHashListParsed.getFirst());
                 } catch (ReadonlyException e) {
+                    log.warn("Set but server is readonly, key={}", new String(keyBytes));
                     return ErrorReply.READONLY;
                 } catch (Exception e) {
                     log.error("Set error, key={}", new String(keyBytes), e);
@@ -629,9 +601,10 @@ public class RequestHandler {
                 commandGroup.update(cmd, data, socket);
                 return commandGroup.init(this, request).handle();
             } catch (ReadonlyException e) {
+                log.warn("Request handle but server is readonly");
                 return ErrorReply.READONLY;
             } catch (Exception e) {
-                log.error("Request handle error", e);
+                log.error("Request handle error.", e);
                 return new ErrorReply(e.getMessage());
             }
         } finally {

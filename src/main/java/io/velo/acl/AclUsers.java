@@ -163,7 +163,8 @@ public class AclUsers {
                 return inner;
             }
         }
-        return null;
+        // when run in networker thread, return the first inner instance, only for read
+        return inners[0];
     }
 
     /**
