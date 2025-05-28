@@ -36,7 +36,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      */
     @TestOnly
     public static void clearUserData(ITcpSocket socket) {
-        ((TcpSocket) socket).setUserData(null);
+        ((TcpSocket) socket).setUserData(new VeloUserDataInSocket());
     }
 
     /**
@@ -62,7 +62,8 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @param sendCommandCount the number of send commands this time
      */
     public static void updateLastSendCommand(ITcpSocket socket, String lastSendCommand, long sendCommandCount) {
-        var veloUserData = createUserDataIfNotSet(socket);
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        assert veloUserData != null;
         veloUserData.lastSendCommandTimeMillis = System.currentTimeMillis();
         veloUserData.lastSendCommand = lastSendCommand;
         veloUserData.sendCommandCount += sendCommandCount;
@@ -81,7 +82,8 @@ public class SocketInspector implements TcpSocket.Inspector {
         }
 
         var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
-        return veloUserData != null && veloUserData.isResp3;
+        assert veloUserData != null;
+        return veloUserData.isResp3;
     }
 
     /**
@@ -91,7 +93,9 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @param isResp3 true if the socket uses RESP3, false otherwise
      */
     public static void setResp3(ITcpSocket socket, boolean isResp3) {
-        createUserDataIfNotSet(socket).isResp3 = isResp3;
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        assert veloUserData != null;
+        veloUserData.isResp3 = isResp3;
     }
 
     /**
@@ -117,7 +121,9 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @param isConnectionReadonly true if the connection is read-only, false otherwise
      */
     public static void setConnectionReadonly(ITcpSocket socket, boolean isConnectionReadonly) {
-        createUserDataIfNotSet(socket).isConnectionReadonly = isConnectionReadonly;
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        assert veloUserData != null;
+        veloUserData.isConnectionReadonly = isConnectionReadonly;
     }
 
     /**
@@ -127,7 +133,9 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @param authUser the authenticated user
      */
     public static void setAuthUser(ITcpSocket socket, String authUser) {
-        createUserDataIfNotSet(socket).authUser = authUser;
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        assert veloUserData != null;
+        veloUserData.authUser = authUser;
     }
 
     /**
@@ -143,7 +151,8 @@ public class SocketInspector implements TcpSocket.Inspector {
         }
 
         var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
-        return veloUserData == null ? null : veloUserData.authUser;
+        assert veloUserData != null;
+        return veloUserData.authUser;
     }
 
     /**
@@ -153,7 +162,8 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @return the client info reply, refer to <a href="https://redis.io/docs/latest/commands/client-info/">client info</a>
      */
     public static String getClientInfo(ITcpSocket socket) {
-        var veloUserData = createUserDataIfNotSet(socket);
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        assert veloUserData != null;
         var remoteAddress = ((TcpSocket) socket).getRemoteAddress();
 
         var sb = new StringBuilder();
@@ -596,7 +606,9 @@ public class SocketInspector implements TcpSocket.Inspector {
     @Override
     public void onRead(TcpSocket socket, ByteBuf buf) {
         var bytes = buf.readRemaining();
-        createUserDataIfNotSet(socket).netInBytesLength += bytes;
+        var veloUserData = (VeloUserDataInSocket) socket.getUserData();
+        assert veloUserData != null;
+        veloUserData.netInBytesLength += bytes;
 
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
         netInBytesLengthArray[threadIndex] += bytes;
@@ -619,7 +631,9 @@ public class SocketInspector implements TcpSocket.Inspector {
 
     @Override
     public void onWrite(TcpSocket socket, ByteBuf buf, int bytes) {
-        createUserDataIfNotSet(socket).netOutBytesLength += bytes;
+        var veloUserData = (VeloUserDataInSocket) socket.getUserData();
+        assert veloUserData != null;
+        veloUserData.netOutBytesLength += bytes;
 
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
         if (threadIndex != -1) {

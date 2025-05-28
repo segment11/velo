@@ -22,6 +22,7 @@ class SocketInspectorTest extends Specification {
     def 'test base'() {
         given:
         def socket = mockTcpSocket()
+        SocketInspector.createUserDataIfNotSet(socket)
         SocketInspector.updateLastSendCommand(socket, "", 1)
 
         expect:
