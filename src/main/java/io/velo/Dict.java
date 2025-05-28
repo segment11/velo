@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.LongAdder;
 public class Dict implements Serializable {
 
     /**
-     * Sequence number for the self Zstd dictionary.
+     * Sequence number for the self-Zstd dictionary.
      */
     public static final int SELF_ZSTD_DICT_SEQ = 1;
 
@@ -35,7 +35,7 @@ public class Dict implements Serializable {
     public static final int GLOBAL_ZSTD_DICT_SEQ = 10;
 
     /**
-     * Singleton instance of the self Zstd dictionary.
+     * Singleton instance of the self-Zstd dictionary.
      */
     public static final Dict SELF_ZSTD_DICT = new Dict();
 
@@ -410,7 +410,7 @@ public class Dict implements Serializable {
     }
 
     /**
-     * Length of the encoded dictionary header.
+     * Length of the encoded dictionary header:
      * dict seq int + createdTime long + keyPrefix length short + dict length short
      */
     private static final int ENCODED_HEADER_LENGTH = 4 + 8 + 2 + 2;

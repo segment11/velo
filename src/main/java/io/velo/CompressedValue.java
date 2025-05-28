@@ -91,7 +91,7 @@ public class CompressedValue {
     public static final int VALUE_MAX_LENGTH = 65536;  // Maximum compressed value size
 
     /**
-     * Header sizes for serialization.
+     * Header sizes for serialization:
      * seq long + expireAt long + keyHash long + dictSeqOrSpType int + compressedLength int
      */
     public static final int VALUE_HEADER_LENGTH = 8 + 8 + 4 + 8 + 4;
@@ -206,7 +206,7 @@ public class CompressedValue {
     }
 
     /**
-     * Returns the length of the compressed data.  If not compressed, this is raw data length.
+     * Returns the length of the compressed data.  If not compressed, this is the raw data length.
      * Only use 24 bits.
      *
      * @return The length of the compressed data.
@@ -444,7 +444,7 @@ public class CompressedValue {
     }
 
     /**
-     * Static version of geospatial type check.
+     * Static version of the geospatial type check.
      *
      * @param spType The type marker to check.
      * @return {@code true} if the type is {@link #SP_TYPE_GEO}.
@@ -743,7 +743,7 @@ public class CompressedValue {
             return firstByte;
         } else {
             // Normal compressed value encoded.
-            // Skip seq long + expire at long.
+            // Skip seq long and expire at long.
             return buffer.getInt(8 + 8);
         }
     }

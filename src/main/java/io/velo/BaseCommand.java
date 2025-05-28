@@ -289,8 +289,8 @@ public abstract class BaseCommand {
 
     /**
      * Copy the properties of another BaseCommand object to this object.
-     * When do unit test, can use this
-     * When reuse a command method, can use this
+     * When doing unit test, can use this
+     * When reusing a command method, can use this
      *
      * @param other The other BaseCommand object to copy properties from
      */
@@ -522,7 +522,7 @@ public abstract class BaseCommand {
      * @param keyBytes Original key bytes
      * @param s        Precomputed slot and hash information
      * @return CompressedValue or null if expired/not found
-     * @throws DictMissingException If required compression dictionary is missing
+     * @throws DictMissingException If using compression dictionary is missing
      */
     public CompressedValue getCv(byte[] keyBytes, SlotWithKeyHash s) {
         var slot = s.slot();
@@ -576,7 +576,7 @@ public abstract class BaseCommand {
      * @param keyBytes        Original key bytes
      * @param slotWithKeyHash Precomputed slot and hash information
      * @return Decompressed value bytes
-     * @throws DictMissingException If required compression dictionary is missing
+     * @throws DictMissingException If using compression dictionary is missing
      */
     public byte[] getValueBytesByCv(CompressedValue cv, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
         if (cv.isTypeNumber()) {
@@ -648,8 +648,8 @@ public abstract class BaseCommand {
      *
      * @param keyBytes          Original key bytes
      * @param slotWithKeyHash   Precomputed slot and hash information
-     * @param expectTypeString  Expect return CompressValue is string type or ignore
-     * @param expectSpTypeArray Expect return CompressValue sp type array
+     * @param expectTypeString  Expect return CompressValue is a string type or ignore
+     * @param expectSpTypeArray Expect return CompressValue a sp type array
      * @return Value bytes or null if not found
      */
     public byte[] get(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, boolean expectTypeString, Integer... expectSpTypeArray) {
@@ -764,7 +764,7 @@ public abstract class BaseCommand {
             cv.setKeyHash(slotWithKeyHash.keyHash());
 
             if (cv.isCompressed()) {
-                // just set cv
+                // set cv directly if the value is already compressed
                 var dstKey = new String(keyBytes);
                 var slot = slotWithKeyHash.slot();
 
@@ -773,11 +773,12 @@ public abstract class BaseCommand {
                 var indexHandlerPool = localPersist.getIndexHandlerPool();
                 if (indexHandlerPool != null) {
                     var shortType = KeyLoader.transferToShortType(cv.getDictSeqOrSpType());
-                    // compressed / uncompressed length only use 24 bits
+                    // compressed / uncompressed length only uses 24 bits
                     var valueLengthHigh24WithShortTypeLow8 = cv.getUncompressedLength() << 8 | shortType;
                     indexHandlerPool.getKeyAnalysisHandler().addKey(slotWithKeyHash.rawKey, valueLengthHigh24WithShortTypeLow8);
                 }
             } else {
+                // check if the value needs do compression
                 set(keyBytes, cv.getCompressedData(), slotWithKeyHash, 0, cv.getExpireAt());
             }
         }
@@ -825,12 +826,12 @@ public abstract class BaseCommand {
     public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType, long expireAt) {
         compressStats.rawTotalLength += valueBytes.length;
 
-        // prefer store as number type
+        // prefer store as a number type
         boolean isTypeNumber = CompressedValue.isTypeNumber(spType);
         if (valueBytes.length <= MAX_LONG_VALUE_IN_BYTES_LENGTH && !isTypeNumber) {
             var value = new String(valueBytes);
 
-            // check if value is a number
+            // check if the value is a number
             long longValue;
             try {
                 longValue = Long.parseLong(value);
@@ -894,7 +895,7 @@ public abstract class BaseCommand {
 
             if (ConfForGlobal.isOnDynTrainDictForCompression) {
                 if (dict == Dict.SELF_ZSTD_DICT) {
-                    // add train sample list
+                    // add to the train sample list
                     if (sampleToTrainList.size() < trainSampleListMaxSize) {
                         var kv = new TrainSampleJob.TrainSampleKV(key, null, cv.getSeq(), valueBytes);
                         sampleToTrainList.add(kv);
@@ -966,7 +967,7 @@ public abstract class BaseCommand {
      * @param bucketIndex Precomputed bucket index
      * @param key         The key string to remove
      * @param keyHash     Main 64-bit key hash
-     * @param keyHash32   Another 32 bits of key
+     * @param keyHash32   Another 32-bit key hash
      * @return true if the key was found and removed
      */
     public boolean remove(short slot, int bucketIndex, String key, long keyHash, int keyHash32) {
@@ -1031,8 +1032,8 @@ public abstract class BaseCommand {
                 dictMap.putDict(keyPrefix, dict);
 //                var oldDict = dictMap.putDict(keyPrefixOrSuffix, dict);
 //                if (oldDict != null) {
-//                    // keep old dict in persist, because may be used by other worker
-//                    // when start server, early dict will be overwritten by new dict with same key prefix, need not persist again?
+//                    // keep old dict, because may be used by another worker
+//                    // when start server, early dict will be overwritten by new dict with the same key prefix, need not persist again?
 //                    dictMap.putDict(keyPrefixOrSuffix + "_" + new Random().nextInt(10000), oldDict);
 //                }
             }

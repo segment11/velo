@@ -101,11 +101,11 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
     }
 
     /**
-     * Provides a worker pool with a specified number of net workers.
+     * Provides a worker pool with a specified number of networkers.
      *
      * @param workerPools the worker pool manager
      * @param config      the configuration object
-     * @return a new WorkerPool instance with the specified number of net workers
+     * @return a new WorkerPool instance with the specified number of networkers
      */
     @Provides
     WorkerPool workerPool(WorkerPools workerPools, Config config) {
@@ -124,7 +124,7 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
     }
 
     /**
-     * Provides the primary server instance, which coordinates net workers.
+     * Provides the primary server instance, which coordinates networkers.
      *
      * @param primaryReactor the primary event loop reactor
      * @param workerServers  the instances of worker servers
@@ -255,7 +255,7 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
     }
 
     /**
-     * Main entry point for the server application. It initializes the server with the number of net workers and
+     * Main entry point for the server application. It initializes the server with the number of networkers and
      * the mode of using a thread-local map based on system properties. It then launches the server.
      *
      * @param args command-line arguments
@@ -271,7 +271,7 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
             }
 
             /**
-             * Called when the server starts. Initializes the thread ID array with the thread IDs of the net worker event loops.
+             * Called when the server starts. Initializes the thread ID array with the thread IDs of the networker event loops.
              */
             @Override
             protected void onStart() throws Exception {

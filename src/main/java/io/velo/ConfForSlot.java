@@ -186,7 +186,7 @@ public enum ConfForSlot {
          * Initializes the bucket configuration with the specified parameters.
          *
          * @param bucketsPerSlot     The number of buckets per slot.
-         * @param initialSplitNumber The initial split number.
+         * @param initialSplitNumber The initialized split number.
          */
         ConfBucket(int bucketsPerSlot, byte initialSplitNumber) {
             this.bucketsPerSlot = bucketsPerSlot;
@@ -199,7 +199,7 @@ public enum ConfForSlot {
         public int bucketsPerSlot;
 
         /**
-         * Initial split number.
+         * Initialized split number.
          */
         public byte initialSplitNumber;
 
@@ -334,7 +334,7 @@ public enum ConfForSlot {
             // check if chunk file number is enough for all key values encoded, considering invalid need merge values
             int estimateOneValueEncodedLength = (int) (ConfForGlobal.estimateOneValueLength * 1.5);
             long estimateChunkCanStoreValueNumber = (long) maxSegmentNumber() * segmentLength / estimateOneValueEncodedLength;
-            // keep 2 times space for chunk file, so pre-read merged segments invalid number is high, for performance
+            // keep 2 times space for the chunk file, so pre-read merged segments invalid number is high, for performance
             if (estimateChunkCanStoreValueNumber < ConfForGlobal.estimateKeyNumber) {
                 throw new IllegalArgumentException("Chunk segment number too small, chunk segments can store key value number should be larger than " + ConfForGlobal.estimateKeyNumber +
                         ", configured chunk segment number is " + maxSegmentNumber());
@@ -397,12 +397,12 @@ public enum ConfForSlot {
         public int shortValueSizeTrigger;
 
         /**
-         * Trigger to persist at least once interval ms.
+         * Trigger to persist at least once, interval ms.
          */
         public int atLeastDoPersistOnceIntervalMs = 2;
 
         /**
-         * When value size / short value size >= size trigger * 0.8, check if last persist time is <= 2ms, if true, do persist.
+         * When value size / short value size >= size trigger * 0.8, check if last persist time is <= 2 ms, if true, do persist.
          * So can avoid io skew.
          */
         public double checkAtLeastDoPersistOnceSizeRate = 0.8;

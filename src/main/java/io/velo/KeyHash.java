@@ -57,7 +57,7 @@ public class KeyHash {
                     && keyBytes[2] == fixedPrefixKeyBytesForTest[2]) {
                 var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
-                // eg. xh!123_key1, xh!123_key2, xh!123_key3 means different key hash but in bucket index 123
+                // xh!123_key1, xh!123_key2, xh!123_key3 means different key hash but in bucket index 123
                 var key = new String(keyBytes);
                 var index_ = key.indexOf("_");
                 var rawKey = key.substring(index_ + 1);
@@ -111,7 +111,7 @@ public class KeyHash {
 
     /**
      * Computes the split index for a given key hash.
-     * This method helps in avoiding data skew when splitting indices.
+     * This method helps to avoid data skew when splitting indices.
      *
      * @param keyHash     the key hash
      * @param splitNumber the number of splits

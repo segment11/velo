@@ -29,7 +29,7 @@ public class DictMap implements NeedCleanUp {
     public static int TO_COMPRESS_MIN_DATA_LENGTH = 64;
 
     /**
-     * Minimum data length to use the self dictionary for compression.
+     * Minimum data length to use the self-Zstd dictionary for compression.
      */
     public static int TO_COMPRESS_USE_SELF_DICT_MIN_DATA_LENGTH = 256;
 
@@ -58,7 +58,7 @@ public class DictMap implements NeedCleanUp {
     }
 
     /**
-     * Private constructor to enforce singleton pattern.
+     * Private constructor to enforce the singleton pattern.
      */
     private DictMap() {
         initMetricsCollect();
@@ -311,10 +311,10 @@ public class DictMap implements NeedCleanUp {
     private final List<String> labelValuesSelf = List.of("self_");
 
     /**
-     * Initializes metrics collection for dictionary compression.
+     * Initializes the metrics collection for dictionary compression.
      */
     private void initMetricsCollect() {
-        // only first slot show global metrics
+        // only the first slot shows global metrics
         dictCompressedGauge.addRawGetter(() -> {
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
 

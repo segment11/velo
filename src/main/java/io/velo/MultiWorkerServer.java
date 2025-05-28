@@ -119,14 +119,14 @@ public class MultiWorkerServer extends Launcher {
     PrimaryServer primaryServer;
 
     /**
-     * Array of request handlers, one per network worker.
+     * Array of request handlers, one per slot worker.
      */
     @ThreadNeedLocal
     @Inject
     RequestHandler[] requestHandlerArray;
 
     /**
-     * Array of event loops for net workers.
+     * Array of event loops for networkers.
      */
     @ThreadNeedLocal
     Eventloop[] netWorkerEventloopArray;
@@ -838,7 +838,7 @@ public class MultiWorkerServer extends Launcher {
         // reuse networker thread
         if (slotWorkers == 1 && netWorkers == 1) {
             isReuseNetWorkerEventloop = true;
-            logger.warn("Slot worker reuse net worker");
+            logger.warn("Slot worker thread reuse net worker thread");
 
             var eventloop = netWorkerEventloopArray[0];
             slotWorkerEventloopArray[0] = eventloop;
@@ -896,7 +896,7 @@ public class MultiWorkerServer extends Launcher {
             }
 
             if (loopCount % 5 == 0) {
-                // need catch exception, or will not delay run task
+                // need catch exception, or will not delay run a task
                 try {
                     doReplAfterLeaderSelect((short) 0);
                 } catch (Exception e) {
@@ -1256,7 +1256,7 @@ public class MultiWorkerServer extends Launcher {
             debug.logRestore = config.get(ofBoolean(), "debugLogRestore", false);
             debug.bulkLoad = config.get(ofBoolean(), "bulkLoad", false);
 
-            // override bucket conf
+            // override bucket conf items
             if (config.getChild("bucket.bucketsPerSlot").hasValue()) {
                 c.confBucket.bucketsPerSlot = config.get(ofInteger(), "bucket.bucketsPerSlot");
             }
@@ -1275,7 +1275,7 @@ public class MultiWorkerServer extends Launcher {
             }
             c.confBucket.checkIfValid();
 
-            // override chunk conf
+            // override chunk conf items
             if (config.getChild("chunk.segmentNumberPerFd").hasValue()) {
                 c.confChunk.segmentNumberPerFd = config.get(ofInteger(), "chunk.segmentNumberPerFd");
             }
@@ -1289,7 +1289,7 @@ public class MultiWorkerServer extends Launcher {
             c.confChunk.lruPerFd.maxSize = config.get(ofInteger(), "chunk.lruPerFd.maxSize", 0);
             c.confChunk.checkIfValid();
 
-            // override wal conf
+            // override wal conf items
             c.confWal.oneChargeBucketNumber = config.get(ofInteger(), "wal.oneChargeBucketNumber", 32);
             c.confWal.valueSizeTrigger = config.get(ofInteger(), "wal.valueSizeTrigger", 200);
             c.confWal.shortValueSizeTrigger = config.get(ofInteger(), "wal.shortValueSizeTrigger", 200);
@@ -1297,7 +1297,7 @@ public class MultiWorkerServer extends Launcher {
             c.confWal.checkAtLeastDoPersistOnceSizeRate = config.get(ofDouble(), "wal.checkAtLeastDoPersistOnceSizeRate", 0.8);
             c.confWal.checkIfValid();
 
-            // override repl conf
+            // override repl conf items
             c.confRepl.binlogOneSegmentLength = config.get(ofInteger(), "repl.binlogOneSegmentLength", 1024 * 1024);
             c.confRepl.binlogOneFileMaxLength = config.get(ofInteger(), "repl.binlogOneFileMaxLength", 512 * 1024 * 1024);
             c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount", 100).shortValue();
@@ -1307,7 +1307,7 @@ public class MultiWorkerServer extends Launcher {
             c.confRepl.iterateKeysOneBatchSize = config.get(ofInteger(), "repl.iterateKeysOneBatchSize", 10000);
             c.confRepl.checkIfValid();
 
-            // override other conf
+            // override other conf items
             c.lruBigString.maxSize = config.get(ofInteger(), "big.string.lru.maxSize", 1000);
             c.lruKeyAndCompressedValueEncoded.maxSize = config.get(ofInteger(), "kv.lru.maxSize", 100_000);
 

@@ -10,12 +10,10 @@ import io.velo.acl.U;
 import io.velo.command.*;
 import io.velo.decode.Request;
 import io.velo.metric.SimpleGauge;
-import io.velo.persist.LocalPersist;
 import io.velo.persist.ReadonlyException;
 import io.velo.repl.LeaderSelector;
 import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.cluster.MultiShardShadow;
-import io.velo.repl.cluster.MultiSlotRange;
 import io.velo.reply.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
@@ -46,8 +44,6 @@ public class RequestHandler {
     public static final String AUTH_COMMAND = "auth";
     private static final String GET_COMMAND = "get";
     private static final String SET_COMMAND = "set";
-
-    public static final String AS_KEY_GET_SLOT_RANGE_IN_CURRENT_CONNECTION_THREAD_LOCALLY = "x_slot_range";
 
     @VisibleForTesting
     final byte workerId;
@@ -343,7 +339,7 @@ public class RequestHandler {
         // http special handle
         if (request.isHttp() && data.length == 1) {
             // metrics, prometheus format
-            // url should be ?metrics, eg: http://localhost:7379/?metrics
+            // url should be ?metrics, http://localhost:7379/?metrics
             // for one target slot beside 0 metrics: http://localhost:7379/?manage&slot&0&view-metrics
             var firstDataBytes = data[0];
             if (Arrays.equals(firstDataBytes, URL_QUERY_METRICS_BYTES)) {
@@ -505,43 +501,6 @@ public class RequestHandler {
                         log.error("XGroup handle error", e);
                         return new ErrorReply(e.getMessage());
                     }
-                }
-
-                // for redis protocol compatible client, get slot range in current connection thread
-                // so need not post to other threads when client use this connection, for performance
-                // need change Jedis to support this feature, refer BaseCommand.calSlotInRedisClientWhenNeedBetterPerf
-                if (key.equals(AS_KEY_GET_SLOT_RANGE_IN_CURRENT_CONNECTION_THREAD_LOCALLY)) {
-                    ArrayList<Short> slots = new ArrayList<>();
-
-                    // for redis cluster crc16 slots
-                    var eachSlotChargeRedisClusterSlotNumber = MultiShard.TO_CLIENT_SLOT_NUMBER / slotNumber;
-                    var multiSlotRange = new MultiSlotRange();
-
-                    var currentThreadId = Thread.currentThread().threadId();
-                    var localPersist = LocalPersist.getInstance();
-                    var oneSlots = localPersist.oneSlots();
-                    for (var oneSlot : oneSlots) {
-                        if (oneSlot.getThreadIdProtectedForSafe() == currentThreadId) {
-                            slots.add(oneSlot.slot());
-
-                            // for redis cluster crc16 slots
-                            var toClientSlotStart = oneSlot.slot() * eachSlotChargeRedisClusterSlotNumber;
-                            var toClientSlotEnd = toClientSlotStart + eachSlotChargeRedisClusterSlotNumber - 1;
-                            multiSlotRange.addSingle(toClientSlotStart, toClientSlotEnd);
-                        }
-                    }
-
-                    // reply join slots, eg: 0,2,4/0-1024,2048-3072,4096-5120
-                    var sb = new StringBuilder();
-                    for (int i = 0; i < slots.size(); i++) {
-                        sb.append(slots.get(i));
-                        if (i != slots.size() - 1) {
-                            sb.append(",");
-                        }
-                    }
-                    sb.append("/");
-                    sb.append(multiSlotRange);
-                    return new BulkReply(sb.toString().getBytes());
                 }
 
                 var gGroup = new GGroup(cmd, data, socket).init(this, request);

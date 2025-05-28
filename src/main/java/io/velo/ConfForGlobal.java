@@ -124,12 +124,12 @@ public class ConfForGlobal {
     public static String zookeeperConnectString;
 
     /**
-     * Session timeout for Zookeeper in milliseconds (default is 30000 ms).
+     * Session timeout for Zookeeper in milliseconds (default is 30_000 ms).
      */
     public static int zookeeperSessionTimeoutMs = 30000;
 
     /**
-     * Connection timeout for Zookeeper in milliseconds (default is 10000 ms).
+     * Connection timeout for Zookeeper in milliseconds (default is 10_000 ms).
      */
     public static int zookeeperConnectionTimeoutMs = 10000;
 
