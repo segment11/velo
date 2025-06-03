@@ -13,34 +13,50 @@ class VeloRDBImporterTest extends Specification {
         given:
         def v = new VeloRDBImporter()
         def callback = new RDBCallback() {
+            Object result
+
             @Override
             void onInteger(Integer value) {
                 println "Integer: $value"
+                result = value
             }
 
             @Override
             void onString(byte[] valueBytes) {
                 println "String: ${new String(valueBytes)}"
+                result = valueBytes
             }
 
             @Override
             void onList(RedisList rl) {
-                println "List: $rl"
+                def str = rl.list.collect { new String(it) }.join(',')
+                println "List: " + str
+                result = rl
             }
 
             @Override
             void onSet(RedisHashKeys rhk) {
-                println "Set: $rhk"
+                def str = rhk.set.join(',')
+                println "Set: " + str
+                result = rhk
             }
 
             @Override
             void onZSet(RedisZSet rz) {
-                println "ZSet: $rz"
+                def str = rz.set.collect {
+                    "${new String(it.member())}:${it.score()}".toString()
+                }.join(',')
+                println "ZSet: " + str
+                result = rz
             }
 
             @Override
             void onHash(RedisHH rhh) {
-                println "Hash: $rhh"
+                def str = rhh.map.collect {
+                    "${it.key}:${new String(it.value)}".toString()
+                }.join(',')
+                println "Hash: " + str
+                result = rhh
             }
         }
 
@@ -102,5 +118,63 @@ class VeloRDBImporterTest extends Specification {
         v.restore(Unpooled.wrappedBuffer(lzfBytes), callback)
         then:
         1 == 1
+
+        when:
+        def quickListBytes = new byte[]{
+                18, 1, 2, 13, 13, 0, 0, 0, 3, 0, 3, 1, 2, 1, 1, 1, -1, 11, 0, -41, 54, 8, 47, -114, -101, -61, 115
+        }
+        v.restore(Unpooled.wrappedBuffer(quickListBytes), callback)
+        then:
+        callback.result instanceof RedisList
+        (callback.result as RedisList).size() == 3
+
+        when:
+        def quickListBytes2 = new byte[]{
+                18, 1, 2, -61, 27, 58, 7, 58, 0, 0, 0, 3, 0, -86, 120, -32, 10, 0, 0, 121, -32, 12, 0, 8, 43, 123,
+                1, -125, 97, 98, 99, 4, -1, 11, 0, -97, -87, -115, -24, 84, 76, 89, -41
+        }
+        v.restore(Unpooled.wrappedBuffer(quickListBytes2), callback)
+        then:
+        callback.result instanceof RedisList
+        (callback.result as RedisList).size() == 3
+
+        when:
+        def intSetBytes = new byte[]{
+                11, 16, 2, 0, 0, 0, 4, 0, 0, 0, 1, 0, 2, 0, 3, 0, 57, 48, 11, 0, 35, 37, -93, -95, 90, -94, 52, -1
+        }
+        v.restore(Unpooled.wrappedBuffer(intSetBytes), callback)
+        then:
+        callback.result instanceof RedisHashKeys
+        (callback.result as RedisHashKeys).set.size() == 4
+
+        when:
+        def listPackSetBytes = new byte[]{
+                20, 14, 14, 0, 0, 0, 2, 0, -125, 97, 98, 99, 4, 123, 1, -1, 11, 0, -88, 69, 96, -99, 43, -117, 76,
+                105
+        }
+        v.restore(Unpooled.wrappedBuffer(listPackSetBytes), callback)
+        then:
+        callback.result instanceof RedisHashKeys
+        (callback.result as RedisHashKeys).set.size() == 2
+
+        when:
+        def listPackHashBytes = new byte[]{
+                16, 22, 22, 0, 0, 0, 4, 0, -125, 97, 98, 99, 4, 123, 1, -125, 120, 121, 122, 4, -63, -56, 2, -1, 11,
+                0, -45, -126, 97, -43, 63, 50, 75, -103
+        }
+        v.restore(Unpooled.wrappedBuffer(listPackHashBytes), callback)
+        then:
+        callback.result instanceof RedisHH
+        (callback.result as RedisHH).map.size() == 2
+
+        when:
+        def listPackZSetBytes = new byte[]{
+                17, 21, 21, 0, 0, 0, 4, 0, -125, 97, 97, 97, 4, 1, 1, -125, 98, 98, 98, 4, 2, 1, -1, 11, 0, 68, 51,
+                25, 105, 59, 101, 71, -54
+        }
+        v.restore(Unpooled.wrappedBuffer(listPackZSetBytes), callback)
+        then:
+        callback.result instanceof RedisZSet
+        (callback.result as RedisZSet).set.size() == 2
     }
 }

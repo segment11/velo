@@ -275,29 +275,36 @@ public class VeloRDBImporter implements RDBImporter {
     }
 
     private void decodeIntSet(ByteBuf buf, RedisHashKeys set) {
-        int encoding = buf.readIntLE();
-        int size = buf.readIntLE();
-        if (size == 0) {
+        var setBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+        int size = setBuf.readableBytes();
+        int memberSize = setBuf.readIntLE();
+        int len = setBuf.readIntLE();
+
+        if (memberSize == 0) {
             throw new IllegalArgumentException("Invalid intset encoding");
         }
 
-        for (int i = 0; i < size; i++) {
-            long value;
-            if (encoding == 2) {
-                value = buf.readShortLE();
-            } else if (encoding == 4) {
-                value = buf.readIntLE();
-            } else if (encoding == 8) {
-                value = buf.readLongLE();
-            } else {
-                throw new IllegalArgumentException("Unknown intset encoding: " + encoding);
+        final int IntSetHeaderSize = 8;
+        if (IntSetHeaderSize + memberSize * len != size) {
+            throw new IllegalArgumentException("Invalid intset length");
+        }
+
+        for (int i = 0; i < len; i++) {
+            switch (memberSize) {
+                case 2 -> set.add(String.valueOf(setBuf.readUnsignedShortLE()));
+                case 4 -> set.add(String.valueOf(setBuf.readUnsignedIntLE()));
+                case 8 -> set.add(String.valueOf(setBuf.readLongLE()));
+                default -> throw new IllegalArgumentException("Invalid intset encoding");
             }
-            set.add(String.valueOf(value));
         }
     }
 
     private void decodeSetListPack(ByteBuf buf, RedisHashKeys set) {
-        // todo
+        var setBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+        var decodedList = ListPack.decode(setBuf);
+        for (var bytes : decodedList) {
+            set.add(new String(bytes));
+        }
     }
 
     private void decodeZSet(ByteBuf buf, int type, RedisZSet zset) {
@@ -338,7 +345,19 @@ public class VeloRDBImporter implements RDBImporter {
     }
 
     private void decodeZSetListPack(ByteBuf buf, RedisZSet zset) {
-        // todo
+        var zsetBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+        var decodedList = ListPack.decode(zsetBuf);
+        for (int i = 0; i < decodedList.size(); i += 2) {
+            var member = new String(decodedList.get(i));
+            var scoreStr = new String(decodedList.get(i + 1));
+            double score = switch (scoreStr) {
+                case "inf" -> Double.POSITIVE_INFINITY;
+                case "-inf" -> Double.NEGATIVE_INFINITY;
+                case "nan" -> Double.NaN;
+                default -> Double.parseDouble(scoreStr);
+            };
+            zset.add(score, member);
+        }
     }
 
     private void decodeHashZipMap(ByteBuf buf, RedisHH hash) {
@@ -369,7 +388,13 @@ public class VeloRDBImporter implements RDBImporter {
     }
 
     private void decodeHashListPack(ByteBuf buf, RedisHH hash) {
-        // todo
+        var hashBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+        var decodedList = ListPack.decode(hashBuf);
+        for (int i = 0; i < decodedList.size(); i += 2) {
+            var field = new String(decodedList.get(i));
+            var value = decodedList.get(i + 1);
+            hash.put(field, value);
+        }
     }
 
 }
