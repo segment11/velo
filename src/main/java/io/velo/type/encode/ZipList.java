@@ -2,8 +2,7 @@ package io.velo.type.encode;
 
 import io.netty.buffer.ByteBuf;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.function.BiConsumer;
 
 // copy from kvrocks rdb_ziplist.cc
 public class ZipList {
@@ -20,14 +19,12 @@ public class ZipList {
     private static final int ZIP_INT_IMM_MAX = 0xFD;
     private static final int ZIP_LIST_HEADER_SIZE = 10; // 4bytes total + 4bytes tail + 2bytes length
 
-    public static List<byte[]> decode(ByteBuf buf) {
+    public static void decode(ByteBuf buf, BiConsumer<byte[], Integer> consumer) {
         // Skip total bytes (4) and tail offset (4)
         buf.skipBytes(8);
 
         // Read number of entries (2 bytes, little endian)
         int numEntries = buf.readUnsignedShortLE();
-        List<byte[]> entries = new ArrayList<>(numEntries);
-
         // Read entries
         for (int i = 0; i < numEntries; i++) {
             // Skip previous entry length
@@ -38,7 +35,6 @@ public class ZipList {
 
             // Read encoding
             int encoding = buf.readUnsignedByte();
-
             if ((encoding & ZIP_STR_MASK) < ZIP_STR_MASK) {
                 // String encoding
                 int len;
@@ -54,7 +50,7 @@ public class ZipList {
 
                 var bytes = new byte[len];
                 buf.readBytes(bytes);
-                entries.add(bytes);
+                consumer.accept(bytes, i);
             } else {
                 // Integer encoding
                 String value;
@@ -78,10 +74,8 @@ public class ZipList {
                 } else {
                     throw new IllegalStateException("Invalid integer encoding");
                 }
-                entries.add(value.getBytes());
+                consumer.accept(value.getBytes(), i);
             }
         }
-
-        return entries;
     }
 }

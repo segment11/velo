@@ -2,8 +2,7 @@ package io.velo.type.encode;
 
 import io.netty.buffer.ByteBuf;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.function.BiConsumer;
 
 // copy from kvrocks rdb_listpack.cc
 public class ListPack {
@@ -58,7 +57,7 @@ public class ListPack {
         }
     }
 
-    public static List<byte[]> decode(ByteBuf buf) {
+    public static void decode(ByteBuf buf, BiConsumer<byte[], Integer> consumer) {
         int size = buf.readableBytes();
         if (size < listPackHeaderSize) {
             throw new IllegalArgumentException("Invalid listpack length");
@@ -71,8 +70,6 @@ public class ListPack {
 
         // member count
         int len = buf.readShortLE();
-
-        List<byte[]> members = new ArrayList<>(len);
         for (int i = 0; i < len; i++) {
             int valueLen;
             long intValue;
@@ -136,9 +133,7 @@ public class ListPack {
             } else {
                 throw new IllegalArgumentException("Invalid listpack entry");
             }
-
-            members.add(valueBytes);
+            consumer.accept(valueBytes, i);
         }
-        return members;
     }
 }

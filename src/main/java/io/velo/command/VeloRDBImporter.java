@@ -11,7 +11,6 @@ import io.velo.type.encode.ListPack;
 import io.velo.type.encode.ZipList;
 
 import java.nio.ByteBuffer;
-import java.util.List;
 
 public class VeloRDBImporter implements RDBImporter {
     // Redis RDB type constants
@@ -259,18 +258,19 @@ public class VeloRDBImporter implements RDBImporter {
             }
 
             var encodedBytes = decodeRdbString(buf);
-            List<byte[]> decodedList;
             if (type == RDB_TYPE_LIST_QUICK_LIST2) {
                 // list pack
                 var listPackBuf = Unpooled.wrappedBuffer(encodedBytes);
-                decodedList = ListPack.decode(listPackBuf);
+                ListPack.decode(listPackBuf, (valueBytes, index) -> {
+                    list.addLast(valueBytes);
+                });
             } else {
                 // zip list
                 var zipListBuf = Unpooled.wrappedBuffer(encodedBytes);
-                decodedList = ZipList.decode(zipListBuf);
+                ZipList.decode(zipListBuf, (valueBytes, index) -> {
+                    list.addLast(valueBytes);
+                });
             }
-
-            list.getList().addAll(decodedList);
         }
     }
 
@@ -301,10 +301,9 @@ public class VeloRDBImporter implements RDBImporter {
 
     private void decodeSetListPack(ByteBuf buf, RedisHashKeys set) {
         var setBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
-        var decodedList = ListPack.decode(setBuf);
-        for (var bytes : decodedList) {
-            set.add(new String(bytes));
-        }
+        ListPack.decode(setBuf, (valueBytes, index) -> {
+            set.add(new String(valueBytes));
+        });
     }
 
     private void decodeZSet(ByteBuf buf, int type, RedisZSet zset) {
@@ -346,18 +345,22 @@ public class VeloRDBImporter implements RDBImporter {
 
     private void decodeZSetListPack(ByteBuf buf, RedisZSet zset) {
         var zsetBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
-        var decodedList = ListPack.decode(zsetBuf);
-        for (int i = 0; i < decodedList.size(); i += 2) {
-            var member = new String(decodedList.get(i));
-            var scoreStr = new String(decodedList.get(i + 1));
-            double score = switch (scoreStr) {
-                case "inf" -> Double.POSITIVE_INFINITY;
-                case "-inf" -> Double.NEGATIVE_INFINITY;
-                case "nan" -> Double.NaN;
-                default -> Double.parseDouble(scoreStr);
-            };
-            zset.add(score, member);
-        }
+
+        final String[] memberArray = new String[1];
+        ListPack.decode(zsetBuf, (valueBytes, index) -> {
+            if (index % 2 == 0) {
+                memberArray[0] = new String(valueBytes);
+            } else {
+                var scoreStr = new String(valueBytes);
+                double score = switch (scoreStr) {
+                    case "inf" -> Double.POSITIVE_INFINITY;
+                    case "-inf" -> Double.NEGATIVE_INFINITY;
+                    case "nan" -> Double.NaN;
+                    default -> Double.parseDouble(scoreStr);
+                };
+                zset.add(score, memberArray[0]);
+            }
+        });
     }
 
     private void decodeHashZipMap(ByteBuf buf, RedisHH hash) {
@@ -389,12 +392,13 @@ public class VeloRDBImporter implements RDBImporter {
 
     private void decodeHashListPack(ByteBuf buf, RedisHH hash) {
         var hashBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
-        var decodedList = ListPack.decode(hashBuf);
-        for (int i = 0; i < decodedList.size(); i += 2) {
-            var field = new String(decodedList.get(i));
-            var value = decodedList.get(i + 1);
-            hash.put(field, value);
-        }
+        final String[] fieldArray = new String[1];
+        ListPack.decode(hashBuf, (valueBytes, index) -> {
+            if (index % 2 == 0) {
+                fieldArray[0] = new String(valueBytes);
+            } else {
+                hash.put(fieldArray[0], valueBytes);
+            }
+        });
     }
-
 }
