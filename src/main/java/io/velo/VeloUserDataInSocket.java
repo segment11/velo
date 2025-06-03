@@ -28,6 +28,34 @@ public class VeloUserDataInSocket {
     long sendCommandCount = 0;
 
     /**
+     * The last sequence number set by the client.
+     */
+    long lastSetSeq;
+
+    /**
+     * Returns the last sequence number set by the client.
+     *
+     * @return The last sequence number set by the client.
+     */
+    public long getLastSetSeq() {
+        return lastSetSeq;
+    }
+
+    /**
+     * The slot index of the last set command execute by the client.
+     */
+    short lastSetSlot;
+
+    /**
+     * Returns the slot index of the last set command execute by the client.
+     *
+     * @return The slot index of the last set command execute by the client.
+     */
+    public short getLastSetSlot() {
+        return lastSetSlot;
+    }
+
+    /**
      * The number of bytes sent from the client.
      */
     long netInBytesLength = 0;

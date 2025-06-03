@@ -14,6 +14,8 @@ class VeloUserDataInSocketTest extends Specification {
         one.lastSendCommandTimeMillis > 0L
         one.lastSendCommand == null
         one.sendCommandCount == 0L
+        one.lastSetSeq == 0L
+        one.lastSetSlot == (short) 0
         one.netInBytesLength == 0L
         one.netOutBytesLength == 0L
         one.authUser == null

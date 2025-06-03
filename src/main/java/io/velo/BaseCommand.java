@@ -872,12 +872,13 @@ public abstract class BaseCommand {
         }
 
         var slot = slotWithKeyHash.slot;
+        var setSeq = snowFlake.nextId();
         if (ConfForGlobal.isValueSetUseCompression && preferDoCompress && dict != null) {
             var beginT = System.nanoTime();
             // dict may be null
             var cv = CompressedValue.compress(valueBytes, dict);
             var costT = (System.nanoTime() - beginT) / 1000;
-            cv.setSeq(snowFlake.nextId());
+            cv.setSeq(setSeq);
             if (cv.isIgnoreCompression(valueBytes)) {
                 cv.setDictSeqOrSpType(CompressedValue.NULL_DICT_SEQ);
             } else {
@@ -908,7 +909,7 @@ public abstract class BaseCommand {
             }
         } else {
             var cvRaw = new CompressedValue();
-            cvRaw.setSeq(snowFlake.nextId());
+            cvRaw.setSeq(setSeq);
             cvRaw.setDictSeqOrSpType(spType);
             cvRaw.setKeyHash(slotWithKeyHash.keyHash);
             cvRaw.setExpireAt(expireAt);
@@ -941,6 +942,8 @@ public abstract class BaseCommand {
             var valueLengthHigh24WithShortTypeLow8 = valueBytes.length << 8 | shortType;
             indexHandlerPool.getKeyAnalysisHandler().addKey(key, valueLengthHigh24WithShortTypeLow8);
         }
+
+        SocketInspector.updateLastSetSeq(socket, setSeq, slot);
     }
 
     /**

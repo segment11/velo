@@ -24,6 +24,7 @@ class SocketInspectorTest extends Specification {
         def socket = mockTcpSocket()
         SocketInspector.createUserDataIfNotSet(socket)
         SocketInspector.updateLastSendCommand(socket, "", 1)
+        SocketInspector.updateLastSetSeq(socket, 1L, (short) 0)
 
         expect:
         !SocketInspector.isResp3(null)

@@ -70,6 +70,20 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
+     * Updates the last set sequence number for a socket.
+     *
+     * @param socket      the socket to update
+     * @param lastSetSeq  the last set sequence number
+     * @param lastSetSlot the last set slot
+     */
+    public static void updateLastSetSeq(ITcpSocket socket, long lastSetSeq, short lastSetSlot) {
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        assert veloUserData != null;
+        veloUserData.lastSetSeq = lastSetSeq;
+        veloUserData.lastSetSlot = lastSetSlot;
+    }
+
+    /**
      * Checks if the socket uses RESP3 protocol.
      *
      * @param socket the socket to check
