@@ -30,6 +30,8 @@ class XOneWalGroupPersistTest extends Specification {
                 dataOs.writeLong(0L)
                 // seq
                 dataOs.writeLong(0L)
+                // value bytes length
+                dataOs.writeInt(1)
             }
             recordXBytesArray[i] = bos.toByteArray()
         }

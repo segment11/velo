@@ -1296,6 +1296,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     @SlaveNeedReplay
     @SlaveReplay
     public int updateRecordXBytesArray(byte[][] recordXBytesArray) {
+        if (!ConfForGlobal.pureMemoryV2) {
+            return 0;
+        }
+
         var n = 0;
         for (var bytes : recordXBytesArray) {
             var buffer = ByteBuffer.wrap(bytes);
