@@ -144,17 +144,13 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         batchKvCountTotal += list.size();
 
         long segmentSeq = snowFlake.nextId();
-        encodeToBuffer(list, buffer, returnPvmList, tmpSegmentIndex, segmentSeq);
+        var valueBytesLength = encodeToBuffer(list, buffer, returnPvmList, tmpSegmentIndex, segmentSeq);
 
         var copyBytes = Arrays.copyOf(this.bytes, this.bytes.length);
 
         buffer.clear();
         Arrays.fill(bytes, (byte) 0);
 
-        var valueBytesLength = 0;
-        for (var pvm : returnPvmList) {
-            valueBytesLength += pvm.valueBytesLength;
-        }
         return new SegmentBytesWithIndex(copyBytes, tmpSegmentIndex, segmentSeq, valueBytesLength);
     }
 
