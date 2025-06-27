@@ -4,6 +4,7 @@ import groovy.lang.GroovyClassLoader;
 import io.velo.Utils;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -116,7 +117,7 @@ public class RefreshLoader {
     /**
      * The logger used for logging refresh and error information.
      */
-    private static final Logger log = org.slf4j.LoggerFactory.getLogger(RefreshLoader.class);
+    private static final Logger log = LoggerFactory.getLogger(RefreshLoader.class);
 
     /**
      * A map to store the last modified timestamp of individual script files.
