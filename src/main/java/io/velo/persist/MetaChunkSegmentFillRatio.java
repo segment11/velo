@@ -16,10 +16,10 @@ import java.util.LinkedList;
  * For pure memory v2 mode. For memory gc.
  */
 public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLoad {
-    private final short slot;
     private final int maxSegmentNumber;
 
-    // init value length int + current value length int
+    // init value length int + current value length int + bucket index 1 byte
+    // one segment cost bytes: 4 + 4 + 1 = 9
     private final byte[] bytes;
     private final ByteBuffer byteBuffer;
 
@@ -41,14 +41,11 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
 
     /**
      * Constructs a new MetaChunkSegmentFillRatio instance for a given slot.
-     *
-     * @param slot The slot number.
      */
-    public MetaChunkSegmentFillRatio(short slot) {
-        this.slot = slot;
+    public MetaChunkSegmentFillRatio() {
         this.maxSegmentNumber = ConfForSlot.global.confChunk.maxSegmentNumber();
 
-        this.bytes = new byte[maxSegmentNumber * 8];
+        this.bytes = new byte[maxSegmentNumber * 9];
         this.byteBuffer = ByteBuffer.wrap(bytes);
 
         for (int i = 0; i < FILL_RATIO_BUCKETS; i++) {
@@ -63,9 +60,13 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
      * @param initValueBytesLength The initial value length
      */
     public void set(int segmentIndex, int initValueBytesLength) {
-        var offset = segmentIndex * 8;
+        var offset = segmentIndex * 9;
+        var oldBucketIndex = byteBuffer.get(offset + 8);
+        fillRatioBucketArray[oldBucketIndex].removeIf(i -> i == segmentIndex);
+
         byteBuffer.putInt(offset, initValueBytesLength);
         byteBuffer.putInt(offset + 4, initValueBytesLength);
+        byteBuffer.put(offset + 8, (byte) (FILL_RATIO_BUCKETS - 1));
 
         // init fill ratio is 100%
         fillRatioBucketArray[FILL_RATIO_BUCKETS - 1].add(segmentIndex);
@@ -78,7 +79,7 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
      * @param valueBytesLength Removed value bytes length (Wal.V persist length)
      */
     public void remove(int segmentIndex, int valueBytesLength) {
-        var offset = segmentIndex * 8;
+        var offset = segmentIndex * 9;
         var initValueBytesLength = byteBuffer.getInt(offset);
         var oldValueBytesLength = byteBuffer.getInt(offset + 4);
         var newValueBytesLength = initValueBytesLength - valueBytesLength;
@@ -90,8 +91,10 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
         var oldIndex = oldFillRatio / 5;
         var newIndex = newFillRatio / 5;
 
-        fillRatioBucketArray[oldIndex].remove(segmentIndex);
+        fillRatioBucketArray[oldIndex].removeIf(i -> i == segmentIndex);
         fillRatioBucketArray[newIndex].add(segmentIndex);
+
+        byteBuffer.put(offset + 8, (byte) newIndex);
     }
 
     @Override
@@ -120,12 +123,14 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
             fillRatioBucket.clear();
         }
         for (int i = 0; i < maxSegmentNumber; i++) {
-            var offset = i * 8;
+            var offset = i * 9;
             var initValueBytesLength = byteBuffer.getInt(offset);
             var valueBytesLength = byteBuffer.getInt(offset + 4);
             if (initValueBytesLength != 0) {
                 var fillRatio = (valueBytesLength * 100) / initValueBytesLength;
                 var index = fillRatio / 5;
+                var bucketIndex = byteBuffer.get(offset + 8);
+                assert index == bucketIndex;
                 fillRatioBucketArray[index].add(i);
             }
         }

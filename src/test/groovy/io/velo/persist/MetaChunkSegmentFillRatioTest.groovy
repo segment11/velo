@@ -9,13 +9,14 @@ class MetaChunkSegmentFillRatioTest extends Specification {
         ConfForGlobal.pureMemory = true
         ConfForGlobal.pureMemoryV2 = true
 
-        def one = new MetaChunkSegmentFillRatio((short) 0)
+        def one = new MetaChunkSegmentFillRatio()
 
         when:
         one.set(0, 10000)
+        one.set(0, 20000)
         one.remove(0, 1000)
         then:
-        0 in one.fillRatioBucketArray[18]
+        0 in one.fillRatioBucketArray[19]
 
         when:
         one.estimate(new StringBuilder())
@@ -25,7 +26,7 @@ class MetaChunkSegmentFillRatioTest extends Specification {
         when:
         one.flush()
         then:
-        0 !in one.fillRatioBucketArray[18]
+        0 !in one.fillRatioBucketArray[19]
 
         cleanup:
         ConfForGlobal.pureMemory = false
@@ -37,7 +38,7 @@ class MetaChunkSegmentFillRatioTest extends Specification {
         ConfForGlobal.pureMemory = true
         ConfForGlobal.pureMemoryV2 = true
 
-        def one = new MetaChunkSegmentFillRatio((short) 0)
+        def one = new MetaChunkSegmentFillRatio()
 
         when:
         one.set(0, 10000)

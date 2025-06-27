@@ -88,14 +88,14 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
         if (ConfForGlobal.pureMemoryV2) {
             this.allKeyHashBuckets = new AllKeyHashBuckets(bucketsPerSlot, oneSlot);
-            this.metaChunkSegmentFillRatio = new MetaChunkSegmentFillRatio(slot);
+            this.metaChunkSegmentFillRatio = new MetaChunkSegmentFillRatio();
         }
     }
 
     @TestOnly
     void resetForPureMemoryV2() {
         this.allKeyHashBuckets = new AllKeyHashBuckets(bucketsPerSlot, oneSlot);
-        this.metaChunkSegmentFillRatio = new MetaChunkSegmentFillRatio(slot);
+        this.metaChunkSegmentFillRatio = new MetaChunkSegmentFillRatio();
     }
 
     /**
