@@ -21,7 +21,7 @@ class SegmentBatchTest extends Specification {
         segmentBatch.afterTightSegmentCountTotal = 1
         segmentBatch.collect()
 
-        println new SegmentBatch.SegmentCompressedBytesWithIndex(new byte[10], 0, 10L)
+        println new SegmentBatch.SegmentCompressedBytesWithIndex(new byte[10], 0, 10L, 100)
         new SegmentBatch2.ForDebugCvCallback().callback('a', new CompressedValue(), 0)
 
         and:

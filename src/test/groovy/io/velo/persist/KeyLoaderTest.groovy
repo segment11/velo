@@ -308,6 +308,7 @@ class KeyLoaderTest extends Specification {
 
         when:
         ConfForGlobal.pureMemoryV2 = true
+        keyLoader.resetForPureMemoryV2()
         expireAt = keyLoader.getExpireAt(0, 'a'.bytes, 10L, 10)
         expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(0, 'a'.bytes, 10L, 10)
         valueBytesX = keyLoader.getValueXByKey(0, 'a'.bytes, 10L, 10)
@@ -425,6 +426,8 @@ class KeyLoaderTest extends Specification {
 
         when:
         ConfForGlobal.pureMemory = true
+        ConfForGlobal.pureMemoryV2 = true
+        keyLoader.resetForPureMemoryV2()
         def walGroupNumber = Wal.calcWalGroupNumber()
         def splitNumberArray = new byte[oneChargeBucketNumber]
         splitNumberArray[0] = (byte) 3
@@ -448,6 +451,7 @@ class KeyLoaderTest extends Specification {
 
         cleanup:
         ConfForGlobal.pureMemory = false
+        ConfForGlobal.pureMemoryV2 = false
         keyLoader.flush()
         keyLoader.cleanUp()
     }
@@ -639,6 +643,7 @@ class KeyLoaderTest extends Specification {
 
         when:
         ConfForGlobal.pureMemoryV2 = true
+        keyLoader.resetForPureMemoryV2()
         keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog, null)
         then:
         1 == 1

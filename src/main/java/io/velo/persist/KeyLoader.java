@@ -85,7 +85,16 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             }
         };
 
+        if (ConfForGlobal.pureMemoryV2) {
+            this.allKeyHashBuckets = new AllKeyHashBuckets(bucketsPerSlot, oneSlot);
+            this.metaChunkSegmentFillRatio = new MetaChunkSegmentFillRatio(slot);
+        }
+    }
+
+    @TestOnly
+    void resetForPureMemoryV2() {
         this.allKeyHashBuckets = new AllKeyHashBuckets(bucketsPerSlot, oneSlot);
+        this.metaChunkSegmentFillRatio = new MetaChunkSegmentFillRatio(slot);
     }
 
     /**
@@ -114,8 +123,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         size += metaOneWalGroupSeq.estimate(sb);
         size += statKeyCountInBuckets.estimate(sb);
 
-        size += allKeyHashBuckets.estimate(sb);
-        if (!ConfForGlobal.pureMemoryV2) {
+        if (ConfForGlobal.pureMemoryV2) {
+            size += allKeyHashBuckets.estimate(sb);
+            size += metaChunkSegmentFillRatio.estimate(sb);
+        } else {
             for (var fdReadWrite : fdReadWriteArray) {
                 if (fdReadWrite != null) {
                     size += fdReadWrite.estimate(sb);
@@ -177,6 +188,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
         if (ConfForGlobal.pureMemoryV2) {
             allKeyHashBuckets.loadFromLastSavedFileWhenPureMemory(is);
+            metaChunkSegmentFillRatio.loadFromLastSavedFileWhenPureMemory(is);
         } else {
             // fd read write
             var fdCount = is.readInt();
@@ -209,6 +221,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
         if (ConfForGlobal.pureMemoryV2) {
             allKeyHashBuckets.writeToSavedFileWhenPureMemory(os);
+            metaChunkSegmentFillRatio.writeToSavedFileWhenPureMemory(os);
         } else {
             int fdCount = 0;
             for (var fdReadWrite : fdReadWriteArray) {
@@ -407,7 +420,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * The all key hash buckets manager for pure memory mode v2.
      */
     @VisibleForTesting
-    final AllKeyHashBuckets allKeyHashBuckets;
+    AllKeyHashBuckets allKeyHashBuckets;
+
+    /**
+     * The meta chunk segment fill ratio manager, for memory gc.
+     */
+    @VisibleForTesting
+    MetaChunkSegmentFillRatio metaChunkSegmentFillRatio;
 
     /**
      * The logger for this class.
@@ -1020,7 +1039,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     void putValueByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32, long expireAt, long seq, byte[] valueBytes) {
         if (ConfForGlobal.pureMemoryV2) {
             // seq as record id
-            allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, seq, typeAsByteIgnore, seq);
+            var putR = allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, seq, (short) valueBytes.length, typeAsByteIgnore, seq);
+            if (putR.isExists()) {
+                metaChunkSegmentFillRatio.remove(putR.segmentIndex(), putR.oldValueBytesLength());
+            }
             allKeyHashBuckets.putLocalValue(seq, valueBytes);
             return;
         }
@@ -1211,7 +1233,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
                     for (var pvm : pvmListThisBucket) {
                         var recordId = AllKeyHashBuckets.pvmToRecordId(pvm);
-                        allKeyHashBuckets.put(pvm.keyHash32, bucketIndex, pvm.expireAt, pvm.seq, pvm.shortType, recordId);
+                        var putR = allKeyHashBuckets.put(pvm.keyHash32, bucketIndex, pvm.expireAt, pvm.seq, pvm.valueBytesLength, pvm.shortType, recordId);
+                        if (putR.isExists()) {
+                            metaChunkSegmentFillRatio.remove(putR.segmentIndex(), putR.oldValueBytesLength());
+                        }
 
                         dataOs.writeInt(pvm.keyHash32);
                         dataOs.writeLong(pvm.expireAt);
@@ -1282,8 +1307,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 var shortType = buffer.get();
                 var recordId = buffer.getLong();
                 var seq = buffer.getLong();
+                var valueBytesLength = buffer.getInt();
 
-                allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, seq, shortType, recordId);
+                var putR = allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, seq, valueBytesLength, shortType, recordId);
+                if (putR.isExists()) {
+                    metaChunkSegmentFillRatio.remove(putR.segmentIndex(), putR.oldValueBytesLength());
+                }
             }
             n += recordSize;
         }
@@ -1338,7 +1367,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     @TestOnly
     boolean removeSingleKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
         if (ConfForGlobal.pureMemoryV2) {
-            return allKeyHashBuckets.remove(keyHash32, bucketIndex);
+            var removeR = allKeyHashBuckets.remove(keyHash32, bucketIndex);
+            if (removeR.isExists()) {
+                metaChunkSegmentFillRatio.remove(removeR.segmentIndex(), removeR.oldValueBytesLength());
+            }
+            return removeR.isExists();
         }
 
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
@@ -1369,6 +1402,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
         if (ConfForGlobal.pureMemoryV2) {
             allKeyHashBuckets.flush();
+            metaChunkSegmentFillRatio.flush();
         } else {
             for (int splitIndex = 0; splitIndex < MAX_SPLIT_NUMBER; splitIndex++) {
                 if (fdReadWriteArray.length <= splitIndex) {
@@ -1394,6 +1428,14 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
         map.put("key_loader_bucket_count", (double) bucketsPerSlot);
         map.put("persist_key_count", (double) getKeyCount());
+
+        if (ConfForGlobal.pureMemoryV2) {
+            // chunk segment fill ratio
+            for (int i = 0; i < MetaChunkSegmentFillRatio.FILL_RATIO_BUCKETS; i++) {
+                var list = metaChunkSegmentFillRatio.fillRatioBucketArray[i];
+                map.put("chunk_segment_fill_ratio_percent_" + ((i + 1) * 5), (double) list.size());
+            }
+        }
 
         var diskUsage = 0L;
         if (fdReadWriteArray != null) {

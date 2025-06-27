@@ -81,13 +81,14 @@ public class SegmentBatch2 implements InSlotMetricCollector {
      * Represents a segment with its byte data, an index, and a sequence number.
      */
     @VisibleForTesting
-    record SegmentBytesWithIndex(byte[] segmentBytes, int tmpSegmentIndex, long segmentSeq) {
+    record SegmentBytesWithIndex(byte[] segmentBytes, int tmpSegmentIndex, long segmentSeq, int valueBytesLength) {
         @Override
         public @NotNull String toString() {
             return "SegmentCompressedBytesWithIndex{" +
                     "tmpSegmentIndex=" + tmpSegmentIndex +
                     ", segmentSeq=" + segmentSeq +
                     ", segmentBytes.length=" + segmentBytes.length +
+                    ", valueBytesLength=" + valueBytesLength +
                     '}';
         }
     }
@@ -150,7 +151,11 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         buffer.clear();
         Arrays.fill(bytes, (byte) 0);
 
-        return new SegmentBytesWithIndex(copyBytes, tmpSegmentIndex, segmentSeq);
+        var valueBytesLength = 0;
+        for (var pvm : returnPvmList) {
+            valueBytesLength += pvm.valueBytesLength;
+        }
+        return new SegmentBytesWithIndex(copyBytes, tmpSegmentIndex, segmentSeq, valueBytesLength);
     }
 
     /**
@@ -161,12 +166,13 @@ public class SegmentBatch2 implements InSlotMetricCollector {
      * @param returnPvmList   A list to store metadata about the persisted values.
      * @param tmpSegmentIndex The temporary segment index.
      * @param segmentSeq      The segment sequence number.
+     * @return Value bytes total length
      */
-    static void encodeToBuffer(@NotNull ArrayList<Wal.V> list,
-                               @NotNull ByteBuffer buffer,
-                               @NotNull ArrayList<PersistValueMeta> returnPvmList,
-                               int tmpSegmentIndex,
-                               long segmentSeq) {
+    static int encodeToBuffer(@NotNull ArrayList<Wal.V> list,
+                              @NotNull ByteBuffer buffer,
+                              @NotNull ArrayList<PersistValueMeta> returnPvmList,
+                              int tmpSegmentIndex,
+                              long segmentSeq) {
         // only use key bytes hash to calculate crc
         var crcCalBytes = new byte[8 * list.size()];
         var crcCalBuffer = ByteBuffer.wrap(crcCalBytes);
@@ -180,7 +186,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         buffer.putInt(0);
 
         int offsetInThisSegment = SEGMENT_HEADER_LENGTH;
-
+        var valueBytesLengthTotal = 0;
         for (var v : list) {
             crcCalBuffer.putLong(v.keyHash());
 
@@ -207,9 +213,11 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             pvm.segmentOffset = offsetInThisSegment;
             pvm.expireAt = v.expireAt();
             pvm.seq = v.seq();
+            pvm.valueBytesLength = length;
             returnPvmList.add(pvm);
 
             offsetInThisSegment += length;
+            valueBytesLengthTotal += length;
         }
 
         if (buffer.remaining() >= 2) {
@@ -222,6 +230,8 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         // refer to SEGMENT_HEADER_LENGTH definition
         // seq long + segment type byte + cv number int + crc int
         buffer.putInt(8 + 1 + 4, segmentCrc32);
+
+        return valueBytesLengthTotal;
     }
 
     /**

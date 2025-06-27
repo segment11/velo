@@ -72,6 +72,11 @@ public class PersistValueMeta {
     long seq;
 
     /**
+     * The length of the value bytes being stored.
+     */
+    int valueBytesLength;
+
+    /**
      * The byte representation of the key associated with this value.
      * Used for efficient lookups and comparisons.
      */

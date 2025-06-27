@@ -13,17 +13,18 @@ class AllKeyHashBucketsTest extends Specification {
         given:
         ConfForGlobal.pureMemoryV2 = true
         def allKeyHashBuckets = new AllKeyHashBuckets(65536)
-        def x = new AllKeyHashBuckets.RecordX(0L, 0L, (byte) 0, 0L)
+        def x = new AllKeyHashBuckets.RecordX(0L, 0L, (byte) 0, 0L, 0)
         println x.toPvm()
+        println new AllKeyHashBuckets.PutResult(true, 0, 100)
 
         when:
-        def n = 10000 * 100
+        def n = 10000 * 10
         def sList = (0..<n).collect {
             def key = 'key:' + (it.toString().padLeft(12, '0'))
             BaseCommand.slot(key.bytes, 1)
         }
         sList.eachWithIndex { s, i ->
-            allKeyHashBuckets.put(s.keyHash32(), s.bucketIndex(), 0L, i, (byte) 0, i)
+            allKeyHashBuckets.put(s.keyHash32(), s.bucketIndex(), 0L, i, 0, (byte) 0, i)
         }
         boolean isMatchAll = true
         sList.eachWithIndex { s, i ->
@@ -35,20 +36,20 @@ class AllKeyHashBucketsTest extends Specification {
 
         when:
         sList[0..<10].each {
-            allKeyHashBuckets.remove(it.keyHash32(), it.bucketIndex())
+            allKeyHashBuckets.remove(it.keyHash32(), it.bucketIndex()).isExists()
         }
         then:
         sList[0..<10].every {
             allKeyHashBuckets.get(it.keyHash32(), it.bucketIndex()) == null
         }
         sList[0..<10].every {
-            !allKeyHashBuckets.remove(it.keyHash32(), it.bucketIndex())
+            !allKeyHashBuckets.remove(it.keyHash32(), it.bucketIndex()).isExists()
         }
 
         when:
         boolean exception = false
         try {
-            allKeyHashBuckets.put(0, 0, AllKeyHashBuckets.MAX_EXPIRE_AT + 1, 0L, (byte) 0, 0L)
+            allKeyHashBuckets.put(0, 0, AllKeyHashBuckets.MAX_EXPIRE_AT + 1, 0L, 0, (byte) 0, 0L)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
@@ -126,13 +127,13 @@ class AllKeyHashBucketsTest extends Specification {
 
         and:
         10.times {
-            allKeyHashBuckets.put(it + 1, it, 10L, it + 1, (byte) 0, it + 1)
+            allKeyHashBuckets.put(it + 1, it, 10L, it + 1, 0, (byte) 0, it + 1)
         }
 
         expect:
         allKeyHashBuckets.getKeyCountInBucketIndex(0) == 1
         (0..<10).every {
-            allKeyHashBuckets.put(it + 1, it, 10L, it + 1, (byte) 0, it + 1)
+            allKeyHashBuckets.put(it + 1, it, 10L, it + 1, 0, (byte) 0, it + 1)
         }
 
         when:

@@ -18,7 +18,7 @@ class SegmentBatch2Test extends Specification {
         segmentBatch2.batchCountTotal = 1
         segmentBatch2.collect()
 
-        println new SegmentBatch2.SegmentBytesWithIndex(new byte[10], 0, 10L)
+        println new SegmentBatch2.SegmentBytesWithIndex(new byte[10], 0, 10L, 0)
         new SegmentBatch2.ForDebugCvCallback().callback('a', new CompressedValue(), 0)
 
         and:

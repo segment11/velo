@@ -572,6 +572,10 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                 var bytes = segment.segmentBytes();
                 fdReadWrite.writeOneInner(targetSegmentIndexTargetFd(targetSegmentIndex), bytes, false);
 
+                if (ConfForGlobal.pureMemoryV2) {
+                    keyLoader.metaChunkSegmentFillRatio.set(targetSegmentIndex, segment.valueBytesLength());
+                }
+
                 xForBinlog.putUpdatedChunkSegmentBytes(targetSegmentIndex, bytes);
                 xForBinlog.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex,
                         isNewAppendAfterBatch ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
