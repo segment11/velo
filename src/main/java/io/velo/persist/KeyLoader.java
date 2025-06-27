@@ -11,6 +11,7 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -425,13 +426,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * The meta chunk segment fill ratio manager, for memory gc.
      */
-    @VisibleForTesting
     MetaChunkSegmentFillRatio metaChunkSegmentFillRatio;
 
     /**
      * The logger for this class.
      */
-    private static final Logger log = org.slf4j.LoggerFactory.getLogger(KeyLoader.class);
+    private static final Logger log = LoggerFactory.getLogger(KeyLoader.class);
 
     /**
      * The stat key count in buckets manager.

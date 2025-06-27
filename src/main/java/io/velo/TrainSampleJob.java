@@ -4,6 +4,7 @@ import com.github.luben.zstd.ZstdDictTrainer;
 import com.github.luben.zstd.ZstdException;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,7 +39,7 @@ public class TrainSampleJob {
     /**
      * Logger for logging information and errors.
      */
-    private static final Logger log = org.slf4j.LoggerFactory.getLogger(TrainSampleJob.class);
+    private static final Logger log = LoggerFactory.getLogger(TrainSampleJob.class);
 
     /**
      * The minimum number of samples required to start training a dictionary.

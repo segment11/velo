@@ -255,8 +255,8 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
         return null;
     }
 
-    public PutResult remove(int keyHash32, int bucketIndex) {
-        return put(keyHash32, bucketIndex, CompressedValue.EXPIRE_NOW, 0L, (short) 0, KeyLoader.typeAsByteIgnore, NO_RECORD_ID);
+    PutResult remove(int keyHash32, int bucketIndex) {
+        return put(keyHash32, bucketIndex, CompressedValue.EXPIRE_NOW, 0L, 0, KeyLoader.typeAsByteIgnore, NO_RECORD_ID);
     }
 
     @TestOnly
@@ -297,7 +297,7 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
         }
     }
 
-    public PutResult put(int keyHash32, int bucketIndex, long expireAt, long seq, int valueBytesLength, byte shortType, long recordId) {
+    PutResult put(int keyHash32, int bucketIndex, long expireAt, long seq, int valueBytesLength, byte shortType, long recordId) {
         if (expireAt > MAX_EXPIRE_AT) {
             throw new IllegalArgumentException("Expire at is too large");
         }
