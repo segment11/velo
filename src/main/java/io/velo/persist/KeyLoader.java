@@ -1436,8 +1436,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         if (ConfForGlobal.pureMemoryV2) {
             // chunk segment fill ratio
             for (int i = 0; i < MetaChunkSegmentFillRatio.FILL_RATIO_BUCKETS; i++) {
-                var list = metaChunkSegmentFillRatio.fillRatioBucketArray[i];
-                map.put("chunk_segment_fill_ratio_percent_" + ((i + 1) * 5), (double) list.size());
+                map.put("chunk_segment_fill_ratio_percent_" + ((i + 1) * 5), (double) metaChunkSegmentFillRatio.fillRatioBucketSegmentCount[i]);
             }
         }
 

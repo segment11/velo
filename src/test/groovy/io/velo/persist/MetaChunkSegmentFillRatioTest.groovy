@@ -16,7 +16,8 @@ class MetaChunkSegmentFillRatioTest extends Specification {
         one.set(0, 20000)
         one.remove(0, 1000)
         then:
-        0 in one.fillRatioBucketArray[19]
+        one.findSegmentsFillRatioLessThan(0, 10, 20) == [0]
+        one.fillRatioBucketSegmentCount[19] == 1
 
         when:
         one.estimate(new StringBuilder())
@@ -26,7 +27,8 @@ class MetaChunkSegmentFillRatioTest extends Specification {
         when:
         one.flush()
         then:
-        0 !in one.fillRatioBucketArray[19]
+        one.findSegmentsFillRatioLessThan(0, 10, 20).isEmpty()
+        one.fillRatioBucketSegmentCount[19] == 0
 
         cleanup:
         ConfForGlobal.pureMemory = false
@@ -49,7 +51,8 @@ class MetaChunkSegmentFillRatioTest extends Specification {
         def is = new DataInputStream(bis)
         one.loadFromLastSavedFileWhenPureMemory(is)
         then:
-        0 in one.fillRatioBucketArray[20]
+        one.findSegmentsFillRatioLessThan(0, 10, 21) == [0]
+        one.fillRatioBucketSegmentCount[20] == 1
 
         cleanup:
         ConfForGlobal.pureMemory = false

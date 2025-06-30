@@ -28,16 +28,18 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
      */
     void flush() {
         Arrays.fill(bytes, (byte) 0);
-        for (var fillRatioBucket : fillRatioBucketArray) {
-            fillRatioBucket.clear();
-        }
+        Arrays.fill(fillRatioBucketSegmentCount, 0);
     }
 
     /**
      * By value length fill ratio, every 5% is a bucket. index is 0 - 20
      */
     static final int FILL_RATIO_BUCKETS = 100 / 5 + 1;
-    final LinkedList<Integer>[] fillRatioBucketArray = new LinkedList[FILL_RATIO_BUCKETS];
+
+    /**
+     * For metrics.
+     */
+    final int[] fillRatioBucketSegmentCount = new int[FILL_RATIO_BUCKETS];
 
     /**
      * Constructs a new MetaChunkSegmentFillRatio instance for a given slot.
@@ -47,10 +49,6 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
 
         this.bytes = new byte[maxSegmentNumber * 9];
         this.byteBuffer = ByteBuffer.wrap(bytes);
-
-        for (int i = 0; i < FILL_RATIO_BUCKETS; i++) {
-            this.fillRatioBucketArray[i] = new LinkedList<>();
-        }
     }
 
     /**
@@ -61,15 +59,17 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
      */
     public void set(int segmentIndex, int initValueBytesLength) {
         var offset = segmentIndex * 9;
-        var oldBucketIndex = byteBuffer.get(offset + 8);
-        fillRatioBucketArray[oldBucketIndex].removeIf(i -> i == segmentIndex);
+
+        var oldInitValueBytesLength = byteBuffer.getInt(offset);
+        if (oldInitValueBytesLength != 0) {
+            var oldFillRatioBucket = byteBuffer.get(offset + 8);
+            fillRatioBucketSegmentCount[oldFillRatioBucket]--;
+        }
 
         byteBuffer.putInt(offset, initValueBytesLength);
         byteBuffer.putInt(offset + 4, initValueBytesLength);
         byteBuffer.put(offset + 8, (byte) (FILL_RATIO_BUCKETS - 1));
-
-        // init fill ratio is 100%
-        fillRatioBucketArray[FILL_RATIO_BUCKETS - 1].add(segmentIndex);
+        fillRatioBucketSegmentCount[FILL_RATIO_BUCKETS - 1]++;
     }
 
     /**
@@ -81,26 +81,54 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
     public void remove(int segmentIndex, int valueBytesLength) {
         var offset = segmentIndex * 9;
         var initValueBytesLength = byteBuffer.getInt(offset);
+        assert initValueBytesLength != 0;
         var oldValueBytesLength = byteBuffer.getInt(offset + 4);
-        var newValueBytesLength = initValueBytesLength - valueBytesLength;
+        var newValueBytesLength = oldValueBytesLength - valueBytesLength;
+        assert newValueBytesLength >= 0;
         byteBuffer.putInt(offset + 4, newValueBytesLength);
 
         var oldFillRatio = (oldValueBytesLength * 100) / initValueBytesLength;
-        var newFillRatio = (newValueBytesLength * 100) / initValueBytesLength;
+        var fillRatio = (newValueBytesLength * 100) / initValueBytesLength;
 
-        var oldIndex = oldFillRatio / 5;
-        var newIndex = newFillRatio / 5;
+        var oldFillRatioBucket = oldFillRatio / 5;
+        var fillRatioBucket = fillRatio / 5;
+        byteBuffer.put(offset + 8, (byte) fillRatioBucket);
 
-        fillRatioBucketArray[oldIndex].removeIf(i -> i == segmentIndex);
-        fillRatioBucketArray[newIndex].add(segmentIndex);
+        if (oldFillRatioBucket != fillRatioBucket) {
+            fillRatioBucketSegmentCount[oldFillRatioBucket]--;
+            fillRatioBucketSegmentCount[fillRatioBucket]++;
+        }
+    }
 
-        byteBuffer.put(offset + 8, (byte) newIndex);
+    /**
+     * Find segments index those fill ratio less than given fill ratio.
+     *
+     * @param beginSegmentIndex      Begin segment index
+     * @param segmentCount           Segment count
+     * @param fillRatioBucketCompare Fill ratio bucket compare
+     * @return segments index list
+     */
+    public LinkedList<Integer> findSegmentsFillRatioLessThan(int beginSegmentIndex, int segmentCount, int fillRatioBucketCompare) {
+        LinkedList<Integer> list = new LinkedList<>();
+        for (int i = beginSegmentIndex; i < beginSegmentIndex + segmentCount; i++) {
+            var offset = i * 9;
+            var initValueBytesLength = byteBuffer.getInt(offset);
+            if (initValueBytesLength == 0) {
+                continue;
+            }
+
+            var fillRatioBucket = byteBuffer.get(offset + 8);
+            if (fillRatioBucket < fillRatioBucketCompare) {
+                list.add(i);
+            }
+        }
+        return list;
     }
 
     @Override
     public long estimate(@NotNull StringBuilder sb) {
         // linked list node object header 16B
-        long size = (8L + 16) * maxSegmentNumber;
+        long size = 9L * maxSegmentNumber;
         sb.append("Meta chunk segment fill ratio: ").append(size).append("\n");
         return size;
     }
@@ -118,21 +146,21 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
         assert bytesLength == bytes.length;
         is.readFully(bytes);
 
-        // re-calc each segment fill ratio
-        for (var fillRatioBucket : fillRatioBucketArray) {
-            fillRatioBucket.clear();
-        }
+        // re-calc each segment fill ratio for metrics
+        Arrays.fill(fillRatioBucketSegmentCount, 0);
         for (int i = 0; i < maxSegmentNumber; i++) {
             var offset = i * 9;
             var initValueBytesLength = byteBuffer.getInt(offset);
             var valueBytesLength = byteBuffer.getInt(offset + 4);
-            if (initValueBytesLength != 0) {
-                var fillRatio = (valueBytesLength * 100) / initValueBytesLength;
-                var index = fillRatio / 5;
-                var bucketIndex = byteBuffer.get(offset + 8);
-                assert index == bucketIndex;
-                fillRatioBucketArray[index].add(i);
+            if (initValueBytesLength == 0) {
+                continue;
             }
+
+            var fillRatio = (valueBytesLength * 100) / initValueBytesLength;
+            var fillRatioBucket = fillRatio / 5;
+            var savedFillRatioBucket = byteBuffer.get(offset + 8);
+            assert fillRatioBucket == savedFillRatioBucket;
+            fillRatioBucketSegmentCount[fillRatioBucket]++;
         }
     }
 
