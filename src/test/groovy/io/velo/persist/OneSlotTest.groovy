@@ -824,7 +824,8 @@ class OneSlotTest extends Specification {
         SegmentBatch2.readToCvList(cvList, segmentBytes, 0, segmentBytes.length, testPvm2.segmentIndex, slot)
         ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> validCvList = []
         validCvList << cvList[0]
-        def encodedSlim = SegmentBatch2.encodeValidCvListSlim(validCvList)
+        def encodedSlimX = SegmentBatch2.encodeValidCvListSlim(validCvList)
+        def encodedSlim = encodedSlimX.bytes()
         chunk.writeSegmentToTargetSegmentIndex(encodedSlim, testPvm2.segmentIndex)
         keyBytes2 = oneSlot.getOnlyKeyBytesFromSegment(testPvm2)
         then:
@@ -1167,8 +1168,9 @@ class OneSlotTest extends Specification {
         }
         // do check, persist begin segment index 2
         oneSlot.checkAndSaveMemory(2)
+        def segmentBytes = chunk.preadOneSegment(2)
         then:
-        SegmentBatch2.isSegmentBytesSlim(chunk.preadOneSegment(2), 0)
+        SegmentBatch2.isSegmentBytesSlim(segmentBytes, 0) || SegmentBatch2.isSegmentBytesSlimAndCompressed(segmentBytes, 0)
 
         when:
         // mock all values invalid

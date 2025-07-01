@@ -12,7 +12,7 @@ import java.nio.ByteBuffer
 class XChunkSegmentSlimUpdateTest extends Specification {
     def 'test encode and decode'() {
         given:
-        def x = new XChunkSegmentSlimUpdate(0, new byte[4096])
+        def x = new XChunkSegmentSlimUpdate(0, 4000, new byte[4096])
 
         expect:
         x.type() == BinlogContent.Type.chunk_segment_slim_update

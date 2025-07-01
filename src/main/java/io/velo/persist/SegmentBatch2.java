@@ -428,17 +428,21 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         return null;
     }
 
+    record EncodedSlimBytesAndValueBytesLength(byte[] bytes, int valueBytesLength) {
+    }
+
     /**
      * Encodes a list of valid CV entries into a SLIM segment format.
      * Probe liner encode and search. Do zstd compressed if needed.
      *
      * @param invalidCvList The list of CvWithKeyAndSegmentOffset objects to encode.
-     * @return A byte array representing the encoded SLIM segment, or null if the encoded size exceeds the segment length limit.
+     * @return A byte array representing the encoded SLIM segment + value bytes length total, or null if the encoded size exceeds the segment length limit.
      */
-    static byte[] encodeValidCvListSlim(List<CvWithKeyAndSegmentOffset> invalidCvList) {
+    static EncodedSlimBytesAndValueBytesLength encodeValidCvListSlim(List<CvWithKeyAndSegmentOffset> invalidCvList) {
         var lastOneSeqAsSegmentSeq = invalidCvList.getLast().cv.getSeq();
         int bytesLengthN = SEGMENT_HEADER_LENGTH;
 
+        var valueBytesLength = 0;
         for (var one : invalidCvList) {
             var keyLength = one.key.length();
             var cvEncodedLength = one.cv.encodedLength();
@@ -446,6 +450,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             // 1 byte for sub block index, 4 bytes for segment offset
             // 2 bytes for key length, key bytes, 4 bytes for cv encoded length, cv encoded bytes
             bytesLengthN += 1 + 4 + 2 + keyLength + 4 + cvEncodedLength;
+            valueBytesLength += 2 + keyLength + cvEncodedLength;
         }
 
         // when after encoded is bigger, need not merged at all
@@ -502,9 +507,9 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             buffer2.put(Chunk.SegmentType.SLIM_AND_COMPRESSED.val);
 
             buffer2.put(SEGMENT_HEADER_LENGTH, compressedBytes);
-            return bytes2;
+            return new EncodedSlimBytesAndValueBytesLength(bytes2, valueBytesLength);
         } else {
-            return bytes;
+            return new EncodedSlimBytesAndValueBytesLength(bytes, valueBytesLength);
         }
     }
 

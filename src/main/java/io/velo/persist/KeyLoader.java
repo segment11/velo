@@ -432,6 +432,15 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     MetaChunkSegmentFillRatio metaChunkSegmentFillRatio;
 
     /**
+     * Get the meta chunk segment fill ratio manager, for memory gc.
+     *
+     * @return the meta chunk segment fill ratio manager.
+     */
+    public MetaChunkSegmentFillRatio getMetaChunkSegmentFillRatio() {
+        return metaChunkSegmentFillRatio;
+    }
+
+    /**
      * The logger for this class.
      */
     private static final Logger log = LoggerFactory.getLogger(KeyLoader.class);

@@ -1,5 +1,6 @@
 package io.velo.repl.incremental;
 
+import io.velo.ConfForGlobal;
 import io.velo.persist.LocalPersist;
 import io.velo.repl.BinlogContent;
 import io.velo.repl.ReplPair;
@@ -13,17 +14,20 @@ import java.nio.ByteBuffer;
  */
 public class XChunkSegmentSlimUpdate implements BinlogContent {
     private final int segmentIndex;
+    private final int valueBytesLength;
     private final byte[] segmentBytesSlim;
 
     /**
      * Constructs a new XChunkSegmentSlimUpdate object with the specified segment index and slim segment bytes.
      *
      * @param segmentIndex     The index of the segment to update.
+     * @param valueBytesLength The value bytes length for fill ratio calc, for pure memory v2.
      * @param segmentBytesSlim The byte array representing the slim segment.
      */
-    public XChunkSegmentSlimUpdate(int segmentIndex, byte[] segmentBytesSlim) {
+    public XChunkSegmentSlimUpdate(int segmentIndex, int valueBytesLength, byte[] segmentBytesSlim) {
         this.segmentIndex = segmentIndex;
         this.segmentBytesSlim = segmentBytesSlim;
+        this.valueBytesLength = valueBytesLength;
     }
 
     /**
@@ -43,8 +47,8 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
      */
     @Override
     public int encodedLength() {
-        // 1 byte for type, 4 bytes for segment index int, 4 bytes for encoded length for check
-        return 1 + 4 + 4 + segmentBytesSlim.length;
+        // 1 byte for type, 4 bytes for segment index int, 4 bytes for value bytes length, 4 bytes for encoded length for check
+        return 1 + 4 + 4 + 4 + segmentBytesSlim.length;
     }
 
     /**
@@ -59,6 +63,7 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
 
         buffer.put(type().code());
         buffer.putInt(segmentIndex);
+        buffer.putInt(valueBytesLength);
         buffer.putInt(segmentBytesSlim.length);
         buffer.put(segmentBytesSlim);
         return bytes;
@@ -73,10 +78,11 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
     public static XChunkSegmentSlimUpdate decodeFrom(ByteBuffer buffer) {
         // already read type byte
         var segmentIndex = buffer.getInt();
+        var valueBytesLength = buffer.getInt();
         var encodedLength = buffer.getInt();
         var bb = new byte[encodedLength];
         buffer.get(bb);
-        return new XChunkSegmentSlimUpdate(segmentIndex, bb);
+        return new XChunkSegmentSlimUpdate(segmentIndex, valueBytesLength, bb);
     }
 
     private final LocalPersist localPersist = LocalPersist.getInstance();
@@ -95,5 +101,9 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
 
         var oneSlot = localPersist.oneSlot(slot);
         oneSlot.getChunk().writeSegmentsFromMasterExistsOrAfterSegmentSlim(segmentBytesSlim, segmentIndex, 1, segmentRealLengths);
+
+        if (ConfForGlobal.pureMemoryV2) {
+            oneSlot.getKeyLoader().getMetaChunkSegmentFillRatio().set(segmentIndex, valueBytesLength);
+        }
     }
 }

@@ -114,7 +114,8 @@ class SegmentBatch2Test extends Specification {
         }
         println invalidCvList[0].toString()
         println invalidCvList[0].shortString()
-        def segmentBytesSlim = SegmentBatch2.encodeValidCvListSlim(invalidCvList)
+        def segmentBytesSlimX = SegmentBatch2.encodeValidCvListSlim(invalidCvList)
+        def segmentBytesSlim = segmentBytesSlimX.bytes()
         then:
         SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytesSlim, (byte) 0, 0).keyBytes() == vList[0].key().bytes
         SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytesSlim, (byte) 0, 1).valueBytes() == vList[1].cvEncoded()
@@ -131,9 +132,9 @@ class SegmentBatch2Test extends Specification {
         for (cv in cvListMany) {
             invalidCvListMany << new SegmentBatch2.CvWithKeyAndSegmentOffset(cv, 'key:' + cv.seq, (int) cv.seq, 0, (byte) 0)
         }
-        def segmentBytesSlim2 = SegmentBatch2.encodeValidCvListSlim(invalidCvListMany)
+        def segmentBytesSlimX2 = SegmentBatch2.encodeValidCvListSlim(invalidCvListMany)
         then:
-        segmentBytesSlim2 == null
+        segmentBytesSlimX2 == null
     }
 
     def 'test read tight segment'() {

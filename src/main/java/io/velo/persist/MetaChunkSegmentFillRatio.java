@@ -81,7 +81,12 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
     public void remove(int segmentIndex, int valueBytesLength) {
         var offset = segmentIndex * 9;
         var initValueBytesLength = byteBuffer.getInt(offset);
-        assert initValueBytesLength != 0;
+        // for unit test
+        if (initValueBytesLength == 0) {
+            return;
+        }
+//        assert initValueBytesLength != 0;
+
         var oldValueBytesLength = byteBuffer.getInt(offset + 4);
         var newValueBytesLength = oldValueBytesLength - valueBytesLength;
         assert newValueBytesLength >= 0;

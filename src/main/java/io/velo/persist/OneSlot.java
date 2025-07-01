@@ -2688,18 +2688,19 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (invalidRate > invalidMergedTriggerRate) {
             var validCvList = cvList.stream().filter(one -> !invalidCvList.contains(one)).toList();
             // new segment with slim type may be bigger than old if segment type is tight
-            var encodedSlim = SegmentBatch2.encodeValidCvListSlim(validCvList);
-            if (encodedSlim != null) {
+            var encodedSlimX = SegmentBatch2.encodeValidCvListSlim(validCvList);
+            if (encodedSlimX != null) {
                 var segmentRealLengths = new int[1];
-                segmentRealLengths[0] = encodedSlim.length;
-                chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(encodedSlim, targetSegmentIndex, 1, segmentRealLengths);
-                keyLoader.metaChunkSegmentFillRatio.set(targetSegmentIndex, encodedSlim.length);
+                var encodedSlimBytes = encodedSlimX.bytes();
+                segmentRealLengths[0] = encodedSlimBytes.length;
+                chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(encodedSlimBytes, targetSegmentIndex, 1, segmentRealLengths);
+                keyLoader.metaChunkSegmentFillRatio.set(targetSegmentIndex, encodedSlimX.valueBytesLength());
 
-                var xChunkSegmentSlimUpdate = new XChunkSegmentSlimUpdate(targetSegmentIndex, encodedSlim);
+                var xChunkSegmentSlimUpdate = new XChunkSegmentSlimUpdate(targetSegmentIndex, encodedSlimX.valueBytesLength(), encodedSlimBytes);
                 appendBinlog(xChunkSegmentSlimUpdate);
 
                 saveMemoryExecuteTotal++;
-                saveMemoryBytesTotal += (segmentBytes.length - encodedSlim.length);
+                saveMemoryBytesTotal += (segmentBytes.length - encodedSlimBytes.length);
             }
         }
     }
