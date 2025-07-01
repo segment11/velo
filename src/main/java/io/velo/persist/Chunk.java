@@ -50,7 +50,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     enum SegmentType {
         NORMAL((byte) 0),
         TIGHT((byte) 1),
-        SLIM((byte) 2);
+        SLIM((byte) 2),
+        SLIM_AND_COMPRESSED((byte) 3);
 
         final byte val;
 
@@ -341,6 +342,22 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
         var fdReadWrite = fdReadWriteArray[fdIndex];
         return fdReadWrite.readBatchForRepl(segmentIndexTargetFd);
+    }
+
+    /**
+     * Get the real length of a segment in the chunk.
+     * When pure memory mode, one segment bytes may change during gc.
+     *
+     * @param targetSegmentIndex the segment index
+     * @return the real length of the segment
+     */
+    public int getSegmentRealLength(int targetSegmentIndex) {
+        var fdIndex = targetFdIndex(targetSegmentIndex);
+        var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
+
+        var fdReadWrite = fdReadWriteArray[fdIndex];
+        var segmentBytes = fdReadWrite.allBytesBySegmentIndexForOneChunkFd[segmentIndexTargetFd];
+        return segmentBytes == null ? 0 : segmentBytes.length;
     }
 
     /**
@@ -784,12 +801,13 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * This method writes the provided bytes to the specified segment index. It supports writing multiple segments at once and handles
      * cases where the bytes are all zeros by clearing the target segment index in memory.
      *
-     * @param bytes        The byte array containing the data to write.
-     * @param segmentIndex The starting segment index to write to.
-     * @param segmentCount The number of segments to write.
+     * @param bytes              The byte array containing the data to write.
+     * @param segmentIndex       The starting segment index to write to.
+     * @param segmentCount       The number of segments to write.
+     * @param segmentRealLengths The real length of each segment.
      */
     @SlaveReplay
-    public void writeSegmentsFromMasterExistsOrAfterSegmentSlim(byte[] bytes, int segmentIndex, int segmentCount) {
+    public void writeSegmentsFromMasterExistsOrAfterSegmentSlim(byte[] bytes, int segmentIndex, int segmentCount, int[] segmentRealLengths) {
         if (ConfForGlobal.pureMemory) {
             var fdIndex = targetFdIndex(segmentIndex);
             var segmentIndexTargetFd = targetSegmentIndexTargetFd(segmentIndex);
@@ -805,13 +823,19 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             } else {
                 var allZeroSegmentCount = 0;
                 for (int i = 0; i < segmentCount; i++) {
+                    var segmentRealLength = segmentRealLengths[i];
+
                     var oneSegmentBytes = new byte[chunkSegmentLength];
                     System.arraycopy(bytes, i * chunkSegmentLength, oneSegmentBytes, 0, chunkSegmentLength);
 
-                    if (isAllZero(oneSegmentBytes)) {
+                    if (isAllZero(oneSegmentBytes) || segmentRealLength == 0) {
                         allZeroSegmentCount++;
                         fdReadWrite.clearTargetSegmentIndexInMemory(segmentIndexTargetFd + i);
                     } else {
+                        assert segmentRealLength <= chunkSegmentLength;
+                        if (segmentRealLength != chunkSegmentLength) {
+                            oneSegmentBytes = Arrays.copyOf(oneSegmentBytes, segmentRealLength);
+                        }
                         fdReadWrite.writeOneInner(segmentIndexTargetFd + i, oneSegmentBytes, false);
                     }
                 }

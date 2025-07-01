@@ -1709,13 +1709,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             throw new IllegalStateException("Load persisted segment bytes error, pvm=" + pvm);
         }
 
-        if (SegmentBatch2.isSegmentBytesSlim(segmentBytes, 0)) {
-//            // crc check
-//            var segmentSeq = buf.readLong();
-//            var cvCount = buf.readInt();
-//            var segmentMaskedValue = buf.readInt();
-//            buf.skipBytes(SEGMENT_HEADER_LENGTH);
-
+        if (SegmentBatch2.isSegmentBytesSlim(segmentBytes, 0) || SegmentBatch2.isSegmentBytesSlimAndCompressed(segmentBytes, 0)) {
             var keyBytesAndValueBytes = SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytes, pvm.subBlockIndex, pvm.segmentOffset);
             if (keyBytesAndValueBytes == null) {
                 throw new IllegalStateException("No key value found in segment bytes slim, pvm=" + pvm);
@@ -1727,7 +1721,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
 
             // set to lru cache, just target bytes
-            ByteBuf buf = Unpooled.wrappedBuffer(keyBytesAndValueBytes.valueBytes());
+            var buf = Unpooled.wrappedBuffer(keyBytesAndValueBytes.valueBytes());
             var cv = CompressedValue.decode(buf, keyBytes, keyHash);
             if (!ConfForGlobal.pureMemory) {
                 lru.put(key, cv.encode());
@@ -1738,7 +1732,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
                 segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
             }
-            ByteBuf buf = Unpooled.wrappedBuffer(segmentBytes);
+            var buf = Unpooled.wrappedBuffer(segmentBytes);
 //            SegmentBatch2.iterateFromSegmentBytes(segmentBytes, 0, segmentBytes.length, new SegmentBatch2.ForDebugCvCallback());
 
 //            // crc check
@@ -1784,7 +1778,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return null;
         }
 
-        if (SegmentBatch2.isSegmentBytesSlim(segmentBytes, 0)) {
+        if (SegmentBatch2.isSegmentBytesSlim(segmentBytes, 0) || SegmentBatch2.isSegmentBytesSlimAndCompressed(segmentBytes, 0)) {
             var keyBytesAndValueBytes = SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytes, pvm.subBlockIndex, pvm.segmentOffset);
             if (keyBytesAndValueBytes == null) {
                 return null;
@@ -1792,10 +1786,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             return keyBytesAndValueBytes.keyBytes();
         } else {
-            if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
-                segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
+            byte[] rawSegmentBytes;
+            if (SegmentBatch2.isSegmentBytesTight(segmentBytes, 0)) {
+                rawSegmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
+            } else {
+                rawSegmentBytes = segmentBytes;
             }
-            ByteBuf buf = Unpooled.wrappedBuffer(segmentBytes);
+
+            var buf = Unpooled.wrappedBuffer(rawSegmentBytes);
             buf.readerIndex(pvm.segmentOffset);
 
             // skip key header or check key
@@ -2195,12 +2193,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     /**
      * Write chunk segments from master exists.
      *
-     * @param bytes             segments bytes
-     * @param beginSegmentIndex the begin segment index
-     * @param segmentCount      the segment count
+     * @param bytes              segments bytes
+     * @param beginSegmentIndex  the begin segment index
+     * @param segmentCount       the segment count
+     * @param segmentRealLengths segment real length array
      */
     @SlaveReplay
-    public void writeChunkSegmentsFromMasterExists(byte[] bytes, int beginSegmentIndex, int segmentCount) {
+    public void writeChunkSegmentsFromMasterExists(byte[] bytes, int beginSegmentIndex, int segmentCount, int[] segmentRealLengths) {
         checkCurrentThreadId();
 
         if (bytes.length != chunk.chunkSegmentLength * segmentCount) {
@@ -2208,7 +2207,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     ", chunk segment length=" + chunk.chunkSegmentLength + ", segment count=" + segmentCount + ", slot=" + slot);
         }
 
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(bytes, beginSegmentIndex, segmentCount);
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(bytes, beginSegmentIndex, segmentCount, segmentRealLengths);
         if (beginSegmentIndex % 4096 == 0) {
             log.warn("Repl write chunk segments from master exists, begin segment index={}, segment count={}, slot={}",
                     beginSegmentIndex, segmentCount, slot);
@@ -2688,9 +2687,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         final int invalidMergedTriggerRate = 50;
         if (invalidRate > invalidMergedTriggerRate) {
             var validCvList = cvList.stream().filter(one -> !invalidCvList.contains(one)).toList();
+            // new segment with slim type may be bigger than old if segment type is tight
             var encodedSlim = SegmentBatch2.encodeValidCvListSlim(validCvList);
             if (encodedSlim != null) {
-                chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(encodedSlim, targetSegmentIndex, 1);
+                var segmentRealLengths = new int[1];
+                segmentRealLengths[0] = encodedSlim.length;
+                chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(encodedSlim, targetSegmentIndex, 1, segmentRealLengths);
+                keyLoader.metaChunkSegmentFillRatio.set(targetSegmentIndex, encodedSlim.length);
 
                 var xChunkSegmentSlimUpdate = new XChunkSegmentSlimUpdate(targetSegmentIndex, encodedSlim);
                 appendBinlog(xChunkSegmentSlimUpdate);

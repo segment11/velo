@@ -93,7 +93,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     @TestOnly
-    void resetForPureMemoryV2() {
+    public void resetForPureMemoryV2() {
+        if (this.allKeyHashBuckets != null) {
+            return;
+        }
         this.allKeyHashBuckets = new AllKeyHashBuckets(bucketsPerSlot, oneSlot);
         this.metaChunkSegmentFillRatio = new MetaChunkSegmentFillRatio();
     }
@@ -1307,11 +1310,17 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             var recordSize = buffer.getInt();
             for (int i = 0; i < recordSize; i++) {
                 var keyHash32 = buffer.getInt();
-                var expireAt = buffer.getLong();
-                var shortType = buffer.get();
                 var recordId = buffer.getLong();
+                var expireAtAndShortType = buffer.getLong();
+                var expireAt = expireAtAndShortType >>> 16;
+                byte shortType = (byte) (expireAtAndShortType & 0xFF);
                 var seq = buffer.getLong();
                 var valueBytesLength = buffer.getInt();
+
+                // for unit test
+                if (seq == 0L) {
+                    continue;
+                }
 
                 var putR = allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, seq, valueBytesLength, shortType, recordId);
                 if (putR.isExists()) {

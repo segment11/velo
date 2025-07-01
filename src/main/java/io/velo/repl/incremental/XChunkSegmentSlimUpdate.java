@@ -90,7 +90,10 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
      */
     @Override
     public void apply(short slot, ReplPair replPair) {
+        var segmentRealLengths = new int[1];
+        segmentRealLengths[0] = segmentBytesSlim.length;
+
         var oneSlot = localPersist.oneSlot(slot);
-        oneSlot.getChunk().writeSegmentsFromMasterExistsOrAfterSegmentSlim(segmentBytesSlim, segmentIndex, 1);
+        oneSlot.getChunk().writeSegmentsFromMasterExistsOrAfterSegmentSlim(segmentBytesSlim, segmentIndex, 1, segmentRealLengths);
     }
 }

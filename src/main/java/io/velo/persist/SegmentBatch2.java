@@ -1,6 +1,7 @@
 package io.velo.persist;
 
 import com.github.luben.zstd.Zstd;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.velo.CompressedValue;
 import io.velo.ConfForSlot;
@@ -24,6 +25,8 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     /**
      * Constants for the segment header structure.
      * seq long + segment type byte + cv number int + crc int
+     * when segment type is slim and compressed
+     * dst size int + src size int + segment type byte + compressed bytes
      */
     public static final int SEGMENT_HEADER_LENGTH = 8 + 1 + 4 + 4;
 
@@ -267,14 +270,20 @@ public class SegmentBatch2 implements InSlotMetricCollector {
      * @param cvCallback   The callback to be applied to each key-value pair.
      */
     public static void iterateFromSegmentBytes(byte[] segmentBytes, int offset, int length, @NotNull CvCallback cvCallback) {
-        var buf = Unpooled.wrappedBuffer(segmentBytes, offset, length).slice();
-        // for crc check
-        var segmentSeq = buf.readLong();
-        var segmentType = buf.readByte();
-        var cvCount = buf.readInt();
-        var segmentCrc32 = buf.readInt();
+        var segmentType = segmentBytes[8];
+        if (segmentType == Chunk.SegmentType.SLIM.val || segmentType == Chunk.SegmentType.SLIM_AND_COMPRESSED.val) {
+            ByteBuf buf;
+            if (segmentType == Chunk.SegmentType.SLIM_AND_COMPRESSED.val) {
+                var dstSize = ByteBuffer.wrap(segmentBytes).getInt();
+                var uncompressedSegmentBytes = new byte[dstSize];
+                Zstd.decompressByteArray(uncompressedSegmentBytes, 0, dstSize, segmentBytes, SEGMENT_HEADER_LENGTH, segmentBytes.length - SEGMENT_HEADER_LENGTH);
+                buf = Unpooled.wrappedBuffer(uncompressedSegmentBytes);
+            } else {
+                buf = Unpooled.wrappedBuffer(segmentBytes);
+            }
 
-        if (segmentType == Chunk.SegmentType.SLIM.val) {
+            var cvCount = buf.readerIndex(8 + 1).readInt();
+            buf.readerIndex(SEGMENT_HEADER_LENGTH);
             for (int i = 0; i < cvCount; i++) {
                 var subBlockIndex = buf.readByte();
                 var segmentOffset = buf.readInt();
@@ -296,6 +305,8 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             return;
         }
 
+        var buf = Unpooled.wrappedBuffer(segmentBytes);
+        buf.readerIndex(SEGMENT_HEADER_LENGTH);
         int offsetInThisSegment = SEGMENT_HEADER_LENGTH;
         while (true) {
             // refer to comment: write 0 short, so merge loop can break, because reuse old bytes
@@ -350,6 +361,18 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     }
 
     /**
+     * Checks if the segment bytes represent a SLIM_AND_COMPRESSED segment type.
+     *
+     * @param segmentBytes The byte array containing the segment data.
+     * @param offset       The starting offset within the segment data.
+     * @return true if the segment type is SLIM_AND_COMPRESSED, false otherwise.
+     */
+    static boolean isSegmentBytesSlimAndCompressed(byte[] segmentBytes, int offset) {
+        // seq long + segment type byte
+        return segmentBytes[offset + 8] == Chunk.SegmentType.SLIM_AND_COMPRESSED.val;
+    }
+
+    /**
      * A record to hold key and value bytes extracted from a segment.
      */
     record KeyBytesAndValueBytesInSegment(byte[] keyBytes, byte[] valueBytes) {
@@ -364,10 +387,23 @@ public class SegmentBatch2 implements InSlotMetricCollector {
      * @return A KeyBytesAndValueBytesInSegment object containing the key and value bytes, or null if not found.
      */
     static KeyBytesAndValueBytesInSegment getKeyBytesAndValueBytesInSegmentBytesSlim(byte[] segmentBytesSlim, byte subBlockIndex, int segmentOffset) {
-        var buffer = ByteBuffer.wrap(segmentBytesSlim);
+        byte[] uncompressedSegmentBytes;
+        if (isSegmentBytesSlimAndCompressed(segmentBytesSlim, 0)) {
+            var buffer = ByteBuffer.wrap(segmentBytesSlim);
+            var dstSize = buffer.getInt();
+            var srcSize = buffer.getInt();
+            uncompressedSegmentBytes = new byte[dstSize];
+            Zstd.decompressByteArray(uncompressedSegmentBytes, 0, dstSize, segmentBytesSlim, SEGMENT_HEADER_LENGTH, srcSize);
+        } else {
+            uncompressedSegmentBytes = segmentBytesSlim;
+        }
+
+        var buffer = ByteBuffer.wrap(uncompressedSegmentBytes);
 
         // seq long + segment type byte + cv number int + crc int
         var cvNumber = buffer.getInt(8 + 1);
+        // crc check
+//        var crc32 = buffer.getInt(8 + 1 + 4);
         buffer.position(SEGMENT_HEADER_LENGTH);
 
         for (int i = 0; i < cvNumber; i++) {
@@ -394,7 +430,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
 
     /**
      * Encodes a list of valid CV entries into a SLIM segment format.
-     * Probe liner encode and search.
+     * Probe liner encode and search. Do zstd compressed if needed.
      *
      * @param invalidCvList The list of CvWithKeyAndSegmentOffset objects to encode.
      * @return A byte array representing the encoded SLIM segment, or null if the encoded size exceeds the segment length limit.
@@ -455,7 +491,21 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         // seq long + segment type byte + cv number int + crc int
         buffer.putInt(8 + 1 + 4, segmentCrc32);
 
-        return bytes;
+        var compressedBytes = Zstd.compress(bytes);
+        // 0.9 or 0.8
+        if (compressedBytes.length < bytes.length * 0.8) {
+            var bytes2 = new byte[SEGMENT_HEADER_LENGTH + compressedBytes.length];
+            var buffer2 = ByteBuffer.wrap(bytes2);
+            // for decompress dst / src bytes length
+            buffer2.putInt(bytes.length);
+            buffer2.putInt(compressedBytes.length);
+            buffer2.put(Chunk.SegmentType.SLIM_AND_COMPRESSED.val);
+
+            buffer2.put(SEGMENT_HEADER_LENGTH, compressedBytes);
+            return bytes2;
+        } else {
+            return bytes;
+        }
     }
 
     /**

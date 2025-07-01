@@ -160,7 +160,7 @@ class AllKeyHashBucketsTest extends Specification {
         def bb = allKeyHashBuckets.getRecordsBytesArrayByWalGroupIndex(0)
         then:
         bb.length == ConfForSlot.global.confWal.oneChargeBucketNumber
-        bb[0].length == 472
+        bb[0].length == 4 + 4 + 16 * (28 + 4)
     }
 
     def 'test scan'() {

@@ -867,7 +867,9 @@ class OneSlotTest extends Specification {
         when:
         def mockBytesFromMaster = new byte[oneSlot.chunk.chunkSegmentLength]
         Arrays.fill(mockBytesFromMaster, (byte) 1)
-        oneSlot.writeChunkSegmentsFromMasterExists(mockBytesFromMaster, 0, 1)
+        int[] segmentRealLengths = new int[1]
+        segmentRealLengths[0] = oneSlot.chunk.chunkSegmentLength
+        oneSlot.writeChunkSegmentsFromMasterExists(mockBytesFromMaster, 0, 1, segmentRealLengths)
         oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
         def bytesOneSegment = oneSlot.preadForMerge(0, 1)
         def bytesNSegments = oneSlot.preadForRepl(0)
@@ -879,7 +881,7 @@ class OneSlotTest extends Specification {
         boolean exception = false
         mockBytesFromMaster = new byte[oneSlot.chunk.chunkSegmentLength + 1]
         try {
-            oneSlot.writeChunkSegmentsFromMasterExists(mockBytesFromMaster, 0, 1)
+            oneSlot.writeChunkSegmentsFromMasterExists(mockBytesFromMaster, 0, 1, segmentRealLengths)
         } catch (IllegalStateException e) {
             println e.message
             exception = true

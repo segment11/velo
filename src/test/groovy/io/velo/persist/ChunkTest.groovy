@@ -300,6 +300,13 @@ class ChunkTest extends Specification {
         chunk.segmentIndex == 0
 
         when:
+        def n = chunk.getSegmentRealLength(0)
+        def n2 = chunk.getSegmentRealLength(1)
+        then:
+        n == 4096
+        n2 == 0
+
+        when:
         chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(0)
         then:
         chunk.preadOneSegment(0) == null
@@ -375,20 +382,22 @@ class ChunkTest extends Specification {
 
         when:
         def replBytes = new byte[4096]
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1)
+        int[] segmentRealLengths = new int[1]
+        segmentRealLengths[0] = 4096
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1, segmentRealLengths)
         then:
         1 == 1
 
         when:
         // write again, fd length will not change
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1)
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1, segmentRealLengths)
         then:
         1 == 1
 
         when:
         boolean exception = false
         try {
-            chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, REPL_ONCE_SEGMENT_COUNT_PREAD + 1)
+            chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, REPL_ONCE_SEGMENT_COUNT_PREAD + 1, segmentRealLengths)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
@@ -402,13 +411,16 @@ class ChunkTest extends Specification {
             def frw = chunk.fdReadWriteArray[i]
             frw.initByteBuffers(true, i)
         }
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1)
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1, segmentRealLengths)
         then:
         1 == 1
 
         when:
         def replBytes2 = new byte[4096 * 2]
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes2, 0, 2)
+        def segmentRealLengths2 = new int[2]
+        segmentRealLengths[0] = 4096
+        segmentRealLengths[1] = 4096
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes2, 0, 2, segmentRealLengths2)
         then:
         1 == 1
 

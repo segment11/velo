@@ -89,12 +89,21 @@ class SegmentBatch2Test extends Specification {
         byteX[8] = Chunk.SegmentType.SLIM.val
         then:
         SegmentBatch2.isSegmentBytesSlim(byteX, 0)
+        !SegmentBatch2.isSegmentBytesSlimAndCompressed(byteX, 0)
+        !SegmentBatch2.isSegmentBytesTight(byteX, 0)
+
+        when:
+        byteX[8] = Chunk.SegmentType.SLIM_AND_COMPRESSED.val
+        then:
+        !SegmentBatch2.isSegmentBytesSlim(byteX, 0)
+        SegmentBatch2.isSegmentBytesSlimAndCompressed(byteX, 0)
         !SegmentBatch2.isSegmentBytesTight(byteX, 0)
 
         when:
         byteX[8] = Chunk.SegmentType.TIGHT.val
         then:
         !SegmentBatch2.isSegmentBytesSlim(byteX, 0)
+        !SegmentBatch2.isSegmentBytesSlimAndCompressed(byteX, 0)
         SegmentBatch2.isSegmentBytesTight(byteX, 0)
 
         when:

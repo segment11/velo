@@ -594,12 +594,22 @@ public class XGroup extends BaseCommand {
             nextSegmentsHasData = oneSlot.hasData(beginSegmentIndex, chunk.getMaxSegmentIndex() - beginSegmentIndex + 1);
         }
 
-        var responseBytes = new byte[4 + 4 + 4 + masterMetaBytes.length + 4 + chunkSegmentsBytes.length];
+        var responseBytes = new byte[4 + 4 + 4 + masterMetaBytes.length + (segmentCount * 4) + 4 + chunkSegmentsBytes.length];
         var responseBuffer = ByteBuffer.wrap(responseBytes);
         responseBuffer.putInt(beginSegmentIndex);
         responseBuffer.putInt(segmentCount);
         responseBuffer.putInt(masterMetaBytes.length);
         responseBuffer.put(masterMetaBytes);
+
+        if (ConfForGlobal.pureMemory) {
+            for (int i = 0; i < segmentCount; i++) {
+                var targetSegmentIndex = beginSegmentIndex + i;
+                var segmentRealLength = chunk.getSegmentRealLength(targetSegmentIndex);
+                responseBuffer.putInt(segmentRealLength);
+            }
+        } else {
+            responseBuffer.position(responseBuffer.position() + (segmentCount * 4));
+        }
 
         if (nextSegmentsHasData) {
             responseBuffer.putInt(chunkSegmentsBytes.length);
@@ -636,6 +646,11 @@ public class XGroup extends BaseCommand {
             buffer.get(metaBytes);
             metaChunkSegmentFlagSeq.overwriteOneBatch(metaBytes, beginSegmentIndex, segmentCount);
 
+            var segmentRealLengths = new int[segmentCount];
+            for (int i = 0; i < segmentCount; i++) {
+                segmentRealLengths[i] = buffer.getInt();
+            }
+
             var chunkSegmentsLength = buffer.getInt();
             if (chunkSegmentsLength == -1) {
                 log.warn("Repl slave fetch exists chunk segments no more segments, begin segment index={}, slot={}", beginSegmentIndex, slot);
@@ -660,7 +675,7 @@ public class XGroup extends BaseCommand {
                 } else {
                     // write 0 to files
                     oneSlot.writeChunkSegmentsFromMasterExists(ConfForSlot.ConfChunk.REPL_EMPTY_BYTES_FOR_ONCE_WRITE,
-                            beginSegmentIndex, segmentCount);
+                            beginSegmentIndex, segmentCount, segmentRealLengths);
                 }
             } else {
                 var chunkSegmentsBytes = new byte[chunkSegmentsLength];
@@ -668,7 +683,7 @@ public class XGroup extends BaseCommand {
 
                 var realSegmentCount = chunkSegmentsLength / ConfForSlot.global.confChunk.segmentLength;
                 oneSlot.writeChunkSegmentsFromMasterExists(chunkSegmentsBytes,
-                        beginSegmentIndex, realSegmentCount);
+                        beginSegmentIndex, realSegmentCount, segmentRealLengths);
             }
         } else {
             replPair.increaseStatsCountWhenSlaveSkipFetch(s_exists_chunk_segments);

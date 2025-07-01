@@ -106,17 +106,15 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
 
                     var offset = j * 7;
                     var recordId = extendBuffer.getLong(offset);
-                    var l = extendBuffer.getLong(offset + 8);
-                    var expireAt = l >>> 16;
-                    var shortType = (byte) (l & 0xFF);
-
+                    var expireAtAndShortType = extendBuffer.getLong(offset + 8);
                     var seq = extendBuffer.getLong(offset + 16);
+                    var valueBytesLength = extendBuffer.getInt(offset + 24);
 
                     dataOs.writeInt(keyHash32);
-                    dataOs.writeLong(expireAt);
-                    dataOs.writeByte(shortType);
                     dataOs.writeLong(recordId);
+                    dataOs.writeLong(expireAtAndShortType);
                     dataOs.writeLong(seq);
+                    dataOs.writeInt(valueBytesLength);
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -151,10 +149,10 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
                 if (recordId == NO_RECORD_ID) {
                     return null;
                 } else {
-                    var l = extendBuffer.getLong(offset + 8);
+                    var expireAtAndShortType = extendBuffer.getLong(offset + 8);
                     // high 48 bit is real expire at millisecond, 8 bit is short type
-                    var expireAt = l >>> 16;
-                    byte shortType = (byte) (l & 0xFF);
+                    var expireAt = expireAtAndShortType >>> 16;
+                    byte shortType = (byte) (expireAtAndShortType & 0xFF);
                     var seq = extendBuffer.getLong(offset + 16);
                     var valueBytesLength = extendBuffer.getInt(offset + 24);
                     return new RecordX(recordId, expireAt, shortType, seq, valueBytesLength);

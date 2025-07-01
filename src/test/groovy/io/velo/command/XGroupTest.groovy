@@ -322,7 +322,7 @@ class XGroupTest extends Specification {
         then:
         r.isReplType(ReplType.s_exists_chunk_segments)
         // only meta bytes, chunk segment bytes not write yet
-        r.buffer().limit() == Repl.HEADER_LENGTH + 8 + 8 + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * MetaChunkSegmentFlagSeq.ONE_LENGTH
+        r.buffer().limit() == Repl.HEADER_LENGTH + 4 + 4 + 4 + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * (MetaChunkSegmentFlagSeq.ONE_LENGTH + 4) + 4
 
         when:
         // chunk segment bytes exists
@@ -332,7 +332,7 @@ class XGroupTest extends Specification {
         then:
         r.isReplType(ReplType.s_exists_chunk_segments)
         // meta bytes with just one chunk segment bytes
-        r.buffer().limit() == Repl.HEADER_LENGTH + 8 + 8 + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * MetaChunkSegmentFlagSeq.ONE_LENGTH + 4096
+        r.buffer().limit() == Repl.HEADER_LENGTH + 4 + 4 + 4 + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * (MetaChunkSegmentFlagSeq.ONE_LENGTH + 4) + 4 + 4096
 
         // response exists wal
         when:
@@ -456,10 +456,12 @@ class XGroupTest extends Specification {
 
         when:
         ConfForGlobal.pureMemoryV2 = true
+        int oneWalGroupRecordXSize = 4 + 4 + 16 * (28 + 4)
+        oneSlot.keyLoader.resetForPureMemoryV2()
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_key_buckets)
-        r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8 + (4 + (4 + 472) * ConfForSlot.global.confWal.oneChargeBucketNumber)
+        r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8 + (4 + (4 + oneWalGroupRecordXSize) * ConfForSlot.global.confWal.oneChargeBucketNumber)
 
         // stat_key_count_in_buckets
         when:
@@ -808,12 +810,15 @@ class XGroupTest extends Specification {
 
         when:
         def metaBytes = oneSlot.getMetaChunkSegmentFlagSeq().getOneBatch(0, FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD)
-        contentBytes = new byte[8 + 4 + metaBytes.length + 4]
+        contentBytes = new byte[8 + 4 + metaBytes.length + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4 + 4]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         requestBuffer.putInt(0)
         requestBuffer.putInt(1024)
         requestBuffer.putInt(metaBytes.length)
         requestBuffer.put(metaBytes)
+        for (i in 0..<FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD) {
+            requestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
+        }
         requestBuffer.putInt(0)
         data4[3] = contentBytes
         x = new XGroup(null, data4, null)
@@ -822,12 +827,15 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.exists_chunk_segments)
 
         when:
-        contentBytes = new byte[8 + 4 + metaBytes.length + 4 + 4096]
+        contentBytes = new byte[8 + 4 + metaBytes.length + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4 + 4 + 4096]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         requestBuffer.putInt(0)
         requestBuffer.putInt(1024)
         requestBuffer.putInt(metaBytes.length)
         requestBuffer.put(metaBytes)
+        for (i in 0..<FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD) {
+            requestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
+        }
         requestBuffer.putInt(4096)
         data4[3] = contentBytes
         x = new XGroup(null, data4, null)
@@ -837,7 +845,7 @@ class XGroupTest extends Specification {
 
         when:
         // no next segments
-        requestBuffer.putInt(8 + 4 + metaBytes.length, -1)
+        requestBuffer.putInt(8 + 4 + metaBytes.length + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4, -1)
         r = x.handleRepl()
         then:
         // next step
@@ -846,7 +854,7 @@ class XGroupTest extends Specification {
         when:
         ConfForGlobal.pureMemory = true
         oneSlot.chunk.fdReadWriteArray[0].initPureMemoryByteArray()
-        requestBuffer.putInt(8 + 4 + metaBytes.length, 0)
+        requestBuffer.putInt(8 + 4 + metaBytes.length + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4, 0)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.exists_chunk_segments)
@@ -964,7 +972,9 @@ class XGroupTest extends Specification {
 
         when:
         ConfForGlobal.pureMemoryV2 = true
-        contentBytes = new byte[1 + 1 + 4 + 1 + 8 + (4 + (4 + 472) * 2)]
+        int oneWalGroupRecordXSize = 4 + 4 + 16 * (28 + 4)
+        oneSlot.keyLoader.resetForPureMemoryV2()
+        contentBytes = new byte[1 + 1 + 4 + 1 + 8 + (4 + (4 + oneWalGroupRecordXSize) * 2)]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         // split index
         requestBuffer.put((byte) 0)
