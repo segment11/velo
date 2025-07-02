@@ -16,7 +16,7 @@ import java.util.LinkedList;
  * For pure memory v2 mode. For memory gc.
  */
 public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLoad {
-    private final int maxSegmentNumber;
+    final int maxSegmentNumber;
 
     // init value length int + current value length int + bucket index 1 byte
     // one segment cost bytes: 4 + 4 + 1 = 9
@@ -68,8 +68,13 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
 
         byteBuffer.putInt(offset, initValueBytesLength);
         byteBuffer.putInt(offset + 4, initValueBytesLength);
-        byteBuffer.put(offset + 8, (byte) (FILL_RATIO_BUCKETS - 1));
-        fillRatioBucketSegmentCount[FILL_RATIO_BUCKETS - 1]++;
+
+        if (initValueBytesLength == 0) {
+            byteBuffer.put(offset + 8, (byte) (0));
+        } else {
+            byteBuffer.put(offset + 8, (byte) (FILL_RATIO_BUCKETS - 1));
+            fillRatioBucketSegmentCount[FILL_RATIO_BUCKETS - 1]++;
+        }
     }
 
     /**
@@ -116,6 +121,10 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
     public LinkedList<Integer> findSegmentsFillRatioLessThan(int beginSegmentIndex, int segmentCount, int fillRatioBucketCompare) {
         LinkedList<Integer> list = new LinkedList<>();
         for (int i = beginSegmentIndex; i < beginSegmentIndex + segmentCount; i++) {
+            if (i >= maxSegmentNumber) {
+                break;
+            }
+
             var offset = i * 9;
             var initValueBytesLength = byteBuffer.getInt(offset);
             if (initValueBytesLength == 0) {

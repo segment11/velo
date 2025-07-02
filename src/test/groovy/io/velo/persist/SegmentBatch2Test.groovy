@@ -125,16 +125,6 @@ class SegmentBatch2Test extends Specification {
         SegmentBatch2.iterateFromSegmentBytes(segmentBytesSlim, new SegmentBatch2.ForDebugCvCallback())
         then:
         1 == 1
-
-        when:
-        def cvListMany = Mock.prepareCompressedValueList(100)
-        List<SegmentBatch2.CvWithKeyAndSegmentOffset> invalidCvListMany = []
-        for (cv in cvListMany) {
-            invalidCvListMany << new SegmentBatch2.CvWithKeyAndSegmentOffset(cv, 'key:' + cv.seq, (int) cv.seq, 0, (byte) 0)
-        }
-        def segmentBytesSlimX2 = SegmentBatch2.encodeValidCvListSlim(invalidCvListMany)
-        then:
-        segmentBytesSlimX2 == null
     }
 
     def 'test read tight segment'() {

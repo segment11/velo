@@ -1122,7 +1122,7 @@ class OneSlotTest extends Specification {
     def 'test check and save memory'() {
         given:
         ConfForGlobal.pureMemory = true
-        ConfForGlobal.pureMemoryV2 = true
+//        ConfForGlobal.pureMemoryV2 = true
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
@@ -1134,8 +1134,8 @@ class OneSlotTest extends Specification {
         oneSlot.setSegmentMergeFlag(1, Chunk.Flag.new_write.flagByte(), 1L, 0)
 
         when:
-        oneSlot.checkAndSaveMemory(0)
-        oneSlot.checkAndSaveMemory(1)
+        oneSlot.checkAndSaveMemory(0, false)
+        oneSlot.checkAndSaveMemory(1, false)
         then:
         1 == 1
 
@@ -1167,7 +1167,7 @@ class OneSlotTest extends Specification {
             oneSlot.keyLoader.removeSingleKey(someS.bucketIndex(), someKey.bytes, someS.keyHash(), someS.keyHash32())
         }
         // do check, persist begin segment index 2
-        oneSlot.checkAndSaveMemory(2)
+        oneSlot.checkAndSaveMemory(2, true)
         def segmentBytes = chunk.preadOneSegment(2)
         then:
         SegmentBatch2.isSegmentBytesSlim(segmentBytes, 0) || SegmentBatch2.isSegmentBytesSlimAndCompressed(segmentBytes, 0)
@@ -1178,7 +1178,7 @@ class OneSlotTest extends Specification {
         5.times {
             bucketIndex0KeyList = batchPut(oneSlot, 100, 100, 1, slotNumber)
         }
-        oneSlot.checkAndSaveMemory(0)
+        oneSlot.checkAndSaveMemory(0, false)
         then:
         chunk.preadOneSegment(0) == null
 

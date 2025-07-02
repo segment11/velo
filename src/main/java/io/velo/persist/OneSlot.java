@@ -1458,7 +1458,60 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         if (ConfForGlobal.pureMemory) {
             // do every 10ms
-            taskChain.add(new CheckAndSaveMemoryTask(this));
+            if (ConfForGlobal.pureMemoryV2) {
+                taskChain.add(new CheckAndSaveMemoryTaskV2(this));
+            } else {
+                taskChain.add(new CheckAndSaveMemoryTask(this));
+            }
+        }
+    }
+
+    static class CheckAndSaveMemoryTaskV2 implements ITask {
+        @VisibleForTesting
+        int lastCheckedSegmentIndex = 0;
+
+        private final OneSlot oneSlot;
+
+        CheckAndSaveMemoryTaskV2(OneSlot oneSlot) {
+            this.oneSlot = oneSlot;
+        }
+
+        @Override
+        public String name() {
+            return "check and save memory v2";
+        }
+
+        @Override
+        public void run() {
+            final var maxSegmentIndex = oneSlot.chunk.getMaxSegmentIndex();
+
+            final int onceCheckMaxSegmentCount = 64;
+
+            // only keep fill ratio 100%, 95% and 90%, gc those < 90%
+            final int keepFillRatioBuckets = 3;
+
+            assert oneSlot.keyLoader != null;
+            var metaChunkSegmentFillRatio = oneSlot.keyLoader.metaChunkSegmentFillRatio;
+            var segmentIndexList = metaChunkSegmentFillRatio.findSegmentsFillRatioLessThan(lastCheckedSegmentIndex, onceCheckMaxSegmentCount,
+                    MetaChunkSegmentFillRatio.FILL_RATIO_BUCKETS - keepFillRatioBuckets);
+            if (segmentIndexList.isEmpty()) {
+                lastCheckedSegmentIndex += onceCheckMaxSegmentCount;
+                if (lastCheckedSegmentIndex > maxSegmentIndex) {
+                    lastCheckedSegmentIndex = 0;
+                }
+                return;
+            }
+
+            final int onceHandleMaxSegmentCount = 4;
+            int lastHandleSegmentIndex = -1;
+            for (int i = 0; i < Math.min(onceHandleMaxSegmentCount, segmentIndexList.size()); i++) {
+                lastHandleSegmentIndex = segmentIndexList.get(i);
+                oneSlot.checkAndSaveMemory(lastHandleSegmentIndex, true);
+            }
+            lastCheckedSegmentIndex = lastHandleSegmentIndex + 1;
+            if (lastCheckedSegmentIndex > maxSegmentIndex) {
+                lastCheckedSegmentIndex = 0;
+            }
         }
     }
 
@@ -1512,7 +1565,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 if (targetSegmentIndex > maxSegmentIndex) {
                     targetSegmentIndex = 0;
                 }
-                oneSlot.checkAndSaveMemory(targetSegmentIndex);
+                oneSlot.checkAndSaveMemory(targetSegmentIndex, false);
             }
 
             lastCheckedSegmentIndex += onceCheckSegmentCount;
@@ -2520,6 +2573,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         if (ConfForGlobal.pureMemory && Flag.canReuse(flagByte)) {
             chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
+            if (ConfForGlobal.pureMemoryV2) {
+                keyLoader.metaChunkSegmentFillRatio.set(segmentIndex, 0);
+            }
             if (segmentIndex % 4096 == 0) {
                 log.info("Clear one segment memory bytes when reuse, segment index={}, slot={}", segmentIndex, slot);
             }
@@ -2548,6 +2604,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             for (int i = 0; i < segmentCount; i++) {
                 var segmentIndex = beginSegmentIndex + i;
                 chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
+                if (ConfForGlobal.pureMemoryV2) {
+                    keyLoader.metaChunkSegmentFillRatio.set(segmentIndex, 0);
+                }
             }
         }
     }
@@ -2627,9 +2686,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * Supervised merge of segments to save memory by merging expired or invalid entries.
      *
      * @param targetSegmentIndex the index of the target segment to check and merge
+     * @param forceTrigger       whether to force trigger the merge even if there are no many expired or invalid entries
      */
     @VisibleForTesting
-    void checkAndSaveMemory(int targetSegmentIndex) {
+    void checkAndSaveMemory(int targetSegmentIndex, boolean forceTrigger) {
         var segmentFlag = metaChunkSegmentFlagSeq.getSegmentMergeFlag(targetSegmentIndex);
         if (segmentFlag.flagByte() != Flag.new_write.flagByte() && segmentFlag.flagByte() != Flag.reuse_new.flagByte()) {
             return;
@@ -2637,6 +2697,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var segmentBytes = chunk.preadOneSegment(targetSegmentIndex, false);
         if (segmentBytes == null) {
+            // when force trigger, means the segment bytes is not null
+            assert !forceTrigger;
             return;
         }
 
@@ -2685,7 +2747,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var totalCvCount = expiredCount + cvList.size();
         var invalidRate = (invalidCvList.size() + expiredCount) * 100 / totalCvCount;
         final int invalidMergedTriggerRate = 50;
-        if (invalidRate > invalidMergedTriggerRate) {
+        if (invalidRate > invalidMergedTriggerRate || forceTrigger) {
             var validCvList = cvList.stream().filter(one -> !invalidCvList.contains(one)).toList();
             // new segment with slim type may be bigger than old if segment type is tight
             var encodedSlimX = SegmentBatch2.encodeValidCvListSlim(validCvList);
@@ -2694,7 +2756,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 var encodedSlimBytes = encodedSlimX.bytes();
                 segmentRealLengths[0] = encodedSlimBytes.length;
                 chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(encodedSlimBytes, targetSegmentIndex, 1, segmentRealLengths);
-                keyLoader.metaChunkSegmentFillRatio.set(targetSegmentIndex, encodedSlimX.valueBytesLength());
+                if (ConfForGlobal.pureMemoryV2) {
+                    keyLoader.metaChunkSegmentFillRatio.set(targetSegmentIndex, encodedSlimX.valueBytesLength());
+                }
 
                 var xChunkSegmentSlimUpdate = new XChunkSegmentSlimUpdate(targetSegmentIndex, encodedSlimX.valueBytesLength(), encodedSlimBytes);
                 appendBinlog(xChunkSegmentSlimUpdate);

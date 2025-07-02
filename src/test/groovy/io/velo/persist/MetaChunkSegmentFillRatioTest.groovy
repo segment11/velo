@@ -20,6 +20,11 @@ class MetaChunkSegmentFillRatioTest extends Specification {
         one.fillRatioBucketSegmentCount[19] == 1
 
         when:
+        one.set(1, 0)
+        then:
+        one.findSegmentsFillRatioLessThan(0, 10, 20) == [0]
+
+        when:
         one.estimate(new StringBuilder())
         then:
         1 == 1
@@ -53,6 +58,11 @@ class MetaChunkSegmentFillRatioTest extends Specification {
         then:
         one.findSegmentsFillRatioLessThan(0, 10, 21) == [0]
         one.fillRatioBucketSegmentCount[20] == 1
+
+        when:
+        def list = one.findSegmentsFillRatioLessThan(one.maxSegmentNumber, 10, 10)
+        then:
+        list.isEmpty()
 
         cleanup:
         ConfForGlobal.pureMemory = false

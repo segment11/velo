@@ -429,6 +429,13 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     }
 
     record EncodedSlimBytesAndValueBytesLength(byte[] bytes, int valueBytesLength) {
+        @Override
+        public @NotNull String toString() {
+            return "EncodedSlimBytesAndValueBytesLength{" +
+                    "bytes.length=" + bytes.length +
+                    ", valueBytesLength=" + valueBytesLength +
+                    '}';
+        }
     }
 
     /**
@@ -450,12 +457,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             // 1 byte for sub block index, 4 bytes for segment offset
             // 2 bytes for key length, key bytes, 4 bytes for cv encoded length, cv encoded bytes
             bytesLengthN += 1 + 4 + 2 + keyLength + 4 + cvEncodedLength;
-            valueBytesLength += 2 + keyLength + cvEncodedLength;
-        }
-
-        // when after encoded is bigger, need not merged at all
-        if (bytesLengthN >= ConfForSlot.global.confChunk.segmentLength) {
-            return null;
+            valueBytesLength += cvEncodedLength;
         }
 
         var bytes = new byte[bytesLengthN];
@@ -499,6 +501,11 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         var compressedBytes = Zstd.compress(bytes);
         // 0.9 or 0.8
         if (compressedBytes.length < bytes.length * 0.8) {
+            // should never happen here
+            if (compressedBytes.length >= ConfForSlot.global.confChunk.segmentLength) {
+                return null;
+            }
+
             var bytes2 = new byte[SEGMENT_HEADER_LENGTH + compressedBytes.length];
             var buffer2 = ByteBuffer.wrap(bytes2);
             // for decompress dst / src bytes length
@@ -509,6 +516,11 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             buffer2.put(SEGMENT_HEADER_LENGTH, compressedBytes);
             return new EncodedSlimBytesAndValueBytesLength(bytes2, valueBytesLength);
         } else {
+            // should never happen here
+            if (bytesLengthN >= ConfForSlot.global.confChunk.segmentLength) {
+                return null;
+            }
+
             return new EncodedSlimBytesAndValueBytesLength(bytes, valueBytesLength);
         }
     }
