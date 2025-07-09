@@ -329,7 +329,8 @@ class ChunkTest extends Specification {
         def contentBytes = new byte[chunk.chunkSegmentLength * 2]
         contentBytes[0] = (byte) 1
         contentBytes[4096] = (byte) 1
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(contentBytes, 0, 2)
+        int[] segmentRealLengths = [4096, 4096]
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(contentBytes, 0, 2, segmentRealLengths)
         def bos = new ByteArrayOutputStream()
         def os = new DataOutputStream(bos)
         chunk.writeToSavedFileWhenPureMemory(os)
@@ -348,8 +349,8 @@ class ChunkTest extends Specification {
 
         when:
         // all byte 0 means clear
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(new byte[chunk.chunkSegmentLength], 0, 1)
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(new byte[chunk.chunkSegmentLength * 2], 1, 2)
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(new byte[chunk.chunkSegmentLength], 0, 1, segmentRealLengths)
+        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(new byte[chunk.chunkSegmentLength * 2], 1, 2, segmentRealLengths)
         then:
         chunk.preadOneSegment(0) == null
         chunk.preadOneSegment(1) == null
@@ -412,8 +413,8 @@ class ChunkTest extends Specification {
         when:
         def replBytes2 = new byte[4096 * 2]
         def segmentRealLengths2 = new int[2]
-        segmentRealLengths[0] = 4096
-        segmentRealLengths[1] = 4096
+        segmentRealLengths2[0] = 4096
+        segmentRealLengths2[1] = 4096
         chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes2, 0, 2, segmentRealLengths2)
         then:
         1 == 1
