@@ -77,7 +77,7 @@ backend only_slave_with_zone_zone1
     mode http
     balance roundrobin
     option httpchk
-    http-check send meth GET uri /?lave_with_zone=zone1
+    http-check send meth GET uri /?slave_with_zone=zone1
     http-check expect status 200
     default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
     server instance0 localhost:7379 maxconn 20 check
