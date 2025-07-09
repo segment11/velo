@@ -25,9 +25,6 @@ import java.util.HashSet;
 // refer to faster
 // https://github.com/microsoft/FASTER
 public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSaveAndLoad {
-    @VisibleForTesting
-    static final long NO_RECORD_ID = -1;
-
     // index -> bucket index
     private final byte[][] allKeyHash32BitBytesArray;
     // record id long 8 byte + (8 byte include expire at 48 bit + short type 8 bit) + seq long 8 byte + value bytes length int 4 byte
@@ -145,18 +142,13 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
                 var extendBuffer = ByteBuffer.wrap(extendBytes);
                 var offset = i * 7;
                 var recordId = extendBuffer.getLong(offset);
-                // deleted
-                if (recordId == NO_RECORD_ID) {
-                    return null;
-                } else {
-                    var expireAtAndShortType = extendBuffer.getLong(offset + 8);
-                    // high 48 bit is real expire at millisecond, 8 bit is short type
-                    var expireAt = expireAtAndShortType >>> 16;
-                    byte shortType = (byte) (expireAtAndShortType & 0xFF);
-                    var seq = extendBuffer.getLong(offset + 16);
-                    var valueBytesLength = extendBuffer.getInt(offset + 24);
-                    return new RecordX(recordId, expireAt, shortType, seq, valueBytesLength);
-                }
+                var expireAtAndShortType = extendBuffer.getLong(offset + 8);
+                // high 48 bit is real expire at millisecond, 8 bit is short type
+                var expireAt = expireAtAndShortType >>> 16;
+                byte shortType = (byte) (expireAtAndShortType & 0xFF);
+                var seq = extendBuffer.getLong(offset + 16);
+                var valueBytesLength = extendBuffer.getInt(offset + 24);
+                return new RecordX(recordId, expireAt, shortType, seq, valueBytesLength);
             }
         }
 
@@ -190,18 +182,13 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
                     continue;
                 }
 
-                var offset = i * 7;
-                var recordId = extendBuffer.getLong(offset);
-                // deleted
-                if (recordId == NO_RECORD_ID) {
-                    continue;
-                }
-
                 if (tmpSkipCount > 0) {
                     tmpSkipCount--;
                     continue;
                 }
 
+                var offset = i * 7;
+                var recordId = extendBuffer.getLong(offset);
                 var l = extendBuffer.getLong(offset + 8);
                 // high 48 bit is real expire at millisecond, 8 bit is short type
                 var expireAt = l >>> 16;
@@ -254,7 +241,34 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
     }
 
     PutResult remove(int keyHash32, int bucketIndex) {
-        return put(keyHash32, bucketIndex, CompressedValue.EXPIRE_NOW, 0L, 0, KeyLoader.typeAsByteIgnore, NO_RECORD_ID);
+        var bytes = allKeyHash32BitBytesArray[bucketIndex];
+        var extendBytes = extendBytesArray[bucketIndex];
+        var buffer = ByteBuffer.wrap(bytes);
+
+        int pos = -1;
+        for (int i = 0; i < bytes.length; i += 4) {
+            var targetKeyHash32 = buffer.getInt(i);
+            if (keyHash32 == targetKeyHash32) {
+                pos = i;
+                break;
+            }
+        }
+
+        if (pos == -1) {
+            return new PutResult(false, 0, 0);
+        }
+
+        buffer.putInt(pos, 0);
+        var extendBuffer = ByteBuffer.wrap(extendBytes);
+        var offset = pos * 7;
+        var oldRecordId = extendBuffer.getLong(offset);
+        var segmentIndex = (int) (oldRecordId >> (18 + 18 + 2));
+        var oldValueBytesLength = extendBuffer.getInt(offset + 24);
+
+        // set 0
+        extendBuffer.put(offset, new byte[4 * 7]);
+
+        return new PutResult(true, segmentIndex, oldValueBytesLength);
     }
 
     @TestOnly
@@ -306,43 +320,20 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
         var extendBytes = extendBytesArray[bucketIndex];
         var buffer = ByteBuffer.wrap(bytes);
 
-        boolean isExists = false;
-
-        boolean isPut = false;
-        int oldValueBytesLength = 0;
-        long oldRecordId = NO_RECORD_ID;
+        int pos = -1;
         for (int i = 0; i < bytes.length; i += 4) {
             var targetKeyHash32 = buffer.getInt(i);
             if (targetKeyHash32 == 0) {
-                // blank, just insert
-                buffer.putInt(i, keyHash32);
-                var extendBuffer = ByteBuffer.wrap(extendBytes);
-                var offset = i * 7;
-                extendBuffer.putLong(offset, recordId);
-                extendBuffer.putLong(offset + 8, l);
-                extendBuffer.putLong(offset + 16, seq);
-                extendBuffer.putInt(offset + 24, valueBytesLength);
-                isPut = true;
-                break;
+                if (pos == -1) {
+                    pos = i;
+                }
             } else if (keyHash32 == targetKeyHash32) {
-                // update
-                var extendBuffer = ByteBuffer.wrap(extendBytes);
-                var offset = i * 7;
-                oldRecordId = extendBuffer.getLong(offset);
-                isExists = oldRecordId != NO_RECORD_ID;
-
-                oldValueBytesLength = extendBuffer.getInt(offset + 24);
-
-                extendBuffer.putLong(offset, recordId);
-                extendBuffer.putLong(offset + 8, l);
-                extendBuffer.putLong(offset + 16, seq);
-                extendBuffer.putInt(offset + 24, valueBytesLength);
-                isPut = true;
+                pos = i;
                 break;
             }
         }
 
-        if (!isPut) {
+        if (pos == -1) {
             if (bucketIndex % 1024 == 0) {
                 log.info("All key hash buckets expand, bucket index={}, from bytes length={}", bucketIndex, bytes.length);
             }
@@ -361,15 +352,23 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
             buffer2.putLong(extendBytes.length + 8, l);
             buffer2.putLong(extendBytes.length + 16, seq);
             buffer2.putInt(extendBytes.length + 24, valueBytesLength);
-        }
 
-        int segmentIndex;
-        if (isExists) {
-            segmentIndex = (int) (oldRecordId >> (18 + 18 + 2));
+            return new PutResult(false, 0, 0);
         } else {
-            segmentIndex = 0;
+            // update
+            buffer.putInt(pos, keyHash32);
+            var extendBuffer = ByteBuffer.wrap(extendBytes);
+            var offset = pos * 7;
+            var oldRecordId = extendBuffer.getLong(offset);
+            var segmentIndex = (int) (oldRecordId >> (18 + 18 + 2));
+            var oldValueBytesLength = extendBuffer.getInt(offset + 24);
+
+            extendBuffer.putLong(offset, recordId);
+            extendBuffer.putLong(offset + 8, l);
+            extendBuffer.putLong(offset + 16, seq);
+
+            return new PutResult(true, segmentIndex, oldValueBytesLength);
         }
-        return new PutResult(isExists, oldValueBytesLength, segmentIndex);
     }
 
     @VisibleForTesting
