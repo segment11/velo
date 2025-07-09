@@ -11,6 +11,7 @@ import io.velo.type.RedisZSet;
 import io.velo.type.encode.ListPack;
 import io.velo.type.encode.ZipList;
 
+import java.io.File;
 import java.nio.ByteBuffer;
 
 public class VeloRDBImporter implements RDBImporter {
@@ -36,8 +37,22 @@ public class VeloRDBImporter implements RDBImporter {
     private static final int RDB_TYPE_SET_LIST_PACK = 20;
     private static final int RDB_TYPE_STREAM_LIST_PACK3 = 21;
 
+    static void setLoadLibraryPath() {
+        var dir = new File(Utils.projectPath("/lib"));
+        if (dir.exists()) {
+            System.setProperty("jna.library.path", dir.getAbsolutePath());
+        } else {
+            dir = new File(Utils.projectPath("/build/libs/lib"));
+            if (dir.exists()) {
+                System.setProperty("jna.library.path", dir.getAbsolutePath());
+            } else {
+                System.out.println("Can't find lib directory");
+            }
+        }
+    }
+
     static {
-        System.setProperty("jna.library.path", Utils.projectPath("/build/libs"));
+        setLoadLibraryPath();
     }
 
     @Override

@@ -8,6 +8,9 @@ import io.velo.type.RedisZSet
 import spock.lang.Specification
 
 class VeloRDBImporterTest extends Specification {
+    static {
+        VeloRDBImporter.setLoadLibraryPath()
+    }
 
     def 'test restore'() {
         given:
