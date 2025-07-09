@@ -1412,6 +1412,25 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         return isDeleted;
     }
 
+    @VisibleForTesting
+    int intervalRemoveExpiredLastBucketIndex = 0;
+
+    void intervalRemoveExpired() {
+        assert ConfForGlobal.pureMemoryV2;
+
+        var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
+
+        var r = allKeyHashBuckets.removeExpired(intervalRemoveExpiredLastBucketIndex);
+        for (var entry : r.entrySet()) {
+            metaChunkSegmentFillRatio.remove(entry.getKey(), entry.getValue());
+        }
+
+        intervalRemoveExpiredLastBucketIndex++;
+        if (intervalRemoveExpiredLastBucketIndex >= bucketsPerSlot) {
+            intervalRemoveExpiredLastBucketIndex = 0;
+        }
+    }
+
     /**
      * Flushes all data managed by this KeyLoader, clearing meta information and truncating file descriptors.
      */

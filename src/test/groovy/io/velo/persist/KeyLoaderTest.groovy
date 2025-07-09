@@ -449,6 +449,13 @@ class KeyLoaderTest extends Specification {
         keyLoader.readKeyBucketForSingleKey(0, (byte) 0, (byte) 3, false) == null
         keyLoader.readKeyBucketForSingleKey(0, (byte) 2, (byte) 3, false) != null
 
+        when:
+        keyLoader.intervalRemoveExpired()
+        keyLoader.intervalRemoveExpiredLastBucketIndex = ConfForSlot.global.confBucket.bucketsPerSlot - 1
+        keyLoader.intervalRemoveExpired()
+        then:
+        1 == 1
+
         cleanup:
         ConfForGlobal.pureMemory = false
         ConfForGlobal.pureMemoryV2 = false

@@ -1483,6 +1483,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         @Override
         public void run() {
+            assert oneSlot.keyLoader != null;
+            oneSlot.keyLoader.intervalRemoveExpired();
+
             final var maxSegmentIndex = oneSlot.chunk.getMaxSegmentIndex();
 
             final int onceCheckMaxSegmentCount = 64;
@@ -1490,7 +1493,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             // only keep fill ratio 100%, 95% and 90%, gc those < 90%
             final int keepFillRatioBuckets = 3;
 
-            assert oneSlot.keyLoader != null;
             var metaChunkSegmentFillRatio = oneSlot.keyLoader.metaChunkSegmentFillRatio;
             var segmentIndexList = metaChunkSegmentFillRatio.findSegmentsFillRatioLessThan(lastCheckedSegmentIndex, onceCheckMaxSegmentCount,
                     MetaChunkSegmentFillRatio.FILL_RATIO_BUCKETS - keepFillRatioBuckets);

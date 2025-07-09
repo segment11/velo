@@ -1,6 +1,5 @@
 package io.velo.persist;
 
-import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
@@ -20,6 +19,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+
+import static io.velo.CompressedValue.NO_EXPIRE;
 
 // pure memory v2
 // refer to faster
@@ -189,12 +190,12 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
 
                 var offset = i * 7;
                 var recordId = extendBuffer.getLong(offset);
-                var l = extendBuffer.getLong(offset + 8);
+                var expireAtAndShortType = extendBuffer.getLong(offset + 8);
                 // high 48 bit is real expire at millisecond, 8 bit is short type
-                var expireAt = l >>> 16;
-                byte shortType = (byte) (l & 0xFF);
+                var expireAt = expireAtAndShortType >>> 16;
+                byte shortType = (byte) (expireAtAndShortType & 0xFF);
 
-                if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
+                if (expireAt != NO_EXPIRE && expireAt < currentTimeMillis) {
                     expiredOrNotMatchedCount++;
                     continue;
                 }
@@ -262,13 +263,48 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
         var extendBuffer = ByteBuffer.wrap(extendBytes);
         var offset = pos * 7;
         var oldRecordId = extendBuffer.getLong(offset);
-        var segmentIndex = (int) (oldRecordId >> (18 + 18 + 2));
+        var oldSegmentIndex = (int) (oldRecordId >> (18 + 18 + 2));
         var oldValueBytesLength = extendBuffer.getInt(offset + 24);
 
         // set 0
         extendBuffer.put(offset, new byte[4 * 7]);
 
-        return new PutResult(true, segmentIndex, oldValueBytesLength);
+        return new PutResult(true, oldSegmentIndex, oldValueBytesLength);
+    }
+
+    // return value bytes length total sum group by segment index, for fill ratio re-calc
+    HashMap<Integer, Integer> removeExpired(int bucketIndex) {
+        assert bucketIndex < ConfForSlot.global.confBucket.bucketsPerSlot;
+        HashMap<Integer, Integer> r = new HashMap<>();
+
+        var bytes = allKeyHash32BitBytesArray[bucketIndex];
+        var extendBytes = extendBytesArray[bucketIndex];
+        var buffer = ByteBuffer.wrap(bytes);
+        var extendBuffer = ByteBuffer.wrap(extendBytes);
+
+        for (int i = 0; i < bytes.length; i += 4) {
+            var targetKeyHash32 = buffer.getInt(i);
+            if (targetKeyHash32 == 0) {
+                continue;
+            }
+
+            var offset = i * 7;
+            var expireAtAndShortType = extendBuffer.getLong(offset + 8);
+            var expireAt = expireAtAndShortType >>> 16;
+            if (expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis()) {
+                var recordId = extendBuffer.getLong(offset);
+                var segmentIndex = (int) (recordId >> (18 + 18 + 2));
+                var valueBytesLength = extendBuffer.getInt(offset + 24);
+                var oldSum = r.get(segmentIndex);
+                var newSum = oldSum == null ? valueBytesLength : oldSum + valueBytesLength;
+                r.put(segmentIndex, newSum);
+
+                buffer.putInt(i, 0);
+                extendBuffer.put(offset, new byte[4 * 7]);
+            }
+        }
+
+        return r;
     }
 
     @TestOnly
@@ -360,14 +396,15 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
             var extendBuffer = ByteBuffer.wrap(extendBytes);
             var offset = pos * 7;
             var oldRecordId = extendBuffer.getLong(offset);
-            var segmentIndex = (int) (oldRecordId >> (18 + 18 + 2));
+            var oldSegmentIndex = (int) (oldRecordId >> (18 + 18 + 2));
             var oldValueBytesLength = extendBuffer.getInt(offset + 24);
 
             extendBuffer.putLong(offset, recordId);
             extendBuffer.putLong(offset + 8, l);
             extendBuffer.putLong(offset + 16, seq);
+            extendBuffer.putInt(offset + 24, valueBytesLength);
 
-            return new PutResult(true, segmentIndex, oldValueBytesLength);
+            return new PutResult(true, oldSegmentIndex, oldValueBytesLength);
         }
     }
 

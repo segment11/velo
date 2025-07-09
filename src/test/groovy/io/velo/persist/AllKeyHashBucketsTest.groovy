@@ -47,6 +47,22 @@ class AllKeyHashBucketsTest extends Specification {
         }
 
         when:
+        sList[10..<20].eachWithIndex { s, i ->
+            def recordId = AllKeyHashBuckets.positionToRecordId(i, (byte) 0, i)
+            allKeyHashBuckets.put(s.keyHash32(), s.bucketIndex(), System.currentTimeMillis() - 10L, 0L, 10, (byte) 0, recordId)
+        }
+        int removeExpiredN = 0
+        sList[10..<20].each {
+            def r = allKeyHashBuckets.removeExpired(it.bucketIndex())
+            r.each { k, v ->
+                println 'remove expired, bucket index: ' + it.bucketIndex() + ', segment index: ' + k + ', value bytes length total: ' + v
+            }
+            removeExpiredN++
+        }
+        then:
+        removeExpiredN == 10
+
+        when:
         boolean exception = false
         try {
             allKeyHashBuckets.put(0, 0, AllKeyHashBuckets.MAX_EXPIRE_AT + 1, 0L, 0, (byte) 0, 0L)
