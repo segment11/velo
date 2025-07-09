@@ -313,11 +313,11 @@ class RGroupTest extends Specification {
         rGroup.from(BaseCommand.mockAGroup())
 
         when:
-        VeloRDBImporter.DEBUG = true
         Debug.instance.logRestore = true
         def reply = rGroup.execute('restore a 0 bbb replace absttl idletime 0 freq 0')
         then:
-        reply == OKReply.INSTANCE
+        // Serialized value too short
+        reply instanceof ErrorReply
 
         when:
         Debug.instance.logRestore = false
@@ -351,9 +351,6 @@ class RGroupTest extends Specification {
         reply = rGroup.execute('restore a 0 bbb replace absttl freq')
         then:
         reply == ErrorReply.SYNTAX
-
-        cleanup:
-        VeloRDBImporter.DEBUG = false
     }
 
     def 'test role'() {

@@ -18,7 +18,6 @@ class ConfForGlobalTest extends Specification {
         println ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression
 
         println ConfForGlobal.netListenAddresses
-        println ConfForGlobal.isUseDirectIO
 
         println ConfForGlobal.dirPath
         println ConfForGlobal.pureMemory

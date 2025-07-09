@@ -11,8 +11,6 @@ import io.velo.persist.index.IndexHandlerPool;
 import io.velo.repl.cluster.MultiShard;
 import io.velo.reply.AsyncReply;
 import io.velo.reply.Reply;
-import jnr.ffi.LibraryLoader;
-import jnr.posix.LibC;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -78,11 +76,7 @@ public class LocalPersist implements NeedCleanUp {
      * Initializes the LibC library loader for C library.
      */
     private LocalPersist() {
-        System.setProperty("jnr.ffi.asm.enabled", "false");
-        libC = LibraryLoader.create(LibC.class).load("c");
     }
-
-    private final LibC libC;
 
     private OneSlot[] oneSlots;
 
@@ -203,7 +197,7 @@ public class LocalPersist implements NeedCleanUp {
         for (short slot = 0; slot < slotNumber; slot++) {
             var i = slot % netWorkers;
             var oneSlot = new OneSlot(slot, slotNumber, snowFlakes[i], persistDir, persistConfig);
-            oneSlot.initFds(libC);
+            oneSlot.initFds();
 
             oneSlots[slot] = oneSlot;
         }

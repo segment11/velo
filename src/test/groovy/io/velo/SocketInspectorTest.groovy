@@ -15,8 +15,10 @@ import java.time.Duration
 
 class SocketInspectorTest extends Specification {
     static TcpSocket mockTcpSocket(Eventloop eventloop = null, int port = 46379) {
-        return TcpSocket.wrapChannel(eventloop, SocketChannel.open(),
+        def socket = TcpSocket.wrapChannel(eventloop, SocketChannel.open(),
                 new InetSocketAddress('localhost', port), null)
+        SocketInspector.createUserDataIfNotSet(socket)
+        return socket
     }
 
     def 'test base'() {

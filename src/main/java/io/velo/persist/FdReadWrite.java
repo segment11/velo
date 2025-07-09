@@ -1,17 +1,15 @@
 package io.velo.persist;
 
 import com.github.luben.zstd.Zstd;
-import com.google.common.io.Files;
 import com.kenai.jffi.MemoryIO;
 import com.kenai.jffi.PageManager;
-import io.velo.*;
+import io.velo.ConfForGlobal;
+import io.velo.ConfForSlot;
+import io.velo.NeedCleanUp;
+import io.velo.StaticMemoryPrepareBytesStats;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
-import jnr.constants.platform.OpenFlags;
-import jnr.ffi.LastError;
-import jnr.ffi.Runtime;
-import jnr.posix.LibC;
 import org.apache.commons.collections4.map.LRUMap;
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.util.RamUsageEstimator;
@@ -25,8 +23,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,39 +40,6 @@ import static io.velo.ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression;
 public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp {
 
     /**
-     * File permission for read/write operations.
-     */
-    private static final int PERM = 00644;
-
-    /**
-     * Direct I/O flag. Loaded from configuration file if available, otherwise defaults to 0x4000.
-     */
-    public static final int O_DIRECT;
-
-    static {
-        var oDirectIntStr = System.getenv("O_DIRECT");
-        if (oDirectIntStr != null) {
-            O_DIRECT = Integer.parseInt(oDirectIntStr);
-        } else {
-            var extendConfigFile = Paths.get("velo_extend.properties").toFile();
-            if (extendConfigFile.exists()) {
-                final String key = "o_direct";
-                try {
-                    var lines = Files.readLines(extendConfigFile, Charset.defaultCharset());
-                    var line = lines.stream().filter(l -> l.startsWith(key)).findFirst().orElseThrow();
-                    var value = line.split("=")[1].trim();
-                    O_DIRECT = Integer.parseInt(value);
-                    System.out.println("Load O_DIRECT=" + O_DIRECT);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            } else {
-                O_DIRECT = 0x4000;
-            }
-        }
-    }
-
-    /**
      * Logger for logging various actions and errors within this class.
      */
     private static final Logger log = LoggerFactory.getLogger(FdReadWrite.class);
@@ -86,11 +49,10 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      *
      * @param slot the slot number associated with this file descriptor
      * @param name the name of the file descriptor
-     * @param libC the LibC instance used for direct I/O operations (can be null in pure memory mode)
      * @param file the file to be read from and written to
      * @throws IOException if there is an error during file operations
      */
-    public FdReadWrite(short slot, String name, @NullableOnlyTest LibC libC, @NotNull File file) throws IOException {
+    public FdReadWrite(short slot, String name, @NotNull File file) throws IOException {
         this.slot = slot;
         this.name = name;
         if (!ConfForGlobal.pureMemory) {
@@ -99,21 +61,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             }
             this.writeIndex = file.length();
 
-            this.libC = libC;
-            if (ConfForGlobal.isUseDirectIO) {
-                this.fd = libC.open(file.getAbsolutePath(), O_DIRECT | OpenFlags.O_RDWR.value() | OpenFlags.O_CREAT.value(), PERM);
-                if (fd < 0) {
-                    throw new IOException("Open fd error=" + strerror());
-                }
-                this.raf = null;
-            } else {
-                this.fd = 0;
-                this.raf = new RandomAccessFile(file, "rw");
-            }
-            log.info("Opened fd={}, name={}, file length={}MB", fd, name, this.writeIndex / 1024 / 1024);
+            this.raf = new RandomAccessFile(file, "rw");
+            log.info("Opened name={}, file length={}MB", name, this.writeIndex / 1024 / 1024);
         } else {
-            this.libC = null;
-            this.fd = 0;
             this.raf = null;
             log.warn("Pure memory mode, not use fd, name={}", name);
         }
@@ -202,16 +152,6 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     final String name;
 
     /**
-     * The LibC instance used for direct I/O operations.
-     */
-    private final LibC libC;
-
-    /**
-     * The file descriptor for direct I/O operations.
-     */
-    private final int fd;
-
-    /**
      * The RandomAccessFile instance used for file operations (used if direct I/O is not enabled).
      */
     private final RandomAccessFile raf;
@@ -236,7 +176,6 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     public String toString() {
         return "FdReadWrite{" +
                 "name='" + name + '\'' +
-                ", fd=" + fd +
                 ", writeIndex=" + writeIndex +
                 ", isLRUOn=" + isLRUOn +
                 ", isChunkFd=" + isChunkFd +
@@ -800,14 +739,6 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             forOneWalGroupBatchBuffer = null;
         }
 
-        if (fd != 0) {
-            int r = libC.close(fd);
-            if (r < 0) {
-                System.err.println("Close fd error=" + strerror() + ", name=" + name);
-            }
-            System.out.println("Closed fd=" + fd + ", name=" + name);
-        }
-
         if (raf != null) {
             try {
                 raf.close();
@@ -991,15 +922,11 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
         var beginT = System.nanoTime();
         int n;
-        if (ConfForGlobal.isUseDirectIO) {
-            n = libC.pread(fd, buffer, readLength, offset);
-        } else {
-            try {
-                raf.seek(offset);
-                n = raf.getChannel().read(buffer);
-            } catch (IOException e) {
-                throw new RuntimeException("Read error, name=" + name, e);
-            }
+        try {
+            raf.seek(offset);
+            n = raf.getChannel().read(buffer);
+        } catch (IOException e) {
+            throw new RuntimeException("Read error, name=" + name, e);
         }
         var costT = (System.nanoTime() - beginT) / 1000;
 
@@ -1009,15 +936,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         readBytesTotal += n;
 
         if (n != readLength) {
-            if (ConfForGlobal.isUseDirectIO) {
-                var strerror = strerror();
-                log.error("Read error, n={}, read length={}, name={}, error={}", n, readLength, name, strerror);
-                throw new RuntimeException("Read error, n=" + n + ", read length=" + readLength + ", name=" + name + ", error=" + strerror);
-            } else {
-                if (n < readLength) {
-                    log.error("Read error, n={}, read length={}, name={}", n, readLength, name);
-                    throw new RuntimeException("Read error, n=" + n + ", read length=" + readLength + ", name=" + name);
-                }
+            if (n < readLength) {
+                log.error("Read error, n={}, read length={}, name={}", n, readLength, name);
+                throw new RuntimeException("Read error, n=" + n + ", read length=" + readLength + ", name=" + name);
             }
         }
 
@@ -1082,15 +1003,11 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
         var beginT = System.nanoTime();
         int n;
-        if (ConfForGlobal.isUseDirectIO) {
-            n = libC.pwrite(fd, buffer, capacity, offset);
-        } else {
-            try {
-                raf.seek(offset);
-                n = raf.getChannel().write(buffer);
-            } catch (IOException e) {
-                throw new RuntimeException("Write error, name=" + name, e);
-            }
+        try {
+            raf.seek(offset);
+            n = raf.getChannel().write(buffer);
+        } catch (IOException e) {
+            throw new RuntimeException("Write error, name=" + name, e);
         }
         var costT = (System.nanoTime() - beginT) / 1000;
 
@@ -1100,14 +1017,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         writeBytesTotal += n;
 
         if (n != capacity) {
-            if (ConfForGlobal.isUseDirectIO) {
-                var strerror = strerror();
-                log.error("Write error, n={}, buffer capacity={}, name={}, error={}", n, capacity, name, strerror);
-                throw new RuntimeException("Write error, n=" + n + ", buffer capacity=" + capacity + ", name=" + name + ", error=" + strerror);
-            } else {
-                log.error("Write error, n={}, buffer capacity={}, name={}", n, capacity, name);
-                throw new RuntimeException("Write error, n=" + n + ", buffer capacity=" + capacity + ", name=" + name);
-            }
+            log.error("Write error, n={}, buffer capacity={}, name={}", n, capacity, name);
+            throw new RuntimeException("Write error, n=" + n + ", buffer capacity=" + capacity + ", name=" + name);
         }
 
         if (offset + capacity > writeIndex) {
@@ -1447,20 +1358,13 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             return;
         }
 
-        if (ConfForGlobal.isUseDirectIO) {
-            var r = libC.ftruncate(fd, 0);
-            if (r < 0) {
-                throw new RuntimeException("Truncate error=" + strerror());
-            }
-            log.info("Truncate fd={}, name={}", fd, name);
-        } else {
-            if (raf != null) {
-                try {
-                    raf.setLength(0);
-                    log.info("Truncate raf, name={}", name);
-                } catch (IOException e) {
-                    throw new RuntimeException("Truncate error, name=" + name, e);
-                }
+
+        if (raf != null) {
+            try {
+                raf.setLength(0);
+                log.info("Truncate raf, name={}", name);
+            } catch (IOException e) {
+                throw new RuntimeException("Truncate error, name=" + name, e);
             }
         }
         writeIndex = 0;
@@ -1487,33 +1391,14 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             return;
         }
 
-        if (ConfForGlobal.isUseDirectIO) {
-            var r = libC.ftruncate(fd, length);
-            if (r < 0) {
-                throw new RuntimeException("Truncate length error=" + strerror());
-            }
-            log.info("Truncate length fd={}, name={}", fd, name);
-        } else {
-            if (raf != null) {
-                try {
-                    raf.setLength(length);
-                    log.info("Truncate length raf, name={}", name);
-                } catch (IOException e) {
-                    throw new RuntimeException("Truncate length error, name=" + name, e);
-                }
+        if (raf != null) {
+            try {
+                raf.setLength(length);
+                log.info("Truncate length raf, name={}", name);
+            } catch (IOException e) {
+                throw new RuntimeException("Truncate length error, name=" + name, e);
             }
         }
         writeIndex = length;
-    }
-
-    /**
-     * Retrieves the error string from the last system error.
-     *
-     * @return the error string.
-     */
-    private String strerror() {
-        var systemRuntime = Runtime.getSystemRuntime();
-        var errno = LastError.getLastError(systemRuntime);
-        return libC.strerror(errno);
     }
 }

@@ -117,9 +117,9 @@ dependencies {
     implementation group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.14.3'
     implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.14.3'
 
-    implementation group: 'io.prometheus', name: 'simpleclient', version: '0.15.0'
-    implementation group: 'io.prometheus', name: 'simpleclient_httpserver', version: '0.15.0'
-    implementation group: 'io.prometheus', name: 'simpleclient_hotspot', version: '0.15.0'
+    implementation group: 'io.prometheus', name: 'simpleclient', version: '0.16.0'
+    implementation group: 'io.prometheus', name: 'simpleclient_httpserver', version: '0.16.0'
+    implementation group: 'io.prometheus', name: 'simpleclient_hotspot', version: '0.16.0'
 
     implementation group: 'org.apache.lucene', name: 'lucene-core', version: '9.11.1'
 
@@ -278,19 +278,4 @@ task copyDependencies(type: Copy) {
     into 'build/libs/lib'
 }
 
-task cBuild(type: Exec) {
-    commandLine = ['gcc', 'src/main/c/get_o_direct.c', '-o', 'build/get_o_direct']
-}
-
-task cRun(type: Exec) {
-    def output = new ByteArrayOutputStream()
-    commandLine = 'build/get_o_direct'
-    standardOutput = output
-    doLast {
-        new File('src/main/resources/velo_extend.properties').text = 'o_direct=' + output.toString().trim()
-    }
-}
-
-cRun.dependsOn cBuild
-
-jar.dependsOn copyDynScript, copyLog4j2, copyConfigFile, copyDependencies, cRun
+jar.dependsOn copyDynScript, copyLog4j2, copyConfigFile, copyDependencies

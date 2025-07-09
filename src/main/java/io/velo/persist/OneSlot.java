@@ -19,7 +19,6 @@ import io.velo.repl.content.RawBytesContent;
 import io.velo.repl.incremental.*;
 import io.velo.task.ITask;
 import io.velo.task.TaskChain;
-import jnr.posix.LibC;
 import org.apache.commons.collections4.map.LRUMap;
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.util.RamUsageEstimator;
@@ -1026,7 +1025,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return keyLoader.getKeyCount() + getWalKeyCount();
     }
 
-    private LibC libC;
     Chunk chunk;
 
     /**
@@ -2169,12 +2167,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     /**
      * Initialize the file descriptors.
      *
-     * @param libC the native C library
      * @throws IOException if an I/O error occurs
      */
-    void initFds(@NotNull LibC libC) throws IOException {
-        this.libC = libC;
-        this.keyLoader.initFds(libC);
+    void initFds() throws IOException {
+        this.keyLoader.initFds();
 
         if (!ConfForGlobal.pureMemory) {
             // do every 10ms
@@ -2188,7 +2184,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private void initChunk() throws IOException {
         this.chunk = new Chunk(slot, slotDir, this);
-        chunk.initFds(libC);
+        chunk.initFds();
 
         updateChunkSegmentIndexFromMeta();
     }

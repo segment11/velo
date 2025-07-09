@@ -1172,9 +1172,6 @@ public class MultiWorkerServer extends Launcher {
                 throw new IllegalArgumentException("Eventloop idle millis must be between 10 and 100");
             }
 
-            ConfForGlobal.isUseDirectIO = config.get(ofBoolean(), "persist.isUseDirectIO", false);
-            log.warn("Global config, isUseDirectIO={}", ConfForGlobal.isUseDirectIO);
-
             ConfForGlobal.PASSWORD = config.get(ofString(), "password", null);
 
             ConfForGlobal.pureMemory = config.get(ofBoolean(), "pureMemory", false);

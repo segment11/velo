@@ -2,6 +2,7 @@ package io.velo.command;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.velo.Utils;
 import io.velo.rdb.RedisLzf;
 import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
@@ -34,6 +35,10 @@ public class VeloRDBImporter implements RDBImporter {
     private static final int RDB_TYPE_STREAM_LIST_PACK2 = 19;
     private static final int RDB_TYPE_SET_LIST_PACK = 20;
     private static final int RDB_TYPE_STREAM_LIST_PACK3 = 21;
+
+    static {
+        System.setProperty("jna.library.path", Utils.projectPath("/build/libs"));
+    }
 
     @Override
     public void restore(ByteBuf buf, RDBCallback callback) {

@@ -77,6 +77,11 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @param lastSetSlot the last set slot
      */
     public static void updateLastSetSeq(ITcpSocket socket, long lastSetSeq, short lastSetSlot) {
+        // for unit test
+        if (socket == null) {
+            return;
+        }
+
         var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
         assert veloUserData != null;
         veloUserData.lastSetSeq = lastSetSeq;

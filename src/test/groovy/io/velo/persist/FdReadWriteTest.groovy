@@ -23,8 +23,6 @@ class FdReadWriteTest extends Specification {
 
     def 'test write and read'() {
         given:
-        System.setProperty('jnr.ffi.asm.enabled', 'false')
-        def libC = LibraryLoader.create(LibC.class).load('c')
         def oneFile1 = new File('/tmp/test-fd-read-write-chunk')
         if (oneFile1.exists()) {
             oneFile1.delete()
@@ -49,12 +47,12 @@ class FdReadWriteTest extends Specification {
         ConfForSlot.global.confBucket.lruPerFd.maxSize = 10
 
         and:
-        def fdChunk = new FdReadWrite(slot, 'test', libC, oneFile1)
+        def fdChunk = new FdReadWrite(slot, 'test', oneFile1)
         fdChunk.initByteBuffers(true, 0)
         println fdChunk
         println 'in memory size estimate: ' + fdChunk.estimate(new StringBuilder())
 
-        def fdKeyBucket = new FdReadWrite(slot, 'test2', libC, oneFile2)
+        def fdKeyBucket = new FdReadWrite(slot, 'test2', oneFile2)
         fdKeyBucket.initByteBuffers(false, 0)
         def walGroupNumber = Wal.calcWalGroupNumber()
         fdKeyBucket.resetAllBytesByOneWalGroupIndexForKeyBucketOneSplitIndex(walGroupNumber)
@@ -85,8 +83,8 @@ class FdReadWriteTest extends Specification {
         // lru off
         ConfForSlot.global.confChunk.lruPerFd.maxSize = 0
         ConfForSlot.global.confBucket.lruPerFd.maxSize = 0
-        def fdChunk11 = new FdReadWrite(slot, 'test11', libC, oneFile11)
-        def fdKeyBucket22 = new FdReadWrite(slot, 'test22', libC, oneFile22)
+        def fdChunk11 = new FdReadWrite(slot, 'test11', oneFile11)
+        def fdKeyBucket22 = new FdReadWrite(slot, 'test22', oneFile22)
         fdChunk11.initByteBuffers(true, 0)
         fdKeyBucket22.initByteBuffers(false, 0)
         then:
@@ -237,10 +235,10 @@ class FdReadWriteTest extends Specification {
         fdKeyBucket.cleanUp()
 
         ConfForGlobal.pureMemory = true
-        fdChunk = new FdReadWrite(slot, 'test', libC, oneFile1)
+        fdChunk = new FdReadWrite(slot, 'test', oneFile1)
         fdChunk.initByteBuffers(true, 0)
         println 'in memory size estimate: ' + fdChunk.estimate(new StringBuilder())
-        fdKeyBucket = new FdReadWrite(slot, 'test2', libC, oneFile2)
+        fdKeyBucket = new FdReadWrite(slot, 'test2', oneFile2)
         fdKeyBucket.initByteBuffers(false, 0)
         println 'in memory size estimate: ' + fdKeyBucket.estimate(new StringBuilder())
         then:
@@ -374,7 +372,7 @@ class FdReadWriteTest extends Specification {
         when:
         ConfForGlobal.pureMemory = false
         ConfForSlot.global.confBucket.lruPerFd.maxSize = ConfForSlot.global.confBucket.bucketsPerSlot
-        fdKeyBucket = new FdReadWrite(slot, 'test2', libC, oneFile2)
+        fdKeyBucket = new FdReadWrite(slot, 'test2', oneFile2)
         fdKeyBucket.initByteBuffers(false, 0)
         def n = fdKeyBucket.warmUp()
         then:
@@ -446,7 +444,7 @@ class FdReadWriteTest extends Specification {
 
         def segmentLength = ConfForSlot.global.confChunk.segmentLength
 
-        def fdChunk = new FdReadWrite(slot, 'test', null, oneFile1)
+        def fdChunk = new FdReadWrite(slot, 'test', oneFile1)
         fdChunk.initByteBuffers(true, 0)
 
         when:
@@ -480,7 +478,7 @@ class FdReadWriteTest extends Specification {
 
         ConfForSlot.global.confBucket.lruPerFd.maxSize = 0
 
-        def fdKeyBucket = new FdReadWrite(slot, 'test2', null, oneFile2)
+        def fdKeyBucket = new FdReadWrite(slot, 'test2', oneFile2)
         fdKeyBucket.initByteBuffers(false, 0)
 
         when:

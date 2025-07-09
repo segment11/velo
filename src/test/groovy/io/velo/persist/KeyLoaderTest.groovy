@@ -19,9 +19,6 @@ class KeyLoaderTest extends Specification {
             }
         }
 
-        System.setProperty('jnr.ffi.asm.enabled', 'false')
-        def libC = LibraryLoader.create(LibC.class).load('c')
-
         def snowFlake = new SnowFlake(1, 1)
 
         short slot = 0
@@ -30,7 +27,7 @@ class KeyLoaderTest extends Specification {
         keyLoader.cleanUp()
         keyLoader.keyCount
 
-        keyLoader.initFds(libC)
+        keyLoader.initFds()
         keyLoader.initFds((byte) 1)
         keyLoader
     }
@@ -503,7 +500,7 @@ class KeyLoaderTest extends Specification {
         final short slot = 0
         def oneSlot = new OneSlot(slot, Consts.slotDir, null, null)
         def keyLoader2 = new KeyLoader(slot, ConfForSlot.global.confBucket.bucketsPerSlot, Consts.slotDir2, keyLoader.snowFlake, oneSlot)
-        keyLoader2.initFds(keyLoader.libC)
+        keyLoader2.initFds()
         keyLoader2.initFds((byte) 1)
         keyLoader2.persistShortValueListBatchInOneWalGroup(0, shortValueList, xForBinlog)
         // put again
@@ -549,7 +546,7 @@ class KeyLoaderTest extends Specification {
         final short slot = 0
         def oneSlot = new OneSlot(slot, Consts.slotDir, null, null)
         def keyLoader2 = new KeyLoader(slot, ConfForSlot.global.confBucket.bucketsPerSlot, Consts.slotDir2, keyLoader.snowFlake, oneSlot)
-        keyLoader2.initFds(keyLoader.libC)
+        keyLoader2.initFds()
         keyLoader2.initFds((byte) 1)
         keyLoader2.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog, null)
         then:

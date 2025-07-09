@@ -23,9 +23,6 @@ public class KeyBucketTestDataGenerator implements TestDataGenerator, WalVDataGe
         var confForSlot = confForSlot();
         var slotDir = slotDir();
 
-        System.setProperty("jnr.ffi.asm.enabled", "false");
-        var libC = LibraryLoader.create(LibC.class).load("c");
-
         final byte splitNumber = 3;
         var sharedBytesArray = new byte[splitNumber][];
         var fdReadWriteArray = new FdReadWrite[splitNumber];
@@ -35,7 +32,7 @@ public class KeyBucketTestDataGenerator implements TestDataGenerator, WalVDataGe
 
             // prometheus metric labels use _ instead of -
             var name = "key_bucket_split_" + splitIndex + "_slot_" + slot;
-            FdReadWrite fdReadWrite = new FdReadWrite(slot, name, libC, file);
+            FdReadWrite fdReadWrite = new FdReadWrite(slot, name, file);
             fdReadWrite.initByteBuffers(false, splitIndex);
             fdReadWriteArray[splitIndex] = fdReadWrite;
         }

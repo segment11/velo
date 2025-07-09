@@ -148,11 +148,7 @@ class ChunkTest extends Specification {
         given:
         def chunk = prepareOne(slot)
         def oneSlot = chunk.oneSlot
-
-        and:
-        System.setProperty('jnr.ffi.asm.enabled', 'false')
-        def libC = LibraryLoader.create(LibC.class).load('c')
-        chunk.initFds(libC)
+        chunk.initFds()
 
         when:
         def sb = new StringBuilder()
@@ -200,9 +196,7 @@ class ChunkTest extends Specification {
         def confChunk = ConfForSlot.global.confChunk
 
         and:
-        System.setProperty('jnr.ffi.asm.enabled', 'false')
-        def libC = LibraryLoader.create(LibC.class).load('c')
-        chunk.initFds(libC)
+        chunk.initFds()
         chunk.collect()
 
         def xForBinlog = new XOneWalGroupPersist(true, false, 0)

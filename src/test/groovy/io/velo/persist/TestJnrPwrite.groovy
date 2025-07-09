@@ -14,7 +14,6 @@ class TestJnrPwrite extends Specification {
     def 'test pwrite and pread'() {
         given:
         System.setProperty('jnr.ffi.asm.enabled', 'false')
-
         def libC = LibraryLoader.create(LibC.class).load('c')
         String filePath = 'test_jnr_libc'
         def file = new File(filePath)
@@ -70,7 +69,7 @@ class TestJnrPwrite extends Specification {
 
         when:
         buf.reset()
-        def fd = libC.open(filePath, FdReadWrite.O_DIRECT | OpenFlags.O_RDWR.value(), 0644)
+        def fd = libC.open(filePath, 0x4000 | OpenFlags.O_RDWR.value(), 0644)
         if (fd < 0) {
             def systemRuntime = jnr.ffi.Runtime.systemRuntime
             def errno = LastError.getLastError(systemRuntime)

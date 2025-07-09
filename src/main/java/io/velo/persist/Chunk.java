@@ -8,7 +8,6 @@ import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import io.velo.repl.incremental.XOneWalGroupPersist;
-import jnr.posix.LibC;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -171,11 +170,10 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     /**
      * Initialize file descriptors for this chunk.
      *
-     * @param libC the native C library
      * @throws IOException if an I/O error occurs
      */
     @VisibleForTesting
-    void initFds(LibC libC) throws IOException {
+    void initFds() throws IOException {
         this.fdLengths = new int[fdPerChunk];
         this.fdReadWriteArray = new FdReadWrite[fdPerChunk];
         for (int i = 0; i < fdPerChunk; i++) {
@@ -184,7 +182,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             var file = new File(slotDir, "chunk-data-" + i);
             fdLengths[i] = (int) file.length();
 
-            var fdReadWrite = new FdReadWrite(slot, name, libC, file);
+            var fdReadWrite = new FdReadWrite(slot, name, file);
             fdReadWrite.initByteBuffers(true, i);
 
             this.fdReadWriteArray[i] = fdReadWrite;

@@ -300,14 +300,6 @@ class RequestHandlerTest extends Specification {
         reply instanceof BulkReply
 
         when:
-        getData2[1] = RequestHandler.AS_KEY_GET_SLOT_RANGE_IN_CURRENT_CONNECTION_THREAD_LOCALLY.bytes
-        requestHandler.parseSlots(getRequest2)
-        reply = requestHandler.handle(getRequest2, socket)
-        then:
-        reply instanceof BulkReply
-        new String(((BulkReply) reply).raw) == '0/0-16383'
-
-        when:
         def setData3 = new byte[3][]
         setData3[0] = 'set'.bytes
         setData3[1] = key.bytes

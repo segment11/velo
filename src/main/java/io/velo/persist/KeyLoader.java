@@ -5,7 +5,6 @@ import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import io.velo.repl.incremental.XOneWalGroupPersist;
-import jnr.posix.LibC;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -409,12 +408,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     static final int KEY_OR_CELL_COST_TOLERANCE_COUNT_WHEN_CHECK_SPLIT = 0;
 
     /**
-     * The libc instance.
-     */
-    @VisibleForTesting
-    LibC libC;
-
-    /**
      * The array of file descriptor read/write managers, indexed by split index.
      */
     @VisibleForTesting
@@ -518,16 +511,14 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Initializes the file descriptors.
      *
-     * @param libC the libc instance.
      * @throws IOException if an I/O error occurs.
      */
-    public void initFds(LibC libC) throws IOException {
+    public void initFds() throws IOException {
         this.metaKeyBucketSplitNumber = new MetaKeyBucketSplitNumber(slot, slotDir);
         this.metaOneWalGroupSeq = new MetaOneWalGroupSeq(slot, slotDir);
         this.statKeyCountInBuckets = new StatKeyCountInBuckets(slot, slotDir);
 
         if (!ConfForGlobal.pureMemoryV2) {
-            this.libC = libC;
             this.fdReadWriteArray = new FdReadWrite[MAX_SPLIT_NUMBER];
 
             var maxSplitNumber = metaKeyBucketSplitNumber.maxSplitNumber();
@@ -557,7 +548,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             var name = "key_bucket_split_" + splitIndex + "_slot_" + slot;
             FdReadWrite fdReadWrite;
             try {
-                fdReadWrite = new FdReadWrite(slot, name, libC, file);
+                fdReadWrite = new FdReadWrite(slot, name, file);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
