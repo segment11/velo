@@ -900,10 +900,6 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
         var offset = oneInnerIndex * oneInnerLength;
         if (offset >= writeIndex) {
-            if (writeIndex != 0) {
-                log.warn("Read one inner bytes from fd, name={}, one inner index={}, offset={}, write index={}, read length={}",
-                        name, oneInnerIndex, offset, writeIndex, length);
-            }
             return null;
         }
 
