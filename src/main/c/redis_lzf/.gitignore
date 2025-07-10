@@ -4,3 +4,6 @@
 /CMakeCache.txt
 /libredis_lzf.so
 /Makefile
+/build
+/cmake-build-debug
+/.idea
