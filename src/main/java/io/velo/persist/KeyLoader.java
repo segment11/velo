@@ -1416,6 +1416,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             metaChunkSegmentFillRatio.remove(entry.getKey(), entry.getValue());
         }
 
+        if (intervalRemoveExpiredLastBucketIndex == 0) {
+            log.info("key buckets interval remove expired, refer segment count={}", r.size());
+        }
+
         intervalRemoveExpiredLastBucketIndex++;
         if (intervalRemoveExpiredLastBucketIndex >= bucketsPerSlot) {
             intervalRemoveExpiredLastBucketIndex = 0;
