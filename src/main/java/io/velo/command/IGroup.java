@@ -107,10 +107,6 @@ public class IGroup extends BaseCommand {
     private final CachedGroovyClassLoader cl = CachedGroovyClassLoader.getInstance();
 
     private Reply info() {
-        if (data.length != 1 && data.length != 2) {
-            return ErrorReply.FORMAT;
-        }
-
         var scriptText = RefreshLoader.getScriptText("/dyn/src/io/velo/script/InfoCommandHandle.groovy");
 
         var variables = new HashMap<String, Object>();

@@ -7,8 +7,8 @@ import io.velo.MultiWorkerServer
 import io.velo.ValkeyRawConfSupport
 import io.velo.monitor.RuntimeCpuCollector
 import io.velo.repl.ReplPair
+import io.velo.reply.AsyncReply
 import io.velo.reply.BulkReply
-import io.velo.reply.ErrorReply
 import io.velo.reply.Reply
 import org.apache.lucene.util.RamUsageEstimator
 import oshi.SystemInfo
@@ -32,74 +32,89 @@ class InfoCommand extends BaseCommand {
         list
     }
 
+    // exclude keyspace (async reply)
+    private static final String[] sections = ['server', 'clients', 'memory', 'persistence',
+                                              'stats', 'replication', 'cpu', 'modules', 'cluster']
+
+    private class StringOrReply {
+        String s
+        AsyncReply reply
+
+        StringOrReply(String s) {
+            this.s = s
+        }
+
+        StringOrReply(AsyncReply reply) {
+            this.reply = reply
+        }
+    }
+
+    private StringOrReply getOneSection(String section) {
+        if ('server' == section) {
+            return new StringOrReply(server())
+        } else if ('clients' == section) {
+            return new StringOrReply(clients())
+        } else if ('memory' == section) {
+            return new StringOrReply(memory())
+        } else if ('replication' == section) {
+            return new StringOrReply(replication())
+        } else if ('cpu' == section) {
+            return new StringOrReply(cpu())
+        } else if ('cluster' == section) {
+            return new StringOrReply(cluster())
+        } else if ('keyspace' == section) {
+            return new StringOrReply(keyspace())
+        } else {
+            return new StringOrReply('\r\n')
+        }
+    }
+
     @Override
     Reply handle() {
-        if (data.length != 1 && data.length != 2) {
-            return ErrorReply.FORMAT
-        }
-
         if (data.length == 2) {
             def section = new String(data[1])
-
-            if ('keyspace' == section) {
-                return keyspace()
-            } else if ('memory' == section) {
-                return memory()
-            } else if ('cpu' == section) {
-                return cpu()
-            } else if ('replication' == section) {
-                return replication()
-            } else if ('server' == section) {
-                return server()
+            def stringOrReply = getOneSection(section)
+            if (stringOrReply.s != null) {
+                return new BulkReply(stringOrReply.s.bytes)
             } else {
-                return ErrorReply.SYNTAX
+                return stringOrReply.reply
             }
+        } else if (data.length == 1) {
+            List<StringOrReply> infoList = []
+            for (section in sections) {
+                infoList << getOneSection(section)
+            }
+
+            def prefixContent = infoList.collect { it.s.trim() }.join('\n')
+            return keyspace(prefixContent)
         } else {
-            def infoServer = server() as BulkReply
-            def infoReplication = replication() as BulkReply
+            boolean hasKeyspace = false
+            List<StringOrReply> infoList = []
+            for (int i = 1; i < data.length; i++) {
+                def bytes = data[i]
+                // for unit test
+                if (bytes == null) {
+                    continue
+                }
 
-            def sb = new StringBuilder()
-            sb << new String(infoServer.raw)
-            sb << '\r\n'
-            sb << new String(infoReplication.raw)
+                def section = new String(bytes)
+                if ('keyspace' == section) {
+                    hasKeyspace = true
+                    continue
+                }
+                infoList << getOneSection(section)
+            }
 
-            return new BulkReply(sb.toString().bytes)
+            def prefixContent = infoList.collect { it.s.trim() }.join('\n')
+            if (hasKeyspace) {
+                return keyspace(prefixContent)
+            } else {
+                return new BulkReply(prefixContent.bytes)
+            }
         }
     }
 
-    private Reply keyspace() {
-        localPersist.doSthInSlots(oneSlot -> {
-            def n1 = oneSlot.getAllKeyCount()
-            def n2 = oneSlot.getAvgTtlInSecond().longValue()
-            return new Tuple2<Long, Long>(n1, n2)
-        }, resultList -> {
-            long keysTotal = 0
-            long avgTtlTotal = 0
-            for (one in resultList) {
-                Tuple2<Long, Long> tuple2 = one as Tuple2<Long, Long>
-                keysTotal += tuple2.v1
-                avgTtlTotal += tuple2.v2
-            }
-            def avgTtlFinal = (avgTtlTotal / resultList.size()).longValue()
-
-            def content = """# Keyspace
-db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
-"""
-            return new BulkReply(content.bytes)
-        })
-    }
-
-    private static List<Tuple2<String, Object>> slaveConnectState(ReplPair replPairAsSlave, int slaveIndex) {
-        List<Tuple2<String, Object>> list = []
-
-        def state = "ip=${replPairAsSlave.host},port=${replPairAsSlave.port}," +
-                "state=${replPairAsSlave.isLinkUp() ? 'online' : 'offline'},offset=${replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset},lag=1"
-        list << new Tuple2("slave${slaveIndex}", state)
-
-        list
-    }
-
-    private static Reply memory() {
+    private static String memory() {
         def memoryMXBean = ManagementFactory.getMemoryMXBean()
         def heapMemoryUsage = memoryMXBean.heapMemoryUsage
         def nonHeapMemoryUsage = memoryMXBean.nonHeapMemoryUsage
@@ -118,7 +133,8 @@ db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
         long totalPhysicalMemory = globalMemory.total
         def totalPhysicalMemoryHumanReadable = RamUsageEstimator.humanReadableUnits(totalPhysicalMemory).replace(' ', '')
 
-        String r = """# Memory
+        def r = """
+# Memory
 used_memory:${totalUsed}
 used_memory_human:${totalUsedHumanReadable}
 used_memory_rss:${totalUsed}
@@ -131,20 +147,58 @@ total_system_memory_human:${totalPhysicalMemoryHumanReadable}
 maxmemory:${totalMax}
 maxmemory_human:${totalMaxHumanReadable}
 """
-        new BulkReply(r.bytes)
+        r.toString()
     }
 
-    private static Reply cpu() {
+    private static String cpu() {
         def process = RuntimeCpuCollector.collect()
 
-        String r = """# Cpu
+        def r = """
+# Cpu
 used_cpu_sys:${(process.getKernelTime() / 1000).round(6)}
 used_cpu_user:${(process.getUserTime() / 1000).round(6)}
 """
-        new BulkReply(r.bytes)
+        r.toString()
     }
 
-    private Reply replication() {
+    private String server() {
+        // a copy one
+        def list = MultiWorkerServer.STATIC_GLOBAL_V.infoServerList
+
+        def upSeconds = ((System.currentTimeMillis() - MultiWorkerServer.UP_TIME) / 1000).intValue()
+        def upDays = (upSeconds / 3600 / 24).intValue()
+        list << new Tuple2<>('uptime_in_seconds', upSeconds.toString())
+        list << new Tuple2<>('uptime_in_days', upDays.toString())
+
+        def firstOneSlot = localPersist.firstOneSlot()
+        list << new Tuple2<>('run_id', firstOneSlot.masterUuid.toString().padLeft(40, '0'))
+
+        def sb = new StringBuilder()
+        sb << "# Server\r\n"
+        list.each { Tuple2<String, String> tuple ->
+            sb << tuple.v1 << ':' << tuple.v2 << '\r\n'
+        }
+        sb << '\r\n'
+
+        sb.toString()
+    }
+
+    private static String clients() {
+        // todo
+        ''
+    }
+
+    private static List<Tuple2<String, Object>> slaveConnectState(ReplPair replPairAsSlave, int slaveIndex) {
+        List<Tuple2<String, Object>> list = []
+
+        def state = "ip=${replPairAsSlave.host},port=${replPairAsSlave.port}," +
+                "state=${replPairAsSlave.isLinkUp() ? 'online' : 'offline'},offset=${replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset},lag=1"
+        list << new Tuple2("slave${slaveIndex}", state)
+
+        list
+    }
+
+    private String replication() {
         def firstOneSlot = localPersist.currentThreadFirstOneSlot()
 
         LinkedList<Tuple2<String, Object>> list = []
@@ -240,27 +294,38 @@ used_cpu_user:${(process.getUserTime() / 1000).round(6)}
             sb << tuple.v1 << ':' << tuple.v2 << '\r\n'
         }
 
-        new BulkReply(sb.toString().bytes)
+        sb.toString()
     }
 
-    private Reply server() {
-        // a copy one
-        def list = MultiWorkerServer.STATIC_GLOBAL_V.infoServerList
+    private static String cluster() {
+        // todo
+        ''
+    }
 
-        def upSeconds = ((System.currentTimeMillis() - MultiWorkerServer.UP_TIME) / 1000).intValue()
-        def upDays = (upSeconds / 3600 / 24).intValue()
-        list << new Tuple2<>('uptime_in_seconds', upSeconds.toString())
-        list << new Tuple2<>('uptime_in_days', upDays.toString())
+    private AsyncReply keyspace(String prefixContent = null) {
+        localPersist.doSthInSlots(oneSlot -> {
+            def n1 = oneSlot.getAllKeyCount()
+            def n2 = oneSlot.getAvgTtlInSecond().longValue()
+            return new Tuple2<Long, Long>(n1, n2)
+        }, resultList -> {
+            long keysTotal = 0
+            long avgTtlTotal = 0
+            for (one in resultList) {
+                Tuple2<Long, Long> tuple2 = one as Tuple2<Long, Long>
+                keysTotal += tuple2.v1
+                avgTtlTotal += tuple2.v2
+            }
+            def avgTtlFinal = (avgTtlTotal / resultList.size()).longValue()
 
-        def firstOneSlot = localPersist.firstOneSlot()
-        list << new Tuple2<>('run_id', firstOneSlot.masterUuid.toString().padLeft(40, '0'))
-
-        def sb = new StringBuilder()
-        sb << "# Server\r\n"
-        list.each { Tuple2<String, String> tuple ->
-            sb << tuple.v1 << ':' << tuple.v2 << '\r\n'
-        }
-
-        new BulkReply(sb.toString().bytes)
+            def content = """
+# Keyspace
+db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
+"""
+            if (prefixContent) {
+                return new BulkReply((prefixContent + content.toString()).bytes)
+            } else {
+                return new BulkReply(content.toString().bytes)
+            }
+        })
     }
 }

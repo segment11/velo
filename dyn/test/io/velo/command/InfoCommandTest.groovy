@@ -9,7 +9,6 @@ import io.velo.persist.LocalPersistTest
 import io.velo.repl.Binlog
 import io.velo.reply.AsyncReply
 import io.velo.reply.BulkReply
-import io.velo.reply.ErrorReply
 import spock.lang.Specification
 
 class InfoCommandTest extends Specification {
@@ -41,7 +40,14 @@ class InfoCommandTest extends Specification {
         when:
         def reply = infoCommand.handle()
         then:
-        reply == ErrorReply.FORMAT
+        reply instanceof BulkReply
+
+        when:
+        data3[1] = 'server'.bytes
+        data3[2] = 'keyspace'.bytes
+        reply = infoCommand.handle()
+        then:
+        reply instanceof AsyncReply
 
         when:
         def data1 = new byte[1][]
@@ -49,7 +55,7 @@ class InfoCommandTest extends Specification {
         infoCommand.data = data1
         reply = infoCommand.handle()
         then:
-        reply instanceof BulkReply
+        reply instanceof AsyncReply
 
         when:
         def data2 = new byte[2][]
@@ -57,32 +63,31 @@ class InfoCommandTest extends Specification {
         infoCommand.data = data2
         reply = infoCommand.handle()
         then:
-        reply == ErrorReply.SYNTAX
+        reply instanceof BulkReply
 
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
 
-    def 'test keyspace'() {
+    def 'test server'() {
         given:
         def iGroup = new IGroup('info', null, null)
         iGroup.from(BaseCommand.mockAGroup())
         def infoCommand = new InfoCommand(iGroup)
 
         and:
-        def localPersist = LocalPersist.instance
         LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
 
         when:
-        def reply = infoCommand.execute('info keyspace')
+        // 10 seconds ago
+        MultiWorkerServer.UP_TIME = System.currentTimeMillis() - 1000 * 10
+        def reply = infoCommand.execute('info server')
         then:
-        reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
-            result instanceof BulkReply
-                    && new String((result as BulkReply).raw).contains('keys:0')
-        }.result
+        reply instanceof BulkReply
+        new String((reply as BulkReply).raw).contains('uptime_in_seconds:10')
 
         cleanup:
         localPersist.cleanUp()
@@ -100,22 +105,6 @@ class InfoCommandTest extends Specification {
         then:
         reply instanceof BulkReply
         new String((reply as BulkReply).raw).contains('total_system_memory:')
-    }
-
-    def 'test cpu'() {
-        given:
-        def iGroup = new IGroup('info', null, null)
-        iGroup.from(BaseCommand.mockAGroup())
-        def infoCommand = new InfoCommand(iGroup)
-
-        when:
-        def reply = infoCommand.execute('info cpu')
-        then:
-        reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('used_cpu_sys:')
-
-        cleanup:
-        RuntimeCpuCollector.close()
     }
 
     def 'test replication'() {
@@ -181,24 +170,41 @@ class InfoCommandTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
-    def 'test server'() {
+    def 'test cpu'() {
+        given:
+        def iGroup = new IGroup('info', null, null)
+        iGroup.from(BaseCommand.mockAGroup())
+        def infoCommand = new InfoCommand(iGroup)
+
+        when:
+        def reply = infoCommand.execute('info cpu')
+        then:
+        reply instanceof BulkReply
+        new String((reply as BulkReply).raw).contains('used_cpu_sys:')
+
+        cleanup:
+        RuntimeCpuCollector.close()
+    }
+
+    def 'test keyspace'() {
         given:
         def iGroup = new IGroup('info', null, null)
         iGroup.from(BaseCommand.mockAGroup())
         def infoCommand = new InfoCommand(iGroup)
 
         and:
-        LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
 
         when:
-        // 10 seconds ago
-        MultiWorkerServer.UP_TIME = System.currentTimeMillis() - 1000 * 10
-        def reply = infoCommand.execute('info server')
+        def reply = infoCommand.execute('info keyspace')
         then:
-        reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('uptime_in_seconds:10')
+        reply instanceof AsyncReply
+        ((AsyncReply) reply).settablePromise.whenResult { result ->
+            result instanceof BulkReply
+                    && new String((result as BulkReply).raw).contains('keys:0')
+        }.result
 
         cleanup:
         localPersist.cleanUp()
