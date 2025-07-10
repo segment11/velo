@@ -5,6 +5,7 @@ import io.velo.BaseCommand
 import io.velo.ConfForGlobal
 import io.velo.MultiWorkerServer
 import io.velo.ValkeyRawConfSupport
+import io.velo.monitor.RuntimeCpuCollector
 import io.velo.repl.ReplPair
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
@@ -44,6 +45,8 @@ class InfoCommand extends BaseCommand {
                 return keyspace()
             } else if ('memory' == section) {
                 return memory()
+            } else if ('cpu' == section) {
+                return cpu()
             } else if ('replication' == section) {
                 return replication()
             } else if ('server' == section) {
@@ -127,6 +130,16 @@ total_system_memory:${totalPhysicalMemory}
 total_system_memory_human:${totalPhysicalMemoryHumanReadable}
 maxmemory:${totalMax}
 maxmemory_human:${totalMaxHumanReadable}
+"""
+        new BulkReply(r.bytes)
+    }
+
+    private static Reply cpu() {
+        def process = RuntimeCpuCollector.collect()
+
+        String r = """# Cpu
+used_cpu_sys:${(process.getKernelTime() / 1000).round(6)}
+used_cpu_user:${(process.getUserTime() / 1000).round(6)}
 """
         new BulkReply(r.bytes)
     }

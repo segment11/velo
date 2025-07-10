@@ -121,6 +121,8 @@ dependencies {
     implementation group: 'io.prometheus', name: 'simpleclient_httpserver', version: '0.16.0'
     implementation group: 'io.prometheus', name: 'simpleclient_hotspot', version: '0.16.0'
 
+    implementation group: 'com.github.oshi', name: 'oshi-core', version: '6.8.2'
+
     implementation group: 'org.apache.lucene', name: 'lucene-core', version: '9.11.1'
 
     implementation group: 'org.rocksdb', name: 'rocksdbjni', version: '9.7.3'
@@ -128,7 +130,6 @@ dependencies {
     implementation group: 'org.apache.parquet', name: 'parquet-column', version: '1.15.0'
     implementation group: 'org.apache.parquet', name: 'parquet-hadoop', version: '1.15.0'
     implementation group: 'org.apache.hadoop', name: 'hadoop-client', version: '3.4.1'
-//    implementation group: 'org.apache.parquet', name: 'parquet-hadoop-bundle', version: '1.15.0'
 
     implementation group: 'org.apache.curator', name: 'curator-framework', version: '5.7.0'
     implementation group: 'org.apache.curator', name: 'curator-recipes', version: '5.7.0'

@@ -2,6 +2,7 @@ package io.velo.command
 
 import io.velo.BaseCommand
 import io.velo.MultiWorkerServer
+import io.velo.monitor.RuntimeCpuCollector
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
@@ -99,6 +100,22 @@ class InfoCommandTest extends Specification {
         then:
         reply instanceof BulkReply
         new String((reply as BulkReply).raw).contains('total_system_memory:')
+    }
+
+    def 'test cpu'() {
+        given:
+        def iGroup = new IGroup('info', null, null)
+        iGroup.from(BaseCommand.mockAGroup())
+        def infoCommand = new InfoCommand(iGroup)
+
+        when:
+        def reply = infoCommand.execute('info cpu')
+        then:
+        reply instanceof BulkReply
+        new String((reply as BulkReply).raw).contains('used_cpu_sys:')
+
+        cleanup:
+        RuntimeCpuCollector.close()
     }
 
     def 'test replication'() {

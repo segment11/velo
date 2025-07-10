@@ -43,6 +43,7 @@ import io.velo.decode.Request;
 import io.velo.decode.RequestDecoder;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
+import io.velo.monitor.RuntimeCpuCollector;
 import io.velo.persist.LocalPersist;
 import io.velo.repl.LeaderSelector;
 import io.velo.repl.ReplPair;
@@ -1106,6 +1107,8 @@ public class MultiWorkerServer extends Launcher {
             primaryEventloop.execute(() -> {
                 System.out.println("Primary eventloop stopping");
             });
+
+            RuntimeCpuCollector.close();
         } catch (Exception e) {
             System.err.println("Stop error=" + e.getMessage());
             e.printStackTrace();
