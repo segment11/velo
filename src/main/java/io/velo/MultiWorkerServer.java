@@ -1305,6 +1305,10 @@ public class MultiWorkerServer extends Launcher {
             c.confRepl.catchUpOffsetMinDiff = config.get(ofInteger(), "repl.catchUpOffsetMinDiff", 1024 * 1024);
             c.confRepl.catchUpIntervalMillis = config.get(ofInteger(), "repl.catchUpIntervalMillis", 100);
             c.confRepl.iterateKeysOneBatchSize = config.get(ofInteger(), "repl.iterateKeysOneBatchSize", 10000);
+            // save memory
+            if (ConfForGlobal.pureMemory) {
+                c.confRepl.binlogFileKeepMaxCount = (short) Math.min(2, c.confRepl.binlogFileKeepMaxCount);
+            }
             c.confRepl.checkIfValid();
 
             // override other conf items
