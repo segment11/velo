@@ -2789,6 +2789,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      */
     void initMetricsCollect() {
         log.warn("Init global metrics collect, slot={}", slot);
+        globalGauge.clearRawGetterList();
         globalGauge.addRawGetter(() -> {
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
 
