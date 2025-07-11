@@ -203,7 +203,7 @@ public class LocalPersist implements NeedCleanUp {
         }
 
         this.multiShard = new MultiShard(persistDir);
-        initSlotsAgainAfterMultiShardLoadedOrChanged();
+        this.initSlotsAgainAfterMultiShardLoadedOrChanged();
     }
 
     private final DictMap dictMap = DictMap.getInstance();
@@ -215,10 +215,11 @@ public class LocalPersist implements NeedCleanUp {
      */
     public void initSlotsAgainAfterMultiShardLoadedOrChanged() throws IOException {
         var firstOneSlot = firstOneSlot();
+        if (firstOneSlot != null) {
+            firstOneSlot.initMetricsCollect();
+        }
 
         for (var oneSlot : oneSlots) {
-            oneSlot.initMetricsCollect();
-
             // set dict map binlog same as the first slot binlog
             if (firstOneSlot != null && oneSlot.slot() == firstOneSlot.slot()) {
                 dictMap.setBinlog(oneSlot.getBinlog());
