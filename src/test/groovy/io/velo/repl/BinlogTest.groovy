@@ -1,12 +1,15 @@
 package io.velo.repl
 
+import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
 import io.velo.persist.*
 import io.velo.repl.incremental.XWalV
 import spock.lang.Specification
+import spock.lang.Stepwise
 
 import java.nio.ByteBuffer
 
+@Stepwise
 class BinlogTest extends Specification {
     final short slot = 0
 
@@ -367,6 +370,8 @@ class BinlogTest extends Specification {
         binlog.cleanUp()
         Consts.slotDir.deleteDir()
         slotDir2.deleteDir()
+
+        ConfForSlot.global.confRepl.binlogFileKeepMaxCount = 10
     }
 
     def 'test apply'() {
@@ -403,5 +408,143 @@ class BinlogTest extends Specification {
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+    }
+
+    def 'test pure memory mode'() {
+        given:
+        ConfForGlobal.pureMemory = true
+        def oneSlot = new OneSlot(slot)
+        def dynConfig = new DynConfig(slot, DynConfigTest.tmpFile, oneSlot)
+        dynConfig.binlogOn = true
+        def binlog = new Binlog(slot, Consts.slotDir, dynConfig)
+
+        println binlog.diskUsage
+        println 'in memory size estimate: ' + binlog.estimate(new StringBuilder())
+
+        and:
+        def vList = Mock.prepareValueList(11)
+
+        when:
+        boolean exception = false
+        try {
+            binlog.readPrevRafOneSegment(1, 0)
+        } catch (IOException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        try {
+            binlog.readPrevRafOneSegment(-1, 0)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        try {
+            binlog.prevRaf(-1) == null
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        def oneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength
+        def oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength
+        binlog.resetCurrentFileOffset oneFileMaxLength - 1
+        for (v in vList[0..9]) {
+            binlog.append(new XWalV(v))
+        }
+        then:
+        binlog.currentFileIndex == 1
+        binlog.prevRaf(0) != null
+        binlog.readPrevRafOneSegment(0, 0).length == oneSegmentLength
+        binlog.readPrevRafOneSegment(1, 0).length < oneSegmentLength
+
+        when:
+        binlog.resetCurrentFileOffset oneSegmentLength - 1
+        for (v in vList[0..9]) {
+            binlog.append(new XWalV(v))
+        }
+        binlog.resetCurrentFileOffset oneSegmentLength * 2 - 1
+        for (v in vList[0..9]) {
+            binlog.append(new XWalV(v))
+        }
+        binlog.resetCurrentFileOffset oneSegmentLength * 3 - 1
+        for (v in vList[0..9]) {
+            binlog.append(new XWalV(v))
+        }
+        then:
+        binlog.readCurrentRafOneSegment(0).length == oneSegmentLength
+        binlog.readCurrentRafOneSegment(oneSegmentLength).length == oneSegmentLength
+        binlog.readCurrentRafOneSegment(oneSegmentLength * 2).length == oneSegmentLength
+        binlog.readCurrentRafOneSegment(oneSegmentLength * 3).length == oneSegmentLength
+        binlog.readCurrentRafOneSegment(binlog.currentFileOffset) == null
+
+        when:
+        def lastAppendFileOffset = binlog.currentFileOffset
+        binlog.resetCurrentFileOffset oneSegmentLength * 4
+        then:
+        binlog.readCurrentRafOneSegment(oneSegmentLength * 3).length > 0
+
+        when:
+        // for cache
+        def bytes = binlog.readPrevRafOneSegment(binlog.currentFileIndex, oneSegmentLength)
+        then:
+        bytes != null
+
+        when:
+        bytes = binlog.readPrevRafOneSegment(binlog.currentFileIndex, oneSegmentLength * 10)
+        then:
+        bytes == null
+
+        when:
+        exception = false
+        try {
+            binlog.readPrevRafOneSegment(0, 1)
+        } catch (IllegalArgumentException ignored) {
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        try {
+            binlog.readCurrentRafOneSegment(1)
+        } catch (IllegalArgumentException ignored) {
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        ConfForSlot.global.confRepl.binlogFileKeepMaxCount = 1
+        binlog.resetCurrentFileOffset oneFileMaxLength - 1
+        // trigger remove old file
+        for (v in vList[0..9]) {
+            binlog.append(new XWalV(v))
+        }
+        then:
+        binlog.currentFileIndex == 2
+
+        when:
+        binlog.resetCurrentFileOffset oneSegmentLength
+        def xWalV = new XWalV(vList[0])
+        binlog.append(xWalV)
+        then:
+        binlog.currentFileOffset == oneSegmentLength + xWalV.encodedLength()
+
+        cleanup:
+        ConfForGlobal.pureMemory = false
     }
 }
