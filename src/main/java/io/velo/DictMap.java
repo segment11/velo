@@ -1,7 +1,7 @@
 package io.velo;
 
 import io.velo.metric.SimpleGauge;
-import io.velo.repl.Binlog;
+import io.velo.persist.LocalPersist;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import io.velo.repl.incremental.XDict;
@@ -65,20 +65,6 @@ public class DictMap implements NeedCleanUp {
     }
 
     /**
-     * Binlog for logging dictionary changes.
-     */
-    private Binlog binlog;
-
-    /**
-     * Sets the binlog for logging dictionary changes.
-     *
-     * @param binlog the binlog to set
-     */
-    public void setBinlog(Binlog binlog) {
-        this.binlog = binlog;
-    }
-
-    /**
      * Logger for logging information and errors.
      */
     private static final Logger log = LoggerFactory.getLogger(DictMap.class);
@@ -102,6 +88,8 @@ public class DictMap implements NeedCleanUp {
     public Dict getDict(String keyPrefixOrSuffix) {
         return cacheDict.get(keyPrefixOrSuffix);
     }
+
+    private final LocalPersist localPersist = LocalPersist.getInstance();
 
     /**
      * Puts a dictionary into the map with a key prefix or suffix.
@@ -133,12 +121,23 @@ public class DictMap implements NeedCleanUp {
             throw new RuntimeException("Write dict to file error", e);
         }
 
-        if (binlog != null) {
-            try {
-                binlog.append(new XDict(keyPrefixOrSuffix, dict));
-            } catch (IOException e) {
-                throw new RuntimeException("Append binlog error, dict key prefix=" + keyPrefixOrSuffix, e);
+        var firstOneSlot = localPersist.firstOneSlot();
+        if (firstOneSlot != null && firstOneSlot.getDynConfig().isBinlogOn()) {
+            var p = firstOneSlot.asyncCall(() -> {
+                try {
+                    firstOneSlot.getBinlog().append(new XDict(keyPrefixOrSuffix, dict));
+                    return true;
+                } catch (IOException e) {
+                    throw new RuntimeException("Append binlog error, dict key prefix=" + keyPrefixOrSuffix, e);
+                }
+            });
+            // sync
+            var r = p.getResult();
+            var e = p.getException();
+            if (e != null) {
+                throw (RuntimeException) e;
             }
+            log.warn("Append binlog success, dict key prefix={}, result={}", keyPrefixOrSuffix, r);
         }
 
         TrainSampleJob.addKeyPrefixGroupIfNotExist(keyPrefixOrSuffix);

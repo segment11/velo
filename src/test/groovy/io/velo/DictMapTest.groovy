@@ -1,10 +1,8 @@
 package io.velo
 
 import io.velo.persist.Consts
-import io.velo.persist.DynConfig
-import io.velo.persist.DynConfigTest
-import io.velo.persist.OneSlot
-import io.velo.repl.Binlog
+import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
 
@@ -25,11 +23,13 @@ class DictMapTest extends Specification {
 
         and:
         final short slot = 0
-        def oneSlot = new OneSlot(slot)
-        def dynConfig = new DynConfig(slot, DynConfigTest.tmpFile, oneSlot)
-        def binlog = new Binlog(slot, Consts.slotDir, dynConfig)
-        dictMap.binlog = binlog
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.firstOneSlot()
+        oneSlot.dynConfig.binlogOn = true
 
+        and:
         def dict = new Dict()
         dict.dictBytes = 'test'.bytes
         dict.seq = 1
@@ -48,7 +48,6 @@ class DictMapTest extends Specification {
         dictMap.putDict('test', dict)
         // seq conflict, will reset seq
         dictMap.putDict('test', dict)
-        dictMap.binlog = null
         dictMap.putDict('test2', dict2)
         then:
         dictMap.dictSize() == 3
@@ -101,9 +100,7 @@ class DictMapTest extends Specification {
         exception
 
         cleanup:
-        binlog.truncateAll()
-        binlog.cleanUp()
-        Consts.slotDir.deleteDir()
-        Consts.testDir.deleteDir()
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 }

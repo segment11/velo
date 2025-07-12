@@ -222,9 +222,6 @@ public class LocalPersist implements NeedCleanUp {
         for (var oneSlot : oneSlots) {
             // set dict map binlog same as the first slot binlog
             if (firstOneSlot != null && oneSlot.slot() == firstOneSlot.slot()) {
-                dictMap.setBinlog(oneSlot.getBinlog());
-                log.warn("Set dict map binlog to slot={}", oneSlot.slot());
-
                 if (!ConfForGlobal.initDynConfigItems.isEmpty()) {
                     for (var entry : ConfForGlobal.initDynConfigItems.entrySet()) {
                         oneSlot.getDynConfig().update(entry.getKey(), entry.getValue());
@@ -366,6 +363,11 @@ public class LocalPersist implements NeedCleanUp {
      * @return the first OneSlot to handle client requests, or null if not found
      */
     public @Nullable OneSlot firstOneSlot() {
+        // for unit test
+        if (oneSlots == null) {
+            return null;
+        }
+
         if (!ConfForGlobal.clusterEnabled) {
             return oneSlots[0];
         }
