@@ -33,8 +33,7 @@ class InfoCommand extends BaseCommand {
     }
 
     // exclude keyspace (async reply)
-    private static final String[] sections = ['server', 'clients', 'memory', 'persistence',
-                                              'stats', 'replication', 'cpu', 'modules', 'cluster']
+    private static final String[] sections = ['server', 'clients', 'memory', 'replication', 'cpu', 'cluster']
 
     private class StringOrReply {
         String s
@@ -65,7 +64,10 @@ class InfoCommand extends BaseCommand {
         } else if ('keyspace' == section) {
             return new StringOrReply(keyspace())
         } else {
-            return new StringOrReply('\r\n')
+            def r = """# ${section[0].toUpperCase() + section.substring(1)}
+key:value
+"""
+            return new StringOrReply(r.toString())
         }
     }
 
@@ -85,7 +87,7 @@ class InfoCommand extends BaseCommand {
                 infoList << getOneSection(section)
             }
 
-            def prefixContent = infoList.collect { it.s.trim() }.join('\n')
+            def prefixContent = infoList.collect { it.s }.join('\r\n')
             return keyspace(prefixContent)
         } else {
             boolean hasKeyspace = false
@@ -105,7 +107,7 @@ class InfoCommand extends BaseCommand {
                 infoList << getOneSection(section)
             }
 
-            def prefixContent = infoList.collect { it.s.trim() }.join('\n')
+            def prefixContent = infoList.collect { it.s }.join('\r\n')
             if (hasKeyspace) {
                 return keyspace(prefixContent)
             } else {
@@ -131,7 +133,6 @@ class InfoCommand extends BaseCommand {
         list.each { Tuple2<String, String> tuple ->
             sb << tuple.v1 << ':' << tuple.v2 << '\r\n'
         }
-        sb << '\r\n'
 
         sb.toString()
     }
@@ -139,8 +140,7 @@ class InfoCommand extends BaseCommand {
     private static String clients() {
         def socketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector
 
-        def r = """
-# Clients
+        def r = """# Clients
 connected_clients:${socketInspector.connectedClientCount()}
 cluster_connections:0
 maxclients:${socketInspector.maxConnections}
@@ -179,8 +179,7 @@ total_blocking_keys:${BlockingList.blockingKeyCount()}
         long totalPhysicalMemory = globalMemory.total
         def totalPhysicalMemoryHumanReadable = RamUsageEstimator.humanReadableUnits(totalPhysicalMemory).replace(' ', '')
 
-        def r = """
-# Memory
+        def r = """# Memory
 used_memory:${totalUsed}
 used_memory_human:${totalUsedHumanReadable}
 used_memory_rss:${totalUsed}
@@ -298,8 +297,7 @@ maxmemory_human:${totalMaxHumanReadable}
     private static String cpu() {
         def process = RuntimeCpuCollector.collect()
 
-        def r = """
-# Cpu
+        def r = """# Cpu
 used_cpu_sys:${(process.getKernelTime() / 1000).round(6)}
 used_cpu_user:${(process.getUserTime() / 1000).round(6)}
 """
@@ -307,8 +305,10 @@ used_cpu_user:${(process.getUserTime() / 1000).round(6)}
     }
 
     private static String cluster() {
-        // todo
-        ''
+        def r = """# Cluster
+cluster_enabled:${ConfForGlobal.clusterEnabled ? 1 : 0}
+"""
+        return r.toString()
     }
 
     private AsyncReply keyspace(String prefixContent = null) {
@@ -326,12 +326,11 @@ used_cpu_user:${(process.getUserTime() / 1000).round(6)}
             }
             def avgTtlFinal = (avgTtlTotal / resultList.size()).longValue()
 
-            def content = """
-# Keyspace
+            def content = """# Keyspace
 db0:keys=${keysTotal},expires=0,avg_ttl=${avgTtlFinal}
 """
             if (prefixContent) {
-                return new BulkReply((prefixContent + content.toString()).bytes)
+                return new BulkReply((prefixContent + "\r\n" + content.toString()).bytes)
             } else {
                 return new BulkReply(content.toString().bytes)
             }

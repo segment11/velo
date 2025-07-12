@@ -203,6 +203,20 @@ class InfoCommandTest extends Specification {
         RuntimeCpuCollector.close()
     }
 
+    def 'test cluster'(){
+        given:
+        def iGroup = new IGroup('info', null, null)
+        iGroup.from(BaseCommand.mockAGroup())
+        def infoCommand = new InfoCommand(iGroup)
+
+        when:
+        def reply = infoCommand.execute('info cluster')
+        then:
+        reply instanceof BulkReply
+        new String((reply as BulkReply).raw).contains('cluster_enabled:')
+
+    }
+
     def 'test keyspace'() {
         given:
         def iGroup = new IGroup('info', null, null)
