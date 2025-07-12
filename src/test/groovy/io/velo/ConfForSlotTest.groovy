@@ -43,7 +43,6 @@ class ConfForSlotTest extends Specification {
         c.confRepl.binlogFileKeepMaxCount == (short) 10
         c.confRepl.catchUpOffsetMinDiff == 1024 * 1024
         c.confRepl.catchUpIntervalMillis == 100
-        c.confRepl.iterateKeysOneBatchSize == 10000
         c.confRepl.checkIfValid()
         println c.confRepl
 

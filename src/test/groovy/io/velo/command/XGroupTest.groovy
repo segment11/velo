@@ -1004,16 +1004,8 @@ class XGroupTest extends Specification {
         // next step
         r.isReplType(ReplType.exists_chunk_segments)
 
-        when:
-        // just for test
-        ConfForSlot.global.confRepl.iterateKeysOneBatchSize = 1
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.exists_chunk_segments)
-
         // s_stat_key_count_in_buckets
         when:
-        ConfForSlot.global.confRepl.iterateKeysOneBatchSize = 10000
         data4[2][0] = ReplType.s_stat_key_count_in_buckets.code
         contentBytes = new byte[ConfForSlot.global.confBucket.bucketsPerSlot * 2]
         data4[3] = contentBytes

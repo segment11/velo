@@ -463,11 +463,6 @@ public enum ConfForSlot {
         public int catchUpIntervalMillis = 100;
 
         /**
-         * Batch size for iterating keys.
-         */
-        public int iterateKeysOneBatchSize = 10000;
-
-        /**
          * Checks if the replication configuration is valid.
          */
         public void checkIfValid() {
@@ -483,7 +478,6 @@ public enum ConfForSlot {
                     ", binlogFileKeepMaxCount=" + binlogFileKeepMaxCount +
                     ", catchUpOffsetMinDiff=" + catchUpOffsetMinDiff +
                     ", catchUpIntervalMillis=" + catchUpIntervalMillis +
-                    ", iterateKeysOneBatchSize=" + iterateKeysOneBatchSize +
                     '}';
         }
     }

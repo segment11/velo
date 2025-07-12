@@ -1290,9 +1290,10 @@ public class MultiWorkerServer extends Launcher {
             c.confChunk.checkIfValid();
 
             // override wal conf items
+            var walValueSizeTrigger = ConfForGlobal.pureMemory ? 50 : 200;
             c.confWal.oneChargeBucketNumber = config.get(ofInteger(), "wal.oneChargeBucketNumber", 32);
-            c.confWal.valueSizeTrigger = config.get(ofInteger(), "wal.valueSizeTrigger", 200);
-            c.confWal.shortValueSizeTrigger = config.get(ofInteger(), "wal.shortValueSizeTrigger", 200);
+            c.confWal.valueSizeTrigger = config.get(ofInteger(), "wal.valueSizeTrigger", walValueSizeTrigger);
+            c.confWal.shortValueSizeTrigger = config.get(ofInteger(), "wal.shortValueSizeTrigger", walValueSizeTrigger);
             c.confWal.atLeastDoPersistOnceIntervalMs = config.get(ofInteger(), "wal.atLeastDoPersistOnceIntervalMs", 2);
             c.confWal.checkAtLeastDoPersistOnceSizeRate = config.get(ofDouble(), "wal.checkAtLeastDoPersistOnceSizeRate", 0.8);
             c.confWal.checkIfValid();
@@ -1301,11 +1302,10 @@ public class MultiWorkerServer extends Launcher {
             var replBinlogOneFileMB = ConfForGlobal.pureMemory ? 32 : 512;
             c.confRepl.binlogOneSegmentLength = config.get(ofInteger(), "repl.binlogOneSegmentLength", 1024 * 1024);
             c.confRepl.binlogOneFileMaxLength = config.get(ofInteger(), "repl.binlogOneFileMaxLength", replBinlogOneFileMB * 1024 * 1024);
-            c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount", replBinlogOneFileMB).shortValue();
+            c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount", 10).shortValue();
             c.confRepl.binlogFileKeepMaxCount = config.get(ofInteger(), "repl.binlogFileKeepMaxCount", 10).shortValue();
             c.confRepl.catchUpOffsetMinDiff = config.get(ofInteger(), "repl.catchUpOffsetMinDiff", 1024 * 1024);
             c.confRepl.catchUpIntervalMillis = config.get(ofInteger(), "repl.catchUpIntervalMillis", 100);
-            c.confRepl.iterateKeysOneBatchSize = config.get(ofInteger(), "repl.iterateKeysOneBatchSize", 10000);
             // save memory
             if (ConfForGlobal.pureMemory) {
                 c.confRepl.binlogFileKeepMaxCount = (short) Math.min(2, c.confRepl.binlogFileKeepMaxCount);
