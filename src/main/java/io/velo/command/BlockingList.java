@@ -64,6 +64,15 @@ public class BlockingList {
         return total;
     }
 
+    /**
+     * blocking key count
+     *
+     * @return blocking key count
+     */
+    public static int blockingKeyCount() {
+        return blockingListPromisesByKey.size();
+    }
+
     @TestOnly
     static byte[][] setReplyIfBlockingListExist(String key, byte[][] elementValueBytesArray) {
         return setReplyIfBlockingListExist(key, elementValueBytesArray, null);

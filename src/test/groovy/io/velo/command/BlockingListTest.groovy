@@ -22,6 +22,7 @@ class BlockingListTest extends Specification {
         BlockingList.addBlockingListPromiseByKey('a', settablePromise, true)
         then:
         BlockingList.blockingClientCount() == 1
+        BlockingList.blockingKeyCount() == 1
 
         when:
         def elementValueBytesArray = new byte[1][]

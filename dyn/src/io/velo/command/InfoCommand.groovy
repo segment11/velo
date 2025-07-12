@@ -114,6 +114,52 @@ class InfoCommand extends BaseCommand {
         }
     }
 
+    private String server() {
+        // a copy one
+        def list = MultiWorkerServer.STATIC_GLOBAL_V.infoServerList
+
+        def upSeconds = ((System.currentTimeMillis() - MultiWorkerServer.UP_TIME) / 1000).intValue()
+        def upDays = (upSeconds / 3600 / 24).intValue()
+        list << new Tuple2<>('uptime_in_seconds', upSeconds.toString())
+        list << new Tuple2<>('uptime_in_days', upDays.toString())
+
+        def firstOneSlot = localPersist.firstOneSlot()
+        list << new Tuple2<>('run_id', firstOneSlot.masterUuid.toString().padLeft(40, '0'))
+
+        def sb = new StringBuilder()
+        sb << "# Server\r\n"
+        list.each { Tuple2<String, String> tuple ->
+            sb << tuple.v1 << ':' << tuple.v2 << '\r\n'
+        }
+        sb << '\r\n'
+
+        sb.toString()
+    }
+
+    private static String clients() {
+        def socketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector
+
+        def r = """
+# Clients
+connected_clients:${socketInspector.connectedClientCount()}
+cluster_connections:0
+maxclients:${socketInspector.maxConnections}
+blocked_clients:${BlockingList.blockingClientCount()}
+total_blocking_keys:${BlockingList.blockingKeyCount()}
+"""
+        r.toString()
+    }
+
+    private static List<Tuple2<String, Object>> slaveConnectState(ReplPair replPairAsSlave, int slaveIndex) {
+        List<Tuple2<String, Object>> list = []
+
+        def state = "ip=${replPairAsSlave.host},port=${replPairAsSlave.port}," +
+                "state=${replPairAsSlave.isLinkUp() ? 'online' : 'offline'},offset=${replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset},lag=1"
+        list << new Tuple2("slave${slaveIndex}", state)
+
+        list
+    }
+
     private static String memory() {
         def memoryMXBean = ManagementFactory.getMemoryMXBean()
         def heapMemoryUsage = memoryMXBean.heapMemoryUsage
@@ -148,54 +194,6 @@ maxmemory:${totalMax}
 maxmemory_human:${totalMaxHumanReadable}
 """
         r.toString()
-    }
-
-    private static String cpu() {
-        def process = RuntimeCpuCollector.collect()
-
-        def r = """
-# Cpu
-used_cpu_sys:${(process.getKernelTime() / 1000).round(6)}
-used_cpu_user:${(process.getUserTime() / 1000).round(6)}
-"""
-        r.toString()
-    }
-
-    private String server() {
-        // a copy one
-        def list = MultiWorkerServer.STATIC_GLOBAL_V.infoServerList
-
-        def upSeconds = ((System.currentTimeMillis() - MultiWorkerServer.UP_TIME) / 1000).intValue()
-        def upDays = (upSeconds / 3600 / 24).intValue()
-        list << new Tuple2<>('uptime_in_seconds', upSeconds.toString())
-        list << new Tuple2<>('uptime_in_days', upDays.toString())
-
-        def firstOneSlot = localPersist.firstOneSlot()
-        list << new Tuple2<>('run_id', firstOneSlot.masterUuid.toString().padLeft(40, '0'))
-
-        def sb = new StringBuilder()
-        sb << "# Server\r\n"
-        list.each { Tuple2<String, String> tuple ->
-            sb << tuple.v1 << ':' << tuple.v2 << '\r\n'
-        }
-        sb << '\r\n'
-
-        sb.toString()
-    }
-
-    private static String clients() {
-        // todo
-        ''
-    }
-
-    private static List<Tuple2<String, Object>> slaveConnectState(ReplPair replPairAsSlave, int slaveIndex) {
-        List<Tuple2<String, Object>> list = []
-
-        def state = "ip=${replPairAsSlave.host},port=${replPairAsSlave.port}," +
-                "state=${replPairAsSlave.isLinkUp() ? 'online' : 'offline'},offset=${replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset},lag=1"
-        list << new Tuple2("slave${slaveIndex}", state)
-
-        list
     }
 
     private String replication() {
@@ -295,6 +293,17 @@ used_cpu_user:${(process.getUserTime() / 1000).round(6)}
         }
 
         sb.toString()
+    }
+
+    private static String cpu() {
+        def process = RuntimeCpuCollector.collect()
+
+        def r = """
+# Cpu
+used_cpu_sys:${(process.getKernelTime() / 1000).round(6)}
+used_cpu_user:${(process.getUserTime() / 1000).round(6)}
+"""
+        r.toString()
     }
 
     private static String cluster() {

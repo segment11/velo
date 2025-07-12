@@ -2,6 +2,7 @@ package io.velo.command
 
 import io.velo.BaseCommand
 import io.velo.MultiWorkerServer
+import io.velo.SocketInspector
 import io.velo.monitor.RuntimeCpuCollector
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
@@ -92,6 +93,22 @@ class InfoCommandTest extends Specification {
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+    }
+
+    def 'test clients'(){
+        given:
+        def iGroup = new IGroup('info', null, null)
+        iGroup.from(BaseCommand.mockAGroup())
+        def infoCommand = new InfoCommand(iGroup)
+
+        and:
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
+
+        when:
+        def reply = infoCommand.execute('info clients')
+        then:
+        reply instanceof BulkReply
+        new String((reply as BulkReply).raw).contains('connected_clients:')
     }
 
     def 'test memory'() {
