@@ -440,12 +440,12 @@ public enum ConfForSlot {
         /**
          * Maximum length of one binlog file.
          */
-        public int binlogOneFileMaxLength = 512 * 1024 * 1024;
+        public int binlogOneFileMaxLength = 32 * 1024 * 1024;
 
         /**
          * Maximum count of segments in the read cache.
          */
-        public short binlogForReadCacheSegmentMaxCount = 100;
+        public short binlogForReadCacheSegmentMaxCount = 32;
 
         /**
          * Maximum count of binlog files to keep.

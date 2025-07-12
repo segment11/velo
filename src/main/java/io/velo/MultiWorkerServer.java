@@ -1298,9 +1298,10 @@ public class MultiWorkerServer extends Launcher {
             c.confWal.checkIfValid();
 
             // override repl conf items
+            var replBinlogOneFileMB = ConfForGlobal.pureMemory ? 32 : 512;
             c.confRepl.binlogOneSegmentLength = config.get(ofInteger(), "repl.binlogOneSegmentLength", 1024 * 1024);
-            c.confRepl.binlogOneFileMaxLength = config.get(ofInteger(), "repl.binlogOneFileMaxLength", 512 * 1024 * 1024);
-            c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount", 100).shortValue();
+            c.confRepl.binlogOneFileMaxLength = config.get(ofInteger(), "repl.binlogOneFileMaxLength", replBinlogOneFileMB * 1024 * 1024);
+            c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount", replBinlogOneFileMB).shortValue();
             c.confRepl.binlogFileKeepMaxCount = config.get(ofInteger(), "repl.binlogFileKeepMaxCount", 10).shortValue();
             c.confRepl.catchUpOffsetMinDiff = config.get(ofInteger(), "repl.catchUpOffsetMinDiff", 1024 * 1024);
             c.confRepl.catchUpIntervalMillis = config.get(ofInteger(), "repl.catchUpIntervalMillis", 100);
