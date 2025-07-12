@@ -2,8 +2,6 @@ package io.velo.jmh;
 
 import io.velo.ConfForSlot;
 import io.velo.persist.FdReadWrite;
-import jnr.ffi.LibraryLoader;
-import jnr.posix.LibC;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
@@ -30,15 +28,10 @@ public class BenchmarkFdReadWrite {
     @Param({"1"})
     int fileNumber = 1;
 
-    LibC libC;
-
     ArrayList<FdReadWrite> fdReadWriteList = new ArrayList<>();
 
     @Setup
     public void setup() throws IOException {
-        System.setProperty("jnr.ffi.asm.enabled", "false");
-        libC = LibraryLoader.create(LibC.class).load("c");
-
         ConfForSlot.global = ConfForSlot.c10m;
 
         var dir = new File(dirPath);
@@ -55,7 +48,7 @@ public class BenchmarkFdReadWrite {
             var file = new File(targetDir, "/test_fd_read_write_jmh_" + i);
             FileInit.append2GBFile(file, true);
 
-            var fdReadWrite = new FdReadWrite((short) 0, "test" + i, libC, file);
+            var fdReadWrite = new FdReadWrite((short) 0, "test" + i, file);
             fdReadWrite.initByteBuffers(false, i);
             fdReadWriteList.add(fdReadWrite);
         }
