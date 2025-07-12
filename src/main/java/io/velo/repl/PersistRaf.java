@@ -1,8 +1,11 @@
 package io.velo.repl;
 
+import io.velo.NotPureMemoryMode;
+
 import java.io.IOException;
 import java.io.RandomAccessFile;
 
+@NotPureMemoryMode
 public class PersistRaf implements ActAsRaf {
     private final RandomAccessFile raf;
 

@@ -1,5 +1,7 @@
 package io.velo.repl;
 
+import io.velo.NotPureMemoryMode;
+
 import java.io.File;
 
 public interface ActAsFile {
@@ -11,6 +13,7 @@ public interface ActAsFile {
 
     String getName();
 
+    @NotPureMemoryMode
     class PersistFile implements ActAsFile {
         final File file;
         private final int fileIndex;
