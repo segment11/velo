@@ -542,6 +542,8 @@ class OneSlotTest extends Specification {
         oneSlot.extCvInvalidCountTotal = 1
         oneSlot.saveMemoryExecuteTotal = 1
         oneSlot.saveMemoryBytesTotal = 4096
+        oneSlot.clearGlobalMetricsCollect()
+        oneSlot.addGlobalMetricsCollect()
         oneSlot.globalGauge.collect()
         oneSlot.collect()
         oneSlot.kvLRUHitTotal = 1

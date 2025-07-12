@@ -206,26 +206,23 @@ public class LocalPersist implements NeedCleanUp {
         this.initSlotsAgainAfterMultiShardLoadedOrChanged();
     }
 
-    private final DictMap dictMap = DictMap.getInstance();
-
     /**
      * Reinitialized slots after MultiShard is loaded or changed.
      *
      * @throws IOException if an I/O error occurs during reinitialization
      */
     public void initSlotsAgainAfterMultiShardLoadedOrChanged() throws IOException {
-        var firstOneSlot = firstOneSlot();
-        if (firstOneSlot != null) {
-            firstOneSlot.initMetricsCollect();
+        for (var oneSlot : oneSlots) {
+            oneSlot.clearGlobalMetricsCollect();
         }
 
-        for (var oneSlot : oneSlots) {
-            // set dict map binlog same as the first slot binlog
-            if (firstOneSlot != null && oneSlot.slot() == firstOneSlot.slot()) {
-                if (!ConfForGlobal.initDynConfigItems.isEmpty()) {
-                    for (var entry : ConfForGlobal.initDynConfigItems.entrySet()) {
-                        oneSlot.getDynConfig().update(entry.getKey(), entry.getValue());
-                    }
+        var firstOneSlot = firstOneSlot();
+        if (firstOneSlot != null) {
+            firstOneSlot.addGlobalMetricsCollect();
+
+            if (!ConfForGlobal.initDynConfigItems.isEmpty()) {
+                for (var entry : ConfForGlobal.initDynConfigItems.entrySet()) {
+                    firstOneSlot.getDynConfig().update(entry.getKey(), entry.getValue());
                 }
             }
         }

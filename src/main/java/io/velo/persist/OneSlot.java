@@ -2769,6 +2769,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private final static OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
 
+    private final DictMap dictMap = DictMap.getInstance();
+
     /**
      * Global gauge for collecting global metrics.
      * Metrics collected here are shared across all slots.
@@ -2780,14 +2782,19 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         globalGauge.register();
     }
 
-    private final DictMap dictMap = DictMap.getInstance();
+    /**
+     * Clear metrics collect for global metrics, when first slot changed
+     */
+    void clearGlobalMetricsCollect() {
+        globalGauge.clearRawGetterList();
+    }
 
     /**
      * Initializes global metrics collection by registering a raw getter that provides
      * various global metrics such as uptime, dictionary size, configuration parameters,
      * memory preparation statistics, and more.
      */
-    void initMetricsCollect() {
+    void addGlobalMetricsCollect() {
         log.warn("Init global metrics collect, slot={}", slot);
         globalGauge.clearRawGetterList();
         globalGauge.addRawGetter(() -> {
