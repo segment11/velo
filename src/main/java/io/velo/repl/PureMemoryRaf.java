@@ -49,10 +49,11 @@ public class PureMemoryRaf implements ActAsRaf, ActAsFile {
 
         if (readableN < bytes.length) {
             buf.readBytes(bytes, 0, readableN);
+            return readableN;
         } else {
             buf.readBytes(bytes);
+            return bytes.length;
         }
-        return Math.min(readableN, bytes.length);
     }
 
     @Override

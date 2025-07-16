@@ -140,7 +140,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                 }
             } else {
                 // begin from 0
-                File file = new File(binlogDir, fileName());
+                File file = new File(binlogDir, fileName(currentFileIndex));
                 FileUtils.touch(file);
                 latestFile = new ActAsFile.PersistFile(file, 0);
             }
@@ -312,8 +312,8 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     static final String FILE_NAME_PREFIX = "binlog-";
 
-    private String fileName() {
-        return FILE_NAME_PREFIX + currentFileIndex;
+    private static String fileName(int fileIndex) {
+        return FILE_NAME_PREFIX + fileIndex;
     }
 
     private static int fileIndex(File file) {
@@ -483,7 +483,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     private void createAndUseNextFile() throws IOException {
         raf.close();
-        log.info("Repl close current binlog file as overflow, file={}, slot={}", fileName(), slot);
+        log.info("Repl close current binlog file as overflow, file={}, slot={}", fileName(currentFileIndex), slot);
 
         var prevRaf = prevRafByFileIndex.remove(currentFileIndex);
         if (prevRaf != null) {
@@ -502,7 +502,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             raf = new PureMemoryRaf(currentFileIndex, new byte[ConfForSlot.global.confRepl.binlogOneFileMaxLength]);
             prevRafByFileIndex.put(currentFileIndex, raf);
         } else {
-            var nextFile = new File(binlogDir, fileName());
+            var nextFile = new File(binlogDir, fileName(currentFileIndex));
             FileUtils.touch(nextFile);
             log.info("Repl create new binlog file, file={}, slot={}", nextFile.getName(), slot);
             raf = new PersistRaf(new RandomAccessFile(nextFile, "rw"));
@@ -721,12 +721,13 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             var entry = it.next();
             var prevRaf = entry.getValue();
             IOUtils.closeQuietly(prevRaf);
+            // when pure memory mode, removed objects (PureMemoryRaf) will gc
             it.remove();
         }
 
         var actAsFiles = listFiles();
         for (var actAsFile : actAsFiles) {
-            if (actAsFile.getName().equals(fileName())) {
+            if (actAsFile.fileIndex() == currentFileIndex) {
                 continue;
             }
 
