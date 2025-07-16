@@ -2,23 +2,12 @@ package io.velo.persist
 
 import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
-import jnr.ffi.LibraryLoader
-import jnr.posix.LibC
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
-import java.nio.file.Paths
 
 class FdReadWriteTest extends Specification {
-    static {
-        var extendConfigFile = Paths.get('velo_extend.properties').toFile()
-        if (!extendConfigFile.exists()) {
-            extendConfigFile.createNewFile()
-            extendConfigFile.text = 'o_direct=16384'
-        }
-    }
-
     final short slot = 0
 
     def 'test write and read'() {
