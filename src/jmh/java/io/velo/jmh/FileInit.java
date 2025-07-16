@@ -7,27 +7,28 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public class FileInit {
-    // 2GB file has 512K pages
-    static final int PAGE_NUMBER = 1024 * 1024 / 2;
+    // 1GB file has 256K pages
+    static final int PAGE_NUMBER = 256 * 1024;
 
     static final int PAGE_SIZE = 4096;
 
-    static final int ONE_BATCH_SIZE = 1024 * 1024 * 2;
+    static final int ONE_BATCH_SIZE = 1024 * 1024;
 
     static final int PAGE_NUMBER_ONE_BATCH = ONE_BATCH_SIZE / PAGE_SIZE;
 
-    static void append2GBFile(File file, boolean isOverwrite) throws IOException {
+    static void init1GBFile(File file, boolean isOverwrite) throws IOException {
         if (file.exists()) {
             if (isOverwrite) {
                 System.out.println("file exists, delete and recreate");
-                file.delete();
+                var r = file.delete();
+                System.out.println("delete result=" + r);
             } else {
                 System.out.println("file exists, skip");
                 return;
             }
         }
 
-        // once append 2M
+        // once append 1M
         final byte[] oneBatchBytes = new byte[ONE_BATCH_SIZE];
         final int batches = 1024;
 

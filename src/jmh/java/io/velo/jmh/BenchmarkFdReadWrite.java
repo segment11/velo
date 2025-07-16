@@ -25,8 +25,8 @@ import java.util.concurrent.TimeUnit;
 public class BenchmarkFdReadWrite {
     final String dirPath = "/tmp/test_fd_read_write_jmh";
 
-    @Param({"1"})
-    int fileNumber = 1;
+    @Param({"2", "4"})
+    int fileNumber = 2;
 
     ArrayList<FdReadWrite> fdReadWriteList = new ArrayList<>();
 
@@ -46,7 +46,7 @@ public class BenchmarkFdReadWrite {
 
         for (int i = 0; i < fileNumber; i++) {
             var file = new File(targetDir, "/test_fd_read_write_jmh_" + i);
-            FileInit.append2GBFile(file, true);
+            FileInit.init1GBFile(file, true);
 
             var fdReadWrite = new FdReadWrite((short) 0, "test" + i, file);
             fdReadWrite.initByteBuffers(false, i);
@@ -60,7 +60,7 @@ public class BenchmarkFdReadWrite {
             fdReadWrite.cleanUp();
         }
 
-        System.out.println("Init int value set=" + initIntValueSet);
+        System.out.println("Init int value set size=" + initIntValueSet.size());
     }
 
     private final Random random = new Random();
@@ -68,6 +68,7 @@ public class BenchmarkFdReadWrite {
     private final Set<Integer> initIntValueSet = new HashSet<>();
 
         /*
+        direct io (deprecated) read/write:
     Threads: 16
 Benchmark                   (fileNumber)   Mode  Cnt    Score   Error   Units
 io.velo.jmh.BenchmarkFdReadWrite.read              1  thrpt       287.089          ops/ms
@@ -101,6 +102,19 @@ io.velo.jmh.BenchmarkFdReadWrite.read              1  thrpt       20.734        
 io.velo.jmh.BenchmarkFdReadWrite.write             1  thrpt       23.757          ops/ms
 io.velo.jmh.BenchmarkFdReadWrite.read              1   avgt        0.048           ms/op
 io.velo.jmh.BenchmarkFdReadWrite.write             1   avgt        0.042           ms/op
+     */
+
+    /*
+     os page cache read write:
+     Benchmark                   (fileNumber)   Mode  Cnt     Score   Error   Units
+     BenchmarkFdReadWrite.read              2  thrpt       1363.674          ops/ms
+     BenchmarkFdReadWrite.read              4  thrpt        672.162          ops/ms
+     BenchmarkFdReadWrite.write             2  thrpt       1513.729          ops/ms
+     BenchmarkFdReadWrite.write             4  thrpt        536.574          ops/ms
+     BenchmarkFdReadWrite.read              2   avgt          0.003           ms/op
+     BenchmarkFdReadWrite.read              4   avgt          0.006           ms/op
+     BenchmarkFdReadWrite.write             2   avgt          0.002           ms/op
+     BenchmarkFdReadWrite.write             4   avgt          0.016           ms/op
      */
     @Benchmark
     public void read() {
