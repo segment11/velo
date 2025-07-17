@@ -1266,13 +1266,11 @@ public class MultiWorkerServer extends Launcher {
             if (config.getChild("bucket.onceScanMaxReadCount").hasValue()) {
                 c.confBucket.onceScanMaxReadCount = config.get(ofInteger(), "bucket.onceScanMaxReadCount").byteValue();
             }
-            if (config.getChild("bucket.lruPerFd.percent").hasValue()) {
-                var percentValue = config.get(ofInteger(), "bucket.lruPerFd.percent");
-                if (percentValue < 0 || percentValue > 100) {
-                    throw new IllegalArgumentException("Key bucket fd read lru percent be between 0 and 100");
-                }
-                c.confBucket.lruPerFd.maxSize = percentValue / 100 * c.confBucket.bucketsPerSlot;
+            var bucketLruPerFdPercent = config.get(ofInteger(), "bucket.lruPerFd.percent", 100);
+            if (bucketLruPerFdPercent < 0 || bucketLruPerFdPercent > 100) {
+                throw new IllegalArgumentException("Key bucket fd read lru percent be between 0 and 100");
             }
+            c.confBucket.lruPerFd.maxSize = bucketLruPerFdPercent / 100 * c.confBucket.bucketsPerSlot;
             c.confBucket.checkIfValid();
 
             // override chunk conf items
