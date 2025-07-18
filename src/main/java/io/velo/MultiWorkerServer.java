@@ -264,7 +264,7 @@ public class MultiWorkerServer extends Launcher {
         int netWorkers = config.get(ofInteger(), "netWorkers", 1);
         netWorkerEventloopArray = new Eventloop[netWorkers];
 
-        // for unit test mock
+        // for unit test
         if (workerPools == null) {
             return null;
         }
@@ -1090,7 +1090,7 @@ public class MultiWorkerServer extends Launcher {
 
             for (int i = 0; i < netWorkerEventloopArray.length; i++) {
                 var netWorkerEventloop = netWorkerEventloopArray[i];
-                // for unit test mock
+                // for unit test
                 if (netWorkerEventloop == null) {
                     continue;
                 }

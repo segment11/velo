@@ -95,7 +95,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @return true if the socket uses RESP3, false otherwise
      */
     public static boolean isResp3(ITcpSocket socket) {
-        // for unit test case
+        // for unit test
         if (socket == null) {
             return false;
         }
@@ -124,7 +124,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @return true if the connection is read-only, false otherwise
      */
     public static boolean isConnectionReadonly(ITcpSocket socket) {
-        // for unit test case
+        // for unit test
         if (socket == null) {
             return false;
         }
@@ -164,7 +164,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @return the authenticated user, or null if not set
      */
     public static String getAuthUser(ITcpSocket socket) {
-        // for unit test case
+        // for unit test
         if (socket == null) {
             return null;
         }

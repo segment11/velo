@@ -50,7 +50,8 @@ public class KeyHash {
      * @return the 64-bit hash of the key
      */
     public static long hash(byte[] keyBytes) {
-        // for unit test, mock some keys always in the same bucket index
+        // for unit test
+        // mock some keys always in the same bucket index
         if (keyBytes.length > fixedPrefixKeyBytesForTest.length) {
             if (keyBytes[0] == fixedPrefixKeyBytesForTest[0]
                     && keyBytes[1] == fixedPrefixKeyBytesForTest[1]
