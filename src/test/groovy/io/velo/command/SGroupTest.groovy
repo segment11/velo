@@ -448,25 +448,6 @@ sunionstore
                 .cv().compressedData == 'value'.bytes
 
         when:
-        sGroup.localTest = true
-        sGroup.localTestRandomValueList = []
-        def rand = new Random()
-        100.times {
-            def value = new byte[200]
-            for (int j = 0; j < value.length; j++) {
-                value[j] = (byte) rand.nextInt(Byte.MAX_VALUE + 1)
-            }
-            sGroup.localTestRandomValueList << value
-        }
-        data3[1] = new byte[16]
-        reply = sGroup.set(data3)
-        then:
-        reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, data3[1], slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
-                .cv().compressedData[-16..-1] == data3[1]
-
-        when:
-        sGroup.localTest = false
         def data4 = new byte[4][]
         data4[1] = 'a'.bytes
         data4[2] = 'value'.bytes

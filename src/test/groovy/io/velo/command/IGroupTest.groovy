@@ -2,6 +2,8 @@ package io.velo.command
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.velo.BaseCommand
+import io.velo.Utils
+import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
@@ -48,6 +50,11 @@ class IGroupTest extends Specification {
         def iGroup = new IGroup('incr', data1, null)
         iGroup.from(BaseCommand.mockAGroup())
 
+        and:
+        def loader = CachedGroovyClassLoader.instance
+        def classpath = Utils.projectPath('/dyn/src')
+        loader.init(GroovyClassLoader.getClass().classLoader, classpath, null)
+
         when:
         def reply = iGroup.handle()
         then:
@@ -71,7 +78,7 @@ class IGroupTest extends Specification {
         iGroup.data = data3
         reply = iGroup.handle()
         then:
-        reply == ErrorReply.FORMAT
+        reply instanceof BulkReply
 
         when:
         iGroup.cmd = 'zzz'

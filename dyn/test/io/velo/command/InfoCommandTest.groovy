@@ -38,6 +38,9 @@ class InfoCommandTest extends Specification {
         LocalPersistTest.prepareLocalPersist()
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
 
+        and:
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
+
         when:
         def reply = infoCommand.handle()
         then:
