@@ -479,17 +479,6 @@ public class SGroup extends BaseCommand {
 
         // for local test, random value, test compress ratio
         var valueBytes = dd[2];
-        if (localTest) {
-            int randomValueIndex = new Random().nextInt(localTestRandomValueList.size());
-            var randomValueBytes = localTestRandomValueList.get(randomValueIndex);
-
-            valueBytes = new byte[randomValueBytes.length];
-
-            // change last 16 bytes same as key
-            System.arraycopy(randomValueBytes, 0, valueBytes, 0, valueBytes.length - keyBytes.length);
-            System.arraycopy(keyBytes, 0, valueBytes, valueBytes.length - keyBytes.length, keyBytes.length);
-        }
-
         if (valueBytes.length > CompressedValue.VALUE_MAX_LENGTH) {
             return ErrorReply.VALUE_TOO_LONG;
         }
