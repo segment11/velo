@@ -16,7 +16,6 @@ import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.cluster.MultiShardShadow;
 import io.velo.reply.*;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +25,6 @@ import java.io.StringWriter;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import static io.activej.config.converter.ConfigConverters.ofBoolean;
 import static io.activej.config.converter.ConfigConverters.ofInteger;
 
 /**
@@ -55,13 +53,6 @@ public class RequestHandler {
     @VisibleForTesting
     final SnowFlake snowFlake;
 
-    @TestOnly
-    final boolean localTest;
-    @TestOnly
-    final int localTestRandomValueListSize;
-    @TestOnly
-    final ArrayList<byte[]> localTestRandomValueList;
-
     int trainSampleListMaxSize;
 
     final CompressStats compressStats;
@@ -85,7 +76,6 @@ public class RequestHandler {
                 "workerId=" + workerId +
                 ", slotWorkers=" + slotWorkers +
                 ", slotNumber=" + slotNumber +
-                ", localTest=" + localTest +
                 ", sampleToTrainList.size=" + sampleToTrainList.size() +
                 ", isStopped=" + isStopped +
                 '}';
@@ -107,32 +97,15 @@ public class RequestHandler {
         this.slotNumber = slotNumber;
         this.snowFlake = snowFlake;
 
-        var toInt = ofInteger();
-        this.localTest = config.get(ofBoolean(), "localTest", false);
-        var localTestRandomValueLength = config.get(toInt, "localTestRandomValueLength", 200);
-        this.localTestRandomValueListSize = config.get(toInt, "localTestRandomValueListSize", 10000);
-        this.localTestRandomValueList = new ArrayList<>(localTestRandomValueListSize);
-        if (this.localTest) {
-            var rand = new Random();
-            for (int i = 0; i < localTestRandomValueListSize; i++) {
-                var value = new byte[localTestRandomValueLength];
-                for (int j = 0; j < value.length; j++) {
-                    value[j] = (byte) rand.nextInt(Byte.MAX_VALUE + 1);
-                }
-                localTestRandomValueList.add(value);
-            }
-            log.info("Local test random value list mocked, size={}, value length={}", localTestRandomValueListSize, localTestRandomValueLength);
-        }
-
         var requestConfig = config.getChild("request");
 
         this.compressStats = new CompressStats("slot_worker_" + workerId, "slot_");
         // compress and train sample dict requestConfig
-        this.trainSampleListMaxSize = requestConfig.get(toInt, "trainSampleListMaxSize", 1000);
+        this.trainSampleListMaxSize = requestConfig.get(ofInteger(), "trainSampleListMaxSize", 1000);
 
         this.trainSampleJob = new TrainSampleJob(workerId);
-        this.trainSampleJob.setDictSize(requestConfig.get(toInt, "dictSize", 1024));
-        this.trainSampleJob.setTrainSampleMinBodyLength(requestConfig.get(toInt, "trainSampleMinBodyLength", 4096));
+        this.trainSampleJob.setDictSize(requestConfig.get(ofInteger(), "dictSize", 1024));
+        this.trainSampleJob.setTrainSampleMinBodyLength(requestConfig.get(ofInteger(), "trainSampleMinBodyLength", 4096));
 
         this.initCommandGroups();
         this.initMetricsCollect();

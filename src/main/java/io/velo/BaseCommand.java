@@ -343,10 +343,6 @@ public abstract class BaseCommand {
         this.trainSampleJob = requestHandler.trainSampleJob;
         this.sampleToTrainList = requestHandler.sampleToTrainList;
 
-        this.localTest = requestHandler.localTest;
-        this.localTestRandomValueListSize = requestHandler.localTestRandomValueListSize;
-        this.localTestRandomValueList = requestHandler.localTestRandomValueList;
-
         this.slotWithKeyHashListParsed = request.getSlotWithKeyHashList();
         this.isCrossRequestWorker = request.isCrossRequestWorker();
         return this;

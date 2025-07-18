@@ -60,7 +60,6 @@ class RequestHandlerTest extends Specification {
         requestHandler.slotWorkers == netWorkers
         requestHandler.slotNumber == slotNumber
         requestHandler.snowFlake == snowFlake
-        requestHandler2.localTestRandomValueList.size() > 0
         requestHandler.getA_ZGroupCommand('a'.bytes[0]) instanceof AGroup
 
         when:
