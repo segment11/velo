@@ -141,8 +141,7 @@ public class TcpClient implements NeedCleanUp {
                                 for (int i = 0; i < pipeline.size(); i++) {
                                     var request = pipeline.get(i);
 
-                                    var xGroup = new XGroup(null, request.getData(), socket);
-                                    xGroup.init(requestHandler, request);
+                                    var xGroup = new XGroup(null, request.getData(), socket, requestHandler, request);
                                     xGroup.setReplPair(replPair);
 
                                     try {

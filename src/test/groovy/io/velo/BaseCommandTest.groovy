@@ -148,9 +148,7 @@ class BaseCommandTest extends Specification {
         c.cmd = 'get'
         c.data = data2
         c.socket = null
-        c.update('get', data2, null)
-        c.localTest = false
-        c.localTestRandomValueList = null
+        c.resetContext('get', data2, null, new Request(data2, false, false))
 
         expect:
         c.cmd == 'get'
@@ -180,10 +178,6 @@ class BaseCommandTest extends Specification {
         c.snowFlake == null
         c.trainSampleJob != null
         c.sampleToTrainList.size() == 0
-
-        !c.localTest
-        c.localTestRandomValueListSize == 0
-        c.localTestRandomValueList.size() == 0
 
         c.slotWithKeyHashListParsed.size() == 0
         !c.isCrossRequestWorker

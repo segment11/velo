@@ -5,10 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.netty.buffer.Unpooled;
-import io.velo.BaseCommand;
-import io.velo.ConfForGlobal;
-import io.velo.ConfForSlot;
-import io.velo.Dict;
+import io.velo.*;
+import io.velo.decode.Request;
 import io.velo.persist.*;
 import io.velo.repl.Binlog;
 import io.velo.repl.Repl;
@@ -38,6 +36,13 @@ import static io.velo.repl.ReplType.*;
 public class XGroup extends BaseCommand {
     public XGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
+    }
+
+    public XGroup(String cmd, byte[][] data, ITcpSocket socket, RequestHandler requestHandler, Request request) {
+        super(cmd, data, socket);
+        super.init(requestHandler);
+        this.slotWithKeyHashListParsed = request.getSlotWithKeyHashList();
+        this.isCrossRequestWorker = request.isCrossRequestWorker();
     }
 
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {

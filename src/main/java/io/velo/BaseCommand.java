@@ -124,16 +124,19 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Update the command string, data array, and network socket connection. Reuse this object in the same thread.
+     * Reset the command string, data array, and network socket connection. Reuse this object in the same thread.
      *
-     * @param cmd    The command string received from the client
-     * @param data   All data array received from the client including command
-     * @param socket The TCP socket connection to the client
+     * @param cmd     The command string received from the client
+     * @param data    All data array received from the client including command
+     * @param socket  The TCP socket connection to the client
+     * @param request The request object
      */
-    void update(String cmd, byte[][] data, ITcpSocket socket) {
+    public void resetContext(String cmd, byte[][] data, ITcpSocket socket, Request request) {
         this.cmd = cmd;
         this.data = data;
         this.socket = socket;
+        this.slotWithKeyHashListParsed = request.getSlotWithKeyHashList();
+        this.isCrossRequestWorker = request.isCrossRequestWorker();
     }
 
     /**
@@ -197,36 +200,12 @@ public abstract class BaseCommand {
     protected TrainSampleJob trainSampleJob;
     protected List<TrainSampleJob.TrainSampleKV> sampleToTrainList;
 
-    @TestOnly
-    public void setLocalTest(boolean localTest) {
-        this.localTest = localTest;
-    }
-
-    @TestOnly
-    public void setLocalTestRandomValueList(ArrayList<byte[]> localTestRandomValueList) {
-        this.localTestRandomValueList = localTestRandomValueList;
-    }
-
-    @TestOnly
-    public ArrayList<byte[]> getLocalTestRandomValueList() {
-        return localTestRandomValueList;
-    }
-
-    @TestOnly
-    protected boolean localTest;
-    @TestOnly
-    protected int localTestRandomValueListSize;
-    @TestOnly
-    protected ArrayList<byte[]> localTestRandomValueList;
-
     protected ArrayList<SlotWithKeyHash> slotWithKeyHashListParsed;
 
-    @TestOnly
     public ArrayList<SlotWithKeyHash> getSlotWithKeyHashListParsed() {
         return slotWithKeyHashListParsed;
     }
 
-    @TestOnly
     public void setSlotWithKeyHashListParsed(ArrayList<SlotWithKeyHash> slotWithKeyHashListParsed) {
         this.slotWithKeyHashListParsed = slotWithKeyHashListParsed;
     }
@@ -254,7 +233,6 @@ public abstract class BaseCommand {
         return mockAGroup(workerId, slotWorkers, slotNumber, new CompressStats("mock", "worker_"),
                 Zstd.defaultCompressionLevel(), 100, new SnowFlake(1, 1),
                 new TrainSampleJob(workerId), new ArrayList<>(),
-                false, 0, new ArrayList<>(),
                 new ArrayList<>(), false);
     }
 
@@ -262,7 +240,6 @@ public abstract class BaseCommand {
     public static AGroup mockAGroup(byte workerId, byte slotWorkers, short slotNumber, CompressStats compressStats,
                                     int compressLevel, int trainSampleListMaxSize, SnowFlake snowFlake,
                                     TrainSampleJob trainSampleJob, List<TrainSampleJob.TrainSampleKV> sampleToTrainList,
-                                    boolean localTest, int localTestRandomValueListSize, ArrayList<byte[]> localTestRandomValueList,
                                     ArrayList<SlotWithKeyHash> slotWithKeyHashListParsed, boolean isCrossRequestWorker) {
         var aGroup = new AGroup("append", new byte[][]{new byte[0], new byte[0], new byte[0]}, null);
         aGroup.workerId = workerId;
@@ -277,10 +254,6 @@ public abstract class BaseCommand {
 
         aGroup.trainSampleJob = trainSampleJob;
         aGroup.sampleToTrainList = sampleToTrainList;
-
-        aGroup.localTest = localTest;
-        aGroup.localTestRandomValueListSize = localTestRandomValueListSize;
-        aGroup.localTestRandomValueList = localTestRandomValueList;
 
         aGroup.slotWithKeyHashListParsed = slotWithKeyHashListParsed;
         aGroup.isCrossRequestWorker = isCrossRequestWorker;
@@ -309,10 +282,6 @@ public abstract class BaseCommand {
         this.trainSampleJob = other.trainSampleJob;
         this.sampleToTrainList = other.sampleToTrainList;
 
-        this.localTest = other.localTest;
-        this.localTestRandomValueListSize = other.localTestRandomValueListSize;
-        this.localTestRandomValueList = other.localTestRandomValueList;
-
         this.slotWithKeyHashListParsed = other.slotWithKeyHashListParsed;
         this.isCrossRequestWorker = other.isCrossRequestWorker;
 
@@ -325,24 +294,23 @@ public abstract class BaseCommand {
      * Initialize the properties of this BaseCommand object.
      *
      * @param requestHandler The RequestHandler object associated with this BaseCommand object
-     * @param request        The Request object associated with this BaseCommand object
      * @return The BaseCommand object itself
      */
-    public BaseCommand init(RequestHandler requestHandler, Request request) {
+    public BaseCommand init(RequestHandler requestHandler) {
         this.requestHandler = requestHandler;
-
         this.slotWorkers = requestHandler.slotWorkers;
         this.slotNumber = requestHandler.slotNumber;
-
         this.compressStats = requestHandler.compressStats;
-
         this.trainSampleListMaxSize = requestHandler.trainSampleListMaxSize;
-
         this.snowFlake = requestHandler.snowFlake;
-
         this.trainSampleJob = requestHandler.trainSampleJob;
         this.sampleToTrainList = requestHandler.sampleToTrainList;
+        return this;
+    }
 
+    @TestOnly
+    public BaseCommand init(RequestHandler requestHandler, Request request) {
+        this.init(requestHandler);
         this.slotWithKeyHashListParsed = request.getSlotWithKeyHashList();
         this.isCrossRequestWorker = request.isCrossRequestWorker();
         return this;

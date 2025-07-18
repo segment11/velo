@@ -154,6 +154,9 @@ public class RequestHandler {
 
     private final BaseCommand[] commandGroups = new BaseCommand[26];
 
+    private GGroup reuseGGroup;
+    private SGroup reuseSGroup;
+
     /**
      * Initializes the command groups.
      * These command groups can be reused in the same worker thread.
@@ -186,9 +189,13 @@ public class RequestHandler {
         commandGroups[24] = new YGroup(null, null, null);
         commandGroups[25] = new ZGroup(null, null, null);
 
-        for (var cmd : commandGroups) {
-            cmd.snowFlake = snowFlake;
+        for (var commandGroup : commandGroups) {
+            commandGroup.snowFlake = snowFlake;
+            commandGroup.init(this);
         }
+
+        reuseGGroup = (GGroup) commandGroups[6];
+        reuseSGroup = (SGroup) commandGroups[18];
     }
 
     /**
@@ -302,9 +309,7 @@ public class RequestHandler {
         var data = request.getData();
 
         if (request.isRepl()) {
-            var xGroup = new XGroup(null, data, socket);
-            xGroup.init(this, request);
-
+            var xGroup = new XGroup(null, data, socket, this, request);
             // try to catch in handle repl method
             return xGroup.handleRepl();
         }
@@ -451,6 +456,7 @@ public class RequestHandler {
                 }
             }
 
+            // do get for shortcut
             if (cmd.equals(GET_COMMAND)) {
                 if (data.length != 2) {
                     return ErrorReply.FORMAT;
@@ -467,7 +473,7 @@ public class RequestHandler {
                     // eg. get x_repl,sub_cmd,sub_sub_cmd,***
                     var dataTransfer = transferDataForXGroup(key);
                     // transfer data to: x_repl sub_cmd sub_sub_cmd ***
-                    var xGroup = new XGroup(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH, dataTransfer, socket).init(this, request);
+                    var xGroup = new XGroup(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH, dataTransfer, socket, this, request);
                     try {
                         return xGroup.handle();
                     } catch (Exception e) {
@@ -476,10 +482,10 @@ public class RequestHandler {
                     }
                 }
 
-                var gGroup = new GGroup(cmd, data, socket).init(this, request);
+                reuseGGroup.resetContext(cmd, data, socket, request);
+                var slotWithKeyHashList = request.getSlotWithKeyHashList();
                 try {
-                    var slotWithKeyHashList = request.getSlotWithKeyHashList();
-                    var bytes = gGroup.get(keyBytes, slotWithKeyHashList.getFirst(), true);
+                    var bytes = reuseGGroup.get(keyBytes, slotWithKeyHashList.getFirst(), true);
                     return bytes != null ? new BulkReply(bytes) : NilReply.INSTANCE;
                 } catch (TypeMismatchException e) {
                     return new ErrorReply(e.getMessage());
@@ -491,7 +497,7 @@ public class RequestHandler {
                 }
             }
 
-            // for short
+            // do set for shortcut
             // full set command handle in SGroup
             if (cmd.equals(SET_COMMAND) && data.length == 3) {
                 var keyBytes = data[1];
@@ -499,15 +505,15 @@ public class RequestHandler {
                     return ErrorReply.KEY_TOO_LONG;
                 }
 
-                // for local test, random value, test compress ratio
                 var valueBytes = data[2];
                 if (valueBytes.length > CompressedValue.VALUE_MAX_LENGTH) {
                     return ErrorReply.VALUE_TOO_LONG;
                 }
 
-                var sGroup = new SGroup(cmd, data, socket).init(this, request);
+                reuseSGroup.resetContext(cmd, data, socket, request);
+                var slotWithKeyHashList = request.getSlotWithKeyHashList();
                 try {
-                    sGroup.set(keyBytes, valueBytes, sGroup.slotWithKeyHashListParsed.getFirst());
+                    reuseSGroup.set(keyBytes, valueBytes, slotWithKeyHashList.getFirst());
                 } catch (ReadonlyException e) {
                     log.warn("Set but server is readonly, key={}", new String(keyBytes));
                     return ErrorReply.READONLY;
@@ -529,9 +535,9 @@ public class RequestHandler {
             }
 
             var commandGroup = commandGroups[firstByte - 'a'];
+            commandGroup.resetContext(cmd, data, socket, request);
             try {
-                commandGroup.update(cmd, data, socket);
-                return commandGroup.init(this, request).handle();
+                return commandGroup.handle();
             } catch (ReadonlyException e) {
                 log.warn("Request handle but server is readonly");
                 return ErrorReply.READONLY;
