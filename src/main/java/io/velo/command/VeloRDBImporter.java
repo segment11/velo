@@ -70,11 +70,6 @@ public class VeloRDBImporter implements RDBImporter {
 
         int type = buf.getUnsignedByte(0);
 
-        // Value bytes: from after type (offset 1) up to footer (len - 11)
-        int valueLen = len - 11;
-        var valueBytes = new byte[valueLen];
-        buf.getBytes(1, valueBytes);
-
         // CRC64 check: over all bytes except the last 8 (footer)
 //        var crcInput = new byte[len - 8];
 //        buf.getBytes(0, crcInput);
