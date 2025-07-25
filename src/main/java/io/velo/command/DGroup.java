@@ -9,11 +9,16 @@ import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
 import io.velo.persist.OneSlot;
 import io.velo.reply.*;
+import io.velo.type.RedisHH;
+import io.velo.type.RedisHashKeys;
+import io.velo.type.RedisList;
+import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public class DGroup extends BaseCommand {
@@ -56,6 +61,13 @@ public class DGroup extends BaseCommand {
 
         if ("decrby".equals(cmd) || "decrbyfloat".equals(cmd)) {
             if (data.length != 3) {
+                return slotWithKeyHashList;
+            }
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
+        }
+
+        if ("dump".equals(cmd)) {
+            if (data.length != 2) {
                 return slotWithKeyHashList;
             }
             slotWithKeyHashList.add(slot(data[1], slotNumber));
@@ -111,6 +123,14 @@ public class DGroup extends BaseCommand {
             }
 
             return decrBy(0, by);
+        }
+
+        if ("dump".equals(cmd)) {
+            if (data.length != 2) {
+                return ErrorReply.FORMAT;
+            }
+
+            return dump();
         }
 
         return NilReply.INSTANCE;
@@ -299,6 +319,97 @@ public class DGroup extends BaseCommand {
             long newValue = longValue - by;
             setNumber(keyBytes, newValue, slotWithKeyHash);
             return new IntegerReply(newValue);
+        }
+    }
+
+    boolean isUseHH(byte[] keyBytes) {
+        int checkPrefixLength = RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX.length;
+        if (keyBytes.length > checkPrefixLength) {
+            // check prefix match
+            if (Arrays.equals(keyBytes, 0, checkPrefixLength,
+                    RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX, 0, checkPrefixLength)) {
+                return false;
+            }
+        }
+        return localPersist.getIsHashSaveMemberTogether();
+    }
+
+    @VisibleForTesting
+    Reply dump() {
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(keyBytes, slotWithKeyHash);
+        if (cv == null) {
+            return NilReply.INSTANCE;
+        }
+
+        if (cv.isTypeString()) {
+            var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+            var dumpBytes = VeloRDBImporter.dumpString(valueBytes);
+            return new BulkReply(dumpBytes);
+        } else if (cv.isSet()) {
+            var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+            var rhk = RedisHashKeys.decode(valueBytes);
+            if (rhk.size() == 0) {
+                return NilReply.INSTANCE;
+            }
+
+            var dumpBytes = VeloRDBImporter.dumpSet(rhk);
+            return new BulkReply(dumpBytes);
+        } else if (cv.isHash()) {
+            if (isUseHH(keyBytes)) {
+                var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+                var rhh = RedisHH.decode(valueBytes);
+                if (rhh.size() == 0) {
+                    return NilReply.INSTANCE;
+                }
+
+                var dumpBytes = VeloRDBImporter.dumpHash(rhh);
+                return new BulkReply(dumpBytes);
+            } else {
+                var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+                var rhk = RedisHashKeys.decode(valueBytes);
+                if (rhk.getSet().isEmpty()) {
+                    return NilReply.INSTANCE;
+                }
+
+                var rhh = new RedisHH();
+                var key = new String(keyBytes);
+                for (var field : rhk.getSet()) {
+                    var fieldKey = RedisHashKeys.fieldKey(key, field);
+                    var sFieldKey = slot(fieldKey.getBytes());
+                    var fieldCv = getCv(fieldKey.getBytes(), sFieldKey);
+                    var fieldValueBytes = getValueBytesByCv(fieldCv, fieldKey.getBytes(), sFieldKey);
+                    rhh.put(field, fieldValueBytes);
+                }
+
+                var dumpBytes = VeloRDBImporter.dumpHash(rhh);
+                return new BulkReply(dumpBytes);
+            }
+        } else if (cv.isList()) {
+            var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+            var rl = RedisList.decode(valueBytes);
+            if (rl.size() == 0) {
+                return NilReply.INSTANCE;
+            }
+
+            var dumpBytes = VeloRDBImporter.dumpList(rl);
+            return new BulkReply(dumpBytes);
+        } else if (cv.isZSet()) {
+            var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+            var rz = RedisZSet.decode(valueBytes);
+            if (rz.isEmpty()) {
+                return NilReply.INSTANCE;
+            }
+
+            var dumpBytes = VeloRDBImporter.dumpZSet(rz);
+            return new BulkReply(dumpBytes);
+        } else {
+            return ErrorReply.DUMP_TYPE_NOT_SUPPORT;
         }
     }
 }

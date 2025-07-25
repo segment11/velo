@@ -3,6 +3,7 @@ package io.velo.command;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.velo.Utils;
+import io.velo.rdb.RedisCrc;
 import io.velo.rdb.RedisLzf;
 import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
@@ -16,6 +17,9 @@ import java.nio.ByteBuffer;
 
 public class VeloRDBImporter implements RDBImporter {
     // Redis RDB type constants
+    private static final short RDB_MIN_VERSION = 6;
+    private static final short RDB_VERSION = 11;
+
     private static final int RDB_TYPE_STRING = 0;
     private static final int RDB_TYPE_LIST = 1;
     private static final int RDB_TYPE_SET = 2;
@@ -53,6 +57,85 @@ public class VeloRDBImporter implements RDBImporter {
 
     static {
         setLoadLibraryPath();
+        RedisCrc.crc64Init();
+    }
+
+    private static byte[] writeVersionAndCrc(ByteBuf buf) {
+        buf.writeShortLE(RDB_VERSION);
+        var crc = RedisCrc.crc64(0, buf.array(), 0, buf.readableBytes());
+        buf.writeLongLE(crc);
+
+        var result = new byte[buf.readableBytes()];
+        buf.getBytes(0, result);
+        return result;
+    }
+
+    // string or number
+    public static byte[] dumpString(byte[] valueBytes) {
+        var buf = Unpooled.buffer();
+
+        buf.writeByte(RDB_TYPE_STRING);
+        writeRdbString(buf, valueBytes);
+
+        return writeVersionAndCrc(buf);
+    }
+
+    public static byte[] dumpSet(RedisHashKeys rhk) {
+        assert rhk != null && rhk.size() > 0;
+
+        var buf = Unpooled.buffer();
+        buf.writeByte(RDB_TYPE_SET);
+        // Write set size
+        writeRdbLength(buf, rhk.size());
+        // Write each member
+        for (var member : rhk.getSet()) {
+            writeRdbString(buf, member.getBytes());
+        }
+
+        return writeVersionAndCrc(buf);
+    }
+
+    public static byte[] dumpHash(RedisHH rhh) {
+        assert rhh != null && rhh.size() > 0;
+
+        var buf = Unpooled.buffer();
+        buf.writeByte(RDB_TYPE_HASH);
+        // Write hash size
+        writeRdbLength(buf, rhh.size());
+        // Write each field-value pair
+        for (var entry : rhh.getMap().entrySet()) {
+            writeRdbString(buf, entry.getKey().getBytes());
+            writeRdbString(buf, entry.getValue());
+        }
+
+        return writeVersionAndCrc(buf);
+    }
+
+    public static byte[] dumpList(RedisList rl) {
+        assert rl != null && rl.size() > 0;
+
+        var buf = Unpooled.buffer();
+        buf.writeByte(RDB_TYPE_LIST);
+        writeRdbLength(buf, rl.size());
+        for (var element : rl.getList()) {
+            writeRdbString(buf, element);
+        }
+
+        return writeVersionAndCrc(buf);
+    }
+
+    public static byte[] dumpZSet(RedisZSet rz) {
+        assert rz != null && !rz.isEmpty();
+
+        var buf = Unpooled.buffer();
+        buf.writeByte(RDB_TYPE_ZSET2);
+        writeRdbLength(buf, rz.size());
+        for (var entry : rz.getSet()) {
+            writeRdbString(buf, entry.member().getBytes());
+            buf.writeDouble(entry.score());
+        }
+
+        return writeVersionAndCrc(buf);
     }
 
     @Override
@@ -65,22 +148,21 @@ public class VeloRDBImporter implements RDBImporter {
 
         // RDB version: 2 bytes before last 8 bytes (little-endian)
         int rdbVersion = buf.getUnsignedShortLE(len - 10);
+        if (rdbVersion < RDB_MIN_VERSION) {
+            throw new IllegalArgumentException("Unsupported RDB version: " + rdbVersion);
+        }
+
         // CRC64: last 8 bytes (little-endian)
         long expectedCrc = buf.getLongLE(len - 8);
+        // CRC64 check: over all bytes except the last 8 (footer)
+        var actualCrc = RedisCrc.crc64(0, buf.array(), 0, len - 8);
+        if (actualCrc != expectedCrc) {
+            throw new IllegalArgumentException("CRC64 mismatch: expected " + expectedCrc + ", got " + actualCrc);
+        }
 
         int type = buf.getUnsignedByte(0);
-
-        // CRC64 check: over all bytes except the last 8 (footer)
-//        var crcInput = new byte[len - 8];
-//        buf.getBytes(0, crcInput);
-//        long actualCrc = RedisCrc.crc64(0, crcInput, crcInput.length);
-//        if (actualCrc != expectedCrc) {
-//            throw new IllegalArgumentException("CRC64 mismatch: expected " + expectedCrc + ", got " + actualCrc);
-//        }
-
         // Now decode the serialized value
         buf.readerIndex(1).writerIndex(len - 10);
-
         switch (type) {
             case RDB_TYPE_STRING:
                 var decoded = decodeRdbString(buf);
@@ -415,5 +497,65 @@ public class VeloRDBImporter implements RDBImporter {
                 hash.put(fieldArray[0], valueBytes);
             }
         });
+    }
+
+    // Helper method to write RDB string encoding
+    private static void writeRdbString(ByteBuf buf, byte[] data) {
+        // Try to encode as integer if possible
+        if (data.length <= 11) {
+            try {
+                var str = new String(data);
+                var value = Long.parseLong(str);
+                if (value >= -(1 << 7) && value <= (1 << 7) - 1) {
+                    // 8-bit integer
+                    buf.writeByte((byte) (0xC0));
+                    buf.writeByte((byte) value);
+                    return;
+                } else if (value >= -(1 << 15) && value <= (1 << 15) - 1) {
+                    // 16-bit integer
+                    buf.writeByte((byte) (0xC0 | 1));
+                    buf.writeShortLE((short) value);
+                    return;
+                } else if (value >= -((long) 1 << 31) && value <= ((long) 1 << 31) - 1) {
+                    // 32-bit integer
+                    buf.writeByte((byte) (0xC0 | 2));
+                    buf.writeIntLE((int) value);
+                    return;
+                }
+            } catch (NumberFormatException e) {
+                // Not a number, continue with normal string encoding
+            }
+        }
+
+        // Normal string encoding
+        if (data.length < (1 << 6)) {
+            // 6-bit length
+            buf.writeByte((byte) (data.length & 0x3F));
+        } else if (data.length < (1 << 14)) {
+            // 14-bit length
+            buf.writeByte((byte) (((data.length >> 8) & 0x3F) | 0x40));
+            buf.writeByte((byte) (data.length & 0xFF));
+        } else {
+            // 32-bit length
+            buf.writeByte((byte) 0x80);
+            buf.writeInt(data.length);
+        }
+        buf.writeBytes(data);
+    }
+
+    // Helper method to write RDB length encoding
+    private static void writeRdbLength(ByteBuf buf, long length) {
+        if (length < (1 << 6)) {
+            // 6-bit length
+            buf.writeByte((byte) (length & 0x3F));
+        } else if (length < (1 << 14)) {
+            // 14-bit length
+            buf.writeByte((byte) (((length >> 8) & 0x3F) | 0x40));
+            buf.writeByte((byte) (length & 0xFF));
+        } else {
+            // 32-bit length
+            buf.writeByte((byte) 0x80);
+            buf.writeInt((int) length);
+        }
     }
 }

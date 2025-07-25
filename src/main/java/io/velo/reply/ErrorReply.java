@@ -165,6 +165,11 @@ public class ErrorReply implements Reply {
     public static final ErrorReply NOT_SUPPORT = new ErrorReply("not support");
 
     /**
+     * Error reply indicating that a dump type is not supported.
+     */
+    public static final ErrorReply DUMP_TYPE_NOT_SUPPORT = new ErrorReply("dump type not support");
+
+    /**
      * Error reply indicating that a cluster slot crosses shards.
      */
     public static final ErrorReply CLUSTER_SLOT_CROSS_SHARDS = new ErrorReply("cluster slot cross shards");

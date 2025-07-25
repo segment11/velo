@@ -8,56 +8,58 @@ import io.velo.type.RedisZSet
 import spock.lang.Specification
 
 class VeloRDBImporterTest extends Specification {
+    class RDBCallbackImpl implements RDBCallback {
+        Object result
+
+        @Override
+        void onInteger(Integer value) {
+            println "Integer: $value"
+            result = value
+        }
+
+        @Override
+        void onString(byte[] valueBytes) {
+            println "String: ${new String(valueBytes)}"
+            result = valueBytes
+        }
+
+        @Override
+        void onList(RedisList rl) {
+            def str = rl.list.collect { new String(it) }.join(',')
+            println "List: " + str
+            result = rl
+        }
+
+        @Override
+        void onSet(RedisHashKeys rhk) {
+            def str = rhk.set.join(',')
+            println "Set: " + str
+            result = rhk
+        }
+
+        @Override
+        void onZSet(RedisZSet rz) {
+            def str = rz.set.collect {
+                "${new String(it.member())}:${it.score()}".toString()
+            }.join(',')
+            println "ZSet: " + str
+            result = rz
+        }
+
+        @Override
+        void onHash(RedisHH rhh) {
+            def str = rhh.map.collect {
+                "${it.key}:${new String(it.value)}".toString()
+            }.join(',')
+            println "Hash: " + str
+            result = rhh
+        }
+    }
+
     def 'test restore'() {
         given:
         def v = new VeloRDBImporter()
-        def callback = new RDBCallback() {
-            Object result
-
-            @Override
-            void onInteger(Integer value) {
-                println "Integer: $value"
-                result = value
-            }
-
-            @Override
-            void onString(byte[] valueBytes) {
-                println "String: ${new String(valueBytes)}"
-                result = valueBytes
-            }
-
-            @Override
-            void onList(RedisList rl) {
-                def str = rl.list.collect { new String(it) }.join(',')
-                println "List: " + str
-                result = rl
-            }
-
-            @Override
-            void onSet(RedisHashKeys rhk) {
-                def str = rhk.set.join(',')
-                println "Set: " + str
-                result = rhk
-            }
-
-            @Override
-            void onZSet(RedisZSet rz) {
-                def str = rz.set.collect {
-                    "${new String(it.member())}:${it.score()}".toString()
-                }.join(',')
-                println "ZSet: " + str
-                result = rz
-            }
-
-            @Override
-            void onHash(RedisHH rhh) {
-                def str = rhh.map.collect {
-                    "${it.key}:${new String(it.value)}".toString()
-                }.join(',')
-                println "Hash: " + str
-                result = rhh
-            }
-        }
+        def callback = new RDBCallbackImpl()
 
         when:
         def aBytes = new byte[]{
@@ -172,6 +174,92 @@ class VeloRDBImporterTest extends Specification {
                 25, 105, 59, 101, 71, -54
         }
         v.restore(Unpooled.wrappedBuffer(listPackZSetBytes), callback)
+        then:
+        callback.result instanceof RedisZSet
+        (callback.result as RedisZSet).set.size() == 2
+    }
+
+    def 'test dump string'() {
+        given:
+        def v = new VeloRDBImporter()
+        def callback = new RDBCallbackImpl()
+
+        when:
+        def bytesByte = VeloRDBImporter.dumpString('12'.bytes)
+        v.restore(Unpooled.wrappedBuffer(bytesByte), callback)
+        then:
+        callback.result as byte[] == '12'.bytes
+
+        when:
+        def bytesShort = VeloRDBImporter.dumpString('123'.bytes)
+        v.restore(Unpooled.wrappedBuffer(bytesShort), callback)
+        then:
+        callback.result as byte[] == '123'.bytes
+
+        when:
+        def bytesInt = VeloRDBImporter.dumpString('1234'.bytes)
+        v.restore(Unpooled.wrappedBuffer(bytesInt), callback)
+        then:
+        callback.result as byte[] == '1234'.bytes
+
+        when:
+        def bytesLong = VeloRDBImporter.dumpString('1234567890'.bytes)
+        v.restore(Unpooled.wrappedBuffer(bytesLong), callback)
+        then:
+        callback.result as byte[] == '1234567890'.bytes
+
+        when:
+        def bytes = VeloRDBImporter.dumpString('hello world'.bytes)
+        v.restore(Unpooled.wrappedBuffer(bytes), callback)
+        then:
+        callback.result as byte[] == 'hello world'.bytes
+    }
+
+    def 'test dump types'() {
+        given:
+        def v = new VeloRDBImporter()
+        def callback = new RDBCallbackImpl()
+
+        when:
+        // set
+        def rhk = new RedisHashKeys()
+        rhk.add('member0')
+        rhk.add('member1')
+        def bytesSet = VeloRDBImporter.dumpSet(rhk)
+        v.restore(Unpooled.wrappedBuffer(bytesSet), callback)
+        then:
+        callback.result instanceof RedisHashKeys
+        (callback.result as RedisHashKeys).set.size() == 2
+
+        when:
+        // hash
+        def rhh = new RedisHH()
+        rhh.put('field0', 'value0'.bytes)
+        rhh.put('field1', 'value1'.bytes)
+        def bytesHash = VeloRDBImporter.dumpHash(rhh)
+        v.restore(Unpooled.wrappedBuffer(bytesHash), callback)
+        then:
+        callback.result instanceof RedisHH
+        (callback.result as RedisHH).map.size() == 2
+
+        when:
+        // list
+        def rl = new RedisList()
+        rl.addLast('value0'.bytes)
+        rl.addLast('value1'.bytes)
+        def bytesList = VeloRDBImporter.dumpList(rl)
+        v.restore(Unpooled.wrappedBuffer(bytesList), callback)
+        then:
+        callback.result instanceof RedisList
+        (callback.result as RedisList).size() == 2
+
+        when:
+        // zset
+        def rz = new RedisZSet()
+        rz.add(0.1, 'member0')
+        rz.add(0.2, 'member1')
+        def bytesZSet = VeloRDBImporter.dumpZSet(rz)
+        v.restore(Unpooled.wrappedBuffer(bytesZSet), callback)
         then:
         callback.result instanceof RedisZSet
         (callback.result as RedisZSet).set.size() == 2

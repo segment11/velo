@@ -21,7 +21,7 @@ extern "C" {
      * Signature: (J[BJ)J
      */
     JNIEXPORT jlong JNICALL Java_io_velo_rdb_RedisCrc_crc64
-      (JNIEnv *, jclass, jlong, jbyteArray, jlong);
+      (JNIEnv *, jclass, jlong, jbyteArray, jlong, jlong);
 
 #ifdef __cplusplus
 }

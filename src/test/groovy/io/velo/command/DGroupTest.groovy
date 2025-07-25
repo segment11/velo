@@ -8,6 +8,10 @@ import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
 import io.velo.reply.*
+import io.velo.type.RedisHH
+import io.velo.type.RedisHashKeys
+import io.velo.type.RedisList
+import io.velo.type.RedisZSet
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -29,12 +33,14 @@ class DGroupTest extends Specification {
         def sDecrByList = _DGroup.parseSlots('decrby', data2, slotNumber)
         def sDecrByFloatList = _DGroup.parseSlots('decrbyfloat', data2, slotNumber)
         def sDelList = _DGroup.parseSlots('del', data2, slotNumber)
+        def sDumpList = _DGroup.parseSlots('dump', data2, slotNumber)
         def sList = _DGroup.parseSlots('dxxx', data2, slotNumber)
         then:
         sDecrList.size() == 1
         sDecrByList.size() == 0
         sDecrByFloatList.size() == 0
         sDelList.size() == 1
+        sDumpList.size() == 1
         sList.size() == 0
 
         when:
@@ -58,10 +64,12 @@ class DGroupTest extends Specification {
         sDebugList = _DGroup.parseSlots('debug', data1, slotNumber)
         sDecrList = _DGroup.parseSlots('decr', data1, slotNumber)
         sDelList = _DGroup.parseSlots('del', data1, slotNumber)
+        sDumpList = _DGroup.parseSlots('dump', data1, slotNumber)
         then:
         sDebugList.size() == 0
         sDecrList.size() == 0
         sDelList.size() == 0
+        sDumpList.size() == 0
     }
 
     def 'test handle'() {
@@ -81,6 +89,12 @@ class DGroupTest extends Specification {
 
         when:
         dGroup.cmd = 'del'
+        reply = dGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        dGroup.cmd = 'dump'
         reply = dGroup.handle()
         then:
         reply == ErrorReply.FORMAT
@@ -468,5 +482,152 @@ class DGroupTest extends Specification {
         then:
         reply instanceof DoubleReply
         ((DoubleReply) reply).doubleValue() == 0.1d
+    }
+
+    def 'test dump'() {
+        given:
+        final short slot = 0
+
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def dGroup = new DGroup(null, null, null)
+        dGroup.byPassGetSet = inMemoryGetSet
+        dGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = dGroup.execute('dump a')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        def cv = new CompressedValue()
+        cv.compressedData = 'abc'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        // set
+        def rhk = new RedisHashKeys()
+        rhk.add('member0')
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        cv.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        // empty set
+        rhk.remove('member0')
+        cv.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        // hash
+        LocalPersist.instance.hashSaveMemberTogether = true
+        def rhh = new RedisHH()
+        rhh.put('field0', 'value0'.bytes)
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        cv.compressedData = rhh.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        // empty hash
+        rhh.remove('field0')
+        cv.compressedData = rhh.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        var rhk1 = new RedisHashKeys()
+        rhk1.add('field0')
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cv.compressedData = rhk1.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        def cv1 = new CompressedValue()
+        cv1.compressedData = 'abc'.bytes
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field0'), 0, cv1)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        // empty hash
+        rhk1.remove('field0')
+        cv.compressedData = rhk1.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        // list
+        def rl = new RedisList()
+        rl.addLast('value0'.bytes)
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        // empty list
+        rl.removeFirst()
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        // zset
+        def rz = new RedisZSet()
+        rz.add(0.1, 'member0')
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+
+        when:
+        // empty zset
+        rz.remove('member0')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        // stream
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_STREAM
+        cv.compressedData = new byte[0]
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply == ErrorReply.DUMP_TYPE_NOT_SUPPORT
+
+        when:
+        // keys too long
+        def data2 = new byte[2][]
+        data2[0] = 'dump'.bytes
+        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        dGroup.data = data2
+        reply = dGroup.dump()
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
     }
 }

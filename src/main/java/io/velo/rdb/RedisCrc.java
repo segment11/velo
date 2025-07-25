@@ -19,10 +19,11 @@ public class RedisCrc {
     /**
      * Computes the CRC64 checksum of a given byte array.
      *
-     * @param crc  the initial CRC64 value
-     * @param data the byte array to compute the CRC64 checksum for
-     * @param l    the number of bytes in the array to consider for the CRC64 computation
+     * @param crc    the initial CRC64 value
+     * @param data   the byte array to compute the CRC64 checksum for
+     * @param offset the starting index of the data array
+     * @param length the length of bytes in the array to consider for the CRC64 computation
      * @return the computed CRC64 checksum
      */
-    public static native long crc64(long crc, final byte[] data, long l);
+    public static native long crc64(long crc, final byte[] data, long offset, long length);
 }
