@@ -74,11 +74,6 @@ public class ConfForGlobal {
     public static String netListenAddresses = "localhost:7379";
 
     /**
-     * Flag to indicate if direct I/O should be used.
-     */
-    public static boolean isUseDirectIO = false;
-
-    /**
      * Directory path for data storage (default is "/tmp/velo-data").
      */
     public static String dirPath = "/tmp/velo-data";

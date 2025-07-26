@@ -210,7 +210,7 @@ class FdReadWriteTest extends Specification {
             fdChunk.writeIndex = oldWriteIndex
         }
         then:
-        ConfForGlobal.isUseDirectIO ? exception : !exception
+        !exception
 
         when:
         fdChunk.writeSegmentsBatchForRepl(1024, new byte[segmentLength * FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD])
