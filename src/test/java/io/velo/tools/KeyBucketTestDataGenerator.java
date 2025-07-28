@@ -6,8 +6,6 @@ import io.velo.SnowFlake;
 import io.velo.persist.FdReadWrite;
 import io.velo.persist.KeyBucket;
 import io.velo.persist.KeyLoader;
-import jnr.ffi.LibraryLoader;
-import jnr.posix.LibC;
 
 import java.io.File;
 import java.io.IOException;
@@ -32,7 +30,7 @@ public class KeyBucketTestDataGenerator implements TestDataGenerator, WalVDataGe
 
             // prometheus metric labels use _ instead of -
             var name = "key_bucket_split_" + splitIndex + "_slot_" + slot;
-            FdReadWrite fdReadWrite = new FdReadWrite(slot, name, file);
+            var fdReadWrite = new FdReadWrite(name, file);
             fdReadWrite.initByteBuffers(false, splitIndex);
             fdReadWriteArray[splitIndex] = fdReadWrite;
         }
