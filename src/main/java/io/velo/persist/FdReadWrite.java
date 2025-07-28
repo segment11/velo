@@ -3,10 +3,7 @@ package io.velo.persist;
 import com.github.luben.zstd.Zstd;
 import com.kenai.jffi.MemoryIO;
 import com.kenai.jffi.PageManager;
-import io.velo.ConfForGlobal;
-import io.velo.ConfForSlot;
-import io.velo.NeedCleanUp;
-import io.velo.StaticMemoryPrepareBytesStats;
+import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
@@ -176,7 +173,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
                 '}';
     }
 
-    // Metric stats
+    // Metric stats begin
     /**
      * The total time spent decompressing data after an LRU cache hit (in microseconds).
      */
@@ -250,7 +247,6 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     long lruMissCounter;
 
     // Metrics for pure memory mode
-
     /**
      * The total time spent compressing shared bytes (in microseconds).
      * Only for pure memory mode stats.
@@ -285,6 +281,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      */
     @VisibleForTesting
     long keyBucketSharedBytesDecompressCountTotal;
+    // Metric stats end
 
     /**
      * The number of segments to batch write at once.
@@ -296,6 +293,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      */
     public static final int REPL_ONCE_SEGMENT_COUNT_PREAD = 1024;
 
+    // read / write reuse memory buffers
     /**
      * A buffer for holding a single inner segment.
      */
@@ -348,6 +346,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      */
     private long forOneWalGroupBatchAddress;
 
+    // ***** ***** ***** ***** ***** ***** ***** ***** ***** *****
     /**
      * The length of one inner segment.
      */
@@ -373,6 +372,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * The first index is the relative segment index in the target chunk fd.
      * Only when pure memory mode.
      */
+    @PureMemoryMode
     byte[][] allBytesBySegmentIndexForOneChunkFd;
 
     /**
@@ -380,6 +380,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * For key bucket, compressed, need compress before set here and decompress after read from here.
      * Only when pure memory mode.
      */
+    @PureMemoryMode
     byte[][] allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex;
 
     /**
@@ -447,6 +448,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @param sharedBytes   the shared bytes to store
      * @param walGroupIndex the index of the WAL group
      */
+    @PureMemoryMode
     void setSharedBytesFromLastSavedFileToMemory(byte[] sharedBytes, int walGroupIndex) {
         allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex] = sharedBytes;
 
@@ -462,6 +464,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @return the decompressed shared bytes
      */
     @VisibleForTesting
+    @PureMemoryMode
     byte[] getSharedBytesDecompressFromMemory(int walGroupIndex) {
         var compressedSharedBytes = allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[walGroupIndex];
         if (compressedSharedBytes == null) {
@@ -491,6 +494,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @param segmentIndex the segment index to check.
      * @return true if the segment index is null, false otherwise.
      */
+    @PureMemoryMode
     boolean isTargetSegmentIndexNullInMemory(int segmentIndex) {
         return allBytesBySegmentIndexForOneChunkFd[segmentIndex] == null;
     }
@@ -500,6 +504,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      *
      * @param segmentIndex the segment index to clear.
      */
+    @PureMemoryMode
     void clearTargetSegmentIndexInMemory(int segmentIndex) {
         allBytesBySegmentIndexForOneChunkFd[segmentIndex] = null;
     }
@@ -509,12 +514,14 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * Chunk fd is by relative segment index, key bucket fd is by bucket index.
      */
     @VisibleForTesting
+    @NotPureMemoryMode
     LRUMap<Integer, byte[]> oneInnerBytesByIndexLRU;
 
     /**
      * Initializes the pure memory byte array.
      */
     @VisibleForTesting
+    @PureMemoryMode
     public void initPureMemoryByteArray() {
         if (isChunkFd) {
             if (this.allBytesBySegmentIndexForOneChunkFd == null) {
@@ -599,37 +606,33 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     public long estimate(@NotNull StringBuilder sb) {
         long size = 0;
         if (ConfForGlobal.pureMemory) {
-            var size1 = 0L;
             if (isChunkFd) {
-                size1 += allBytesBySegmentIndexForOneChunkFd.length * 16L;
+                size += allBytesBySegmentIndexForOneChunkFd.length * 16L;
                 for (var bytes : allBytesBySegmentIndexForOneChunkFd) {
                     if (bytes != null) {
-                        size1 += bytes.length;
+                        size += bytes.length;
                     }
                 }
-                sb.append("Pure memory, Fd chunk segments, name: ").append(name).append(", size: ").append(size1).append("\n");
+                sb.append("Pure memory, Fd chunk segments, name: ").append(name).append(", size: ").append(size).append("\n");
             } else {
-                size1 += allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length * 16L;
+                size += allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex.length * 16L;
                 for (var bytes : allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex) {
                     if (bytes != null) {
-                        size1 += bytes.length;
+                        size += bytes.length;
                     }
                 }
-                sb.append("Pure memory, Fd key buckets, name: ").append(name).append(", size: ").append(size1).append("\n");
+                sb.append("Pure memory, Fd key buckets, name: ").append(name).append(", size: ").append(size).append("\n");
             }
-            size += size1;
         } else {
-            var size1 = 0L;
-            size1 += oneInnerBuffer.capacity();
+            size += oneInnerBuffer.capacity();
             if (isChunkFd) {
-                size1 += writeSegmentBatchBuffer.capacity();
-                size1 += forReplBuffer.capacity();
-                size1 += readForMergeBatchBuffer.capacity();
+                size += writeSegmentBatchBuffer.capacity();
+                size += forReplBuffer.capacity();
+                size += readForMergeBatchBuffer.capacity();
             } else {
-                size1 += forOneWalGroupBatchBuffer.capacity();
+                size += forOneWalGroupBatchBuffer.capacity();
             }
-            sb.append("Fd read write buffer, name: ").append(name).append(", size: ").append(size1).append("\n");
-            size += size1;
+            sb.append("Fd read write buffer, name: ").append(name).append(", size: ").append(size).append("\n");
 
             if (isLRUOn) {
                 var size2 = RamUsageEstimator.sizeOfMap(oneInnerBytesByIndexLRU);
@@ -659,7 +662,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             var lruMemoryRequireMB = ((long) maxSize * oneInnerLength) / 1024 / 1024;
             log.info("Chunk lru max size for one chunk fd={}, one inner length={}, memory require={}MB, name={}",
                     maxSize, oneInnerLength, lruMemoryRequireMB, name);
-            log.info("LRU prepare, type={}, MB={}, fd={}", LRUPrepareBytesStats.Type.fd_chunk_data, lruMemoryRequireMB, name);
+            log.info("LRU prepare, type={}, MB={}, fd={}, chunk", LRUPrepareBytesStats.Type.fd_chunk_data, lruMemoryRequireMB, name);
             LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.fd_chunk_data, name, (int) lruMemoryRequireMB, true);
         } else {
             // key bucket
@@ -670,7 +673,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             var lruMemoryRequireMB = (double) ((long) maxSize * oneInnerLength) / 1024 / 1024 * compressRatio;
             log.info("Key bucket lru max size for one key bucket fd={}, one inner length={}， compress ratio maybe={}, memory require={}MB, name={}",
                     maxSize, oneInnerLength, compressRatio, lruMemoryRequireMB, name);
-            log.info("LRU prepare, type={}, MB={}, fd={}", LRUPrepareBytesStats.Type.fd_key_bucket, lruMemoryRequireMB, name);
+            log.info("LRU prepare, type={}, MB={}, fd={}, key buckets", LRUPrepareBytesStats.Type.fd_key_bucket, lruMemoryRequireMB, name);
             LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.fd_key_bucket, name, (int) lruMemoryRequireMB, false);
 
         }
@@ -776,6 +779,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @param isRefreshLRUCache true if the LRU cache should be refreshed, false otherwise.
      * @return the read bytes.
      */
+    @NotPureMemoryMode
     private byte[] readInnerByBuffer(int oneInnerIndex, @NotNull ByteBuffer buffer, boolean isRefreshLRUCache) {
         return readInnerByBuffer(oneInnerIndex, buffer, isRefreshLRUCache, buffer.capacity());
     }
@@ -786,6 +790,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @return the number of buckets warmed up.
      */
     @TestOnly
+    @NotPureMemoryMode
     public int warmUp() {
         // only for key bucket fd
         if (isChunkFd) {
@@ -854,6 +859,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @param length            the length of bytes to read.
      * @return the read bytes.
      */
+    @NotPureMemoryMode
     private byte[] readInnerByBuffer(int oneInnerIndex, @NotNull ByteBuffer buffer, boolean isRefreshLRUCache, int length) {
         checkOneInnerIndex(oneInnerIndex);
         if (length > buffer.capacity()) {
@@ -970,6 +976,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @param isRefreshLRUCache true if the LRU cache should be refreshed, false otherwise.
      * @return the number of bytes written.
      */
+    @NotPureMemoryMode
     private int writeInnerByBuffer(int oneInnerIndex, @NotNull ByteBuffer buffer, @NotNull WriteBufferPrepare prepare, boolean isRefreshLRUCache) {
         checkOneInnerIndex(oneInnerIndex);
 
@@ -1045,6 +1052,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @return the read bytes.
      */
     @VisibleForTesting
+    @PureMemoryMode
     byte[] readOneInnerBatchFromMemory(int oneInnerIndex, int oneInnerCount) {
         if (!isChunkFd) {
             // read shared bytes for one wal group
@@ -1137,6 +1145,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @param bucketIndex the index of the key bucket.
      */
     @TestOnly
+    @PureMemoryMode
     public void clearOneKeyBucketToMemory(int bucketIndex) {
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var sharedBytes = getSharedBytesDecompressFromMemory(walGroupIndex);
@@ -1157,6 +1166,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @param bucketIndex the index of the key bucket.
      */
     @TestOnly
+    @PureMemoryMode
     public void clearKeyBucketsToMemory(int bucketIndex) {
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         clearAllKeyBucketsInOneWalGroupToMemory(walGroupIndex);
@@ -1168,6 +1178,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @param walGroupIndex the index of the WAL group.
      */
     @TestOnly
+    @PureMemoryMode
     public void clearAllKeyBucketsInOneWalGroupToMemory(int walGroupIndex) {
         setSharedBytesCompressToMemory(null, walGroupIndex);
     }
@@ -1190,6 +1201,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @return the number of bytes written.
      */
     @VisibleForTesting
+    @PureMemoryMode
     int writeOneInnerBatchToMemory(int beginOneInnerIndex, byte[] bytes, int position) {
         var isSmallerThanOneInner = bytes.length < oneInnerLength;
         if (!isSmallerThanOneInner && (bytes.length - position) % oneInnerLength != 0) {
@@ -1300,6 +1312,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @return the number of bytes written.
      */
     @SlaveReplay
+    @NotPureMemoryMode
     public int writeSegmentsBatchForRepl(int beginSegmentIndex, byte[] bytes) {
         // pure memory will not reach here, refer Chunk.writeSegmentsFromMasterExists
         return writeInnerByBuffer(beginSegmentIndex, forReplBuffer, (buffer) -> {
@@ -1338,7 +1351,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     @SlaveReplay
     public void truncate() {
         if (ConfForGlobal.pureMemory) {
-            log.warn("Pure memory mode, not use fd, name={}", name);
+            log.warn("Pure memory mode, not use fd, name={}, skip truncate, just set bytes null", name);
             if (isChunkFd) {
                 this.allBytesBySegmentIndexForOneChunkFd = new byte[allBytesBySegmentIndexForOneChunkFd.length][];
             } else {
