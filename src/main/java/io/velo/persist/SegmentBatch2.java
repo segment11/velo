@@ -34,8 +34,6 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     private final byte[] bytes;
     // ByteBuffer for reading and writing data into the byte array
     private final ByteBuffer buffer;
-    // slot number associated with this segment batch
-    private final short slot;
 
     // Snowflake ID generator for segment sequences
     private final SnowFlake snowFlake;
@@ -49,12 +47,9 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     /**
      * Constructs a new SegmentBatch2 instance for a specific slot and SnowFlake ID generator.
      *
-     * @param slot      The slot number associated with this segment batch.
      * @param snowFlake The SnowFlake ID generator for segment sequences.
      */
-    public SegmentBatch2(short slot, SnowFlake snowFlake) {
-        this.slot = slot;
-
+    public SegmentBatch2(SnowFlake snowFlake) {
         // Initialize the byte array and ByteBuffer for segment data
         this.bytes = new byte[ConfForSlot.global.confChunk.segmentLength];
         this.buffer = ByteBuffer.wrap(bytes);

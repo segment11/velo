@@ -25,19 +25,17 @@ public class SegmentBatch implements InSlotMetricCollector {
      * Byte array to hold the segment data.
      */
     private final byte[] bytes;
+
     /**
      * ByteBuffer for reading and writing data into the byte array.
      */
     private final ByteBuffer buffer;
-    /**
-     * Slot number associated with this segment batch.
-     */
-    private final short slot;
 
     /**
      * Length of each chunk segment.
      */
     private final int chunkSegmentLength;
+
     /**
      * Snowflake ID generator for segment sequences.
      */
@@ -67,12 +65,10 @@ public class SegmentBatch implements InSlotMetricCollector {
     /**
      * Constructs a new SegmentBatch instance for a specific slot and SnowFlake ID generator.
      *
-     * @param slot      The slot number associated with this segment batch.
      * @param snowFlake The SnowFlake ID generator for segment sequences.
      */
-    public SegmentBatch(short slot, @NotNull SnowFlake snowFlake) {
+    public SegmentBatch(@NotNull SnowFlake snowFlake) {
         this.chunkSegmentLength = ConfForSlot.global.confChunk.segmentLength;
-        this.slot = slot;
 
         // Initialize the byte array and ByteBuffer for segment data
         this.bytes = new byte[chunkSegmentLength];

@@ -27,6 +27,7 @@ import java.util.HashMap;
  */
 public class DynConfig {
     private static final Logger log = LoggerFactory.getLogger(DynConfig.class);
+
     private final short slot;
     private final File dynConfigFile;
 

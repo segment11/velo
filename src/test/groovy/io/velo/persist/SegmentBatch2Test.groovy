@@ -7,12 +7,10 @@ import spock.lang.Specification
 import java.nio.ByteBuffer
 
 class SegmentBatch2Test extends Specification {
-    final short slot = 0
-
     def 'split segments write and read'() {
         given:
         def snowFlake = new SnowFlake(1, 1)
-        def segmentBatch2 = new SegmentBatch2(slot, snowFlake)
+        def segmentBatch2 = new SegmentBatch2(snowFlake)
 
         segmentBatch2.collect()
         segmentBatch2.batchCountTotal = 1
@@ -130,8 +128,8 @@ class SegmentBatch2Test extends Specification {
     def 'test read tight segment'() {
         given:
         def snowFlake = new SnowFlake(1, 1)
-        def segmentBatch = new SegmentBatch(slot, snowFlake)
-        def segmentBatch2 = new SegmentBatch2(slot, snowFlake)
+        def segmentBatch = new SegmentBatch(snowFlake)
+        def segmentBatch2 = new SegmentBatch2(snowFlake)
 
         and:
         def list = Mock.prepareValueList(800)

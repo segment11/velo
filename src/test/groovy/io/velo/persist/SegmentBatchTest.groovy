@@ -12,7 +12,7 @@ class SegmentBatchTest extends Specification {
     def 'tight segments write and read'() {
         given:
         def snowFlake = new SnowFlake(1, 1)
-        def segmentBatch = new SegmentBatch(slot, snowFlake)
+        def segmentBatch = new SegmentBatch(snowFlake)
 
         segmentBatch.collect()
         segmentBatch.compressCountTotal = 1

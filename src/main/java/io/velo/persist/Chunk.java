@@ -146,8 +146,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         this.oneSlot = oneSlot;
         this.keyLoader = oneSlot.keyLoader;
         this.metaChunkSegmentFlagSeq = oneSlot.metaChunkSegmentFlagSeq;
-        this.segmentBatch = new SegmentBatch(slot, oneSlot.snowFlake);
-        this.segmentBatch2 = new SegmentBatch2(slot, oneSlot.snowFlake);
+        this.segmentBatch = new SegmentBatch(oneSlot.snowFlake);
+        this.segmentBatch2 = new SegmentBatch2(oneSlot.snowFlake);
     }
 
     /**
