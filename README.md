@@ -42,6 +42,7 @@ Prepare the environment:
 ```shell
 git clone https://github.com/segment11/velo.git
 cd velo
+git submodule update --remote
 gradle jar
 ```
 
