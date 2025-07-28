@@ -548,7 +548,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             var name = "key_bucket_split_" + splitIndex + "_slot_" + slot;
             FdReadWrite fdReadWrite;
             try {
-                fdReadWrite = new FdReadWrite(slot, name, file);
+                fdReadWrite = new FdReadWrite(name, file);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

@@ -47,13 +47,11 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Constructs a new instance of {@code FdReadWrite}.
      *
-     * @param slot the slot number associated with this file descriptor
      * @param name the name of the file descriptor
      * @param file the file to be read from and written to
      * @throws IOException if there is an error during file operations
      */
-    public FdReadWrite(short slot, String name, @NotNull File file) throws IOException {
-        this.slot = slot;
+    public FdReadWrite(String name, @NotNull File file) throws IOException {
         this.name = name;
         if (!ConfForGlobal.pureMemory) {
             if (!file.exists()) {
@@ -139,11 +137,6 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
         return map;
     }
-
-    /**
-     * The slot number associated with this file descriptor.
-     */
-    private final short slot;
 
     /**
      * The name of the file descriptor.

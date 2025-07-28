@@ -178,11 +178,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         this.fdReadWriteArray = new FdReadWrite[fdPerChunk];
         for (int i = 0; i < fdPerChunk; i++) {
             // Prometheus metric labels use _ instead of -
-            var name = "chunk_data_index_" + i;
+            var name = "chunk_data_index_" + i + "_slot_" + slot;
             var file = new File(slotDir, "chunk-data-" + i);
             fdLengths[i] = (int) file.length();
 
-            var fdReadWrite = new FdReadWrite(slot, name, file);
+            var fdReadWrite = new FdReadWrite(name, file);
             fdReadWrite.initByteBuffers(true, i);
 
             this.fdReadWriteArray[i] = fdReadWrite;
