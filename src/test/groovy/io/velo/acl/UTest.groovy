@@ -2,6 +2,7 @@ package io.velo.acl
 
 import io.velo.BaseCommand
 import io.velo.reply.MultiBulkReply
+import org.apache.commons.codec.digest.DigestUtils
 import spock.lang.Specification
 
 class UTest extends Specification {
@@ -78,6 +79,19 @@ class UTest extends Specification {
         then:
         u.firstPassword == null
         !u.checkPassword('123456')
+
+        when:
+        def uu = new U('kerry')
+        uu.on = true
+        uu.password = U.Password.sha256Hex('123456')
+        then:
+        uu.literal() == 'user kerry on #' + DigestUtils.sha256Hex('123456')
+        uu.checkPassword('123456')
+
+        when:
+        def uu2 = U.fromLiteral('user kerry on #' + DigestUtils.sha256Hex('123456'))
+        then:
+        uu2.checkPassword('123456')
 
         when:
         def u1 = U.fromLiteral('user kerry on nopass +@all -@dangerous %R~a* ~b* &myChannel*')

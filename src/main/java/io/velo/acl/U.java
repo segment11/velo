@@ -276,9 +276,12 @@ public class U {
         sb.append("user ").append(user).append(" ");
         sb.append(isOn ? "on" : "off").append(" ");
         var firstPassword = getFirstPassword();
-        // need # before password ? todo
         if (firstPassword != null) {
-            sb.append(firstPassword.passwordEncoded).append(" ");
+            if (firstPassword.encodeType == PasswordEncodedType.sha256Hex) {
+                sb.append(ADD_HASH_PASSWORD_PREFIX).append(firstPassword.passwordEncoded).append(" ");
+            } else {
+                sb.append(firstPassword.passwordEncoded).append(" ");
+            }
         }
 
         for (var rCmd : rCmdList) {
@@ -295,7 +298,7 @@ public class U {
         }
 
         // remove last space
-        if (sb.length() > 0) {
+        if (!sb.isEmpty()) {
             sb.deleteCharAt(sb.length() - 1);
         }
         return sb.toString();
@@ -394,8 +397,9 @@ public class U {
         u.setOn(isOn);
         if (Password.NO_PASS.equals(password)) {
             u.addPassword(Password.NO_PASSWORD);
+        } else if (password.startsWith(ADD_HASH_PASSWORD_PREFIX)) {
+            u.addPassword(Password.sha256HexEncoded(password.substring(1)));
         } else {
-            // need trim # before password ? todo
             u.addPassword(Password.plain(password));
         }
 
