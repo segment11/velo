@@ -388,9 +388,7 @@ public class RequestHandler {
         }
 
         var cmd = request.cmd();
-
-        var requestTimer = requestTimeSummary.labels(cmd).startTimer();
-        try {
+        try (var requestTimer = requestTimeSummary.labels(cmd).startTimer()) {
             // http basic auth
             if (request.isHttp()) {
                 if (SocketInspector.getAuthUser(socket) == null && ConfForGlobal.PASSWORD != null) {
@@ -545,8 +543,6 @@ public class RequestHandler {
                 log.error("Request handle error.", e);
                 return new ErrorReply(e.getMessage());
             }
-        } finally {
-            requestTimer.observeDuration();
         }
     }
 

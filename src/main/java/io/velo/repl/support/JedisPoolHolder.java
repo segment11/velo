@@ -96,11 +96,8 @@ public class JedisPoolHolder implements NeedCleanUp {
      * @since 1.0.0
      */
     public static <R> R exe(JedisPool jedisPool, JedisCallback<R> callback) {
-        Jedis jedis = jedisPool.getResource();
-        try {
+        try (Jedis jedis = jedisPool.getResource()) {
             return callback.call(jedis);
-        } finally {
-            jedis.close();
         }
     }
 }

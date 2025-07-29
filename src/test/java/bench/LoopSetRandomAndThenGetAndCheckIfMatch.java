@@ -80,10 +80,8 @@ public class LoopSetRandomAndThenGetAndCheckIfMatch extends Thread {
 
     @Override
     public void run() {
-        var jedis = new Jedis("localhost", port);
         var userHome = System.getProperty("user.home");
-
-        try {
+        try (var jedis = new Jedis("localhost", port)) {
             var f = new File(new File(userHome), "velo-data-loopSetValues-" + loopId + ".txt");
             if (doSet) {
                 FileOutputStream fos = null;
@@ -176,7 +174,6 @@ public class LoopSetRandomAndThenGetAndCheckIfMatch extends Thread {
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-            jedis.close();
             latch.countDown();
         }
     }
