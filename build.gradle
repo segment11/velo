@@ -296,4 +296,4 @@ task cLibCopy(type: Copy) {
 
 cLibCopy.dependsOn cBuildLzf, cBuildCrc64
 
-jar.dependsOn copyDynScript, copyLog4j2, copyConfigFile, copyDependencies
+jar.dependsOn copyDynScript, copyLog4j2, copyConfigFile, copyDependencies, cLibCopy
