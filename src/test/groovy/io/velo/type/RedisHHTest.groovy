@@ -12,15 +12,23 @@ class RedisHHTest extends Specification {
         def rh = new RedisHH()
 
         when:
+        def expireAt = System.currentTimeMillis() + 1000 * 10
         rh.put('name', 'zhangsan'.bytes)
+        rh.put('name', 'zhangsan'.bytes, expireAt)
         rh.put('age', '20'.bytes)
         then:
         rh.get('name') == 'zhangsan'.bytes
         rh.get('age') == '20'.bytes
+        rh.getExpireAt('name') == expireAt
         rh.size() == 2
         rh.remove('name')
         !rh.remove('name')
         rh.size() == 1
+
+        when:
+        rh.putExpireAt('name', expireAt + 1000 * 10)
+        then:
+        rh.getExpireAt('name') == expireAt + 1000 * 10
 
         when:
         rh.putAll(['name2': 'lisi'.bytes, 'age2': '30'.bytes])
@@ -35,7 +43,7 @@ class RedisHHTest extends Specification {
         def rh = new RedisHH()
 
         when:
-        rh.put('name', 'zhangsan'.bytes)
+        rh.put('name', 'zhangsan'.bytes, System.currentTimeMillis() + 1000 * 10)
         rh.put('age', '20'.bytes)
         def encoded = rh.encode()
         encoded = rh.encodeButDoNotCompress()
@@ -50,13 +58,9 @@ class RedisHHTest extends Specification {
 
         when:
         int countOnlyFindName = 0
-        RedisHH.iterate(encoded, true) { key, value ->
+        RedisHH.iterate(encoded, true) { key, value, expireAt ->
             countOnlyFindName++
-            if (key == 'name') {
-                return true
-            } else {
-                return false
-            }
+            return key == 'name'
         }
         then:
         countOnlyFindName == 1
@@ -135,7 +139,7 @@ class RedisHHTest extends Specification {
         def encoded = rh.encode()
         def buffer = ByteBuffer.wrap(encoded)
         // first key length
-        buffer.putShort(RedisHH.HEADER_LENGTH, (short) (CompressedValue.KEY_MAX_LENGTH + 1))
+        buffer.putShort(RedisHH.HEADER_LENGTH + 8, (short) (CompressedValue.KEY_MAX_LENGTH + 1))
         boolean exception = false
         try {
             RedisHH.decode(encoded, false)
@@ -147,7 +151,7 @@ class RedisHHTest extends Specification {
         exception
 
         when:
-        buffer.putShort(RedisHH.HEADER_LENGTH, (short) -1)
+        buffer.putShort(RedisHH.HEADER_LENGTH + 8, (short) -1)
         exception = false
         try {
             RedisHH.decode(encoded, false)
@@ -159,8 +163,8 @@ class RedisHHTest extends Specification {
         exception
 
         when:
-        buffer.putShort(RedisHH.HEADER_LENGTH, (short) 1)
-        buffer.putInt(RedisHH.HEADER_LENGTH + 2 + 1, CompressedValue.VALUE_MAX_LENGTH + 1)
+        buffer.putShort(RedisHH.HEADER_LENGTH + 8, (short) 1)
+        buffer.putInt(RedisHH.HEADER_LENGTH + 8 + 2 + 1, CompressedValue.VALUE_MAX_LENGTH + 1)
         boolean exception2 = false
         try {
             RedisHH.decode(encoded, false)
@@ -172,7 +176,7 @@ class RedisHHTest extends Specification {
         exception2
 
         when:
-        buffer.putInt(RedisHH.HEADER_LENGTH + 2 + 1, -1)
+        buffer.putInt(RedisHH.HEADER_LENGTH + 8 + 2 + 1, -1)
         exception2 = false
         try {
             RedisHH.decode(encoded, false)
@@ -254,7 +258,7 @@ class RedisHHTest extends Specification {
         def encoded4 = rh4.encode()
         then:
         // uuid length is 36
-        encoded4.length == RedisHH.HEADER_LENGTH + 5 * (2 + 6 + 4 + 36)
+        encoded4.length == RedisHH.HEADER_LENGTH + 5 * (8 + 2 + 6 + 4 + 36)
 
         cleanup:
         dictMap.cleanUp()

@@ -33,6 +33,11 @@ public class RedisHH {
     private final HashMap<String, byte[]> map = new HashMap<>();
 
     /**
+     * The internal map to store expire at.
+     */
+    private final HashMap<String, Long> mapExpireAt = new HashMap<>();
+
+    /**
      * Returns the internal map containing key-value pairs.
      *
      * @return The internal map.
@@ -50,14 +55,19 @@ public class RedisHH {
         return map.size();
     }
 
+    public void put(String key, byte[] value) {
+        put(key, value, null);
+    }
+
     /**
      * Adds a key-value pair to the map.
      *
-     * @param key   The key of the pair.
-     * @param value The value of the pair.
+     * @param key      The key of the pair.
+     * @param value    The value of the pair.
+     * @param expireAt The expire at milliseconds of the pair.
      * @throws IllegalArgumentException if the key or value length exceeds the maximum allowed length.
      */
-    public void put(String key, byte[] value) {
+    public void put(String key, byte[] value, Long expireAt) {
         if (key.length() > CompressedValue.KEY_MAX_LENGTH) {
             throw new IllegalArgumentException("Key length too long, key length=" + key.length());
         }
@@ -65,6 +75,10 @@ public class RedisHH {
             throw new IllegalArgumentException("Value length too long, value length=" + value.length);
         }
         map.put(key, value);
+
+        if (expireAt != null) {
+            mapExpireAt.put(key, expireAt);
+        }
     }
 
     /**
@@ -74,6 +88,7 @@ public class RedisHH {
      * @return True if the pair was removed, false otherwise.
      */
     public boolean remove(String key) {
+        mapExpireAt.remove(key);
         return map.remove(key) != null;
     }
 
@@ -94,6 +109,27 @@ public class RedisHH {
      */
     public byte[] get(String key) {
         return map.get(key);
+    }
+
+    /**
+     * Retrieves the expire at milliseconds associated with the specified key.
+     *
+     * @param key The key of the pair to retrieve.
+     * @return The expire at milliseconds associated with the key, or 0 if the key is not found.
+     */
+    public long getExpireAt(String key) {
+        var l = mapExpireAt.get(key);
+        return l == null ? 0 : l;
+    }
+
+    /**
+     * Puts the expire at milliseconds associated with the specified key.
+     *
+     * @param key      The key of the pair to put.
+     * @param expireAt The expire at milliseconds to put.
+     */
+    public void putExpireAt(String key, long expireAt) {
+        mapExpireAt.put(key, expireAt);
     }
 
     /**
@@ -123,10 +159,10 @@ public class RedisHH {
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
         for (var entry : map.entrySet()) {
-            // key / value length use 2 bytes
+            // key / value length use 2 bytes, expire at milliseconds use 8 bytes
             var key = entry.getKey();
             var value = entry.getValue();
-            bodyBytesLength += 2 + key.getBytes().length + 4 + value.length;
+            bodyBytesLength += 8 + 2 + key.getBytes().length + 4 + value.length;
         }
 
         short size = (short) map.size();
@@ -141,6 +177,8 @@ public class RedisHH {
         for (var entry : map.entrySet()) {
             var key = entry.getKey();
             var value = entry.getValue();
+            var expireAt = mapExpireAt.get(key);
+            buffer.putLong(expireAt == null ? 0 : expireAt);
             buffer.putShort((short) key.getBytes().length);
             buffer.put(key.getBytes());
             buffer.putInt(value.length);
@@ -224,8 +262,11 @@ public class RedisHH {
      */
     public static RedisHH decode(byte[] data, boolean doCheckCrc32) {
         var r = new RedisHH();
-        iterate(data, doCheckCrc32, (field, valueBytes) -> {
+        iterate(data, doCheckCrc32, (field, valueBytes, expireAt) -> {
             r.map.put(field, valueBytes);
+            if (expireAt != 0) {
+                r.mapExpireAt.put(field, expireAt);
+            }
             return false;
         });
         return r;
@@ -251,9 +292,10 @@ public class RedisHH {
          *
          * @param field      The field name.
          * @param valueBytes The value bytes.
+         * @param expireAt   The expire at milliseconds.
          * @return True to break the iteration, false to continue.
          */
-        boolean onField(String field, byte[] valueBytes);
+        boolean onField(String field, byte[] valueBytes, long expireAt);
     }
 
     /**
@@ -284,6 +326,8 @@ public class RedisHH {
         }
 
         for (int i = 0; i < size; i++) {
+            var expireAt = buffer.getLong();
+
             int keyLength = buffer.getShort();
             if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
                 throw new IllegalStateException("Key length error, key length=" + keyLength);
@@ -298,7 +342,7 @@ public class RedisHH {
 
             var valueBytes = new byte[valueLength];
             buffer.get(valueBytes);
-            var isBreak = callback.onField(new String(keyBytes), valueBytes);
+            var isBreak = callback.onField(new String(keyBytes), valueBytes, expireAt);
             if (isBreak) {
                 break;
             }

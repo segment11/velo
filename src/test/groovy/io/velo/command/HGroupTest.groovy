@@ -17,6 +17,34 @@ import spock.lang.Specification
 class HGroupTest extends Specification {
     def _HGroup = new HGroup(null, null, null)
 
+    static List<String> cmdLines = '''
+hdel
+hexists
+hget
+hgetall
+hincrby
+hincrbyfloat
+hkeys
+hlen
+hmget
+hmset
+hscan
+hrandfield
+hset
+hsetnx
+hstrlen
+hvals
+hexpire
+hexpireat
+hexpiretime
+hpersist
+hpexpire
+hpexpireat
+hpexpiretime
+hpttl
+httl
+'''.readLines().collect { it.trim() }.findAll { it }
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -25,48 +53,24 @@ class HGroupTest extends Specification {
         and:
         data2[1] = 'a'.bytes
 
+        expect:
+        cmdLines.every {
+            def sList = _HGroup.parseSlots(it, data2, slotNumber)
+            sList.size() == 1
+        }
+
         when:
-        def sHdelList = _HGroup.parseSlots('hdel', data2, slotNumber)
-        def sHexistsList = _HGroup.parseSlots('hexists', data2, slotNumber)
-        def sHgetList = _HGroup.parseSlots('hget', data2, slotNumber)
-        def sHgetallList = _HGroup.parseSlots('hgetall', data2, slotNumber)
-        def sHincrbyList = _HGroup.parseSlots('hincrby', data2, slotNumber)
-        def sHincrbyfloatList = _HGroup.parseSlots('hincrbyfloat', data2, slotNumber)
-        def sHkeysList = _HGroup.parseSlots('hkeys', data2, slotNumber)
-        def sHlenList = _HGroup.parseSlots('hlen', data2, slotNumber)
-        def sHmgetList = _HGroup.parseSlots('hmget', data2, slotNumber)
-        def sHmsetList = _HGroup.parseSlots('hmset', data2, slotNumber)
-        def sHscanList = _HGroup.parseSlots('hscan', data2, slotNumber)
-        def sHrandfieldList = _HGroup.parseSlots('hrandfield', data2, slotNumber)
-        def sHsetList = _HGroup.parseSlots('hset', data2, slotNumber)
-        def sHsetnxList = _HGroup.parseSlots('hsetnx', data2, slotNumber)
-        def sHstrlenList = _HGroup.parseSlots('hstrlen', data2, slotNumber)
-        def sHvalsList = _HGroup.parseSlots('hvals', data2, slotNumber)
         def sList = _HGroup.parseSlots('hxxx', data2, slotNumber)
         then:
-        sHdelList.size() == 1
-        sHexistsList.size() == 1
-        sHgetList.size() == 1
-        sHgetallList.size() == 1
-        sHincrbyList.size() == 1
-        sHincrbyfloatList.size() == 1
-        sHkeysList.size() == 1
-        sHlenList.size() == 1
-        sHmgetList.size() == 1
-        sHmsetList.size() == 1
-        sHscanList.size() == 1
-        sHrandfieldList.size() == 1
-        sHsetList.size() == 1
-        sHsetnxList.size() == 1
-        sHstrlenList.size() == 1
-        sHvalsList.size() == 1
         sList.size() == 0
 
         when:
         def data1 = new byte[1][]
-        sHgetList = _HGroup.parseSlots('hget', data1, slotNumber)
         then:
-        sHgetList.size() == 0
+        cmdLines.every {
+            def sList1 = _HGroup.parseSlots(it, data1, slotNumber)
+            sList1.size() == 0
+        }
     }
 
     def 'test handle'() {
@@ -92,102 +96,12 @@ class HGroupTest extends Specification {
 
         when:
         hGroup.data = data1
-        hGroup.cmd = 'hexists'
-        reply = hGroup.handle()
+        def replyList = cmdLines.collect {
+            hGroup.cmd = it
+            hGroup.handle()
+        }
         then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hget'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hgetall'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hincrby'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hincrbyfloat'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hkeys'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hlen'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hmget'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hmset'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        def data5 = new byte[5][]
-        hGroup.data = data5
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.data = data1
-        hGroup.cmd = 'hscan'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hrandfield'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hset'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hsetnx'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hstrlen'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        hGroup.cmd = 'hvals'
-        reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        replyList.every { it == ErrorReply.FORMAT }
 
         when:
         hGroup.cmd = 'zzz'
@@ -1702,6 +1616,357 @@ class HGroupTest extends Specification {
         when:
         data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
         reply = hGroup.hvals()
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+    }
+
+    def 'test httl'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        def reply = hGroup.execute('httl a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def rhk = new RedisHashKeys()
+        rhk.add('field0')
+        rhk.add('field1')
+        cvKeys.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
+        reply = hGroup.execute('httl a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        def cvField0 = Mock.prepareCompressedValueList(1)[0]
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field0'), 0, cvField0)
+        def cvField1 = Mock.prepareCompressedValueList(1)[0]
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field1'), 0, cvField1)
+        reply = hGroup.execute('httl a fields 3 field0 field1 field2')
+        reply = hGroup.execute('hpttl a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hexpiretime a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hpexpiretime a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hpersist a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        cvField0.expireAt = System.currentTimeMillis() + 1000 * 10
+        cvField1.expireAt = System.currentTimeMillis() + 1000 * 10
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field0'), 0, cvField0)
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field1'), 0, cvField1)
+        reply = hGroup.execute('hpersist a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_1
+        ((MultiBulkReply) reply).replies[1] == IntegerReply.REPLY_1
+        ((MultiBulkReply) reply).replies[2] == HGroup.FIELD_NOT_FOUND
+
+        when:
+        cvField0.expireAt = System.currentTimeMillis() + 1000 * 10
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field0'), 0, cvField0)
+        reply = hGroup.execute('httl a fields 1 field0')
+        reply = hGroup.execute('hpttl a fields 1 field0')
+        reply = hGroup.execute('hexpiretime a fields 1 field0')
+        reply = hGroup.execute('hpexpiretime a fields 1 field0')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = true
+        reply = hGroup.execute('httl a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
+        cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        def rhh = new RedisHH()
+        cvRhh.compressedData = rhh.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvRhh)
+        reply = hGroup.execute('httl a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        rhh.put('field0', ' '.bytes)
+        rhh.put('field1', ' '.bytes, System.currentTimeMillis() + 1000 * 10)
+        cvRhh.compressedData = rhh.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvRhh)
+        reply = hGroup.execute('httl a fields 3 field0 field1 field2')
+        reply = hGroup.execute('hpttl a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hexpiretime a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hpexpiretime a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hpersist a fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('httl a fields 3 field0 field1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = hGroup.execute('httl a fields 3x field0 field1 field2')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = hGroup.execute('httl a fieldsx 3 field0 field1 field2')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = hGroup.execute('httl a fields 3')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        def data5 = new byte[5][]
+        data5[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        hGroup.data = data5
+        hGroup.cmd = 'httl'
+        reply = hGroup.handle()
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        data5[1] = 'a'.bytes
+        data5[2] = 'fields'.bytes
+        data5[3] = '1'.bytes
+        data5[4] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        reply = hGroup.handle()
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+    }
+
+    def 'test hexpire'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        def reply = hGroup.execute('hexpire a 10 fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def rhk = new RedisHashKeys()
+        rhk.add('field0')
+        rhk.add('field1')
+        cvKeys.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
+        reply = hGroup.execute('hexpire a 10 fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        def cvField0 = Mock.prepareCompressedValueList(1)[0]
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field0'), 0, cvField0)
+        def cvField1 = Mock.prepareCompressedValueList(1)[0]
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field1'), 0, cvField1)
+        reply = hGroup.execute('hexpire a 10 fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 3
+        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_1
+        ((MultiBulkReply) reply).replies[1] == IntegerReply.REPLY_1
+        ((MultiBulkReply) reply).replies[2] == HGroup.FIELD_NOT_FOUND
+
+        when:
+        reply = hGroup.execute('hexpireat a ' + (System.currentTimeMillis() / 1000 + 10).intValue() + ' fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hpexpire a 10000 fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hpexpireat a ' + (System.currentTimeMillis() + 10000) + ' fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = true
+        reply = hGroup.execute('hexpire a 10 fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
+        cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        def rhh = new RedisHH()
+        cvRhh.compressedData = rhh.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvRhh)
+        reply = hGroup.execute('hexpire a 10 fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        rhh.put('field0', ' '.bytes)
+        rhh.put('field1', ' '.bytes)
+        cvRhh.compressedData = rhh.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvRhh)
+        reply = hGroup.execute('hexpire a 10 fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 3
+        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_1
+        ((MultiBulkReply) reply).replies[1] == IntegerReply.REPLY_1
+        ((MultiBulkReply) reply).replies[2] == HGroup.FIELD_NOT_FOUND
+
+        when:
+        reply = hGroup.execute('hexpireat a ' + (System.currentTimeMillis() / 1000 + 10).intValue() + ' fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hpexpire a 10000 fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        reply = hGroup.execute('hpexpireat a ' + (System.currentTimeMillis() + 10000) + ' fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+
+        // Test NX option
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        cvField0.expireAt = System.currentTimeMillis() + 1000 * 10
+        cvField1.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field0'), 0, cvField0)
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field1'), 0, cvField1)
+        reply = hGroup.execute('hexpire a 20 nx fields 3 field0 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 3
+        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_0
+        ((MultiBulkReply) reply).replies[1] == IntegerReply.REPLY_1
+        ((MultiBulkReply) reply).replies[2] == HGroup.FIELD_NOT_FOUND
+
+        // Test XX option
+        when:
+        cvField0.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field0'), 0, cvField0)
+        reply = hGroup.execute('hexpire a 20 xx fields 1 field0')
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 1
+        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_0  // field0 has no expire
+
+        // Test GT option
+        when:
+        cvField0.expireAt = System.currentTimeMillis() + 1000 * 5  // 5 seconds
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field0'), 0, cvField0)
+        reply = hGroup.execute('hexpire a 3 gt fields 1 field0')  // 3 seconds < 5 seconds
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 1
+        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_0  // 3 < 5, so no update
+
+        when:
+        reply = hGroup.execute('hexpire a 10 gt fields 1 field0')  // 10 seconds > 5 seconds
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 1
+        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_1  // 10 > 5, so update
+
+        // Test LT option
+        when:
+        cvField0.expireAt = System.currentTimeMillis() + 1000 * 20  // 20 seconds
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field0'), 0, cvField0)
+        reply = hGroup.execute('hexpire a 25 lt fields 1 field0')  // 25 seconds > 20 seconds
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 1
+        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_0  // 25 > 20, so no update
+
+        when:
+        reply = hGroup.execute('hexpire a 10 lt fields 1 field0')  // 10 seconds < 20 seconds
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) reply).replies.length == 1
+        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_1  // 10 < 20, so update
+
+        // Test error cases
+        when:
+        reply = hGroup.execute('hexpire a 10x fields 3 field0 field1 field2')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = hGroup.execute('hexpire a 10 fieldx 3 field0 field1 field2')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = hGroup.execute('hexpire a 10 fields 3x field0 field1 field2')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = hGroup.execute('hexpire a 10 fields 3 field0 field1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        def data6 = new byte[6][]
+        data6[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        hGroup.data = data6
+        hGroup.cmd = 'hexpire'
+        reply = hGroup.handle()
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        data6[1] = 'a'.bytes
+        data6[2] = '10'.bytes
+        data6[3] = 'fields'.bytes
+        data6[4] = '1'.bytes
+        data6[5] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        reply = hGroup.handle()
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }

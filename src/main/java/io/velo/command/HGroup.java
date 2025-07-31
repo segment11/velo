@@ -2,7 +2,6 @@ package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.*;
-import io.velo.acl.AclUsers;
 import io.velo.persist.KeyLoader;
 import io.velo.reply.*;
 import io.velo.type.RedisHH;
@@ -38,6 +37,17 @@ public class HGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        // hash ttl commands
+        if ("hexpire".equals(cmd) || "hexpireat".equals(cmd) || "hexpiretime".equals(cmd) ||
+                "hpersist".equals(cmd) || "hpexpire".equals(cmd) || "hpexpireat".equals(cmd) || "hpexpiretime".equals(cmd) ||
+                "hpttl".equals(cmd) || "httl".equals(cmd)) {
+            if (data.length < 2) {
+                return slotWithKeyHashList;
+            }
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
+            return slotWithKeyHashList;
+        }
+
         return slotWithKeyHashList;
     }
 
@@ -52,6 +62,18 @@ public class HGroup extends BaseCommand {
 
         if ("hexists".equals(cmd)) {
             return hexists();
+        }
+
+        if ("hexpire".equals(cmd)) {
+            return hexpire(false, false);
+        }
+
+        if ("hexpireat".equals(cmd)) {
+            return hexpire(true, false);
+        }
+
+        if ("hexpiretime".equals(cmd)) {
+            return hIterateFields(false, false, false);
         }
 
         if ("hget".equals(cmd)) {
@@ -86,6 +108,26 @@ public class HGroup extends BaseCommand {
             return hmset(false);
         }
 
+        if ("hpersist".equals(cmd)) {
+            return hIterateFields(true, false, false);
+        }
+
+        if ("hpexpire".equals(cmd)) {
+            return hexpire(false, true);
+        }
+
+        if ("hpexpireat".equals(cmd)) {
+            return hexpire(true, true);
+        }
+
+        if ("hpexpiretime".equals(cmd)) {
+            return hIterateFields(false, true, false);
+        }
+
+        if ("hpttl".equals(cmd)) {
+            return hIterateFields(false, true, true);
+        }
+
         if ("hrandfield".equals(cmd)) {
             return hrandfield();
         }
@@ -104,6 +146,10 @@ public class HGroup extends BaseCommand {
 
         if ("hstrlen".equals(cmd)) {
             return hget(true);
+        }
+
+        if ("httl".equals(cmd)) {
+            return hIterateFields(false, false, true);
         }
 
         if ("hvals".equals(cmd)) {
@@ -377,7 +423,7 @@ public class HGroup extends BaseCommand {
 
         final String[] fieldToFind = {new String(fieldBytes)};
         final boolean[] isFind = {false};
-        RedisHH.iterate(encodedBytes, true, (field, value) -> {
+        RedisHH.iterate(encodedBytes, true, (field, value, expireAt) -> {
             if (field.equals(fieldToFind[0])) {
                 isFind[0] = true;
                 return true;
@@ -386,6 +432,346 @@ public class HGroup extends BaseCommand {
         });
 
         return isFind[0] ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+    }
+
+    @VisibleForTesting
+    static final IntegerReply FIELD_NOT_FOUND = new IntegerReply(-2);
+    private static final IntegerReply FIELD_HAS_NO_EXPIRE = new IntegerReply(-1);
+
+    private Reply hIterateFields(boolean isPersist, boolean isMilliseconds, boolean isTtl) {
+        // HPERSIST key FIELDS numfields field [field ...]
+        // HEXPIRETIME key FIELDS numfields field [field ...]
+        // HPEXPIRETIME key FIELDS numfields field [field ...]
+        // HTTL key FIELDS numfields field [field ...]
+        // HPTTL key FIELDS numfields field [field ...]
+        if (data.length < 5) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        if (!"fields".equalsIgnoreCase(new String(data[2]))) {
+            return ErrorReply.SYNTAX;
+        }
+
+        int numFields;
+        try {
+            numFields = Integer.parseInt(new String(data[3]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+
+        // check if we have enough fields
+        if (data.length < 4 + numFields) {
+            return ErrorReply.SYNTAX;
+        }
+
+        // validate field lengths
+        ArrayList<String> fields = new ArrayList<>();
+        for (int i = 0; i < numFields; i++) {
+            if (data[4 + i].length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+            fields.add(new String(data[4 + i]));
+        }
+
+        if (isUseHH(keyBytes)) {
+            return hIterateFields2(keyBytes, fields, isPersist, isMilliseconds, isTtl);
+        }
+
+        var rhk = getRedisHashKeys(keyBytes);
+        if (rhk == null) {
+            var replies = new Reply[numFields];
+            for (int i = 0; i < numFields; i++) {
+                replies[i] = FIELD_NOT_FOUND;
+            }
+            return new MultiBulkReply(replies);
+        }
+
+        var replies = new Reply[numFields];
+        var key = new String(keyBytes);
+        for (int i = 0; i < numFields; i++) {
+            var field = fields.get(i);
+            var isFieldExist = rhk.contains(field);
+            if (!isFieldExist) {
+                replies[i] = FIELD_NOT_FOUND;
+                continue;
+            }
+
+            var fieldKey = RedisHashKeys.fieldKey(key, field);
+            var fieldSlotWithKeyHash = slot(fieldKey.getBytes());
+            var fieldCv = getCv(fieldKey.getBytes(), fieldSlotWithKeyHash);
+            if (fieldCv == null) {
+                // may be expired at just this time
+                replies[i] = FIELD_NOT_FOUND;
+                continue;
+            }
+
+            var fieldExpireAt = fieldCv.getExpireAt();
+            if (fieldExpireAt == CompressedValue.NO_EXPIRE) {
+                replies[i] = FIELD_HAS_NO_EXPIRE;
+                continue;
+            }
+
+            if (isPersist) {
+                // remove expiration
+                fieldCv.setSeq(snowFlake.nextId());
+                fieldCv.setExpireAt(CompressedValue.NO_EXPIRE);
+                setCv(fieldKey.getBytes(), fieldCv, fieldSlotWithKeyHash);
+
+                replies[i] = IntegerReply.REPLY_1;
+            } else if (isTtl) {
+                var ttlMillis = fieldExpireAt - System.currentTimeMillis();
+                replies[i] = isMilliseconds ? new IntegerReply(ttlMillis) : new IntegerReply(ttlMillis / 1000);
+            } else {
+                // get expire time
+                replies[i] = isMilliseconds ? new IntegerReply(fieldExpireAt) : new IntegerReply(fieldExpireAt / 1000);
+            }
+        }
+
+        return new MultiBulkReply(replies);
+    }
+
+    private Reply hIterateFields2(byte[] keyBytes, ArrayList<String> fields, boolean isPersist, boolean isMilliseconds, boolean isTtl) {
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        if (rhh == null) {
+            var replies = new Reply[fields.size()];
+            for (int i = 0; i < fields.size(); i++) {
+                replies[i] = FIELD_NOT_FOUND;
+            }
+            return new MultiBulkReply(replies);
+        }
+
+        var numFields = fields.size();
+        var map = rhh.getMap();
+
+        var replies = new Reply[numFields];
+        for (int i = 0; i < numFields; i++) {
+            var field = fields.get(i);
+            var isFieldExist = map.containsKey(field);
+            if (!isFieldExist) {
+                replies[i] = FIELD_NOT_FOUND;
+                continue;
+            }
+
+            var fieldExpireAt = rhh.getExpireAt(field);
+            if (fieldExpireAt == CompressedValue.NO_EXPIRE) {
+                replies[i] = FIELD_HAS_NO_EXPIRE;
+                continue;
+            }
+
+            if (isPersist) {
+                // remove expiration
+                rhh.putExpireAt(field, CompressedValue.NO_EXPIRE);
+                replies[i] = IntegerReply.REPLY_1;
+            } else if (isTtl) {
+                var ttlMillis = fieldExpireAt - System.currentTimeMillis();
+                replies[i] = isMilliseconds ? new IntegerReply(ttlMillis) : new IntegerReply(ttlMillis / 1000);
+            } else {
+                // get expire time
+                replies[i] = isMilliseconds ? new IntegerReply(fieldExpireAt) : new IntegerReply(fieldExpireAt / 1000);
+            }
+        }
+
+        if (isPersist) {
+            saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+        }
+        return new MultiBulkReply(replies);
+    }
+
+    private Reply hexpire(boolean isAt, boolean isMilliseconds) {
+        // HEXPIRE key seconds [NX | XX | GT | LT] FIELDS numfields field [field ...]
+        // HPEXPIRE key milliseconds [NX | XX | GT | LT] FIELDS numfields field [field ...]
+        // HEXPIREAT key timestamp [NX | XX | GT | LT] FIELDS numfields field [field ...]
+        // HPEXPIREAT key timestamp [NX | XX | GT | LT] FIELDS numfields field [field ...]
+        if (data.length < 6) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        var timeBytes = data[2];
+        long timeValue;
+        try {
+            timeValue = Long.parseLong(new String(timeBytes));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+
+        long expireAt;
+        if (isMilliseconds) {
+            expireAt = isAt ? timeValue : System.currentTimeMillis() + timeValue;
+        } else {
+            expireAt = isAt ? timeValue * 1000 : System.currentTimeMillis() + timeValue * 1000;
+        }
+
+        // parse options (NX | XX | GT | LT)
+        boolean isNx = false;
+        boolean isXx = false;
+        boolean isGt = false;
+        boolean isLt = false;
+        int fieldsIndex = 3;
+
+        if (data.length > 3) {
+            var optionBytes = data[3];
+            var option = new String(optionBytes);
+            if ("nx".equalsIgnoreCase(option)) {
+                isNx = true;
+                fieldsIndex = 4;
+            } else if ("xx".equalsIgnoreCase(option)) {
+                isXx = true;
+                fieldsIndex = 4;
+            } else if ("gt".equalsIgnoreCase(option)) {
+                isGt = true;
+                fieldsIndex = 4;
+            } else if ("lt".equalsIgnoreCase(option)) {
+                isLt = true;
+                fieldsIndex = 4;
+            }
+        }
+
+        // check for fields keyword
+        if (data.length <= fieldsIndex || !"fields".equalsIgnoreCase(new String(data[fieldsIndex]))) {
+            return ErrorReply.SYNTAX;
+        }
+        fieldsIndex++;
+
+        // data.length > 6
+        assert data.length > fieldsIndex;
+        int numFields;
+        try {
+            numFields = Integer.parseInt(new String(data[fieldsIndex]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        fieldsIndex++;
+
+        // check if we have enough fields
+        if (data.length < fieldsIndex + numFields) {
+            return ErrorReply.SYNTAX;
+        }
+
+        // validate field lengths
+        ArrayList<String> fields = new ArrayList<>();
+        for (int i = 0; i < numFields; i++) {
+            if (data[fieldsIndex + i].length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+            fields.add(new String(data[fieldsIndex + i]));
+        }
+
+        if (isUseHH(keyBytes)) {
+            return hexpire2(keyBytes, expireAt, isNx, isXx, isGt, isLt, fields);
+        }
+
+        var rhk = getRedisHashKeys(keyBytes);
+        if (rhk == null) {
+            var replies = new Reply[numFields];
+            for (int i = 0; i < numFields; i++) {
+                replies[i] = FIELD_NOT_FOUND;
+            }
+            return new MultiBulkReply(replies);
+        }
+
+        var replies = new Reply[numFields];
+        var key = new String(keyBytes);
+        for (int i = 0; i < numFields; i++) {
+            var field = fields.get(i);
+            var isFieldExist = rhk.contains(field);
+            if (!isFieldExist) {
+                replies[i] = FIELD_NOT_FOUND;
+                continue;
+            }
+
+            var fieldKey = RedisHashKeys.fieldKey(key, field);
+            var fieldSlotWithKeyHash = slot(fieldKey.getBytes());
+            var fieldCv = getCv(fieldKey.getBytes(), fieldSlotWithKeyHash);
+            if (fieldCv == null) {
+                // may be expired at just this time
+                replies[i] = FIELD_NOT_FOUND;
+                continue;
+            }
+
+            var fieldExpireAt = fieldCv.getExpireAt();
+            // check conditions
+            if (skipSetExpireAt(expireAt, isNx, isXx, isGt, isLt, replies, i, fieldExpireAt)) {
+                continue;
+            }
+
+            // set expiration
+            fieldCv.setSeq(snowFlake.nextId());
+            fieldCv.setExpireAt(expireAt);
+            setCv(fieldKey.getBytes(), fieldCv, fieldSlotWithKeyHash);
+
+            replies[i] = IntegerReply.REPLY_1;
+        }
+
+        return new MultiBulkReply(replies);
+    }
+
+    private boolean skipSetExpireAt(long expireAt, boolean isNx, boolean isXx, boolean isGt, boolean isLt, Reply[] replies, int fieldIndex, long fieldExpireAt) {
+        if (isNx && fieldExpireAt != CompressedValue.NO_EXPIRE) {
+            replies[fieldIndex] = IntegerReply.REPLY_0;
+            return true;
+        }
+        if (isXx && fieldExpireAt == CompressedValue.NO_EXPIRE) {
+            replies[fieldIndex] = IntegerReply.REPLY_0;
+            return true;
+        }
+        if (isGt && fieldExpireAt != CompressedValue.NO_EXPIRE && fieldExpireAt >= expireAt) {
+            replies[fieldIndex] = IntegerReply.REPLY_0;
+            return true;
+        }
+        if (isLt && fieldExpireAt != CompressedValue.NO_EXPIRE && fieldExpireAt <= expireAt) {
+            replies[fieldIndex] = IntegerReply.REPLY_0;
+            return true;
+        }
+        return false;
+    }
+
+    private Reply hexpire2(byte[] keyBytes, long expireAt, boolean isNx, boolean isXx, boolean isGt, boolean isLt, ArrayList<String> fields) {
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        if (rhh == null) {
+            var replies = new Reply[fields.size()];
+            for (int i = 0; i < fields.size(); i++) {
+                replies[i] = FIELD_NOT_FOUND;
+            }
+            return new MultiBulkReply(replies);
+        }
+
+        var numFields = fields.size();
+        var map = rhh.getMap();
+
+        var replies = new Reply[numFields];
+        for (int i = 0; i < numFields; i++) {
+            var field = fields.get(i);
+            var isFieldExist = map.containsKey(field);
+            if (!isFieldExist) {
+                replies[i] = FIELD_NOT_FOUND;
+                continue;
+            }
+
+            var fieldExpireAt = rhh.getExpireAt(field);
+            // check conditions
+            if (skipSetExpireAt(expireAt, isNx, isXx, isGt, isLt, replies, i, fieldExpireAt)) {
+                continue;
+            }
+
+            // set expiration
+            rhh.putExpireAt(field, expireAt);
+            replies[i] = IntegerReply.REPLY_1;
+        }
+
+        saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+        return new MultiBulkReply(replies);
     }
 
     @VisibleForTesting
@@ -432,7 +818,7 @@ public class HGroup extends BaseCommand {
 
         final String[][] fieldToFind = {{new String(fieldBytes)}};
         final byte[][] fieldValueBytes = {null};
-        RedisHH.iterate(encodedBytes, true, (field, value) -> {
+        RedisHH.iterate(encodedBytes, true, (field, value, expireAt) -> {
             if (field.equals(fieldToFind[0][0])) {
                 fieldValueBytes[0] = value;
                 return true;
@@ -683,7 +1069,7 @@ public class HGroup extends BaseCommand {
 
         var replies = new Reply[size];
         final int[] i = {0};
-        RedisHH.iterate(encodedBytes, true, (field, value) -> {
+        RedisHH.iterate(encodedBytes, true, (field, value, expireAt) -> {
             replies[i[0]++] = new BulkReply(field.getBytes());
             return false;
         });
