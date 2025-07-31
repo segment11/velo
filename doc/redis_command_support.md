@@ -116,6 +116,9 @@
 
 - [√] HDEL
 - [√] HEXISTS
+- [√] HEXPIRE
+- [√] HEXPIREAT
+- [√] HEXPIRETIME
 - [√] HGET
 - [√] HGETALL
 - [√] HINCRBY
@@ -124,10 +127,16 @@
 - [√] HLEN
 - [√] HMGET
 - [√] HMSET
+- [√] HPERSIST
+- [√] HPEXPIRE
+- [√] HPEXPIREAT
+- [√] HPEXPIRETIME
+- [√] HPTTL
 - [√] HRANDFIELD
 - [√] HSET
 - [√] HSETNX
 - [√] HSTRLEN
+- [√] HTTL
 - [√] HVALS
 
 ## hyperloglog
