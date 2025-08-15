@@ -111,6 +111,35 @@ class RedisListTest extends Specification {
         rl3.size() == 1
     }
 
+    def 'iterate'() {
+        given:
+        def rl = new RedisList()
+
+        when:
+        rl.addFirst('a'.bytes)
+        rl.addLast('b'.bytes)
+        def encoded = rl.encode()
+        List<String> list = []
+        RedisList.iterate(encoded, false) { bytes, i ->
+            list << new String(bytes)
+            return false
+        }
+        then:
+        list == ['a', 'b']
+
+        when:
+        list.clear()
+        RedisList.iterate(encoded, true) { bytes, i ->
+            list << new String(bytes)
+            if ('a' == new String(bytes)) {
+                return true
+            }
+            return false
+        }
+        then:
+        list == ['a']
+    }
+
     def 'test compress'() {
         given:
         def rl = new RedisList()

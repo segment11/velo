@@ -6,6 +6,7 @@ import io.velo.reply.*;
 import io.velo.type.RedisList;
 import org.jetbrains.annotations.VisibleForTesting;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -132,24 +133,36 @@ public class LGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rl = getRedisList(keyBytes, slotWithKeyHash);
-        if (rl == null) {
+        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
+        if (encodedBytes == null) {
             // -1 or nil ? todo
             return NilReply.INSTANCE;
         }
 
-        if (index >= rl.size()) {
+        var buffer = ByteBuffer.wrap(encodedBytes);
+        var size = buffer.getShort();
+        if (index >= size) {
             return NilReply.INSTANCE;
         }
 
         if (index < 0) {
-            index = rl.size() + index;
+            index = size + index;
         }
         if (index < 0) {
             return NilReply.INSTANCE;
         }
 
-        return new BulkReply(rl.get(index));
+        final byte[][] returnBytesArray = new byte[1][];
+        int finalIndex = index;
+        RedisList.iterate(encodedBytes, true, (bytes, i) -> {
+            if (i == finalIndex) {
+                returnBytesArray[0] = bytes;
+                return true;
+            }
+            return false;
+        });
+
+        return new BulkReply(returnBytesArray[0]);
     }
 
     private Reply addToList(byte[] keyBytes, byte[][] valueBytesArr, boolean addFirst,
@@ -618,21 +631,31 @@ public class LGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rl = getRedisList(keyBytes, slotWithKeyHash);
-        if (rl == null) {
+        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
+        if (encodedBytes == null) {
             return MultiBulkReply.EMPTY;
         }
 
-        int size = rl.size();
+        var buffer = ByteBuffer.wrap(encodedBytes);
+        var size = buffer.getShort();
+
         var startEnd = IndexStartEndReset.reset(start, end, size);
         if (!startEnd.valid()) {
             return MultiBulkReply.EMPTY;
         }
 
         var replies = new Reply[startEnd.end() - startEnd.start() + 1];
-        for (int i = startEnd.start(); i <= startEnd.end(); i++) {
-            replies[i - start] = new BulkReply(rl.get(i));
-        }
+        RedisList.iterate(encodedBytes, true, (bytes, i) -> {
+            if (i > startEnd.end()) {
+                return true;
+            }
+
+            if (i >= startEnd.start()) {
+                replies[i - start] = new BulkReply(bytes);
+            }
+            return false;
+        });
+
         return new MultiBulkReply(replies);
     }
 
