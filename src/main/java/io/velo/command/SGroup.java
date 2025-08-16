@@ -18,6 +18,7 @@ import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -1204,13 +1205,21 @@ public class SGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhk = getRedisSet(keyBytes, slotWithKeyHash);
-        if (rhk == null) {
+        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_SET);
+        if (encodedBytes == null) {
             return IntegerReply.REPLY_0;
         }
 
-        var isMember = rhk.contains(new String(memberBytes));
-        return isMember ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+        final var isMemberArray = new boolean[1];
+        RedisHashKeys.iterate(encodedBytes, true, (bytes, i) -> {
+            if (Arrays.equals(memberBytes, bytes)) {
+                isMemberArray[0] = true;
+                return true;
+            }
+            return false;
+        });
+
+        return isMemberArray[0] ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
     }
 
     @VisibleForTesting
@@ -1225,21 +1234,22 @@ public class SGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhk = getRedisSet(keyBytes, slotWithKeyHash);
-        if (rhk == null) {
-            return MultiBulkReply.EMPTY;
-        }
-        if (rhk.size() == 0) {
+        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_SET);
+        if (encodedBytes == null) {
             return MultiBulkReply.EMPTY;
         }
 
-        var set = rhk.getSet();
-
-        var replies = new Reply[set.size()];
-        int i = 0;
-        for (var value : set) {
-            replies[i++] = new BulkReply(value.getBytes());
+        var buffer = ByteBuffer.wrap(encodedBytes);
+        var size = buffer.getShort();
+        if (size == 0) {
+            return MultiBulkReply.EMPTY;
         }
+
+        var replies = new Reply[size];
+        RedisHashKeys.iterate(encodedBytes, true, (bytes, i) -> {
+            replies[i] = new BulkReply(bytes);
+            return false;
+        });
         return new MultiBulkReply(replies);
     }
 

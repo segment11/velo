@@ -237,4 +237,60 @@ public class RedisHashKeys {
         }
         return r;
     }
+
+    /**
+     * Iterates over the byte array and calls the callback for each element.
+     */
+    public interface IterateCallback {
+        /**
+         * Called for each element.
+         *
+         * @param bytes The element bytes.
+         * @param index The index of the element.
+         * @return true to break, false to continue
+         */
+        boolean on(byte[] bytes, int index);
+    }
+
+    /**
+     * Iterates over the byte array and calls the callback for each element.
+     *
+     * @param data         The byte array to iterate.
+     * @param doCheckCrc32 Whether to check the CRC32.
+     * @param callback     The callback to call for each element.
+     */
+    public static void iterate(byte[] data, boolean doCheckCrc32, IterateCallback callback) {
+        var buffer = ByteBuffer.wrap(data);
+        var size = buffer.getShort();
+        var dictSeq = buffer.getInt();
+        var bodyBytesLength = buffer.getInt();
+        var crc = buffer.getInt();
+
+        if (dictSeq > 0) {
+            // decompress first
+            buffer = RedisHH.decompressIfUseDict(dictSeq, bodyBytesLength, data);
+        }
+
+        // check crc
+        if (size > 0 && doCheckCrc32) {
+            int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
+            if (crc != crcCompare) {
+                throw new IllegalStateException("CRC check failed");
+            }
+        }
+
+        for (int i = 0; i < size; i++) {
+            int len = buffer.getShort();
+            if (len <= 0) {
+                throw new IllegalStateException("Length error, length=" + len);
+            }
+
+            var bytes = new byte[len];
+            buffer.get(bytes);
+            var isBreak = callback.on(bytes, i);
+            if (isBreak) {
+                break;
+            }
+        }
+    }
 }

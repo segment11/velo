@@ -120,6 +120,35 @@ class RedisHashKeysTest extends Specification {
         exception
     }
 
+    def 'iterate'() {
+        given:
+        def rhk = new RedisHashKeys()
+
+        when:
+        rhk.add('field1')
+        rhk.add('field2')
+        def encoded = rhk.encode()
+        List<String> list = []
+        RedisHashKeys.iterate(encoded, false) { bytes, i ->
+            list << new String(bytes)
+            return false
+        }
+        then:
+        list == ['field1', 'field2']
+
+        when:
+        list.clear()
+        RedisHashKeys.iterate(encoded, true) { bytes, i ->
+            list << new String(bytes)
+            if ('field1' == new String(bytes)) {
+                return true
+            }
+            return false
+        }
+        then:
+        list == ['field1']
+    }
+
     def 'test compress'() {
         given:
         def rhk = new RedisHashKeys()

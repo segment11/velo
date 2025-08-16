@@ -1566,6 +1566,7 @@ sunionstore
         def cvA = cvList[0]
         cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         def rhkA = new RedisHashKeys()
+        rhkA.add('2')
         rhkA.add('1')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
