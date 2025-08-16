@@ -1,6 +1,5 @@
 package io.velo.type
 
-
 import spock.lang.Specification
 
 class RedisZSetTest extends Specification {
@@ -108,6 +107,36 @@ class RedisZSetTest extends Specification {
         }
         then:
         exception
+    }
+
+    def 'iterate'() {
+        given:
+        def rz = new RedisZSet()
+
+        when:
+        rz.add(1, 'a')
+        rz.add(2, 'b')
+        rz.add(3, 'c')
+        def encoded = rz.encode()
+        List<String> list = []
+        RedisZSet.iterate(encoded, false) { memberBytes, score, rank ->
+            list << (new String(memberBytes) + ':' + score + ':' + rank)
+            return false
+        }
+        then:
+        list == ['a:1.0:0', 'b:2.0:1', 'c:3.0:2']
+
+        when:
+        list.clear()
+        RedisZSet.iterate(encoded, true) { memberBytes, score, rank ->
+            list << (new String(memberBytes) + ':' + score + ':' + rank)
+            if ('a'.bytes == memberBytes) {
+                return true
+            }
+            return false
+        }
+        then:
+        list == ['a:1.0:0']
     }
 
     def 'max score member'() {

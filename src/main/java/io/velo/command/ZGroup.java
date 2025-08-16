@@ -10,6 +10,7 @@ import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -1210,9 +1211,7 @@ public class ZGroup extends BaseCommand {
 
         var rz = getRedisZSet(keyBytes, slotWithKeyHashListParsed.getFirst());
         if (rz == null || rz.isEmpty()) {
-            for (int i = 0; i < replies.length; i++) {
-                replies[i] = NilReply.INSTANCE;
-            }
+            Arrays.fill(replies, NilReply.INSTANCE);
             return new MultiBulkReply(replies);
         }
 
@@ -2017,16 +2016,29 @@ public class ZGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rz = getRedisZSet(keyBytes, slotWithKeyHash);
-        if (rz == null || rz.isEmpty()) {
+        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_ZSET);
+        if (encodedBytes == null) {
             return NilReply.INSTANCE;
         }
 
-        var sv = rz.get(new String(memberBytes));
-        if (sv == null) {
+        var buffer = ByteBuffer.wrap(encodedBytes);
+        var size = buffer.getShort();
+        if (size == 0) {
             return NilReply.INSTANCE;
         }
 
-        return new BulkReply(sv.score());
+        final var isExistArray = new boolean[1];
+        final var scoreArray = new double[1];
+
+        RedisZSet.iterate(encodedBytes, true, (bytes, score, rank) -> {
+            if (Arrays.equals(bytes, memberBytes)) {
+                isExistArray[0] = true;
+                scoreArray[0] = score;
+                return true;
+            }
+            return false;
+        });
+
+        return isExistArray[0] ? new BulkReply(scoreArray[0]) : NilReply.INSTANCE;
     }
 }
