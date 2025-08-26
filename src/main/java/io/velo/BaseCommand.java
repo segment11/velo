@@ -24,6 +24,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static io.velo.CompressedValue.KEY_MAX_LENGTH;
+import static io.velo.CompressedValue.VALUE_MAX_LENGTH;
+
 /**
  * Abstract base class for handling Velo commands.
  * This class provides core functionalities for parsing command data, handling slots, and interacting with the persistence layer.
@@ -329,11 +332,25 @@ public abstract class BaseCommand {
     public abstract Reply handle();
 
     @TestOnly
+    private static final String GT_KEY_LENGTH_PLACEHOLDER = ">key";
+    private static final String GT_VALUE_LENGTH_PLACEHOLDER = ">value";
+
+    @TestOnly
     public Reply execute(String allDataString) {
         var dataStrings = allDataString.split(" ");
         var data = new byte[dataStrings.length][];
         for (int i = 0; i < dataStrings.length; i++) {
-            data[i] = dataStrings[i].getBytes();
+            var dataString = dataStrings[i];
+            if (dataString.equals(GT_KEY_LENGTH_PLACEHOLDER)) {
+                data[i] = new byte[KEY_MAX_LENGTH + 1];
+                continue;
+            }
+            if (dataString.equals(GT_VALUE_LENGTH_PLACEHOLDER)) {
+                data[i] = new byte[VALUE_MAX_LENGTH + 1];
+                continue;
+            }
+
+            data[i] = dataString.getBytes();
         }
 
         this.cmd = dataStrings[0];

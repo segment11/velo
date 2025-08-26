@@ -63,8 +63,7 @@ public class TGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply type() {
+    private Reply type() {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }
