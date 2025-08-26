@@ -13,6 +13,7 @@ import spock.lang.Specification
 import java.time.Duration
 
 class ZGroupTest extends Specification {
+    final short slot = 0
     def _ZGroup = new ZGroup(null, null, null)
 
     def singleKeyCmdList1 = '''
@@ -105,13 +106,8 @@ zunionstore
         data6[4] = 'c'.bytes
         data6[5] = 'd'.bytes
         def sListList222 = multiKeyCmdList2.collect {
-            try {
-                _ZGroup.parseSlots(it, data6, slotNumber)
-                return OKReply.INSTANCE
-            } catch (ErrorReplyException e) {
-                println e.message
-                return ErrorReply.SYNTAX
-            }
+            def ss = _ZGroup.parseSlots(it, data6, slotNumber)
+            ss.isEmpty() ? ErrorReply.SYNTAX : OKReply.INSTANCE
         }
         then:
         sListList222.every { it == ErrorReply.SYNTAX }
@@ -119,13 +115,8 @@ zunionstore
         when:
         data6[1] = 'a'.bytes
         sListList222 = multiKeyCmdList2.collect {
-            try {
-                _ZGroup.parseSlots(it, data6, slotNumber)
-                return OKReply.INSTANCE
-            } catch (ErrorReplyException e) {
-                println e.message
-                return ErrorReply.SYNTAX
-            }
+            def ss = _ZGroup.parseSlots(it, data6, slotNumber)
+            ss.isEmpty() ? ErrorReply.SYNTAX : OKReply.INSTANCE
         }
         then:
         sListList222.every { it == ErrorReply.SYNTAX }
@@ -133,13 +124,8 @@ zunionstore
         when:
         data6[1] = '1'.bytes
         sListList222 = multiKeyCmdList2.collect {
-            try {
-                _ZGroup.parseSlots(it, data6, slotNumber)
-                return OKReply.INSTANCE
-            } catch (ErrorReplyException e) {
-                println e.message
-                return ErrorReply.SYNTAX
-            }
+            def ss = _ZGroup.parseSlots(it, data6, slotNumber)
+            ss.isEmpty() ? ErrorReply.SYNTAX : OKReply.INSTANCE
         }
         then:
         sListList222.every { it == ErrorReply.SYNTAX }
@@ -172,13 +158,8 @@ zunionstore
         data7[5] = 'c'.bytes
         data7[6] = 'd'.bytes
         def sListList333 = multiKeyCmdList3.collect {
-            try {
-                _ZGroup.parseSlots(it, data7, slotNumber)
-                return OKReply.INSTANCE
-            } catch (ErrorReplyException e) {
-                println e.message
-                return ErrorReply.SYNTAX
-            }
+            def ss = _ZGroup.parseSlots(it, data7, slotNumber)
+            ss.isEmpty() ? ErrorReply.SYNTAX : OKReply.INSTANCE
         }
         then:
         sListList333.every { it == ErrorReply.SYNTAX }
@@ -186,13 +167,8 @@ zunionstore
         when:
         data7[2] = 'a'.bytes
         sListList333 = multiKeyCmdList3.collect {
-            try {
-                _ZGroup.parseSlots(it, data7, slotNumber)
-                return OKReply.INSTANCE
-            } catch (ErrorReplyException e) {
-                println e.message
-                return ErrorReply.SYNTAX
-            }
+            def ss = _ZGroup.parseSlots(it, data7, slotNumber)
+            ss.isEmpty() ? ErrorReply.SYNTAX : OKReply.INSTANCE
         }
         then:
         sListList333.every { it == ErrorReply.SYNTAX }
@@ -200,13 +176,8 @@ zunionstore
         when:
         data7[2] = '1'.bytes
         sListList333 = multiKeyCmdList3.collect {
-            try {
-                _ZGroup.parseSlots(it, data7, slotNumber)
-                return OKReply.INSTANCE
-            } catch (ErrorReplyException e) {
-                println e.message
-                return ErrorReply.SYNTAX
-            }
+            def ss = _ZGroup.parseSlots(it, data7, slotNumber)
+            ss.isEmpty() ? ErrorReply.SYNTAX : OKReply.INSTANCE
         }
         then:
         sListList333.every { it == ErrorReply.SYNTAX }
@@ -240,8 +211,6 @@ zunionstore
         then:
         sZintercardList.size() == 0
     }
-
-    final short slot = 0
 
     def 'test handle'() {
         given:
@@ -277,25 +246,15 @@ zunionstore
 
     def 'test zadd'() {
         given:
-        final short slot = 0
-
-        def data6 = new byte[6][]
-        data6[1] = 'a'.bytes
-        data6[2] = '0'.bytes
-        data6[3] = 'member0'.bytes
-        data6[4] = '1'.bytes
-        data6[5] = 'member1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zadd', data6, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zadd', data6, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zadd()
+        def reply = zGroup.execute('zadd a 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
@@ -303,66 +262,47 @@ zunionstore
         fromMem(inMemoryGetSet, 'a').get('member1').score() == 1
 
         when:
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd a 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
-        data6[2] = 'a'.bytes
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd a a member0 1 member1')
         then:
         reply == ErrorReply.NOT_FLOAT
 
         when:
-        data6[1] = 'a'.bytes
-        data6[2] = '0'.bytes
-        data6[3] = new byte[RedisZSet.ZSET_MEMBER_MAX_LENGTH + 1]
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd a 0 >key 1 member1')
         then:
         reply == ErrorReply.ZSET_MEMBER_LENGTH_TO_LONG
 
         when:
-        data6[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd >key 0 member0 1 member1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'nx'.bytes
-        data4[3] = '0'.bytes
-        zGroup.data = data4
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd a nx 0')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        def data7 = new byte[7][]
-        data7[1] = 'a'.bytes
-        data7[2] = 'nx'.bytes
-        data7[3] = '0'.bytes
-        data7[4] = 'member0'.bytes
-        data7[5] = '1'.bytes
-        data7[6] = 'member1'.bytes
-        zGroup.data = data7
         inMemoryGetSet.remove(slot, 'a')
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd a nx 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd a nx 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
-        data7[2] = 'xx'.bytes
         inMemoryGetSet.remove(slot, 'a')
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd a xx 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
@@ -374,40 +314,8 @@ zunionstore
         rz.add(0.1, 'member0')
         rz.add(0.1, 'member1')
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zadd()
-        then:
-        reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
-
-        when:
-        data7[2] = 'gt'.bytes
-        rz.add(0.1, 'member0')
-        rz.add(0.1, 'member1')
-        cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zadd()
-        then:
-        reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
-
-        when:
-        rz.add(10, 'member0')
-        rz.add(11, 'member1')
-        cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zadd()
-        then:
-        reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
-
-        when:
-        data7[2] = 'lt'.bytes
-        rz.add(10, 'member0')
-        rz.add(11, 'member1')
-        cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zadd()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a xx 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
@@ -416,49 +324,68 @@ zunionstore
         rz.add(0.1, 'member0')
         rz.add(0.1, 'member1')
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zadd()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a gt 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
-        data7[2] = 'incr'.bytes
-        reply = zGroup.zadd()
+        rz.add(10, 'member0')
+        rz.add(11, 'member1')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a gt 0 member0 1 member1')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 0
+
+        when:
+        rz.add(10, 'member0')
+        rz.add(11, 'member1')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a lt 0 member0 1 member1')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 0
+
+        when:
+        rz.add(0.1, 'member0')
+        rz.add(0.1, 'member1')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a lt 0 member0 1 member1')
+        then:
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 0
+
+        when:
+        reply = zGroup.execute('zadd a incr 0 member0 1 member1')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        def data5 = new byte[5][]
-        data5[1] = 'a'.bytes
-        data5[2] = 'incr'.bytes
-        data5[3] = '0'.bytes
-        data5[4] = 'member0'.bytes
-        zGroup.data = data5
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd a incr 0 member0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
         inMemoryGetSet.remove(slot, 'a')
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd a incr 0 member0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        data5[2] = 'ch'.bytes
-        data5[3] = '1'.bytes
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd a ch 1 member0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        data5[3] = 'nx'.bytes
-        data5[4] = 'lt'.bytes
-        reply = zGroup.zadd()
+        reply = zGroup.execute('zadd a ch nx lt')
         then:
         reply == ErrorReply.SYNTAX
 
@@ -469,32 +396,23 @@ zunionstore
             rz.add(it as double, 'member' + it)
         }
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        data5[2] = 'ch'.bytes
-        data5[3] = '0'.bytes
-        data5[4] = 'extend_member0'.bytes
-        reply = zGroup.zadd()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a ch 0 extend_member0')
         then:
         reply == ErrorReply.ZSET_SIZE_TO_LONG
     }
 
     def 'test zcard'() {
         given:
-        final short slot = 0
-
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zcard', data2, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zcard', data2, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zcard()
+        def reply = zGroup.execute('zcard a')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -504,38 +422,29 @@ zunionstore
         def rz = new RedisZSet()
         rz.add(0.1, 'member0')
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zcard()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zcard a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zcard()
+        reply = zGroup.execute('zcard >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test zcount'() {
         given:
-        final short slot = 0
-
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '(1'.bytes
-        data4[3] = '(4'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zcount', data4, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zcount', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zcount(false)
+        def reply = zGroup.execute('zcount a (1 (4')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -544,8 +453,8 @@ zunionstore
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zcount(false)
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zcount a (1 (4')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -554,103 +463,79 @@ zunionstore
             rz.add(it, 'member' + it)
         }
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zcount(false)
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zcount a (1 (4')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        data4[2] = '(member1'.bytes
-        data4[3] = '(member4'.bytes
-        reply = zGroup.zcount(true)
+        reply = zGroup.execute('zlexcount a (member1 (member4')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        data4[2] = '[member1'.bytes
-        data4[3] = '[member4'.bytes
-        reply = zGroup.zcount(true)
+        reply = zGroup.execute('zlexcount a [member1 [member4')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 4
 
         when:
-        data4[2] = '2'.bytes
-        data4[3] = '3'.bytes
-        reply = zGroup.zcount(false)
+        reply = zGroup.execute('zcount a 2 3')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        data4[2] = '-inf'.bytes
-        data4[3] = '+inf'.bytes
-        reply = zGroup.zcount(false)
+        reply = zGroup.execute('zcount a -inf +inf')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 10
 
         when:
-        data4[2] = '3'.bytes
-        data4[3] = '2'.bytes
-        reply = zGroup.zcount(false)
+        reply = zGroup.execute('zcount a 3 2')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data4[2] = '[3'.bytes
-        data4[3] = '[2'.bytes
-        reply = zGroup.zcount(false)
+        reply = zGroup.execute('zcount a [3 [2')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data4[2] = '[member3'.bytes
-        data4[3] = '[member2'.bytes
-        reply = zGroup.zcount(true)
+        reply = zGroup.execute('zlexcount a [member3 [member2')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data4[2] = 'a'.bytes
-        reply = zGroup.zcount(false)
+        reply = zGroup.execute('zcount a a 3')
         then:
         reply == ErrorReply.NOT_FLOAT
 
         when:
-        data4[2] = '1'.bytes
-        data4[3] = 'a'.bytes
-        reply = zGroup.zcount(false)
+        reply = zGroup.execute('zcount a 1 a')
         then:
         reply == ErrorReply.NOT_FLOAT
 
         when:
-        data4[2] = 'member1'.bytes
-        reply = zGroup.zcount(true)
+        reply = zGroup.execute('zlexcount a member1 [member4')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data4[2] = '[member1'.bytes
-        data4[3] = 'member4'.bytes
-        reply = zGroup.zcount(true)
+        reply = zGroup.execute('zlexcount a [member1 member4')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data4[3] = '4'.bytes
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zcount(false)
+        reply = zGroup.execute('zcount >key 2 3')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test zdiff'() {
         given:
-        final short slot = 0
-
         def data5 = new byte[5][]
         data5[1] = '2'.bytes
         data5[2] = 'a'.bytes
@@ -1095,17 +980,9 @@ zunionstore
         cvB.compressedData = rzB.encode()
         inMemoryGetSet.put(slot, 'b', 0, cvB)
         zGroup.data = data10
-        boolean exception = false
-        String exceptionMessage = null
-        try {
-            zGroup.zdiff(false, true)
-        } catch (ErrorReplyException e) {
-            exception = true
-            exceptionMessage = e.message
-        }
+        def errorReply = zGroup.zdiff(false, true)
         then:
-        exception
-        exceptionMessage.contains(ErrorReply.ZSET_SIZE_TO_LONG.message)
+        errorReply == ErrorReply.ZSET_SIZE_TO_LONG
 
         when:
         def eventloop = Eventloop.builder()
@@ -1252,29 +1129,21 @@ zunionstore
 
     def 'test zincrby'() {
         given:
-        final short slot = 0
-
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '1'.bytes
-        data4[3] = 'member0'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zincrby', data4, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zincrby', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zincrby()
+        def reply = zGroup.execute('zincrby a 1 member0')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == '1.0'.bytes
 
         when:
-        reply = zGroup.zincrby()
+        reply = zGroup.execute('zincrby a 1 member0')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == '2.0'.bytes
@@ -1287,53 +1156,38 @@ zunionstore
             rz.add(it as double, 'member' + it)
         }
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        data4[3] = 'extend_member0'.bytes
-        reply = zGroup.zincrby()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zincrby a 1 extend_member0')
         then:
         reply == ErrorReply.ZSET_SIZE_TO_LONG
 
         when:
-        data4[3] = new byte[RedisZSet.ZSET_MEMBER_MAX_LENGTH + 1]
-        reply = zGroup.zincrby()
+        reply = zGroup.execute('zincrby a 1 >key')
         then:
         reply == ErrorReply.ZSET_MEMBER_LENGTH_TO_LONG
 
         when:
-        data4[2] = 'a'.bytes
-        reply = zGroup.zincrby()
+        reply = zGroup.execute('zincrby a a member0')
         then:
         reply == ErrorReply.NOT_FLOAT
 
         when:
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zincrby()
+        reply = zGroup.execute('zincrby >key 1 member0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test zintercard'() {
-        // todo
         given:
-        final short slot = 0
-
-        def data6 = new byte[6][]
-        data6[1] = '2'.bytes
-        data6[2] = 'a'.bytes
-        data6[3] = 'b'.bytes
-        data6[4] = 'limit'.bytes
-        data6[5] = '0'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zintercard', data6, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zintercard', data6, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zintercard()
+        def reply = zGroup.execute('zintercard 2 a b limit 0')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1344,7 +1198,7 @@ zunionstore
         def rzA = new RedisZSet()
         cvA.compressedData = rzA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 0')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1354,7 +1208,7 @@ zunionstore
         rzA.add(0.3, 'member2')
         cvA.compressedData = rzA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 0')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1364,7 +1218,7 @@ zunionstore
         def rzB = new RedisZSet()
         cvB.compressedData = rzB.encode()
         inMemoryGetSet.put(slot, 'b', 0, cvB)
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 0')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1374,21 +1228,19 @@ zunionstore
         rzB.add(0.4, 'member3')
         cvB.compressedData = rzB.encode()
         inMemoryGetSet.put(slot, 'b', 0, cvB)
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        data6[5] = '1'.bytes
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        data6[5] = '3'.bytes
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 3')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
@@ -1398,7 +1250,7 @@ zunionstore
         rzB.remove('member1')
         cvB.compressedData = rzB.encode()
         inMemoryGetSet.put(slot, 'b', 0, cvB)
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 3')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1416,7 +1268,7 @@ zunionstore
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
         zGroup.crossRequestWorker = true
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 3')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1430,7 +1282,7 @@ zunionstore
         rzB.add(0.4, 'member3')
         cvB.compressedData = rzB.encode()
         inMemoryGetSet.put(slot, 'b', 0, cvB)
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 3')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1439,8 +1291,7 @@ zunionstore
         }.result
 
         when:
-        data6[5] = '1'.bytes
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 1')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1449,8 +1300,7 @@ zunionstore
         }.result
 
         when:
-        data6[5] = '0'.bytes
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 0')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1462,7 +1312,7 @@ zunionstore
         rzB.clear()
         cvB.compressedData = rzB.encode()
         inMemoryGetSet.put(slot, 'b', 0, cvB)
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 0')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1472,7 +1322,7 @@ zunionstore
 
         when:
         inMemoryGetSet.remove(slot, 'b')
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit 0')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1481,61 +1331,43 @@ zunionstore
         }.result
 
         when:
-        data6[4] = 'limit_'.bytes
-        reply = zGroup.zintercard()
+        zGroup.crossRequestWorker = false
+        reply = zGroup.execute('zintercard 2 a b limit_ 0')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data6[4] = 'limit'.bytes
-        data6[5] = 'a'.bytes
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data6[5] = '-1'.bytes
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 a b limit -1')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data6[5] = '0'.bytes
-        data6[1] = '1'.bytes
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 1 a b limit 0')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data6[1] = 'a'.bytes
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard a a b limit 0')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data6[1] = '2'.bytes
-        data6[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 2 >key b limit 0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        def data7 = new byte[7][]
-        data7[1] = '6'.bytes
-        data7[2] = 'a'.bytes
-        data7[3] = 'b'.bytes
-        data7[4] = 'c'.bytes
-        data7[5] = 'd'.bytes
-        data7[6] = 'e'.bytes
-        zGroup.data = data7
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 6 a b c d e')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data7[1] = '4'.bytes
-        data7[6] = 'limit'.bytes
-        reply = zGroup.zintercard()
+        reply = zGroup.execute('zintercard 4 a b c d limit')
         then:
         reply == ErrorReply.SYNTAX
 
@@ -1545,23 +1377,15 @@ zunionstore
 
     def 'test zmscore'() {
         given:
-        final short slot = 0
-
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'member0'.bytes
-        data4[3] = 'member1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zmscore', data4, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zmscore', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zmscore()
+        def reply = zGroup.execute('zmscore a member0 member1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1573,8 +1397,8 @@ zunionstore
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zmscore()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zmscore a member0 member1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1584,8 +1408,8 @@ zunionstore
         when:
         rz.add(0.1, 'member0')
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zmscore()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zmscore a member0 member1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1594,37 +1418,27 @@ zunionstore
         ((MultiBulkReply) reply).replies[1] == NilReply.INSTANCE
 
         when:
-        data4[2] = new byte[RedisZSet.ZSET_MEMBER_MAX_LENGTH + 1]
-        reply = zGroup.zmscore()
+        reply = zGroup.execute('zmscore a >key member1')
         then:
         reply == ErrorReply.ZSET_MEMBER_LENGTH_TO_LONG
 
         when:
-        data4[2] = 'member0'.bytes
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zmscore()
+        reply = zGroup.execute('zmscore >key member0 member1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test zpopmax'() {
         given:
-        final short slot = 0
-
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = '1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zpopmax', data3, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zpopmax', data3, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zpopmax(false)
+        def reply = zGroup.execute('zpopmax a 1')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -1633,16 +1447,16 @@ zunionstore
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zpopmax(false)
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zpopmax a 1')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
         rz.add(100, 'member100')
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zpopmax(false)
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zpopmax a 1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1655,8 +1469,8 @@ zunionstore
         rz.add(100, 'member100')
         rz.add(10, 'member10')
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zpopmax(true)
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zpopmin a 1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1666,30 +1480,22 @@ zunionstore
         ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == '10.0'.bytes
 
         when:
-        data3[2] = '0'.bytes
-        reply = zGroup.zpopmax(false)
+        reply = zGroup.execute('zpopmax a 0')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data3[2] = 'a'.bytes
-        reply = zGroup.zpopmax(false)
+        reply = zGroup.execute('zpopmax a a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data3[2] = '1'.bytes
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zpopmax(false)
+        reply = zGroup.execute('zpopmax >key 1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
-        zGroup.data = data2
-        reply = zGroup.zpopmax(false)
+        reply = zGroup.execute('zpopmax a')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1697,32 +1503,20 @@ zunionstore
 
     def 'test zrandmember'() {
         given:
-        final short slot = 0
-
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '1'.bytes
-        data4[3] = 'withscores'.bytes
-
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zrandmember', data4, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrandmember', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zrandmember()
+        def reply = zGroup.execute('zrandmember a 1 withscores')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        zGroup.data = data2
-        reply = zGroup.zrandmember()
+        reply = zGroup.execute('zrandmember a')
         then:
         reply == NilReply.INSTANCE
 
@@ -1731,24 +1525,21 @@ zunionstore
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        zGroup.data = data4
-        reply = zGroup.zrandmember()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zrandmember a 1 withscores')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        zGroup.data = data2
-        reply = zGroup.zrandmember()
+        reply = zGroup.execute('zrandmember a')
         then:
         reply == NilReply.INSTANCE
 
         when:
         rz.add(100, 'member100')
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        zGroup.data = data4
-        reply = zGroup.zrandmember()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zrandmember a 1 withscores')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1758,8 +1549,7 @@ zunionstore
         ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == '100.0'.bytes
 
         when:
-        zGroup.data = data2
-        reply = zGroup.zrandmember()
+        reply = zGroup.execute('zrandmember a')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 1
@@ -1767,9 +1557,7 @@ zunionstore
         ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'member100'.bytes
 
         when:
-        data4[2] = '2'.bytes
-        zGroup.data = data4
-        reply = zGroup.zrandmember()
+        reply = zGroup.execute('zrandmember a 2 withscores')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1780,98 +1568,67 @@ zunionstore
             rz.add(it as double, 'member' + it)
         }
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        data4[2] = '5'.bytes
-        reply = zGroup.zrandmember()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zrandmember a 5 withscores')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 10
 
         when:
-        data4[2] = '-3'.bytes
-        reply = zGroup.zrandmember()
+        reply = zGroup.execute('zrandmember a -3 withscores')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 6
 
         when:
-        data4[3] = '_withscores'.bytes
-        reply = zGroup.zrandmember()
+        reply = zGroup.execute('zrandmember a -3 _withscores')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data4[3] = 'withscores'.bytes
-        data4[2] = '0'.bytes
-        reply = zGroup.zrandmember()
+        reply = zGroup.execute('zrandmember a 0 withscores')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data4[2] = 'a'.bytes
-        reply = zGroup.zrandmember()
+        reply = zGroup.execute('zrandmember a a withscores')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zrandmember()
+        reply = zGroup.execute('zrandmember >key 0 withscores')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'withscores'.bytes
-
-        zGroup.data = data3
-        reply = zGroup.zrandmember()
+        reply = zGroup.execute('zrandmember a withscores')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        def data5 = new byte[5][]
-        zGroup.data = data5
-        reply = zGroup.zrandmember()
+        reply = zGroup.execute('zrandmember a 0 withscores x')
         then:
         reply == ErrorReply.FORMAT
     }
 
     def 'test zrange'() {
         given:
-        final short slot = 0
-
-        def data10 = new byte[10][]
-        data10[1] = 'a'.bytes
-        data10[2] = '(1'.bytes
-        data10[3] = '(4'.bytes
-        data10[4] = 'byscore'.bytes
-        data10[5] = 'rev'.bytes
-        data10[6] = 'limit'.bytes
-        data10[7] = '0'.bytes
-        data10[8] = '0'.bytes
-        data10[9] = 'withscores'.bytes
-
-        // no rev first
-        data10[5] = 'byscore'.bytes
-
         def dstKeyBytes = 'dst'.bytes
 
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zrange', data10, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrange', data10, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zrange(data10)
+        def reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 0 withscores')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1880,13 +1637,13 @@ zunionstore
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zrange(data10)
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 0 withscores')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1895,67 +1652,53 @@ zunionstore
             rz.add(it as double, 'member' + it)
         }
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zrange(data10)
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 0 withscores')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 4
 
         when:
         // limit count
-        data10[8] = '3'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 3 withscores')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 4
 
         when:
         // not withscores
-        data10[9] = 'byscore'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 3 byscore')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
 
         when:
         // limit count
-        data10[8] = '0'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 0 byscore')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
 
         when:
         // limit offset
-        data10[7] = '1'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 1 0 byscore')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 1
 
         when:
         // limit offset
-        data10[7] = '3'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 3 0 byscore')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        // limit offset
-        data10[7] = '0'.bytes
-        // limit count
-        data10[8] = '0'.bytes
-        // rev
-        data10[5] = 'rev'.bytes
-        // start / stop
-        data10[2] = '(4'.bytes
-        data10[3] = '(1'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (4 (1 byscore rev limit 0 0 byscore')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1964,686 +1707,476 @@ zunionstore
         def tmpData5 = new byte[5][]
         tmpData5[1] = dstKeyBytes
         tmpData5[2] = 'a'.bytes
+        zGroup.execute('zrange a (1 (4 byscore byscore limit 0 0 byscore')
         zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
-        // rev
-        data10[5] = 'byscore'.bytes
-        // start / stop
-        data10[2] = '(1'.bytes
-        data10[3] = '(4'.bytes
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
         inMemoryGetSet.getBuf(slot, dstKeyBytes, 0, 0L) != null
 
         when:
-        // limit count
-        data10[8] = '2'.bytes
-        // query result count = 3
-        data10[2] = '(1'.bytes
-        data10[3] = '(5'.bytes
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        zGroup.execute('zrange a (1 (5 byscore byscore limit 0 2 byscore')
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        // limit count
-        data10[8] = '0'.bytes
-        data10[2] = '1.1'.bytes
-        data10[3] = '1.2'.bytes
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        zGroup.execute('zrange a 1.1 1.2 byscore rev limit 0 0 byscore')
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data10[5] = 'byscore'.bytes
-        data10[2] = '1.1'.bytes
-        data10[3] = '1.2'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 1.1 1.2 byscore byscore limit 0 0 byscore')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        data10[5] = 'byscore'.bytes
-        data10[2] = '[1.1'.bytes
-        data10[3] = '[1.2'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a [1.1 [1.2 byscore byscore limit 0 0 byscore')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        data10[5] = 'byscore'.bytes
-        data10[2] = '[1.1'.bytes
-        data10[3] = '[1.a'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a [1.1 [1.a byscore byscore limit 0 0 byscore')
         then:
         reply == ErrorReply.NOT_FLOAT
 
         when:
-        data10[5] = 'byscore'.bytes
-        data10[2] = '[1.a'.bytes
-        data10[3] = '[1.2'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a [1.a [1.2 byscore byscore limit 0 0 byscore')
         then:
         reply == ErrorReply.NOT_FLOAT
 
         when:
-        // limit count
-        data10[8] = '2'.bytes
-        data10[5] = 'byscore'.bytes
-        data10[2] = '-inf'.bytes
-        data10[3] = '+inf'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a -inf +inf byscore byscore limit 0 2 byscore')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
 
         when:
         // limit count
-        data10[8] = '0'.bytes
-        data10[5] = 'byscore'.bytes
-        data10[2] = '2'.bytes
-        data10[3] = '1'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 2 1 byscore byscore limit 0 0 byscore')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         // limit count
-        data10[8] = '0'.bytes
-        data10[5] = 'rev'.bytes
-        data10[2] = '1'.bytes
-        data10[3] = '2'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 1 2 byscore rev limit 0 0 byscore')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
 
         // by index
         when:
-        data10[4] = 'byindex'.bytes
-        data10[5] = 'byindex'.bytes
-        // withscores
-        data10[9] = 'byindex'.bytes
-        data10[2] = '0'.bytes
-        data10[3] = '1'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 0 1 byindex byindex limit 0 0 byindex')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        data10[2] = '-3'.bytes
-        data10[3] = '-1'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a -3 -1 byindex byindex limit 0 0 byindex')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 3
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 3
 
         when:
-        data10[2] = '1'.bytes
-        data10[3] = '0'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 1 0 byindex byindex limit 0 0 byindex')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data10[2] = '3'.bytes
-        data10[3] = '6'.bytes
-        data10[8] = '2'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 3 6 byindex byindex limit 0 2 byindex')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        // limit offset
-        data10[7] = '1'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 3 6 byindex byindex limit 1 2 byindex')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        // limit offset
-        data10[7] = '4'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 3 6 byindex byindex limit 4 2 byindex')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        // limit offset count
-        data10[7] = '0'.bytes
-        data10[8] = '2'.bytes
-        data10[9] = 'withscores'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 3 6 byindex byindex limit 0 2 withscores')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 4
 
         when:
-        // limit count
-        data10[8] = '0'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 3 6 byindex byindex limit 0 0 withscores')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 8
 
         when:
-        // limit count
-        data10[8] = '0'.bytes
-        data10[9] = 'withscores'.bytes
-        reply = zGroup.zrange(data10)
-        then:
-        reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 8
-
-        when:
-        data10[8] = '2'.bytes
-        data10[9] = 'byindex'.bytes
-        data10[5] = 'rev'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 3 6 byindex rev limit 0 2 byindex')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
 
         // bylex
         when:
-        data10[4] = 'bylex'.bytes
-        // rev
-        data10[5] = 'bylex'.bytes
-        // limit count
-        data10[8] = '2'.bytes
-        // withscores
-        data10[9] = 'bylex'.bytes
-        data10[2] = '(member1'.bytes
-        data10[3] = '(member4'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (member1 (member4 bylex bylex limit 0 2 bylex')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        data10[2] = '(member4'.bytes
-        data10[3] = '(member1'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (member4 (member1 bylex bylex limit 0 2 bylex')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data10[2] = '-'.bytes
-        data10[3] = '+'.bytes
-        data10[8] = '0'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a - + bylex bylex limit 0 0 bylex')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 10
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 10
 
         when:
-        data10[2] = '('.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a ( + bylex bylex limit 0 0 bylex')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data10[2] = '-'.bytes
-        data10[3] = '('.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a - ( bylex bylex limit 0 0 bylex')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data10[2] = '[member1'.bytes
-        data10[3] = '[member4'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a [member1 [member4 bylex bylex limit 0 0 bylex')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 4
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 4
 
         when:
-        data10[2] = '[member10'.bytes
-        data10[3] = '[member11'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a [member10 [member11 bylex bylex limit 0 0 bylex')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data10[2] = '[member1'.bytes
-        data10[3] = '[member8'.bytes
-        // limit offset
-        data10[7] = '3'.bytes
-        data10[8] = '2'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a [member1 [member8 bylex bylex limit 3 2 bylex')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        data10[9] = 'withscores'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a [member1 [member8 bylex bylex limit 3 2 withscores')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 4
 
         when:
-        data10[7] = '0'.bytes
-        data10[8] = '0'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a [member1 [member8 bylex bylex limit 0 0 withscores')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 16
 
         when:
-        data10[7] = '10'.bytes
-        data10[8] = '2'.bytes
-        data10[9] = 'bylex'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a [member1 [member8 bylex bylex limit 10 2 bylex')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(data10, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data10[5] = 'rev'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a [member1 [member8 bylex rev limit 10 2 bylex')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        data10[2] = 'member1'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a member1 [member8 bylex rev limit 10 2 bylex')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data10[2] = '(member1'.bytes
-        data10[3] = 'member4'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (member1 member4 bylex rev limit 10 2 bylex')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data10[7] = '-1'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (member1 member4 bylex rev limit -1 2 bylex')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data10[7] = 'a'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (member1 member4 bylex rev limit a 2 bylex')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data10[7] = '0'.bytes
-        data10[8] = 'a'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (member1 member4 bylex rev limit 0 a bylex')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data10[8] = '0'.bytes
-        data10[9] = 'withscores_'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (member1 member4 bylex rev limit 0 0 withscores_')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data10[9] = 'limit'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a (member1 member4 bylex rev limit 0 0 limit')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data10[4] = 'byindex'.bytes
-        data10[5] = 'byindex'.bytes
-        data10[9] = 'withscores'.bytes
-        data10[2] = 'a'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a a member4 byindex byindex limit 0 0 withscores')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data10[2] = '1'.bytes
-        data10[3] = 'a'.bytes
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange a 1 a byindex byindex limit 0 0 withscores')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data10[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zrange(data10)
+        reply = zGroup.execute('zrange >key 1 a byindex byindex limit 0 0 withscores')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test zrangebylex'() {
         given:
-        final short slot = 0
-
-        def data7 = new byte[7][]
-        data7[1] = 'a'.bytes
-        data7[2] = '(1'.bytes
-        data7[3] = '(4'.bytes
-        data7[4] = 'limit'.bytes
-        data7[5] = '0'.bytes
-        data7[6] = '0'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zrangebylex', data7, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangebylex', data7, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.handle()
+        def reply = zGroup.execute('zrangebylex a (1 (4 limit 0 0')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '(1'.bytes
-        data4[3] = '(4'.bytes
-        zGroup.data = data4
-        reply = zGroup.handle()
+        reply = zGroup.execute('zrangebylex a (1 (4')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        def data5 = new byte[5][]
-        zGroup.data = data5
-        reply = zGroup.handle()
+        reply = zGroup.execute('zrangebylex a (1 (4 x')
         then:
         reply == ErrorReply.FORMAT
     }
 
     def 'test zrangebyscore'() {
         given:
-        final short slot = 0
-
-        def data7 = new byte[7][]
-        data7[1] = 'a'.bytes
-        data7[2] = '(1'.bytes
-        data7[3] = '(4'.bytes
-        data7[4] = 'limit'.bytes
-        data7[5] = '0'.bytes
-        data7[6] = '0'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zrangebyscore', data7, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangebyscore', data7, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.handle()
+        def reply = zGroup.execute('zrangebyscore a (1 (4 limit 0 0')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '(1'.bytes
-        data4[3] = '(4'.bytes
-        zGroup.data = data4
-        reply = zGroup.handle()
+        reply = zGroup.execute('zrangebyscore a (1 (4')
         then:
         reply == MultiBulkReply.EMPTY
     }
 
     def 'test zrangestore'() {
         given:
-        final short slot = 0
-
-        def data8 = new byte[8][]
-        data8[1] = 'dst'.bytes
-        data8[2] = 'a'.bytes
-        data8[3] = '1'.bytes
-        data8[4] = '4'.bytes
-        data8[5] = 'limit'.bytes
-        data8[6] = '0'.bytes
-        data8[7] = '0'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zrangestore', data8, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', data8, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.handle()
+        def reply = zGroup.execute('zrangestore dst a 1 4 limit 0 0')
         then:
         reply == IntegerReply.REPLY_0
     }
 
     def 'test zrevrange'() {
         given:
-        final short slot = 0
-
-        def data5 = new byte[5][]
-        data5[1] = 'a'.bytes
-        data5[2] = '1'.bytes
-        data5[3] = '4'.bytes
-        data5[4] = 'withscores'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zrevrange', data5, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrevrange', data5, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.handle()
+        def reply = zGroup.execute('zrevrange a 1 4 withscores')
         then:
         reply == MultiBulkReply.EMPTY
     }
 
     def 'test zrevrangebylex'() {
         given:
-        final short slot = 0
-
-        def data7 = new byte[7][]
-        data7[1] = 'a'.bytes
-        data7[2] = '(1'.bytes
-        data7[3] = '(4'.bytes
-        data7[4] = 'limit'.bytes
-        data7[5] = '0'.bytes
-        data7[6] = '0'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zrevrangebylex', data7, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrevrangebylex', data7, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.handle()
+        def reply = zGroup.execute('zrevrangebylex a (1 (4 limit 0 0')
         then:
         reply == MultiBulkReply.EMPTY
     }
 
     def 'test zrevrangebyscore'() {
         given:
-        final short slot = 0
-
-        def data7 = new byte[7][]
-        data7[1] = 'a'.bytes
-        data7[2] = '(1'.bytes
-        data7[3] = '(4'.bytes
-        data7[4] = 'limit'.bytes
-        data7[5] = '0'.bytes
-        data7[6] = '0'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zrevrangebyscore', data7, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrevrangebyscore', data7, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.handle()
+        def reply = zGroup.execute('zrevrangebyscore a (1 (4 limit 0 0')
         then:
         reply == MultiBulkReply.EMPTY
     }
 
     def 'test zrank'() {
         given:
-        final short slot = 0
-
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'member0'.bytes
-        data4[3] = 'withscore_'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zrank', data4, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrank', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zrank(false)
+        def reply = zGroup.execute('zrank a member0 withscore_')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        data4[3] = 'withscore'.bytes
-        reply = zGroup.zrank(false)
+        reply = zGroup.execute('zrank a member0 withscore')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        data4[3] = 'withscore_'.bytes
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zrank(false)
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zrank a member0 withscore_')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        data4[3] = 'withscore'.bytes
-        reply = zGroup.zrank(false)
+        reply = zGroup.execute('zrank a member0 withscore')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        data4[3] = 'withscore_'.bytes
         rz.add(0.1, 'member0')
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zrank(false)
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zrank a member0 withscore_')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
-        reply = zGroup.zrank(true)
+        reply = zGroup.execute('zrevrank a member0 withscore_')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
-        data4[3] = 'withscore'.bytes
-        reply = zGroup.zrank(false)
+        reply = zGroup.execute('zrank a member0 withscore')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -2653,51 +2186,37 @@ zunionstore
         ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == '0.1'.bytes
 
         when:
-        data4[2] = 'member1'.bytes
-        data4[3] = 'withscore_'.bytes
-        reply = zGroup.zrank(false)
+        reply = zGroup.execute('zrank a member1 withscore_')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        data4[3] = 'withscore'.bytes
-        reply = zGroup.zrank(false)
+        reply = zGroup.execute('zrank a member1 withscore')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        data4[2] = new byte[RedisZSet.ZSET_MEMBER_MAX_LENGTH + 1]
-        reply = zGroup.zrank(false)
+        reply = zGroup.execute('zrank a >key withscore')
         then:
         reply == ErrorReply.ZSET_MEMBER_LENGTH_TO_LONG
 
         when:
-        data4[2] = 'member0'.bytes
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zrank(false)
+        reply = zGroup.execute('zrank >key member1 withscore')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test zrem'() {
         given:
-        final short slot = 0
-
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'member0'.bytes
-        data4[3] = 'member1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zrem', data4, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrem', data4, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zrem()
+        def reply = zGroup.execute('zrem a member0 member1')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -2706,8 +2225,8 @@ zunionstore
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zrem()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zrem a member0 member1')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -2716,35 +2235,30 @@ zunionstore
         rz.add(0.2, 'member1')
         rz.add(0.3, 'member2')
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zrem()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zrem a member0 member1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        reply = zGroup.zrem()
+        reply = zGroup.execute('zrem a member0 member1')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data4[2] = new byte[RedisZSet.ZSET_MEMBER_MAX_LENGTH + 1]
-        reply = zGroup.zrem()
+        reply = zGroup.execute('zrem a >key member1')
         then:
         reply == ErrorReply.ZSET_MEMBER_LENGTH_TO_LONG
 
         when:
-        data4[2] = 'member0'.bytes
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zrem()
+        reply = zGroup.execute('zrem >key member0 member1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test zremrangebyscore'() {
         given:
-        final short slot = 0
-
         def data4 = new byte[4][]
         data4[1] = 'a'.bytes
         data4[2] = '(1'.bytes
@@ -2780,7 +2294,7 @@ zunionstore
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
+        inMemoryGetSet.put('a', cv)
         reply = zGroup.zremrangebyscore(true, false, false)
         then:
         reply == IntegerReply.REPLY_0
@@ -2804,7 +2318,7 @@ zunionstore
             rz.add(it as double, 'member' + it)
         }
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
+        inMemoryGetSet.put('a', cv)
         data4[2] = '(1'.bytes
         data4[3] = '(4'.bytes
         reply = zGroup.zremrangebyscore(true, false, false)
@@ -2816,7 +2330,7 @@ zunionstore
         data4[2] = '[1'.bytes
         data4[3] = '[4'.bytes
         // reset 10 members
-        inMemoryGetSet.put(slot, 'a', 0, cv)
+        inMemoryGetSet.put('a', cv)
         reply = zGroup.zremrangebyscore(true, false, false)
         then:
         reply instanceof IntegerReply
@@ -2852,7 +2366,7 @@ zunionstore
         data4[2] = '-inf'.bytes
         data4[3] = '+inf'.bytes
         // reset 10 members
-        inMemoryGetSet.put(slot, 'a', 0, cv)
+        inMemoryGetSet.put('a', cv)
         reply = zGroup.zremrangebyscore(true, false, false)
         then:
         reply instanceof IntegerReply
@@ -2863,7 +2377,7 @@ zunionstore
         data4[2] = '1'.bytes
         data4[3] = '4'.bytes
         // reset 10 members
-        inMemoryGetSet.put(slot, 'a', 0, cv)
+        inMemoryGetSet.put('a', cv)
         reply = zGroup.zremrangebyscore(false, false, true)
         then:
         reply instanceof IntegerReply
@@ -2873,7 +2387,7 @@ zunionstore
         data4[2] = '-3'.bytes
         data4[3] = '-1'.bytes
         // reset 10 members
-        inMemoryGetSet.put(slot, 'a', 0, cv)
+        inMemoryGetSet.put('a', cv)
         reply = zGroup.zremrangebyscore(false, false, true)
         then:
         reply instanceof IntegerReply
@@ -2882,7 +2396,7 @@ zunionstore
         when:
         data4[3] = '-11'.bytes
         // reset 10 members
-        inMemoryGetSet.put(slot, 'a', 0, cv)
+        inMemoryGetSet.put('a', cv)
         reply = zGroup.zremrangebyscore(false, false, true)
         then:
         reply == IntegerReply.REPLY_0
@@ -2904,7 +2418,7 @@ zunionstore
         data4[2] = '(member1'.bytes
         data4[3] = '(member4'.bytes
         // reset 10 members
-        inMemoryGetSet.put(slot, 'a', 0, cv)
+        inMemoryGetSet.put('a', cv)
         reply = zGroup.zremrangebyscore(false, true, false)
         then:
         reply instanceof IntegerReply
@@ -2914,7 +2428,7 @@ zunionstore
         data4[2] = '[member1'.bytes
         data4[3] = '[member4'.bytes
         // reset 10 members
-        inMemoryGetSet.put(slot, 'a', 0, cv)
+        inMemoryGetSet.put('a', cv)
         reply = zGroup.zremrangebyscore(false, true, false)
         then:
         reply instanceof IntegerReply
@@ -2960,22 +2474,15 @@ zunionstore
 
     def 'test zscore'() {
         given:
-        final short slot = 0
-
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'member0'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def zGroup = new ZGroup('zscore', data3, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
         when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zscore', data3, zGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.zscore()
+        def reply = zGroup.execute('zscore a member0')
         then:
         reply == NilReply.INSTANCE
 
@@ -2984,36 +2491,32 @@ zunionstore
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         def rz = new RedisZSet()
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zscore()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zscore a member0')
         then:
         reply == NilReply.INSTANCE
 
         when:
         rz.add(0.1, 'member0')
         cv.compressedData = rz.encode()
-        inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = zGroup.zscore()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zscore a member0')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == '0.1'.bytes
 
         when:
-        data3[2] = 'member1'.bytes
-        reply = zGroup.zscore()
+        reply = zGroup.execute('zscore a member1')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        data3[2] = new byte[RedisZSet.ZSET_MEMBER_MAX_LENGTH + 1]
-        reply = zGroup.zscore()
+        reply = zGroup.execute('zscore a >key')
         then:
         reply == ErrorReply.ZSET_MEMBER_LENGTH_TO_LONG
 
         when:
-        data3[2] = 'member0'.bytes
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = zGroup.zscore()
+        reply = zGroup.execute('zscore >key member0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }

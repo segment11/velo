@@ -24,6 +24,16 @@ public interface ByPassGetSet {
     void put(short slot, String key, int bucketIndex, CompressedValue cv);
 
     /**
+     * Puts a compressed value into the storage system.
+     *
+     * @param key the key associated with the value.
+     * @param cv  the compressed value to be stored.
+     */
+    default void put(String key, CompressedValue cv) {
+        put((short) 0, key, 0, cv);
+    }
+
+    /**
      * Removes a value from the storage system associated with a given key.
      *
      * @param slot the slot number where the value is stored.

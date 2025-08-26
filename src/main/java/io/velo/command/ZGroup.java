@@ -49,15 +49,18 @@ public class ZGroup extends BaseCommand {
             try {
                 numKeys = Integer.parseInt(new String(numKeysBytes));
             } catch (NumberFormatException e) {
-                throw new ErrorReplyException(ErrorReply.NOT_INTEGER.getMessage());
+                return slotWithKeyHashList;
+//                throw new ErrorReplyException(ErrorReply.NOT_INTEGER.getMessage());
             }
 
             if (numKeys < 2) {
-                throw new ErrorReplyException(ErrorReply.INVALID_INTEGER.getMessage());
+                return slotWithKeyHashList;
+//                throw new ErrorReplyException(ErrorReply.INVALID_INTEGER.getMessage());
             }
 
             if (data.length < numKeys + 2) {
-                throw new ErrorReplyException(ErrorReply.SYNTAX.getMessage());
+                return slotWithKeyHashList;
+//                throw new ErrorReplyException(ErrorReply.SYNTAX.getMessage());
             }
 
             for (int i = 2; i < numKeys + 2; i++) {
@@ -83,15 +86,18 @@ public class ZGroup extends BaseCommand {
             try {
                 numKeys = Integer.parseInt(new String(numKeysBytes));
             } catch (NumberFormatException e) {
-                throw new ErrorReplyException(ErrorReply.NOT_INTEGER.getMessage());
+                return slotWithKeyHashList;
+//                throw new ErrorReplyException(ErrorReply.NOT_INTEGER.getMessage());
             }
 
             if (numKeys < 2) {
-                throw new ErrorReplyException(ErrorReply.INVALID_INTEGER.getMessage());
+                return slotWithKeyHashList;
+//                throw new ErrorReplyException(ErrorReply.INVALID_INTEGER.getMessage());
             }
 
             if (data.length < numKeys + 3) {
-                throw new ErrorReplyException(ErrorReply.SYNTAX.getMessage());
+                return slotWithKeyHashList;
+//                throw new ErrorReplyException(ErrorReply.SYNTAX.getMessage());
             }
 
             for (int i = 3; i < numKeys + 3; i++) {
@@ -358,8 +364,7 @@ public class ZGroup extends BaseCommand {
     private record Member(double score, String e) {
     }
 
-    @VisibleForTesting
-    Reply zadd() {
+    private Reply zadd() {
         if (data.length < 4) {
             return ErrorReply.FORMAT;
         }
@@ -506,8 +511,7 @@ public class ZGroup extends BaseCommand {
         return new IntegerReply(isIncludeCh ? changed + added : added);
     }
 
-    @VisibleForTesting
-    Reply zcard() {
+    private Reply zcard() {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }
@@ -531,8 +535,7 @@ public class ZGroup extends BaseCommand {
 
     private final static String negInf = "-inf";
 
-    @VisibleForTesting
-    Reply zcount(boolean byLex) {
+    private Reply zcount(boolean byLex) {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
         }
@@ -632,9 +635,9 @@ public class ZGroup extends BaseCommand {
         }
     }
 
-    private void operateZset(RedisZSet rz, ArrayList<RedisZSet> otherRzList, boolean isInter, boolean isUnion,
-                             boolean isAggregateSum, boolean isAggregateMin, boolean isAggregateMax,
-                             boolean isWeights, double[] weights) {
+    private ErrorReply operateZset(RedisZSet rz, ArrayList<RedisZSet> otherRzList, boolean isInter, boolean isUnion,
+                                   boolean isAggregateSum, boolean isAggregateMin, boolean isAggregateMax,
+                                   boolean isWeights, double[] weights) {
         if (isInter) {
             var memberMap = rz.getMemberMap();
 
@@ -700,7 +703,7 @@ public class ZGroup extends BaseCommand {
 
                         rz.add(memberScore, otherSv.member(), true, true);
                         if (rz.size() == RedisZSet.ZSET_MAX_SIZE) {
-                            throw new ErrorReplyException(ErrorReply.ZSET_SIZE_TO_LONG.getMessage());
+                            return ErrorReply.ZSET_SIZE_TO_LONG;
                         }
                     } else {
                         double memberScore = sv.score();
@@ -743,6 +746,7 @@ public class ZGroup extends BaseCommand {
                 }
             }
         }
+        return null;
     }
 
     @VisibleForTesting
@@ -776,8 +780,7 @@ public class ZGroup extends BaseCommand {
         return zdiff(dd, isInter, isUnion, dstKeyBytes);
     }
 
-    @VisibleForTesting
-    Reply zdiff(byte[][] dd, boolean isInter, boolean isUnion, byte[] dstKeyBytes) {
+    private Reply zdiff(byte[][] dd, boolean isInter, boolean isUnion, byte[] dstKeyBytes) {
         if (dd.length < 4) {
             return ErrorReply.FORMAT;
         }
@@ -904,9 +907,12 @@ public class ZGroup extends BaseCommand {
                 var otherRz = getRedisZSet(other.rawKey().getBytes(), other);
                 otherRzList.add(otherRz);
             }
-            operateZset(rz, otherRzList, isInter, isUnion,
+            var errorReply = operateZset(rz, otherRzList, isInter, isUnion,
                     isAggregateSum, isAggregateMin, isAggregateMax,
                     isWeights, weights);
+            if (errorReply != null) {
+                return errorReply;
+            }
 
             if (rz.isEmpty()) {
                 return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
@@ -957,9 +963,13 @@ public class ZGroup extends BaseCommand {
             for (var promise : promises) {
                 otherRzList.add(promise.getResult());
             }
-            operateZset(finalRz, otherRzList, isInter, isUnion,
+            var errorReply = operateZset(finalRz, otherRzList, isInter, isUnion,
                     finalIsAggregateSum, finalIsAggregateMin, finalIsAggregateMax,
                     finalIsWeights, finalWeights);
+            if (errorReply != null) {
+                finalPromise.set(errorReply);
+                return;
+            }
 
             if (finalRz.isEmpty()) {
                 finalPromise.set(doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY);
@@ -986,7 +996,7 @@ public class ZGroup extends BaseCommand {
         return asyncReply;
     }
 
-    Reply zincrby() {
+    private Reply zincrby() {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
         }
@@ -1031,8 +1041,7 @@ public class ZGroup extends BaseCommand {
         return new BulkReply(score);
     }
 
-    @VisibleForTesting
-    Reply zintercard() {
+    private Reply zintercard() {
         if (data.length < 4) {
             return ErrorReply.FORMAT;
         }
@@ -1187,8 +1196,7 @@ public class ZGroup extends BaseCommand {
         return asyncReply;
     }
 
-    @VisibleForTesting
-    Reply zmscore() {
+    private Reply zmscore() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -1227,8 +1235,7 @@ public class ZGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
-    Reply zpopmax(boolean isMin) {
+    private Reply zpopmax(boolean isMin) {
         if (data.length != 2 && data.length != 3) {
             return ErrorReply.FORMAT;
         }
@@ -1270,8 +1277,7 @@ public class ZGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
-    Reply zrandmember() {
+    private Reply zrandmember() {
         if (data.length < 2 || data.length > 4) {
             return ErrorReply.FORMAT;
         }
@@ -1355,8 +1361,7 @@ public class ZGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
-    Reply zrange(byte[][] dd) {
+    private Reply zrange(byte[][] dd) {
         return zrange(dd, null);
     }
 
@@ -1743,8 +1748,7 @@ public class ZGroup extends BaseCommand {
         }
     }
 
-    @VisibleForTesting
-    Reply zrank(boolean isReverse) {
+    private Reply zrank(boolean isReverse) {
         if (data.length != 3 && data.length != 4) {
             return ErrorReply.FORMAT;
         }
@@ -1787,8 +1791,7 @@ public class ZGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
-    Reply zrem() {
+    private Reply zrem() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -1999,8 +2002,7 @@ public class ZGroup extends BaseCommand {
         return removed == 0 ? IntegerReply.REPLY_0 : new IntegerReply(removed);
     }
 
-    @VisibleForTesting
-    Reply zscore() {
+    private Reply zscore() {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }
