@@ -9,7 +9,6 @@ import io.velo.CompressedValue;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.reply.*;
-import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -86,8 +85,7 @@ public class EGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply exists() {
+    private Reply exists() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -154,7 +152,6 @@ public class EGroup extends BaseCommand {
         return asyncReply;
     }
 
-    @VisibleForTesting
     Reply expire(boolean isAt, boolean isMilliseconds) {
         if (data.length != 3 && data.length != 4) {
             return ErrorReply.FORMAT;
@@ -219,7 +216,6 @@ public class EGroup extends BaseCommand {
         return IntegerReply.REPLY_1;
     }
 
-    @VisibleForTesting
     Reply expiretime(boolean isMilliseconds) {
         if (data.length != 2) {
             return ErrorReply.FORMAT;

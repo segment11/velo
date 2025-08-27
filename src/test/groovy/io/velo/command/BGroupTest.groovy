@@ -321,11 +321,7 @@ class BGroupTest extends Specification {
         reply == ErrorReply.SYNTAX
 
         when:
-        def data3 = new byte[3][]
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        data3[2] = '0'.bytes
-        bGroup.data = data3
-        reply = bGroup.bitcount()
+        reply = bGroup.execute('bitcount >key 0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
@@ -424,11 +420,7 @@ class BGroupTest extends Specification {
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        def data3 = new byte[3][]
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        data3[2] = '0'.bytes
-        bGroup.data = data3
-        reply = bGroup.bitpos()
+        reply = bGroup.execute('bitpos >key 0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
@@ -913,11 +905,7 @@ class BGroupTest extends Specification {
         reply instanceof ErrorReply
 
         when:
-        def data3 = new byte[4][]
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        data3[2] = '0'.bytes
-        bGroup.data = data3
-        reply = bGroup.blpop(true)
+        reply = bGroup.execute('blpop >key 0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 

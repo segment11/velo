@@ -18,6 +18,7 @@ import java.nio.ByteBuffer
 import java.time.Duration
 
 class DGroupTest extends Specification {
+    final short slot = 0
     def _DGroup = new DGroup(null, null, null)
 
     def 'test parse slot'() {
@@ -188,21 +189,14 @@ class DGroupTest extends Specification {
 
     def 'test debug'() {
         given:
-        final short slot = 0
-
-        def data3 = new byte[3][]
-        data3[1] = 'object'.bytes
-        data3[2] = 'key'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def dGroup = new DGroup('debug', data3, null)
+        def dGroup = new DGroup(null, null, null)
         dGroup.byPassGetSet = inMemoryGetSet
         dGroup.from(BaseCommand.mockAGroup())
 
         when:
-        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('debug', data3, dGroup.slotNumber)
-        def reply = dGroup.debug()
+        def reply = dGroup.execute('debug object key')
         then:
         reply == NilReply.INSTANCE
 
@@ -211,7 +205,7 @@ class DGroupTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_BYTE
         cv.compressedData = new byte[1]
         inMemoryGetSet.put(slot, 'key', 0, cv)
-        reply = dGroup.debug()
+        reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
         new String(((BulkReply) reply).raw).contains(':int')
@@ -219,114 +213,99 @@ class DGroupTest extends Specification {
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_DOUBLE
         cv.compressedData = new byte[8]
-        reply = dGroup.debug()
+        reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
         new String(((BulkReply) reply).raw).contains(':embstr')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
-        reply = dGroup.debug()
+        reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
         new String(((BulkReply) reply).raw).contains(':hashtable')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
-        reply = dGroup.debug()
+        reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
         new String(((BulkReply) reply).raw).contains(':quicklist')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
-        reply = dGroup.debug()
+        reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
         new String(((BulkReply) reply).raw).contains(':hashtable')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
-        reply = dGroup.debug()
+        reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
         new String(((BulkReply) reply).raw).contains(':ziplist')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_STREAM
-        reply = dGroup.debug()
+        reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
         new String(((BulkReply) reply).raw).contains(':stream')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
-        reply = dGroup.debug()
+        reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
         new String(((BulkReply) reply).raw).contains(':embstr')
 
         when:
         cv.dictSeqOrSpType = -200
-        reply = dGroup.debug()
+        reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
         new String(((BulkReply) reply).raw).contains(':unknown')
 
         when:
-        data3[1] = 'log'.bytes
-        data3[2] = 'test xxx'.bytes
-        reply = dGroup.debug()
+        reply = dGroup.execute('debug log test_xxx')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        data3[1] = '_'.bytes
-        reply = dGroup.debug()
+        reply = dGroup.execute('debug _ test_xxx')
         then:
         reply == NilReply.INSTANCE
     }
 
     def 'test del'() {
         given:
-        final short slot = 0
-
-        def data2 = new byte[2][]
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def dGroup = new DGroup('del', data2, null)
+        def dGroup = new DGroup(null, null, null)
         dGroup.byPassGetSet = inMemoryGetSet
         dGroup.from(BaseCommand.mockAGroup())
 
         when:
-        def data1 = new byte[1][]
-        dGroup.data = data1
-        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('del', data1, dGroup.slotNumber)
-        def reply = dGroup.del()
+        def reply = dGroup.execute('del')
         then:
         reply == ErrorReply.FORMAT
 
         when:
-        dGroup.data = data2
-        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('del', data2, dGroup.slotNumber)
-        reply = dGroup.del()
+        reply = dGroup.execute('del >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        data2[1] = 'a'.bytes
-        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('del', data2, dGroup.slotNumber)
-        reply = dGroup.del()
+        reply = dGroup.execute('del a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        reply = dGroup.del()
+        reply = dGroup.execute('del a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
@@ -345,14 +324,9 @@ class DGroupTest extends Specification {
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
         dGroup.crossRequestWorker = true
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'b'.bytes
-        dGroup.data = data3
-        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('del', data3, dGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.put(slot, 'b', 0, cv)
-        reply = dGroup.del()
+        reply = dGroup.execute('del a b')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -366,11 +340,7 @@ class DGroupTest extends Specification {
 
     def 'test dbsize'() {
         given:
-        final short slot = 0
-
-        def data1 = new byte[1][]
-
-        def dGroup = new DGroup('dbsize', data1, null)
+        def dGroup = new DGroup(null, null, null)
         dGroup.from(BaseCommand.mockAGroup())
 
         when:
@@ -386,7 +356,7 @@ class DGroupTest extends Specification {
                 .withCurrentThread()
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
-        def reply = dGroup.dbsize()
+        def reply = dGroup.execute('dbsize')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -400,8 +370,6 @@ class DGroupTest extends Specification {
 
     def 'test decr by'() {
         given:
-        final short slot = 0
-
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = '1'.bytes
@@ -486,8 +454,6 @@ class DGroupTest extends Specification {
 
     def 'test dump'() {
         given:
-        final short slot = 0
-
         def inMemoryGetSet = new InMemoryGetSet()
 
         def dGroup = new DGroup(null, null, null)
@@ -621,12 +587,7 @@ class DGroupTest extends Specification {
         reply == ErrorReply.DUMP_TYPE_NOT_SUPPORT
 
         when:
-        // keys too long
-        def data2 = new byte[2][]
-        data2[0] = 'dump'.bytes
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        dGroup.data = data2
-        reply = dGroup.dump()
+        reply = dGroup.execute('dump >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }

@@ -125,7 +125,7 @@ class GGroupTest extends Specification {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def gGroup = new GGroup('getbit', null, null)
+        def gGroup = new GGroup(null, null, null)
         gGroup.byPassGetSet = inMemoryGetSet
         gGroup.from(BaseCommand.mockAGroup())
 
@@ -169,11 +169,7 @@ class GGroupTest extends Specification {
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        def data3 = new byte[3][]
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        data3[2] = '0'.bytes
-        gGroup.data = data3
-        reply = gGroup.getbit()
+        reply = gGroup.execute('getbit >key 0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 

@@ -13,7 +13,6 @@ import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
 import io.velo.type.RedisList;
 import io.velo.type.RedisZSet;
-import org.jetbrains.annotations.VisibleForTesting;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -140,8 +139,7 @@ public class DGroup extends BaseCommand {
         return "refcount:1 encoding:" + encodingType + " serializedlength:" + cv.getCompressedLength();
     }
 
-    @VisibleForTesting
-    Reply debug() {
+    private Reply debug() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -187,8 +185,7 @@ public class DGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply del() {
+    private Reply del() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -255,8 +252,7 @@ public class DGroup extends BaseCommand {
         return asyncReply;
     }
 
-    @VisibleForTesting
-    Reply dbsize() {
+    private Reply dbsize() {
         // skip
         if (data.length == 2) {
             return ErrorReply.FORMAT;
@@ -268,7 +264,6 @@ public class DGroup extends BaseCommand {
         });
     }
 
-    @VisibleForTesting
     Reply decrBy(int by, double byFloat) {
         var keyBytes = data[1];
         if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
@@ -334,8 +329,7 @@ public class DGroup extends BaseCommand {
         return localPersist.getIsHashSaveMemberTogether();
     }
 
-    @VisibleForTesting
-    Reply dump() {
+    private Reply dump() {
         var keyBytes = data[1];
         if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
             return ErrorReply.KEY_TOO_LONG;

@@ -86,8 +86,7 @@ public class GGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply getbit() {
+    private Reply getbit() {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }

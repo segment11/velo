@@ -10,7 +10,6 @@ import io.velo.ConfForGlobal;
 import io.velo.reply.*;
 import io.velo.type.RedisBF;
 import io.velo.type.RedisBitSet;
-import org.jetbrains.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -135,8 +134,7 @@ public class BGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply bitcount() {
+    private Reply bitcount() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -205,8 +203,7 @@ public class BGroup extends BaseCommand {
         return new IntegerReply(count);
     }
 
-    @VisibleForTesting
-    Reply bitpos() {
+    private Reply bitpos() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -286,8 +283,7 @@ public class BGroup extends BaseCommand {
         return new IntegerReply(pos);
     }
 
-    @VisibleForTesting
-    Reply bf() {
+    private Reply bf() {
         // bf.***
         var bfCmdSuffix = cmd.substring(3);
 
@@ -751,8 +747,7 @@ public class BGroup extends BaseCommand {
     // max 1 hour check
     static final int MAX_TIMEOUT_SECONDS = 3600;
 
-    @VisibleForTesting
-    Reply blpop(boolean isLeft) {
+    private Reply blpop(boolean isLeft) {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
