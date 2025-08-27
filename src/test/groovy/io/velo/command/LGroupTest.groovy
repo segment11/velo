@@ -12,6 +12,7 @@ import io.velo.type.RedisList
 import spock.lang.Specification
 
 class LGroupTest extends Specification {
+    final short slot = 0
     def _LGroup = new LGroup(null, null, null)
 
     def 'test parse slot'() {
@@ -180,22 +181,15 @@ class LGroupTest extends Specification {
 
     def 'test lindex'() {
         given:
-        final short slot = 0
-
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = '0'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('lindex', data3, null)
+        def lGroup = new LGroup(null, null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lindex', data3, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = lGroup.lindex()
+        def reply = lGroup.execute('lindex a 0')
         then:
         reply == NilReply.INSTANCE
 
@@ -206,69 +200,54 @@ class LGroupTest extends Specification {
         rl.addFirst('a'.bytes)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = lGroup.lindex()
+        reply = lGroup.execute('lindex a 0')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == 'a'.bytes
 
         when:
-        data3[2] = '1'.bytes
-        reply = lGroup.lindex()
+        reply = lGroup.execute('lindex a 1')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        data3[2] = '-1'.bytes
-        reply = lGroup.lindex()
+        reply = lGroup.execute('lindex a -1')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == 'a'.bytes
 
         when:
-        data3[2] = '-2'.bytes
-        reply = lGroup.lindex()
+        reply = lGroup.execute('lindex a -2')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        data3[2] = RedisList.LIST_MAX_SIZE.toString().bytes
-        reply = lGroup.lindex()
+        reply = lGroup.execute('lindex a 65536')
         then:
         reply == ErrorReply.LIST_SIZE_TO_LONG
 
         when:
-        data3[2] = 'a'.bytes
-        reply = lGroup.lindex()
+        reply = lGroup.execute('lindex a a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = lGroup.lindex()
+        reply = lGroup.execute('lindex >key 1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test linsert'() {
         given:
-        final short slot = 0
-
-        def data5 = new byte[5][]
-        data5[1] = 'a'.bytes
-        data5[2] = 'after'.bytes
-        data5[3] = 'b'.bytes
-        data5[4] = 'c'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('linsert', data5, null)
+        def lGroup = new LGroup(null, null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('linsert', data5, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = lGroup.linsert()
+        def reply = lGroup.execute('linsert a after b c')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -279,7 +258,7 @@ class LGroupTest extends Specification {
         rl.addFirst('b'.bytes)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = lGroup.linsert()
+        reply = lGroup.execute('linsert a after b c')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
@@ -289,8 +268,7 @@ class LGroupTest extends Specification {
         rl.addFirst('b'.bytes)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        data5[2] = 'before'.bytes
-        reply = lGroup.linsert()
+        reply = lGroup.execute('linsert a before b c')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
@@ -299,55 +277,43 @@ class LGroupTest extends Specification {
         rl.removeFirst()
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = lGroup.linsert()
+        reply = lGroup.execute('linsert a before b c')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
-        data5[2] = 'xxx'.bytes
-        reply = lGroup.linsert()
+        reply = lGroup.execute('linsert a xxx b c')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data5[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = lGroup.linsert()
+        reply = lGroup.execute('linsert >key before b c')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data5[1] = 'a'.bytes
-        data5[3] = new byte[CompressedValue.VALUE_MAX_LENGTH + 1]
-        reply = lGroup.linsert()
+        reply = lGroup.execute('linsert a before >value c')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
 
         when:
-        data5[3] = 'b'.bytes
-        data5[4] = new byte[CompressedValue.VALUE_MAX_LENGTH + 1]
-        reply = lGroup.linsert()
+        reply = lGroup.execute('linsert a before b >value')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
     }
 
     def 'test llen'() {
         given:
-        final short slot = 0
-
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('llen', data2, null)
+        def lGroup = new LGroup(null, null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('llen', data2, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = lGroup.llen()
+        def reply = lGroup.execute('llen a')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -358,39 +324,29 @@ class LGroupTest extends Specification {
         rl.addFirst('a'.bytes)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = lGroup.llen()
+        reply = lGroup.execute('llen a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = lGroup.llen()
+        reply = lGroup.execute('llen >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test lmove'() {
         given:
-        final short slot = 0
-
-        def data5 = new byte[5][]
-        data5[1] = 'a'.bytes
-        data5[2] = 'b'.bytes
-        data5[3] = 'left'.bytes
-        data5[4] = 'left'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('lmove', data5, null)
+        def lGroup = new LGroup(null, null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lmove', data5, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
-        def reply = lGroup.lmove()
+        def reply = lGroup.execute('lmove a b left left')
         then:
         reply == NilReply.INSTANCE
 
@@ -408,7 +364,7 @@ class LGroupTest extends Specification {
         rl1.addFirst('b'.bytes)
         cv1.compressedData = rl1.encode()
         inMemoryGetSet.put(slot, 'b', 0, cv1)
-        reply = lGroup.lmove()
+        reply = lGroup.execute('lmove a b left left')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == 'a'.bytes
@@ -416,9 +372,7 @@ class LGroupTest extends Specification {
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
         inMemoryGetSet.put(slot, 'b', 0, cv1)
-        data5[3] = 'left'.bytes
-        data5[4] = 'right'.bytes
-        reply = lGroup.lmove()
+        reply = lGroup.execute('lmove a b left right')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == 'a'.bytes
@@ -426,9 +380,7 @@ class LGroupTest extends Specification {
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
         inMemoryGetSet.put(slot, 'b', 0, cv1)
-        data5[3] = 'right'.bytes
-        data5[4] = 'left'.bytes
-        reply = lGroup.lmove()
+        reply = lGroup.execute('lmove a b right left')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == 'a'.bytes
@@ -436,36 +388,28 @@ class LGroupTest extends Specification {
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
         inMemoryGetSet.put(slot, 'b', 0, cv1)
-        data5[3] = 'right'.bytes
-        data5[4] = 'right'.bytes
-        reply = lGroup.lmove()
+        reply = lGroup.execute('lmove a b right right')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == 'a'.bytes
 
         when:
-        data5[3] = 'xxx'.bytes
-        reply = lGroup.lmove()
+        reply = lGroup.execute('lmove a b xxx right')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data5[3] = 'left'.bytes
-        data5[4] = 'xxx'.bytes
-        reply = lGroup.lmove()
+        reply = lGroup.execute('lmove a b left xxx')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data5[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = lGroup.lmove()
+        reply = lGroup.execute('lmove >key b left left')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data5[1] = 'a'.bytes
-        data5[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = lGroup.lmove()
+        reply = lGroup.execute('lmove a >key left left')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
@@ -476,25 +420,19 @@ class LGroupTest extends Specification {
 
         when:
         inMemoryGetSet.remove(slot, 'a')
-        def data6 = new byte[6][]
-        data6[1] = 'a'.bytes
-        data6[2] = 'b'.bytes
-        data6[3] = 'left'.bytes
-        data6[4] = 'left'.bytes
-        data6[5] = '0'.bytes
-        lGroup.data = data6
+        lGroup.execute('lmove a b left left 0')
         reply = lGroup.lmove(true)
         then:
         reply == NilReply.INSTANCE
 
         when:
-        data6[5] = 'a'.bytes
+        lGroup.data[5] = 'a'.bytes
         reply = lGroup.lmove(true)
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data6[5] = '3601'.bytes
+        lGroup.data[5] = '3601'.bytes
         reply = lGroup.lmove(true)
         then:
         reply instanceof ErrorReply
@@ -502,22 +440,18 @@ class LGroupTest extends Specification {
 
     def 'test lpop'() {
         given:
-        final short slot = 0
-
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
         def socket = SocketInspectorTest.mockTcpSocket()
 
-        def lGroup = new LGroup('lpop', data2, socket)
+        def lGroup = new LGroup(null, null, socket)
+        def rGroup = new RGroup(null, null, socket)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
+        rGroup.from(lGroup)
 
         when:
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lpop', data2, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = lGroup.lpop(true)
+        def reply = lGroup.execute('lpop a')
         then:
         reply == NilReply.INSTANCE
 
@@ -528,13 +462,13 @@ class LGroupTest extends Specification {
         rl.addFirst('a'.bytes)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = lGroup.lpop(true)
+        reply = lGroup.execute('lpop a')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == 'a'.bytes
 
         when:
-        reply = lGroup.lpop(true)
+        reply = lGroup.execute('lpop a')
         then:
         reply == NilReply.INSTANCE
 
@@ -545,11 +479,7 @@ class LGroupTest extends Specification {
         }
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = '2'.bytes
-        lGroup.data = data3
-        reply = lGroup.lpop(false)
+        reply = rGroup.execute('rpop a 2')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -561,43 +491,34 @@ class LGroupTest extends Specification {
         resetRedisList(rl, 0)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        lGroup.data = data3
-        reply = lGroup.lpop(false)
+        reply = rGroup.execute('rpop a 2')
         then:
         reply == MultiBulkReply.NULL
 
         when:
-        // without count
-        lGroup.data = data2
-        reply = lGroup.lpop(true)
+        reply = lGroup.execute('lpop a')
         then:
         reply == NilReply.INSTANCE
 
         when:
         inMemoryGetSet.remove(slot, 'a')
-        // with count
-        lGroup.data = data3
-        reply = lGroup.lpop(false)
+        reply = rGroup.execute('rpop a 2')
         then:
         reply == MultiBulkReply.NULL
 
         when:
         SocketInspector.setResp3(socket, true)
-        reply = lGroup.lpop(false)
+        reply = rGroup.execute('rpop a 2')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        // without count
-        lGroup.data = data2
-        reply = lGroup.lpop(true)
+        reply = lGroup.execute('lpop a')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        data3[2] = '-1'.bytes
-        lGroup.data = data3
-        reply = lGroup.lpop(true)
+        reply = lGroup.execute('lpop a -1')
         then:
         reply == ErrorReply.RANGE_OUT_OF_INDEX
 
@@ -605,42 +526,32 @@ class LGroupTest extends Specification {
         rl.addFirst('a'.bytes)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        data3[2] = '0'.bytes
-        reply = lGroup.lpop(true)
+        reply = lGroup.execute('lpop a 0')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        data3[2] = 'a'.bytes
-        reply = lGroup.lpop(true)
+        reply = lGroup.execute('lpop a a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = lGroup.lpop(true)
+        reply = lGroup.execute('lpop >key 0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test lpos'() {
         given:
-        final short slot = 0
-
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('lpos', data3, null)
+        def lGroup = new LGroup(null, null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lpos', data3, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = lGroup.lpos()
+        def reply = lGroup.execute('lpos a a')
         then:
         reply == NilReply.INSTANCE
 
@@ -651,29 +562,18 @@ class LGroupTest extends Specification {
         rl.addFirst('a'.bytes)
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
-        data3[2] = 'b'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a b')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        def data9 = new byte[9][]
-        data9[1] = 'a'.bytes
-        data9[2] = 'a'.bytes
-        data9[3] = 'rank'.bytes
-        data9[4] = '-1'.bytes
-        data9[5] = 'count'.bytes
-        data9[6] = '1'.bytes
-        data9[7] = 'maxlen'.bytes
-        data9[8] = '0'.bytes
-        lGroup.data = data9
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a a rank -1 count 1 maxlen 0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
@@ -688,41 +588,30 @@ class LGroupTest extends Specification {
         }
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        // member
-        data9[2] = '5'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a 5 rank -1 count 1 maxlen 0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 15
 
         when:
-        // rank
-        data9[4] = '2'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a 5 rank 2 count 1 maxlen 0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 15
 
         when:
         // maxlen
-        data9[8] = '10'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a 5 rank 2 count 1 maxlen 10')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        // count
-        data9[6] = '2'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a 5 rank 2 count 2 maxlen 10')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        // rank
-        data9[4] = '1'.bytes
-        // maxlen
-        data9[8] = '0'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a 5 rank 1 count 2 maxlen 0')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -732,9 +621,7 @@ class LGroupTest extends Specification {
         ((IntegerReply) ((MultiBulkReply) reply).replies[1]).integer == 15
 
         when:
-        // rank
-        data9[4] = '-1'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a 5 rank -1 count 2 maxlen 0')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -744,116 +631,86 @@ class LGroupTest extends Specification {
         ((IntegerReply) ((MultiBulkReply) reply).replies[1]).integer == 5
 
         when:
-        // count
-        data9[6] = '0'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a 5 rank -1 count 0 maxlen 0')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
 
         when:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'a'.bytes
-        data4[3] = 'rank'.bytes
-        lGroup.data = data4
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a 5 rank')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data4[3] = 'count'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a 5 count')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data4[3] = 'maxlen'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a 5 maxlen')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        def data5 = new byte[5][]
-        data5[1] = 'a'.bytes
-        data5[2] = 'a'.bytes
-        data5[3] = 'rank'.bytes
-        data5[4] = 'a'.bytes
-        lGroup.data = data5
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a a rank a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data5[3] = 'count'.bytes
-        data5[4] = 'a'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a a count a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data5[3] = 'maxlen'.bytes
-        data5[4] = 'a'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a a maxlen a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data5[4] = '-1'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a a maxlen -1')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data5[3] = 'count'.bytes
-        data5[4] = '-1'.bytes
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a a count -1')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data5[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos >key a count -1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data5[1] = 'a'.bytes
-        data5[2] = new byte[CompressedValue.VALUE_MAX_LENGTH + 1]
-        reply = lGroup.lpos()
+        reply = lGroup.execute('lpos a >value count -1')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
     }
 
     def 'test lpush'() {
         given:
-        final short slot = 0
-
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('lpush', data3, null)
+        def lGroup = new LGroup(null, null, null)
+        def rGroup = new RGroup(null, null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
+        rGroup.from(lGroup)
 
         when:
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lpush', data3, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = lGroup.lpush(true, true)
+        def reply = lGroup.execute('lpushx a a')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        reply = lGroup.lpush(true, false)
+        reply = lGroup.execute('lpush a a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        reply = lGroup.lpush(false, false)
+        reply = rGroup.execute('rpush a a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
@@ -862,7 +719,7 @@ class LGroupTest extends Specification {
         BlockingList.clearBlockingListPromisesForAllKeys()
         SettablePromise<Reply> finalPromise = new SettablePromise<>()
         BlockingList.addBlockingListPromiseByKey('a', finalPromise, true)
-        reply = lGroup.lpush(true, false)
+        reply = lGroup.execute('lpush a a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 3
@@ -872,7 +729,7 @@ class LGroupTest extends Specification {
         BlockingList.clearBlockingListPromisesForAllKeys()
         SettablePromise<Reply> finalPromise2 = new SettablePromise<>()
         BlockingList.addBlockingListPromiseByKey('a', finalPromise2, true)
-        reply = lGroup.lpush(false, false)
+        reply = rGroup.execute('rpush a a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 3
@@ -883,7 +740,7 @@ class LGroupTest extends Specification {
         SettablePromise<Reply> finalPromise3 = new SettablePromise<>()
         BlockingList.addBlockingListPromiseByKey('a', finalPromise3, true)
         inMemoryGetSet.remove(slot, 'a')
-        reply = lGroup.lpush(true, false)
+        reply = lGroup.execute('lpush a a')
         then:
         reply == IntegerReply.REPLY_1
         finalPromise3.isComplete()
@@ -892,14 +749,7 @@ class LGroupTest extends Specification {
         BlockingList.clearBlockingListPromisesForAllKeys()
         SettablePromise<Reply> finalPromise4 = new SettablePromise<>()
         BlockingList.addBlockingListPromiseByKey('a', finalPromise4, false)
-        // lpush a a b c
-        def data5 = new byte[5][]
-        data5[1] = 'a'.bytes
-        data5[2] = 'a'.bytes
-        data5[3] = 'b'.bytes
-        data5[4] = 'c'.bytes
-        lGroup.data = data5
-        reply = lGroup.lpush(true, false)
+        reply = lGroup.execute('lpush a a b c')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 3
@@ -911,7 +761,7 @@ class LGroupTest extends Specification {
         BlockingList.clearBlockingListPromisesForAllKeys()
         SettablePromise<Reply> finalPromise5 = new SettablePromise<>()
         BlockingList.addBlockingListPromiseByKey('a', finalPromise5, true)
-        reply = lGroup.lpush(false, false)
+        reply = rGroup.execute('rpush a a b c')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 3 - 1 + 3
@@ -928,32 +778,26 @@ class LGroupTest extends Specification {
         }
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        lGroup.data = data3
-        reply = lGroup.lpush(true, false)
+        reply = lGroup.execute('lpush a a')
         then:
         reply == ErrorReply.LIST_SIZE_TO_LONG
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = lGroup.lpush(true, false)
+        reply = lGroup.execute('lpush >key a b c')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data3[1] = 'a'.bytes
-        data3[2] = new byte[CompressedValue.VALUE_MAX_LENGTH + 1]
-        reply = lGroup.lpush(true, false)
+        reply = lGroup.execute('lpush a >value b c')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
     }
 
     def 'test lrange'() {
         given:
-        final short slot = 0
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('lrange', null, null)
+        def lGroup = new LGroup(null, null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
@@ -988,34 +832,22 @@ class LGroupTest extends Specification {
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        def data4 = new byte[4][]
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        lGroup.data = data4
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lrange', data4, lGroup.slotNumber)
-        reply = lGroup.lrange()
+        reply = lGroup.execute('lrange >key a 1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test lrem'() {
         given:
-        final short slot = 0
-
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '1'.bytes
-        data4[3] = '0'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('lrem', data4, null)
+        def lGroup = new LGroup(null, null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lrem', data4, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = lGroup.lrem()
+        def reply = lGroup.execute('lrem a 1 0')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1031,79 +863,62 @@ class LGroupTest extends Specification {
         }
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = lGroup.lrem()
+        reply = lGroup.execute('lrem a 1 0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        data4[2] = '-1'.bytes
-        reply = lGroup.lrem()
+        reply = lGroup.execute('lrem a -1 0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        reply = lGroup.lrem()
+        reply = lGroup.execute('lrem a -1 0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
-        data4[2] = '0'.bytes
-        data4[3] = '1'.bytes
-        reply = lGroup.lrem()
+        reply = lGroup.execute('lrem a 0 1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        data4[2] = '3'.bytes
-        data4[3] = '2'.bytes
-        reply = lGroup.lrem()
+        reply = lGroup.execute('lrem a 3 2')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        data4[2] = 'a'.bytes
-        reply = lGroup.lrem()
+        reply = lGroup.execute('lrem a a 2')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = lGroup.lrem()
+        reply = lGroup.execute('lrem >key 3 2')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[1] = 'a'.bytes
-        data4[3] = new byte[CompressedValue.VALUE_MAX_LENGTH + 1]
-        reply = lGroup.lrem()
+        reply = lGroup.execute('lrem a 3 >value')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
     }
 
     def 'test lset'() {
         given:
-        final short slot = 0
-
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '1'.bytes
-        data4[3] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('lset', data4, null)
+        def lGroup = new LGroup(null, null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
         when:
-        lGroup.slotWithKeyHashListParsed = _LGroup.parseSlots('lset', data4, lGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = lGroup.lset()
+        def reply = lGroup.execute('lset a 1 a')
         then:
         reply == ErrorReply.NO_SUCH_KEY
 
@@ -1116,56 +931,48 @@ class LGroupTest extends Specification {
         }
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = lGroup.lset()
+        reply = lGroup.execute('lset a 1 a')
         then:
         reply == OKReply.INSTANCE
 
         when:
         // set again, not change
-        reply = lGroup.lset()
+        reply = lGroup.execute('lset a 1 a')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        data4[2] = '-1'.bytes
-        reply = lGroup.lset()
+        reply = lGroup.execute('lset a -1 a')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        data4[2] = '-11'.bytes
-        reply = lGroup.lset()
+        reply = lGroup.execute('lset a -11 a')
         then:
         reply == ErrorReply.INDEX_OUT_OF_RANGE
 
         when:
-        data4[2] = '10'.bytes
-        reply = lGroup.lset()
+        reply = lGroup.execute('lset a 10 a')
         then:
         reply == ErrorReply.INDEX_OUT_OF_RANGE
 
         when:
-        data4[2] = RedisList.LIST_MAX_SIZE.toString().bytes
-        reply = lGroup.lset()
+        reply = lGroup.execute('lset a 65536 a')
         then:
         reply == ErrorReply.LIST_SIZE_TO_LONG
 
         when:
-        data4[2] = 'a'.bytes
-        reply = lGroup.lset()
+        reply = lGroup.execute('lset a a a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = lGroup.lset()
+        reply = lGroup.execute('lset >key 1 a')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[1] = 'a'.bytes
-        data4[3] = new byte[CompressedValue.VALUE_MAX_LENGTH + 1]
-        reply = lGroup.lset()
+        reply = lGroup.execute('lset a 1 >value')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
     }
@@ -1181,11 +988,9 @@ class LGroupTest extends Specification {
 
     def 'test ltrim'() {
         given:
-        final short slot = 0
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def lGroup = new LGroup('ltrim', null, null)
+        def lGroup = new LGroup(null, null, null)
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
@@ -1242,13 +1047,7 @@ class LGroupTest extends Specification {
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '0'.bytes
-        data4[3] = '9'.bytes
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        lGroup.data = data4
-        reply = lGroup.ltrim()
+        reply = lGroup.execute('ltrim >key 0 9')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }

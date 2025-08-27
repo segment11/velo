@@ -4,7 +4,6 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.*;
 import io.velo.reply.*;
 import io.velo.type.RedisList;
-import org.jetbrains.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -109,8 +108,7 @@ public class LGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply lindex() {
+    private Reply lindex() {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }
@@ -245,8 +243,7 @@ public class LGroup extends BaseCommand {
         saveRedisList(rl, keyBytes, slotWithKeyHash, this, dictMap);
     }
 
-    @VisibleForTesting
-    Reply linsert() {
+    private Reply linsert() {
         if (data.length != 5) {
             return ErrorReply.FORMAT;
         }
@@ -278,8 +275,7 @@ public class LGroup extends BaseCommand {
         return addToList(keyBytes, valueBytesArr, false, true, isBefore, pivotBytes, false);
     }
 
-    @VisibleForTesting
-    Reply llen() {
+    private Reply llen() {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }
@@ -300,12 +296,10 @@ public class LGroup extends BaseCommand {
         return new IntegerReply(size);
     }
 
-    @VisibleForTesting
-    Reply lmove() {
+    private Reply lmove() {
         return lmove(false);
     }
 
-    @VisibleForTesting
     Reply lmove(boolean isBlock) {
         if (!isBlock && data.length != 5) {
             return ErrorReply.FORMAT;
@@ -366,7 +360,6 @@ public class LGroup extends BaseCommand {
         }
     }
 
-    @VisibleForTesting
     Reply lpop(boolean popFirst) {
         if (data.length != 2 && data.length != 3) {
             return ErrorReply.FORMAT;
@@ -433,8 +426,7 @@ public class LGroup extends BaseCommand {
         return new MultiBulkReply(arr);
     }
 
-    @VisibleForTesting
-    Reply lpos() {
+    private Reply lpos() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -562,7 +554,6 @@ public class LGroup extends BaseCommand {
         return new MultiBulkReply(arr);
     }
 
-    @VisibleForTesting
     Reply lpush(boolean addFirst, boolean needKeyExist) {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
@@ -610,8 +601,7 @@ public class LGroup extends BaseCommand {
         }
     }
 
-    @VisibleForTesting
-    Reply lrange() {
+    private Reply lrange() {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
         }
@@ -659,8 +649,7 @@ public class LGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
-    Reply lrem() {
+    private Reply lrem() {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
         }
@@ -714,8 +703,7 @@ public class LGroup extends BaseCommand {
         return new IntegerReply(removed);
     }
 
-    @VisibleForTesting
-    Reply lset() {
+    private Reply lset() {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
         }
@@ -766,8 +754,7 @@ public class LGroup extends BaseCommand {
         return OKReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply ltrim() {
+    private Reply ltrim() {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
         }

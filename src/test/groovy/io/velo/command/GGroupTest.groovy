@@ -181,25 +181,21 @@ class GGroupTest extends Specification {
 
     def 'test getdel'() {
         given:
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def gGroup = new GGroup('getdel', data2, null)
+        def gGroup = new GGroup(null, null, null)
         gGroup.byPassGetSet = inMemoryGetSet
         gGroup.from(BaseCommand.mockAGroup())
 
         when:
-        gGroup.slotWithKeyHashListParsed = _GGroup.parseSlots('getdel', data2, gGroup.slotNumber)
-        def reply = gGroup.getdel()
+        def reply = gGroup.execute('getdel a')
         then:
         reply == NilReply.INSTANCE
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = gGroup.getdel()
+        reply = gGroup.execute('getdel a')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == cv.compressedData
@@ -207,114 +203,86 @@ class GGroupTest extends Specification {
 
     def 'test getex'() {
         given:
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def gGroup = new GGroup('getex', data2, null)
+        def gGroup = new GGroup(null, null, null)
         gGroup.byPassGetSet = inMemoryGetSet
         gGroup.from(BaseCommand.mockAGroup())
 
         when:
-        gGroup.slotWithKeyHashListParsed = _GGroup.parseSlots('getex', data2, gGroup.slotNumber)
-        def reply = gGroup.getex()
+        def reply = gGroup.execute('getex a')
         then:
         reply == NilReply.INSTANCE
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = gGroup.getex()
+        reply = gGroup.execute('getex a')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == cv.compressedData
 
         when:
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = gGroup.getex()
+        reply = gGroup.execute('getex >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'persist'.bytes
-        gGroup.data = data3
         cv.expireAt = System.currentTimeMillis() + 1000 * 60
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = gGroup.getex()
+        reply = gGroup.execute('getex a persist')
         def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt == CompressedValue.NO_EXPIRE
 
         when:
-        data3[2] = 'persist_'.bytes
-        reply = gGroup.getex()
+        reply = gGroup.execute('getex a persist_')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'ex'.bytes
-        data4[3] = '60'.bytes
-        gGroup.data = data4
-        reply = gGroup.getex()
+        reply = gGroup.execute('getex a ex 60')
         bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt > System.currentTimeMillis()
 
         when:
-        data4[3] = 'a'.bytes
-        reply = gGroup.getex()
+        reply = gGroup.execute('getex a ex a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data4[3] = '-1'.bytes
-        reply = gGroup.getex()
+        reply = gGroup.execute('getex a ex -1')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data4[2] = 'px'.bytes
-        data4[3] = '60000'.bytes
-        reply = gGroup.getex()
+        reply = gGroup.execute('getex a px 60000')
         bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt > System.currentTimeMillis()
 
         when:
-        data4[2] = 'pxat'.bytes
-        data4[3] = (System.currentTimeMillis() + 1000 * 60).toString().bytes
-        reply = gGroup.getex()
+        def pxatStr = (System.currentTimeMillis() + 1000 * 60).toString()
+        reply = gGroup.execute('getex a pxat ' + pxatStr)
         bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
         then:
-        bufOrCv.cv().expireAt.toString().bytes == data4[3]
+        bufOrCv.cv().expireAt.toString().bytes == pxatStr.bytes
 
         when:
-        data4[2] = 'exat'.bytes
-        data4[3] = ((System.currentTimeMillis() / 1000).intValue() + 60).toString().bytes
-        reply = gGroup.getex()
+        def exatStr = ((System.currentTimeMillis() / 1000).intValue() + 60).toString()
+        reply = gGroup.execute('getex a exat ' + exatStr)
         bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt > System.currentTimeMillis()
 
         when:
-        data4[2] = 'xx'.bytes
-        reply = gGroup.getex()
+        reply = gGroup.execute('getex a xx 60000')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        def data5 = new byte[5][]
-        data5[1] = 'a'.bytes
-        data5[2] = 'ex'.bytes
-        data5[3] = '60'.bytes
-        data5[4] = 'xx'.bytes
-        gGroup.data = data5
-        reply = gGroup.getex()
+        reply = gGroup.execute('getex a ex 60 xx')
         then:
         reply == ErrorReply.FORMAT
     }

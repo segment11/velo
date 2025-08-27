@@ -370,40 +370,31 @@ class DGroupTest extends Specification {
 
     def 'test decr by'() {
         given:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = '1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def dGroup = new DGroup('decrby', data3, null)
+        def dGroup = new DGroup(null, null, null)
         dGroup.byPassGetSet = inMemoryGetSet
         dGroup.from(BaseCommand.mockAGroup())
 
         when:
-        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data3, dGroup.slotNumber)
         def cv = new CompressedValue()
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_BYTE
         // 0
         cv.compressedData = new byte[1]
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        def reply = dGroup.decrBy(1, 0)
+        def reply = dGroup.execute('decrby a 1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == -1
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data3, dGroup.slotNumber)
-        reply = dGroup.decrBy(1, 0)
+        reply = dGroup.execute('decrby >key 1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data3[1] = 'a'.bytes
-        dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data3, dGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        reply = dGroup.decrBy(1, 0)
+        reply = dGroup.execute('decrby a 1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == -1
@@ -411,21 +402,21 @@ class DGroupTest extends Specification {
         when:
         cv.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = dGroup.decrBy(1, 0)
+        reply = dGroup.execute('decrby a 1')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = dGroup.decrBy(1, 0)
+        reply = dGroup.execute('decrby a 1')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
         cv.compressedData = '1234'.bytes
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = dGroup.decrBy(1, 0)
+        reply = dGroup.execute('decrby a 1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1233
@@ -437,7 +428,7 @@ class DGroupTest extends Specification {
         ByteBuffer.wrap(doubleBytes).putDouble(1.1)
         cv.compressedData = doubleBytes
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = dGroup.decrBy(0, 1)
+        reply = dGroup.execute('decrbyfloat a 1')
         then:
         reply instanceof DoubleReply
         ((DoubleReply) reply).doubleValue() == 0.1d
@@ -446,7 +437,7 @@ class DGroupTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
         cv.compressedData = '1.1'.bytes
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = dGroup.decrBy(0, 1)
+        reply = dGroup.execute('decrbyfloat a 1')
         then:
         reply instanceof DoubleReply
         ((DoubleReply) reply).doubleValue() == 0.1d

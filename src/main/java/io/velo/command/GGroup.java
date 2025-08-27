@@ -124,8 +124,7 @@ public class GGroup extends BaseCommand {
         return bs.get(offset) ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
     }
 
-    @VisibleForTesting
-    Reply getdel() {
+    private Reply getdel() {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }
@@ -141,8 +140,7 @@ public class GGroup extends BaseCommand {
         }
     }
 
-    @VisibleForTesting
-    Reply getex() {
+    private Reply getex() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -224,7 +222,6 @@ public class GGroup extends BaseCommand {
 
     private final static Reply BLANK_REPLY = new BulkReply(new byte[0]);
 
-    @VisibleForTesting
     Reply getrange() {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
@@ -260,8 +257,7 @@ public class GGroup extends BaseCommand {
         return new BulkReply(subBytes);
     }
 
-    @VisibleForTesting
-    Reply getset() {
+    private Reply getset() {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }
