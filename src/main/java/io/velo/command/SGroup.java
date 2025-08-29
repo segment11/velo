@@ -221,8 +221,7 @@ public class SGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply save() {
+    private Reply save() {
         if (!ConfForGlobal.pureMemory) {
             return OKReply.INSTANCE;
         }
@@ -408,7 +407,6 @@ public class SGroup extends BaseCommand {
 
     public static final Pattern IPv4_PATTERN = Pattern.compile(IPV4_REGEX);
 
-    @VisibleForTesting
     Reply slaveof() {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
@@ -467,7 +465,6 @@ public class SGroup extends BaseCommand {
         return asyncReply;
     }
 
-    @VisibleForTesting
     Reply set(byte[][] dd) {
         if (dd.length < 3) {
             return ErrorReply.FORMAT;
@@ -599,8 +596,7 @@ public class SGroup extends BaseCommand {
         return OKReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply setbit() {
+    private Reply setbit() {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
         }
@@ -652,8 +648,7 @@ public class SGroup extends BaseCommand {
         return result.isOldBit1() ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
     }
 
-    @VisibleForTesting
-    Reply setrange() {
+    private Reply setrange() {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
         }
@@ -711,8 +706,7 @@ public class SGroup extends BaseCommand {
         return new IntegerReply(lengthResult);
     }
 
-    @VisibleForTesting
-    Reply strlen() {
+    private Reply strlen() {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }
@@ -732,8 +726,7 @@ public class SGroup extends BaseCommand {
         }
     }
 
-    @VisibleForTesting
-    Reply select() {
+    private Reply select() {
         return OKReply.INSTANCE;
     }
 
@@ -765,8 +758,7 @@ public class SGroup extends BaseCommand {
         saveRedisSet(rhk, keyBytes, slotWithKeyHash, this, dictMap);
     }
 
-    @VisibleForTesting
-    Reply sadd() {
+    private Reply sadd() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -807,8 +799,7 @@ public class SGroup extends BaseCommand {
         return new IntegerReply(added);
     }
 
-    @VisibleForTesting
-    Reply scard() {
+    private Reply scard() {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }
@@ -828,7 +819,6 @@ public class SGroup extends BaseCommand {
         return new IntegerReply(size);
     }
 
-    @VisibleForTesting
     private void operateSet(TreeSet<String> set, ArrayList<RedisHashKeys> otherRhkList, boolean isInter, boolean isUnion) {
         for (var otherRhk : otherRhkList) {
             if (otherRhk != null) {
@@ -1062,8 +1052,7 @@ public class SGroup extends BaseCommand {
         return asyncReply;
     }
 
-    @VisibleForTesting
-    Reply sintercard() {
+    private Reply sintercard() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -1188,8 +1177,7 @@ public class SGroup extends BaseCommand {
         return asyncReply;
     }
 
-    @VisibleForTesting
-    Reply sismember() {
+    private Reply sismember() {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }
@@ -1222,8 +1210,7 @@ public class SGroup extends BaseCommand {
         return isMemberArray[0] ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
     }
 
-    @VisibleForTesting
-    Reply smembers() {
+    private Reply smembers() {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }
@@ -1253,8 +1240,7 @@ public class SGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
-    Reply smismember() {
+    private Reply smismember() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -1290,8 +1276,7 @@ public class SGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
-    Reply sort(boolean canDoStore) {
+    private Reply sort(boolean canDoStore) {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -1600,8 +1585,7 @@ public class SGroup extends BaseCommand {
         }
     }
 
-    @VisibleForTesting
-    Reply smove() {
+    private Reply smove() {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
         }
@@ -1667,8 +1651,7 @@ public class SGroup extends BaseCommand {
         return asyncReply;
     }
 
-    @VisibleForTesting
-    Reply srandmember(boolean doPop) {
+    private Reply srandmember(boolean doPop) {
         if (data.length != 2 && data.length != 3) {
             return ErrorReply.FORMAT;
         }
@@ -1747,8 +1730,7 @@ public class SGroup extends BaseCommand {
         }
     }
 
-    @VisibleForTesting
-    Reply srem() {
+    private Reply srem() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -1788,7 +1770,6 @@ public class SGroup extends BaseCommand {
         return new IntegerReply(removed);
     }
 
-    @VisibleForTesting
     Reply subscribe(boolean isPattern) {
         if (data.length < 2) {
             return ErrorReply.FORMAT;

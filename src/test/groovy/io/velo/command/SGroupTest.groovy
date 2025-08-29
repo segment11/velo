@@ -185,7 +185,7 @@ sunionstore
 
         when:
         ConfForGlobal.pureMemory = false
-        def reply = sGroup.save()
+        def reply = sGroup.execute('save')
         then:
         reply == OKReply.INSTANCE
 
@@ -194,7 +194,7 @@ sunionstore
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        reply = sGroup.save()
+        reply = sGroup.execute('save')
         then:
         reply instanceof AsyncReply
         ((AsyncReply) reply).settablePromise.whenResult { result ->
@@ -427,20 +427,15 @@ sunionstore
 
     def 'test set'() {
         given:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'value'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('set', data3, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('set', data3, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = sGroup.set(data3)
+        def reply = sGroup.execute('set a value')
         def slotWithKeyHash = sGroup.slotWithKeyHashListParsed[0]
         then:
         reply == OKReply.INSTANCE
@@ -448,57 +443,48 @@ sunionstore
                 .cv().compressedData == 'value'.bytes
 
         when:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'value'.bytes
-        data4[3] = 'nx'.bytes
-        sGroup.data = data4
         inMemoryGetSet.remove(slot, 'a')
-        reply = sGroup.set(data4)
+        reply = sGroup.execute('set a value nx')
         then:
         reply == OKReply.INSTANCE
 
         when:
         // set nx again
-        reply = sGroup.set(data4)
+        reply = sGroup.execute('set a value nx')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        data4[3] = 'xx'.bytes
-        reply = sGroup.set(data4)
+        reply = sGroup.execute('set a value xx')
         then:
         reply == OKReply.INSTANCE
 
         when:
         inMemoryGetSet.remove(slot, 'a')
-        data4[3] = 'xx'.bytes
-        reply = sGroup.set(data4)
+        reply = sGroup.execute('set a value xx')
         then:
         reply == NilReply.INSTANCE
 
         when:
         inMemoryGetSet.remove(slot, 'a')
-        data4[3] = 'keepttl'.bytes
-        reply = sGroup.set(data4)
+        reply = sGroup.execute('set a value keepttl')
         then:
         reply == OKReply.INSTANCE
 
         when:
         // keepttl set again
-        reply = sGroup.set(data4)
+        reply = sGroup.execute('set a value keepttl')
         then:
         reply == OKReply.INSTANCE
 
         when:
         inMemoryGetSet.remove(slot, 'a')
-        data4[3] = 'get'.bytes
-        reply = sGroup.set(data4)
+        reply = sGroup.execute('set a value get')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        reply = sGroup.set(data4)
+        reply = sGroup.execute('set a value get')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == 'value'.bytes
@@ -507,87 +493,68 @@ sunionstore
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        data4[3] = 'get'.bytes
-        reply = sGroup.set(data4)
+        reply = sGroup.execute('set a value get')
         then:
         reply == ErrorReply.NOT_STRING
 
         when:
-        def data5 = new byte[5][]
-        data5[1] = 'a'.bytes
-        data5[2] = 'value'.bytes
-        data5[3] = 'ex'.bytes
-        data5[4] = '10'.bytes
-        reply = sGroup.set(data5)
+        reply = sGroup.execute('set a value ex 10')
         then:
         reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, data5[1], slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt > System.currentTimeMillis() + 9000
 
         when:
-        data5[3] = 'px'.bytes
-        data5[4] = '10000'.bytes
-        reply = sGroup.set(data5)
+        reply = sGroup.execute('set a value px 10000')
         then:
         reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, data5[1], slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt > System.currentTimeMillis() + 9000
 
         when:
-        data5[3] = 'exat'.bytes
-        data5[4] = ((System.currentTimeMillis() / 1000).intValue() + 10).toString().bytes
-        reply = sGroup.set(data5)
+        reply = sGroup.execute('set a value exat ' + ((System.currentTimeMillis() / 1000).intValue() + 10))
         then:
         reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, data5[1], slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt > System.currentTimeMillis() + 9000
 
         when:
-        data5[3] = 'pxat'.bytes
-        data5[4] = (System.currentTimeMillis() + 10000).toString().bytes
-        reply = sGroup.set(data5)
+        reply = sGroup.execute('set a value pxat ' + (System.currentTimeMillis() + 10000))
         then:
         reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, data5[1], slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt > System.currentTimeMillis() + 9000
 
         when:
-        data5[4] = '-1'.bytes
-        reply = sGroup.set(data5)
+        reply = sGroup.execute('set a value pxat -1')
         then:
         reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, data5[1], slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt == CompressedValue.NO_EXPIRE
 
         when:
-        data5[4] = 'a'.bytes
-        reply = sGroup.set(data5)
+        reply = sGroup.execute('set a value pxat a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
         // skip syntax check
-        data4[3] = 'zz'.bytes
-        reply = sGroup.set(data4)
+        reply = sGroup.execute('set a value zz')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        data4[3] = 'ex'.bytes
-        reply = sGroup.set(data4)
+        reply = sGroup.execute('set a value ex')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.set(data3)
+        reply = sGroup.execute('set >key value')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data3[1] = 'a'.bytes
-        data3[2] = new byte[CompressedValue.VALUE_MAX_LENGTH + 1]
-        reply = sGroup.set(data3)
+        reply = sGroup.execute('set a >value')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
     }
@@ -660,10 +627,7 @@ sunionstore
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        def data4 = new byte[4][]
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        sGroup.data = data4
-        reply = sGroup.setbit()
+        reply = sGroup.execute('setbit >key 0 10')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
@@ -691,52 +655,40 @@ sunionstore
 
     def 'test setnx'() {
         given:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'value'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('setnx', data3, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('setnx', data3, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = sGroup.handle()
+        def reply = sGroup.execute('setnx a value')
         then:
         reply == IntegerReply.REPLY_1
 
         when:
-        reply = sGroup.handle()
+        reply = sGroup.execute('setnx a value')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.handle()
+        reply = sGroup.execute('setnx >key value')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test setrange'() {
         given:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '1'.bytes
-        data4[3] = 'value'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('setrange', data4, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('setrange', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = sGroup.setrange()
+        def reply = sGroup.execute('setrange a 1 value')
 
         def slotWithKeyHash = sGroup.slotWithKeyHashListParsed[0]
 
@@ -747,7 +699,7 @@ sunionstore
                 .cv().compressedData[1..-1] == 'value'.bytes
 
         when:
-        reply = sGroup.setrange()
+        reply = sGroup.execute('setrange a 1 value')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 6
@@ -756,7 +708,7 @@ sunionstore
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = '1234567890'.bytes
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = sGroup.setrange()
+        reply = sGroup.execute('setrange a 1 value')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 10
@@ -765,9 +717,7 @@ sunionstore
 
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        data4[2] = '0'.bytes
-        data4[3] = 'value'.bytes
-        reply = sGroup.setrange()
+        reply = sGroup.execute('setrange a 0 value')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 10
@@ -775,47 +725,37 @@ sunionstore
                 .cv().compressedData == 'value67890'.bytes
 
         when:
-        data4[2] = '-1'.bytes
-        reply = sGroup.setrange()
+        reply = sGroup.execute('setrange a -1 value')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data4[2] = 'a'.bytes
-        reply = sGroup.setrange()
+        reply = sGroup.execute('setrange a a value')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data4[2] = '1'.bytes
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.setrange()
+        reply = sGroup.execute('setrange >key 1 value')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[1] = 'a'.bytes
-        data4[3] = new byte[CompressedValue.VALUE_MAX_LENGTH + 1]
-        reply = sGroup.setrange()
+        reply = sGroup.execute('setrange a 1 >value')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
     }
 
     def 'test strlen'() {
         given:
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('strlen', data2, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('strlen', data2, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = sGroup.strlen()
+        def reply = sGroup.execute('strlen a')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -824,7 +764,7 @@ sunionstore
         cv.compressedData = '1234567890'.bytes
 
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = sGroup.strlen()
+        reply = sGroup.execute('strlen a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 10
@@ -834,7 +774,7 @@ sunionstore
         cv.compressedData = new byte[4]
         ByteBuffer.wrap(cv.compressedData).putInt(123456)
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = sGroup.strlen()
+        reply = sGroup.execute('strlen a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 6
@@ -842,17 +782,14 @@ sunionstore
 
     def 'test select'() {
         given:
-        def data2 = new byte[2][]
-        data2[1] = '1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('select', data2, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        def reply = sGroup.select()
+        def reply = sGroup.execute('select 1')
         then:
 //        reply == ErrorReply.NOT_SUPPORT
         reply == OKReply.INSTANCE
@@ -860,21 +797,15 @@ sunionstore
 
     def 'test sadd'() {
         given:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '1'.bytes
-        data4[3] = '2'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('sadd', data4, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('sadd', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = sGroup.sadd()
+        def reply = sGroup.execute('sadd a 1 2')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
@@ -886,7 +817,7 @@ sunionstore
         rhk.add('1')
         cv.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = sGroup.sadd()
+        reply = sGroup.execute('sadd a 1 2')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
@@ -898,41 +829,32 @@ sunionstore
         }
         cv.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        data4[2] = '-1'.bytes
-        data4[3] = '-2'.bytes
-        reply = sGroup.sadd()
+        reply = sGroup.execute('sadd a -1 -2')
         then:
         reply == ErrorReply.SET_SIZE_TO_LONG
 
         when:
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.sadd()
+        reply = sGroup.execute('sadd >key 1 2')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[1] = 'a'.bytes
-        data4[2] = new byte[RedisHashKeys.SET_MEMBER_MAX_LENGTH + 1]
-        reply = sGroup.sadd()
+        reply = sGroup.execute('sadd a >key 2')
         then:
         reply == ErrorReply.SET_MEMBER_LENGTH_TO_LONG
     }
 
     def 'test scard'() {
         given:
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('scard', data2, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('scard', data2, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = sGroup.scard()
+        def reply = sGroup.execute('scard a')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -943,14 +865,13 @@ sunionstore
         rhk.add('1')
         cv.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = sGroup.scard()
+        reply = sGroup.execute('scard a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.scard()
+        reply = sGroup.execute('scard >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
@@ -1346,24 +1267,16 @@ sunionstore
 
     def 'test sintercard'() {
         given:
-        def data6 = new byte[6][]
-        data6[1] = '2'.bytes
-        data6[2] = 'a'.bytes
-        data6[3] = 'b'.bytes
-        data6[4] = 'limit'.bytes
-        data6[5] = '0'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('sintercard', data6, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('sintercard', data6, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
-        def reply = sGroup.sintercard()
+        def reply = sGroup.execute('sintercard 2 a b limit 0')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1374,7 +1287,7 @@ sunionstore
         def rhkA = new RedisHashKeys()
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit 0')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1382,7 +1295,7 @@ sunionstore
         rhkA.add('1')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit 0')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1392,7 +1305,7 @@ sunionstore
         def rhkB = new RedisHashKeys()
         cvB.compressedData = rhkB.encode()
         inMemoryGetSet.put(slot, 'b', 0, cvB)
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit 0')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1400,21 +1313,19 @@ sunionstore
         rhkB.add('1')
         cvB.compressedData = rhkB.encode()
         inMemoryGetSet.put(slot, 'b', 0, cvB)
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit 0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        data6[5] = '1'.bytes
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit 1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
-        data6[5] = '2'.bytes
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit 2')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
@@ -1433,7 +1344,7 @@ sunionstore
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
         sGroup.crossRequestWorker = true
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit 2')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1442,8 +1353,7 @@ sunionstore
         }.result
 
         when:
-        data6[5] = '1'.bytes
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit 1')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1452,8 +1362,7 @@ sunionstore
         }.result
 
         when:
-        data6[5] = '0'.bytes
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit 0')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1465,7 +1374,7 @@ sunionstore
         rhkB.remove('1')
         cvB.compressedData = rhkB.encode()
         inMemoryGetSet.put(slot, 'b', 0, cvB)
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit 0')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1475,7 +1384,7 @@ sunionstore
 
         when:
         inMemoryGetSet.remove(slot, 'b')
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit 0')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1484,57 +1393,38 @@ sunionstore
         }.result
 
         when:
-        data6[3] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a >key limit 0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data6[1] = 'a'.bytes
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard a a b limit 0')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data6[1] = '1'.bytes
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 1 a b limit 0')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data6[1] = '2'.bytes
-        data6[2] = 'a'.bytes
-        data6[3] = 'b'.bytes
-        data6[4] = 'limit'.bytes
-        data6[5] = 'a'.bytes
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data6[4] = 'limitx'.bytes
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit_x 0')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        def data5 = new byte[5][]
-        data5[1] = '2'.bytes
-        data5[2] = 'a'.bytes
-        data5[3] = 'b'.bytes
-        data5[4] = 'limit'.bytes
-        sGroup.data = data5
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 2 a b limit')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data5[1] = '3'.bytes
-        data5[2] = 'a'.bytes
-        data5[3] = 'b'.bytes
-        data5[4] = 'c'.bytes
         inMemoryGetSet.remove(slot, 'a')
-        reply = sGroup.sintercard()
+        reply = sGroup.execute('sintercard 3 a b c')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1544,20 +1434,15 @@ sunionstore
 
     def 'test sismember'() {
         given:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = '1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('sismember', data3, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('sismember', data3, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = sGroup.sismember()
+        def reply = sGroup.execute('sismember a 1')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1570,7 +1455,7 @@ sunionstore
         rhkA.add('1')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.sismember()
+        reply = sGroup.execute('sismember a 1')
         then:
         reply == IntegerReply.REPLY_1
 
@@ -1578,39 +1463,32 @@ sunionstore
         rhkA.remove('1')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.sismember()
+        reply = sGroup.execute('sismember a 1')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data3[2] = new byte[RedisHashKeys.SET_MEMBER_MAX_LENGTH + 1]
-        reply = sGroup.sismember()
+        reply = sGroup.execute('sismember a >key')
         then:
         reply == ErrorReply.SET_MEMBER_LENGTH_TO_LONG
 
         when:
-        data3[2] = '1'.bytes
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.sismember()
+        reply = sGroup.execute('sismember >key 1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test smembers'() {
         given:
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('smembers', data2, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('smembers', data2, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = sGroup.smembers()
+        def reply = sGroup.execute('smembers a')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -1622,7 +1500,7 @@ sunionstore
         rhkA.add('1')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.smembers()
+        reply = sGroup.execute('smembers a')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 1
@@ -1631,34 +1509,27 @@ sunionstore
         rhkA.remove('1')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.smembers()
+        reply = sGroup.execute('smembers a')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.smembers()
+        reply = sGroup.execute('smembers >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test smismember'() {
         given:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '1'.bytes
-        data4[3] = '2'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('smismember', data4, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('smismember', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = sGroup.smismember()
+        def reply = sGroup.execute('smismember a 1 2')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -1670,7 +1541,7 @@ sunionstore
         rhkA.add('1')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.smismember()
+        reply = sGroup.execute('smismember a 1 2')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1681,20 +1552,17 @@ sunionstore
         rhkA.remove('1')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.smismember()
+        reply = sGroup.execute('smismember a 1 2')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        data4[2] = new byte[RedisHashKeys.SET_MEMBER_MAX_LENGTH + 1]
-        reply = sGroup.smismember()
+        reply = sGroup.execute('smismember a >key 2')
         then:
         reply == ErrorReply.SET_MEMBER_LENGTH_TO_LONG
 
         when:
-        data4[2] = '1'.bytes
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.smismember()
+        reply = sGroup.execute('smismember >key 1 2')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
@@ -1874,10 +1742,7 @@ sunionstore
         reply2 == ErrorReply.WRONG_TYPE
 
         when:
-        def data2 = new byte[2][]
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        sGroup.data = data2
-        reply = sGroup.sort(false)
+        reply = sGroup.execute('sort >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
@@ -1888,22 +1753,16 @@ sunionstore
 
     def 'test smove'() {
         given:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'b'.bytes
-        data4[3] = '1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('smove', data4, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('smove', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
-        def reply = sGroup.smove()
+        def reply = sGroup.execute('smove a b 1')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1915,7 +1774,7 @@ sunionstore
         rhkA.add('11')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.smove()
+        reply = sGroup.execute('smove a b 1')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1924,7 +1783,7 @@ sunionstore
         rhkA.add('1')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.smove()
+        reply = sGroup.execute('smove a b 1')
         then:
         reply == IntegerReply.REPLY_1
 
@@ -1932,7 +1791,7 @@ sunionstore
         rhkA.add('2')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.smove()
+        reply = sGroup.execute('smove a b 1')
         then:
         reply == IntegerReply.REPLY_1
 
@@ -1955,7 +1814,7 @@ sunionstore
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
         inMemoryGetSet.remove(slot, 'b')
-        reply = sGroup.smove()
+        reply = sGroup.execute('smove a b 1')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1967,7 +1826,7 @@ sunionstore
         rhkA.add('1')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.smove()
+        reply = sGroup.execute('smove a b 1')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -1976,21 +1835,17 @@ sunionstore
         }.result
 
         when:
-        data4[3] = new byte[RedisHashKeys.SET_MEMBER_MAX_LENGTH + 1]
-        reply = sGroup.smove()
+        reply = sGroup.execute('smove a b >key')
         then:
         reply == ErrorReply.SET_MEMBER_LENGTH_TO_LONG
 
         when:
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.smove()
+        reply = sGroup.execute('smove >key b 1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[1] = 'a'.bytes
-        data4[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.smove()
+        reply = sGroup.execute('smove a >key 1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
@@ -2000,29 +1855,20 @@ sunionstore
 
     def 'test srandmember'() {
         given:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = '1'.bytes
-
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('srandmember', data3, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('srandmember', data3, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = sGroup.srandmember(false)
+        def reply = sGroup.execute('srandmember a 1')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        sGroup.data = data2
-        reply = sGroup.srandmember(false)
+        reply = sGroup.execute('srandmember a')
         then:
         reply == NilReply.INSTANCE
 
@@ -2033,14 +1879,12 @@ sunionstore
         def rhkA = new RedisHashKeys()
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        sGroup.data = data3
-        reply = sGroup.srandmember(false)
+        reply = sGroup.execute('srandmember a 1')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        sGroup.data = data2
-        reply = sGroup.srandmember(false)
+        reply = sGroup.execute('srandmember a')
         then:
         reply == NilReply.INSTANCE
 
@@ -2050,79 +1894,64 @@ sunionstore
         }
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        sGroup.data = data3
-        reply = sGroup.srandmember(false)
+        reply = sGroup.execute('srandmember a 1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 1
 
         when:
-        sGroup.data = data2
-        reply = sGroup.srandmember(false)
+        reply = sGroup.execute('srandmember a')
         then:
         reply instanceof BulkReply
         new String(((BulkReply) reply).raw) as int < 10
 
         when:
-        data3[2] = '11'.bytes
-        sGroup.data = data3
-        reply = sGroup.srandmember(false)
+        reply = sGroup.execute('srandmember a 11')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 10
 
         when:
-        data3[2] = '-5'.bytes
-        reply = sGroup.srandmember(false)
+        reply = sGroup.execute('srandmember a -5')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 5
 
         when:
-        data3[2] = '5'.bytes
-        reply = sGroup.srandmember(true)
+        reply = sGroup.execute('spop a 5')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 5
 
         when:
         // pop all
-        reply = sGroup.srandmember(true)
+        reply = sGroup.execute('spop a 5')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 5
 
         when:
-        data3[2] = 'a'.bytes
-        sGroup.data = data3
-        reply = sGroup.srandmember(false)
+        reply = sGroup.execute('srandmember a a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.srandmember(false)
+        reply = sGroup.execute('srandmember >key 1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test srem'() {
         given:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '1'.bytes
-        data4[3] = '2'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def sGroup = new SGroup('srem', data4, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        sGroup.slotWithKeyHashListParsed = _SGroup.parseSlots('srem', data4, sGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
-        def reply = sGroup.srem()
+        def reply = sGroup.execute('srem a 1 2')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -2133,7 +1962,7 @@ sunionstore
         def rhkA = new RedisHashKeys()
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.srem()
+        reply = sGroup.execute('srem a 1 2')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -2141,7 +1970,7 @@ sunionstore
         rhkA.add('1')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.srem()
+        reply = sGroup.execute('srem a 1 2')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
@@ -2152,20 +1981,18 @@ sunionstore
         rhkA.add('3')
         cvA.compressedData = rhkA.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
-        reply = sGroup.srem()
+        reply = sGroup.execute('srem a 1 2')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
 
         when:
-        data4[3] = new byte[RedisHashKeys.SET_MEMBER_MAX_LENGTH + 1]
-        reply = sGroup.srem()
+        reply = sGroup.execute('srem a 1 >key')
         then:
         reply == ErrorReply.SET_MEMBER_LENGTH_TO_LONG
 
         when:
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = sGroup.srem()
+        reply = sGroup.execute('srem >key 1 2')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
