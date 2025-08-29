@@ -214,41 +214,36 @@ class RGroupTest extends Specification {
 
     def 'test rename'() {
         given:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'b'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def rGroup = new RGroup('rename', data3, null)
+        def rGroup = new RGroup(null, null, null)
         rGroup.byPassGetSet = inMemoryGetSet
         rGroup.from(BaseCommand.mockAGroup())
 
         when:
-        rGroup.slotWithKeyHashListParsed = _RGroup.parseSlots('rename', data3, rGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
-        def reply = rGroup.rename(false)
+        def reply = rGroup.execute('rename a b')
         then:
         reply == ErrorReply.NO_SUCH_KEY
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = rGroup.rename(false)
+        reply = rGroup.execute('rename a b')
         then:
         reply == OKReply.INSTANCE
 
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
         inMemoryGetSet.put(slot, 'b', 0, cv)
-        reply = rGroup.rename(true)
+        reply = rGroup.execute('renamenx a b')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         inMemoryGetSet.remove(slot, 'b')
-        reply = rGroup.rename(true)
+        reply = rGroup.execute('renamenx a b')
         then:
         reply == IntegerReply.REPLY_1
 
@@ -279,7 +274,7 @@ class RGroupTest extends Specification {
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
         inMemoryGetSet.put(slot, 'b', 0, cv)
-        reply = rGroup.rename(true)
+        reply = rGroup.execute('renamenx a b')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
@@ -288,15 +283,12 @@ class RGroupTest extends Specification {
         }.result
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = rGroup.rename(false)
+        reply = rGroup.execute('rename >key b')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data3[1] = 'a'.bytes
-        data3[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = rGroup.rename(false)
+        reply = rGroup.execute('rename a >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
@@ -414,21 +406,16 @@ class RGroupTest extends Specification {
 
     def 'test rpoplpush'() {
         given:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'b'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def rGroup = new RGroup('rpoplpush', data3, null)
+        def rGroup = new RGroup(null, null, null)
         rGroup.byPassGetSet = inMemoryGetSet
         rGroup.from(BaseCommand.mockAGroup())
 
         when:
-        rGroup.slotWithKeyHashListParsed = _RGroup.parseSlots('rpoplpush', data3, rGroup.slotNumber)
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
-        def reply = rGroup.rpoplpush()
+        def reply = rGroup.execute('rpoplpush a b')
         then:
         reply == NilReply.INSTANCE
 
@@ -450,7 +437,7 @@ class RGroupTest extends Specification {
         cvB.compressedData = rlB.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvA)
         inMemoryGetSet.put(slot, 'b', 0, cvB)
-        reply = rGroup.rpoplpush()
+        reply = rGroup.execute('rpoplpush a b')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == '9'.bytes
@@ -478,15 +465,12 @@ class RGroupTest extends Specification {
         }.result
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = rGroup.rpoplpush()
+        reply = rGroup.execute('rpoplpush >key b')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data3[1] = 'a'.bytes
-        data3[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = rGroup.rpoplpush()
+        reply = rGroup.execute('rpoplpush a >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 

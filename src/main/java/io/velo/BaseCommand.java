@@ -332,6 +332,7 @@ public abstract class BaseCommand {
     public abstract Reply handle();
 
     @TestOnly
+    private static final String BYTES_0_LENGTH_PLACEHOLDER = "_0";
     private static final String GT_KEY_LENGTH_PLACEHOLDER = ">key";
     private static final String GT_VALUE_LENGTH_PLACEHOLDER = ">value";
 
@@ -341,13 +342,19 @@ public abstract class BaseCommand {
         var data = new byte[dataStrings.length][];
         for (int i = 0; i < dataStrings.length; i++) {
             var dataString = dataStrings[i];
-            if (dataString.equals(GT_KEY_LENGTH_PLACEHOLDER)) {
-                data[i] = new byte[KEY_MAX_LENGTH + 1];
-                continue;
-            }
-            if (dataString.equals(GT_VALUE_LENGTH_PLACEHOLDER)) {
-                data[i] = new byte[VALUE_MAX_LENGTH + 1];
-                continue;
+            switch (dataString) {
+                case BYTES_0_LENGTH_PLACEHOLDER -> {
+                    data[i] = new byte[0];
+                    continue;
+                }
+                case GT_KEY_LENGTH_PLACEHOLDER -> {
+                    data[i] = new byte[KEY_MAX_LENGTH + 1];
+                    continue;
+                }
+                case GT_VALUE_LENGTH_PLACEHOLDER -> {
+                    data[i] = new byte[VALUE_MAX_LENGTH + 1];
+                    continue;
+                }
             }
 
             data[i] = dataString.getBytes();

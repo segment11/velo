@@ -176,8 +176,7 @@ public class RGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply rename(boolean isNx) {
+    private Reply rename(boolean isNx) {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }

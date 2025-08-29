@@ -7,7 +7,6 @@ import io.velo.reply.*;
 import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.math.BigDecimal;
@@ -227,8 +226,7 @@ public class HGroup extends BaseCommand {
         return localPersist.getIsHashSaveMemberTogether();
     }
 
-    @VisibleForTesting
-    Reply hdel() {
+    private Reply hdel() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -379,8 +377,7 @@ public class HGroup extends BaseCommand {
         return new MultiBulkReply(replies, isResp3, false);
     }
 
-    @VisibleForTesting
-    Reply hexists() {
+    private Reply hexists() {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }
@@ -774,8 +771,7 @@ public class HGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
-    Reply hget(boolean onlyReturnLength) {
+    private Reply hget(boolean onlyReturnLength) {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }
@@ -833,8 +829,7 @@ public class HGroup extends BaseCommand {
         return onlyReturnLength ? new IntegerReply(fieldValueByte.length) : new BulkReply(fieldValueByte);
     }
 
-    @VisibleForTesting
-    Reply hgetall() {
+    private Reply hgetall() {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }
@@ -893,8 +888,7 @@ public class HGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
-    Reply hincrby(boolean isFloat) {
+    private Reply hincrby(boolean isFloat) {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
         }
@@ -1007,8 +1001,7 @@ public class HGroup extends BaseCommand {
         }
     }
 
-    @VisibleForTesting
-    Reply hkeys(boolean onlyReturnSize) {
+    private Reply hkeys(boolean onlyReturnSize) {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }
@@ -1076,8 +1069,7 @@ public class HGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
-    Reply hmget() {
+    private Reply hmget() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -1127,13 +1119,7 @@ public class HGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @TestOnly
-    Reply hmset() {
-        return hmset(false);
-    }
-
-    @VisibleForTesting
-    Reply hmset(boolean isHset) {
+    private Reply hmset(boolean isHset) {
         if (data.length < 4 || data.length % 2 != 0) {
             return ErrorReply.FORMAT;
         }
@@ -1217,8 +1203,7 @@ public class HGroup extends BaseCommand {
         }
     }
 
-    @VisibleForTesting
-    Reply hrandfield() {
+    private Reply hrandfield() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -1343,8 +1328,7 @@ public class HGroup extends BaseCommand {
         return indexes;
     }
 
-    @VisibleForTesting
-    Reply hscan() {
+    private Reply hscan() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
@@ -1492,8 +1476,7 @@ public class HGroup extends BaseCommand {
         return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor.getBytes()), new MultiBulkReply(replies)});
     }
 
-    @VisibleForTesting
-    Reply hsetnx() {
+    private Reply hsetnx() {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
         }
@@ -1566,8 +1549,7 @@ public class HGroup extends BaseCommand {
         return IntegerReply.REPLY_1;
     }
 
-    @VisibleForTesting
-    Reply hvals() {
+    private Reply hvals() {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }

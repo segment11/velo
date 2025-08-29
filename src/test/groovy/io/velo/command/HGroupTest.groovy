@@ -145,28 +145,23 @@ httl
 
     def 'test hdel'() {
         given:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'field'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hdel', data3, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hdel', data3, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
-        def reply = hGroup.hdel()
+        def reply = hGroup.execute('hdel a field')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hdel()
+        reply = hGroup.execute('hdel a field')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -178,7 +173,7 @@ httl
         rhk.add('field')
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        reply = hGroup.hdel()
+        reply = hGroup.execute('hdel a field')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
@@ -191,20 +186,20 @@ httl
         rhh.put('field', ' '.bytes)
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hdel()
+        reply = hGroup.execute('hdel a field')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        reply = hGroup.hdel()
+        reply = hGroup.execute('hdel a field')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hdel()
+        reply = hGroup.execute('hdel a field')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -216,7 +211,7 @@ httl
         }
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        reply = hGroup.hdel()
+        reply = hGroup.execute('hdel a field')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
@@ -229,21 +224,18 @@ httl
         }
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hdel()
+        reply = hGroup.execute('hdel a field')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 0
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hdel()
+        reply = hGroup.execute('hdel >key field')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data3[1] = 'a'.bytes
-        data3[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hdel()
+        reply = hGroup.execute('hdel a >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
@@ -335,28 +327,23 @@ httl
 
     def 'test hexists'() {
         given:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'field'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hexists', data3, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hexists', data3, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('a', 'field'))
-        def reply = hGroup.hexists()
+        def reply = hGroup.execute('hexists a field')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hexists()
+        reply = hGroup.execute('hexists a field')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -364,7 +351,7 @@ httl
         LocalPersist.instance.hashSaveMemberTogether = false
         def cvField = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field'), 0, cvField)
-        reply = hGroup.hexists()
+        reply = hGroup.execute('hexists a field')
         then:
         reply == IntegerReply.REPLY_1
 
@@ -376,66 +363,57 @@ httl
         rhh.put('field', ' '.bytes)
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hexists()
+        reply = hGroup.execute('hexists a field')
         then:
         reply == IntegerReply.REPLY_1
 
         when:
-        data3[2] = 'field1'.bytes
-        reply = hGroup.hexists()
+        reply = hGroup.execute('hexists a field1')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hexists()
+        reply = hGroup.execute('hexists >key field')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data3[1] = 'a'.bytes
-        data3[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hexists()
+        reply = hGroup.execute('hexists a >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test hget'() {
         given:
-        def data3 = new byte[3][]
-        data3[1] = 'a'.bytes
-        data3[2] = 'field'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hget', data3, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hget', data3, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('a', 'field'))
-        def reply = hGroup.hget(true)
+        def reply = hGroup.execute('hstrlen a field')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hget(true)
+        reply = hGroup.execute('hstrlen a field')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        reply = hGroup.hget(false)
+        reply = hGroup.execute('hget a field')
         then:
         reply == NilReply.INSTANCE
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hget(false)
+        reply = hGroup.execute('hget a field')
         then:
         reply == NilReply.INSTANCE
 
@@ -443,7 +421,7 @@ httl
         LocalPersist.instance.hashSaveMemberTogether = false
         def cvField = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field'), 0, cvField)
-        reply = hGroup.hget(true)
+        reply = hGroup.execute('hstrlen a field')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == cvField.compressedData.length
@@ -456,73 +434,65 @@ httl
         rhh.put('field', ' '.bytes)
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hget(true)
+        reply = hGroup.execute('hstrlen a field')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        reply = hGroup.hget(false)
+        reply = hGroup.execute('hget a field')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == cvField.compressedData
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hget(false)
+        reply = hGroup.execute('hget a field')
         then:
         reply instanceof BulkReply
         ((BulkReply) reply).raw == ' '.bytes
 
         when:
-        data3[2] = 'field1'.bytes
-        reply = hGroup.hget(true)
+        reply = hGroup.execute('hstrlen a field1')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
-        reply = hGroup.hget(false)
+        reply = hGroup.execute('hget a field1')
         then:
         reply == NilReply.INSTANCE
 
         when:
-        data3[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hget(true)
+        reply = hGroup.execute('hstrlen >key field')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data3[1] = 'a'.bytes
-        data3[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hget(true)
+        reply = hGroup.execute('hstrlen a >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test hgetall'() {
         given:
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hgetall', data2, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hgetall', data2, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
-        def reply = hGroup.hgetall()
+        def reply = hGroup.execute('hgetall a')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hgetall()
+        reply = hGroup.execute('hgetall a')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -537,7 +507,7 @@ httl
         def cvField = cvList[1]
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field'), 0, cvField)
-        reply = hGroup.hgetall()
+        reply = hGroup.execute('hgetall a')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -554,7 +524,7 @@ httl
         rhh.put('field', ' '.bytes)
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hgetall()
+        reply = hGroup.execute('hgetall a')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -567,14 +537,14 @@ httl
         rhh.remove('field')
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hgetall()
+        reply = hGroup.execute('hgetall a')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
         inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('a', 'field'))
-        reply = hGroup.hgetall()
+        reply = hGroup.execute('hgetall a')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -587,35 +557,28 @@ httl
         rhk.remove('field')
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        reply = hGroup.hgetall()
+        reply = hGroup.execute('hgetall a')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hgetall()
+        reply = hGroup.execute('hgetall >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test hincrby'() {
         given:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'field'.bytes
-        data4[3] = '1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hincrby', data4, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hincrby', data4, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('a', 'field'))
-        def reply = hGroup.hincrby(false)
+        def reply = hGroup.execute('hincrby a field 1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
@@ -623,55 +586,48 @@ httl
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hincrby(false)
+        reply = hGroup.execute('hincrby a field 1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        reply = hGroup.hincrby(true)
+        reply = hGroup.execute('hincrbyfloat a field 1')
         then:
         reply instanceof DoubleReply
         ((DoubleReply) reply).doubleValue() == 2.0d
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hincrby(true)
+        reply = hGroup.execute('hincrbyfloat a field 1')
         then:
         reply instanceof DoubleReply
         ((DoubleReply) reply).doubleValue() == 2.0d
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        data4[3] = 'a'.bytes
-        reply = hGroup.hincrby(false)
+        reply = hGroup.execute('hincrby a field a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        reply = hGroup.hincrby(true)
+        reply = hGroup.execute('hincrbyfloat a field a')
         then:
         reply == ErrorReply.NOT_FLOAT
 
         when:
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hincrby(false)
+        reply = hGroup.execute('hincrby >key field 1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[1] = 'a'.bytes
-        data4[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hincrby(false)
+        reply = hGroup.execute('hincrby a >key 1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[1] = 'a'.bytes
-        data4[2] = 'field'.bytes
-        data4[3] = '1'.bytes
         LocalPersist.instance.hashSaveMemberTogether = true
         def cvRhh = Mock.prepareCompressedValueList(1)[0]
         cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
@@ -679,7 +635,7 @@ httl
         rhh.put('field', '0'.bytes)
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hincrby(false)
+        reply = hGroup.execute('hincrby a field 1')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
@@ -688,7 +644,7 @@ httl
         rhh.put('field', '1.1'.bytes)
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hincrby(true)
+        reply = hGroup.execute('hincrbyfloat a field 1')
         then:
         reply instanceof DoubleReply
         ((DoubleReply) reply).doubleValue() == 2.1d
@@ -697,7 +653,7 @@ httl
         rhh.remove('field')
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hincrby(true)
+        reply = hGroup.execute('hincrbyfloat a field 1')
         then:
         reply instanceof DoubleReply
         ((DoubleReply) reply).doubleValue() == 1.0d
@@ -706,46 +662,42 @@ httl
         rhh.put('field', 'a'.bytes)
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hincrby(true)
+        reply = hGroup.execute('hincrbyfloat a field 1')
         then:
         reply == ErrorReply.NOT_FLOAT
     }
 
     def 'test hkeys'() {
         given:
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hkeys', data2, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hkeys', data2, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
-        def reply = hGroup.hkeys(false)
+        def reply = hGroup.execute('hkeys a')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hkeys(false)
+        reply = hGroup.execute('hkeys a')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        reply = hGroup.hkeys(true)
+        reply = hGroup.execute('hlen a')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hkeys(true)
+        reply = hGroup.execute('hlen a')
         then:
         reply == IntegerReply.REPLY_0
 
@@ -757,7 +709,7 @@ httl
         rhk.add('field')
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        reply = hGroup.hkeys(false)
+        reply = hGroup.execute('hkeys a')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 1
@@ -772,7 +724,7 @@ httl
         rhh.put('field', ' '.bytes)
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hkeys(false)
+        reply = hGroup.execute('hkeys a')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 1
@@ -781,14 +733,14 @@ httl
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        reply = hGroup.hkeys(true)
+        reply = hGroup.execute('hlen a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hkeys(true)
+        reply = hGroup.execute('hlen a')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 1
@@ -798,7 +750,7 @@ httl
         rhk.remove('field')
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        reply = hGroup.hkeys(false)
+        reply = hGroup.execute('hkeys a')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -807,41 +759,34 @@ httl
         rhh.remove('field')
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hkeys(false)
+        reply = hGroup.execute('hkeys a')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = hGroup.hkeys(true)
+        reply = hGroup.execute('hlen a')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hkeys(false)
+        reply = hGroup.execute('hkeys >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test hmget'() {
         given:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'field'.bytes
-        data4[3] = 'field1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hmget', data4, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hmget', data4, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
-        def reply = hGroup.hmget()
+        def reply = hGroup.execute('hmget a field field1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -851,7 +796,7 @@ httl
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hmget()
+        reply = hGroup.execute('hmget a field field1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -865,7 +810,7 @@ httl
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field'), 0, cvField)
         def cvField1 = cvList[1]
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field1'), 0, cvField1)
-        reply = hGroup.hmget()
+        reply = hGroup.execute('hmget a field field1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -883,7 +828,7 @@ httl
         rhh.put('field1', ' '.bytes)
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hmget()
+        reply = hGroup.execute('hmget a field field1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -894,44 +839,35 @@ httl
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hmget()
+        reply = hGroup.execute('hmget >key field field1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[1] = 'a'.bytes
-        data4[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hmget()
+        reply = hGroup.execute('hmget a >key field1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
 
     def 'test hmset'() {
         given:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'field'.bytes
-        data4[3] = 'value'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hmset', data4, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hmset', data4, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
-        def reply = hGroup.hmset()
+        def reply = hGroup.execute('hmset a field value')
         then:
         reply == OKReply.INSTANCE
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset a field value')
         then:
         reply == OKReply.INSTANCE
 
@@ -945,7 +881,7 @@ httl
         }
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset a field value')
         then:
         reply == ErrorReply.HASH_SIZE_TO_LONG
 
@@ -959,7 +895,7 @@ httl
         }
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset a field value')
         then:
         reply == ErrorReply.HASH_SIZE_TO_LONG
 
@@ -968,15 +904,7 @@ httl
         rhk.remove('field0')
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        def data6 = new byte[6][]
-        data6[1] = 'a'.bytes
-        data6[2] = 'field'.bytes
-        data6[3] = 'value'.bytes
-        data6[4] = 'field0'.bytes
-        data6[5] = 'value0'.bytes
-        hGroup.data = data6
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hmset', data6, hGroup.slotNumber)
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset a field value field0 value0')
         then:
         reply == ErrorReply.HASH_SIZE_TO_LONG
 
@@ -985,7 +913,7 @@ httl
         rhh.remove('field0')
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset a field value field0 value0')
         then:
         reply == ErrorReply.HASH_SIZE_TO_LONG
 
@@ -996,12 +924,12 @@ httl
         }
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset a field value field0 value0')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        reply = hGroup.hmset(true)
+        reply = hGroup.execute('hset a field value field0 value0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
@@ -1013,12 +941,12 @@ httl
         }
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset a field value field0 value0')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        reply = hGroup.hmset(true)
+        reply = hGroup.execute('hset a field value field0 value0')
         then:
         reply instanceof IntegerReply
         ((IntegerReply) reply).integer == 2
@@ -1026,12 +954,7 @@ httl
         // get and compare
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        data4[1] = 'a'.bytes
-        data4[2] = 'field'.bytes
-        data4[3] = 'field0'.bytes
-        hGroup.data = data4
-        hGroup.cmd = 'hmget'
-        reply = hGroup.hmget()
+        reply = hGroup.execute('hmget a field field0')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1042,7 +965,7 @@ httl
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hmget()
+        reply = hGroup.execute('hmget a field field0')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1053,80 +976,62 @@ httl
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.data = data4
-        hGroup.cmd = 'hmset'
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset >key field value')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[1] = 'a'.bytes
-        data4[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset a >key value')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[2] = 'field'.bytes
-        data4[3] = new byte[CompressedValue.VALUE_MAX_LENGTH + 1]
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset a field >value')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
 
         when:
-        data4[2] = new byte[0]
-        data4[3] = 'value'.bytes
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset a _0 value')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data4[2] = 'field'.bytes
-        data4[3] = new byte[0]
-        reply = hGroup.hmset()
+        reply = hGroup.execute('hmset a field _0')
         then:
         reply == ErrorReply.SYNTAX
     }
 
     def 'test hrandfield'() {
         given:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = '1'.bytes
-        data4[3] = '1'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hrandfield', data4, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hrandfield', data4, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
-        def reply = hGroup.hrandfield()
+        def reply = hGroup.execute('hrandfield a 1 1')
         then:
         reply == NilReply.INSTANCE
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 1')
         then:
         reply == NilReply.INSTANCE
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        data4[3] = 'withvalues'.bytes
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 withvalues')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 withvalues')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -1137,8 +1042,7 @@ httl
         def rhk = new RedisHashKeys()
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        data4[3] = '1'.bytes
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 1')
         then:
         reply == NilReply.INSTANCE
 
@@ -1149,20 +1053,19 @@ httl
         def rhh = new RedisHH()
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 1')
         then:
         reply == NilReply.INSTANCE
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        data4[3] = 'withvalues'.bytes
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 withvalues')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 withvalues')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -1173,8 +1076,7 @@ httl
         }
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        data4[3] = '1'.bytes
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 1
@@ -1186,7 +1088,7 @@ httl
         }
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 1')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 1
@@ -1194,25 +1096,21 @@ httl
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
         // > rhk size
-        data4[3] = (rhk.size() + 1).toString().bytes
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 ' + (rhk.size() + 1))
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == rhk.size()
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        data4[3] = (rhh.size() + 1).toString().bytes
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 ' + (rhk.size() + 1))
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == rhh.size()
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        data4[2] = '1'.bytes
-        data4[3] = 'withvalues'.bytes
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 withvalues')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1221,7 +1119,7 @@ httl
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 withvalues')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1234,7 +1132,7 @@ httl
         rhk.size().times {
             inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field' + it), 0, cvList[it])
         }
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 1 withvalues')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1243,8 +1141,7 @@ httl
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        data4[2] = '-1'.bytes
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a -1 withvalues')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1253,7 +1150,7 @@ httl
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a -1 withvalues')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1262,64 +1159,47 @@ httl
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        data4[2] = '5'.bytes
-        data4[3] = '5'.bytes
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a 5 5')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 5
 
         when:
-        data4[2] = '-5'.bytes
-        data4[3] = '-5'.bytes
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a -5 -5')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 5
 
         when:
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield >key -5 -5')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[1] = 'a'.bytes
-        data4[2] = 'a'.bytes
-        reply = hGroup.hrandfield()
+        reply = hGroup.execute('hrandfield a a -5')
         then:
         reply == ErrorReply.NOT_INTEGER
     }
 
     def 'test hscan'() {
         given:
-        def data8 = new byte[8][]
-        data8[1] = 'a'.bytes
-        data8[2] = '0'.bytes
-        data8[3] = 'match'.bytes
-        data8[4] = 'field*'.bytes
-        data8[5] = 'count'.bytes
-        data8[6] = '5'.bytes
-        data8[7] = 'novalues'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hscan', data8, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hscan', data8, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
-        def reply = hGroup.hscan()
+        def reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
         then:
         reply == MultiBulkReply.SCAN_EMPTY
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
         then:
         reply == MultiBulkReply.SCAN_EMPTY
 
@@ -1330,7 +1210,7 @@ httl
         def rhk = new RedisHashKeys()
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
         then:
         reply == MultiBulkReply.SCAN_EMPTY
 
@@ -1341,7 +1221,7 @@ httl
         def rhh = new RedisHH()
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
         then:
         reply == MultiBulkReply.SCAN_EMPTY
 
@@ -1356,7 +1236,7 @@ httl
         }
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1364,21 +1244,17 @@ httl
         ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 5
 
         when:
-        data8[4] = 'zzz'.bytes
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match zzz count 5 novalues')
         then:
         reply == MultiBulkReply.SCAN_EMPTY
 
         when:
-        data8[7] = 'withvalues'.bytes
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match zzz count 5 withvalues')
         then:
         reply == ErrorReply.NOT_SUPPORT
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        data8[4] = 'field*'.bytes
-        data8[7] = 'novalues'.bytes
         10.times {
             if (it == 5) {
                 rhh.put('xxx', ' '.bytes)
@@ -1388,7 +1264,7 @@ httl
         }
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1396,8 +1272,7 @@ httl
         ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 5
 
         when:
-        data8[7] = 'withvalues'.bytes
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match field* count 5 withvalues')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 2
@@ -1405,155 +1280,122 @@ httl
         ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 10
 
         when:
-        data8[4] = 'zzz'.bytes
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match zzz count 5 withvalues')
         then:
         reply == MultiBulkReply.SCAN_EMPTY
 
         when:
         // invalid integer
-        data8[6] = 'a'.bytes
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match zzz count a withvalues')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data8[6] = '-1'.bytes
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match zzz count -1 withvalues')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data8[6] = '10'.bytes
-        data8[5] = 'xxx'.bytes
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match zzz xxx 10 withvalues')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data8[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan >key 0 match zzz count 10 withvalues')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        def data6 = new byte[6][]
-        data6[1] = 'a'.bytes
-        data6[2] = '0'.bytes
-        data6[3] = 'match'.bytes
-        data6[4] = 'field'.bytes
-        data6[5] = 'count'.bytes
-        hGroup.data = data6
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match field count')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data6[5] = 'match'.bytes
-        reply = hGroup.hscan()
+        reply = hGroup.execute('hscan a 0 match field match')
         then:
         reply == ErrorReply.SYNTAX
     }
 
     def 'test hsetnx'() {
         given:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'field'.bytes
-        data4[3] = 'value'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hsetnx', data4, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hsetnx', data4, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
-        def reply = hGroup.hsetnx()
+        def reply = hGroup.execute('hsetnx a field value')
         then:
         reply == IntegerReply.REPLY_1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hsetnx()
+        reply = hGroup.execute('hsetnx a field value')
         then:
         reply == IntegerReply.REPLY_1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        reply = hGroup.hsetnx()
+        reply = hGroup.execute('hsetnx a field value')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.hsetnx()
+        reply = hGroup.execute('hsetnx a field value')
         then:
         reply == IntegerReply.REPLY_0
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        data4[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hsetnx()
+        reply = hGroup.execute('hsetnx >key field value')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[1] = 'a'.bytes
-        data4[2] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hsetnx()
+        reply = hGroup.execute('hsetnx a >key value')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data4[2] = 'field'.bytes
-        data4[3] = new byte[CompressedValue.VALUE_MAX_LENGTH + 1]
-        reply = hGroup.hsetnx()
+        reply = hGroup.execute('hsetnx a field >value')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
 
         when:
-        data4[2] = new byte[0]
-        data4[3] = 'value'.bytes
-        reply = hGroup.hsetnx()
+        reply = hGroup.execute('hsetnx a _0 value')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data4[2] = 'field'.bytes
-        data4[3] = new byte[0]
-        reply = hGroup.hsetnx()
+        reply = hGroup.execute('hsetnx a field _0')
         then:
         reply == ErrorReply.SYNTAX
     }
 
     def 'test hvals'() {
         given:
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
-        def hGroup = new HGroup('hvals', data2, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        hGroup.slotWithKeyHashListParsed = _HGroup.parseSlots('hvals', data2, hGroup.slotNumber)
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
-        def reply = hGroup.hvals()
+        def reply = hGroup.execute('hvals a')
         then:
         reply == MultiBulkReply.EMPTY
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
-        reply = hGroup.hvals()
+        reply = hGroup.execute('hvals a')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -1564,7 +1406,7 @@ httl
         def rhk = new RedisHashKeys()
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        reply = hGroup.hvals()
+        reply = hGroup.execute('hvals a')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -1575,7 +1417,7 @@ httl
         def rhh = new RedisHH()
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hvals()
+        reply = hGroup.execute('hvals a')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -1584,7 +1426,7 @@ httl
         rhk.add('field')
         cvKeys.compressedData = rhk.encode()
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
-        reply = hGroup.hvals()
+        reply = hGroup.execute('hvals a')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 1
@@ -1595,7 +1437,7 @@ httl
         rhh.put('field', ' '.bytes)
         cvRhh.compressedData = rhh.encode()
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
-        reply = hGroup.hvals()
+        reply = hGroup.execute('hvals a')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 1
@@ -1606,7 +1448,7 @@ httl
         LocalPersist.instance.hashSaveMemberTogether = false
         def cvField = Mock.prepareCompressedValueList(1)[0]
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('a', 'field'), 0, cvField)
-        reply = hGroup.hvals()
+        reply = hGroup.execute('hvals a')
         then:
         reply instanceof MultiBulkReply
         ((MultiBulkReply) reply).replies.length == 1
@@ -1614,8 +1456,7 @@ httl
         ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == cvField.compressedData
 
         when:
-        data2[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.hvals()
+        reply = hGroup.execute('hvals >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
@@ -1755,20 +1596,12 @@ httl
         reply == ErrorReply.FORMAT
 
         when:
-        def data5 = new byte[5][]
-        data5[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        hGroup.data = data5
-        hGroup.cmd = 'httl'
-        reply = hGroup.handle()
+        reply = hGroup.execute('httl >key fields 1 field0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data5[1] = 'a'.bytes
-        data5[2] = 'fields'.bytes
-        data5[3] = '1'.bytes
-        data5[4] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.handle()
+        reply = hGroup.execute('httl a fields 1 >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
@@ -1952,21 +1785,12 @@ httl
         reply == ErrorReply.SYNTAX
 
         when:
-        def data6 = new byte[6][]
-        data6[1] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        hGroup.data = data6
-        hGroup.cmd = 'hexpire'
-        reply = hGroup.handle()
+        reply = hGroup.execute('hexpire >key 10 fields 1 field0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
-        data6[1] = 'a'.bytes
-        data6[2] = '10'.bytes
-        data6[3] = 'fields'.bytes
-        data6[4] = '1'.bytes
-        data6[5] = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        reply = hGroup.handle()
+        reply = hGroup.execute('hexpire a 10 fields 1 >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
     }
