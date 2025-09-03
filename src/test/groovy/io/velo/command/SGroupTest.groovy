@@ -19,6 +19,7 @@ import java.nio.ByteBuffer
 import java.time.Duration
 
 class SGroupTest extends Specification {
+    final short slot = 0
     def _SGroup = new SGroup(null, null, null)
 
     def singleKeyCmdList1 = '''
@@ -49,8 +50,6 @@ sinterstore
 sunion
 sunionstore
 '''.readLines().collect { it.trim() }.findAll { it }
-
-    final short slot = 0
 
     def 'test parse slot'() {
         given:
@@ -156,7 +155,7 @@ sunionstore
         sGroup.cmd = 'select'
         reply = sGroup.handle()
         then:
-        reply == OKReply.INSTANCE
+        reply == ErrorReply.NOT_SUPPORT
 
         when:
         sGroup.cmd = 'subscribe'
@@ -791,8 +790,8 @@ sunionstore
         when:
         def reply = sGroup.execute('select 1')
         then:
-//        reply == ErrorReply.NOT_SUPPORT
-        reply == OKReply.INSTANCE
+        reply == ErrorReply.NOT_SUPPORT
+//        reply == OKReply.INSTANCE
     }
 
     def 'test sadd'() {

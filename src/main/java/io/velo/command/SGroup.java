@@ -134,7 +134,7 @@ public class SGroup extends BaseCommand {
         }
 
         if ("select".equals(cmd)) {
-            return select();
+            return ErrorReply.NOT_SUPPORT;
         }
 
         // set group
@@ -724,10 +724,6 @@ public class SGroup extends BaseCommand {
         } else {
             return new IntegerReply(cv.getUncompressedLength());
         }
-    }
-
-    private Reply select() {
-        return OKReply.INSTANCE;
     }
 
     private RedisHashKeys getRedisSet(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
