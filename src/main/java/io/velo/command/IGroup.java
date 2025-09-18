@@ -14,6 +14,9 @@ import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.example.GroupReadSupport;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.MessageTypeParser;
+import org.rocksdb.Options;
+import org.rocksdb.RocksDB;
+import org.rocksdb.RocksDBException;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -99,6 +102,10 @@ public class IGroup extends BaseCommand {
 
         if ("ingest".equals(cmd)) {
             return ingest();
+        }
+
+        if ("ingest_sst".equals(cmd)) {
+            return ingest_sst();
         }
 
         return NilReply.INSTANCE;
@@ -344,5 +351,96 @@ public class IGroup extends BaseCommand {
 
             return new MultiBulkReply(replies);
         });
+    }
+
+    private Reply ingest_sst() {
+        // ingest_sst dir=/tmp/velo/rocks_db_dir/
+        if (data.length != 2) {
+            return ErrorReply.FORMAT;
+        }
+
+        var dirPath = getPairValue(new String(data[1]));
+        var dir = new File(dirPath);
+        if (!dir.exists()) {
+            return new ErrorReply("dir: " + dirPath + " not exists");
+        }
+
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return new ErrorReply("dir: " + dirPath + " is empty");
+        }
+
+        RocksDB db;
+        try {
+            db = RocksDB.open(new Options(), dirPath);
+            log.info("open rocks db success, dir={}", dirPath);
+        } catch (RocksDBException e) {
+            log.error("open rocks db error, dir={}", dirPath, e);
+            return new ErrorReply("open rocks db error, dir: " + dirPath);
+        }
+
+        // try to iterate first 10000 keys
+        final int batchSize = 10000;
+        log.info("try to do iterate, only iterate first {} keys.", batchSize);
+
+        var iterator = db.newIterator();
+        iterator.seekToFirst();
+        int count = 0;
+        while (iterator.isValid() && count < batchSize) {
+            var keyBytes = iterator.key();
+            var valueBytes = iterator.value();
+            iterator.next();
+            count++;
+
+            if (count % 100 == 0) {
+                log.info("key: {}, value bytes size: {}", new String(keyBytes), valueBytes.length);
+            }
+        }
+
+        var debug = Debug.getInstance();
+        debug.bulkLoad = true;
+        log.warn("Ingest sst start, set bulk load to true");
+
+        try {
+            return localPersist.doSthInSlots(oneSlot -> {
+                // put number + skip number
+                int[] r = new int[2];
+
+                var it = db.newIterator();
+                it.seekToFirst();
+                while (it.isValid()) {
+                    var keyBytes = it.key();
+                    var valueBytes = it.value();
+
+                    var s = slot(keyBytes);
+                    if (s.slot() != oneSlot.slot()) {
+                        r[1]++;
+                    } else {
+                        set(keyBytes, valueBytes, s);
+                        r[0]++;
+                    }
+
+                    it.next();
+                }
+
+                return r;
+            }, resultList -> {
+                var replies = new Reply[resultList.size()];
+                for (int i = 0; i < resultList.size(); i++) {
+                    var r = resultList.get(i);
+                    var str = "slot: " + i + " put: " + r[0] + " skip: " + r[1];
+                    replies[i] = new BulkReply(str.getBytes());
+                }
+
+                debug.bulkLoad = false;
+                log.warn("Ingest sst end, set bulk load to false");
+
+                return new MultiBulkReply(replies);
+            });
+        } finally {
+            debug.bulkLoad = false;
+            db.close();
+            log.info("close rocks db, dir={}", dirPath);
+        }
     }
 }

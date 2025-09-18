@@ -10,6 +10,10 @@ import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.reply.*
 import io.velo.type.RedisHashKeys
+import org.rocksdb.Options
+import org.rocksdb.RocksDB
+import org.rocksdb.WriteBatch
+import org.rocksdb.WriteOptions
 import spock.lang.Specification
 
 class IGroupTest extends Specification {
@@ -73,12 +77,44 @@ class IGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        def inMemoryGetSet = new InMemoryGetSet()
+        iGroup.byPassGetSet = inMemoryGetSet
+        def data33 = new byte[3][]
+        data33[1] = 'a'.bytes
+        data33[2] = '1'.bytes
+        iGroup.cmd = 'incrby'
+        iGroup.data = data33
+        iGroup.slotWithKeyHashListParsed = _IGroup.parseSlots('incrby', data33, iGroup.slotNumber)
+        reply = iGroup.handle()
+        then:
+        reply instanceof IntegerReply
+
+        when:
+        iGroup.cmd = 'incrbyfloat'
+        reply = iGroup.handle()
+        then:
+        reply instanceof DoubleReply
+
+        when:
         def data3 = new byte[3][]
         iGroup.cmd = 'info'
         iGroup.data = data3
         reply = iGroup.handle()
         then:
         reply instanceof BulkReply
+
+        when:
+        iGroup.cmd = 'ingest'
+        iGroup.data = data1
+        reply = iGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        iGroup.cmd = 'ingest_sst'
+        reply = iGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
 
         when:
         iGroup.cmd = 'zzz'
@@ -287,6 +323,71 @@ class IGroupTest extends Specification {
         reply == ErrorReply.FORMAT
 
         cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test ingest_sst'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def iGroup = new IGroup('ingest_sst', null, null)
+        iGroup.byPassGetSet = inMemoryGetSet
+        iGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        and:
+        def dir = new File(Consts.persistDir, 'ingest_sst')
+        dir.mkdirs()
+
+        and:
+        // create sst files using rocks db jni
+        def db = RocksDB.open(new Options().setCreateIfMissing(true), dir.absolutePath)
+        def count = 10000
+        println 'prepare sst key value data, count: ' + count
+        def writeBatch = new WriteBatch()
+        for (int i = 0; i < count; i++) {
+            // value is uuid
+            def value = UUID.randomUUID().toString()
+            writeBatch.put(('key:' + i).bytes, value.bytes)
+        }
+        db.write(new WriteOptions(), writeBatch)
+        db.close()
+        println 'prepare sst key value data done'
+
+        when:
+        def reply = iGroup.execute('ingest_sst dir=' + dir.absolutePath)
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getResult() instanceof MultiBulkReply
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: ${count} skip: 0".bytes
+
+        when:
+        // dir not exists
+        reply = iGroup.execute('ingest_sst dir=/tmp/xxx_x')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        // file not exists
+        new File('/tmp/xxx_x').mkdirs()
+        reply = iGroup.execute('ingest_sst dir=/tmp/xxx_x')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        // invalid rocks db file
+        new File('/tmp/xxx_x/test.text').text = 'xxx'
+        reply = iGroup.execute('ingest_sst dir=/tmp/xxx_x')
+        then:
+        reply instanceof ErrorReply
+
+        cleanup:
+        new File('/tmp/xxx_x').deleteDir()
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
