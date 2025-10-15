@@ -401,46 +401,43 @@ public class IGroup extends BaseCommand {
         debug.bulkLoad = true;
         log.warn("Ingest sst start, set bulk load to true");
 
-        try {
-            return localPersist.doSthInSlots(oneSlot -> {
-                // put number + skip number
-                int[] r = new int[2];
+        return localPersist.doSthInSlots(oneSlot -> {
+            // put number + skip number
+            int[] r = new int[2];
 
-                var it = db.newIterator();
-                it.seekToFirst();
-                while (it.isValid()) {
-                    var keyBytes = it.key();
-                    var valueBytes = it.value();
+            var it = db.newIterator();
+            it.seekToFirst();
+            while (it.isValid()) {
+                var keyBytes = it.key();
+                var valueBytes = it.value();
 
-                    var s = slot(keyBytes);
-                    if (s.slot() != oneSlot.slot()) {
-                        r[1]++;
-                    } else {
-                        set(keyBytes, valueBytes, s);
-                        r[0]++;
-                    }
-
-                    it.next();
+                var s = slot(keyBytes);
+                if (s.slot() != oneSlot.slot()) {
+                    r[1]++;
+                } else {
+                    set(keyBytes, valueBytes, s);
+                    r[0]++;
                 }
 
-                return r;
-            }, resultList -> {
-                var replies = new Reply[resultList.size()];
-                for (int i = 0; i < resultList.size(); i++) {
-                    var r = resultList.get(i);
-                    var str = "slot: " + i + " put: " + r[0] + " skip: " + r[1];
-                    replies[i] = new BulkReply(str.getBytes());
-                }
+                it.next();
+            }
 
-                debug.bulkLoad = false;
-                log.warn("Ingest sst end, set bulk load to false");
-
-                return new MultiBulkReply(replies);
-            });
-        } finally {
-            debug.bulkLoad = false;
+            return r;
+        }, resultList -> {
             db.close();
             log.info("close rocks db, dir={}", dirPath);
-        }
+
+            var replies = new Reply[resultList.size()];
+            for (int i = 0; i < resultList.size(); i++) {
+                var r = resultList.get(i);
+                var str = "slot: " + i + " put: " + r[0] + " skip: " + r[1];
+                replies[i] = new BulkReply(str.getBytes());
+            }
+
+            debug.bulkLoad = false;
+            log.warn("Ingest sst end, set bulk load to false");
+
+            return new MultiBulkReply(replies);
+        });
     }
 }
