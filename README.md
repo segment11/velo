@@ -22,7 +22,7 @@ Details refer to https://github.com/segment11/velo/blob/main/doc/redis_command_s
 ## Ingestion
 
 - parquet file
-- sst file [todo]
+- sst file
 
 ## Get started
 
