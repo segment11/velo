@@ -802,6 +802,43 @@ public class Wal implements InMemoryEstimate {
     private final Debug debug = Debug.getInstance();
 
     /**
+     * Resets the write position after bulk loading.
+     */
+    void resetWritePositionAfterBulkLoad() {
+        var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
+
+        resetWal(false);
+        if (!delayToKeyBucketValues.isEmpty()) {
+            int offset = 0;
+            for (var entry : delayToKeyBucketValues.entrySet()) {
+                var v = entry.getValue();
+                putVToFile(v, false, offset, targetGroupBeginOffset);
+                var encodeLength = v.encodeLength();
+                offset += encodeLength;
+                assert offset < ONE_GROUP_BUFFER_SIZE;
+
+                lastSeqAfterPut = v.seq;
+            }
+            writePosition = offset;
+        }
+
+        resetWal(true);
+        if (!delayToKeyBucketShortValues.isEmpty()) {
+            int offset = 0;
+            for (var entry : delayToKeyBucketShortValues.entrySet()) {
+                var v = entry.getValue();
+                putVToFile(v, true, offset, targetGroupBeginOffset);
+                var encodeLength = v.encodeLength();
+                offset += encodeLength;
+                assert offset < ONE_GROUP_BUFFER_SIZE;
+
+                lastSeqShortValueAfterPut = v.seq;
+            }
+            writePositionShortValue = offset;
+        }
+    }
+
+    /**
      * Puts a log entry into the WAL.
      *
      * @param isValueShort      true if the value is short, false otherwise.

@@ -293,6 +293,8 @@ public class IGroup extends BaseCommand {
                         }
                     } catch (IOException e) {
                         log.error("read file error, file={}", file.getName(), e);
+                    } finally {
+                        oneSlot.resetWritePositionAfterBulkLoad();
                     }
                 } else {
                     // parquet file
@@ -333,6 +335,8 @@ public class IGroup extends BaseCommand {
                         }
                     } catch (IOException e) {
                         log.error("read parquet file error, file={}", file.getName(), e);
+                    } finally {
+                        oneSlot.resetWritePositionAfterBulkLoad();
                     }
                 }
             }
@@ -404,24 +408,26 @@ public class IGroup extends BaseCommand {
         return localPersist.doSthInSlots(oneSlot -> {
             // put number + skip number
             int[] r = new int[2];
+            try {
+                var it = db.newIterator();
+                it.seekToFirst();
+                while (it.isValid()) {
+                    var keyBytes = it.key();
+                    var valueBytes = it.value();
 
-            var it = db.newIterator();
-            it.seekToFirst();
-            while (it.isValid()) {
-                var keyBytes = it.key();
-                var valueBytes = it.value();
+                    var s = slot(keyBytes);
+                    if (s.slot() != oneSlot.slot()) {
+                        r[1]++;
+                    } else {
+                        set(keyBytes, valueBytes, s);
+                        r[0]++;
+                    }
 
-                var s = slot(keyBytes);
-                if (s.slot() != oneSlot.slot()) {
-                    r[1]++;
-                } else {
-                    set(keyBytes, valueBytes, s);
-                    r[0]++;
+                    it.next();
                 }
-
-                it.next();
+            } finally {
+                oneSlot.resetWritePositionAfterBulkLoad();
             }
-
             return r;
         }, resultList -> {
             db.close();

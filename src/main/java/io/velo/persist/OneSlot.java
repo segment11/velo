@@ -2107,6 +2107,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     /**
+     * Reset write position after bulk load.
+     */
+    public void resetWritePositionAfterBulkLoad() {
+        for (var wal : walArray) {
+            wal.resetWritePositionAfterBulkLoad();
+        }
+    }
+
+    /**
      * Flush OneSlot, clear all data, including WAL, chunk segments, key buckets, big strings, metadata.
      */
     @SlaveNeedReplay

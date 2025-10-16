@@ -845,6 +845,7 @@ class OneSlotTest extends Specification {
         bufOrCv2 != null
 
         cleanup:
+        oneSlot.resetWritePositionAfterBulkLoad()
         oneSlot.flush()
         oneSlot.cleanUp()
         Consts.persistDir.deleteDir()
