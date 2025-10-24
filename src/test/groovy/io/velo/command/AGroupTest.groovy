@@ -223,7 +223,7 @@ class AGroupTest extends Specification {
         }
         reply = aGroup.execute('acl dryrun a get a')
         then:
-        reply == OKReply.INSTANCE
+        reply == NilReply.INSTANCE
 
         when:
         reply = aGroup.execute('acl dryrun a')

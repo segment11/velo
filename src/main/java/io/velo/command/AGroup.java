@@ -157,9 +157,8 @@ public class AGroup extends BaseCommand {
                 return isAclCheckOk.isKeyFail() ? ErrorReply.ACL_PERMIT_KEY_LIMIT : ErrorReply.ACL_PERMIT_LIMIT;
             }
 
-            // todo
-
-            return OKReply.INSTANCE;
+            redirectRequest.setSlotWithKeyHashList(slotWithKeyHashListParsed);
+            return requestHandler.handle(redirectRequest, socket);
         } else if ("genpass".equals(subCmd)) {
             if (data.length != 2 && data.length != 3) {
                 return ErrorReply.SYNTAX;
