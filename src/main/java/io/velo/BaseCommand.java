@@ -155,6 +155,22 @@ public abstract class BaseCommand {
         this.socket = socket;
     }
 
+    /**
+     * Convert data to line
+     *
+     * @return data line
+     */
+    protected String dataToLine() {
+        var sb = new StringBuilder();
+        for (var i = 0; i < data.length; i++) {
+            sb.append(new String(data[i]));
+            if (i != data.length - 1) {
+                sb.append(" ");
+            }
+        }
+        return sb.toString();
+    }
+
     protected static final AclUsers aclUsers = AclUsers.getInstance();
 
     /**

@@ -2,11 +2,12 @@ package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.BaseCommand;
+import io.velo.Utils;
 import io.velo.ValkeyRawConfSupport;
 import io.velo.acl.*;
 import io.velo.decode.Request;
+import io.velo.repl.incremental.XAclUpdate;
 import io.velo.reply.*;
-import io.velo.Utils;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -125,6 +126,8 @@ public class AGroup extends BaseCommand {
                     count++;
                 }
             }
+
+            appendAclUpdateBinlog();
             return new IntegerReply(count);
         } else if ("dryrun".equals(subCmd)) {
             if (data.length < 4) {
@@ -308,6 +311,8 @@ public class AGroup extends BaseCommand {
 
             try {
                 FileUtils.writeLines(aclFile, "UTF-8", lines);
+
+                appendAclUpdateBinlog();
                 return OKReply.INSTANCE;
             } catch (IOException e) {
                 return new ErrorReply("write acl file error: " + e.getMessage());
@@ -379,6 +384,8 @@ public class AGroup extends BaseCommand {
                         }
                     }
                 });
+
+                appendAclUpdateBinlog();
                 return OKReply.INSTANCE;
             } catch (AclInvalidRuleException e) {
                 log.error("Set user error={}", e.getMessage());
@@ -406,6 +413,28 @@ public class AGroup extends BaseCommand {
         }
 
         return ErrorReply.SYNTAX;
+    }
+
+    private void appendAclUpdateBinlog() {
+        var line = dataToLine();
+        var firstOneSlot = localPersist.firstOneSlot();
+        if (firstOneSlot != null && firstOneSlot.getDynConfig().isBinlogOn()) {
+            var p = firstOneSlot.asyncCall(() -> {
+                try {
+                    firstOneSlot.getBinlog().append(new XAclUpdate(line));
+                    return true;
+                } catch (IOException e) {
+                    throw new RuntimeException("Append binlog error, acl line=" + line, e);
+                }
+            });
+            // sync
+            var r = p.getResult();
+            var e = p.getException();
+            if (e != null) {
+                throw (RuntimeException) e;
+            }
+            log.warn("Append binlog success, acl line={}, result={}", line, r);
+        }
     }
 
     @VisibleForTesting

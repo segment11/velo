@@ -6,6 +6,9 @@ import io.velo.acl.AclUsers
 import io.velo.acl.RCmd
 import io.velo.acl.U
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Consts
+import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import io.velo.reply.*
 import spock.lang.Specification
 
@@ -13,6 +16,7 @@ import java.nio.file.Paths
 
 class AGroupTest extends Specification {
     def _AGroup = new AGroup(null, null, null)
+    final short slot = 0
 
     def 'test parse slot'() {
         given:
@@ -130,6 +134,13 @@ class AGroupTest extends Specification {
         def aclUsers = AclUsers.instance
         aclUsers.initForTest()
 
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.dynConfig.binlogOn = true
+
         // ***** *****
         when:
         def reply = aGroup.execute('acl cat')
@@ -173,7 +184,7 @@ class AGroupTest extends Specification {
         ((IntegerReply) reply).integer == 0
 
         when:
-        aclUsers.upInsert('a') {u ->
+        aclUsers.upInsert('a') { u ->
             u.password = U.Password.NO_PASSWORD
         }
         reply = aGroup.execute('acl deluser a')
@@ -190,7 +201,7 @@ class AGroupTest extends Specification {
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        aclUsers.upInsert('a') {u ->
+        aclUsers.upInsert('a') { u ->
             u.on = false
             u.password = U.Password.NO_PASSWORD
         }
@@ -199,7 +210,7 @@ class AGroupTest extends Specification {
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        aclUsers.upInsert('a') {u ->
+        aclUsers.upInsert('a') { u ->
             u.on = true
         }
         reply = aGroup.execute('acl dryrun a get a')
@@ -207,7 +218,7 @@ class AGroupTest extends Specification {
         reply == ErrorReply.ACL_PERMIT_LIMIT
 
         when:
-        aclUsers.upInsert('a') {u ->
+        aclUsers.upInsert('a') { u ->
             u.addRCmd(true, RCmd.fromLiteral('+get'))
         }
         reply = aGroup.execute('acl dryrun a get a')
@@ -468,5 +479,9 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl')
         then:
         reply == ErrorReply.FORMAT
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 }

@@ -154,6 +154,7 @@ class BaseCommandTest extends Specification {
         c.cmd == 'get'
         c.data == data2
         c.socket == null
+        c.dataToLine() == 'get key'
         c.execute('test test') == null
         c.execute('set >key >value') == null
 
