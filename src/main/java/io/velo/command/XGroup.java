@@ -1483,7 +1483,7 @@ public class XGroup extends BaseCommand {
             } else {
                 // use jedis to get data sync, because need try to connect to master
                 var jedisPoolHolder = JedisPoolHolder.getInstance();
-                var jedisPool = jedisPoolHolder.create(replPairAsSlave.getHost(), replPairAsSlave.getPort());
+                var jedisPool = jedisPoolHolder.createIfNotCached(replPairAsSlave.getHost(), replPairAsSlave.getPort());
                 try {
                     resultBytes = JedisPoolHolder.exe(jedisPool, jedis -> {
                         var pong = jedis.ping();

@@ -52,7 +52,7 @@ h.get('/failover_manager/add_one_cluster_name') { req, resp ->
     def host = array[0]
     def port = array[1] as int
 
-    def jedisPool = JedisPoolHolder.instance.create(host, port)
+    def jedisPool = JedisPoolHolder.instance.createIfNotCached(host, port)
     def r = JedisPoolHolder.exe(jedisPool) { jedis ->
         jedis.clusterNodes()
     }

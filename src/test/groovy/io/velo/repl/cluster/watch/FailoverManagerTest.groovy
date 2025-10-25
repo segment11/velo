@@ -166,7 +166,7 @@ yyy localhost 17380 slave bbb
             ])
             fm.doFailover('cluster1', failHostAndPort)
 
-            def jedisPool = JedisPoolHolder.instance.create('localhost', 7380)
+            def jedisPool = JedisPoolHolder.instance.createIfNotCached('localhost', 7380)
             r = JedisPoolHolder.exe(jedisPool) { jedis ->
                 def clusterNodes = jedis.clusterNodes()
                 def lines = clusterNodes.readLines().collect { it.trim() }.findAll { it }

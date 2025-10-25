@@ -6,8 +6,8 @@ import spock.lang.Specification
 class JedisPoolHolderTest extends Specification {
     def 'test connect'() {
         given:
-        def jedisPool = JedisPoolHolder.instance.create('localhost', 6379)
-        def jedisPool2 = JedisPoolHolder.instance.create('localhost', 6379)
+        def jedisPool = JedisPoolHolder.instance.createIfNotCached('localhost', 6379)
+        def jedisPool2 = JedisPoolHolder.instance.createIfNotCached('localhost', 6379)
 
         expect:
         jedisPool == jedisPool2

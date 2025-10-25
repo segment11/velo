@@ -674,7 +674,7 @@ class ManageCommand extends BaseCommand {
             def log = LoggerFactory.getLogger(ManageCommand.class)
             byte[][] valueBytesArray = new byte[data.length - 6][]
             try {
-                def jedisPool = JedisPoolHolder.instance.create(host, port)
+                def jedisPool = JedisPoolHolder.instance.createIfNotCached(host, port)
                 // may be null
                 JedisPoolHolder.exe(jedisPool, jedis -> {
                     def pong = jedis.ping()

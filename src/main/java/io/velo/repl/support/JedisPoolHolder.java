@@ -48,7 +48,7 @@ public class JedisPoolHolder implements NeedCleanUp {
      * @return The Jedis pool for the specified host and port.
      * @since 1.0.0
      */
-    public synchronized JedisPool create(String host, int port) {
+    public synchronized JedisPool createIfNotCached(String host, int port) {
         var key = host + ":" + port;
         var client = cached.get(key);
         if (client != null) {

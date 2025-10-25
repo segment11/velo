@@ -218,7 +218,7 @@ class FailoverManager {
         def array = nodeName.substring(DELAY_RESTART_CHECK_FOR_FAILED_HOST_AND_PORT_NODE_NAME_PREFIX.length()).split(':')
         def hostAndPort = new HostAndPort(array[0], array[1] as int)
         try {
-            def jedisPool = jedisPoolHolder.create(hostAndPort.host, hostAndPort.port)
+            def jedisPool = jedisPoolHolder.createIfNotCached(hostAndPort.host, hostAndPort.port)
             JedisPoolHolder.exe(jedisPool) { jedis ->
                 jedis.ping()
             }
@@ -231,7 +231,7 @@ class FailoverManager {
         def client = leaderSelector.client
         try {
             def clusterxNodesArgs = new String(client.getData().forPath(zookeeperVeloMetaBasePath + '/' + nodeName))
-            def jedisPool = jedisPoolHolder.create(hostAndPort.host, hostAndPort.port)
+            def jedisPool = jedisPoolHolder.createIfNotCached(hostAndPort.host, hostAndPort.port)
             String result
             if (mockSetNodes) {
                 result = 'OK'
@@ -305,7 +305,7 @@ class FailoverManager {
                     }
 
                     try {
-                        def jedisPool = jedisPoolHolder.create(hostAndPort.host, hostAndPort.port)
+                        def jedisPool = jedisPoolHolder.createIfNotCached(hostAndPort.host, hostAndPort.port)
                         JedisPoolHolder.exe(jedisPool) { jedis ->
                             jedis.ping()
                         }
@@ -435,7 +435,7 @@ class FailoverManager {
 
             log.warn 'failover manager do failover, cluster name={}, query cluster nodes by target host and port={}:{}',
                     oneClusterName, hostAndPort.host, hostAndPort.port
-            def jedisPool = jedisPoolHolder.create(hostAndPort.host, hostAndPort.port)
+            def jedisPool = jedisPoolHolder.createIfNotCached(hostAndPort.host, hostAndPort.port)
             def r = JedisPoolHolder.exe(jedisPool) { jedis ->
                 jedis.clusterNodes()
             }
@@ -585,7 +585,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             if (mockSetNodes) {
                 result = 'OK'
             } else {
-                def jedisPool = jedisPoolHolder.create(hostAndPort.host, hostAndPort.port)
+                def jedisPool = jedisPoolHolder.createIfNotCached(hostAndPort.host, hostAndPort.port)
                 result = JedisPoolHolder.exe(jedisPool) { jedis ->
                     def command = new ExtendProtocolCommand('clusterx')
                     byte[] r = jedis.sendCommand(command, 'setnodes'.bytes, clusterxNodesArgs.bytes) as byte[]
