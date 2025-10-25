@@ -1,10 +1,15 @@
 package io.velo.command;
 
+import com.moilioncircle.redis.replicator.Configuration;
+import com.moilioncircle.redis.replicator.RedisRdbReplicator;
+import com.moilioncircle.redis.replicator.rdb.iterable.ValueIterableRdbVisitor;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.*;
 import io.velo.reply.*;
 import io.velo.type.RedisList;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -97,13 +102,13 @@ public class LGroup extends BaseCommand {
             return ltrim();
         }
 
-//        if ("load-rdb".equals(cmd)) {
-//            try {
-//                return loadRdb();
-//            } catch (Exception e) {
-//                return new ErrorReply(e.getMessage());
-//            }
-//        }
+        if ("load-rdb".equals(cmd)) {
+            try {
+                return loadRdb();
+            } catch (Exception e) {
+                return new ErrorReply(e.getMessage());
+            }
+        }
 
         return NilReply.INSTANCE;
     }
@@ -810,41 +815,29 @@ public class LGroup extends BaseCommand {
         return OKReply.INSTANCE;
     }
 
-//    Reply loadRdb() throws URISyntaxException, IOException {
-//        if (data.length != 2 && data.length != 3) {
-//            return ErrorReply.FORMAT;
-//        }
-//
-//        var filePathBytes = data[1];
-//        var filePath = new String(filePathBytes);
-//        if (!filePath.startsWith("/") || !filePath.endsWith(".rdb")) {
-//            return ErrorReply.INVALID_FILE;
-//        }
-//
-//        var file = new File(filePath);
-//        if (!file.exists()) {
-//            return ErrorReply.NO_SUCH_FILE;
-//        }
-//
-//        boolean onlyAnalysis = false;
-//        if (data.length == 3) {
-//            onlyAnalysis = "analysis".equals(new String(data[2]).toLowerCase());
-//        }
-//
-//        var r = new RedisReplicator("redis://" + filePath);
-//        r.setRdbVisitor(new ValueIterableRdbVisitor(r));
-//
-//        var eventListener = new MyRDBVisitorEventListener(this, onlyAnalysis);
-//        r.addEventListener(eventListener);
-//        r.open();
-//
-//        if (onlyAnalysis) {
-//            int n = 10;
-//            for (int i = 0; i < n; i++) {
-//                eventListener.radixTree.sumIncrFromRoot(new int[i]);
-//            }
-//        }
-//
-//        return new IntegerReply(eventListener.keyCount);
-//    }
+    Reply loadRdb() throws IOException {
+        if (data.length != 2) {
+            return ErrorReply.FORMAT;
+        }
+
+        var filePathBytes = data[1];
+        var filePath = new String(filePathBytes);
+        if (!filePath.startsWith("/") || !filePath.endsWith(".rdb")) {
+            return ErrorReply.INVALID_FILE;
+        }
+
+        var file = new File(filePath);
+        if (!file.exists()) {
+            return ErrorReply.NO_SUCH_FILE;
+        }
+
+        var r = new RedisRdbReplicator(file, Configuration.defaultSetting());
+        r.setRdbVisitor(new ValueIterableRdbVisitor(r));
+
+        var eventListener = new MyRDBVisitorEventListener(this);
+        r.addEventListener(eventListener);
+        r.open();
+
+        return new IntegerReply(eventListener.keyCount);
+    }
 }

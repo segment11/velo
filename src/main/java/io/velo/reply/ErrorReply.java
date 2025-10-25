@@ -105,6 +105,11 @@ public class ErrorReply implements Reply {
     public static final ErrorReply INVALID_INTEGER = new ErrorReply("invalid integer");
 
     /**
+     * Error reply indicating an invalid file.
+     */
+    public static final ErrorReply INVALID_FILE = new ErrorReply("invalid file");
+
+    /**
      * Error reply indicating that a range is out of index.
      */
     public static final ErrorReply RANGE_OUT_OF_INDEX = new ErrorReply("range out of index");

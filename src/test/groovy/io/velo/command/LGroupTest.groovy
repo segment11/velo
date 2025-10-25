@@ -1,14 +1,12 @@
 package io.velo.command
 
 import io.activej.promise.SettablePromise
-import io.velo.BaseCommand
-import io.velo.CompressedValue
-import io.velo.SocketInspector
-import io.velo.SocketInspectorTest
+import io.velo.*
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.type.RedisList
+import redis.clients.jedis.Jedis
 import spock.lang.Specification
 
 class LGroupTest extends Specification {
@@ -165,12 +163,11 @@ class LGroupTest extends Specification {
         then:
         reply == ErrorReply.FORMAT
 
-//        when:
-//        lGroup.cmd = 'load-rdb'
-//        reply = lGroup.handle()
-//
-//        then:
-//        reply == ErrorReply.FORMAT
+        when:
+        lGroup.cmd = 'load-rdb'
+        reply = lGroup.handle()
+        then:
+        reply == ErrorReply.FORMAT
 
         when:
         lGroup.cmd = 'zzz'
@@ -1050,5 +1047,59 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('ltrim >key 0 9')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+    }
+
+    def 'test load rdb'() {
+        // check redis-server bin file and generate rdb file
+        final String redisServerBin = '/usr/local/bin/redis-server'
+        final String rdbFilePath = '/tmp/dump.rdb'
+
+        Process process
+
+        int mockDataNum = 100
+        int tmpPort = 16379
+        if (!new File(rdbFilePath).exists()) {
+            if (!new File(redisServerBin).exists()) {
+                println 'skip test load rdb as redis-server bin file not exists: ' + redisServerBin
+                return
+            }
+
+            process = new ProcessBuilder(redisServerBin, '--dir', '/tmp', '--port', tmpPort.toString()).start()
+            Thread.sleep(5000)
+            Thread.start {
+                def jedis = new Jedis('localhost', tmpPort)
+                mockDataNum.times { i ->
+                    jedis.set(Utils.rightPad('key:' + i, '0', 16), UUID.randomUUID().toString())
+                }
+                println "generate ${mockDataNum} string keys / values"
+
+                jedis.close()
+                process.destroy()
+                println 'destroy redis-server process after mock data'
+            }
+            process.waitFor()
+            process = null
+            println 'generate rdb file done'
+        } else {
+            println 'use exist rdb file to test load rdb: ' + rdbFilePath
+        }
+
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def lGroup = new LGroup(null, null, null)
+        lGroup.byPassGetSet = inMemoryGetSet
+        lGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = lGroup.execute('load-rdb ' + rdbFilePath)
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer > 0
+
+        cleanup:
+        if (process != null) {
+            process.destroy()
+        }
     }
 }
