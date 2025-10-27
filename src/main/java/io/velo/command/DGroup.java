@@ -8,6 +8,7 @@ import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
 import io.velo.persist.OneSlot;
+import io.velo.rdb.RDBParser;
 import io.velo.reply.*;
 import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
@@ -343,7 +344,7 @@ public class DGroup extends BaseCommand {
 
         if (cv.isTypeString()) {
             var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
-            var dumpBytes = VeloRDBImporter.dumpString(valueBytes);
+            var dumpBytes = RDBParser.dumpString(valueBytes);
             return new BulkReply(dumpBytes);
         } else if (cv.isSet()) {
             var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
@@ -352,7 +353,7 @@ public class DGroup extends BaseCommand {
                 return NilReply.INSTANCE;
             }
 
-            var dumpBytes = VeloRDBImporter.dumpSet(rhk);
+            var dumpBytes = RDBParser.dumpSet(rhk);
             return new BulkReply(dumpBytes);
         } else if (cv.isHash()) {
             if (isUseHH(keyBytes)) {
@@ -362,7 +363,7 @@ public class DGroup extends BaseCommand {
                     return NilReply.INSTANCE;
                 }
 
-                var dumpBytes = VeloRDBImporter.dumpHash(rhh);
+                var dumpBytes = RDBParser.dumpHash(rhh);
                 return new BulkReply(dumpBytes);
             } else {
                 var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
@@ -381,7 +382,7 @@ public class DGroup extends BaseCommand {
                     rhh.put(field, fieldValueBytes);
                 }
 
-                var dumpBytes = VeloRDBImporter.dumpHash(rhh);
+                var dumpBytes = RDBParser.dumpHash(rhh);
                 return new BulkReply(dumpBytes);
             }
         } else if (cv.isList()) {
@@ -391,7 +392,7 @@ public class DGroup extends BaseCommand {
                 return NilReply.INSTANCE;
             }
 
-            var dumpBytes = VeloRDBImporter.dumpList(rl);
+            var dumpBytes = RDBParser.dumpList(rl);
             return new BulkReply(dumpBytes);
         } else if (cv.isZSet()) {
             var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
@@ -400,7 +401,7 @@ public class DGroup extends BaseCommand {
                 return NilReply.INSTANCE;
             }
 
-            var dumpBytes = VeloRDBImporter.dumpZSet(rz);
+            var dumpBytes = RDBParser.dumpZSet(rz);
             return new BulkReply(dumpBytes);
         } else {
             return ErrorReply.DUMP_TYPE_NOT_SUPPORT;
