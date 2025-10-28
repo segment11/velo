@@ -2,6 +2,7 @@ package io.velo.command;
 
 import com.moilioncircle.redis.replicator.Configuration;
 import com.moilioncircle.redis.replicator.RedisRdbReplicator;
+import com.moilioncircle.redis.replicator.rdb.iterable.ValueIterableEventListener;
 import com.moilioncircle.redis.replicator.rdb.iterable.ValueIterableRdbVisitor;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.*;
@@ -834,10 +835,14 @@ public class LGroup extends BaseCommand {
         var r = new RedisRdbReplicator(file, Configuration.defaultSetting());
         r.setRdbVisitor(new ValueIterableRdbVisitor(r));
 
+        // as big as need, todo, because batch is append not replace
+        final int batchSize = 10_000;
         var eventListener = new MyRDBVisitorEventListener(this);
-        r.addEventListener(eventListener);
+        r.addEventListener(new ValueIterableEventListener(batchSize, eventListener));
         r.open();
 
-        return new IntegerReply(eventListener.keyCount);
+        log.warn("Load rdb {}, skip key count={}, update key count={}", filePath,
+                eventListener.skipKeyCount, eventListener.updateKeyCount);
+        return new IntegerReply(eventListener.updateKeyCount);
     }
 }

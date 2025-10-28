@@ -1,8 +1,14 @@
 package io.velo.command
 
 import io.activej.promise.SettablePromise
-import io.velo.*
+import io.velo.BaseCommand
+import io.velo.CompressedValue
+import io.velo.SocketInspector
+import io.velo.SocketInspectorTest
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Consts
+import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.type.RedisList
@@ -1069,10 +1075,40 @@ class LGroupTest extends Specification {
             Thread.start {
                 def jedis = new Jedis('localhost', tmpPort)
                 mockDataNum.times { i ->
-                    jedis.set(Utils.rightPad('key:' + i, '0', 16), UUID.randomUUID().toString())
+                    jedis.set('key:' + i, UUID.randomUUID().toString())
                 }
                 println "generate ${mockDataNum} string keys / values"
 
+                mockDataNum.times { i ->
+                    10.times { j ->
+                        jedis.lpush('list:' + i, 'element:' + j)
+                    }
+                }
+                println "generate ${mockDataNum} list keys / values"
+
+                mockDataNum.times { i ->
+                    10.times { j ->
+                        jedis.hset('hash:' + i, 'field:' + j, UUID.randomUUID().toString())
+                    }
+                }
+                println "generate ${mockDataNum} hash keys / values"
+
+                mockDataNum.times { i ->
+                    10.times { j ->
+                        jedis.sadd('set:' + i, 'member:' + j)
+                    }
+                }
+                println "generate ${mockDataNum} set keys / values"
+
+                mockDataNum.times { i ->
+                    10.times { j ->
+                        jedis.zadd('zset:' + i, j, 'element:' + j)
+                    }
+                }
+                println "generate ${mockDataNum} zset keys / values"
+
+//                jedis.save()
+//                println 'save rdb done'
                 jedis.close()
                 process.destroy()
                 println 'destroy redis-server process after mock data'
@@ -1091,15 +1127,22 @@ class LGroupTest extends Specification {
         lGroup.byPassGetSet = inMemoryGetSet
         lGroup.from(BaseCommand.mockAGroup())
 
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
         when:
         def reply = lGroup.execute('load-rdb ' + rdbFilePath)
         then:
         reply instanceof IntegerReply
-        (reply as IntegerReply).integer > 0
+        (reply as IntegerReply).integer == mockDataNum * 5
 
         cleanup:
         if (process != null) {
             process.destroy()
         }
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 }
