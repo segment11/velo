@@ -13,14 +13,13 @@ import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-// before slave start receive data from master, master need start this binlog for slave catch up
+/**
+ * Binlog for replication, slave pull mode, each one slot has one binlog.
+ */
 public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     private final short slot;
@@ -28,7 +27,9 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     private File binlogDir;
     private ActAsRaf raf;
 
-    // old files, read and send to slave when catch up
+    /**
+     * Old binlog files, key is file index
+     */
     private final TreeMap<Integer, ActAsRaf> prevRafByFileIndex = new TreeMap<>();
 
     // for cache, ignore when pure memory mode
@@ -39,10 +40,22 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     private long diskUsage = 0L;
 
+    /**
+     * Get disk usage for stats
+     *
+     * @return disk usage
+     */
     public long getDiskUsage() {
         return ConfForGlobal.pureMemory ? 0 : diskUsage;
     }
 
+    /**
+     * For cache when slave pull, last written segment bytes
+     *
+     * @param bytes     binlog one segment bytes
+     * @param fileIndex file index
+     * @param offset    file offset
+     */
     @VisibleForTesting
     record BytesWithFileIndexAndOffset(byte[] bytes, int fileIndex,
                                        long offset) implements Comparable<BytesWithFileIndexAndOffset> {
@@ -64,6 +77,12 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
+    /**
+     * File index and offset, for one repl pair mark
+     *
+     * @param fileIndex file index
+     * @param offset    file offset
+     */
     public record FileIndexAndOffset(int fileIndex, long offset) {
         @Override
         public @NotNull String toString() {
@@ -92,7 +111,11 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(Binlog.class);
 
-    // return sorted by file index
+    /**
+     * List binlog files
+     *
+     * @return binlog files, sorted by file index
+     */
     private ArrayList<ActAsFile> listFiles() {
         if (ConfForGlobal.pureMemory) {
             return new ArrayList(prevRafByFileIndex.values());
@@ -113,6 +136,14 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
+    /**
+     * Constructor
+     *
+     * @param slot      slot
+     * @param slotDir   slot dir
+     * @param dynConfig dyn config
+     * @throws IOException when io error
+     */
     public Binlog(short slot, @NotNull File slotDir, @NotNull DynConfig dynConfig) throws IOException {
         this.slot = slot;
         this.dynConfig = dynConfig;
@@ -152,6 +183,12 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         this.tempAppendSegmentBuffer = ByteBuffer.wrap(tempAppendSegmentBytes);
     }
 
+    /**
+     * Estimate memory cost size
+     *
+     * @param sb string builder
+     * @return memory cost size
+     */
     @Override
     public long estimate(@NotNull StringBuilder sb) {
         long size = 0;
@@ -168,11 +205,21 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         return size;
     }
 
+    /**
+     * Get current file index
+     *
+     * @return current file index
+     */
     @TestOnly
     int getCurrentFileIndex() {
         return currentFileIndex;
     }
 
+    /**
+     * Get current file offset
+     *
+     * @return current file offset
+     */
     @TestOnly
     long getCurrentFileOffset() {
         return currentFileOffset;
@@ -194,15 +241,30 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                 '}';
     }
 
+    /**
+     * Get current file index and offset wrap
+     *
+     * @return one file index and offset object
+     */
     public FileIndexAndOffset currentFileIndexAndOffset() {
         return new FileIndexAndOffset(currentFileIndex, currentFileOffset);
     }
 
+    /**
+     * Get current repl offset
+     *
+     * @return current repl offset, calculated by file index and offset
+     */
     public long currentReplOffset() {
         var binlogOneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength;
         return (long) currentFileIndex * binlogOneFileMaxLength + currentFileOffset;
     }
 
+    /**
+     * Get the earliest file index and offset, not 0 because old binlog files may be deleted
+     *
+     * @return the earliest file index and offset
+     */
     public FileIndexAndOffset earliestFileIndexAndOffset() {
         // at least have one file, self created
         var actAsFiles = listFiles();
@@ -216,6 +278,9 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         this.clearByteBuffer();
     }
 
+    /**
+     * For padding one complete segment
+     */
     @VisibleForTesting
     static class PaddingBinlogContent implements BinlogContent {
         private final byte[] paddingBytes;
@@ -246,10 +311,21 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
+    /**
+     * Move to next segment
+     *
+     * @throws IOException when io error
+     */
     public void moveToNextSegment() throws IOException {
         moveToNextSegment(false);
     }
 
+    /**
+     * Move to next segment
+     *
+     * @param forceEvenIfMargin true ignore when current offset is one segment completed
+     * @throws IOException when io error
+     */
     public void moveToNextSegment(boolean forceEvenIfMargin) throws IOException {
         var oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
         var mod = currentFileOffset % oneSegmentLength;
@@ -278,6 +354,13 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                 currentFileIndex, currentFileOffset, slot);
     }
 
+    /**
+     * Reopen at target file index and margin offset
+     *
+     * @param resetFileIndex target file index
+     * @param marginOffset   target file offset, align to one segment
+     * @throws IOException when io error
+     */
     public void reopenAtFileIndexAndMarginOffset(int resetFileIndex, long marginOffset) throws IOException {
         if (currentFileIndex == resetFileIndex) {
             // truncate to target offset
@@ -310,6 +393,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                 currentFileIndex, currentFileOffset, slot);
     }
 
+    // binlog file name prefix
     static final String FILE_NAME_PREFIX = "binlog-";
 
     private static String fileName(int fileIndex) {
@@ -357,11 +441,23 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         return ConfForSlot.global.confRepl.binlogOneFileMaxLength / ConfForSlot.global.confRepl.binlogOneSegmentLength;
     }
 
+    /**
+     * Align to one segment
+     *
+     * @param fileOffset file offset
+     * @return the margin offset
+     */
     public static int marginFileOffset(long fileOffset) {
         var oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
         return (int) (fileOffset - fileOffset % oneSegmentLength);
     }
 
+    /**
+     * Append binlog content
+     *
+     * @param content the binlog content
+     * @throws IOException when io error
+     */
     public void append(@NotNull BinlogContent content) throws IOException {
         if (!dynConfig.isBinlogOn()) {
             return;
@@ -419,7 +515,14 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
-    // self as slave, but also as master to another slave, need do binlog just same as master
+    /**
+     * Write binlog one segment bytes received from master, as slave, but also as master to another slave, need do binlog just same as master
+     *
+     * @param oneSegmentBytes one segment bytes
+     * @param toFileIndex     to file index
+     * @param toFileOffset    to file offset
+     * @throws IOException when io error
+     */
     public void writeFromMasterOneSegmentBytes(byte[] oneSegmentBytes, int toFileIndex, long toFileOffset) throws IOException {
         if (!dynConfig.isBinlogOn()) {
             return;
@@ -586,6 +689,14 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         return one >= 0 ? latestAppendForReadCacheSegmentBytesSet.get(one).bytes : null;
     }
 
+    /**
+     * Read one segment bytes from previous binlog file
+     *
+     * @param fileIndex the file index
+     * @param offset    the file offset
+     * @return one segment bytes
+     * @throws IOException when read error
+     */
     public byte[] readPrevRafOneSegment(int fileIndex, long offset) throws IOException {
         if (fileIndex < 0) {
             throw new IllegalArgumentException("Repl read binlog segment bytes, file index must be >= 0, slot=" + slot);
@@ -681,6 +792,15 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
+    /**
+     * Decode from one segment bytes and apply to slave repl pair
+     *
+     * @param slot            the replication slot to which this content is applied.
+     * @param oneSegmentBytes one segment bytes
+     * @param skipBytesN      skip bytes number
+     * @param replPair        the repl pair associated with this replication session.
+     * @return the number of decoded content
+     */
     public static int decodeAndApply(short slot,
                                      byte[] oneSegmentBytes,
                                      int skipBytesN,
@@ -705,6 +825,62 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             n++;
         }
         return n;
+    }
+
+    /**
+     * Analyse one binlog file
+     *
+     * @param binlogFile the binlog file
+     * @return the number of decoded content
+     * @throws IOException when read error
+     */
+    public static long analyseBinlogFile(@NotNull File binlogFile) throws IOException {
+        var binlogOneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
+        var oneSegmentBytes = new byte[binlogOneSegmentLength];
+        var byteBuffer = ByteBuffer.wrap(oneSegmentBytes);
+
+        Map<BinlogContent.Type, Long> countByType = new HashMap<>();
+        Map<BinlogContent.Type, Long> encodedLengthByType = new HashMap<>();
+
+        var is = new BufferedInputStream(new FileInputStream(binlogFile));
+        while (true) {
+            var n = is.read(oneSegmentBytes);
+            if (n < 0) {
+                break;
+            }
+            byteBuffer.position(0);
+
+            while (true) {
+                if (byteBuffer.remaining() == 0) {
+                    break;
+                }
+
+                var code = byteBuffer.get();
+                if (code == 0) {
+                    break;
+                }
+
+                var type = BinlogContent.Type.fromCode(code);
+                var content = type.decodeFrom(byteBuffer);
+
+                // add count
+                countByType.put(type, countByType.getOrDefault(type, 0L) + 1);
+                encodedLengthByType.put(type, encodedLengthByType.getOrDefault(type, 0L) + content.encodedLength());
+            }
+
+            if (n < binlogOneSegmentLength) {
+                break;
+            }
+        }
+
+        long totalCount = 0L;
+        for (var entry : countByType.entrySet()) {
+            var type = entry.getKey();
+            System.out.println(type + ": count - " + entry.getValue() + ", encoded length - " + encodedLengthByType.get(type));
+            totalCount += entry.getValue();
+        }
+        System.out.println("Total count - " + totalCount);
+        return totalCount;
     }
 
     @SlaveNeedReplay

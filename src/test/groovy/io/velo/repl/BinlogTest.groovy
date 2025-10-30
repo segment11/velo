@@ -405,6 +405,13 @@ class BinlogTest extends Specification {
         then:
         n == 0
 
+        when:
+        def testBinlogFile = new File(Consts.persistDir, 'test-binlog.dat')
+        testBinlogFile.bytes = oneSegmentBytes
+        def n2 = Binlog.analyseBinlogFile(testBinlogFile)
+        then:
+        n2 == 10
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
