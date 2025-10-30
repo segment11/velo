@@ -887,6 +887,7 @@ public class MultiWorkerServer extends Launcher {
 
         var aclUsers = AclUsers.getInstance();
         aclUsers.initBySlotWorkerEventloopArray(slotWorkerEventloopArray);
+        aclUsers.loadAclFile();
 
         // start primary schedule
         primaryScheduleRunnable = new PrimaryTaskRunnable(loopCount -> {

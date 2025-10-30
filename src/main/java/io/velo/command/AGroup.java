@@ -217,35 +217,12 @@ public class AGroup extends BaseCommand {
                 return ErrorReply.NO_SUCH_FILE;
             }
 
-            List<U> users = new ArrayList<>();
             try {
-                var lines = FileUtils.readLines(aclFile, "UTF-8");
-                for (var line : lines) {
-                    if (line.startsWith("#")) {
-                        continue;
-                    }
-
-                    var u = U.fromLiteral(line);
-                    if (u == null) {
-                        return new ErrorReply("parse acl file error: " + line);
-                    }
-                    users.add(u);
-                }
-            } catch (IOException e) {
-                log.error("Read acl file error={}", e.getMessage());
-                return new ErrorReply("read acl file error: " + e.getMessage());
-            } catch (IllegalArgumentException e) {
-                log.error("Parse acl file error={}", e.getMessage());
-                return new ErrorReply("parse acl file error: " + e.getMessage());
+                aclUsers.loadAclFile();
+                return OKReply.INSTANCE;
+            } catch (Exception e) {
+                return new ErrorReply(e.getMessage());
             }
-
-            // must include default user
-            if (users.stream().noneMatch(u -> u.getUser().equals(U.INIT_DEFAULT_U.getUser()))) {
-                return new ErrorReply("no default user in acl file");
-            }
-
-            aclUsers.replaceUsers(users);
-            return OKReply.INSTANCE;
         } else if ("log".equals(subCmd)) {
             if (data.length != 3) {
                 return ErrorReply.SYNTAX;

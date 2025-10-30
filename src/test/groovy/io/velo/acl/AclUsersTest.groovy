@@ -3,8 +3,10 @@ package io.velo.acl
 import io.activej.async.callback.AsyncComputation
 import io.activej.common.function.SupplierEx
 import io.activej.eventloop.Eventloop
+import io.velo.ValkeyRawConfSupport
 import spock.lang.Specification
 
+import java.nio.file.Paths
 import java.time.Duration
 
 class AclUsersTest extends Specification {
@@ -62,6 +64,48 @@ class AclUsersTest extends Specification {
         aclUsers.replaceUsers(users)
         then:
         aclUsers.get('test1') != null
+
+        when:
+        def aclFile = Paths.get(ValkeyRawConfSupport.aclFilename).toFile()
+        if (!aclFile.exists()) {
+            aclFile.createNewFile()
+        }
+        aclFile.text = 'user default on nopass ~* +@all &*\r\n# comment'
+        aclUsers.loadAclFile()
+        then:
+        aclUsers.get('default') != null
+
+        when:
+        boolean exception = false
+        // no default user
+        aclFile.text = 'user test on nopass ~* +@all &*'
+        try {
+            aclUsers.loadAclFile()
+        } catch (Exception e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        // not valid user literal
+        aclFile.text = '_user default on nopass ~* +@all &*'
+        try {
+            aclUsers.loadAclFile()
+        } catch (Exception e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        aclFile.delete()
+        aclUsers.loadAclFile()
+        then:
+        1 == 1
 
         cleanup:
         eventloop.breakEventloop()

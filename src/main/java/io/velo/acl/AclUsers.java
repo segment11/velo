@@ -2,10 +2,14 @@ package io.velo.acl;
 
 import io.activej.eventloop.Eventloop;
 import io.velo.ThreadNeedLocal;
+import io.velo.ValkeyRawConfSupport;
+import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -67,6 +71,46 @@ public class AclUsers {
             inners[i] = new Inner(eventloopThread != null ? eventloopThread.threadId() : Thread.currentThread().threadId());
         }
         log.info("Acl users init by slot worker eventloop array");
+    }
+
+    /**
+     * Loads the ACL file and replaces the existing user list with the loaded users.
+     */
+    public void loadAclFile() {
+        var aclFile = Paths.get(ValkeyRawConfSupport.aclFilename).toFile();
+        if (!aclFile.exists()) {
+            return;
+        }
+
+        List<U> users = new ArrayList<>();
+        try {
+            var lines = FileUtils.readLines(aclFile, "UTF-8");
+            for (var line : lines) {
+                if (line.startsWith("#")) {
+                    continue;
+                }
+
+                var u = U.fromLiteral(line);
+                if (u == null) {
+                    throw new IllegalArgumentException("parse acl file error: " + line);
+                }
+                users.add(u);
+            }
+        } catch (IOException e) {
+            log.error("Read acl file error={}", e.getMessage());
+            throw new RuntimeException("read acl file error: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            log.error("Parse acl file error={}", e.getMessage());
+            throw new RuntimeException("parse acl file error: " + e.getMessage());
+        }
+
+        // must include default user
+        if (users.stream().noneMatch(u -> u.getUser().equals(U.INIT_DEFAULT_U.getUser()))) {
+            log.error("no default user in acl file");
+            throw new IllegalArgumentException("no default user in acl file");
+        }
+
+        replaceUsers(users);
     }
 
     /**
