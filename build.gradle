@@ -106,7 +106,7 @@ dependencies {
     implementation group: 'com.github.luben', name: 'zstd-jni', version: '1.5.5-10'
     implementation group: 'org.lz4', name: 'lz4-java', version: '1.8.0'
 
-    implementation group: 'com.moilioncircle', name: 'redis-replicator', version: '3.8.1'
+    implementation group: 'com.moilioncircle', name: 'redis-replicator', version: '3.10.0'
 
     implementation group: 'redis.clients', name: 'jedis', version: '4.4.7'
 
@@ -282,6 +282,7 @@ task cBuildLzf(type: Exec) {
 }
 
 def javaHome = System.getenv("JAVA_HOME")
+println 'JAVA_HOME running in gradle: ' + javaHome
 
 task cBuildCrc64(type: Exec) {
     commandLine 'bash', '-c', 'cd src/main/c/redis_crc64 && mkdir -p build && cd build && cmake .. -B . && make'
