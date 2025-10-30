@@ -1258,8 +1258,11 @@ public class XGroup extends BaseCommand {
         return Repl.reply(slot, replPair, s_catch_up, new RawBytesContent(responseBytes));
     }
 
+    private long catchUpLoopCount = 0L;
+
     @VisibleForTesting
     Repl.ReplReply s_catch_up(short slot, byte[] contentBytes) {
+        catchUpLoopCount++;
         var catchUpIntervalMillis = ConfForSlot.global.confRepl.catchUpIntervalMillis;
 
         // client received from server
@@ -1358,7 +1361,7 @@ public class XGroup extends BaseCommand {
 
         try {
             var n = Binlog.decodeAndApply(slot, readSegmentBytes, skipBytesN, replPair);
-            if (fetchedOffset == 0) {
+            if (fetchedOffset == 0 && catchUpLoopCount % 10 == 0) {
                 log.info("Repl binlog catch up success, slave uuid={}, {}, catch up file index={}, catch up offset={}, apply n={}, slot={}",
                         replPair.getSlaveUuid(), replPair.getHostAndPort(), fetchedFileIndex, fetchedOffset, n, slot);
             }
