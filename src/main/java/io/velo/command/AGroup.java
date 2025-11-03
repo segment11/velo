@@ -66,6 +66,11 @@ public class AGroup extends BaseCommand {
             return append();
         }
 
+        if ("asking".equals(cmd)) {
+            // velo slot migration node A to node B, not by keys like redis, end when B all received.
+            return OKReply.INSTANCE;
+        }
+
         return NilReply.INSTANCE;
     }
 
