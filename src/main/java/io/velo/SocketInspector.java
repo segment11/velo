@@ -4,6 +4,7 @@ import io.activej.bytebuf.ByteBuf;
 import io.activej.eventloop.Eventloop;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
+import io.velo.command.BlockingList;
 import io.velo.command.XGroup;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.NotNull;
@@ -693,6 +694,9 @@ public class SocketInspector implements TcpSocket.Inspector {
 
         // remove from subscribe by channel
         subscribeByChannel.forEach((channel, sockets) -> sockets.remove(socket));
+
+        // remove from blocking list
+        BlockingList.removeBySocket(socket);
 
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
         connectedClientCountArray[threadIndex]--;

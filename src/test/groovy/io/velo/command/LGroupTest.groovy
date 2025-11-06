@@ -721,7 +721,7 @@ class LGroupTest extends Specification {
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()
         SettablePromise<Reply> finalPromise = new SettablePromise<>()
-        BlockingList.addBlockingListPromiseByKey('a', finalPromise, true)
+        BlockingList.addBlockingListPromiseByKey('a', finalPromise, null, true)
         reply = lGroup.execute('lpush a a')
         then:
         reply instanceof IntegerReply
@@ -731,7 +731,7 @@ class LGroupTest extends Specification {
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()
         SettablePromise<Reply> finalPromise2 = new SettablePromise<>()
-        BlockingList.addBlockingListPromiseByKey('a', finalPromise2, true)
+        BlockingList.addBlockingListPromiseByKey('a', finalPromise2, null, true)
         reply = rGroup.execute('rpush a a')
         then:
         reply instanceof IntegerReply
@@ -741,7 +741,7 @@ class LGroupTest extends Specification {
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()
         SettablePromise<Reply> finalPromise3 = new SettablePromise<>()
-        BlockingList.addBlockingListPromiseByKey('a', finalPromise3, true)
+        BlockingList.addBlockingListPromiseByKey('a', finalPromise3, null, true)
         inMemoryGetSet.remove(slot, 'a')
         reply = lGroup.execute('lpush a a')
         then:
@@ -751,7 +751,7 @@ class LGroupTest extends Specification {
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()
         SettablePromise<Reply> finalPromise4 = new SettablePromise<>()
-        BlockingList.addBlockingListPromiseByKey('a', finalPromise4, false)
+        BlockingList.addBlockingListPromiseByKey('a', finalPromise4, null, false)
         reply = lGroup.execute('lpush a a b c')
         then:
         reply instanceof IntegerReply
@@ -763,7 +763,7 @@ class LGroupTest extends Specification {
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()
         SettablePromise<Reply> finalPromise5 = new SettablePromise<>()
-        BlockingList.addBlockingListPromiseByKey('a', finalPromise5, true)
+        BlockingList.addBlockingListPromiseByKey('a', finalPromise5, null, true)
         reply = rGroup.execute('rpush a a b c')
         then:
         reply instanceof IntegerReply

@@ -2,6 +2,7 @@ package io.velo.command
 
 import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
+import io.velo.SocketInspectorTest
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
@@ -19,7 +20,7 @@ class BlockingListTest extends Specification {
 
         when:
         def settablePromise = new SettablePromise<Reply>()
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise, true)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise, null, true)
         then:
         BlockingList.blockingClientCount() == 1
         BlockingList.blockingKeyCount() == 1
@@ -39,9 +40,9 @@ class BlockingListTest extends Specification {
         def settablePromise3 = new SettablePromise<Reply>()
         def settablePromise4 = new SettablePromise<Reply>()
         settablePromise2.set(NilReply.INSTANCE)
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise2, true)
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise3, false)
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise4, true)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise2, null, true)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise3, null, false)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise4, null, true)
         def elementValueBytesArray2 = new byte[1][]
         elementValueBytesArray2[0] = 'a'.bytes
         def bb2 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray2)
@@ -55,8 +56,8 @@ class BlockingListTest extends Specification {
         BlockingList.clearBlockingListPromisesForAllKeys()
         def settablePromise33 = new SettablePromise<Reply>()
         def settablePromise44 = new SettablePromise<Reply>()
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise44, true)
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise33, false)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise44, null, true)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise33, null, false)
         def elementValueBytesArray33 = new byte[1][]
         elementValueBytesArray33[0] = 'a'.bytes
         def bb33 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray33)
@@ -69,8 +70,8 @@ class BlockingListTest extends Specification {
         BlockingList.clearBlockingListPromisesForAllKeys()
         def settablePromise333 = new SettablePromise<Reply>()
         def settablePromise444 = new SettablePromise<Reply>()
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise333, true)
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise444, true)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise333, null, true)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise444, null, true)
         def elementValueBytesArray333 = new byte[1][]
         elementValueBytesArray333[0] = 'a'.bytes
         def bb333 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray333)
@@ -83,8 +84,8 @@ class BlockingListTest extends Specification {
         BlockingList.clearBlockingListPromisesForAllKeys()
         def settablePromise3333 = new SettablePromise<Reply>()
         def settablePromise4444 = new SettablePromise<Reply>()
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise3333, false)
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise4444, false)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise3333, null, false)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise4444, null, false)
         def elementValueBytesArray3333 = new byte[1][]
         elementValueBytesArray3333[0] = 'a'.bytes
         def bb3333 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray3333)
@@ -97,8 +98,8 @@ class BlockingListTest extends Specification {
         BlockingList.clearBlockingListPromisesForAllKeys()
         def settablePromise5 = new SettablePromise<Reply>()
         def settablePromise6 = new SettablePromise<Reply>()
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise5, true)
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise6, false)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise5, null, true)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise6, null, false)
         def elementValueBytesArray5 = new byte[3][]
         elementValueBytesArray5[0] = 'a'.bytes
         elementValueBytesArray5[1] = 'b'.bytes
@@ -128,7 +129,7 @@ class BlockingListTest extends Specification {
 
         BlockingList.clearBlockingListPromisesForAllKeys()
         def settablePromise7 = new SettablePromise<Reply>()
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise7, true, xx)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise7, null, true, xx)
         def elementValueBytesArray7 = new byte[1][]
         elementValueBytesArray7[0] = 'a'.bytes
         def bb7 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray7, bGroup)
@@ -141,7 +142,7 @@ class BlockingListTest extends Specification {
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()
         def settablePromise8 = new SettablePromise<Reply>()
-        BlockingList.addBlockingListPromiseByKey('a', settablePromise8, false, xx)
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise8, null, false, xx)
         def elementValueBytesArray8 = new byte[1][]
         elementValueBytesArray8[0] = 'a'.bytes
         def bb8 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray8, bGroup)
@@ -152,11 +153,45 @@ class BlockingListTest extends Specification {
         inMemoryGetSet.getBuf(slot, 'b'.bytes, slotForKeyB.bucketIndex(), slotForKeyB.keyHash()) != null
 
         when:
-        var one = BlockingList.addBlockingListPromiseByKey('a', settablePromise8, true)
+        def one = BlockingList.addBlockingListPromiseByKey('a', settablePromise8, null, true)
         BlockingList.removeBlockingListPromiseByKey('a', one)
         BlockingList.removeBlockingListPromiseByKey('xx', one)
         then:
         1 == 1
+
+        when:
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        BlockingList.addOne('a', one)
+        then:
+        BlockingList.blockingClientCount() == 1
+
+        when:
+        BlockingList.removeOne('a', one)
+        then:
+        BlockingList.blockingClientCount() == 0
+
+        // test socket disconnect
+        when:
+        def socket = SocketInspectorTest.mockTcpSocket()
+        def socket2 = SocketInspectorTest.mockTcpSocket(null, 46380)
+        def settablePromise9 = new SettablePromise<Reply>()
+        def settablePromise10 = new SettablePromise<Reply>()
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        BlockingList.addBlockingListPromiseByKey('yy', settablePromise9, socket, true)
+        BlockingList.addBlockingListPromiseByKey('yy', settablePromise10, socket2, true)
+        then:
+        BlockingList.blockingKeyCount() == 1
+        BlockingList.blockingClientCount() == 2
+
+        when:
+        BlockingList.removeBySocket(socket)
+        then:
+        BlockingList.blockingClientCount() == 1
+
+        when:
+        BlockingList.removeBySocket(socket2)
+        then:
+        BlockingList.blockingClientCount() == 0
 
         cleanup:
         localPersist.cleanUp()

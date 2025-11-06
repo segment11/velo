@@ -14,7 +14,6 @@ import io.velo.type.RedisBitSet;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.Collections;
 
 public class BGroup extends BaseCommand {
     public BGroup(String cmd, byte[][] data, ITcpSocket socket) {
@@ -829,9 +828,9 @@ public class BGroup extends BaseCommand {
                     if (isNoWait) {
                         finalPromise.set(NilReply.INSTANCE);
                     } else {
-                        var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, isLeft, System.currentTimeMillis(), null);
+                        var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
                         for (var key : keys) {
-                            BlockingList.blockingListPromisesByKey.computeIfAbsent(key, k -> Collections.synchronizedList(new ArrayList<>())).add(one);
+                            BlockingList.addOne(key, one);
                         }
 
                         var reactor = Reactor.getCurrentReactor();
@@ -840,7 +839,7 @@ public class BGroup extends BaseCommand {
                                 finalPromise.set(NilReply.INSTANCE);
                                 // remove form blocking list
                                 for (var key : keys) {
-                                    BlockingList.blockingListPromisesByKey.get(key).remove(one);
+                                    BlockingList.removeOne(key, one);
                                 }
                             }
                         });
@@ -858,15 +857,15 @@ public class BGroup extends BaseCommand {
                 var asyncReply = new AsyncReply(finalPromise);
 
                 var firstKey = keys.getFirst();
-                var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, isLeft, System.currentTimeMillis(), null);
-                BlockingList.blockingListPromisesByKey.computeIfAbsent(firstKey, k -> Collections.synchronizedList(new ArrayList<>())).add(one);
+                var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
+                BlockingList.addOne(firstKey, one);
 
                 var reactor = Reactor.getCurrentReactor();
                 reactor.delay(timeoutSeconds * 1000, () -> {
                     if (!finalPromise.isComplete()) {
                         finalPromise.set(NilReply.INSTANCE);
                         // remove form blocking list
-                        BlockingList.blockingListPromisesByKey.get(firstKey).remove(one);
+                        BlockingList.removeOne(firstKey, one);
                     }
                 });
 

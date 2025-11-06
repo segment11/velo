@@ -508,7 +508,7 @@ public class RGroup extends BaseCommand {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        var one = BlockingList.addBlockingListPromiseByKey(srcKey, finalPromise, srcLeft, xx);
+        var one = BlockingList.addBlockingListPromiseByKey(srcKey, finalPromise, socket, srcLeft, xx);
 
         var reactor = Reactor.getCurrentReactor();
         reactor.delay(timeoutSeconds * 1000L, () -> {
