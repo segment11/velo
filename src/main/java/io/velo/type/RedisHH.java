@@ -303,7 +303,7 @@ public class RedisHH {
             var field = entry.getKey();
             var valueBytes = entry.getValue();
             var expireAt = mapExpireAt.get(field);
-            if (callback.onField(field, valueBytes, expireAt == null ? 0 : expireAt)) {
+            if (callback.onField(field, valueBytes, expireAt == null ? CompressedValue.NO_EXPIRE : expireAt)) {
                 break;
             }
         }
