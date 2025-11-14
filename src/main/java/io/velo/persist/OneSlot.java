@@ -1747,6 +1747,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return null;
         }
 
+        var expireAt = valueBytesWithExpireAtAndSeq.expireAt();
+        if (expireAt != CompressedValue.NO_EXPIRE && expireAt < System.currentTimeMillis()) {
+            return null;
+        }
+
         var valueBytes = valueBytesWithExpireAtAndSeq.valueBytes();
         if (!PersistValueMeta.isPvm(valueBytes)) {
             // short value, just return, CompressedValue can decode
@@ -2053,12 +2058,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
 
             // encode again
-            cvEncoded = cv.encodeAsBigStringMeta(uuid);
-            var xBigStrings = new XBigStrings(uuid, key, cvEncoded);
+            var cvBigStringEncoded = cv.encodeAsBigStringMeta(uuid);
+            var xBigStrings = new XBigStrings(uuid, key, cvBigStringEncoded);
             appendBinlog(xBigStrings);
 
             v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
-                    key, cvEncoded, isFromMerge);
+                    key, cvBigStringEncoded, isFromMerge);
 
             isValueShort = true;
         }
