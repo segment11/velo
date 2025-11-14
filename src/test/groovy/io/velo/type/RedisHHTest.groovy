@@ -43,7 +43,7 @@ class RedisHHTest extends Specification {
         def rh = new RedisHH()
 
         when:
-        rh.put('name', 'zhangsan'.bytes, System.currentTimeMillis() + 1000 * 10)
+        rh.put('name', 'zhangsan'.bytes, System.currentTimeMillis() + 1000 * 2)
         rh.put('age', '20'.bytes)
         def encoded = rh.encode()
         encoded = rh.encodeButDoNotCompress()
@@ -52,7 +52,6 @@ class RedisHHTest extends Specification {
         rh2.get('name') == 'zhangsan'.bytes
         rh2.get('age') == '20'.bytes
         rh2.size() == 2
-        RedisHH.getSizeWithoutDecode(encoded) == 2
         rh2.map.containsKey('name')
         rh2.map.containsKey('age')
 
@@ -64,6 +63,39 @@ class RedisHHTest extends Specification {
         }
         then:
         countOnlyFindName == 1
+
+        when:
+        // wait field name expire
+        Thread.sleep(1000 * 2 + 100)
+        rh2 = RedisHH.decode(encoded)
+        then:
+        rh2.get('name') == null
+        rh2.get('age') == '20'.bytes
+        rh2.size() == 1
+
+        when:
+        int countIfFindName = 0
+        rh2.iterate { key, value, expireAt ->
+            if (key == 'name') {
+                countIfFindName++
+                return true
+            }
+            return false
+        }
+        then:
+        countIfFindName == 0
+
+        when:
+        int countIfFindAge = 0
+        rh2.iterate { key, value, expireAt ->
+            if (key == 'age') {
+                countIfFindAge++
+                return true
+            }
+            return false
+        }
+        then:
+        countIfFindAge == 1
     }
 
     def 'decode crc32 not match'() {

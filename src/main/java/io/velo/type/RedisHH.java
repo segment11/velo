@@ -55,6 +55,12 @@ public class RedisHH {
         return map.size();
     }
 
+    /**
+     * Adds a key-value pair to the map.
+     *
+     * @param key   The key of the pair.
+     * @param value The value of the pair.
+     */
     public void put(String key, byte[] value) {
         put(key, value, null);
     }
@@ -178,7 +184,7 @@ public class RedisHH {
             var key = entry.getKey();
             var value = entry.getValue();
             var expireAt = mapExpireAt.get(key);
-            buffer.putLong(expireAt == null ? 0 : expireAt);
+            buffer.putLong(expireAt == null ? CompressedValue.NO_EXPIRE : expireAt);
             buffer.putShort((short) key.getBytes().length);
             buffer.put(key.getBytes());
             buffer.putInt(value.length);
@@ -264,23 +270,12 @@ public class RedisHH {
         var r = new RedisHH();
         iterate(data, doCheckCrc32, (field, valueBytes, expireAt) -> {
             r.map.put(field, valueBytes);
-            if (expireAt != 0) {
+            if (expireAt != CompressedValue.NO_EXPIRE) {
                 r.mapExpireAt.put(field, expireAt);
             }
             return false;
         });
         return r;
-    }
-
-    /**
-     * Retrieves the size of the map without decoding the entire byte array.
-     *
-     * @param data The byte array containing the encoded map.
-     * @return The size of the map.
-     */
-    public static int getSizeWithoutDecode(byte[] data) {
-        var buffer = ByteBuffer.wrap(data);
-        return buffer.getShort();
     }
 
     /**
@@ -296,6 +291,22 @@ public class RedisHH {
          * @return True to break the iteration, false to continue.
          */
         boolean onField(String field, byte[] valueBytes, long expireAt);
+    }
+
+    /**
+     * Iterates over the fields and values in a RedisHH object.
+     *
+     * @param callback The callback to be called for each field and value pair.
+     */
+    public void iterate(IterateCallback callback) {
+        for (var entry : map.entrySet()) {
+            var field = entry.getKey();
+            var valueBytes = entry.getValue();
+            var expireAt = mapExpireAt.get(field);
+            if (callback.onField(field, valueBytes, expireAt == null ? 0 : expireAt)) {
+                break;
+            }
+        }
     }
 
     /**
@@ -325,12 +336,21 @@ public class RedisHH {
             }
         }
 
+        var currentTimeMillis = System.currentTimeMillis();
         for (int i = 0; i < size; i++) {
             var expireAt = buffer.getLong();
 
             int keyLength = buffer.getShort();
             if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
                 throw new IllegalStateException("Key length error, key length=" + keyLength);
+            }
+
+            // skip expired
+            if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
+                buffer.position(buffer.position() + keyLength);
+                var valueLength = buffer.getInt();
+                buffer.position(buffer.position() + valueLength);
+                continue;
             }
 
             var keyBytes = new byte[keyLength];
@@ -342,8 +362,7 @@ public class RedisHH {
 
             var valueBytes = new byte[valueLength];
             buffer.get(valueBytes);
-            var isBreak = callback.onField(new String(keyBytes), valueBytes, expireAt);
-            if (isBreak) {
+            if (callback.onField(new String(keyBytes), valueBytes, expireAt)) {
                 break;
             }
         }

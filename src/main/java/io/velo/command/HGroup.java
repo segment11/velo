@@ -1051,7 +1051,8 @@ public class HGroup extends BaseCommand {
             return onlyReturnSize ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
         }
 
-        var size = RedisHH.getSizeWithoutDecode(encodedBytes);
+        var rhh = RedisHH.decode(encodedBytes);
+        var size = rhh.size();
         if (size == 0) {
             return onlyReturnSize ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
         }
@@ -1062,7 +1063,7 @@ public class HGroup extends BaseCommand {
 
         var replies = new Reply[size];
         final int[] i = {0};
-        RedisHH.iterate(encodedBytes, true, (field, value, expireAt) -> {
+        rhh.iterate((field, value, expireAt) -> {
             replies[i[0]++] = new BulkReply(field.getBytes());
             return false;
         });
