@@ -84,6 +84,10 @@ class ClusterxCommand extends BaseCommand {
             return addslots(true, true)
         }
 
+        if ('flushslots' == subCmd) {
+            return flushslots()
+        }
+
         if ('getkeysinslot' == subCmd) {
             return getkeysinslot()
         }
@@ -176,8 +180,7 @@ migrating_state:ok
     static final ErrorReply CLUSTER_DISABLED = new ErrorReply('This instance has cluster support disable')
 
 
-    @VisibleForTesting
-    Reply addslots(boolean isRange, boolean isDelete) {
+    private Reply addslots(boolean isRange, boolean isDelete) {
         if (!ConfForGlobal.clusterEnabled) {
             return CLUSTER_DISABLED
         }
@@ -212,7 +215,7 @@ migrating_state:ok
         def mySelfShard = multiShard.mySelfShard()
         def mySelfNode = mySelfShard.mySelfNode()
         if (!mySelfNode.master) {
-            return new ErrorReply('only master can add slots')
+            return new ErrorReply('only master can add or delete slots')
         }
 
         if (isDelete) {
@@ -222,8 +225,8 @@ migrating_state:ok
                 }
             }
 
-            TreeSet<Integer> add = []
-            mySelfShard.multiSlotRange.removeOrAddSet(toClientSlots, add)
+            TreeSet<Integer> addNone = []
+            mySelfShard.multiSlotRange.removeOrAddSet(toClientSlots, addNone)
 
             log.warn 'Cluster delete slots success, slots={}, node={}', toClientSlots, mySelfNode.nodeId()
             multiShard.saveMeta()
@@ -243,6 +246,38 @@ migrating_state:ok
         }
 
         log.warn 'Cluster add slots success, slots={}, node={}', toClientSlots, mySelfNode.nodeId()
+        multiShard.saveMeta()
+        OK
+    }
+
+    private Reply flushslots() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        if (data.length != 2) {
+            return ErrorReply.FORMAT
+        }
+
+        def multiShard = localPersist.multiShard
+        def mySelfShard = multiShard.mySelfShard()
+
+        // check if has data
+        for (slotRange in mySelfShard.multiSlotRange.list) {
+            for (toClientSLot in slotRange.begin..slotRange.end) {
+                def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSLot)
+                def oneSlot = localPersist.oneSlot(innerSlot)
+                // thread not safe, but is ok
+                if (oneSlot.getAllKeyCount() > 0) {
+                    return new ErrorReply('there are data in slot: ' + toClientSLot + ', inner slot: ' + innerSlot)
+                }
+            }
+        }
+
+        def allToClientSlots = mySelfShard.multiSlotRange.toTreeSet()
+        TreeSet<Integer> addNone = []
+        mySelfShard.multiSlotRange.removeOrAddSet(allToClientSlots, addNone)
+
         multiShard.saveMeta()
         OK
     }
@@ -885,20 +920,20 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         // set batch
         def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
         int toClientSlotEnd = toClientSlot + (MultiShard.TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber).intValue()
-        TreeSet<Integer> set = []
-        TreeSet<Integer> setEmpty = []
+        TreeSet<Integer> addSet = []
+        TreeSet<Integer> removeNone = []
         for (int i = toClientSlot; i < toClientSlotEnd; i++) {
-            set << i
+            addSet << i
         }
 
         // add
-        toShard.multiSlotRange.removeOrAddSet(setEmpty, set)
+        toShard.multiSlotRange.removeOrAddSet(removeNone, addSet)
         toShard.importMigratingSlot = Shard.NO_MIGRATING_SLOT
         toShard.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
         shards.each { ss ->
             if (ss != toShard) {
                 // remove
-                ss.multiSlotRange.removeOrAddSet(set, setEmpty)
+                ss.multiSlotRange.removeOrAddSet(addSet, removeNone)
                 ss.importMigratingSlot = Shard.NO_MIGRATING_SLOT
                 ss.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
             }

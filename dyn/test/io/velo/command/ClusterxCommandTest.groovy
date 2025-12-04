@@ -74,6 +74,7 @@ addslots
 addslotsrange
 delslots
 delslotsrange
+flushslots
 countkeysinslot
 getkeysinslot
 info
@@ -134,6 +135,7 @@ slots
         and:
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
 
         when:
         ConfForGlobal.clusterEnabled = true
@@ -188,6 +190,29 @@ slots
         then:
         reply instanceof ErrorReply
         ((ErrorReply) reply).message.contains('only master can')
+
+        when:
+        // flushslots
+        multiShard.shards[0].multiSlotRange.addSingle(0, 1024)
+        // has data
+        cGroup.set('a'.bytes, 'a'.bytes)
+        reply = clusterx.execute('cluster flushslots')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('there are data')
+
+        when:
+        // clear data
+        def firstOneSlot = localPersist.firstOneSlot()
+        firstOneSlot.flush()
+        reply = clusterx.execute('cluster flushslots')
+        then:
+        reply == ClusterxCommand.OK
+
+        when:
+        reply = clusterx.execute('cluster flushslots 0')
+        then:
+        reply == ErrorReply.FORMAT
 
         cleanup:
         localPersist.cleanUp()
