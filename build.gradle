@@ -277,24 +277,4 @@ task copyDependencies(type: Copy) {
     into 'build/libs/lib'
 }
 
-task cBuildLzf(type: Exec) {
-    commandLine 'bash', '-c', 'cd src/main/c/redis_lzf && mkdir -p build && cd build && cmake .. -B . && make'
-}
-
-def javaHome = System.getenv("JAVA_HOME")
-println 'JAVA_HOME running in gradle: ' + javaHome
-
-task cBuildCrc64(type: Exec) {
-    commandLine 'bash', '-c', 'cd src/main/c/redis_crc64 && mkdir -p build && cd build && cmake .. -B . && make'
-    // env
-    environment 'JAVA_HOME', javaHome
-}
-
-task cLibCopy(type: Copy) {
-    from 'src/main/c/redis_lzf/build/libredis_lzf.so', 'src/main/c/redis_crc64/build/libredis_crc64.so'
-    into 'build/libs/lib'
-}
-
-cLibCopy.dependsOn cBuildLzf, cBuildCrc64
-
-jar.dependsOn copyDynScript, copyLog4j2, copyConfigFile, copyDependencies, cLibCopy
+jar.dependsOn copyDynScript, copyLog4j2, copyConfigFile, copyDependencies

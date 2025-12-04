@@ -1,8 +1,10 @@
 package io.velo.rdb;
 
+import com.moilioncircle.redis.replicator.util.ByteArray;
+import com.moilioncircle.redis.replicator.util.CRC64;
+import com.moilioncircle.redis.replicator.util.Lzf;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.velo.Utils;
 import io.velo.command.RDBCallback;
 import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
@@ -11,29 +13,7 @@ import io.velo.type.RedisZSet;
 import io.velo.type.encode.ListPack;
 import io.velo.type.encode.ZipList;
 
-import java.io.File;
-import java.nio.ByteBuffer;
-
 public class RDBParser {
-    static void setLoadLibraryPath() {
-        var dir = new File(Utils.projectPath("/lib"));
-        if (dir.exists()) {
-            System.setProperty("jna.library.path", dir.getAbsolutePath());
-        } else {
-            dir = new File(Utils.projectPath("/build/libs/lib"));
-            if (dir.exists()) {
-                System.setProperty("jna.library.path", dir.getAbsolutePath());
-            } else {
-                System.out.println("Can't find lib directory");
-            }
-        }
-    }
-
-    static {
-        setLoadLibraryPath();
-        RedisCrc.crc64Init();
-    }
-
     // Redis RDB type constants
     public static final short RDB_MIN_VERSION = 6;
     public static final short RDB_VERSION = 11;
@@ -183,12 +163,22 @@ public class RDBParser {
             long ulen = decodeLength(buf, new int[1]);
             var cdata = new byte[(int) clen];
             buf.readBytes(cdata);
-            var out = new byte[(int) ulen];
-            int res = RedisLzf.instance.lzf_decompress(
-                    ByteBuffer.wrap(cdata), (int) clen,
-                    ByteBuffer.wrap(out), (int) ulen);
-            if (res <= 0) {
-                throw new IllegalArgumentException("LZF decompress failed");
+            var outByteArray = Lzf.decode(new ByteArray(cdata), ulen);
+            var it = outByteArray.iterator();
+            byte[] out = null;
+            int outPos = 0;
+            while (it.hasNext()) {
+                var bytes = it.next();
+                if (bytes.length == ulen) {
+                    out = bytes;
+                    break;
+                } else {
+                    if (out == null) {
+                        out = new byte[(int) ulen];
+                    }
+                    System.arraycopy(bytes, 0, out, outPos, bytes.length);
+                    outPos += bytes.length;
+                }
             }
             return out;
         } else {
@@ -399,11 +389,9 @@ public class RDBParser {
     }
 
     // dump
-
-
     private static byte[] writeVersionAndCrc(ByteBuf buf) {
         buf.writeShortLE(RDB_VERSION);
-        var crc = RedisCrc.crc64(0, buf.array(), 0, buf.readableBytes());
+        var crc = CRC64.crc64(buf.array(), 0, buf.readableBytes());
         buf.writeLongLE(crc);
 
         var result = new byte[buf.readableBytes()];
