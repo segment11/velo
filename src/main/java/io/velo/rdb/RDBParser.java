@@ -467,7 +467,6 @@ public class RDBParser {
         return writeVersionAndCrc(buf);
     }
 
-
     // Helper method to write RDB string encoding
     private static void writeRdbString(ByteBuf buf, byte[] data) {
         // Try to encode as integer if possible
@@ -493,6 +492,25 @@ public class RDBParser {
                 }
             } catch (NumberFormatException e) {
                 // Not a number, continue with normal string encoding
+            }
+        }
+
+        if (data.length > 20) {
+            try {
+                var compressed = Lzf.encode(new ByteArray(data));
+                if (compressed.length() < data.length) {
+                    // Only use compression if it actually reduces size
+                    buf.writeByte((byte) (0xC0 | 3)); // Special encoding flag with LZF indicator
+                    writeRdbLength(buf, compressed.length()); // Compressed length
+                    writeRdbLength(buf, data.length); // Uncompressed length
+                    // Write compressed data
+                    for (var bytes : compressed) {
+                        buf.writeBytes(bytes);
+                    }
+                    return;
+                }
+            } catch (Exception e) {
+                // If compression fails, fall back to regular encoding
             }
         }
 
