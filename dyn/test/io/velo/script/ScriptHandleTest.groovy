@@ -1,5 +1,7 @@
 package io.velo.script
 
+import io.velo.MultiWorkerServer
+import io.velo.SocketInspector
 import io.velo.Utils
 import io.velo.command.*
 import io.velo.dyn.CachedGroovyClassLoader
@@ -56,7 +58,6 @@ class ScriptHandleTest extends Specification {
         def clusterxScript = new ClusterxCommandHandle()
         clusterxScript.setBinding(binding)
         clusterxScript.run()
-        new ClusterxCommandHandle(binding).run()
         then:
         1 == 1
 
@@ -64,7 +65,6 @@ class ScriptHandleTest extends Specification {
         def commandScript = new CommandCommandHandle()
         commandScript.setBinding(binding3)
         commandScript.run()
-        new CommandCommandHandle(binding3).run()
         then:
         1 == 1
 
@@ -72,7 +72,6 @@ class ScriptHandleTest extends Specification {
         def configScript = new ConfigCommandHandle()
         configScript.setBinding(binding)
         configScript.run()
-        new ConfigCommandHandle(binding).run()
         then:
         1 == 1
 
@@ -80,7 +79,6 @@ class ScriptHandleTest extends Specification {
         def extendScript = new ExtendCommandHandle()
         extendScript.setBinding(binding)
         extendScript.run()
-        new ExtendCommandHandle(binding).run()
         then:
         1 == 1
 
@@ -88,15 +86,15 @@ class ScriptHandleTest extends Specification {
         def extendScript2 = new ExtendCommandParseSlots()
         extendScript2.setBinding(binding2)
         extendScript2.run()
-        new ExtendCommandParseSlots(binding2).run()
         then:
         1 == 1
 
         when:
+        def inspector = new SocketInspector()
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
         def infoScript = new InfoCommandHandle()
         infoScript.setBinding(binding)
         infoScript.run()
-        new InfoCommandHandle(binding).run()
         then:
         1 == 1
 
@@ -104,15 +102,6 @@ class ScriptHandleTest extends Specification {
         def manageScript = new ManageCommandHandle()
         manageScript.setBinding(binding)
         manageScript.run()
-        new ManageCommandHandle(binding).run()
-        then:
-        1 == 1
-
-        when:
-        def sentinelScript = new SentinelCommandHandle()
-        sentinelScript.setBinding(binding)
-        sentinelScript.run()
-        new SentinelCommandHandle(binding).run()
         then:
         1 == 1
 
@@ -120,7 +109,6 @@ class ScriptHandleTest extends Specification {
         def manageScript2 = new ManageCommandParseSlots()
         manageScript2.setBinding(binding2)
         manageScript2.run()
-        new ManageCommandParseSlots(binding2).run()
         then:
         1 == 1
 

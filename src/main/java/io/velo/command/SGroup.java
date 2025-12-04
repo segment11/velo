@@ -6,7 +6,6 @@ import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.*;
 import io.velo.dyn.CachedGroovyClassLoader;
-import io.velo.dyn.RefreshLoader;
 import io.velo.persist.KeyLoader;
 import io.velo.persist.ScanCursor;
 import io.velo.repl.LeaderSelector;
@@ -388,15 +387,7 @@ public class SGroup extends BaseCommand {
     private final CachedGroovyClassLoader cl = CachedGroovyClassLoader.getInstance();
 
     private Reply sentinel() {
-        if (data.length < 2) {
-            return ErrorReply.FORMAT;
-        }
-
-        var scriptText = RefreshLoader.getScriptText("/dyn/src/io/velo/script/SentinelCommandHandle.groovy");
-
-        var variables = new HashMap<String, Object>();
-        variables.put("sGroup", this);
-        return (Reply) cl.eval(scriptText, variables);
+        return ErrorReply.NOT_SUPPORT;
     }
 
     private static final String IPV4_REGEX =

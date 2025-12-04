@@ -4,7 +4,6 @@ import io.activej.eventloop.Eventloop
 import io.velo.*
 import io.velo.acl.AclUsers
 import io.velo.acl.RPubSub
-import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
 import io.velo.repl.LeaderSelector
@@ -413,15 +412,10 @@ sunionstore
         given:
         def sGroup = new SGroup(null, null, null)
 
-        and:
-        def loader = CachedGroovyClassLoader.instance
-        def classpath = Utils.projectPath('/dyn/src')
-        loader.init(GroovyClassLoader.getClass().classLoader, classpath, null)
-
         when:
         def reply = sGroup.execute('sentinel zzz')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == ErrorReply.NOT_SUPPORT
     }
 
     def 'test set'() {
