@@ -110,7 +110,7 @@ class EGroupTest extends Specification {
         reply = eGroup.handle()
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'a'.bytes
+        (reply as BulkReply).raw == 'a'.bytes
 
         when:
         def classpath = Utils.projectPath("/dyn/src")
@@ -151,14 +151,14 @@ class EGroupTest extends Specification {
         reply = eGroup.execute('exists a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         inMemoryGetSet.remove(slot, 'a')
         reply = eGroup.execute('exists a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         def eventloop = Eventloop.builder()
@@ -180,7 +180,7 @@ class EGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && ((IntegerReply) result).integer == 1
         }.result
 
@@ -355,7 +355,7 @@ class EGroupTest extends Specification {
         reply = eGroup.execute('expiretime a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -1
+        (reply as IntegerReply).integer == -1
 
         when:
         cv.expireAt = System.currentTimeMillis() + 1000 * 60
@@ -363,19 +363,19 @@ class EGroupTest extends Specification {
         reply = pGroup.execute('pexpiretime a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == cv.expireAt
+        (reply as IntegerReply).integer == cv.expireAt
 
         when:
         reply = eGroup.execute('expiretime a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == (cv.expireAt / 1000).intValue()
+        (reply as IntegerReply).integer == (cv.expireAt / 1000).intValue()
 
         when:
         inMemoryGetSet.remove(slot, 'a')
         reply = eGroup.execute('expiretime a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -2
+        (reply as IntegerReply).integer == -2
     }
 }

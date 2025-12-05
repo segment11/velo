@@ -146,15 +146,15 @@ class AGroupTest extends Specification {
         def reply = aGroup.execute('acl cat')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'all'.bytes
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'all'.bytes
 
         when:
         reply = aGroup.execute('acl cat dangerous')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'acl'.bytes
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'acl'.bytes
 
         when:
         reply = aGroup.execute('acl cat dangerous_x')
@@ -181,7 +181,7 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl deluser a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         aclUsers.upInsert('a') { u ->
@@ -190,7 +190,7 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl deluser a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         // ***** *****
         when:
@@ -235,13 +235,13 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl genpass')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw.length == 64
+        (reply as BulkReply).raw.length == 64
 
         when:
         reply = aGroup.execute('acl genpass 5')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw.length == 2
+        (reply as BulkReply).raw.length == 2
 
         when:
         reply = aGroup.execute('acl genpass 0')
@@ -269,7 +269,7 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl getuser a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).dumpForTest(sb, 0)
+        (reply as MultiBulkReply).dumpForTest(sb, 0)
 
         when:
         println sb.toString()
@@ -287,7 +287,7 @@ class AGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         // default + a
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         reply = aGroup.execute('acl list a')
@@ -310,14 +310,14 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl load')
         then:
         reply instanceof ErrorReply
-        ((ErrorReply) reply).message == 'no default user in acl file'
+        (reply as ErrorReply).message == 'no default user in acl file'
 
         when:
         aclFile.text = 'user default on'
         reply = aGroup.execute('acl load')
         then:
         reply instanceof ErrorReply
-        ((ErrorReply) reply).message.contains 'parse acl file error'
+        (reply as ErrorReply).message.contains 'parse acl file error'
 
         when:
         // invalid key pattern
@@ -325,7 +325,7 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl load')
         then:
         reply instanceof ErrorReply
-        ((ErrorReply) reply).message.contains 'parse acl file error'
+        (reply as ErrorReply).message.contains 'parse acl file error'
 
         when:
         aclFile.delete()
@@ -348,7 +348,7 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl log 1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         reply = aGroup.execute('acl log 0')
@@ -446,7 +446,7 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl users')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         reply = aGroup.execute('acl users a')
@@ -460,14 +460,14 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl whoami')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'default'.bytes
+        (reply as BulkReply).raw == 'default'.bytes
 
         when:
         SocketInspector.setAuthUser(socket, 'a')
         reply = aGroup.execute('acl whoami')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'a'.bytes
+        (reply as BulkReply).raw == 'a'.bytes
 
         when:
         reply = aGroup.execute('acl whoami x')

@@ -112,7 +112,7 @@ class WGroupTest extends Specification {
         Thread.sleep(200)
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && (result as IntegerReply).integer == 0
         }.result
 
@@ -122,7 +122,7 @@ class WGroupTest extends Specification {
         Thread.sleep(200)
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && (result as IntegerReply).integer == 1
         }.result
 
@@ -134,7 +134,7 @@ class WGroupTest extends Specification {
         Thread.sleep(200)
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && (result as IntegerReply).integer == 2
         }.result
 

@@ -140,7 +140,7 @@ class IGroupTest extends Specification {
         def reply = iGroup.handle()
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         def data3 = new byte[3][]
@@ -151,7 +151,7 @@ class IGroupTest extends Specification {
         reply = iGroup.handle()
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         data3[2] = 'a'.bytes

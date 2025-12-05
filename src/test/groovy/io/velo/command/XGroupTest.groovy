@@ -148,7 +148,7 @@ class XGroupTest extends Specification {
         reply = xGroup.handle()
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw) == 'localhost:6380'
+        new String((reply as BulkReply).raw) == 'localhost:6380'
 
         when:
         data4[3] = 'x_catch_up'.bytes

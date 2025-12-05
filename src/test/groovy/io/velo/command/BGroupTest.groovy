@@ -847,7 +847,7 @@ class BGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == NilReply.INSTANCE
         }.result
 
@@ -858,7 +858,7 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('blpop a b 0')
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == NilReply.INSTANCE
         }.result
 
@@ -869,7 +869,7 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('blpop a b 0')
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof MultiBulkReply &&
                     ((result as MultiBulkReply).replies[1] as BulkReply).raw == 'b'.bytes
         }.result
@@ -880,7 +880,7 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('blpop a b 0')
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == NilReply.INSTANCE
         }.result
 
@@ -890,7 +890,7 @@ class BGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == NilReply.INSTANCE
         }.result
 

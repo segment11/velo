@@ -148,7 +148,7 @@ class PGroupTest extends Specification {
         reply = pGroup.handle()
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -2
+        (reply as IntegerReply).integer == -2
 
         when:
         def data1 = new byte[1][]
@@ -182,7 +182,7 @@ class PGroupTest extends Specification {
         reply = pGroup.handle()
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -2
+        (reply as IntegerReply).integer == -2
 
         when:
         pGroup.cmd = 'psetex'
@@ -330,7 +330,7 @@ class PGroupTest extends Specification {
         def reply = pGroup.execute('pfcount a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         pGroup.execute('pfadd a abc')
@@ -338,7 +338,7 @@ class PGroupTest extends Specification {
         reply = pGroup.execute('pfcount a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = pGroup.execute('pfmerge dst a b')
@@ -363,7 +363,7 @@ class PGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && ((IntegerReply) result).integer == 2
         }.result
 
@@ -372,7 +372,7 @@ class PGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == OKReply.INSTANCE
         }.result
 
@@ -381,7 +381,7 @@ class PGroupTest extends Specification {
         reply = pGroup.execute('pfcount dst')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         cleanup:
         eventloop.breakEventloop()
@@ -404,7 +404,7 @@ class PGroupTest extends Specification {
         def reply = _PGroup.publish(data3, null)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         def socket = SocketInspectorTest.mockTcpSocket()

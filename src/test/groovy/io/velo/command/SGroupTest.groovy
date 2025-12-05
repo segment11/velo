@@ -139,7 +139,7 @@ sunionstore
         sGroup.cmd = 'sentinel'
         def reply = sGroup.handle()
         then:
-        reply == ErrorReply.FORMAT
+        reply == ErrorReply.NOT_SUPPORT
 
         when:
         sGroup.cmd = 'save'
@@ -195,7 +195,7 @@ sunionstore
         reply = sGroup.execute('save')
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == OKReply.INSTANCE
         }.result
 
@@ -237,7 +237,7 @@ sunionstore
         def reply = sGroup.scan()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         data8[7] = 'hash'.bytes
@@ -278,9 +278,9 @@ sunionstore
         reply = sGroup.scan()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
-        ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 10
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 10
         ScanCursor.fromLong(veloUserData.lastScanAssignCursor).keyBucketsSkipCount() == 10
 
         when:
@@ -291,9 +291,9 @@ sunionstore
         reply = sGroup.scan()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
-        ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 5
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 5
         ScanCursor.fromLong(veloUserData.lastScanAssignCursor).keyBucketsSkipCount() == 5
 
         when:
@@ -308,9 +308,9 @@ sunionstore
         reply = sGroup.scan()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
-        ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 5
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 5
         !ScanCursor.fromLong(veloUserData.lastScanAssignCursor).walIterateEnd
         ScanCursor.fromLong(veloUserData.lastScanAssignCursor).walSkipCount() == 5
 
@@ -320,9 +320,9 @@ sunionstore
         reply = sGroup.scan()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
-        ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 15
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 15
         ScanCursor.fromLong(veloUserData.lastScanAssignCursor).walIterateEnd
         ScanCursor.fromLong(veloUserData.lastScanAssignCursor).keyBucketsSkipCount() == 5
 
@@ -332,9 +332,9 @@ sunionstore
         reply = sGroup.scan()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
-        ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 10
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 10
 
         when:
         // wal key values clear
@@ -342,7 +342,7 @@ sunionstore
         reply = sGroup.scan()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies[1] == MultiBulkReply.EMPTY
+        (reply as MultiBulkReply).replies[1] == MultiBulkReply.EMPTY
 
         when:
         // count, invalid integer
@@ -480,7 +480,7 @@ sunionstore
         reply = sGroup.execute('set a value get')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'value'.bytes
+        (reply as BulkReply).raw == 'value'.bytes
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -687,7 +687,7 @@ sunionstore
 
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 6
+        (reply as IntegerReply).integer == 6
         inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().compressedData[1..-1] == 'value'.bytes
 
@@ -695,7 +695,7 @@ sunionstore
         reply = sGroup.execute('setrange a 1 value')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 6
+        (reply as IntegerReply).integer == 6
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -704,7 +704,7 @@ sunionstore
         reply = sGroup.execute('setrange a 1 value')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 10
+        (reply as IntegerReply).integer == 10
         inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().compressedData == '1value7890'.bytes
 
@@ -713,7 +713,7 @@ sunionstore
         reply = sGroup.execute('setrange a 0 value')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 10
+        (reply as IntegerReply).integer == 10
         inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().compressedData == 'value67890'.bytes
 
@@ -760,7 +760,7 @@ sunionstore
         reply = sGroup.execute('strlen a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 10
+        (reply as IntegerReply).integer == 10
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_INT
@@ -770,7 +770,7 @@ sunionstore
         reply = sGroup.execute('strlen a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 6
+        (reply as IntegerReply).integer == 6
     }
 
     def 'test select'() {
@@ -801,7 +801,7 @@ sunionstore
         def reply = sGroup.execute('sadd a 1 2')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -813,7 +813,7 @@ sunionstore
         reply = sGroup.execute('sadd a 1 2')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         rhk.remove('1')
@@ -861,7 +861,7 @@ sunionstore
         reply = sGroup.execute('scard a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = sGroup.execute('scard >key')
@@ -913,7 +913,7 @@ sunionstore
         reply = sGroup.sdiff(false, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         reply = sGroup.sdiff(true, false)
@@ -924,7 +924,7 @@ sunionstore
         reply = sGroup.sdiff(false, true)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         // empty set
@@ -959,7 +959,7 @@ sunionstore
         reply = sGroup.sdiff(false, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         reply = sGroup.sdiff(true, false)
@@ -970,7 +970,7 @@ sunionstore
         reply = sGroup.sdiff(false, true)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         rhkB.add('1')
@@ -979,15 +979,15 @@ sunionstore
         reply = sGroup.sdiff(false, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == '2'.bytes
+        (reply as MultiBulkReply).replies.length == 1
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == '2'.bytes
 
         when:
         reply = sGroup.sdiff(true, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == '1'.bytes
+        (reply as MultiBulkReply).replies.length == 1
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == '1'.bytes
 
         when:
         rhkB.remove('1')
@@ -1016,7 +1016,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == MultiBulkReply.EMPTY
         }.result
 
@@ -1025,7 +1025,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             (result instanceof MultiBulkReply) && ((MultiBulkReply) result).replies.length == 3
         }.result
 
@@ -1085,7 +1085,7 @@ sunionstore
         reply = sGroup.sdiffstore(false, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = sGroup.sdiffstore(true, false)
@@ -1096,7 +1096,7 @@ sunionstore
         reply = sGroup.sdiffstore(false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         // empty set
@@ -1130,7 +1130,7 @@ sunionstore
         reply = sGroup.sdiffstore(false, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = sGroup.sdiffstore(true, false)
@@ -1141,7 +1141,7 @@ sunionstore
         reply = sGroup.sdiffstore(false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         rhkB.add('1')
@@ -1150,14 +1150,14 @@ sunionstore
         reply = sGroup.sdiffstore(false, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
         RedisHashKeys.decode(inMemoryGetSet.getBuf(slot, 'dst'.bytes, 0, 0L).cv().compressedData).contains('2')
 
         when:
         reply = sGroup.sdiffstore(true, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
         RedisHashKeys.decode(inMemoryGetSet.getBuf(slot, 'dst'.bytes, 0, 0L).cv().compressedData).contains('1')
 
         when:
@@ -1187,7 +1187,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_0
         }.result
 
@@ -1196,7 +1196,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             (result instanceof IntegerReply) && ((IntegerReply) result).integer == 3
         }.result
 
@@ -1209,7 +1209,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             reply == IntegerReply.REPLY_0
         }.result
 
@@ -1218,7 +1218,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             reply == IntegerReply.REPLY_0
         }.result
 
@@ -1227,7 +1227,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             (result instanceof IntegerReply) && ((IntegerReply) result).integer == 3
         }.result
 
@@ -1237,7 +1237,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             reply == IntegerReply.REPLY_0
         }.result
 
@@ -1309,19 +1309,19 @@ sunionstore
         reply = sGroup.execute('sintercard 2 a b limit 0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = sGroup.execute('sintercard 2 a b limit 1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = sGroup.execute('sintercard 2 a b limit 2')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         def eventloop = Eventloop.builder()
@@ -1341,7 +1341,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             (result instanceof IntegerReply) && ((IntegerReply) result).integer == 1
         }.result
 
@@ -1350,7 +1350,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             (result instanceof IntegerReply) && ((IntegerReply) result).integer == 1
         }.result
 
@@ -1359,7 +1359,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             (result instanceof IntegerReply) && ((IntegerReply) result).integer == 1
         }.result
 
@@ -1371,7 +1371,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_0
         }.result
 
@@ -1381,7 +1381,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_0
         }.result
 
@@ -1496,7 +1496,7 @@ sunionstore
         reply = sGroup.execute('smembers a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         rhkA.remove('1')
@@ -1537,9 +1537,9 @@ sunionstore
         reply = sGroup.execute('smismember a 1 2')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_1
-        ((MultiBulkReply) reply).replies[1] == IntegerReply.REPLY_0
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
+        (reply as MultiBulkReply).replies[1] == IntegerReply.REPLY_0
 
         when:
         rhkA.remove('1')
@@ -1811,7 +1811,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_1
         }.result
 
@@ -1823,7 +1823,7 @@ sunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_1
         }.result
 
@@ -1890,38 +1890,38 @@ sunionstore
         reply = sGroup.execute('srandmember a 1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         reply = sGroup.execute('srandmember a')
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw) as int < 10
+        new String((reply as BulkReply).raw) as int < 10
 
         when:
         reply = sGroup.execute('srandmember a 11')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 10
+        (reply as MultiBulkReply).replies.length == 10
 
         when:
         reply = sGroup.execute('srandmember a -5')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 5
+        (reply as MultiBulkReply).replies.length == 5
 
         when:
         reply = sGroup.execute('spop a 5')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 5
+        (reply as MultiBulkReply).replies.length == 5
 
         when:
         // pop all
         reply = sGroup.execute('spop a 5')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 5
+        (reply as MultiBulkReply).replies.length == 5
 
         when:
         reply = sGroup.execute('srandmember a a')
@@ -1966,7 +1966,7 @@ sunionstore
         reply = sGroup.execute('srem a 1 2')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         rhkA.add('1')
@@ -1977,7 +1977,7 @@ sunionstore
         reply = sGroup.execute('srem a 1 2')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = sGroup.execute('srem a 1 >key')
@@ -2011,7 +2011,7 @@ sunionstore
         def reply = sGroup.subscribe(false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 3 * 3
+        (reply as MultiBulkReply).replies.length == 3 * 3
 
         when:
         aclUsers.upInsert('default') { u ->
@@ -2064,7 +2064,7 @@ sunionstore
         def reply = sGroup.slaveof()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == OKReply.INSTANCE
         }.result
 
@@ -2092,7 +2092,7 @@ sunionstore
         reply = sGroup.slaveof()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == OKReply.INSTANCE
         }.result
 

@@ -235,7 +235,7 @@ class InfoCommandTest extends Specification {
         def reply = infoCommand.execute('info keyspace')
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof BulkReply
                     && new String((result as BulkReply).raw).contains('keys:0')
         }.result

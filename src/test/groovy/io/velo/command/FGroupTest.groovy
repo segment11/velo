@@ -129,7 +129,7 @@ class FGroupTest extends Specification {
         }
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == OKReply.INSTANCE
         }.result
 
@@ -164,7 +164,7 @@ class FGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == OKReply.INSTANCE
         }.result
 

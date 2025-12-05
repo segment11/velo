@@ -198,7 +198,7 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getdel a')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == cv.compressedData
+        (reply as BulkReply).raw == cv.compressedData
     }
 
     def 'test getex'() {
@@ -220,7 +220,7 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getex a')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == cv.compressedData
+        (reply as BulkReply).raw == cv.compressedData
 
         when:
         reply = gGroup.execute('getex >key')
@@ -307,7 +307,7 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getrange a 0 1')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'ab'.bytes
+        (reply as BulkReply).raw == 'ab'.bytes
 
         when:
         reply = gGroup.execute('getrange a 0 a')
@@ -318,7 +318,7 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getrange a 2 1')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw.length == 0
+        (reply as BulkReply).raw.length == 0
     }
 
     def 'test getset'() {
@@ -342,7 +342,7 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getset a value2')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'abc'.bytes
+        (reply as BulkReply).raw == 'abc'.bytes
 
         when:
         def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, 0L)
@@ -362,43 +362,43 @@ class GGroupTest extends Specification {
         def reply = gGroup.execute('geoadd a nx xx ch 1.0 2.0 m0 2.0 3.0 m1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = gGroup.execute('geoadd a nx 1.0 2.0 m0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = gGroup.execute('geoadd a xx 1.0 2.0 m2')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = gGroup.execute('geoadd a 1.0 2.0 m0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = gGroup.execute('geoadd a ch 10.0 20.0 m0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = gGroup.execute('geoadd a ch 10.0 30.0 m0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = gGroup.execute('geoadd a ch 20.0 30.0 m0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = gGroup.execute('geoadd a nx 1.a 2.0 m0')
@@ -585,7 +585,7 @@ class GGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && ((IntegerReply) result).integer == 2
         }.result
 

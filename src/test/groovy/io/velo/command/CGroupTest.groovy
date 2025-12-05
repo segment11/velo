@@ -236,7 +236,7 @@ class CGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_0
         }.result
 
@@ -245,7 +245,7 @@ class CGroupTest extends Specification {
         reply = cGroup.execute('copy a b replace')
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_1
         }.result
 
@@ -253,7 +253,7 @@ class CGroupTest extends Specification {
         reply = cGroup.execute('copy a b replace_')
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_0
         }.result
 

@@ -206,7 +206,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lindex a 0')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'a'.bytes
+        (reply as BulkReply).raw == 'a'.bytes
 
         when:
         reply = lGroup.execute('lindex a 1')
@@ -217,7 +217,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lindex a -1')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'a'.bytes
+        (reply as BulkReply).raw == 'a'.bytes
 
         when:
         reply = lGroup.execute('lindex a -2')
@@ -264,7 +264,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('linsert a after b c')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         rl = new RedisList()
@@ -274,7 +274,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('linsert a before b c')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         rl.removeFirst()
@@ -283,7 +283,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('linsert a before b c')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = lGroup.execute('linsert a xxx b c')
@@ -330,7 +330,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('llen a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = lGroup.execute('llen >key')
@@ -370,7 +370,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lmove a b left left')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'a'.bytes
+        (reply as BulkReply).raw == 'a'.bytes
 
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
@@ -378,7 +378,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lmove a b left right')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'a'.bytes
+        (reply as BulkReply).raw == 'a'.bytes
 
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
@@ -386,7 +386,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lmove a b right left')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'a'.bytes
+        (reply as BulkReply).raw == 'a'.bytes
 
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
@@ -394,7 +394,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lmove a b right right')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'a'.bytes
+        (reply as BulkReply).raw == 'a'.bytes
 
         when:
         reply = lGroup.execute('lmove a b xxx right')
@@ -468,7 +468,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lpop a')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == 'a'.bytes
+        (reply as BulkReply).raw == 'a'.bytes
 
         when:
         reply = lGroup.execute('lpop a')
@@ -485,9 +485,9 @@ class LGroupTest extends Specification {
         reply = rGroup.execute('rpop a 2')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == ('aaaaabbbbbccccc' * 5).bytes
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == ('aaaaabbbbbccccc' * 5).bytes
 
         when:
         // clear all
@@ -568,7 +568,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lpos a a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = lGroup.execute('lpos a b')
@@ -579,7 +579,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lpos a a rank -1 count 1 maxlen 0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         rl.removeFirst()
@@ -594,13 +594,13 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lpos a 5 rank -1 count 1 maxlen 0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 15
+        (reply as IntegerReply).integer == 15
 
         when:
         reply = lGroup.execute('lpos a 5 rank 2 count 1 maxlen 0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 15
+        (reply as IntegerReply).integer == 15
 
         when:
         // maxlen
@@ -617,27 +617,27 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lpos a 5 rank 1 count 2 maxlen 0')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof IntegerReply
-        ((IntegerReply) ((MultiBulkReply) reply).replies[0]).integer == 5
-        ((MultiBulkReply) reply).replies[1] instanceof IntegerReply
-        ((IntegerReply) ((MultiBulkReply) reply).replies[1]).integer == 15
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof IntegerReply
+        ((IntegerReply) (reply as MultiBulkReply).replies[0]).integer == 5
+        (reply as MultiBulkReply).replies[1] instanceof IntegerReply
+        ((IntegerReply) (reply as MultiBulkReply).replies[1]).integer == 15
 
         when:
         reply = lGroup.execute('lpos a 5 rank -1 count 2 maxlen 0')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof IntegerReply
-        ((IntegerReply) ((MultiBulkReply) reply).replies[0]).integer == 15
-        ((MultiBulkReply) reply).replies[1] instanceof IntegerReply
-        ((IntegerReply) ((MultiBulkReply) reply).replies[1]).integer == 5
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof IntegerReply
+        ((IntegerReply) (reply as MultiBulkReply).replies[0]).integer == 15
+        (reply as MultiBulkReply).replies[1] instanceof IntegerReply
+        ((IntegerReply) (reply as MultiBulkReply).replies[1]).integer == 5
 
         when:
         reply = lGroup.execute('lpos a 5 rank -1 count 0 maxlen 0')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         reply = lGroup.execute('lpos a 5 rank')
@@ -710,13 +710,13 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lpush a a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = rGroup.execute('rpush a a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()
@@ -725,7 +725,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lpush a a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 3
+        (reply as IntegerReply).integer == 3
         finalPromise.isComplete()
 
         when:
@@ -735,7 +735,7 @@ class LGroupTest extends Specification {
         reply = rGroup.execute('rpush a a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 3
+        (reply as IntegerReply).integer == 3
         finalPromise2.isComplete()
 
         when:
@@ -755,7 +755,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lpush a a b c')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 3
+        (reply as IntegerReply).integer == 3
         finalPromise4.isComplete()
         finalPromise4.getResult() instanceof MultiBulkReply
         ((finalPromise4.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'c'.bytes
@@ -767,7 +767,7 @@ class LGroupTest extends Specification {
         reply = rGroup.execute('rpush a a b c')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 3 - 1 + 3
+        (reply as IntegerReply).integer == 3 - 1 + 3
         finalPromise5.isComplete()
         finalPromise5.getResult() instanceof MultiBulkReply
         ((finalPromise5.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
@@ -822,7 +822,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lrange a 0 2')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 3
+        (reply as MultiBulkReply).replies.length == 3
 
         when:
         reply = lGroup.execute('lrange a 2 1')
@@ -869,31 +869,31 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lrem a 1 0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = lGroup.execute('lrem a -1 0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = lGroup.execute('lrem a -1 0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = lGroup.execute('lrem a 0 1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = lGroup.execute('lrem a 3 2')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = lGroup.execute('lrem a a 2')

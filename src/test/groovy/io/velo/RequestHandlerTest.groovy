@@ -281,7 +281,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(getRequest2, socket)
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw.length == 10
+        (reply as BulkReply).raw.length == 10
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
@@ -365,7 +365,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(httpRequest, socket)
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains('request_time_count')
+        new String((reply as BulkReply).raw).contains('request_time_count')
 
         when:
         // for haproxy
@@ -376,7 +376,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(httpRequest, socket)
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains('master')
+        new String((reply as BulkReply).raw).contains('master')
 
         when:
         leaderSelector.hasLeadershipLocalMocked = false
@@ -389,7 +389,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(httpRequest, socket)
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains('master or slave')
+        new String((reply as BulkReply).raw).contains('master or slave')
 
         when:
         leaderSelector.hasLeadershipLocalMocked = true
@@ -404,7 +404,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(httpRequest, socket)
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains('slave')
+        new String((reply as BulkReply).raw).contains('slave')
 
         when:
         httpData[0] = 'slave_with_zone=zone1'.bytes
@@ -424,7 +424,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(httpRequest, socket)
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains('zone1')
+        new String((reply as BulkReply).raw).contains('zone1')
 
         when:
         httpData[0] = null

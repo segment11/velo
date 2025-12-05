@@ -267,7 +267,7 @@ class RGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == OKReply.INSTANCE
         }.result
 
@@ -278,7 +278,7 @@ class RGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_0
         }.result
 
@@ -360,9 +360,9 @@ class RGroupTest extends Specification {
         def reply = rGroup.role()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies[0] == new BulkReply('master'.bytes)
-        ((MultiBulkReply) reply).replies[1] == IntegerReply.REPLY_0
-        ((MultiBulkReply) reply).replies[2] == MultiBulkReply.EMPTY
+        (reply as MultiBulkReply).replies[0] == new BulkReply('master'.bytes)
+        (reply as MultiBulkReply).replies[1] == IntegerReply.REPLY_0
+        (reply as MultiBulkReply).replies[2] == MultiBulkReply.EMPTY
 
         when:
         def replPairAsMaster = ReplPairTest.mockAsMaster()
@@ -370,9 +370,9 @@ class RGroupTest extends Specification {
         reply = rGroup.role()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies[0] == new BulkReply('master'.bytes)
-        ((MultiBulkReply) reply).replies[2] instanceof MultiBulkReply
-        ((MultiBulkReply) ((MultiBulkReply) reply).replies[2]).replies[0] instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies[0] == new BulkReply('master'.bytes)
+        (reply as MultiBulkReply).replies[2] instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as MultiBulkReply).replies[2]).replies[0] instanceof MultiBulkReply
 
         when:
         oneSlot.replPairs.clear()
@@ -381,8 +381,8 @@ class RGroupTest extends Specification {
         reply = rGroup.role()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 5
-        ((MultiBulkReply) reply).replies[0] == new BulkReply('slave'.bytes)
+        (reply as MultiBulkReply).replies.length == 5
+        (reply as MultiBulkReply).replies[0] == new BulkReply('slave'.bytes)
 
         cleanup:
         localPersist.cleanUp()
@@ -440,7 +440,7 @@ class RGroupTest extends Specification {
         reply = rGroup.execute('rpoplpush a b')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == '9'.bytes
+        (reply as BulkReply).raw == '9'.bytes
 
         when:
         def eventloop = Eventloop.builder()
@@ -460,7 +460,7 @@ class RGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof BulkReply && ((BulkReply) result).raw == '8'.bytes
         }.result
 
@@ -496,7 +496,7 @@ class RGroupTest extends Specification {
         def reply = rGroup.handle()
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         inMemoryGetSet.remove(slot, 'a')
@@ -548,7 +548,7 @@ class RGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == NilReply.INSTANCE
         }.result
 
@@ -574,7 +574,7 @@ class RGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == NilReply.INSTANCE
         }.result
 
@@ -588,7 +588,7 @@ class RGroupTest extends Specification {
                 true, true, 0)
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == '1'.bytes
+        (reply as BulkReply).raw == '1'.bytes
 
         when:
         localPersist.cleanUp()
@@ -614,7 +614,7 @@ class RGroupTest extends Specification {
                 true, true, 0)
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof BulkReply && ((BulkReply) result).raw == '1'.bytes
         }.result
 

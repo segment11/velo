@@ -257,7 +257,7 @@ zunionstore
         def reply = zGroup.execute('zadd a 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
         fromMem(inMemoryGetSet, 'a').get('member0').score() == 0
         fromMem(inMemoryGetSet, 'a').get('member1').score() == 1
 
@@ -265,7 +265,7 @@ zunionstore
         reply = zGroup.execute('zadd a 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = zGroup.execute('zadd a a member0 1 member1')
@@ -292,20 +292,20 @@ zunionstore
         reply = zGroup.execute('zadd a nx 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = zGroup.execute('zadd a nx 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         inMemoryGetSet.remove(slot, 'a')
         reply = zGroup.execute('zadd a xx 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -318,7 +318,7 @@ zunionstore
         reply = zGroup.execute('zadd a xx 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         rz.add(0.1, 'member0')
@@ -328,7 +328,7 @@ zunionstore
         reply = zGroup.execute('zadd a gt 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         rz.add(10, 'member0')
@@ -338,7 +338,7 @@ zunionstore
         reply = zGroup.execute('zadd a gt 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         rz.add(10, 'member0')
@@ -348,7 +348,7 @@ zunionstore
         reply = zGroup.execute('zadd a lt 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         rz.add(0.1, 'member0')
@@ -358,7 +358,7 @@ zunionstore
         reply = zGroup.execute('zadd a lt 0 member0 1 member1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = zGroup.execute('zadd a incr 0 member0 1 member1')
@@ -369,20 +369,20 @@ zunionstore
         reply = zGroup.execute('zadd a incr 0 member0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         inMemoryGetSet.remove(slot, 'a')
         reply = zGroup.execute('zadd a incr 0 member0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = zGroup.execute('zadd a ch 1 member0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = zGroup.execute('zadd a ch nx lt')
@@ -426,7 +426,7 @@ zunionstore
         reply = zGroup.execute('zcard a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = zGroup.execute('zcard >key')
@@ -467,31 +467,31 @@ zunionstore
         reply = zGroup.execute('zcount a (1 (4')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = zGroup.execute('zlexcount a (member1 (member4')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = zGroup.execute('zlexcount a [member1 [member4')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 4
+        (reply as IntegerReply).integer == 4
 
         when:
         reply = zGroup.execute('zcount a 2 3')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = zGroup.execute('zcount a -inf +inf')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 10
+        (reply as IntegerReply).integer == 10
 
         when:
         reply = zGroup.execute('zcount a 3 2')
@@ -649,16 +649,16 @@ zunionstore
         reply = zGroup.zdiff(false, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'member0'.bytes
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'member0'.bytes
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         zGroup.data = data10
@@ -677,14 +677,14 @@ zunionstore
         reply = zGroup.zdiff(false, true)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         data5[4] = 'withscores'.bytes
@@ -693,18 +693,18 @@ zunionstore
         reply = zGroup.zdiff(false, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'member0'.bytes
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == '0.1'.bytes
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'member0'.bytes
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == '0.1'.bytes
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         zGroup.data = data10
@@ -723,14 +723,14 @@ zunionstore
         reply = zGroup.zdiff(false, true)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         data5[4] = 'withscores_'.bytes
@@ -744,14 +744,14 @@ zunionstore
         reply = zGroup.zdiff(false, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         zGroup.data = data10
@@ -770,14 +770,14 @@ zunionstore
         reply = zGroup.zdiff(false, true)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         rzB.add(0.1, 'member0')
@@ -799,42 +799,42 @@ zunionstore
         reply = zGroup.zdiff(true, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(true, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         zGroup.data = data5
         reply = zGroup.zdiff(false, true)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         zGroup.data = data10
         reply = zGroup.zdiff(true, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(true, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         data10[8] = 'min'.bytes
@@ -842,14 +842,14 @@ zunionstore
         reply = zGroup.zdiff(true, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(true, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         data10[8] = 'max'.bytes
@@ -857,14 +857,14 @@ zunionstore
         reply = zGroup.zdiff(true, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(true, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         data10[8] = 'xxx'.bytes
@@ -878,14 +878,14 @@ zunionstore
         reply = zGroup.zdiff(false, true)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         data10[8] = 'min'.bytes
@@ -893,14 +893,14 @@ zunionstore
         reply = zGroup.zdiff(false, true)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         data10[8] = 'max'.bytes
@@ -908,14 +908,14 @@ zunionstore
         reply = zGroup.zdiff(false, true)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         rzA.remove('member0')
@@ -935,42 +935,42 @@ zunionstore
         reply = zGroup.zdiff(false, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 5
+        (reply as MultiBulkReply).replies.length == 5
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 5
+        (reply as IntegerReply).integer == 5
 
         when:
         zGroup.data = data10
         reply = zGroup.zdiff(true, false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 5
+        (reply as MultiBulkReply).replies.length == 5
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(true, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 5
+        (reply as IntegerReply).integer == 5
 
         when:
         zGroup.data = data10
         reply = zGroup.zdiff(false, true)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 11
+        (reply as MultiBulkReply).replies.length == 11
 
         when:
         zGroup.addDstKeyBytesForStore(dstKeyBytes)
         reply = zGroup.zdiffstore(false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 11
+        (reply as IntegerReply).integer == 11
 
         when:
         rzB.clear()
@@ -1005,7 +1005,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == MultiBulkReply.EMPTY
         }.result
 
@@ -1015,7 +1015,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_0
         }.result
 
@@ -1030,7 +1030,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof MultiBulkReply && ((MultiBulkReply) result).replies.length == 5
         }.result
 
@@ -1040,7 +1040,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && ((IntegerReply) result).integer == 5
         }.result
 
@@ -1051,7 +1051,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof MultiBulkReply && ((MultiBulkReply) result).replies.length == 10
         }.result
 
@@ -1061,7 +1061,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && ((IntegerReply) result).integer == 10
         }.result
 
@@ -1140,13 +1140,13 @@ zunionstore
         def reply = zGroup.execute('zincrby a 1 member0')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == '1.0'.bytes
+        (reply as BulkReply).raw == '1.0'.bytes
 
         when:
         reply = zGroup.execute('zincrby a 1 member0')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == '2.0'.bytes
+        (reply as BulkReply).raw == '2.0'.bytes
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -1231,19 +1231,19 @@ zunionstore
         reply = zGroup.execute('zintercard 2 a b limit 0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = zGroup.execute('zintercard 2 a b limit 1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = zGroup.execute('zintercard 2 a b limit 3')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         rzB.remove('member0')
@@ -1272,7 +1272,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_0
         }.result
 
@@ -1286,7 +1286,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && ((IntegerReply) result).integer == 2
         }.result
 
@@ -1295,7 +1295,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && ((IntegerReply) result).integer == 1
         }.result
 
@@ -1304,7 +1304,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && ((IntegerReply) result).integer == 2
         }.result
 
@@ -1316,7 +1316,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_0
         }.result
 
@@ -1326,7 +1326,7 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_0
         }.result
 
@@ -1388,9 +1388,9 @@ zunionstore
         def reply = zGroup.execute('zmscore a member0 member1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] == NilReply.INSTANCE
-        ((MultiBulkReply) reply).replies[1] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -1401,9 +1401,9 @@ zunionstore
         reply = zGroup.execute('zmscore a member0 member1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] == NilReply.INSTANCE
-        ((MultiBulkReply) reply).replies[1] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when:
         rz.add(0.1, 'member0')
@@ -1412,10 +1412,10 @@ zunionstore
         reply = zGroup.execute('zmscore a member0 member1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == '0.1'.bytes
-        ((MultiBulkReply) reply).replies[1] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == '0.1'.bytes
+        (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when:
         reply = zGroup.execute('zmscore a >key member1')
@@ -1459,11 +1459,11 @@ zunionstore
         reply = zGroup.execute('zpopmax a 1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'member100'.bytes
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == '100.0'.bytes
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'member100'.bytes
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == '100.0'.bytes
 
         when:
         rz.add(100, 'member100')
@@ -1473,11 +1473,11 @@ zunionstore
         reply = zGroup.execute('zpopmin a 1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'member10'.bytes
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == '10.0'.bytes
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'member10'.bytes
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == '10.0'.bytes
 
         when:
         reply = zGroup.execute('zpopmax a 0')
@@ -1498,7 +1498,7 @@ zunionstore
         reply = zGroup.execute('zpopmax a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
     }
 
     def 'test zrandmember'() {
@@ -1542,25 +1542,25 @@ zunionstore
         reply = zGroup.execute('zrandmember a 1 withscores')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'member100'.bytes
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == '100.0'.bytes
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'member100'.bytes
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == '100.0'.bytes
 
         when:
         reply = zGroup.execute('zrandmember a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'member100'.bytes
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'member100'.bytes
 
         when:
         reply = zGroup.execute('zrandmember a 2 withscores')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         rz.remove('member100')
@@ -1572,13 +1572,13 @@ zunionstore
         reply = zGroup.execute('zrandmember a 5 withscores')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 10
+        (reply as MultiBulkReply).replies.length == 10
 
         when:
         reply = zGroup.execute('zrandmember a -3 withscores')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 6
+        (reply as MultiBulkReply).replies.length == 6
 
         when:
         reply = zGroup.execute('zrandmember a -3 _withscores')
@@ -1656,35 +1656,35 @@ zunionstore
         reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 0 withscores')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 4
+        (reply as MultiBulkReply).replies.length == 4
 
         when:
         // limit count
         reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 3 withscores')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 4
+        (reply as MultiBulkReply).replies.length == 4
 
         when:
         // not withscores
         reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 3 byscore')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         // limit count
         reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 0 byscore')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         // limit offset
         reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 1 0 byscore')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         // limit offset
@@ -1701,7 +1701,7 @@ zunionstore
         reply = zGroup.execute('zrange a (4 (1 byscore rev limit 0 0 byscore')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         def tmpData5 = new byte[5][]
@@ -1712,7 +1712,7 @@ zunionstore
         reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
         inMemoryGetSet.getBuf(slot, dstKeyBytes, 0, 0L) != null
 
         when:
@@ -1721,7 +1721,7 @@ zunionstore
         reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         zGroup.execute('zrange a 1.1 1.2 byscore rev limit 0 0 byscore')
@@ -1753,7 +1753,7 @@ zunionstore
         reply = zGroup.execute('zrange a -inf +inf byscore byscore limit 0 2 byscore')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         // limit count
@@ -1782,25 +1782,25 @@ zunionstore
         reply = zGroup.execute('zrange a 0 1 byindex byindex limit 0 0 byindex')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = zGroup.execute('zrange a -3 -1 byindex byindex limit 0 0 byindex')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 3
+        (reply as MultiBulkReply).replies.length == 3
 
         when:
         reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 3
+        (reply as IntegerReply).integer == 3
 
         when:
         reply = zGroup.execute('zrange a 1 0 byindex byindex limit 0 0 byindex')
@@ -1816,25 +1816,25 @@ zunionstore
         reply = zGroup.execute('zrange a 3 6 byindex byindex limit 0 2 byindex')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = zGroup.execute('zrange a 3 6 byindex byindex limit 1 2 byindex')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = zGroup.execute('zrange a 3 6 byindex byindex limit 4 2 byindex')
@@ -1850,32 +1850,32 @@ zunionstore
         reply = zGroup.execute('zrange a 3 6 byindex byindex limit 0 2 withscores')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 4
+        (reply as MultiBulkReply).replies.length == 4
 
         when:
         reply = zGroup.execute('zrange a 3 6 byindex byindex limit 0 0 withscores')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 8
+        (reply as MultiBulkReply).replies.length == 8
 
         when:
         reply = zGroup.execute('zrange a 3 6 byindex rev limit 0 2 byindex')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         // bylex
         when:
         reply = zGroup.execute('zrange a (member1 (member4 bylex bylex limit 0 2 bylex')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = zGroup.execute('zrange a (member4 (member1 bylex bylex limit 0 2 bylex')
@@ -1891,13 +1891,13 @@ zunionstore
         reply = zGroup.execute('zrange a - + bylex bylex limit 0 0 bylex')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 10
+        (reply as MultiBulkReply).replies.length == 10
 
         when:
         reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 10
+        (reply as IntegerReply).integer == 10
 
         when:
         reply = zGroup.execute('zrange a ( + bylex bylex limit 0 0 bylex')
@@ -1913,13 +1913,13 @@ zunionstore
         reply = zGroup.execute('zrange a [member1 [member4 bylex bylex limit 0 0 bylex')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 4
+        (reply as MultiBulkReply).replies.length == 4
 
         when:
         reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 4
+        (reply as IntegerReply).integer == 4
 
         when:
         reply = zGroup.execute('zrange a [member10 [member11 bylex bylex limit 0 0 bylex')
@@ -1935,25 +1935,25 @@ zunionstore
         reply = zGroup.execute('zrange a [member1 [member8 bylex bylex limit 3 2 bylex')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
 
         when:
         reply = zGroup.zrange(zGroup.data, dstKeyBytes)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = zGroup.execute('zrange a [member1 [member8 bylex bylex limit 3 2 withscores')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 4
+        (reply as MultiBulkReply).replies.length == 4
 
         when:
         reply = zGroup.execute('zrange a [member1 [member8 bylex bylex limit 0 0 withscores')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 16
+        (reply as MultiBulkReply).replies.length == 16
 
         when:
         reply = zGroup.execute('zrange a [member1 [member8 bylex bylex limit 10 2 bylex')
@@ -2167,23 +2167,23 @@ zunionstore
         reply = zGroup.execute('zrank a member0 withscore_')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = zGroup.execute('zrevrank a member0 withscore_')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = zGroup.execute('zrank a member0 withscore')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof IntegerReply
-        ((IntegerReply) ((MultiBulkReply) reply).replies[0]).integer == 0
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == '0.1'.bytes
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof IntegerReply
+        ((IntegerReply) (reply as MultiBulkReply).replies[0]).integer == 0
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == '0.1'.bytes
 
         when:
         reply = zGroup.execute('zrank a member1 withscore_')
@@ -2239,7 +2239,7 @@ zunionstore
         reply = zGroup.execute('zrem a member0 member1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         reply = zGroup.execute('zrem a member0 member1')
@@ -2324,7 +2324,7 @@ zunionstore
         reply = zGroup.zremrangebyscore(true, false, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         data4[2] = '[1'.bytes
@@ -2334,7 +2334,7 @@ zunionstore
         reply = zGroup.zremrangebyscore(true, false, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 4
+        (reply as IntegerReply).integer == 4
 
         when:
         data4[2] = '[4'.bytes
@@ -2370,7 +2370,7 @@ zunionstore
         reply = zGroup.zremrangebyscore(true, false, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 10
+        (reply as IntegerReply).integer == 10
 
         // by rank
         when:
@@ -2381,7 +2381,7 @@ zunionstore
         reply = zGroup.zremrangebyscore(false, false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 4
+        (reply as IntegerReply).integer == 4
 
         when:
         data4[2] = '-3'.bytes
@@ -2391,7 +2391,7 @@ zunionstore
         reply = zGroup.zremrangebyscore(false, false, true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 3
+        (reply as IntegerReply).integer == 3
 
         when:
         data4[3] = '-11'.bytes
@@ -2422,7 +2422,7 @@ zunionstore
         reply = zGroup.zremrangebyscore(false, true, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         data4[2] = '[member1'.bytes
@@ -2432,7 +2432,7 @@ zunionstore
         reply = zGroup.zremrangebyscore(false, true, false)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 4
+        (reply as IntegerReply).integer == 4
 
         when:
         // remove again
@@ -2503,7 +2503,7 @@ zunionstore
         reply = zGroup.execute('zscore a member0')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == '0.1'.bytes
+        (reply as BulkReply).raw == '0.1'.bytes
 
         when:
         reply = zGroup.execute('zscore a member1')

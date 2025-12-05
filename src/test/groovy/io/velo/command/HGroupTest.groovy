@@ -176,7 +176,7 @@ httl
         reply = hGroup.execute('hdel a field')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -189,7 +189,7 @@ httl
         reply = hGroup.execute('hdel a field')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -214,7 +214,7 @@ httl
         reply = hGroup.execute('hdel a field')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -227,7 +227,7 @@ httl
         reply = hGroup.execute('hdel a field')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = hGroup.execute('hdel >key field')
@@ -319,7 +319,7 @@ httl
         reply = hGroup.execute('hello')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 14
+        (reply as MultiBulkReply).replies.length == 14
 
         cleanup:
         localPersist.cleanUp()
@@ -424,7 +424,7 @@ httl
         reply = hGroup.execute('hstrlen a field')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == cvField.compressedData.length
+        (reply as IntegerReply).integer == cvField.compressedData.length
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -437,21 +437,21 @@ httl
         reply = hGroup.execute('hstrlen a field')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
         reply = hGroup.execute('hget a field')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == cvField.compressedData
+        (reply as BulkReply).raw == cvField.compressedData
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         reply = hGroup.execute('hget a field')
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).raw == ' '.bytes
+        (reply as BulkReply).raw == ' '.bytes
 
         when:
         reply = hGroup.execute('hstrlen a field1')
@@ -510,11 +510,11 @@ httl
         reply = hGroup.execute('hgetall a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'field'.bytes
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == cvField.compressedData
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'field'.bytes
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == cvField.compressedData
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -527,11 +527,11 @@ httl
         reply = hGroup.execute('hgetall a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'field'.bytes
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == ' '.bytes
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'field'.bytes
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == ' '.bytes
 
         when:
         rhh.remove('field')
@@ -547,10 +547,10 @@ httl
         reply = hGroup.execute('hgetall a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'field'.bytes
-        ((MultiBulkReply) reply).replies[1] instanceof NilReply
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'field'.bytes
+        (reply as MultiBulkReply).replies[1] instanceof NilReply
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -581,7 +581,7 @@ httl
         def reply = hGroup.execute('hincrby a field 1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -589,21 +589,21 @@ httl
         reply = hGroup.execute('hincrby a field 1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
         reply = hGroup.execute('hincrbyfloat a field 1')
         then:
         reply instanceof DoubleReply
-        ((DoubleReply) reply).doubleValue() == 2.0d
+        (reply as DoubleReply).doubleValue() == 2.0d
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         reply = hGroup.execute('hincrbyfloat a field 1')
         then:
         reply instanceof DoubleReply
-        ((DoubleReply) reply).doubleValue() == 2.0d
+        (reply as DoubleReply).doubleValue() == 2.0d
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -638,7 +638,7 @@ httl
         reply = hGroup.execute('hincrby a field 1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         rhh.put('field', '1.1'.bytes)
@@ -647,7 +647,7 @@ httl
         reply = hGroup.execute('hincrbyfloat a field 1')
         then:
         reply instanceof DoubleReply
-        ((DoubleReply) reply).doubleValue() == 2.1d
+        (reply as DoubleReply).doubleValue() == 2.1d
 
         when:
         rhh.remove('field')
@@ -656,7 +656,7 @@ httl
         reply = hGroup.execute('hincrbyfloat a field 1')
         then:
         reply instanceof DoubleReply
-        ((DoubleReply) reply).doubleValue() == 1.0d
+        (reply as DoubleReply).doubleValue() == 1.0d
 
         when:
         rhh.put('field', 'a'.bytes)
@@ -712,9 +712,9 @@ httl
         reply = hGroup.execute('hkeys a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'field'.bytes
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'field'.bytes
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -727,23 +727,23 @@ httl
         reply = hGroup.execute('hkeys a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'field'.bytes
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'field'.bytes
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
         reply = hGroup.execute('hlen a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         reply = hGroup.execute('hlen a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -789,9 +789,9 @@ httl
         def reply = hGroup.execute('hmget a field field1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] == NilReply.INSTANCE
-        ((MultiBulkReply) reply).replies[1] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -799,9 +799,9 @@ httl
         reply = hGroup.execute('hmget a field field1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] == NilReply.INSTANCE
-        ((MultiBulkReply) reply).replies[1] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -813,11 +813,11 @@ httl
         reply = hGroup.execute('hmget a field field1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == cvField.compressedData
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == cvField1.compressedData
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == cvField.compressedData
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == cvField1.compressedData
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -831,11 +831,11 @@ httl
         reply = hGroup.execute('hmget a field field1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == ' '.bytes
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == ' '.bytes
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == ' '.bytes
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == ' '.bytes
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -932,7 +932,7 @@ httl
         reply = hGroup.execute('hset a field value field0 value0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -949,7 +949,7 @@ httl
         reply = hGroup.execute('hset a field value field0 value0')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         // get and compare
         when:
@@ -957,22 +957,22 @@ httl
         reply = hGroup.execute('hmget a field field0')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'value'.bytes
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == 'value0'.bytes
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'value'.bytes
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == 'value0'.bytes
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         reply = hGroup.execute('hmget a field field0')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == 'value'.bytes
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[1]).raw == 'value0'.bytes
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'value'.bytes
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == 'value0'.bytes
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -1079,7 +1079,7 @@ httl
         reply = hGroup.execute('hrandfield a 1 1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -1091,7 +1091,7 @@ httl
         reply = hGroup.execute('hrandfield a 1 1')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 1
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -1099,32 +1099,32 @@ httl
         reply = hGroup.execute('hrandfield a 1 ' + (rhk.size() + 1))
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == rhk.size()
+        (reply as MultiBulkReply).replies.length == rhk.size()
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         reply = hGroup.execute('hrandfield a 1 ' + (rhk.size() + 1))
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == rhh.size()
+        (reply as MultiBulkReply).replies.length == rhh.size()
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
         reply = hGroup.execute('hrandfield a 1 withvalues')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((MultiBulkReply) reply).replies[1] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         reply = hGroup.execute('hrandfield a 1 withvalues')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -1135,40 +1135,40 @@ httl
         reply = hGroup.execute('hrandfield a 1 withvalues')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
         reply = hGroup.execute('hrandfield a -1 withvalues')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         reply = hGroup.execute('hrandfield a -1 withvalues')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((MultiBulkReply) reply).replies[1] instanceof BulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        (reply as MultiBulkReply).replies[1] instanceof BulkReply
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
         reply = hGroup.execute('hrandfield a 5 5')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 5
+        (reply as MultiBulkReply).replies.length == 5
 
         when:
         reply = hGroup.execute('hrandfield a -5 -5')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 5
+        (reply as MultiBulkReply).replies.length == 5
 
         when:
         reply = hGroup.execute('hrandfield >key -5 -5')
@@ -1239,9 +1239,9 @@ httl
         reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
-        ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 5
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 5
 
         when:
         reply = hGroup.execute('hscan a 0 match zzz count 5 novalues')
@@ -1267,17 +1267,17 @@ httl
         reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
-        ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 5
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 5
 
         when:
         reply = hGroup.execute('hscan a 0 match field* count 5 withvalues')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[1] instanceof MultiBulkReply
-        ((MultiBulkReply) ((MultiBulkReply) reply).replies[1]).replies.length == 10
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 10
 
         when:
         reply = hGroup.execute('hscan a 0 match zzz count 5 withvalues')
@@ -1429,8 +1429,8 @@ httl
         reply = hGroup.execute('hvals a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -1440,9 +1440,9 @@ httl
         reply = hGroup.execute('hvals a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == ' '.bytes
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == ' '.bytes
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -1451,9 +1451,9 @@ httl
         reply = hGroup.execute('hvals a')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == cvField.compressedData
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == cvField.compressedData
 
         when:
         reply = hGroup.execute('hvals >key')
@@ -1520,9 +1520,9 @@ httl
         reply = hGroup.execute('hpersist a fields 3 field0 field1 field2')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_1
-        ((MultiBulkReply) reply).replies[1] == IntegerReply.REPLY_1
-        ((MultiBulkReply) reply).replies[2] == HGroup.FIELD_NOT_FOUND
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
+        (reply as MultiBulkReply).replies[1] == IntegerReply.REPLY_1
+        (reply as MultiBulkReply).replies[2] == HGroup.FIELD_NOT_FOUND
 
         when:
         cvField0.expireAt = System.currentTimeMillis() + 1000 * 10
@@ -1640,10 +1640,10 @@ httl
         reply = hGroup.execute('hexpire a 10 fields 3 field0 field1 field2')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 3
-        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_1
-        ((MultiBulkReply) reply).replies[1] == IntegerReply.REPLY_1
-        ((MultiBulkReply) reply).replies[2] == HGroup.FIELD_NOT_FOUND
+        (reply as MultiBulkReply).replies.length == 3
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
+        (reply as MultiBulkReply).replies[1] == IntegerReply.REPLY_1
+        (reply as MultiBulkReply).replies[2] == HGroup.FIELD_NOT_FOUND
 
         when:
         reply = hGroup.execute('hexpireat a ' + (System.currentTimeMillis() / 1000 + 10).intValue() + ' fields 3 field0 field1 field2')
@@ -1684,10 +1684,10 @@ httl
         reply = hGroup.execute('hexpire a 10 fields 3 field0 field1 field2')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 3
-        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_1
-        ((MultiBulkReply) reply).replies[1] == IntegerReply.REPLY_1
-        ((MultiBulkReply) reply).replies[2] == HGroup.FIELD_NOT_FOUND
+        (reply as MultiBulkReply).replies.length == 3
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
+        (reply as MultiBulkReply).replies[1] == IntegerReply.REPLY_1
+        (reply as MultiBulkReply).replies[2] == HGroup.FIELD_NOT_FOUND
 
         when:
         reply = hGroup.execute('hexpireat a ' + (System.currentTimeMillis() / 1000 + 10).intValue() + ' fields 3 field0 field1 field2')
@@ -1714,10 +1714,10 @@ httl
         reply = hGroup.execute('hexpire a 20 nx fields 3 field0 field1 field2')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 3
-        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_0
-        ((MultiBulkReply) reply).replies[1] == IntegerReply.REPLY_1
-        ((MultiBulkReply) reply).replies[2] == HGroup.FIELD_NOT_FOUND
+        (reply as MultiBulkReply).replies.length == 3
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_0
+        (reply as MultiBulkReply).replies[1] == IntegerReply.REPLY_1
+        (reply as MultiBulkReply).replies[2] == HGroup.FIELD_NOT_FOUND
 
         // Test XX option
         when:
@@ -1726,8 +1726,8 @@ httl
         reply = hGroup.execute('hexpire a 20 xx fields 1 field0')
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_0  // field0 has no expire
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_0  // field0 has no expire
 
         // Test GT option
         when:
@@ -1736,15 +1736,15 @@ httl
         reply = hGroup.execute('hexpire a 3 gt fields 1 field0')  // 3 seconds < 5 seconds
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_0  // 3 < 5, so no update
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_0  // 3 < 5, so no update
 
         when:
         reply = hGroup.execute('hexpire a 10 gt fields 1 field0')  // 10 seconds > 5 seconds
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_1  // 10 > 5, so update
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1  // 10 > 5, so update
 
         // Test LT option
         when:
@@ -1753,15 +1753,15 @@ httl
         reply = hGroup.execute('hexpire a 25 lt fields 1 field0')  // 25 seconds > 20 seconds
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_0  // 25 > 20, so no update
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_0  // 25 > 20, so no update
 
         when:
         reply = hGroup.execute('hexpire a 10 lt fields 1 field0')  // 10 seconds < 20 seconds
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 1
-        ((MultiBulkReply) reply).replies[0] == IntegerReply.REPLY_1  // 10 < 20, so update
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1  // 10 < 20, so update
 
         // Test error cases
         when:

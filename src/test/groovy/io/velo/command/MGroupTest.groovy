@@ -145,9 +145,9 @@ class MGroupTest extends Specification {
         def reply = mGroup.mget()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] == NilReply.INSTANCE
-        ((MultiBulkReply) reply).replies[1] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -155,10 +155,10 @@ class MGroupTest extends Specification {
         reply = mGroup.mget()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
-        ((MultiBulkReply) reply).replies[0] instanceof BulkReply
-        ((BulkReply) ((MultiBulkReply) reply).replies[0]).raw == cv.compressedData
-        ((MultiBulkReply) reply).replies[1] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == cv.compressedData
+        (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when:
         def eventloop = Eventloop.builder()
@@ -178,7 +178,7 @@ class MGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof MultiBulkReply
         }.result
 
@@ -237,7 +237,7 @@ class MGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result == OKReply.INSTANCE
         }.result
 
@@ -318,7 +318,7 @@ class MGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             reply == IntegerReply.REPLY_1
         }.result
 
@@ -341,7 +341,7 @@ class MGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             reply == IntegerReply.REPLY_0
         }.result
 

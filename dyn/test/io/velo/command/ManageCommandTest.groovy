@@ -204,7 +204,7 @@ class ManageCommandTest extends Specification {
         Thread.sleep(100)
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.getResult() == MultiBulkReply.EMPTY
+        (reply as AsyncReply).settablePromise.getResult() == MultiBulkReply.EMPTY
 
         when:
         localPersist.indexHandlerPool.keyAnalysisHandler.innerTask.addTopKPrefixCount('test:', 0)
@@ -212,8 +212,8 @@ class ManageCommandTest extends Specification {
         Thread.sleep(100)
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.getResult() instanceof MultiBulkReply
-        ((MultiBulkReply) ((AsyncReply) reply).settablePromise.getResult()).replies.length == 1
+        (reply as AsyncReply).settablePromise.getResult() instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as AsyncReply).settablePromise.getResult()).replies.length == 1
 
         when:
         data4[2] = 'xxx'.bytes

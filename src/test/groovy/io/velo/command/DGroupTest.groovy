@@ -135,7 +135,7 @@ class DGroupTest extends Specification {
         reply = dGroup.handle()
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -1
+        (reply as IntegerReply).integer == -1
 
         when:
         // decrby
@@ -157,7 +157,7 @@ class DGroupTest extends Specification {
         reply = dGroup.handle()
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -1
+        (reply as IntegerReply).integer == -1
 
         when:
         // decrbyfloat
@@ -178,7 +178,7 @@ class DGroupTest extends Specification {
         reply = dGroup.handle()
         then:
         reply instanceof DoubleReply
-        ((DoubleReply) reply).doubleValue() == -1
+        (reply as DoubleReply).doubleValue() == -1
 
         when:
         dGroup.cmd = 'zzz'
@@ -208,7 +208,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains(':int')
+        new String((reply as BulkReply).raw).contains(':int')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_DOUBLE
@@ -216,56 +216,56 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains(':embstr')
+        new String((reply as BulkReply).raw).contains(':embstr')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains(':hashtable')
+        new String((reply as BulkReply).raw).contains(':hashtable')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains(':quicklist')
+        new String((reply as BulkReply).raw).contains(':quicklist')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains(':hashtable')
+        new String((reply as BulkReply).raw).contains(':hashtable')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains(':ziplist')
+        new String((reply as BulkReply).raw).contains(':ziplist')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_STREAM
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains(':stream')
+        new String((reply as BulkReply).raw).contains(':stream')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains(':embstr')
+        new String((reply as BulkReply).raw).contains(':embstr')
 
         when:
         cv.dictSeqOrSpType = -200
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains(':unknown')
+        new String((reply as BulkReply).raw).contains(':unknown')
 
         when:
         reply = dGroup.execute('debug log test_xxx')
@@ -302,13 +302,13 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('del a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = dGroup.execute('del a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 0
+        (reply as IntegerReply).integer == 0
 
         when:
         def eventloop = Eventloop.builder()
@@ -330,7 +330,7 @@ class DGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && ((IntegerReply) result).integer == 1
         }.result
 
@@ -360,7 +360,7 @@ class DGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && ((IntegerReply) result).integer == 0
         }.result
 
@@ -385,7 +385,7 @@ class DGroupTest extends Specification {
         def reply = dGroup.execute('decrby a 1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -1
+        (reply as IntegerReply).integer == -1
 
         when:
         reply = dGroup.execute('decrby >key 1')
@@ -397,7 +397,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('decrby a 1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -1
+        (reply as IntegerReply).integer == -1
 
         when:
         cv.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
@@ -419,7 +419,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('decrby a 1')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 1233
+        (reply as IntegerReply).integer == 1233
 
         when:
         // float
@@ -431,7 +431,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('decrbyfloat a 1')
         then:
         reply instanceof DoubleReply
-        ((DoubleReply) reply).doubleValue() == 0.1d
+        (reply as DoubleReply).doubleValue() == 0.1d
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
@@ -440,7 +440,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('decrbyfloat a 1')
         then:
         reply instanceof DoubleReply
-        ((DoubleReply) reply).doubleValue() == 0.1d
+        (reply as DoubleReply).doubleValue() == 0.1d
     }
 
     def 'test dump'() {

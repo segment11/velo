@@ -69,7 +69,7 @@ class TGroupTest extends Specification {
         reply = tGroup.handle()
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 2
+        (reply as MultiBulkReply).replies.length == 2
     }
 
     def 'test ttl'() {
@@ -87,7 +87,7 @@ class TGroupTest extends Specification {
         def reply = tGroup.execute('ttl a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -2
+        (reply as IntegerReply).integer == -2
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -97,7 +97,7 @@ class TGroupTest extends Specification {
         reply = tGroup.execute('ttl a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == -1
+        (reply as IntegerReply).integer == -1
 
         when:
         cv.expireAt = System.currentTimeMillis() + 2500
@@ -105,7 +105,7 @@ class TGroupTest extends Specification {
         reply = tGroup.execute('ttl a')
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         def data2 = new byte[2][]
@@ -115,7 +115,7 @@ class TGroupTest extends Specification {
         reply = tGroup.ttl(true)
         then:
         reply instanceof IntegerReply
-        ((IntegerReply) reply).integer > 2000
+        (reply as IntegerReply).integer > 2000
 
         when:
         reply = tGroup.execute('ttl >key')

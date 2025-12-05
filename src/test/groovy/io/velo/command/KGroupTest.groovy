@@ -71,7 +71,7 @@ class KGroupTest extends Specification {
         def reply = kGroup.execute('keys key:.*')
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof MultiBulkReply && (result as MultiBulkReply).replies.length == 10
         }.result
 

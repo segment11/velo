@@ -161,7 +161,7 @@ class VGroupTest extends Specification {
         then:
         reply instanceof IntegerReply
         // skip 1ab as not all alphabet
-        ((IntegerReply) reply).integer == 2
+        (reply as IntegerReply).integer == 2
 
         when:
         data3[1] = 'count'.bytes
@@ -171,7 +171,7 @@ class VGroupTest extends Specification {
         Thread.sleep(200)
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && ((IntegerReply) result).integer == 1
         }.result
 
@@ -182,7 +182,7 @@ class VGroupTest extends Specification {
         Thread.sleep(200)
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof MultiBulkReply && ((MultiBulkReply) result).replies.length == 2
         }.result
 
@@ -249,7 +249,7 @@ class VGroupTest extends Specification {
         Thread.sleep(200)
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.whenResult { result ->
+        (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof MultiBulkReply && ((MultiBulkReply) result).replies.length == 1
         }.result
 

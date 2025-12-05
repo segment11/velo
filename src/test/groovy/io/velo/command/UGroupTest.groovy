@@ -62,7 +62,7 @@ class UGroupTest extends Specification {
         def reply = uGroup.unsubscribe(false)
         then:
         reply instanceof MultiBulkReply
-        ((MultiBulkReply) reply).replies.length == 3 * 3
+        (reply as MultiBulkReply).replies.length == 3 * 3
 
         when:
         def data1 = new byte[1][]
