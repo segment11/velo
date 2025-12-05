@@ -74,6 +74,7 @@ addslots
 addslotsrange
 delslots
 delslotsrange
+failover
 flushslots
 countkeysinslot
 getkeysinslot
@@ -84,6 +85,7 @@ myid
 myshardid
 nodes
 replicas
+replicate
 reset
 saveconfig
 slaves
@@ -710,7 +712,7 @@ slots
         reply = clusterx.setnodes()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
         shards[0].nodes.size() == 2
         shards[0].multiSlotRange.list.size() == 2
 
@@ -720,7 +722,7 @@ slots
         reply = clusterx.setnodes()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
 
         when:
         // slave to master again
@@ -728,7 +730,7 @@ slots
         reply = clusterx.setnodes()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
 
         when:
         // delete from cluster, reset as master
@@ -736,7 +738,100 @@ slots
         reply = clusterx.setnodes()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+
+        when:
+        // failover
+        data3[1] = 'failover'.bytes
+        data3[2] = 'force'.bytes
+        clusterx.data = data3
+        reply = clusterx.failover()
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('not in cluster')
+
+        when:
+        shards[0].nodes[0].mySelf = true
+        reply = clusterx.failover()
+        then:
+        reply == ClusterxCommand.OK
+
+        when:
+        shards[0].nodes[0].master = false
+        shards[0].nodes << new Node(nodeIdFix: 'old_master', master: true, slaveIndex: 0)
+        reply = clusterx.failover()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+
+        when:
+        clusterx.data = data4
+        reply = clusterx.failover()
+        then:
+        reply == ErrorReply.FORMAT
+
+        // replicate
+        when:
+        // two shards
+        def shard0 = new Shard()
+        shard0.nodes << new Node(nodeIdFix: 'new_node_id1', master: true, slaveIndex: 0, mySelf: true)
+        shard0.nodes << new Node(nodeIdFix: 'new_node_id2', master: false, slaveIndex: 0, followNodeId: 'new_node_id1')
+        def shard1 = new Shard()
+        shard1.nodes << new Node(nodeIdFix: 'new_node_id3', master: true, slaveIndex: 0)
+        shard1.nodes << new Node(nodeIdFix: 'new_node_id4', master: false, slaveIndex: 0, followNodeId: 'new_node_id3')
+        shards.clear()
+        shards << shard0
+        shards << shard1
+        data3[1] = 'replicate'.bytes
+        data3[2] = 'not_exist_node_id'.bytes
+        clusterx.data = data3
+        reply = clusterx.replicate()
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('master node id not found')
+
+        when:
+        // myself
+        data3[2] = 'new_node_id1'.bytes
+        reply = clusterx.replicate()
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('self node id is')
+
+        when:
+        // self is master
+        data3[2] = 'new_node_id3'.bytes
+        reply = clusterx.replicate()
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('self node is master')
+
+        when:
+        // replicate to shard1
+        shard0.nodes[0].mySelf = false
+        shard0.nodes[1].mySelf = true
+        reply = clusterx.replicate()
+        println shard0
+        println shard1
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+
+        when:
+        // replicate to shard0
+        data3[2] = 'new_node_id1'.bytes
+        reply = clusterx.replicate()
+        println shard0
+        println shard1
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+
+        when:
+        clusterx.data = data4
+        reply = clusterx.replicate()
+        then:
+        reply == ErrorReply.FORMAT
 
         cleanup:
         localPersist.cleanUp()
@@ -851,7 +946,7 @@ slots
         reply = clusterx.setslot()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
 
         when:
         // set slot not myself, ignore
@@ -862,7 +957,7 @@ slots
         reply = clusterx.setslot()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
 
         when:
         shard1.multiSlotRange.addSingle(0, 8191)
@@ -872,7 +967,7 @@ slots
         reply = clusterx.setslot()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
         shard0.multiSlotRange.contains(0)
         !shard1.multiSlotRange.contains(0)
 
@@ -882,7 +977,7 @@ slots
         reply = clusterx.setslot()
         then:
         reply instanceof AsyncReply
-        ((AsyncReply) reply).settablePromise.getResult() == ClusterxCommand.OK
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
 
         when:
         // not margin

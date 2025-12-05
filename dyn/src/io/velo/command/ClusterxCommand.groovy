@@ -84,6 +84,10 @@ class ClusterxCommand extends BaseCommand {
             return addslots(true, true)
         }
 
+        if ('failover' == subCmd) {
+            return failover()
+        }
+
         if ('flushslots' == subCmd) {
             return flushslots()
         }
@@ -125,7 +129,7 @@ class ClusterxCommand extends BaseCommand {
         }
 
         if ('replicate' == subCmd) {
-            return new ErrorReply('use clusterx setnodes instead')
+            return replicate()
         }
 
         if ('reset' == subCmd) {
@@ -248,6 +252,59 @@ migrating_state:ok
         log.warn 'Cluster add slots success, slots={}, node={}', toClientSlots, mySelfNode.nodeId()
         multiShard.saveMeta()
         OK
+    }
+
+    // need broadcast by gossip, prefer use a central controller to change all cluster nodes
+    @VisibleForTesting
+    Reply failover() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        if (data.length != 2 && data.length != 3) {
+            return ErrorReply.FORMAT
+        }
+
+        def force = data.length == 3 && 'force'.equalsIgnoreCase(new String(data[2]))
+
+        def multiShard = localPersist.multiShard
+        def mySelfShard = multiShard.mySelfShard()
+        if (!mySelfShard) {
+            return new ErrorReply('not in cluster')
+        }
+
+        def myNode = mySelfShard.mySelfNode()
+        if (myNode.isMaster()) {
+            log.warn 'I am master, can not failover'
+            return OK
+        }
+
+        // set follow node id for new slaves
+        myNode.master = true
+        myNode.followNodeId = null
+        for (node in mySelfShard.nodes) {
+            if (node != myNode) {
+                node.master = false
+                node.followNodeId = myNode.nodeId()
+            }
+        }
+
+        multiShard.saveMeta()
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>()
+        def asyncReply = new AsyncReply(finalPromise)
+
+        def leaderSelector = LeaderSelector.instance
+        leaderSelector.resetAsMaster(force, (e) -> {
+            if (e != null) {
+                log.error('Reset as master failed', e)
+                finalPromise.set(new ErrorReply('error when reset as master: ' + e.message))
+            } else {
+                log.warn('Reset as master success')
+                finalPromise.set(OK)
+            }
+        })
+        return asyncReply
     }
 
     private Reply flushslots() {
@@ -687,6 +744,80 @@ migrating_state:ok
     }
 
     @VisibleForTesting
+    Reply replicate() {
+        if (!ConfForGlobal.clusterEnabled) {
+            return CLUSTER_DISABLED
+        }
+
+        if (data.length != 3) {
+            return ErrorReply.FORMAT
+        }
+
+        def nodeId = new String(data[2])
+
+        def multiShard = localPersist.multiShard
+        Shard toShard = null
+        Node toMasterNode = null
+        for (ss in multiShard.shards) {
+            def masterNode = ss.master()
+            if (masterNode.nodeId() == nodeId) {
+                toShard = ss
+                toMasterNode = masterNode
+            }
+        }
+
+        if (!toMasterNode) {
+            return new ErrorReply('master node id not found: ' + nodeId)
+        }
+
+        def mySelfShard = multiShard.mySelfShard()
+        // need meet first
+        if (!mySelfShard) {
+            return new ErrorReply('not in cluster')
+        }
+
+        def mySelfNode = mySelfShard.mySelfNode()
+        if (mySelfNode.nodeId() == nodeId) {
+            return new ErrorReply('self node id is: ' + nodeId)
+        }
+
+        if (mySelfShard == toShard) {
+            // like do failover
+            assert !mySelfNode.isMaster()
+        } else {
+            if (mySelfNode.isMaster()) {
+                return new ErrorReply('self node is master')
+            }
+
+            // remove from old shard
+            mySelfShard.nodes.remove(mySelfNode)
+
+            mySelfNode.slaveIndex = toShard.nodes.size() - 1
+            toShard.nodes << mySelfNode
+        }
+
+        mySelfNode.master = false
+        mySelfNode.followNodeId = nodeId
+
+        multiShard.saveMeta()
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>()
+        def asyncReply = new AsyncReply(finalPromise)
+
+        def leaderSelector = LeaderSelector.instance
+        leaderSelector.resetAsSlave(toMasterNode.host, toMasterNode.port, (e) -> {
+            if (e != null) {
+                log.error('Reset as slave failed', e)
+                finalPromise.set(new ErrorReply('error when reset as master: ' + e.message))
+            } else {
+                log.warn('Reset as slave success')
+                finalPromise.set(OK)
+            }
+        })
+        return asyncReply
+    }
+
+    @VisibleForTesting
     Reply reset() {
         if (!ConfForGlobal.clusterEnabled) {
             return CLUSTER_DISABLED
@@ -856,7 +987,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                     log.error('Reset as master failed', e)
                     finalPromise.set(new ErrorReply('error when reset as master: ' + e.message))
                 } else {
-                    log.debug('Reset as master success')
+                    log.warn('Reset as master success')
                     finalPromise.set(OK)
                 }
             })
@@ -875,7 +1006,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                     log.error('Reset as slave failed', e)
                     finalPromise.set(new ErrorReply('error when reset as master: ' + e.message))
                 } else {
-                    log.debug('Reset as slave success')
+                    log.warn('Reset as slave success')
                     finalPromise.set(OK)
                 }
             })
