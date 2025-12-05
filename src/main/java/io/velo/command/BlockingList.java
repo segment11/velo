@@ -114,7 +114,7 @@ public class BlockingList {
      * @param key                    target key
      * @param elementValueBytesArray list values added
      * @param baseCommand            base command
-     * @return list values exclude sent to blocking clients
+     * @return list values exclude sent to blocking clients, null if key is not blocking
      */
     public synchronized static byte[][] setReplyIfBlockingListExist(String key, byte[][] elementValueBytesArray, BaseCommand baseCommand) {
         final var rr = new BytesArrayWrap();
@@ -199,7 +199,11 @@ public class BlockingList {
             return list.isEmpty() ? null : list;
         });
 
-        if (rr.bytesArray == null || rr.bytesArray.length == 0) {
+        if (rr.bytesArray == null) {
+            return null;
+        }
+
+        if (rr.bytesArray.length == 0) {
             return new byte[0][];
         }
         return rr.bytesArray;
