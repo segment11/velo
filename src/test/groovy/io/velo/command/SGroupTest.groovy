@@ -1896,7 +1896,7 @@ sunionstore
         reply = sGroup.execute('srandmember a')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw) as int < 10
+        (reply as BulkReply).asString() as int < 10
 
         when:
         reply = sGroup.execute('srandmember a 11')

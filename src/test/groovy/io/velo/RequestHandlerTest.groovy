@@ -365,7 +365,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(httpRequest, socket)
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('request_time_count')
+        (reply as BulkReply).asString().contains('request_time_count')
 
         when:
         // for haproxy
@@ -376,7 +376,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(httpRequest, socket)
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('master')
+        (reply as BulkReply).asString().contains('master')
 
         when:
         leaderSelector.hasLeadershipLocalMocked = false
@@ -389,7 +389,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(httpRequest, socket)
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('master or slave')
+        (reply as BulkReply).asString().contains('master or slave')
 
         when:
         leaderSelector.hasLeadershipLocalMocked = true
@@ -404,7 +404,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(httpRequest, socket)
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('slave')
+        (reply as BulkReply).asString().contains('slave')
 
         when:
         httpData[0] = 'slave_with_zone=zone1'.bytes
@@ -424,7 +424,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(httpRequest, socket)
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('zone1')
+        (reply as BulkReply).asString().contains('zone1')
 
         when:
         httpData[0] = null

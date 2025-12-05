@@ -208,7 +208,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains(':int')
+        (reply as BulkReply).asString().contains(':int')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_DOUBLE
@@ -216,56 +216,56 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains(':embstr')
+        (reply as BulkReply).asString().contains(':embstr')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains(':hashtable')
+        (reply as BulkReply).asString().contains(':hashtable')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains(':quicklist')
+        (reply as BulkReply).asString().contains(':quicklist')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains(':hashtable')
+        (reply as BulkReply).asString().contains(':hashtable')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains(':ziplist')
+        (reply as BulkReply).asString().contains(':ziplist')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_STREAM
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains(':stream')
+        (reply as BulkReply).asString().contains(':stream')
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains(':embstr')
+        (reply as BulkReply).asString().contains(':embstr')
 
         when:
         cv.dictSeqOrSpType = -200
         reply = dGroup.execute('debug object key')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains(':unknown')
+        (reply as BulkReply).asString().contains(':unknown')
 
         when:
         reply = dGroup.execute('debug log test_xxx')

@@ -22,6 +22,16 @@ public class BulkReply implements Reply {
     }
 
     /**
+     * Returns the raw bytes of the bulk reply as a string.
+     *
+     * @return the raw bytes as a string
+     */
+    @TestOnly
+    public String asString() {
+        return new String(raw);
+    }
+
+    /**
      * Default constructor for BulkReply.
      */
     public BulkReply() {
