@@ -5,6 +5,7 @@ import io.activej.bytebuf.ByteBuf
 import io.activej.common.function.SupplierEx
 import io.activej.eventloop.Eventloop
 import io.activej.net.socket.tcp.TcpSocket
+import io.velo.command.BlockingList
 import io.velo.command.XGroup
 import io.velo.repl.ReplPairTest
 import io.velo.reply.BulkReply
@@ -91,6 +92,8 @@ class SocketInspectorTest extends Specification {
                 .build()
         Eventloop[] eventloopArray = [eventloopCurrent]
         inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+
+        BlockingList.initBySlotWorkerEventloopArray(eventloopArray)
 
         when:
         MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]

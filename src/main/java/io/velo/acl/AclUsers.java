@@ -74,6 +74,31 @@ public class AclUsers {
     }
 
     /**
+     * Initializes the AclUsers instance for testing purposes with a single inner instance.
+     */
+    @TestOnly
+    public void initForTest() {
+        inners = new Inner[1];
+        inners[0] = new Inner(Thread.currentThread().threadId());
+    }
+
+    /**
+     * Returns the Inner instance associated with the current thread.
+     *
+     * @return The Inner instance or null if no matching instance is found.
+     */
+    public Inner getInner() {
+        var currentThreadId = Thread.currentThread().threadId();
+        for (var inner : inners) {
+            if (inner.expectThreadId == currentThreadId) {
+                return inner;
+            }
+        }
+        // when run in networker thread, return the first inner instance, only for read
+        return inners[0];
+    }
+
+    /**
      * Loads the ACL file and replaces the existing user list with the loaded users.
      */
     public void loadAclFile() {
@@ -114,15 +139,6 @@ public class AclUsers {
     }
 
     /**
-     * Initializes the AclUsers instance for testing purposes with a single inner instance.
-     */
-    @TestOnly
-    public void initForTest() {
-        inners = new Inner[1];
-        inners[0] = new Inner(Thread.currentThread().threadId());
-    }
-
-    /**
      * Inner class handling user operations within the context of a specific thread.
      * Each Inner instance is associated with a specific thread ID.
      */
@@ -134,7 +150,7 @@ public class AclUsers {
          *
          * @param expectThreadId The thread ID this inner instance is expected to handle.
          */
-        public Inner(long expectThreadId) {
+        Inner(long expectThreadId) {
             this.expectThreadId = expectThreadId;
             users.add(U.INIT_DEFAULT_U); // Add a default user to the list.
         }
@@ -193,22 +209,6 @@ public class AclUsers {
         public boolean delete(String user) {
             return users.removeIf(u -> u.user.equals(user));
         }
-    }
-
-    /**
-     * Returns the Inner instance associated with the current thread.
-     *
-     * @return The Inner instance or null if no matching instance is found.
-     */
-    public Inner getInner() {
-        var currentThreadId = Thread.currentThread().threadId();
-        for (var inner : inners) {
-            if (inner.expectThreadId == currentThreadId) {
-                return inner;
-            }
-        }
-        // when run in networker thread, return the first inner instance, only for read
-        return inners[0];
     }
 
     /**

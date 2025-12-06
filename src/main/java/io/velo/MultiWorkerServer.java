@@ -38,6 +38,7 @@ import io.prometheus.client.hotspot.MemoryPoolsExports;
 import io.prometheus.client.hotspot.StandardExports;
 import io.velo.acl.AclUsers;
 import io.velo.acl.Category;
+import io.velo.command.BlockingList;
 import io.velo.decode.HttpHeaderBody;
 import io.velo.decode.Request;
 import io.velo.decode.RequestDecoder;
@@ -888,6 +889,8 @@ public class MultiWorkerServer extends Launcher {
         var aclUsers = AclUsers.getInstance();
         aclUsers.initBySlotWorkerEventloopArray(slotWorkerEventloopArray);
         aclUsers.loadAclFile();
+
+        BlockingList.initBySlotWorkerEventloopArray(slotWorkerEventloopArray);
 
         // start primary schedule
         primaryScheduleRunnable = new PrimaryTaskRunnable(loopCount -> {

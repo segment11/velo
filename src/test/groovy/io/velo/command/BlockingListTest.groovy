@@ -1,5 +1,6 @@
 package io.velo.command
 
+import io.activej.eventloop.Eventloop
 import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.SocketInspectorTest
@@ -12,8 +13,19 @@ import io.velo.reply.NilReply
 import io.velo.reply.Reply
 import spock.lang.Specification
 
+import java.time.Duration
+
 class BlockingListTest extends Specification {
     def 'test blocking list promise'() {
+        given:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        Thread.sleep(100)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        BlockingList.initBySlotWorkerEventloopArray(eventloopArray)
+
         expect:
         !BlockingList.setReplyIfBlockingListExist('a', new byte[1][0])
         BlockingList.blockingClientCount() == 0
@@ -185,11 +197,13 @@ class BlockingListTest extends Specification {
 
         when:
         BlockingList.removeBySocket(socket)
+        eventloopCurrent.run()
         then:
         BlockingList.blockingClientCount() == 1
 
         when:
         BlockingList.removeBySocket(socket2)
+        eventloopCurrent.run()
         then:
         BlockingList.blockingClientCount() == 0
 
