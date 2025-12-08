@@ -539,6 +539,9 @@ public class RequestHandler {
             } catch (ReadonlyException e) {
                 log.warn("Request handle but server is readonly");
                 return ErrorReply.READONLY;
+            } catch (TypeMismatchException e) {
+                log.warn(e.getMessage());
+                return new ErrorReply(e.getMessage());
             } catch (Exception e) {
                 log.error("Request handle error.", e);
                 return new ErrorReply(e.getMessage());
