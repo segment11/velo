@@ -325,11 +325,6 @@ public class RGroup extends BaseCommand {
 
             rdbImporter.restore(buf, new RDBCallback() {
                 @Override
-                public void onInteger(Integer value) {
-                    setNumber(keyBytes, value, slotWithKeyHash, finalExpireAt);
-                }
-
-                @Override
                 public void onString(byte[] valueBytes) {
                     set(keyBytes, valueBytes, slotWithKeyHash, CompressedValue.NULL_DICT_SEQ, finalExpireAt);
                 }

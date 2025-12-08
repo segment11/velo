@@ -13,12 +13,6 @@ class RDBParserTest extends Specification {
         Object result
 
         @Override
-        void onInteger(Integer value) {
-            println "Integer: $value"
-            result = value
-        }
-
-        @Override
         void onString(byte[] valueBytes) {
             println "String: ${new String(valueBytes)}"
             result = valueBytes

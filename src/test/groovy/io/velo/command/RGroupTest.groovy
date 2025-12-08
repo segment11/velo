@@ -316,21 +316,22 @@ class RGroupTest extends Specification {
         reply instanceof ErrorReply
 
         when:
-        reply = rGroup.execute('restore a 0 bbb replace') { data ->
+        reply = rGroup.execute('restore string0 0 bbb replace') { data ->
             data[3] = RDBParser.dumpString('values'.bytes)
         }
-        def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, 0L)
+        def bufOrCv = inMemoryGetSet.getBuf(slot, 'string0'.bytes, 0, 0L)
         then:
         reply == OKReply.INSTANCE
         bufOrCv.cv().compressedData == 'values'.bytes
 
         when:
-        reply = rGroup.execute('restore a 0 bbb replace') { data ->
+        reply = rGroup.execute('restore int0 0 bbb replace') { data ->
             data[3] = RDBParser.dumpString('1'.bytes)
         }
-        bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, 0L)
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'int0'.bytes, 0, 0L)
         then:
         reply == OKReply.INSTANCE
+        bufOrCv.cv().isTypeNumber()
         bufOrCv.cv().numberValue() == 1
 
         when:
@@ -361,6 +362,22 @@ class RGroupTest extends Specification {
         reply == OKReply.INSTANCE
         bufOrCv.cv().isHash()
         RedisHH.decode(bufOrCv.cv().compressedData).size() == 3
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        reply = rGroup.execute('restore hash1 0 bbb replace') { data ->
+            def rhh = new RedisHH()
+            rhh.put('a', 'a'.bytes)
+            rhh.put('b', 'b'.bytes)
+            rhh.put('c', 'c'.bytes)
+            data[3] = RDBParser.dumpHash(rhh)
+        }
+        var keysKey = RedisHashKeys.keysKey('hash1')
+        bufOrCv = inMemoryGetSet.getBuf(slot, keysKey.bytes, 0, 0L)
+        then:
+        reply == OKReply.INSTANCE
+        bufOrCv.cv().isHash()
+        RedisHashKeys.decode(bufOrCv.cv().compressedData).size() == 3
 
         when:
         reply = rGroup.execute('restore set0 0 bbb replace') { data ->
