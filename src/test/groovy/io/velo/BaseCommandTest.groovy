@@ -157,6 +157,9 @@ class BaseCommandTest extends Specification {
         c.dataToLine() == 'get key'
         c.execute('test test') == null
         c.execute('set >key >value') == null
+        c.execute('test test') { data ->
+            data[0] = 'test'.bytes
+        } == null
 
         when:
         def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, null, Config.create())

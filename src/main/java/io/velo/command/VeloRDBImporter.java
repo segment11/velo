@@ -1,5 +1,6 @@
 package io.velo.command;
 
+import com.moilioncircle.redis.replicator.util.CRC64;
 import io.netty.buffer.ByteBuf;
 import io.velo.rdb.RDBParser;
 
@@ -24,10 +25,10 @@ public class VeloRDBImporter implements RDBImporter {
         // CRC64: last 8 bytes (little-endian)
         long expectedCrc = buf.getLongLE(len - 8);
         // CRC64 check: over all bytes except the last 8 (footer)
-//        var actualCrc = RedisCrc.crc64(0, buf.array(), 0, len - 8);
-//        if (actualCrc != expectedCrc) {
-//            throw new IllegalArgumentException("CRC64 mismatch: expected " + expectedCrc + ", got " + actualCrc);
-//        }
+        var actualCrc = CRC64.crc64(buf.array(), 0, len - 8);
+        if (actualCrc != expectedCrc) {
+            throw new IllegalArgumentException("CRC64 mismatch: expected " + expectedCrc + ", got " + actualCrc);
+        }
 
         parser.readEntry(buf, callback);
     }

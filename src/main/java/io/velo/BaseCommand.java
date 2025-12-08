@@ -352,8 +352,19 @@ public abstract class BaseCommand {
     private static final String GT_KEY_LENGTH_PLACEHOLDER = ">key";
     private static final String GT_VALUE_LENGTH_PLACEHOLDER = ">value";
 
+
+    @TestOnly
+    public interface DataArrayReplacer {
+        void replace(byte[][] data);
+    }
+
     @TestOnly
     public Reply execute(String allDataString) {
+        return execute(allDataString, null);
+    }
+
+    @TestOnly
+    public Reply execute(String allDataString, DataArrayReplacer replacer) {
         var dataStrings = allDataString.split(" ");
         var data = new byte[dataStrings.length][];
         for (int i = 0; i < dataStrings.length; i++) {
@@ -378,6 +389,10 @@ public abstract class BaseCommand {
 
         this.cmd = dataStrings[0];
         this.data = data;
+
+        if (replacer != null) {
+            replacer.replace(data);
+        }
 
         slotWithKeyHashListParsed = parseSlots(cmd, data, slotNumber);
         return handle();

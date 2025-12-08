@@ -4,10 +4,14 @@ import io.activej.eventloop.Eventloop
 import io.velo.*
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
+import io.velo.rdb.RDBParser
 import io.velo.repl.ReplPairTest
 import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.reply.*
+import io.velo.type.RedisHH
+import io.velo.type.RedisHashKeys
 import io.velo.type.RedisList
+import io.velo.type.RedisZSet
 import spock.lang.Specification
 
 import java.time.Duration
@@ -310,6 +314,81 @@ class RGroupTest extends Specification {
         then:
         // Serialized value too short
         reply instanceof ErrorReply
+
+        when:
+        reply = rGroup.execute('restore a 0 bbb replace') { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, 0L)
+        then:
+        reply == OKReply.INSTANCE
+        bufOrCv.cv().compressedData == 'values'.bytes
+
+        when:
+        reply = rGroup.execute('restore a 0 bbb replace') { data ->
+            data[3] = RDBParser.dumpString('1'.bytes)
+        }
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, 0L)
+        then:
+        reply == OKReply.INSTANCE
+        bufOrCv.cv().numberValue() == 1
+
+        when:
+        reply = rGroup.execute('restore list0 0 bbb replace') { data ->
+            def rl = new RedisList()
+            rl.addLast('a'.bytes)
+            rl.addLast('b'.bytes)
+            rl.addLast('c'.bytes)
+            data[3] = RDBParser.dumpList(rl)
+        }
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'list0'.bytes, 0, 0L)
+        then:
+        reply == OKReply.INSTANCE
+        bufOrCv.cv().isList()
+        RedisList.decode(bufOrCv.cv().compressedData).size() == 3
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = true
+        reply = rGroup.execute('restore hash0 0 bbb replace') { data ->
+            def rhh = new RedisHH()
+            rhh.put('a', 'a'.bytes)
+            rhh.put('b', 'b'.bytes)
+            rhh.put('c', 'c'.bytes)
+            data[3] = RDBParser.dumpHash(rhh)
+        }
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'hash0'.bytes, 0, 0L)
+        then:
+        reply == OKReply.INSTANCE
+        bufOrCv.cv().isHash()
+        RedisHH.decode(bufOrCv.cv().compressedData).size() == 3
+
+        when:
+        reply = rGroup.execute('restore set0 0 bbb replace') { data ->
+            def rhk = new RedisHashKeys()
+            rhk.add('a')
+            rhk.add('b')
+            rhk.add('c')
+            data[3] = RDBParser.dumpSet(rhk)
+        }
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'set0'.bytes, 0, 0L)
+        then:
+        reply == OKReply.INSTANCE
+        bufOrCv.cv().isSet()
+        RedisHashKeys.decode(bufOrCv.cv().compressedData).size() == 3
+
+        when:
+        reply = rGroup.execute('restore zset0 0 bbb replace') { data ->
+            def rz = new RedisZSet()
+            rz.add(1.0d, 'a')
+            rz.add(2.0d, 'b')
+            rz.add(3.0d, 'c')
+            data[3] = RDBParser.dumpZSet(rz)
+        }
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'zset0'.bytes, 0, 0L)
+        then:
+        reply == OKReply.INSTANCE
+        bufOrCv.cv().isZSet()
+        RedisZSet.decode(bufOrCv.cv().compressedData).size() == 3
 
         when:
         Debug.instance.logRestore = false
