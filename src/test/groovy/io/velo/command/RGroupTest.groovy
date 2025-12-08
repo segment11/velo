@@ -557,7 +557,7 @@ class RGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof BulkReply && ((BulkReply) result).raw == '8'.bytes
+            result instanceof BulkReply && (result as BulkReply).raw == '8'.bytes
         }.result
 
         when:
@@ -711,7 +711,7 @@ class RGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof BulkReply && ((BulkReply) result).raw == '1'.bytes
+            result instanceof BulkReply && (result as BulkReply).raw == '1'.bytes
         }.result
 
         cleanup:

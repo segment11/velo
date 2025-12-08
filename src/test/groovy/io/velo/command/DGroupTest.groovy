@@ -331,7 +331,7 @@ class DGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && ((IntegerReply) result).integer == 1
+            result instanceof IntegerReply && (result as IntegerReply).integer == 1
         }.result
 
         cleanup:
@@ -361,7 +361,7 @@ class DGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && ((IntegerReply) result).integer == 0
+            result instanceof IntegerReply && (result as IntegerReply).integer == 0
         }.result
 
         cleanup:

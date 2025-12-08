@@ -1031,7 +1031,7 @@ zunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof MultiBulkReply && ((MultiBulkReply) result).replies.length == 5
+            result instanceof MultiBulkReply && (result as MultiBulkReply).replies.length == 5
         }.result
 
         when:
@@ -1041,7 +1041,7 @@ zunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && ((IntegerReply) result).integer == 5
+            result instanceof IntegerReply && (result as IntegerReply).integer == 5
         }.result
 
         when:
@@ -1052,7 +1052,7 @@ zunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof MultiBulkReply && ((MultiBulkReply) result).replies.length == 10
+            result instanceof MultiBulkReply && (result as MultiBulkReply).replies.length == 10
         }.result
 
         when:
@@ -1062,7 +1062,7 @@ zunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && ((IntegerReply) result).integer == 10
+            result instanceof IntegerReply && (result as IntegerReply).integer == 10
         }.result
 
         when:
@@ -1287,7 +1287,7 @@ zunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && ((IntegerReply) result).integer == 2
+            result instanceof IntegerReply && (result as IntegerReply).integer == 2
         }.result
 
         when:
@@ -1296,7 +1296,7 @@ zunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && ((IntegerReply) result).integer == 1
+            result instanceof IntegerReply && (result as IntegerReply).integer == 1
         }.result
 
         when:
@@ -1305,7 +1305,7 @@ zunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && ((IntegerReply) result).integer == 2
+            result instanceof IntegerReply && (result as IntegerReply).integer == 2
         }.result
 
         when:

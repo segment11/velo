@@ -172,7 +172,7 @@ class VGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && ((IntegerReply) result).integer == 1
+            result instanceof IntegerReply && (result as IntegerReply).integer == 1
         }.result
 
         when:
@@ -183,7 +183,7 @@ class VGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof MultiBulkReply && ((MultiBulkReply) result).replies.length == 2
+            result instanceof MultiBulkReply && (result as MultiBulkReply).replies.length == 2
         }.result
 
         when:
@@ -250,7 +250,7 @@ class VGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof MultiBulkReply && ((MultiBulkReply) result).replies.length == 1
+            result instanceof MultiBulkReply && (result as MultiBulkReply).replies.length == 1
         }.result
 
         when:

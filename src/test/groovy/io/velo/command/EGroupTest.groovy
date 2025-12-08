@@ -181,7 +181,7 @@ class EGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && ((IntegerReply) result).integer == 1
+            result instanceof IntegerReply && (result as IntegerReply).integer == 1
         }.result
 
         cleanup:

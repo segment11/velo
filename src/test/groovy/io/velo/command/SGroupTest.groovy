@@ -1026,7 +1026,7 @@ sunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            (result instanceof MultiBulkReply) && ((MultiBulkReply) result).replies.length == 3
+            (result instanceof MultiBulkReply) && (result as MultiBulkReply).replies.length == 3
         }.result
 
         when:
@@ -1197,7 +1197,7 @@ sunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            (result instanceof IntegerReply) && ((IntegerReply) result).integer == 3
+            (result instanceof IntegerReply) && (result as IntegerReply).integer == 3
         }.result
 
         when:
@@ -1228,7 +1228,7 @@ sunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            (result instanceof IntegerReply) && ((IntegerReply) result).integer == 3
+            (result instanceof IntegerReply) && (result as IntegerReply).integer == 3
         }.result
 
         when:
@@ -1342,7 +1342,7 @@ sunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            (result instanceof IntegerReply) && ((IntegerReply) result).integer == 1
+            (result instanceof IntegerReply) && (result as IntegerReply).integer == 1
         }.result
 
         when:
@@ -1351,7 +1351,7 @@ sunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            (result instanceof IntegerReply) && ((IntegerReply) result).integer == 1
+            (result instanceof IntegerReply) && (result as IntegerReply).integer == 1
         }.result
 
         when:
@@ -1360,7 +1360,7 @@ sunionstore
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            (result instanceof IntegerReply) && ((IntegerReply) result).integer == 1
+            (result instanceof IntegerReply) && (result as IntegerReply).integer == 1
         }.result
 
         when:
