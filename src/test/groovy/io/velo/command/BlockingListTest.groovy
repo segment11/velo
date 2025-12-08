@@ -144,7 +144,7 @@ class BlockingListTest extends Specification {
         BlockingList.addBlockingListPromiseByKey('a', settablePromise7, null, true, xx)
         def elementValueBytesArray7 = new byte[1][]
         elementValueBytesArray7[0] = 'a'.bytes
-        def bb7 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray7, bGroup)
+        def bb7 = BlockingList.setReplyIfBlockingListExist('a', true, elementValueBytesArray7, bGroup)
         then:
         settablePromise7.isComplete()
         (settablePromise7.getResult() as BulkReply).raw == 'a'.bytes
@@ -157,12 +157,24 @@ class BlockingListTest extends Specification {
         BlockingList.addBlockingListPromiseByKey('a', settablePromise8, null, false, xx)
         def elementValueBytesArray8 = new byte[1][]
         elementValueBytesArray8[0] = 'a'.bytes
-        def bb8 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray8, bGroup)
+        def bb8 = BlockingList.setReplyIfBlockingListExist('a', true, elementValueBytesArray8, bGroup)
         then:
         settablePromise8.isComplete()
         (settablePromise8.getResult() as BulkReply).raw == 'a'.bytes
         bb8.length == 0
-        inMemoryGetSet.getBuf(slot, 'b'.bytes, slotForKeyB.bucketIndex(), slotForKeyB.keyHash()) != null
+
+        when:
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        def settablePromise88 = new SettablePromise<Reply>()
+        BlockingList.addBlockingListPromiseByKey('a', settablePromise88, null, true, xx)
+        def elementValueBytesArray88 = new byte[2][]
+        elementValueBytesArray88[0] = 'a'.bytes
+        elementValueBytesArray88[1] = 'b'.bytes
+        def bb88 = BlockingList.setReplyIfBlockingListExist('a', false, elementValueBytesArray88, bGroup)
+        then:
+        settablePromise88.isComplete()
+        (settablePromise88.getResult() as BulkReply).raw == 'b'.bytes
+        bb88.length == 1
 
         when:
         def one = BlockingList.addBlockingListPromiseByKey('a', settablePromise8, null, true)

@@ -173,7 +173,7 @@ public class BlockingList {
 
     @TestOnly
     static byte[][] setReplyIfBlockingListExist(String key, byte[][] elementValueBytesArray) {
-        return setReplyIfBlockingListExist(key, elementValueBytesArray, null);
+        return setReplyIfBlockingListExist(key, true, elementValueBytesArray, null);
     }
 
     private static final LocalPersist localPersist = LocalPersist.getInstance();
@@ -182,14 +182,25 @@ public class BlockingList {
      * Set reply to blocking clients when list values are added
      *
      * @param key                    target key
+     * @param addFirst               is added from left
      * @param elementValueBytesArray list values added
      * @param baseCommand            base command
      * @return list values exclude sent to blocking clients, null if key is not blocking
      */
-    public static byte[][] setReplyIfBlockingListExist(String key, byte[][] elementValueBytesArray, BaseCommand baseCommand) {
+    public static byte[][] setReplyIfBlockingListExist(String key, boolean addFirst, byte[][] elementValueBytesArray, BaseCommand baseCommand) {
         var list = getInner().blockingListPromisesByKey.get(key);
-        if (list == null) {
+        if (list == null || list.isEmpty()) {
             return null;
+        }
+
+        byte[][] fromLeftToRight;
+        if (!addFirst) {
+            fromLeftToRight = new byte[elementValueBytesArray.length][];
+            for (int i = 0; i < elementValueBytesArray.length; i++) {
+                fromLeftToRight[i] = elementValueBytesArray[elementValueBytesArray.length - i - 1];
+            }
+        } else {
+            fromLeftToRight = elementValueBytesArray;
         }
 
         var it = list.iterator();
@@ -203,17 +214,17 @@ public class BlockingList {
             }
 
             if (promise.isLeft) {
-                if (leftI >= elementValueBytesArray.length) {
+                if (leftI >= fromLeftToRight.length) {
                     break;
                 }
 
-                var leftValueBytes = elementValueBytesArray[leftI];
+                var leftValueBytes = fromLeftToRight[leftI];
                 // already reset by other promise
                 if (leftValueBytes == null) {
                     break;
                 }
 
-                elementValueBytesArray[leftI] = null;
+                fromLeftToRight[leftI] = null;
                 leftI++;
 
                 var xx = promise.xx();
@@ -233,18 +244,18 @@ public class BlockingList {
                 }
                 it.remove();
             } else {
-                var index = elementValueBytesArray.length - 1 - rightI;
+                var index = fromLeftToRight.length - 1 - rightI;
                 if (index < 0) {
                     break;
                 }
 
-                var rightValueBytes = elementValueBytesArray[index];
+                var rightValueBytes = fromLeftToRight[index];
                 // already reset by other promise
                 if (rightValueBytes == null) {
                     break;
                 }
 
-                elementValueBytesArray[index] = null;
+                fromLeftToRight[index] = null;
                 rightI++;
 
                 var xx = promise.xx();
@@ -266,13 +277,13 @@ public class BlockingList {
             }
         }
 
-        int returnLength = elementValueBytesArray.length - leftI - rightI;
+        int returnLength = fromLeftToRight.length - leftI - rightI;
         if (returnLength == 0) {
             return new byte[0][];
         }
 
         var returnBytesArray = new byte[returnLength][];
-        System.arraycopy(elementValueBytesArray, leftI, returnBytesArray, 0, returnBytesArray.length);
+        System.arraycopy(fromLeftToRight, leftI, returnBytesArray, 0, returnBytesArray.length);
         return returnBytesArray;
     }
 

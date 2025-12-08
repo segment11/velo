@@ -770,7 +770,7 @@ class LGroupTest extends Specification {
         (reply as IntegerReply).integer == 3 - 1 + 3
         finalPromise5.isComplete()
         finalPromise5.getResult() instanceof MultiBulkReply
-        ((finalPromise5.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
+        ((finalPromise5.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'c'.bytes
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
