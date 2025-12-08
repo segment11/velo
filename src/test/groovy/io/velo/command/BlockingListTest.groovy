@@ -27,7 +27,7 @@ class BlockingListTest extends Specification {
         BlockingList.initBySlotWorkerEventloopArray(eventloopArray)
 
         expect:
-        !BlockingList.setReplyIfBlockingListExist('a', new byte[1][0])
+        !BlockingList.setReplyRPushIfBlockingListExist('a', new byte[1][0])
         BlockingList.blockingClientCount() == 0
 
         when:
@@ -40,7 +40,7 @@ class BlockingListTest extends Specification {
         when:
         def elementValueBytesArray = new byte[1][]
         elementValueBytesArray[0] = 'a'.bytes
-        def bb = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray)
+        def bb = BlockingList.setReplyRPushIfBlockingListExist('a', elementValueBytesArray)
         then:
         settablePromise.isComplete()
         settablePromise.getResult() instanceof MultiBulkReply
@@ -57,7 +57,7 @@ class BlockingListTest extends Specification {
         BlockingList.addBlockingListPromiseByKey('a', settablePromise4, null, true)
         def elementValueBytesArray2 = new byte[1][]
         elementValueBytesArray2[0] = 'a'.bytes
-        def bb2 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray2)
+        def bb2 = BlockingList.setReplyRPushIfBlockingListExist('a', elementValueBytesArray2)
         then:
         settablePromise2.isComplete()
         settablePromise3.isComplete()
@@ -72,7 +72,7 @@ class BlockingListTest extends Specification {
         BlockingList.addBlockingListPromiseByKey('a', settablePromise33, null, false)
         def elementValueBytesArray33 = new byte[1][]
         elementValueBytesArray33[0] = 'a'.bytes
-        def bb33 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray33)
+        def bb33 = BlockingList.setReplyRPushIfBlockingListExist('a', elementValueBytesArray33)
         then:
         settablePromise44.isComplete()
         !settablePromise33.isComplete()
@@ -86,7 +86,7 @@ class BlockingListTest extends Specification {
         BlockingList.addBlockingListPromiseByKey('a', settablePromise444, null, true)
         def elementValueBytesArray333 = new byte[1][]
         elementValueBytesArray333[0] = 'a'.bytes
-        def bb333 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray333)
+        def bb333 = BlockingList.setReplyRPushIfBlockingListExist('a', elementValueBytesArray333)
         then:
         settablePromise333.isComplete()
         !settablePromise444.isComplete()
@@ -100,7 +100,7 @@ class BlockingListTest extends Specification {
         BlockingList.addBlockingListPromiseByKey('a', settablePromise4444, null, false)
         def elementValueBytesArray3333 = new byte[1][]
         elementValueBytesArray3333[0] = 'a'.bytes
-        def bb3333 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray3333)
+        def bb3333 = BlockingList.setReplyLPushIfBlockingListExist('a', elementValueBytesArray3333)
         then:
         settablePromise3333.isComplete()
         !settablePromise4444.isComplete()
@@ -116,7 +116,7 @@ class BlockingListTest extends Specification {
         elementValueBytesArray5[0] = 'a'.bytes
         elementValueBytesArray5[1] = 'b'.bytes
         elementValueBytesArray5[2] = 'c'.bytes
-        def bb5 = BlockingList.setReplyIfBlockingListExist('a', elementValueBytesArray5)
+        def bb5 = BlockingList.setReplyRPushIfBlockingListExist('a', elementValueBytesArray5)
         then:
         settablePromise5.isComplete()
         ((settablePromise5.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
@@ -155,26 +155,29 @@ class BlockingListTest extends Specification {
         BlockingList.clearBlockingListPromisesForAllKeys()
         def settablePromise8 = new SettablePromise<Reply>()
         BlockingList.addBlockingListPromiseByKey('a', settablePromise8, null, false, xx)
-        def elementValueBytesArray8 = new byte[1][]
+        def elementValueBytesArray8 = new byte[3][]
         elementValueBytesArray8[0] = 'a'.bytes
+        elementValueBytesArray8[1] = 'b'.bytes
+        elementValueBytesArray8[2] = 'c'.bytes
         def bb8 = BlockingList.setReplyIfBlockingListExist('a', true, elementValueBytesArray8, bGroup)
         then:
         settablePromise8.isComplete()
         (settablePromise8.getResult() as BulkReply).raw == 'a'.bytes
-        bb8.length == 0
+        bb8.length == 2
 
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()
         def settablePromise88 = new SettablePromise<Reply>()
         BlockingList.addBlockingListPromiseByKey('a', settablePromise88, null, true, xx)
-        def elementValueBytesArray88 = new byte[2][]
+        def elementValueBytesArray88 = new byte[3][]
         elementValueBytesArray88[0] = 'a'.bytes
         elementValueBytesArray88[1] = 'b'.bytes
+        elementValueBytesArray88[2] = 'c'.bytes
         def bb88 = BlockingList.setReplyIfBlockingListExist('a', false, elementValueBytesArray88, bGroup)
         then:
         settablePromise88.isComplete()
-        (settablePromise88.getResult() as BulkReply).raw == 'b'.bytes
-        bb88.length == 1
+        (settablePromise88.getResult() as BulkReply).raw == 'a'.bytes
+        bb88.length == 2
 
         when:
         def one = BlockingList.addBlockingListPromiseByKey('a', settablePromise8, null, true)

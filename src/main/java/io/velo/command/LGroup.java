@@ -580,7 +580,6 @@ public class LGroup extends BaseCommand {
             }
         }
 
-        // todo, when lpushx / rpushx and key is blocking, need check exists first, then do pop
         var key = new String(keyBytes);
         var afterPopValueBytesArray = BlockingList.setReplyIfBlockingListExist(key, addFirst, valueBytesArr, this);
         // no blocking for this key

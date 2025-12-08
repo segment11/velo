@@ -172,8 +172,13 @@ public class BlockingList {
     }
 
     @TestOnly
-    static byte[][] setReplyIfBlockingListExist(String key, byte[][] elementValueBytesArray) {
+    static byte[][] setReplyLPushIfBlockingListExist(String key, byte[][] elementValueBytesArray) {
         return setReplyIfBlockingListExist(key, true, elementValueBytesArray, null);
+    }
+
+    @TestOnly
+    static byte[][] setReplyRPushIfBlockingListExist(String key, byte[][] elementValueBytesArray) {
+        return setReplyIfBlockingListExist(key, false, elementValueBytesArray, null);
     }
 
     private static final LocalPersist localPersist = LocalPersist.getInstance();
@@ -194,7 +199,7 @@ public class BlockingList {
         }
 
         byte[][] fromLeftToRight;
-        if (!addFirst) {
+        if (addFirst) {
             fromLeftToRight = new byte[elementValueBytesArray.length][];
             for (int i = 0; i < elementValueBytesArray.length; i++) {
                 fromLeftToRight[i] = elementValueBytesArray[elementValueBytesArray.length - i - 1];
@@ -284,7 +289,17 @@ public class BlockingList {
 
         var returnBytesArray = new byte[returnLength][];
         System.arraycopy(fromLeftToRight, leftI, returnBytesArray, 0, returnBytesArray.length);
-        return returnBytesArray;
+
+        if (addFirst) {
+            // sort back
+            var fromRightToLeft = new byte[returnBytesArray.length][];
+            for (int i = 0; i < fromRightToLeft.length; i++) {
+                fromRightToLeft[i] = fromLeftToRight[fromLeftToRight.length - i - 1];
+            }
+            return fromRightToLeft;
+        } else {
+            return returnBytesArray;
+        }
     }
 
     @TestOnly
