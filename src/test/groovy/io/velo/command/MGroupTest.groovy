@@ -388,10 +388,40 @@ class MGroupTest extends Specification {
         inMemoryGetSet.put('a', cv0)
         inMemoryGetSet.put('b', cv1)
         reply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS a b')
+        def jedis = redisServer.initJedis()
         then:
         reply == OKReply.INSTANCE
+        jedis.get('a') == 'value0'
+        jedis.get('b') == 'value1'
+
+        when:
+        jedis.del('a')
+        jedis.del('b')
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+        LocalPersist.instance.addOneSlot(slot, eventloop)
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        mGroup.crossRequestWorker = true
+        reply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS a b')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            reply == OKReply.INSTANCE
+        }.result
+        jedis.get('a') == 'value0'
+        jedis.get('b') == 'value1'
 
         cleanup:
+        jedis.close()
         redisServer.stop()
     }
 }

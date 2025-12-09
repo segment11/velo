@@ -412,9 +412,13 @@ public class MGroup extends BaseCommand {
                     continue;
                 }
                 long expireAt = cv.getExpireAt();
-                jedisTo.restore(key.getBytes(), expireAt, dumpBytes, restoreParams);
-                count++;
+                var result = jedisTo.restore(key.getBytes(), expireAt, dumpBytes, restoreParams);
+                if (!result.equals("OK")) {
+                    log.warn("Migrate error={}, key={}", result, key);
+                    continue;
+                }
 
+                count++;
                 if (isReplace) {
                     removeDelay(s.slot(), s.bucketIndex(), key, s.keyHash());
                 }
@@ -428,9 +432,9 @@ public class MGroup extends BaseCommand {
         } else {
             ArrayList<KeyBytesAndSlotWithKeyHash> list = new ArrayList<>();
             for (int i = 0; i < keys.size(); i++) {
-                var keyBytes = data[i];
-                var slotWithKeyHash = slot(keyBytes);
-                list.add(new KeyBytesAndSlotWithKeyHash(keyBytes, i, slotWithKeyHash));
+                var key = keys.get(i);
+                var slotWithKeyHash = slot(key.getBytes());
+                list.add(new KeyBytesAndSlotWithKeyHash(key.getBytes(), i, slotWithKeyHash));
             }
 
             ArrayList<Promise<ArrayList<DumpBytesAndTtlAndIndex>>> promises = new ArrayList<>();
@@ -456,6 +460,7 @@ public class MGroup extends BaseCommand {
                 promises.add(p);
             }
 
+            final var isReplaceFinal = isReplace;
             SettablePromise<Reply> finalPromise = new SettablePromise<>();
             var asyncReply = new AsyncReply(finalPromise);
 
@@ -471,8 +476,20 @@ public class MGroup extends BaseCommand {
                     for (var d : p.getResult()) {
                         var one = list.get(d.index);
                         var key = one.slotWithKeyHash.rawKey();
-                        jedisTo.restore(key.getBytes(), d.expireAt, d.dumpBytes, restoreParams);
+                        var result = jedisTo.restore(key.getBytes(), d.expireAt, d.dumpBytes, restoreParams);
+                        if (!result.equals("OK")) {
+                            log.warn("Migrate error={}, key={}", result, key);
+                            continue;
+                        }
+
                         count++;
+                        if (isReplaceFinal) {
+                            var s = one.slotWithKeyHash;
+                            var oneSlot = localPersist.oneSlot(s.slot());
+                            oneSlot.asyncRun(() -> {
+                                removeDelay(s.slot(), s.bucketIndex(), key, s.keyHash());
+                            });
+                        }
                     }
                 }
 
