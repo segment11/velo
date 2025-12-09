@@ -397,7 +397,7 @@ public class IGroup extends BaseCommand {
             count++;
 
             if (count % 100 == 0) {
-                log.info("key: {}, value bytes size: {}", new String(keyBytes), valueBytes.length);
+                log.info("key={}, value bytes size={}", new String(keyBytes), valueBytes.length);
             }
         }
 
