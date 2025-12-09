@@ -91,13 +91,13 @@ class RedisServer {
         }
     }
 
-    static Jedis initJedis(String host, int port) {
+    Jedis initJedis() {
         def log = LoggerFactory.getLogger(RedisServer)
         for (int i = 0; i < 10; i++) {
             try {
-                def jedis = new Jedis(host, port)
+                def jedis = new Jedis('127.0.0.1', port)
                 jedis.ping()
-                log.info 'connected to server, host: {}, port: {}', host, port
+                log.info 'connected to server, port={}', port
                 return jedis
             } catch (Exception e) {
                 log.warn 'waiting for server ready, retry..., {}', e.message
