@@ -468,36 +468,40 @@ public class MGroup extends BaseCommand {
                 if (e != null) {
                     log.error("migrate error={}", e.getMessage());
                     finalPromise.setException(e);
+                    jedisTo.close();
+                    log.info("Close jedis {}:{}", host, port);
                     return;
                 }
 
-                var count = 0;
-                for (var p : promises) {
-                    for (var d : p.getResult()) {
-                        var one = list.get(d.index);
-                        var key = one.slotWithKeyHash.rawKey();
-                        var result = jedisTo.restore(key.getBytes(), d.expireAt, d.dumpBytes, restoreParams);
-                        if (!result.equals("OK")) {
-                            log.warn("Migrate error={}, key={}", result, key);
-                            continue;
-                        }
+                try {
+                    var count = 0;
+                    for (var p : promises) {
+                        for (var d : p.getResult()) {
+                            var one = list.get(d.index);
+                            var key = one.slotWithKeyHash.rawKey();
+                            var result = jedisTo.restore(key.getBytes(), d.expireAt, d.dumpBytes, restoreParams);
+                            if (!result.equals("OK")) {
+                                log.warn("Migrate error={}, key={}", result, key);
+                                continue;
+                            }
 
-                        count++;
-                        if (isReplaceFinal) {
-                            var s = one.slotWithKeyHash;
-                            var oneSlot = localPersist.oneSlot(s.slot());
-                            oneSlot.asyncRun(() -> {
-                                removeDelay(s.slot(), s.bucketIndex(), key, s.keyHash());
-                            });
+                            count++;
+                            if (isReplaceFinal) {
+                                var s = one.slotWithKeyHash;
+                                var oneSlot = localPersist.oneSlot(s.slot());
+                                oneSlot.asyncRun(() -> {
+                                    removeDelay(s.slot(), s.bucketIndex(), key, s.keyHash());
+                                });
+                            }
                         }
                     }
+
+                    var rr = count != 0 ? OKReply.INSTANCE : NOKEY_REPLY;
+                    finalPromise.set(rr);
+                } finally {
+                    jedisTo.close();
+                    log.info("Close jedis {}:{}", host, port);
                 }
-
-                jedisTo.close();
-                log.info("Close jedis {}:{}", host, port);
-
-                var rr = count != 0 ? OKReply.INSTANCE : NOKEY_REPLY;
-                finalPromise.set(rr);
             });
 
             return asyncReply;
