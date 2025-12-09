@@ -5,7 +5,6 @@ import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
-import io.velo.CompressedValue;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.reply.*;
@@ -318,22 +317,10 @@ public class MGroup extends BaseCommand {
         return asyncReply;
     }
 
-    // todo, migrate use dump
-    private byte[] dump(CompressedValue cv, byte[] keyBytes, SlotWithKeyHash s) {
-        return getValueBytesByCv(cv, keyBytes, s);
-    }
-
-    private void restore(byte[] keyBytes, byte[] dumpBytes, long expireAt, RestoreParams restoreParams, Jedis jedisTo) {
-//        jedisTo.restore(keyBytes, expireAt, dumpBytes, restoreParams);
-        if (expireAt != CompressedValue.NO_EXPIRE) {
-            jedisTo.psetex(keyBytes, expireAt - System.currentTimeMillis(), dumpBytes);
-        } else {
-            jedisTo.set(keyBytes, dumpBytes);
-        }
-    }
-
     private record DumpBytesAndTtlAndIndex(byte[] dumpBytes, long expireAt, int index) {
     }
+
+    static final Reply NOKEY_REPLY = new BulkReply("NOKEY".getBytes());
 
     private Reply migrate() {
         if (data.length < 7) {
@@ -355,7 +342,7 @@ public class MGroup extends BaseCommand {
         for (int i = 6; i < data.length; i++) {
             var arg = new String(data[i]);
             if (arg.equalsIgnoreCase("keys")) {
-                if (i + 1 < data.length) {
+                if (i + 1 > data.length) {
                     return ErrorReply.SYNTAX;
                 }
                 for (int j = i + 1; j < data.length; j++) {
@@ -385,6 +372,7 @@ public class MGroup extends BaseCommand {
             return ErrorReply.SYNTAX;
         }
 
+        // perf bad
         var jedisClientConfig = DefaultJedisClientConfig.builder().timeoutMillis(timeoutMs).build();
         Jedis jedisTo;
         try {
@@ -407,6 +395,9 @@ public class MGroup extends BaseCommand {
             restoreParams.replace();
         }
 
+        var dGroup = new DGroup(null, null, null);
+        dGroup.from(this);
+
         if (!isCrossRequestWorker) {
             int count = 0;
             for (var key : keys) {
@@ -416,8 +407,12 @@ public class MGroup extends BaseCommand {
                     continue;
                 }
 
-                var dumpBytes = dump(cv, key.getBytes(), s);
-                restore(key.getBytes(), dumpBytes, cv.getExpireAt(), restoreParams, jedisTo);
+                var dumpBytes = dGroup.dumpBytes(cv, key.getBytes(), s);
+                if (dumpBytes == null) {
+                    continue;
+                }
+                long expireAt = cv.getExpireAt();
+                jedisTo.restore(key.getBytes(), expireAt, dumpBytes, restoreParams);
                 count++;
 
                 if (isReplace) {
@@ -429,7 +424,7 @@ public class MGroup extends BaseCommand {
             jedisTo.close();
             log.info("Close jedis {}:{}", host, port);
 
-            return count != 0 ? OKReply.INSTANCE : new BulkReply("NOKEY".getBytes());
+            return count != 0 ? OKReply.INSTANCE : NOKEY_REPLY;
         } else {
             ArrayList<KeyBytesAndSlotWithKeyHash> list = new ArrayList<>();
             for (int i = 0; i < keys.size(); i++) {
@@ -453,7 +448,7 @@ public class MGroup extends BaseCommand {
                             continue;
                         }
 
-                        var dumpBytes = dump(cv, one.keyBytes, one.slotWithKeyHash);
+                        var dumpBytes = dGroup.dumpBytes(cv, one.keyBytes, one.slotWithKeyHash);
                         dumpBytesList.add(new DumpBytesAndTtlAndIndex(dumpBytes, cv.getExpireAt(), one.index));
                     }
                     return dumpBytesList;
@@ -475,7 +470,8 @@ public class MGroup extends BaseCommand {
                 for (var p : promises) {
                     for (var d : p.getResult()) {
                         var one = list.get(d.index);
-                        restore(one.slotWithKeyHash.rawKey().getBytes(), d.dumpBytes, d.expireAt, restoreParams, jedisTo);
+                        var key = one.slotWithKeyHash.rawKey();
+                        jedisTo.restore(key.getBytes(), d.expireAt, d.dumpBytes, restoreParams);
                         count++;
                     }
                 }
@@ -483,7 +479,7 @@ public class MGroup extends BaseCommand {
                 jedisTo.close();
                 log.info("Close jedis {}:{}", host, port);
 
-                var rr = count != 0 ? OKReply.INSTANCE : new BulkReply("NOKEY".getBytes());
+                var rr = count != 0 ? OKReply.INSTANCE : NOKEY_REPLY;
                 finalPromise.set(rr);
             });
 

@@ -330,46 +330,32 @@ public class DGroup extends BaseCommand {
         return localPersist.getIsHashSaveMemberTogether();
     }
 
-    private Reply dump() {
-        var keyBytes = data[1];
-        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
-            return ErrorReply.KEY_TOO_LONG;
-        }
-
-        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, slotWithKeyHash);
-        if (cv == null) {
-            return NilReply.INSTANCE;
-        }
-
+    byte[] dumpBytes(CompressedValue cv, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
         if (cv.isTypeString()) {
             var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
-            var dumpBytes = RDBParser.dumpString(valueBytes);
-            return new BulkReply(dumpBytes);
+            return RDBParser.dumpString(valueBytes);
         } else if (cv.isSet()) {
             var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
             var rhk = RedisHashKeys.decode(valueBytes);
             if (rhk.size() == 0) {
-                return NilReply.INSTANCE;
+                return null;
             }
 
-            var dumpBytes = RDBParser.dumpSet(rhk);
-            return new BulkReply(dumpBytes);
+            return RDBParser.dumpSet(rhk);
         } else if (cv.isHash()) {
             if (isUseHH(keyBytes)) {
                 var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
                 var rhh = RedisHH.decode(valueBytes);
                 if (rhh.size() == 0) {
-                    return NilReply.INSTANCE;
+                    return null;
                 }
 
-                var dumpBytes = RDBParser.dumpHash(rhh);
-                return new BulkReply(dumpBytes);
+                return RDBParser.dumpHash(rhh);
             } else {
                 var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
                 var rhk = RedisHashKeys.decode(valueBytes);
                 if (rhk.getSet().isEmpty()) {
-                    return NilReply.INSTANCE;
+                    return null;
                 }
 
                 var rhh = new RedisHH();
@@ -382,29 +368,51 @@ public class DGroup extends BaseCommand {
                     rhh.put(field, fieldValueBytes);
                 }
 
-                var dumpBytes = RDBParser.dumpHash(rhh);
-                return new BulkReply(dumpBytes);
+                return RDBParser.dumpHash(rhh);
             }
         } else if (cv.isList()) {
             var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
             var rl = RedisList.decode(valueBytes);
             if (rl.size() == 0) {
-                return NilReply.INSTANCE;
+                return null;
             }
 
-            var dumpBytes = RDBParser.dumpList(rl);
-            return new BulkReply(dumpBytes);
+            return RDBParser.dumpList(rl);
         } else if (cv.isZSet()) {
             var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
             var rz = RedisZSet.decode(valueBytes);
             if (rz.isEmpty()) {
-                return NilReply.INSTANCE;
+                return null;
             }
 
-            var dumpBytes = RDBParser.dumpZSet(rz);
-            return new BulkReply(dumpBytes);
+            return RDBParser.dumpZSet(rz);
         } else {
+            return TYPE_NOT_SUPPORT;
+        }
+    }
+
+    private static final byte[] TYPE_NOT_SUPPORT = "-1-1".getBytes();
+
+    private Reply dump() {
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(keyBytes, slotWithKeyHash);
+        if (cv == null) {
+            return NilReply.INSTANCE;
+        }
+
+        var dumpBytes = dumpBytes(cv, keyBytes, slotWithKeyHash);
+        if (dumpBytes == null) {
+            return NilReply.INSTANCE;
+        }
+        if (dumpBytes == TYPE_NOT_SUPPORT) {
             return ErrorReply.DUMP_TYPE_NOT_SUPPORT;
         }
+
+        return new BulkReply(dumpBytes);
     }
 }

@@ -2,18 +2,21 @@ package io.velo.command
 
 import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
+import io.velo.CompressedValue
 import io.velo.Utils
 import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
 import io.velo.reply.*
+import io.velo.tools.RedisServer
 import spock.lang.Specification
 
 import java.time.Duration
 
 class MGroupTest extends Specification {
     def _MGroup = new MGroup(null, null, null)
+    final short slot = 0
 
     def 'test parse slot'() {
         given:
@@ -126,8 +129,6 @@ class MGroupTest extends Specification {
 
     def 'test mget'() {
         given:
-        final short slot = 0
-
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
@@ -188,8 +189,6 @@ class MGroupTest extends Specification {
 
     def 'test mset'() {
         given:
-        final short slot = 0
-
         def data5 = new byte[5][]
         data5[1] = 'a'.bytes
         data5[2] = '1'.bytes
@@ -261,8 +260,6 @@ class MGroupTest extends Specification {
 
     def 'test msetnx'() {
         given:
-        final short slot = 0
-
         def data5 = new byte[5][]
         data5[1] = 'a'.bytes
         data5[2] = '1'.bytes
@@ -354,5 +351,47 @@ class MGroupTest extends Specification {
 
         cleanup:
         eventloop.breakEventloop()
+    }
+
+    def 'test migrate'() {
+        given:
+        if (!RedisServer.isBinExists()) {
+            println 'skip test migrate, because redis server binary not exists'
+            return
+        }
+
+        def redisServer = new RedisServer('test-migrate').noSave().randomPort()
+        Thread.start {
+            redisServer.run()
+        }
+
+        and:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def mGroup = new MGroup(null, null, null)
+        mGroup.byPassGetSet = inMemoryGetSet
+        mGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS a b')
+        then:
+        reply == MGroup.NOKEY_REPLY
+
+        when:
+        def cvList = Mock.prepareCompressedValueList(2)
+        def cv0 = cvList[0]
+        def cv1 = cvList[1]
+        cv0.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cv0.compressedData = 'value0'.bytes
+        cv1.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cv1.compressedData = 'value1'.bytes
+        inMemoryGetSet.put('a', cv0)
+        inMemoryGetSet.put('b', cv1)
+        reply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS a b')
+        then:
+        reply == OKReply.INSTANCE
+
+        cleanup:
+        redisServer.stop()
     }
 }
