@@ -134,6 +134,12 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
 
         var r = new Request(data, isHttp, isRepl);
         r.setHttpHeaders(httpHeaders);
+
+        if (resp.bigStringNoMemoryCopy.length != 0) {
+            r.bigStringNoMemoryCopy = resp.bigStringNoMemoryCopy.copy();
+            r.bigStringNoMemoryCopy.reset();
+        }
+
         return r;
     }
 

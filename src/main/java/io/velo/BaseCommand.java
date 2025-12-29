@@ -5,12 +5,14 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.acl.AclUsers;
 import io.velo.acl.U;
 import io.velo.command.AGroup;
+import io.velo.decode.BigStringNoMemoryCopy;
 import io.velo.decode.Request;
 import io.velo.mock.ByPassGetSet;
 import io.velo.persist.KeyLoader;
 import io.velo.persist.LocalPersist;
 import io.velo.persist.OneSlot;
 import io.velo.repl.cluster.MultiShard;
+import io.velo.repl.incremental.XBigStrings;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
@@ -140,6 +142,7 @@ public abstract class BaseCommand {
         this.socket = socket;
         this.slotWithKeyHashListParsed = request.getSlotWithKeyHashList();
         this.isCrossRequestWorker = request.isCrossRequestWorker();
+        this.bigStringNoMemoryCopy = request.getBigStringNoMemoryCopy();
     }
 
     /**
@@ -231,6 +234,8 @@ public abstract class BaseCommand {
 
     protected boolean isCrossRequestWorker;
 
+    protected BigStringNoMemoryCopy bigStringNoMemoryCopy;
+
     /**
      * Sets whether the command needs to be sent to other workers.
      * When do unit test, can change
@@ -303,6 +308,7 @@ public abstract class BaseCommand {
 
         this.slotWithKeyHashListParsed = other.slotWithKeyHashListParsed;
         this.isCrossRequestWorker = other.isCrossRequestWorker;
+        this.bigStringNoMemoryCopy = other.bigStringNoMemoryCopy;
 
         if (other.byPassGetSet != null) {
             this.byPassGetSet = other.byPassGetSet;
@@ -332,6 +338,7 @@ public abstract class BaseCommand {
         this.init(requestHandler);
         this.slotWithKeyHashListParsed = request.getSlotWithKeyHashList();
         this.isCrossRequestWorker = request.isCrossRequestWorker();
+        this.bigStringNoMemoryCopy = request.getBigStringNoMemoryCopy();
         return this;
     }
 
@@ -843,6 +850,41 @@ public abstract class BaseCommand {
      * @param expireAt        Given expire time
      */
     public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType, long expireAt) {
+        if (bigStringNoMemoryCopy != null) {
+            compressStats.rawTotalLength += bigStringNoMemoryCopy.length;
+            var beginT = System.nanoTime();
+            var cv = CompressedValue.compress(valueBytes, bigStringNoMemoryCopy.offset, bigStringNoMemoryCopy.length, Dict.SELF_ZSTD_DICT);
+            var costT = (System.nanoTime() - beginT) / 1000;
+
+            // stats
+            compressStats.compressedCount++;
+            compressStats.compressedTotalLength += cv.getCompressedLength();
+            compressStats.compressedCostTimeTotalUs += costT;
+
+            var key = new String(keyBytes);
+
+            var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
+            var uuid = oneSlot.getSnowFlake().nextId();
+            var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(uuid, key, cv.getCompressedData());
+            if (!isWriteOk) {
+                throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
+            }
+
+            var cvBigStringEncoded = cv.encodeAsBigStringShort(uuid, Dict.SELF_ZSTD_DICT_SEQ);
+            var xBigStrings = new XBigStrings(uuid, key, cvBigStringEncoded);
+            oneSlot.appendBinlog(xBigStrings);
+
+            var cvAsBigString = new CompressedValue();
+            cvAsBigString.setDictSeqOrSpType(CompressedValue.SP_TYPE_BIG_STRING);
+            cvAsBigString.setSeq(uuid);
+            cvAsBigString.setExpireAt(expireAt);
+            cvAsBigString.setKeyHash(slotWithKeyHash.keyHash);
+            cvAsBigString.setCompressedDataAsBigString(uuid, Dict.SELF_ZSTD_DICT_SEQ);
+
+            oneSlot.put(new String(keyBytes), slotWithKeyHash.bucketIndex, cvAsBigString);
+            return;
+        }
+
         compressStats.rawTotalLength += valueBytes.length;
 
         // prefer store as a number type

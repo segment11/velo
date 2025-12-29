@@ -88,13 +88,13 @@ public class CompressedValue {
      */
     public static final short KEY_MAX_LENGTH = 256;    // Maximum allowed key size
     // must < Wal.ONE_GROUP_BUFFER_SIZE
-    public static final int VALUE_MAX_LENGTH = 65536;  // Maximum compressed value size
+    public static final int VALUE_MAX_LENGTH = 1024 * 1024;  // Maximum compressed value size
 
     /**
      * Header sizes for serialization:
      * seq long + expireAt long + keyHash long + dictSeqOrSpType int + compressedLength int
      */
-    public static final int VALUE_HEADER_LENGTH = 8 + 8 + 4 + 8 + 4;
+    public static final int VALUE_HEADER_LENGTH = 8 + 8 + 8 + 4 + 4;
     public static final int KEY_HEADER_LENGTH = 2;
 
     /**
@@ -644,15 +644,28 @@ public class CompressedValue {
      * @return Compressed value object.
      */
     public static CompressedValue compress(byte[] data, @Nullable Dict dict) {
+        return compress(data, 0, data.length, dict);
+    }
+
+    /**
+     * Compresses the given data using the given Zstd dictionary.
+     *
+     * @param data   The data to compress.
+     * @param offset The offset in the data array.
+     * @param length The length of the data to compress.
+     * @param dict   Given Zstd dictionary; {@code null} means use the self-trained dictionary.
+     * @return Compressed value object.
+     */
+    public static CompressedValue compress(byte[] data, int offset, int length, @Nullable Dict dict) {
         var cv = new CompressedValue();
 
         // Memory copy is too much, use direct buffer better.
-        var dst = new byte[((int) Zstd.compressBound(data.length))];
+        var dst = new byte[((int) Zstd.compressBound(length))];
         int compressedSize;
         if (dict == null || dict == Dict.SELF_ZSTD_DICT) {
-            compressedSize = (int) Zstd.compress(dst, data, Zstd.defaultCompressionLevel());
+            compressedSize = (int) Zstd.compressByteArray(dst, 0, dst.length, data, offset, length, Zstd.defaultCompressionLevel());
         } else {
-            compressedSize = dict.compressByteArray(dst, 0, data, 0, data.length);
+            compressedSize = dict.compressByteArray(dst, 0, data, offset, length);
         }
         if (compressedSize <= 0) {
             throw new IllegalStateException("Compress error");
@@ -783,17 +796,22 @@ public class CompressedValue {
         }
     }
 
+    public void setCompressedDataAsBigString(long uuid, int dictSeq) {
+        // UUID + dict int.
+        compressedData = new byte[12];
+        ByteBuffer.wrap(compressedData).putLong(uuid).putInt(dictSeq);
+    }
+
     /**
      * Encodes to bytes as big string metadata.
      * Encoded length = 8 + 8 + 4 + 8 + 4 + 4 + 12 = 48.
      *
-     * @param uuid Big string UUID for file name.
+     * @param uuid    Big string UUID for file name.
+     * @param dictSeq Compressed dictionary sequence number.
      * @return Encoded bytes.
      */
-    public byte[] encodeAsBigStringMeta(long uuid) {
-        // UUID + dict int.
-        compressedData = new byte[12];
-        ByteBuffer.wrap(compressedData).putLong(uuid).putInt(dictSeqOrSpType);
+    public byte[] encodeAsBigStringShort(long uuid, int dictSeq) {
+        setCompressedDataAsBigString(uuid, dictSeq);
 
         var bytes = new byte[encodedLength()];
         var buf = ByteBuf.wrapForWriting(bytes);

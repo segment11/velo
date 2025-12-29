@@ -1031,7 +1031,7 @@ public class MultiWorkerServer extends Launcher {
         awaitShutdown();
     }
 
-    public static boolean isStopping = false;
+    public static volatile boolean isStopping = false;
 
     /**
      * Stops the application.
@@ -1224,6 +1224,9 @@ public class MultiWorkerServer extends Launcher {
 
             ConfForGlobal.doubleScale = config.get(ofInteger(), "number.doubleScale", 2);
             log.warn("Global config, doubleScale={}", ConfForGlobal.doubleScale);
+
+            ConfForGlobal.bigStringNoMemoryCopySize = config.get(ofInteger(), "bigStringNoMemoryCopySize", 1024 * 256);
+            log.warn("Global config, bigStringNoMemoryCopySize={}", ConfForGlobal.bigStringNoMemoryCopySize);
 
             var dynConfig = config.getChild("dyn-config");
             if (dynConfig != null) {

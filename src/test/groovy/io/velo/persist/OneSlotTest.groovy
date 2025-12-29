@@ -529,6 +529,27 @@ class OneSlotTest extends Specification {
         rBigString != null
 
         when:
+        def cvBigString2 = Mock.prepareCompressedValueList(1)[0]
+        cvBigString2.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
+        oneSlot.put(bigStringKey, sBigString.bucketIndex(), cvBigString2)
+        rBigString = oneSlot.get(bigStringKey.bytes, sBigString.bucketIndex(), sBigString.keyHash(), sBigString.keyHash32())
+        then:
+        rBigString != null
+
+        when:
+        def cvBigString3 = Mock.prepareCompressedValueList(1)[0]
+        cvBigString3.seq = oneSlot.snowFlake.nextId()
+        cvBigString3.setCompressedDataAsBigString(cvBigString3.seq, Dict.SELF_ZSTD_DICT_SEQ)
+        cvBigString3.expireAt = System.currentTimeMillis() + 10000
+        cvBigString3.keyHash = sBigString.keyHash()
+        cvBigString3.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        oneSlot.put(bigStringKey, sBigString.bucketIndex(), cvBigString3)
+        rBigString = oneSlot.get(bigStringKey.bytes, sBigString.bucketIndex(), sBigString.keyHash(), sBigString.keyHash32())
+        then:
+        rBigString != null
+        CompressedValue.decode(rBigString.buf(), bigStringKey.bytes, sBigString.keyHash()).seq == cvBigString3.seq
+
+        when:
         def inspector = new SocketInspector()
         def eventloopCurrent = Eventloop.builder()
                 .withCurrentThread()

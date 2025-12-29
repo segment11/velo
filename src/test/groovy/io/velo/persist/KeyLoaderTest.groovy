@@ -464,7 +464,7 @@ class KeyLoaderTest extends Specification {
         keyLoader.putValueByKey(0, 'a'.bytes, 10L, 10, 0L, 1L, encodeAsShortStringA)
         def cv = new CompressedValue()
         cv.keyHash = 11L
-        def bigStringCvEncoded = cv.encodeAsBigStringMeta(1234L)
+        def bigStringCvEncoded = cv.encodeAsBigStringShort(1234L, Dict.SELF_ZSTD_DICT_SEQ)
         keyLoader.putValueByKey(0, 'b'.bytes, 11L, 11, System.currentTimeMillis() - 1000, 11L, bigStringCvEncoded)
         int count = keyLoader.intervalDeleteExpiredBigStringFiles()
         then:
@@ -500,7 +500,7 @@ class KeyLoaderTest extends Specification {
                 bigStringCv.seq = v.seq()
                 bigStringCv.keyHash = v.keyHash()
                 bigStringCv.expireAt = System.currentTimeMillis() - 1
-                def bigStringCvEncoded = bigStringCv.encodeAsBigStringMeta(uuid)
+                def bigStringCvEncoded = bigStringCv.encodeAsBigStringShort(uuid, Dict.SELF_ZSTD_DICT_SEQ)
 
                 def v2 = new Wal.V(v.seq(), 0, v.keyHash(), bigStringCv.expireAt, bigStringCv.dictSeqOrSpType,
                         v.key(), bigStringCvEncoded, false)

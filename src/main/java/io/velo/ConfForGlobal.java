@@ -189,6 +189,11 @@ public class ConfForGlobal {
     public static int doubleScale = 2;
 
     /**
+     * Size for big strings to avoid memory copy (default is 256 KB).
+     */
+    public static int bigStringNoMemoryCopySize = 1024 * 256;
+
+    /**
      * Initial dynamic configuration items.
      */
     public static final HashMap<String, String> initDynConfigItems = new HashMap<>();

@@ -70,6 +70,20 @@ public class Request {
     }
 
     /**
+     * If set value is too big, do not copy, reuse read buffer.
+     */
+    BigStringNoMemoryCopy bigStringNoMemoryCopy;
+
+    /**
+     * Get big string no memory copy mark.
+     *
+     * @return the big string no memory copy mark
+     */
+    public BigStringNoMemoryCopy getBigStringNoMemoryCopy() {
+        return bigStringNoMemoryCopy;
+    }
+
+    /**
      * The ACL (Access Control List) utility object for the request.
      */
     private U u;

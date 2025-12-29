@@ -2032,55 +2032,71 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
 
-        byte[] cvEncoded;
         boolean isValueShort;
+        Wal.V v;
         // is use faster kv style, save all key and value in record log
         if (ConfForGlobal.pureMemoryV2) {
             isValueShort = false;
+        } else if (cv.isBigString()) {
+            isValueShort = true;
         } else {
             isValueShort = cv.noExpire() && (cv.isTypeNumber() || cv.isShortString());
         }
         if (isValueShort) {
+            byte[] cvEncoded;
             if (cv.isTypeNumber()) {
                 cvEncoded = cv.encodeAsNumber();
+            } else if (cv.isBigString()) {
+                cvEncoded = cv.encode();
             } else {
                 cvEncoded = cv.encodeAsShortString();
             }
+
+            v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
+                    key, cvEncoded, isFromMerge);
 
             // for metrics update
             if (walShortValueWriteIndex < targetWal.fileToWriteIndex) {
                 walShortValueWriteIndex = targetWal.fileToWriteIndex;
             }
         } else {
-            cvEncoded = cv.encode();
+            var cvEncodedLength = cv.encodedLength();
+            var persistLength = Wal.V.persistLength(key.length(), cvEncodedLength);
+            boolean isPersistLengthOverSegmentLength = persistLength + SEGMENT_HEADER_LENGTH > chunkSegmentLength;
 
-            // for metrics update
-            if (walWriteIndex < targetWal.fileToWriteIndex) {
-                walWriteIndex = targetWal.fileToWriteIndex;
+            // for big string, use single file
+            if (isPersistLengthOverSegmentLength || key.contains("kerry-test-big-string-")) {
+                var uuid = snowFlake.nextId();
+                var bytes = cv.getCompressedData();
+                var isWriteOk = bigStringFiles.writeBigStringBytes(uuid, key, bytes);
+                if (!isWriteOk) {
+                    throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
+                }
+
+                // encode again
+                var cvBigStringEncoded = cv.encodeAsBigStringShort(uuid, cv.getDictSeqOrSpType());
+                var xBigStrings = new XBigStrings(uuid, key, cvBigStringEncoded);
+                appendBinlog(xBigStrings);
+
+                v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
+                        key, cvBigStringEncoded, isFromMerge);
+
+                isValueShort = true;
+
+                // for metrics update
+                if (walShortValueWriteIndex < targetWal.fileToWriteIndex) {
+                    walShortValueWriteIndex = targetWal.fileToWriteIndex;
+                }
+            } else {
+                var cvEncoded = cv.encode();
+                v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
+                        key, cvEncoded, isFromMerge);
+
+                // for metrics update
+                if (walWriteIndex < targetWal.fileToWriteIndex) {
+                    walWriteIndex = targetWal.fileToWriteIndex;
+                }
             }
-        }
-        var v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
-                key, cvEncoded, isFromMerge);
-
-        // for big string, use single file
-        boolean isPersistLengthOverSegmentLength = v.persistLength() + SEGMENT_HEADER_LENGTH > chunkSegmentLength;
-        if (isPersistLengthOverSegmentLength || key.contains("kerry-test-big-string-")) {
-            var uuid = snowFlake.nextId();
-            var bytes = cv.getCompressedData();
-            var isWriteOk = bigStringFiles.writeBigStringBytes(uuid, key, bytes);
-            if (!isWriteOk) {
-                throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
-            }
-
-            // encode again
-            var cvBigStringEncoded = cv.encodeAsBigStringMeta(uuid);
-            var xBigStrings = new XBigStrings(uuid, key, cvBigStringEncoded);
-            appendBinlog(xBigStrings);
-
-            v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
-                    key, cvBigStringEncoded, isFromMerge);
-
-            isValueShort = true;
         }
 
         var putResult = targetWal.put(isValueShort, key, v, lastPersistTimeMs);

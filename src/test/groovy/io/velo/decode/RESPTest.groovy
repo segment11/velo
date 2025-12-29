@@ -1,6 +1,7 @@
 package io.velo.decode
 
 import io.netty.buffer.Unpooled
+import io.velo.ConfForGlobal
 import spock.lang.Specification
 
 class RESPTest extends Specification {
@@ -188,5 +189,53 @@ class RESPTest extends Specification {
         }
         then:
         exception
+    }
+
+    def 'test decode big string'() {
+        given:
+        def resp = new RESP()
+
+        when:
+        ConfForGlobal.bigStringNoMemoryCopySize = 10
+        def setCmdStr = '*3\r\n$3\r\nSET\r\n$5\r\nmykey\r\n$15\r\nmyvaluexxxxxxxx\r\n'
+        def respBytes = setCmdStr.bytes
+        def bb = Unpooled.wrappedBuffer(respBytes)
+        bb.readerIndex(0).writerIndex(respBytes.length)
+        def cbb = Unpooled.compositeBuffer()
+        cbb.addComponent(true, bb)
+        def data = resp.decode(cbb)
+        then:
+        resp.bigStringNoMemoryCopy.length != 0
+        data[2] == respBytes
+
+        when:
+        resp.bigStringNoMemoryCopy.reset()
+        def setExCmdStr = '*4\r\n$5\r\nSETEX\r\n$5\r\nmykey\r\n$5\r\n10000\r\n$15\r\nmyvaluexxxxxxxx\r\n'
+        respBytes = setExCmdStr.bytes
+        bb = Unpooled.wrappedBuffer(respBytes)
+        bb.readerIndex(0).writerIndex(respBytes.length)
+        cbb = Unpooled.compositeBuffer()
+        cbb.addComponent(true, bb)
+        data = resp.decode(cbb)
+        then:
+        resp.bigStringNoMemoryCopy.length != 0
+        data[3] == respBytes
+
+        when:
+        // key is too long, just warning
+        resp.bigStringNoMemoryCopy.reset()
+        def setCmdStr2 = '*3\r\n$3\r\nSET\r\n$15\r\nmykeyxxxxxxxxxx\r\n$7\r\nmyvalue\r\n'
+        def respBytes2 = setCmdStr2.bytes
+        def bb2 = Unpooled.wrappedBuffer(respBytes2)
+        bb2.readerIndex(0).writerIndex(respBytes2.length)
+        def cbb2 = Unpooled.compositeBuffer()
+        cbb2.addComponent(true, bb2)
+        def data2 = resp.decode(cbb2)
+        then:
+        resp.bigStringNoMemoryCopy.length == 0
+        data2[2] == 'myvalue'.bytes
+
+        cleanup:
+        ConfForGlobal.bigStringNoMemoryCopySize = 1024 * 256
     }
 }

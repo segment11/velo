@@ -323,8 +323,9 @@ class CompressedValueTest extends Specification {
         CompressedValue.getSeqFromNumberOrShortStringEncodedBytes(new byte[10]) == 0
 
         when:
-        cv.dictSeqOrSpType = 100
-        def encodedBigStringMeta = cv.encodeAsBigStringMeta(890L)
+        cv.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
+        cv.setCompressedDataAsBigString(890L, Dict.SELF_ZSTD_DICT_SEQ)
+        def encodedBigStringMeta = cv.encodeAsBigStringShort(890L, Dict.SELF_ZSTD_DICT_SEQ)
         def cvDecodeBigStringMeta = CompressedValue.decode(Unpooled.wrappedBuffer(encodedBigStringMeta), null, 0L)
         def bufferBigStringMeta = ByteBuffer.wrap(cvDecodeBigStringMeta.compressedData)
         then:
@@ -333,7 +334,7 @@ class CompressedValueTest extends Specification {
         cvDecodeBigStringMeta.isBigString()
         bufferBigStringMeta.getLong() == 890L
         // dict seq
-        bufferBigStringMeta.getInt() == 100
+        bufferBigStringMeta.getInt() == Dict.SELF_ZSTD_DICT_SEQ
         CompressedValue.onlyReadSpType(encodedBigStringMeta) == CompressedValue.SP_TYPE_BIG_STRING
     }
 
@@ -391,10 +392,12 @@ class CompressedValueTest extends Specification {
         when:
         def cv1 = CompressedValue.compress(rawBytes, null)
         def cv2 = CompressedValue.compress(rawBytes, Dict.SELF_ZSTD_DICT)
+        cv1.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
         then:
         cv1.compressedLength < rawBytes.length
         cv2.compressedLength < rawBytes.length
         !cv1.isIgnoreCompression(rawBytes)
+        cv1.uncompressedLength == rawBytes.length
 
         when:
         def rawBytesDecompressed2 = cv1.decompress(null)

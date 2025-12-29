@@ -1,8 +1,12 @@
 package io.velo.decode;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.CompositeByteBuf;
 import io.netty.util.ByteProcessor;
 import io.netty.util.CharsetUtil;
+import io.velo.ConfForGlobal;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A class to decode RESP (Redis Serialization Protocol) messages using Netty's ByteBuf.
@@ -58,6 +62,8 @@ public class RESP {
 
     private final NumberProcessor numberProcessor = new NumberProcessor();
 
+    private static final Logger log = LoggerFactory.getLogger(RESP.class);
+
     /**
      * Parse a Redis number from a ByteBuf.
      *
@@ -107,6 +113,8 @@ public class RESP {
         return data;
     }
 
+    BigStringNoMemoryCopy bigStringNoMemoryCopy = new BigStringNoMemoryCopy();
+
     /**
      * Decode a RESP message from a ByteBuf.
      *
@@ -115,6 +123,9 @@ public class RESP {
      * @throws IllegalArgumentException if the RESP message format is incorrect.
      */
     public byte[][] decode(ByteBuf bb) {
+        String cmd = null;
+        int beforeReadReaderIndex = bb.readerIndex();
+
         byte[][] bytes = null;
         outerLoop:
         while (true) {
@@ -150,13 +161,47 @@ public class RESP {
                             break outerLoop;
                         }
                         int size = parseRedisNumber(lineBuf);
-                        if (bb.readableBytes() >= size + 2) {
+                        if (bb.readableBytes() < size + 2) {
+                            bb.readerIndex(readerIndex);
+                            break outerLoop;
+                        }
+
+                        // for no memory copy
+                        if (size >= ConfForGlobal.bigStringNoMemoryCopySize && bb instanceof CompositeByteBuf cbb && cbb.numComponents() == 1) {
+                            boolean isSetBigString = false;
+                            if (cmd != null) {
+                                var isSet = cmd.equals("set");
+                                var isSetEx = cmd.equals("setex");
+
+                                if (isSet && i == 2) {
+                                    bigStringNoMemoryCopy.readBufferInDataIndex = 2;
+                                    bytes[2] = cbb.array();
+                                    isSetBigString = true;
+                                } else if (isSetEx && i == 3) {
+                                    bigStringNoMemoryCopy.readBufferInDataIndex = 3;
+                                    bytes[3] = cbb.array();
+                                    isSetBigString = true;
+                                }
+                            }
+
+                            if (isSetBigString) {
+                                bigStringNoMemoryCopy.offset = cbb.readerIndex() - beforeReadReaderIndex;
+                                bigStringNoMemoryCopy.length = size;
+                                cbb.skipBytes(size + 2);
+                            } else {
+                                log.warn("Perf bad, copy big value from read buffer, size={}, cmd={}, index={}", size, cmd, i);
+                                bytes[i] = new byte[size];
+                                cbb.readBytes(bytes[i]);
+                                cbb.skipBytes(2);
+                            }
+                        } else {
                             bytes[i] = new byte[size];
                             bb.readBytes(bytes[i]);
                             bb.skipBytes(2);
-                        } else {
-                            bb.readerIndex(readerIndex);
-                            break outerLoop;
+
+                            if (i == 0) {
+                                cmd = new String(bytes[0]).toLowerCase();
+                            }
                         }
                     } else {
                         throw new IllegalArgumentException("Unexpected character: " + b);

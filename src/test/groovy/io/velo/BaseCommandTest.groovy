@@ -6,6 +6,7 @@ import io.activej.net.socket.tcp.ITcpSocket
 import io.velo.acl.AclUsers
 import io.velo.acl.U
 import io.velo.command.AGroup
+import io.velo.decode.BigStringNoMemoryCopy
 import io.velo.decode.Request
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Consts
@@ -645,6 +646,16 @@ class BaseCommandTest extends Specification {
         then:
         c.getCv(key.bytes, sKey) == null
         !c.exists(slot, sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
+
+        when:
+        // big string
+        c.bigStringNoMemoryCopy = new BigStringNoMemoryCopy()
+        c.bigStringNoMemoryCopy.offset = 1000
+        c.bigStringNoMemoryCopy.length = 1000
+        def bigValueBytes = ('x' * 10000).bytes
+        c.set(key.bytes, bigValueBytes, sKey, 0, System.currentTimeMillis() + 1000)
+        then:
+        oneSlot.bigStringFiles.getBigStringFileUuidList().size() > 0
 
         cleanup:
         localPersist.cleanUp()

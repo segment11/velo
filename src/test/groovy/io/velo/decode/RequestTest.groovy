@@ -18,6 +18,8 @@ class RequestTest extends Specification {
         request.slotNumber = 1
         request.u = U.INIT_DEFAULT_U
 
+        request.bigStringNoMemoryCopy == null
+
         expect:
         request.data.length == 3
         !request.isHttp()

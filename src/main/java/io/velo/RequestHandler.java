@@ -503,8 +503,9 @@ public class RequestHandler {
                     return ErrorReply.KEY_TOO_LONG;
                 }
 
+                var bigStringNoMemoryCopy = request.getBigStringNoMemoryCopy();
                 var valueBytes = data[2];
-                if (valueBytes.length > CompressedValue.VALUE_MAX_LENGTH) {
+                if (valueBytes.length > CompressedValue.VALUE_MAX_LENGTH && bigStringNoMemoryCopy == null) {
                     return ErrorReply.VALUE_TOO_LONG;
                 }
 
