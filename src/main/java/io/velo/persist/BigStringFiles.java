@@ -36,6 +36,10 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     long diskUsage = 0L;
 
+    long writeByteLengthTotal = 0L;
+    long writeFileCountTotal = 0L;
+    long writeFileCostMsTotal = 0L;
+
     private static final String BIG_STRING_DIR_NAME = "big-string";
 
     /**
@@ -262,9 +266,18 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
         var file = new File(bigStringDir, String.valueOf(uuid));
         try {
+            var beginT = System.currentTimeMillis();
             FileUtils.writeByteArrayToFile(file, bytes);
+            var costT = System.currentTimeMillis() - beginT;
+
             bigStringFilesCount++;
             diskUsage += bytes.length;
+
+            // stats
+            writeByteLengthTotal += bytes.length;
+            writeFileCountTotal++;
+            writeFileCostMsTotal += costT;
+
             return true;
         } catch (IOException e) {
             log.error("Write big string file error, uuid={}, key={}, slot={}", uuid, key, slot, e);
