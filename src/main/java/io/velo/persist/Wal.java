@@ -1,5 +1,6 @@
 package io.velo.persist;
 
+import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
@@ -936,6 +937,28 @@ public class Wal implements InMemoryEstimate {
             }
         }
         return new PutResult(needPersist, false, null, needPersist ? 0 : offset);
+    }
+
+    int intervalDeleteExpiredBigStringFiles() {
+        int count = 0;
+        var currentTimeMillis = System.currentTimeMillis();
+
+        for (var entry : delayToKeyBucketShortValues.entrySet()) {
+            var v = entry.getValue();
+            if (v.expireAt != NO_EXPIRE && v.expireAt < currentTimeMillis) {
+                // check if is big string
+                var spType = CompressedValue.onlyReadSpType(v.cvEncoded);
+                if (spType == CompressedValue.SP_TYPE_BIG_STRING) {
+                    var buf = Unpooled.wrappedBuffer(v.cvEncoded);
+                    var cv = CompressedValue.decode(buf, v.key.getBytes(), v.keyHash);
+                    oneSlot.handleWhenCvExpiredOrDeleted(entry.getKey(), cv, null);
+
+                    count++;
+                }
+            }
+        }
+
+        return count;
     }
 
     /**

@@ -1,10 +1,12 @@
 package io.velo.persist;
 
+import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import io.velo.repl.incremental.XOneWalGroupPersist;
+import io.velo.task.ITask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -23,7 +25,7 @@ import java.util.stream.Collectors;
  * KeyLoader uses a split file system to handle large amounts of data efficiently, with each split file corresponding to a specific split index.
  * It also supports replaying operations from a slave node and maintaining consistent state across nodes in a distributed environment.
  */
-public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, CanSaveAndLoad {
+public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, CanSaveAndLoad, ITask {
     /**
      * The number of pages per bucket. Each bucket is composed of this number of pages.
      */
@@ -1417,13 +1419,70 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         }
 
         if (intervalRemoveExpiredLastBucketIndex == 0) {
-            log.info("key buckets interval remove expired, refer segment count={}", r.size());
+            log.info("Key buckets interval remove expired, refer segment count={}", r.size());
         }
 
         intervalRemoveExpiredLastBucketIndex++;
         if (intervalRemoveExpiredLastBucketIndex >= bucketsPerSlot) {
             intervalRemoveExpiredLastBucketIndex = 0;
         }
+    }
+
+    @VisibleForTesting
+    int intervalDeleteExpiredBigStringFilesLastBucketIndex = 0;
+
+    @VisibleForTesting
+    int intervalDeleteExpiredBigStringFiles() {
+        var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
+
+        final int[] countArray = {0};
+        var currentTimeMillis = System.currentTimeMillis();
+
+        var keyBuckets = readKeyBuckets(intervalDeleteExpiredBigStringFilesLastBucketIndex);
+        for (var keyBucket : keyBuckets) {
+            if (keyBucket == null) {
+                continue;
+            }
+
+            keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+                if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
+                    var buf = Unpooled.wrappedBuffer(valueBytes);
+                    var cv = CompressedValue.decode(buf, keyBytes, keyHash);
+                    if (cv.isBigString()) {
+                        KeyLoader.this.cvExpiredOrDeletedCallBack.handle(new String(keyBytes), cv);
+                        countArray[0]++;
+                    }
+                }
+            });
+        }
+
+        if (intervalDeleteExpiredBigStringFilesLastBucketIndex % 16384 == 0 || countArray[0] > 0) {
+            log.info("Key buckets interval delete expired big string files, bucket index={}, refer big string files count={}",
+                    intervalDeleteExpiredBigStringFilesLastBucketIndex, countArray[0]);
+        }
+
+        intervalDeleteExpiredBigStringFilesLastBucketIndex++;
+        if (intervalDeleteExpiredBigStringFilesLastBucketIndex >= bucketsPerSlot) {
+            intervalDeleteExpiredBigStringFilesLastBucketIndex = 0;
+        }
+
+        return countArray[0];
+    }
+
+    @Override
+    public String name() {
+        return "check and delete expired big string files";
+    }
+
+    @Override
+    public void run() {
+        intervalDeleteExpiredBigStringFiles();
+    }
+
+    @Override
+    public int executeOnceAfterLoopCount() {
+        // execute once every 10ms
+        return 1;
     }
 
     /**

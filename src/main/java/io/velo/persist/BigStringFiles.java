@@ -342,7 +342,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         if (!isDeleted) {
             throw new RuntimeException("Delete big string file error, s=" + slot + ", key=" + key + ", uuid=" + uuid);
         } else {
-            log.warn("Delete big string file, s={}, key={}, uuid={}", slot, key, uuid);
+            log.debug("Delete big string file, s={}, key={}, uuid={}", slot, key, uuid);
         }
     }
 }

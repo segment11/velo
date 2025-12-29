@@ -743,8 +743,8 @@ public class CompressedValue {
             return firstByte;
         } else {
             // Normal compressed value encoded.
-            // Skip seq long and expire at long.
-            return buffer.getInt(8 + 8);
+            // Skip seq long and expire at long and key hash long.
+            return buffer.getInt(8 + 8 + 8);
         }
     }
 

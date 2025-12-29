@@ -3,8 +3,6 @@ package io.velo.persist
 import io.velo.*
 import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.repl.incremental.XOneWalGroupPersistTest
-import jnr.ffi.LibraryLoader
-import jnr.posix.LibC
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -453,9 +451,34 @@ class KeyLoaderTest extends Specification {
         then:
         1 == 1
 
-        cleanup:
+        when:
         ConfForGlobal.pureMemory = false
         ConfForGlobal.pureMemoryV2 = false
+        keyLoader.intervalDeleteExpiredBigStringFiles()
+        keyLoader.intervalDeleteExpiredBigStringFilesLastBucketIndex = ConfForSlot.global.confBucket.bucketsPerSlot - 1
+        keyLoader.intervalDeleteExpiredBigStringFiles()
+        then:
+        1 == 1
+
+        when:
+        keyLoader.putValueByKey(0, 'a'.bytes, 10L, 10, 0L, 1L, encodeAsShortStringA)
+        def cv = new CompressedValue()
+        cv.keyHash = 11L
+        def bigStringCvEncoded = cv.encodeAsBigStringMeta(1234L)
+        keyLoader.putValueByKey(0, 'b'.bytes, 11L, 11, System.currentTimeMillis() - 1000, 11L, bigStringCvEncoded)
+        int count = keyLoader.intervalDeleteExpiredBigStringFiles()
+        then:
+        count == 1
+
+        when:
+        // task interface method, just for code coverage
+        keyLoader.name()
+        keyLoader.executeOnceAfterLoopCount()
+        keyLoader.run()
+        then:
+        1 == 1
+
+        cleanup:
         keyLoader.flush()
         keyLoader.cleanUp()
     }

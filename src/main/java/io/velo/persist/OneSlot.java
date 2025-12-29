@@ -1346,11 +1346,26 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param loopCount the loop count
      */
     public void doTask(int loopCount) {
+        if (MultiWorkerServer.isStopping) {
+            return;
+        }
+
         taskChain.doTask(loopCount);
 
         var canTruncateFdIndex = metaChunkSegmentFlagSeq.canTruncateFdIndex;
         if (canTruncateFdIndex != -1) {
             truncateChunkFile(canTruncateFdIndex);
+        }
+
+        if (loopCount % 10 == 0) {
+            // execute once every 100ms
+            for (var wal : walArray) {
+                var count = wal.intervalDeleteExpiredBigStringFiles();
+                if (count > 0 || wal.groupIndex == 0) {
+                    log.debug("Wal interval delete expired big string files, slot={}, group index={}, refer big string files count={}",
+                            slot, wal.groupIndex, count);
+                }
+            }
         }
     }
 
@@ -2049,7 +2064,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         // for big string, use single file
         boolean isPersistLengthOverSegmentLength = v.persistLength() + SEGMENT_HEADER_LENGTH > chunkSegmentLength;
-        if (isPersistLengthOverSegmentLength || key.startsWith("kerry-test-big-string-")) {
+        if (isPersistLengthOverSegmentLength || key.contains("kerry-test-big-string-")) {
             var uuid = snowFlake.nextId();
             var bytes = cv.getCompressedData();
             var isWriteOk = bigStringFiles.writeBigStringBytes(uuid, key, bytes);
@@ -2190,6 +2205,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             // do every 10ms
             // for truncate file to save ssd space
             taskChain.add(metaChunkSegmentFlagSeq);
+            // for delete expired big string files
+            taskChain.add(keyLoader);
         }
 
         // chunk

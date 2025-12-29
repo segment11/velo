@@ -1031,6 +1031,8 @@ public class MultiWorkerServer extends Launcher {
         awaitShutdown();
     }
 
+    public static boolean isStopping = false;
+
     /**
      * Stops the application.
      *
@@ -1038,6 +1040,7 @@ public class MultiWorkerServer extends Launcher {
      */
     @Override
     protected void onStop() throws Exception {
+        isStopping = true;
         try {
             for (var requestHandler : requestHandlerArray) {
                 requestHandler.stop();

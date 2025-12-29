@@ -533,4 +533,44 @@ class WalTest extends Specification {
         fileShortValue.delete()
         Debug.instance.bulkLoad = false
     }
+
+    def 'test delete expired big string files'() {
+        given:
+        ConfForGlobal.pureMemory = false
+        ConfForSlot.global = ConfForSlot.debugMode
+
+        def file = new File(Consts.slotDir, 'test-raf.wal')
+        def fileShortValue = new File(Consts.slotDir, 'test-raf-short-value.wal')
+        if (file.exists()) {
+            file.delete()
+        }
+        if (fileShortValue.exists()) {
+            fileShortValue.delete()
+        }
+
+        def raf = new RandomAccessFile(file, 'rw')
+        def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
+        def snowFlake = new SnowFlake(1, 1)
+        def oneSlot = new OneSlot(slot)
+        def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+
+        when:
+        def count = wal.intervalDeleteExpiredBigStringFiles()
+        then:
+        count == 0
+
+        when:
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.keyHash = KeyHash.hash('a'.bytes)
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        def v = new Wal.V(1, 0, cv.keyHash, System.currentTimeMillis() - 1000, 0, 'a', cv.encodeAsBigStringMeta(1234L), false)
+        wal.put(true, 'xxxx', v)
+        count = wal.intervalDeleteExpiredBigStringFiles()
+        then:
+        count == 1
+
+        cleanup:
+        wal.clear()
+        wal.clear(false)
+    }
 }
