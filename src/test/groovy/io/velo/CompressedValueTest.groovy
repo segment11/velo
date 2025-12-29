@@ -248,6 +248,7 @@ class CompressedValueTest extends Specification {
         then:
         encodedNumber.length == 11
         cvDecodeNumber.numberValue() == Short.MAX_VALUE
+        CompressedValue.onlyReadSpType(encodedNumber) == cv.dictSeqOrSpType
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_INT
@@ -259,6 +260,7 @@ class CompressedValueTest extends Specification {
         then:
         encodedNumber.length == 13
         cvDecodeNumber.numberValue() == Integer.MAX_VALUE
+        CompressedValue.onlyReadSpType(encodedNumber) == cv.dictSeqOrSpType
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_LONG
@@ -270,6 +272,7 @@ class CompressedValueTest extends Specification {
         then:
         encodedNumber.length == 17
         cvDecodeNumber.numberValue() == Long.MAX_VALUE
+        CompressedValue.onlyReadSpType(encodedNumber) == cv.dictSeqOrSpType
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_DOUBLE
@@ -281,6 +284,7 @@ class CompressedValueTest extends Specification {
         then:
         encodedNumber.length == 17
         cvDecodeNumber.numberValue() == Double.MAX_VALUE
+        CompressedValue.onlyReadSpType(encodedNumber) == cv.dictSeqOrSpType
 
         when:
         boolean exception = false
@@ -328,7 +332,9 @@ class CompressedValueTest extends Specification {
         cv.getBigStringMetaUuid() == 890L
         cvDecodeBigStringMeta.isBigString()
         bufferBigStringMeta.getLong() == 890L
+        // dict seq
         bufferBigStringMeta.getInt() == 100
+        CompressedValue.onlyReadSpType(encodedBigStringMeta) == CompressedValue.SP_TYPE_BIG_STRING
     }
 
     def 'test encode corner case'() {
