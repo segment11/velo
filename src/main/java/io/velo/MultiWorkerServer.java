@@ -1323,6 +1323,9 @@ public class MultiWorkerServer extends Launcher {
             // override other conf items
             c.lruBigString.maxSize = config.get(ofInteger(), "big.string.lru.maxSize", 1000);
             c.lruKeyAndCompressedValueEncoded.maxSize = config.get(ofInteger(), "kv.lru.maxSize", 100_000);
+            if (c.lruKeyAndCompressedValueEncoded.maxSize <= 0) {
+                throw new IllegalArgumentException("KV get lru max size can not be 0");
+            }
 
             // important log
             logger.info("!!!!!!\n\nConfForSlot={}\n\n", c);

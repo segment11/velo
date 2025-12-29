@@ -268,6 +268,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         int maxSizeForAllWalGroups = ConfForSlot.global.lruKeyAndCompressedValueEncoded.maxSize;
         var maxSizeForEachWalGroup = maxSizeForAllWalGroups / walGroupNumber;
+        if (maxSizeForEachWalGroup < 10) {
+            maxSizeForEachWalGroup = 10;
+        }
         final var maybeOneCompressedValueEncodedLength = 200;
         var lruMemoryRequireMBReadGroupByWalGroup = maxSizeForAllWalGroups * maybeOneCompressedValueEncodedLength / 1024 / 1024;
         log.info("LRU max size for each wal group={}, all wal group number={}, maybe one compressed value encoded length is {}B, memory require={}MB, slot={}",

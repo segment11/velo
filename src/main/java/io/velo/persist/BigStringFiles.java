@@ -43,7 +43,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      */
     public static final int SKIP_UUID = -1;
 
-    private final LRUMap<Long, byte[]> bigStringBytesByUuidLRU;
+    private LRUMap<Long, byte[]> bigStringBytesByUuidLRU;
 
     private final HashMap<Long, byte[]> allBytesByUuid = new HashMap<>();
 
@@ -87,17 +87,19 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
 
         var maxSize = ConfForSlot.global.lruBigString.maxSize;
-        final var maybeOneBigStringBytesLength = 4096;
-        var lruMemoryRequireMB = maxSize * maybeOneBigStringBytesLength / 1024 / 1024;
-        log.info("LRU max size for big string={}, maybe one big string bytes length is {}B, memory require={}MB, slot={}",
-                maxSize,
-                maybeOneBigStringBytesLength,
-                lruMemoryRequireMB,
-                slot);
-        log.info("LRU prepare, type={}, MB={}, slot={}", LRUPrepareBytesStats.Type.big_string, lruMemoryRequireMB, slot);
-        LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.big_string, String.valueOf(slot), lruMemoryRequireMB, false);
+        if (maxSize > 0) {
+            final var maybeOneBigStringBytesLength = 4096;
+            var lruMemoryRequireMB = maxSize * maybeOneBigStringBytesLength / 1024 / 1024;
+            log.info("LRU max size for big string={}, maybe one big string bytes length is {}B, memory require={}MB, slot={}",
+                    maxSize,
+                    maybeOneBigStringBytesLength,
+                    lruMemoryRequireMB,
+                    slot);
+            log.info("LRU prepare, type={}, MB={}, slot={}", LRUPrepareBytesStats.Type.big_string, lruMemoryRequireMB, slot);
+            LRUPrepareBytesStats.add(LRUPrepareBytesStats.Type.big_string, String.valueOf(slot), lruMemoryRequireMB, false);
 
-        this.bigStringBytesByUuidLRU = new LRUMap<>(maxSize);
+            this.bigStringBytesByUuidLRU = new LRUMap<>(maxSize);
+        }
 
         var files = bigStringDir.listFiles();
         bigStringFilesCount = files != null ? files.length : 0;
@@ -208,13 +210,13 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             return allBytesByUuid.get(uuid);
         }
 
-        var bytesCached = bigStringBytesByUuidLRU.get(uuid);
+        var bytesCached = bigStringBytesByUuidLRU != null ? bigStringBytesByUuidLRU.get(uuid) : null;
         if (bytesCached != null) {
             return bytesCached;
         }
 
         var bytes = readBigStringBytes(uuid);
-        if (bytes != null && doLRUCache) {
+        if (bytes != null && doLRUCache && bigStringBytesByUuidLRU != null) {
             bigStringBytesByUuidLRU.put(uuid, bytes);
         }
         return bytes;
@@ -285,7 +287,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             return true;
         }
 
-        bigStringBytesByUuidLRU.remove(uuid);
+        if (bigStringBytesByUuidLRU != null) {
+            bigStringBytesByUuidLRU.remove(uuid);
+        }
 
         var file = new File(bigStringDir, String.valueOf(uuid));
         if (file.exists()) {
@@ -308,7 +312,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             return;
         }
 
-        bigStringBytesByUuidLRU.clear();
+        if (bigStringBytesByUuidLRU != null) {
+            bigStringBytesByUuidLRU.clear();
+        }
 
         try {
             FileUtils.cleanDirectory(bigStringDir);
