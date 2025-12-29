@@ -137,7 +137,7 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
 
         if (resp.bigStringNoMemoryCopy.length != 0) {
             r.bigStringNoMemoryCopy = resp.bigStringNoMemoryCopy.copy();
-            r.bigStringNoMemoryCopy.reset();
+            resp.bigStringNoMemoryCopy.reset();
         }
 
         return r;
