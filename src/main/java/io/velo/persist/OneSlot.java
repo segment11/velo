@@ -1473,7 +1473,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 }
             }
 
-            if (count > 0 || targetBucketIndex % 16384 == 0) {
+            if (count > 0 && targetBucketIndex % 16384 == 0) {
                 log.info("Interval delete overwrite big string files, slot={}, bucket index={}, count={}", slot, targetBucketIndex, count);
             }
         }
@@ -2184,9 +2184,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
                 }
 
-                // encode again
-                cv.setDictSeqOrSpType(CompressedValue.SP_TYPE_BIG_STRING);
                 cv.setCompressedDataAsBigString(uuid, cv.getDictSeqOrSpType());
+                // update type to big string
+                cv.setDictSeqOrSpType(CompressedValue.SP_TYPE_BIG_STRING);
+
                 var cvBigStringEncoded = cv.encode();
                 var xBigStrings = new XBigStrings(uuid, bucketIndex, key, cvBigStringEncoded);
                 appendBinlog(xBigStrings);
