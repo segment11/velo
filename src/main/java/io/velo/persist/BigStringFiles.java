@@ -269,6 +269,20 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @return true if the operation was successful; false otherwise.
      */
     public boolean writeBigStringBytes(long uuid, @NotNull String key, byte[] bytes) {
+        return writeBigStringBytes(uuid, key, bytes, 0, bytes.length);
+    }
+
+    /**
+     * Writes bytes to a big string file.
+     *
+     * @param uuid   UUID of the big string file.
+     * @param key    Key associated with the big string.
+     * @param bytes  Bytes to write.
+     * @param offset Offset within the bytes array.
+     * @param length Length of bytes to write.
+     * @return true if the operation was successful; false otherwise.
+     */
+    public boolean writeBigStringBytes(long uuid, @NotNull String key, byte[] bytes, int offset, int length) {
         if (ConfForGlobal.pureMemory) {
             var r = allBytesByUuid.put(uuid, bytes);
             if (r == null) {
@@ -280,7 +294,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         var file = new File(bigStringDir, String.valueOf(uuid));
         try {
             var beginT = System.currentTimeMillis();
-            FileUtils.writeByteArrayToFile(file, bytes);
+            FileUtils.writeByteArrayToFile(file, bytes, offset, length, false);
             var costT = System.currentTimeMillis() - beginT;
 
             bigStringFilesCount++;

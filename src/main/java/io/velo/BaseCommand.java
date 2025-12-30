@@ -851,35 +851,48 @@ public abstract class BaseCommand {
      */
     public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType, long expireAt) {
         if (bigStringNoMemoryCopy != null) {
-            compressStats.rawTotalLength += bigStringNoMemoryCopy.length;
-            var beginT = System.nanoTime();
-            var cv = CompressedValue.compress(valueBytes, bigStringNoMemoryCopy.offset, bigStringNoMemoryCopy.length, Dict.SELF_ZSTD_DICT);
-            var costT = (System.nanoTime() - beginT) / 1000;
-
-            // stats
-            compressStats.compressedCount++;
-            compressStats.compressedTotalLength += cv.getCompressedLength();
-            compressStats.compressedCostTimeTotalUs += costT;
-
             var key = new String(keyBytes);
 
             var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
             var uuid = oneSlot.getSnowFlake().nextId();
-            var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(uuid, key, cv.getCompressedData());
-            if (!isWriteOk) {
-                throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
-            }
-
-            var cvBigStringEncoded = cv.encodeAsBigStringShort(uuid, Dict.SELF_ZSTD_DICT_SEQ);
-            var xBigStrings = new XBigStrings(uuid, key, cvBigStringEncoded);
-            oneSlot.appendBinlog(xBigStrings);
 
             var cvAsBigString = new CompressedValue();
-            cvAsBigString.setDictSeqOrSpType(CompressedValue.SP_TYPE_BIG_STRING);
             cvAsBigString.setSeq(uuid);
-            cvAsBigString.setExpireAt(expireAt);
             cvAsBigString.setKeyHash(slotWithKeyHash.keyHash);
-            cvAsBigString.setCompressedDataAsBigString(uuid, Dict.SELF_ZSTD_DICT_SEQ);
+            cvAsBigString.setExpireAt(expireAt);
+            cvAsBigString.setDictSeqOrSpType(CompressedValue.SP_TYPE_BIG_STRING);
+
+            if (bigStringNoMemoryCopy.length <= ConfForGlobal.bigStringNoCompressMinSize) {
+                // can do compress
+                compressStats.rawTotalLength += bigStringNoMemoryCopy.length;
+                var beginT = System.nanoTime();
+                var cr = CompressedValue.compress(valueBytes, bigStringNoMemoryCopy.offset, bigStringNoMemoryCopy.length, Dict.SELF_ZSTD_DICT);
+                var costT = (System.nanoTime() - beginT) / 1000;
+
+                // stats
+                compressStats.compressedCount++;
+                compressStats.compressedTotalLength += cr.data().length;
+                compressStats.compressedCostTimeTotalUs += costT;
+
+                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(uuid, key, cr.data());
+                if (!isWriteOk) {
+                    throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
+                }
+
+                cvAsBigString.setCompressedDataAsBigString(uuid, cr.isCompressed() ? Dict.SELF_ZSTD_DICT_SEQ : CompressedValue.NULL_DICT_SEQ);
+            } else {
+                // do not compress
+                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(uuid, key, valueBytes, bigStringNoMemoryCopy.offset, bigStringNoMemoryCopy.length);
+                if (!isWriteOk) {
+                    throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
+                }
+
+                cvAsBigString.setCompressedDataAsBigString(uuid, CompressedValue.NULL_DICT_SEQ);
+            }
+
+            var cvBigStringEncoded = cvAsBigString.encode();
+            var xBigStrings = new XBigStrings(uuid, key, cvBigStringEncoded);
+            oneSlot.appendBinlog(xBigStrings);
 
             oneSlot.put(new String(keyBytes), slotWithKeyHash.bucketIndex, cvAsBigString);
             return;
@@ -911,7 +924,7 @@ public abstract class BaseCommand {
         }
 
         var key = new String(keyBytes);
-        var preferDoCompress = valueBytes.length >= DictMap.TO_COMPRESS_MIN_DATA_LENGTH;
+        var preferDoCompress = valueBytes.length >= DictMap.TO_COMPRESS_MIN_DATA_LENGTH && valueBytes.length <= ConfForGlobal.bigStringNoCompressMinSize;
         var preferDoCompressUseSelfDict = valueBytes.length >= DictMap.TO_COMPRESS_USE_SELF_DICT_MIN_DATA_LENGTH;
 
         Dict dict = null;
@@ -937,16 +950,15 @@ public abstract class BaseCommand {
         if (ConfForGlobal.isValueSetUseCompression && preferDoCompress && dict != null) {
             var beginT = System.nanoTime();
             // dict may be null
-            var cv = CompressedValue.compress(valueBytes, dict);
+            var cr = CompressedValue.compress(valueBytes, dict);
             var costT = (System.nanoTime() - beginT) / 1000;
+
+            var cv = new CompressedValue();
             cv.setSeq(setSeq);
-            if (cv.isIgnoreCompression(valueBytes)) {
-                cv.setDictSeqOrSpType(CompressedValue.NULL_DICT_SEQ);
-            } else {
-                cv.setDictSeqOrSpType(dict.getSeq());
-            }
             cv.setKeyHash(slotWithKeyHash.keyHash);
             cv.setExpireAt(expireAt);
+            cv.setDictSeqOrSpType(cr.isCompressed() ? dict.getSeq() : CompressedValue.NULL_DICT_SEQ);
+            cv.setCompressedData(cr.data());
 
             putToOneSlot(slot, key, slotWithKeyHash, cv);
 
@@ -971,9 +983,9 @@ public abstract class BaseCommand {
         } else {
             var cvRaw = new CompressedValue();
             cvRaw.setSeq(setSeq);
-            cvRaw.setDictSeqOrSpType(spType);
             cvRaw.setKeyHash(slotWithKeyHash.keyHash);
             cvRaw.setExpireAt(expireAt);
+            cvRaw.setDictSeqOrSpType(spType);
             cvRaw.setCompressedData(valueBytes);
 
             putToOneSlot(slot, key, slotWithKeyHash, cvRaw);

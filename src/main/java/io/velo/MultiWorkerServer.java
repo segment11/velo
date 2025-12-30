@@ -1228,6 +1228,9 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.bigStringNoMemoryCopySize = config.get(ofInteger(), "bigStringNoMemoryCopySize", 1024 * 256);
             log.warn("Global config, bigStringNoMemoryCopySize={}", ConfForGlobal.bigStringNoMemoryCopySize);
 
+            ConfForGlobal.bigStringNoCompressMinSize = config.get(ofInteger(), "bigStringNoCompressMinSize", 1024 * 256);
+            log.warn("Global config, bigStringNoCompressMinSize={}", ConfForGlobal.bigStringNoCompressMinSize);
+
             var dynConfig = config.getChild("dyn-config");
             if (dynConfig != null) {
                 dynConfig.getChildren().forEach((k, v) -> {

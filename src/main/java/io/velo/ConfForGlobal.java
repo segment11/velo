@@ -194,6 +194,12 @@ public class ConfForGlobal {
     public static int bigStringNoMemoryCopySize = 1024 * 256;
 
     /**
+     * Minimum size for big strings to avoid compression (default is 256 KB).
+     * Compress big strings cost too much time, perf bad.
+     */
+    public static int bigStringNoCompressMinSize = 1024 * 256;
+
+    /**
      * Initial dynamic configuration items.
      */
     public static final HashMap<String, String> initDynConfigItems = new HashMap<>();
