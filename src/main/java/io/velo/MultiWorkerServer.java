@@ -956,6 +956,10 @@ public class MultiWorkerServer extends Launcher {
         }
 
         localPersist.initCheck();
+
+        for (var scheduleRunnable : scheduleRunnableArray) {
+            scheduleRunnable.startDone(true);
+        }
     }
 
     /**

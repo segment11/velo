@@ -1363,6 +1363,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (loopCount % 10 == 0) {
             // execute once every 100ms
             for (var wal : walArray) {
+                // unit test
+                if (wal == null) {
+                    continue;
+                }
+
                 var count = wal.intervalDeleteExpiredBigStringFiles();
                 if (count > 0 || wal.groupIndex == 0) {
                     log.debug("Wal interval delete expired big string files, slot={}, group index={}, refer big string files count={}",
@@ -1407,6 +1412,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     int deleteOverwriteBigStringFilesLastBucketIndex = 0;
 
     void intervalDeleteOverwriteBigStringFiles() {
+        // unit test
+        if (keyLoader == null) {
+            return;
+        }
+
         intervalDeleteOverwriteBigStringFiles(deleteOverwriteBigStringFilesLastBucketIndex);
         deleteOverwriteBigStringFilesLastBucketIndex++;
         if (deleteOverwriteBigStringFilesLastBucketIndex >= keyLoader.bucketsPerSlot) {
@@ -1463,7 +1473,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 }
             }
 
-            if (count > 0 && targetBucketIndex % 1024 == 0) {
+            if (count > 0 || targetBucketIndex % 16384 == 0) {
                 log.info("Interval delete overwrite big string files, slot={}, bucket index={}, count={}", slot, targetBucketIndex, count);
             }
         }

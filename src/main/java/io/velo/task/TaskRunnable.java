@@ -95,23 +95,35 @@ public class TaskRunnable implements Runnable {
      */
     @Override
     public void run() {
-        for (var oneSlot : oneSlots) {
-            oneSlot.doTask(loopCount);
-        }
-        loopCount++;
+        if (isStartDone) {
+            for (var oneSlot : oneSlots) {
+                oneSlot.doTask(loopCount);
+            }
+            loopCount++;
 
-        if (isStopped) {
-            return;
-        }
+            if (isStopped) {
+                return;
+            }
 
-        final long INTERVAL_MS = 10L;
-        slotWorkerEventloop.delay(INTERVAL_MS, this);
+            final long INTERVAL_MS = 10L;
+            slotWorkerEventloop.delay(INTERVAL_MS, this);
+        }
     }
 
     /**
      * A flag indicating whether this task runnable should be stopped.
      */
     private volatile boolean isStopped = false;
+    private volatile boolean isStartDone = false;
+
+    /**
+     * Sets the start done flag for this task runnable.
+     *
+     * @param isStartDone The flag indicating whether the task runnable has started.
+     */
+    public void startDone(boolean isStartDone) {
+        this.isStartDone = isStartDone;
+    }
 
     /**
      * Stops this task runnable by setting the isStopped flag.

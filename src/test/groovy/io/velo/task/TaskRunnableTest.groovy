@@ -20,6 +20,7 @@ class TaskRunnableTest extends Specification {
         and:
         def taskRunnable = new TaskRunnable((byte) 0, (byte) 1)
         taskRunnable.chargeOneSlots(oneSlots)
+        taskRunnable.startDone(true)
 
         def eventloop = Eventloop.builder()
                 .withThreadName('test-task-runnable')
