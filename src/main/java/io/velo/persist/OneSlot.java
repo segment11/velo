@@ -1369,9 +1369,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                             slot, wal.groupIndex, count);
                 }
             }
-
-            intervalDeleteOverwriteBigStringFiles();
         }
+
+        // execute once every 10ms
+        intervalDeleteOverwriteBigStringFiles();
     }
 
     @VisibleForTesting
@@ -3037,6 +3038,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             map.put("big_string_files_read_file_count", (double) bigStringFiles.readFileCountTotal);
             map.put("big_string_files_read_file_cost_us_avg", (double) bigStringFiles.readFileCostMsTotal * 1000 / bigStringFiles.readFileCountTotal);
             map.put("big_string_files_read_byte_length_avg", (double) bigStringFiles.readByteLengthTotal / bigStringFiles.readFileCountTotal);
+
+            map.put("big_string_files_delay_to_delete_count", (double) delayToDeleteBigStringFiles.size());
         }
 
         if (binlog != null) {
