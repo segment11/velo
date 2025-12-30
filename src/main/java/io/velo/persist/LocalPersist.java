@@ -233,7 +233,7 @@ public class LocalPersist implements NeedCleanUp {
      *
      * @return true if all WAL reads were successful, false otherwise
      */
-    public boolean walLazyReadFromFile() {
+    public boolean walLazyRead() {
         var beginT = System.currentTimeMillis();
         CompletableFuture<Boolean>[] fArray = new CompletableFuture[oneSlots.length];
         for (int i = 0; i < oneSlots.length; i++) {
@@ -257,18 +257,31 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Init check for each slot.
+     * Performs init check asynchronously for each slot.
      *
      * @return true if all slot init check ok, false otherwise
      */
-    public boolean initCheckInEachOneSlot() {
+    public boolean initCheck() {
         var beginT = System.currentTimeMillis();
-        for (OneSlot oneSlot : oneSlots) {
-            oneSlot.deleteOverwriteBigStringFilesBatchWhenServerStart();
+        CompletableFuture<Integer>[] fArray = new CompletableFuture[oneSlots.length];
+        for (int i = 0; i < oneSlots.length; i++) {
+            var oneSlot = oneSlots[i];
+            fArray[i] = oneSlot.initCheck();
         }
+
+        log.info("Wait for all slots init check");
+        CompletableFuture.allOf(fArray).join();
         var endT = System.currentTimeMillis();
         log.info("All slots init check done, cost={}ms", endT - beginT);
-        return true;
+
+        var isEveryOk = true;
+        for (var f : fArray) {
+            if (f.isCompletedExceptionally()) {
+                isEveryOk = false;
+                break;
+            }
+        }
+        return isEveryOk;
     }
 
     /**

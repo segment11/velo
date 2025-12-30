@@ -1236,19 +1236,20 @@ class OneSlotTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
 
-        oneSlot.deleteOverwriteBigStringFilesBatchWhenServerStart()
+        def future = oneSlot.initCheck()
+        future.get()
 
         when:
         oneSlot.intervalDeleteOverwriteBigStringFiles()
         then:
-        oneSlot.intervalDeleteOverwriteBigStringFilesLastBucketIndex == 1
+        oneSlot.deleteOverwriteBigStringFilesLastBucketIndex == 1
 
         when:
-        oneSlot.intervalDeleteOverwriteBigStringFilesLastBucketIndex = oneSlot.keyLoader.bucketsPerSlot - 1
+        oneSlot.deleteOverwriteBigStringFilesLastBucketIndex = oneSlot.keyLoader.bucketsPerSlot - 1
         oneSlot.delayToDeleteBigStringFiles << new BigStringFiles.Id(1234L, 0)
         oneSlot.intervalDeleteOverwriteBigStringFiles()
         then:
-        oneSlot.intervalDeleteOverwriteBigStringFilesLastBucketIndex == 0
+        oneSlot.deleteOverwriteBigStringFilesLastBucketIndex == 0
 
         when:
         oneSlot.bigStringFiles.writeBigStringBytes(1234L, '1234', 0, '1234'.bytes)
@@ -1273,7 +1274,7 @@ class OneSlotTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
         cv.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
         oneSlot.keyLoader.putValueByKey(0, '1234'.bytes, sKey.keyHash(), sKey.keyHash32(), 0L, 1234L, cv.encode())
-        oneSlot.intervalDeleteOverwriteBigStringFilesLastBucketIndex = 0
+        oneSlot.deleteOverwriteBigStringFilesLastBucketIndex = 0
         oneSlot.intervalDeleteOverwriteBigStringFiles()
         then:
         oneSlot.delayToDeleteBigStringFiles.size() == 1

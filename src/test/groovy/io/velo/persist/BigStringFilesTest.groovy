@@ -15,6 +15,9 @@ class BigStringFilesTest extends Specification {
         given:
         def bigString = 'a' * 10000
 
+        println new BigStringFiles.Id(1234L, 0)
+        println new BigStringFiles.IdWithKey(1234L, '1234')
+
         def tmpSlotDir1 = new File('/tmp/tmp-slot-dir')
         def tmpSlotDir2 = new File('/tmp/tmp-slot-dir2')
         if (tmpSlotDir1.exists()) {
@@ -41,6 +44,11 @@ class BigStringFilesTest extends Specification {
         bigStringFiles1.getBigStringFileUuidList(0).size() == 1
         bigStringFiles11.getBigStringFileUuidList(0).size() == 1
         bigStringFiles2.getBigStringBytes(1L, 0) == null
+
+        when:
+        def bigStringFiles111 = new BigStringFiles(slot, tmpSlotDir1)
+        then:
+        bigStringFiles111.bucketIndexesWhenFirstServerStart.size() == 1
 
         when:
         bigStringFiles1.deleteBigStringFileIfExist(1L, 0)

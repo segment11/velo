@@ -1378,38 +1378,66 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     final LinkedList<BigStringFiles.Id> delayToDeleteBigStringFiles = new LinkedList<>();
 
-    void deleteOverwriteBigStringFilesBatchWhenServerStart() {
-        for (int i = 0; i < keyLoader.bucketsPerSlot; i++) {
-            intervalDeleteOverwriteBigStringFiles();
-        }
+    CompletableFuture<Integer> initCheck() {
+        var waitF = new CompletableFuture<Integer>();
+        // just run once
+        new Thread(() -> {
+            log.info("Start a single thread to do init check, slot={}", slot);
+            try {
+                int n = 0;
+                // delete big string files those are overwritten
+                if (bigStringFiles.bigStringFilesCount > 0) {
+                    for (int i : bigStringFiles.bucketIndexesWhenFirstServerStart) {
+                        n += intervalDeleteOverwriteBigStringFiles(i);
+                    }
+                }
+                log.info("Init check delete overwrite big string files count={}", n);
+                waitF.complete(n);
+            } catch (Exception e) {
+                log.error("Init check error for slot=" + slot, e);
+                waitF.completeExceptionally(e);
+            } finally {
+                log.info("End slot do init check, slot={}", slot);
+            }
+        }).start();
+        return waitF;
     }
 
     @VisibleForTesting
-    int intervalDeleteOverwriteBigStringFilesLastBucketIndex = 0;
+    int deleteOverwriteBigStringFilesLastBucketIndex = 0;
+
+    void intervalDeleteOverwriteBigStringFiles() {
+        intervalDeleteOverwriteBigStringFiles(deleteOverwriteBigStringFilesLastBucketIndex);
+        deleteOverwriteBigStringFilesLastBucketIndex++;
+        if (deleteOverwriteBigStringFilesLastBucketIndex >= keyLoader.bucketsPerSlot) {
+            deleteOverwriteBigStringFilesLastBucketIndex = 0;
+        }
+    }
 
     /**
      * Delete big string files those are overwritten.
      */
-    void intervalDeleteOverwriteBigStringFiles() {
+    int intervalDeleteOverwriteBigStringFiles(int targetBucketIndex) {
         if (!delayToDeleteBigStringFiles.isEmpty()) {
             var oneId = delayToDeleteBigStringFiles.removeFirst();
             bigStringFiles.deleteBigStringFileIfExist(oneId.uuid(), oneId.bucketIndex());
         }
 
-        var uuidList = bigStringFiles.getBigStringFileUuidList(intervalDeleteOverwriteBigStringFilesLastBucketIndex);
+        int count = 0;
+
+        var uuidList = bigStringFiles.getBigStringFileUuidList(targetBucketIndex);
         if (!uuidList.isEmpty()) {
-            var walGroupIndex = Wal.calcWalGroupIndex(intervalDeleteOverwriteBigStringFilesLastBucketIndex);
+            var walGroupIndex = Wal.calcWalGroupIndex(targetBucketIndex);
             var targetWal = walArray[walGroupIndex];
 
-            int count = 0;
-            var persistedUuidWithKeyList = keyLoader.getPersistedBigStringUuidList(intervalDeleteOverwriteBigStringFilesLastBucketIndex);
+            var persistedUuidWithKeyList = keyLoader.getPersistedBigStringUuidList(targetBucketIndex);
             if (persistedUuidWithKeyList.isEmpty()) {
                 for (var uuid : uuidList) {
                     if (targetWal.bigStringFileUuidByKey.containsValue(uuid)) {
                         continue;
                     }
 
-                    delayToDeleteBigStringFiles.add(new BigStringFiles.Id(uuid, intervalDeleteOverwriteBigStringFilesLastBucketIndex));
+                    delayToDeleteBigStringFiles.add(new BigStringFiles.Id(uuid, targetBucketIndex));
                     count++;
                 }
             } else {
@@ -1429,21 +1457,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     }
 
                     if (canDelete) {
-                        delayToDeleteBigStringFiles.add(new BigStringFiles.Id(uuid, intervalDeleteOverwriteBigStringFilesLastBucketIndex));
+                        delayToDeleteBigStringFiles.add(new BigStringFiles.Id(uuid, targetBucketIndex));
                         count++;
                     }
                 }
             }
 
-            if (count > 0 && intervalDeleteOverwriteBigStringFilesLastBucketIndex % 1024 == 0) {
-                log.info("Interval delete overwrite big string files, slot={}, bucket index={}, count={}", slot, intervalDeleteOverwriteBigStringFilesLastBucketIndex, count);
+            if (count > 0 && targetBucketIndex % 1024 == 0) {
+                log.info("Interval delete overwrite big string files, slot={}, bucket index={}, count={}", slot, targetBucketIndex, count);
             }
         }
-
-        intervalDeleteOverwriteBigStringFilesLastBucketIndex++;
-        if (intervalDeleteOverwriteBigStringFilesLastBucketIndex >= keyLoader.bucketsPerSlot) {
-            intervalDeleteOverwriteBigStringFilesLastBucketIndex = 0;
-        }
+        return count;
     }
 
     /**

@@ -113,8 +113,8 @@ class LocalPersistTest extends Specification {
         exception
 
         when:
-        def isOkWalLazyRead = localPersist.walLazyReadFromFile()
-        def isOkInitCheck = localPersist.initCheckInEachOneSlot()
+        def isOkWalLazyRead = localPersist.walLazyRead()
+        def isOkInitCheck = localPersist.initCheck()
         def isOkWarmUp = localPersist.warmUp()
         then:
         isOkWalLazyRead

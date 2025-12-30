@@ -16,10 +16,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Manages big string files stored in the file system or in-memory.
@@ -58,7 +55,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     private final HashMap<Integer, HashMap<Long, byte[]>> allBytesByBucketIndexAndUuid = new HashMap<>();
 
-    private int bigStringFilesCount = 0;
+    int bigStringFilesCount = 0;
+
+    HashSet<Integer> bucketIndexesWhenFirstServerStart = new HashSet<>();
 
     /**
      * Collects metrics related to this instance.
@@ -118,6 +117,10 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         if (files != null) {
             for (var file : files) {
                 diskUsage += file.length();
+                var arr = file.getName().split("_");
+                if (arr.length == 2) {
+                    bucketIndexesWhenFirstServerStart.add(Integer.parseInt(arr[0]));
+                }
             }
         }
     }
