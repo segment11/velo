@@ -358,7 +358,7 @@ public class Wal implements InMemoryEstimate {
     @SlaveNeedReplay
     HashMap<String, V> delayToKeyBucketShortValues;
 
-    HashSet<Long> bigStringFileUuids = new HashSet<>();
+    HashMap<String, Long> bigStringFileUuidByKey = new HashMap<>();
 
     final long fileToWriteIndex;
 
@@ -561,7 +561,7 @@ public class Wal implements InMemoryEstimate {
         }
 
         if (CompressedValue.onlyReadSpType(v.cvEncoded) == CompressedValue.SP_TYPE_BIG_STRING) {
-            bigStringFileUuids.add(CompressedValue.getBigStringMetaUuid(v.cvEncoded));
+            bigStringFileUuidByKey.put(v.key, CompressedValue.getBigStringMetaUuid(v.cvEncoded));
         }
     }
 
@@ -606,7 +606,7 @@ public class Wal implements InMemoryEstimate {
     void clear(boolean writeBytes0ToRaf) {
         delayToKeyBucketValues.clear();
         delayToKeyBucketShortValues.clear();
-        bigStringFileUuids.clear();
+        bigStringFileUuidByKey.clear();
 
         if (writeBytes0ToRaf) {
             resetWal(false);
@@ -629,7 +629,7 @@ public class Wal implements InMemoryEstimate {
     @SlaveNeedReplay
     public void clearShortValues() {
         delayToKeyBucketShortValues.clear();
-        bigStringFileUuids.clear();
+        bigStringFileUuidByKey.clear();
         resetWal(true);
 
         clearShortValuesCount++;
@@ -1090,7 +1090,7 @@ public class Wal implements InMemoryEstimate {
 
         delayToKeyBucketValues.clear();
         delayToKeyBucketShortValues.clear();
-        bigStringFileUuids.clear();
+        bigStringFileUuidByKey.clear();
         var n1 = readBytesToList(delayToKeyBucketValues, false, bytes, realDataOffset, oneGroupBufferSize);
         var n2 = readBytesToList(delayToKeyBucketShortValues, true, bytes, realDataOffset + oneGroupBufferSize, oneGroupBufferSize);
         if (groupIndex1 % 100 == 0) {

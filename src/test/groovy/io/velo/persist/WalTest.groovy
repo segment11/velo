@@ -128,8 +128,8 @@ class WalTest extends Specification {
         toMap.size() == 10
         wal.keyCount == 10
         wal.lastSeqShortValueAfterPut == vList[-1].seq()
-        wal.bigStringFileUuids.size() == 1
-        wal.bigStringFileUuids.first() == 1234L
+        wal.bigStringFileUuidByKey.size() == 1
+        wal.bigStringFileUuidByKey.containsValue 1234L
 
         when:
         def vBytes = new byte[2]

@@ -1251,7 +1251,7 @@ class OneSlotTest extends Specification {
         when:
         oneSlot.bigStringFiles.writeBigStringBytes(1234L, '1234', 0, '1234'.bytes)
         oneSlot.bigStringFiles.writeBigStringBytes(2345L, '2345', 0, '2345'.bytes)
-        oneSlot.getWalByBucketIndex(0).bigStringFileUuids << 1234L
+        oneSlot.getWalByBucketIndex(0).bigStringFileUuidByKey.put('1234', 1234L)
         oneSlot.intervalDeleteOverwriteBigStringFiles()
         then:
         oneSlot.delayToDeleteBigStringFiles.size() == 1
@@ -1263,7 +1263,7 @@ class OneSlotTest extends Specification {
         oneSlot.bigStringFiles.writeBigStringBytes(2345L, '2345', 0, '2345'.bytes)
         oneSlot.bigStringFiles.writeBigStringBytes(3456L, '3456', 0, '3456'.bytes)
         oneSlot.getWalByBucketIndex(0).clear()
-        oneSlot.getWalByBucketIndex(0).bigStringFileUuids << 2345L
+        oneSlot.getWalByBucketIndex(0).bigStringFileUuidByKey.put('2345', 2345L)
         def sKey = BaseCommand.slot('1234'.bytes, slotNumber)
         def cv = new CompressedValue()
         cv.seq = 1234L
