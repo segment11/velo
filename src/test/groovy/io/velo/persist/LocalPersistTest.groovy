@@ -114,9 +114,11 @@ class LocalPersistTest extends Specification {
 
         when:
         def isOkWalLazyRead = localPersist.walLazyReadFromFile()
+        def isOkInitCheck = localPersist.initCheckInEachOneSlot()
         def isOkWarmUp = localPersist.warmUp()
         then:
         isOkWalLazyRead
+        isOkInitCheck
         isOkWarmUp
 
         cleanup:

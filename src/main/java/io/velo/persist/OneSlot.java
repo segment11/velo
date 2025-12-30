@@ -1378,6 +1378,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     final LinkedList<BigStringFiles.Id> delayToDeleteBigStringFiles = new LinkedList<>();
 
+    void deleteOverwriteBigStringFilesBatchWhenServerStart() {
+        for (int i = 0; i < keyLoader.bucketsPerSlot; i++) {
+            intervalDeleteOverwriteBigStringFiles();
+        }
+    }
+
     @VisibleForTesting
     int intervalDeleteOverwriteBigStringFilesLastBucketIndex = 0;
 

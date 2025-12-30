@@ -257,6 +257,21 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
+     * Init check for each slot.
+     *
+     * @return true if all slot init check ok, false otherwise
+     */
+    public boolean initCheckInEachOneSlot() {
+        var beginT = System.currentTimeMillis();
+        for (OneSlot oneSlot : oneSlots) {
+            oneSlot.deleteOverwriteBigStringFilesBatchWhenServerStart();
+        }
+        var endT = System.currentTimeMillis();
+        log.info("All slots init check done, cost={}ms", endT - beginT);
+        return true;
+    }
+
+    /**
      * Perform warm up asynchronously for each slot.
      *
      * @return true if warm up was successful for all slots, false otherwise

@@ -1236,6 +1236,8 @@ class OneSlotTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
 
+        oneSlot.deleteOverwriteBigStringFilesBatchWhenServerStart()
+
         when:
         oneSlot.intervalDeleteOverwriteBigStringFiles()
         then:

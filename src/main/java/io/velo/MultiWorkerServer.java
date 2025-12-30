@@ -931,6 +931,8 @@ public class MultiWorkerServer extends Launcher {
             throw new RuntimeException("Wal lazy read from file failed");
         }
 
+        localPersist.initCheckInEachOneSlot();
+
         // metrics
         CollectorRegistry.defaultRegistry.register(new StandardExports());
         CollectorRegistry.defaultRegistry.register(new BufferPoolsExports());
