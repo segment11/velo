@@ -714,6 +714,16 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
+    /**
+     * Checks if a key exists in the WAL.
+     *
+     * @param key the key to check.
+     * @return true if the key exists, false otherwise.
+     */
+    boolean hasKey(@NotNull String key) {
+        return delayToKeyBucketValues.containsKey(key) || delayToKeyBucketShortValues.containsKey(key);
+    }
+
     // stats
     long needPersistCountTotal = 0;
     long needPersistKvCountTotal = 0;

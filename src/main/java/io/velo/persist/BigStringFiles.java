@@ -30,6 +30,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     record Id(long uuid, int bucketIndex) {
     }
 
+    record IdWithKey(long uuid, String key) {
+    }
+
 
     private final short slot;
     final File bigStringDir;

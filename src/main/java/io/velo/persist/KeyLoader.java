@@ -1432,12 +1432,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Get persisted big string uuid list, not expired.
      *
      * @param bucketIndex The bucket index.
-     * @return The persisted big string uuid list.
+     * @return The persisted big string uuid with key list.
      */
-    List<Long> getPersistedBigStringUuidList(int bucketIndex) {
+    List<BigStringFiles.IdWithKey> getPersistedBigStringUuidList(int bucketIndex) {
         // pure memory, todo
 
-        var list = new ArrayList<Long>();
+        var list = new ArrayList<BigStringFiles.IdWithKey>();
         var currentTimeMillis = System.currentTimeMillis();
 
         var keyBuckets = readKeyBuckets(bucketIndex);
@@ -1451,7 +1451,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                     var buf = Unpooled.wrappedBuffer(valueBytes);
                     var cv = CompressedValue.decode(buf, keyBytes, keyHash);
                     if (cv.isBigString()) {
-                        list.add(cv.getBigStringMetaUuid());
+                        list.add(new BigStringFiles.IdWithKey(cv.getBigStringMetaUuid(), new String(keyBytes)));
                     }
                 }
             });
@@ -1495,8 +1495,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         }
 
         if (intervalDeleteExpiredBigStringFilesLastBucketIndex % 16384 == 0 || countArray[0] > 0) {
-            log.info("Key buckets interval delete expired big string files, bucket index={}, refer big string files count={}",
-                    intervalDeleteExpiredBigStringFilesLastBucketIndex, countArray[0]);
+            log.info("Key buckets interval delete expired big string files, bucket index={}, slot={}, refer big string files count={}",
+                    intervalDeleteExpiredBigStringFilesLastBucketIndex, slot, countArray[0]);
         }
 
         intervalDeleteExpiredBigStringFilesLastBucketIndex++;

@@ -355,12 +355,15 @@ class WalTest extends Specification {
         wal.put(true, key, v)
         then:
         wal.exists(key)
+        wal.hasKey(key)
+        !wal.hasKey(key + '-not-exist')
 
         when:
         wal.put(false, key, v)
         then:
         wal.exists(key)
         !wal.exists(key + '-not-exist')
+        wal.hasKey(key)
 
         when:
         def longV = new Wal.V(4, 0, 0, 0, 0, key, ('long-value' * 100).bytes, false)

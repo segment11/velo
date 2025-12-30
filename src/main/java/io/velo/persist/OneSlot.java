@@ -1395,8 +1395,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             var targetWal = walArray[walGroupIndex];
 
             int count = 0;
-            var persistedUuidList = keyLoader.getPersistedBigStringUuidList(intervalDeleteOverwriteBigStringFilesLastBucketIndex);
-            if (persistedUuidList.isEmpty()) {
+            var persistedUuidWithKeyList = keyLoader.getPersistedBigStringUuidList(intervalDeleteOverwriteBigStringFilesLastBucketIndex);
+            if (persistedUuidWithKeyList.isEmpty()) {
                 for (var uuid : uuidList) {
                     if (targetWal.bigStringFileUuids.contains(uuid)) {
                         continue;
@@ -1406,18 +1406,25 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     count++;
                 }
             } else {
-                var set = new HashSet<>(persistedUuidList);
-                // check those not exists in persisted
+                var map = new HashMap<Long, String>();
+                for (var one : persistedUuidWithKeyList) {
+                    map.put(one.uuid(), one.key());
+                }
+                // check those not exists in key buckets or wal cached
                 for (var uuid : uuidList) {
-                    if (set.contains(uuid)) {
-                        continue;
-                    }
-                    if (targetWal.bigStringFileUuids.contains(uuid)) {
-                        continue;
+                    boolean canDelete;
+                    if (map.containsKey(uuid)) {
+                        var key = map.get(uuid);
+                        // wal is newer
+                        canDelete = targetWal.hasKey(key);
+                    } else {
+                        canDelete = !targetWal.bigStringFileUuids.contains(uuid);
                     }
 
-                    delayToDeleteBigStringFiles.add(new BigStringFiles.Id(uuid, intervalDeleteOverwriteBigStringFilesLastBucketIndex));
-                    count++;
+                    if (canDelete) {
+                        delayToDeleteBigStringFiles.add(new BigStringFiles.Id(uuid, intervalDeleteOverwriteBigStringFilesLastBucketIndex));
+                        count++;
+                    }
                 }
             }
 
