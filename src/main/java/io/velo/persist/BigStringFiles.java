@@ -38,15 +38,15 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     long readByteLengthTotal = 0L;
     long readFileCountTotal = 0L;
-    long readFileCostMsTotal = 0L;
+    long readFileCostUsTotal = 0L;
 
     long writeByteLengthTotal = 0L;
     long writeFileCountTotal = 0L;
-    long writeFileCostMsTotal = 0L;
+    long writeFileCostUsTotal = 0L;
 
     long deleteByteLengthTotal = 0L;
     long deleteFileCountTotal = 0L;
-    long deleteFileCostMsTotal = 0L;
+    long deleteFileCostUsTotal = 0L;
 
     private static final String BIG_STRING_DIR_NAME = "big-string";
 
@@ -278,14 +278,14 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
 
         try {
-            var beginT = System.currentTimeMillis();
+            var beginT = System.nanoTime();
             var bytes = FileUtils.readFileToByteArray(file);
-            var costT = System.currentTimeMillis() - beginT;
+            var costT = System.nanoTime() - beginT;
 
             // stats
             readByteLengthTotal += bytes.length;
             readFileCountTotal++;
-            readFileCostMsTotal += costT;
+            readFileCostUsTotal += (costT / 1000);
 
             return bytes;
         } catch (IOException e) {
@@ -329,9 +329,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
         var file = new File(bigStringDir, bucketIndex + "/" + uuid);
         try {
-            var beginT = System.currentTimeMillis();
+            var beginT = System.nanoTime();
             FileUtils.writeByteArrayToFile(file, bytes, offset, length, false);
-            var costT = System.currentTimeMillis() - beginT;
+            var costT = System.nanoTime() - beginT;
 
             bigStringFilesCount++;
             diskUsage += bytes.length;
@@ -339,7 +339,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             // stats
             writeByteLengthTotal += bytes.length;
             writeFileCountTotal++;
-            writeFileCostMsTotal += costT;
+            writeFileCostUsTotal += (costT / 1000);
 
             return true;
         } catch (IOException e) {
@@ -374,14 +374,14 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             var len = file.length();
             diskUsage -= len;
 
-            var beginT = System.currentTimeMillis();
+            var beginT = System.nanoTime();
             var r = file.delete();
-            var costT = System.currentTimeMillis() - beginT;
+            var costT = System.nanoTime() - beginT;
 
             // stats
             deleteByteLengthTotal += len;
             deleteFileCountTotal++;
-            deleteFileCostMsTotal += costT;
+            deleteFileCostUsTotal += (costT / 1000);
 
             return r;
         } else {
