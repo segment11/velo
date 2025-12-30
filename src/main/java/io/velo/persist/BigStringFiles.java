@@ -204,6 +204,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             if (arr.length != 2) {
                 continue;
             }
+            if (bucketIndex != Integer.parseInt(arr[0])) {
+                continue;
+            }
             var uuid = Long.parseLong(arr[1]);
             list.add(uuid);
         }
