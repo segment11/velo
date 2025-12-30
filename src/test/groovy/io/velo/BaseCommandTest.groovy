@@ -270,18 +270,17 @@ class BaseCommandTest extends Specification {
         def sBigString = BaseCommand.slot(bigStringKey.bytes, slotNumber)
         def cvBigString = Mock.prepareCompressedValueList(1)[0]
         cvBigString.keyHash = sBigString.keyHash()
-        def rawData = cvBigString.compressedData
+        cvBigString.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigString.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
         oneSlot.put(bigStringKey, sBigString.bucketIndex(), cvBigString)
         then:
-        // cvBigString compressedData is already changed
-        c.getCv(bigStringKey.bytes, sBigString).compressedData == rawData
+        c.getCv(bigStringKey.bytes, sBigString) == null
 
-//        when:
-//        oneSlot.getBigStringDir().listFiles().each {
-//            it.delete()
-//        }
-//        then:
-//        c.getCv(bigStringKey.bytes, sBigString).compressedData == null
+        when:
+        def bigStringBytes = ('aaaaabbbbbccccc' * 10).bytes
+        oneSlot.bigStringFiles.writeBigStringBytes(1234L, bigStringKey, bigStringBytes)
+        then:
+        c.getCv(bigStringKey.bytes, sBigString).compressedData == bigStringBytes
 
         when:
         def cvNumber = new CompressedValue()
@@ -659,7 +658,14 @@ class BaseCommandTest extends Specification {
         then:
         oneSlot.bigStringFiles.getBigStringFileUuidList().size() > 0
 
+        when:
+        ConfForGlobal.bigStringNoCompressMinSize = 500
+        c.set(key.bytes, bigValueBytes, sKey, 0, System.currentTimeMillis() + 1000)
+        then:
+        oneSlot.bigStringFiles.getBigStringFileUuidList().size() > 0
+
         cleanup:
+        ConfForGlobal.bigStringNoCompressMinSize = 1024 * 256
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
