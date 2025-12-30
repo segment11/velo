@@ -1,6 +1,5 @@
 package io.velo
 
-
 import spock.lang.Specification
 
 class TrainSampleJobTest extends Specification {
@@ -73,7 +72,10 @@ class TrainSampleJobTest extends Specification {
         def dict = result.cacheDict().get('key:')
         dict.initCtx()
         MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
-        def cv = CompressedValue.compress(sampleValueBytes, dict)
+        def cr = CompressedValue.compress(sampleValueBytes, dict)
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = dict.seq
+        cv.compressedData = cr.data()
         def decompressBytes = cv.decompress(dict)
         then:
         Arrays.equals(sampleValueBytes, decompressBytes)

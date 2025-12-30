@@ -389,33 +389,25 @@ class CompressedValueTest extends Specification {
         def rawBytes = ('111112222233333' * 10).bytes
 
         when:
-        def cv1 = CompressedValue.compress(rawBytes, null)
-        def cv2 = CompressedValue.compress(rawBytes, Dict.SELF_ZSTD_DICT)
-        cv1.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
+        def cr1 = CompressedValue.compress(rawBytes, null)
+        def cr2 = CompressedValue.compress(rawBytes, Dict.SELF_ZSTD_DICT)
         then:
-        cv1.compressedLength < rawBytes.length
-        cv2.compressedLength < rawBytes.length
-        !cv1.isIgnoreCompression(rawBytes)
-        cv1.uncompressedLength == rawBytes.length
+        cr1.isCompressed()
+        cr2.isCompressed()
 
         when:
+        def cv1 = new CompressedValue()
+        cv1.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
+        cv1.compressedData = cr1.data()
         def rawBytesDecompressed2 = cv1.decompress(null)
         then:
+        cv1.uncompressedLength == rawBytes.length
         rawBytes == rawBytesDecompressed2
 
         when:
         def rawBytesDecompressed3 = cv1.decompress(Dict.SELF_ZSTD_DICT)
         then:
         rawBytes == rawBytesDecompressed3
-
-        when:
-        def rawBytes2 = '1234'.bytes
-        // will not compress
-        def cv3 = CompressedValue.compress(rawBytes2, null)
-        then:
-        cv3.isIgnoreCompression(rawBytes2)
-        !cv3.isIgnoreCompression('12345'.bytes)
-        !cv3.isIgnoreCompression('1235'.bytes)
 
         when:
         def snowFlake = new SnowFlake(1, 1)
@@ -432,11 +424,14 @@ class CompressedValueTest extends Specification {
         def dict = result.cacheDict().get('key:')
         dict.initCtx()
         MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
-        def cv4 = CompressedValue.compress(rawBytes, dict)
+        def cr4 = CompressedValue.compress(rawBytes, dict)
         then:
-        cv4.compressedLength < rawBytes.length
+        cr4.data().length < rawBytes.length
 
         when:
+        def cv4 = new CompressedValue()
+        cv4.dictSeqOrSpType = dict.seq
+        cv4.compressedData = cr4.data()
         def rawBytesDecompressed = cv4.decompress(dict)
         then:
         rawBytes == rawBytesDecompressed

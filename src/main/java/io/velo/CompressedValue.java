@@ -597,25 +597,6 @@ public class CompressedValue {
     }
 
     /**
-     * Checks if the compressed data matches the beginning of the given raw data.
-     * If the compressed data length is greater than or equal to the raw data length, no effect.
-     *
-     * @param data Raw data to compare against the compressed data.
-     * @return {@code true} if the first 20 bytes (or full length if shorter) match.
-     */
-    public boolean isIgnoreCompression(byte[] data) {
-        assert compressedData != null;
-        if (compressedData.length != data.length) {
-            return false;
-        }
-
-        var compareMinBytesNum = Math.min(20, data.length);
-        var buffer1 = ByteBuffer.wrap(data, 0, compareMinBytesNum);
-        var buffer2 = ByteBuffer.wrap(compressedData, 0, compareMinBytesNum);
-        return buffer1.equals(buffer2);
-    }
-
-    /**
      * Decompresses the compressed data using the given Zstd dictionary.
      *
      * @param dict Given Zstd dictionary; {@code null} means use the self-trained dictionary.
@@ -637,13 +618,22 @@ public class CompressedValue {
     }
 
     /**
+     * Compress result.
+     *
+     * @param data         Compressed data or raw data.
+     * @param isCompressed true if the data is compressed.
+     */
+    public record CompressResult(byte[] data, boolean isCompressed) {
+    }
+
+    /**
      * Compresses the given data using the given Zstd dictionary.
      *
      * @param data The data to compress.
      * @param dict Given Zstd dictionary; {@code null} means use the self-trained dictionary.
-     * @return Compressed value object.
+     * @return Compress result.
      */
-    public static CompressedValue compress(byte[] data, @Nullable Dict dict) {
+    public static CompressResult compress(byte[] data, @Nullable Dict dict) {
         return compress(data, 0, data.length, dict);
     }
 
@@ -654,11 +644,9 @@ public class CompressedValue {
      * @param offset The offset in the data array.
      * @param length The length of the data to compress.
      * @param dict   Given Zstd dictionary; {@code null} means use the self-trained dictionary.
-     * @return Compressed value object.
+     * @return Compress result.
      */
-    public static CompressedValue compress(byte[] data, int offset, int length, @Nullable Dict dict) {
-        var cv = new CompressedValue();
-
+    public static CompressResult compress(byte[] data, int offset, int length, @Nullable Dict dict) {
         // Memory copy is too much, use direct buffer better.
         var dst = new byte[((int) Zstd.compressBound(length))];
         int compressedSize;
@@ -672,9 +660,7 @@ public class CompressedValue {
         }
 
         if (compressedSize > data.length) {
-            // No need to compress.
-            cv.compressedData = data;
-            return cv;
+            return new CompressResult(data, false);
         }
 
         // If wasting too much space, copy to another array.
@@ -682,12 +668,10 @@ public class CompressedValue {
             // Memory copy is too much.
             var newDst = new byte[compressedSize];
             System.arraycopy(dst, 0, newDst, 0, compressedSize);
-            cv.compressedData = newDst;
+            return new CompressResult(newDst, true);
         } else {
-            cv.compressedData = dst;
+            return new CompressResult(dst, true);
         }
-
-        return cv;
     }
 
     /**

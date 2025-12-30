@@ -304,9 +304,11 @@ class BaseCommandTest extends Specification {
 
         when:
         def longStringBytes = ('aaaaabbbbbccccc' * 10).bytes
-        def cvCompressed = CompressedValue.compress(longStringBytes, Dict.SELF_ZSTD_DICT)
-        cvCompressed.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
+        def cr = CompressedValue.compress(longStringBytes, Dict.SELF_ZSTD_DICT)
+        def cvCompressed = new CompressedValue()
         cvCompressed.keyHash = sKey.keyHash()
+        cvCompressed.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
+        cvCompressed.compressedData = cr.data()
         valueBytes = c.getValueBytesByCv(cvCompressed)
         then:
         valueBytes.length == longStringBytes.length
