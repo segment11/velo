@@ -36,6 +36,10 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     long diskUsage = 0L;
 
+    long readByteLengthTotal = 0L;
+    long readFileCountTotal = 0L;
+    long readFileCostMsTotal = 0L;
+
     long writeByteLengthTotal = 0L;
     long writeFileCountTotal = 0L;
     long writeFileCostMsTotal = 0L;
@@ -240,7 +244,16 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
 
         try {
-            return FileUtils.readFileToByteArray(file);
+            var beginT = System.currentTimeMillis();
+            var bytes = FileUtils.readFileToByteArray(file);
+            var costT = System.currentTimeMillis() - beginT;
+
+            // stats
+            readByteLengthTotal += bytes.length;
+            readFileCountTotal++;
+            readFileCostMsTotal += costT;
+
+            return bytes;
         } catch (IOException e) {
             log.error("Read big string file error, uuid={}, slot={}", uuid, slot, e);
             return null;
