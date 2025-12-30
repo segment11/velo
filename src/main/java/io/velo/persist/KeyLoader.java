@@ -1494,7 +1494,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             });
         }
 
-        if (countArray[0] > 0) {
+        if (countArray[0] > 0 && intervalDeleteExpiredBigStringFilesLastBucketIndex % 16384 == 0) {
             log.info("Key buckets interval delete expired big string files, bucket index={}, slot={}, refer big string files count={}",
                     intervalDeleteExpiredBigStringFilesLastBucketIndex, slot, countArray[0]);
         }
