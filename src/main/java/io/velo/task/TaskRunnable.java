@@ -95,19 +95,22 @@ public class TaskRunnable implements Runnable {
      */
     @Override
     public void run() {
-        if (isStartDone) {
-            for (var oneSlot : oneSlots) {
-                oneSlot.doTask(loopCount);
-            }
-            loopCount++;
-
-            if (isStopped) {
-                return;
-            }
-
-            final long INTERVAL_MS = 10L;
+        final long INTERVAL_MS = 10L;
+        if (!isStartDone) {
             slotWorkerEventloop.delay(INTERVAL_MS, this);
+            return;
         }
+
+        for (var oneSlot : oneSlots) {
+            oneSlot.doTask(loopCount);
+        }
+        loopCount++;
+
+        if (isStopped) {
+            return;
+        }
+
+        slotWorkerEventloop.delay(INTERVAL_MS, this);
     }
 
     /**
