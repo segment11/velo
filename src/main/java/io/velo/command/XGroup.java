@@ -1036,7 +1036,7 @@ public class XGroup extends BaseCommand {
                 var bigStringBytes = new byte[bigStringBytesLength];
                 buffer.get(bigStringBytes);
 
-                var file = new File(bigStringDir, bucketIndex + "_" + uuid);
+                var file = new File(bigStringDir, bucketIndex + "/" + uuid);
                 FileUtils.writeByteArrayToFile(file, bigStringBytes);
             }
         } catch (IOException e) {

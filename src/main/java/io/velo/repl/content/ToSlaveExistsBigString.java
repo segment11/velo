@@ -92,7 +92,7 @@ public class ToSlaveExistsBigString implements ReplContent {
 
         var existCount = 0;
         for (var uuid : toSendUuidList) {
-            var file = new File(bigStringDir, bucketIndex + "_" + uuid);
+            var file = new File(bigStringDir, bucketIndex + "/" + uuid);
             if (!file.exists()) {
                 continue;
             }
@@ -137,7 +137,7 @@ public class ToSlaveExistsBigString implements ReplContent {
 
         var length = HEADER_LENGTH;
         for (var uuid : toSendUuidList) {
-            var file = new File(bigStringDir, bucketIndex + "_" + uuid);
+            var file = new File(bigStringDir, bucketIndex + "/" + uuid);
             if (!file.exists()) {
                 continue;
             }

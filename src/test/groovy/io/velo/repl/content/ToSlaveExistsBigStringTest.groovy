@@ -43,8 +43,10 @@ class ToSlaveExistsBigStringTest extends Specification {
         content.encodeLength() == 9
 
         when:
-        new File(bigStringDir, '0_1').text = '1' * 10
-        new File(bigStringDir, '0_3').text = '3' * 30
+        def subDir = new File(bigStringDir, '0')
+        subDir.mkdir()
+        new File(subDir, '1').text = '1' * 10
+        new File(subDir, '3').text = '3' * 30
         content = new ToSlaveExistsBigString(0, bigStringDir, uuidListInMaster, sentUuidList)
         then:
         content.encodeLength() == 9 + (8 + 4) * 1 + 30
@@ -65,7 +67,7 @@ class ToSlaveExistsBigStringTest extends Specification {
         uuidListInMaster.clear()
         (ToSlaveExistsBigString.ONCE_SEND_BIG_STRING_COUNT * 2).times {
             uuidListInMaster << (it as long)
-            new File(bigStringDir, 0 + '_' + it).text = it.toString() * 10
+            new File(bigStringDir, 0 + '/' + it).text = it.toString() * 10
         }
         content = new ToSlaveExistsBigString(0, bigStringDir, uuidListInMaster, sentUuidList)
         bytes = new byte[content.encodeLength()]

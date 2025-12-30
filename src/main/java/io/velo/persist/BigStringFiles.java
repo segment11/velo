@@ -112,15 +112,23 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
 
         var files = bigStringDir.listFiles();
-        bigStringFilesCount = files != null ? files.length : 0;
-
         if (files != null) {
             for (var file : files) {
-                diskUsage += file.length();
-                var arr = file.getName().split("_");
-                if (arr.length == 2) {
-                    bucketIndexesWhenFirstServerStart.add(Integer.parseInt(arr[0]));
+                if (file.isDirectory()) {
+                    var bucketIndex = Integer.parseInt(file.getName());
+                    bucketIndexesWhenFirstServerStart.add(bucketIndex);
+
+                    var subFiles = file.listFiles();
+                    if (subFiles == null) {
+                        continue;
+                    }
+
+                    for (var subFile : subFiles) {
+                        diskUsage += subFile.length();
+                        bigStringFilesCount++;
+                    }
                 }
+
             }
         }
     }
@@ -199,21 +207,13 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             return list;
         }
 
-        var files = bigStringDir.listFiles();
+        var files = new File(bigStringDir, bucketIndex + "").listFiles();
         if (files == null) {
             return list;
         }
 
-        for (File file : files) {
-            var fileName = file.getName();
-            var arr = fileName.split("_");
-            if (arr.length != 2) {
-                continue;
-            }
-            if (bucketIndex != Integer.parseInt(arr[0])) {
-                continue;
-            }
-            var uuid = Long.parseLong(arr[1]);
+        for (var file : files) {
+            var uuid = Long.parseLong(file.getName());
             list.add(uuid);
         }
         return list;
@@ -267,7 +267,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @return Bytes of the big string file or null if the file doesn't exist or an error occurs.
      */
     private byte[] readBigStringBytes(long uuid, int bucketIndex) {
-        var file = new File(bigStringDir, bucketIndex + "_" + uuid);
+        var file = new File(bigStringDir, bucketIndex + "/" + uuid);
         if (!file.exists()) {
             log.warn("Big string file not exists, uuid={}, slot={}", uuid, slot);
             return null;
@@ -323,7 +323,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             return true;
         }
 
-        var file = new File(bigStringDir, bucketIndex + "_" + uuid);
+        var file = new File(bigStringDir, bucketIndex + "/" + uuid);
         try {
             var beginT = System.currentTimeMillis();
             FileUtils.writeByteArrayToFile(file, bytes, offset, length, false);
@@ -364,7 +364,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             bigStringBytesByUuidLRU.remove(uuid);
         }
 
-        var file = new File(bigStringDir, bucketIndex + "_" + uuid);
+        var file = new File(bigStringDir, bucketIndex + "/" + uuid);
         if (file.exists()) {
             bigStringFilesCount--;
             diskUsage -= file.length();
