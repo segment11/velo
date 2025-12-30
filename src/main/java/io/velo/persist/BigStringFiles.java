@@ -44,6 +44,10 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     long writeFileCountTotal = 0L;
     long writeFileCostMsTotal = 0L;
 
+    long deleteByteLengthTotal = 0L;
+    long deleteFileCountTotal = 0L;
+    long deleteFileCostMsTotal = 0L;
+
     private static final String BIG_STRING_DIR_NAME = "big-string";
 
     /**
@@ -367,8 +371,19 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         var file = new File(bigStringDir, bucketIndex + "/" + uuid);
         if (file.exists()) {
             bigStringFilesCount--;
-            diskUsage -= file.length();
-            return file.delete();
+            var len = file.length();
+            diskUsage -= len;
+
+            var beginT = System.currentTimeMillis();
+            var r = file.delete();
+            var costT = System.currentTimeMillis() - beginT;
+
+            // stats
+            deleteByteLengthTotal += len;
+            deleteFileCountTotal++;
+            deleteFileCostMsTotal += costT;
+
+            return r;
         } else {
             return true;
         }
