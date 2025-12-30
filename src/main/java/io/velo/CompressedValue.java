@@ -796,6 +796,20 @@ public class CompressedValue {
         return ByteBuffer.wrap(compressedData).getLong();
     }
 
+    /**
+     * Gets the big string UUID from the encoded bytes.
+     *
+     * @param encodedBytes Encoded bytes.
+     * @return Big string UUID.
+     */
+    public static long getBigStringMetaUuid(byte[] encodedBytes) {
+        assert encodedBytes.length >= 8 + 8 + 8 + 4 + 4 + 8;
+        // sp type already is a big string
+        var buffer = ByteBuffer.wrap(encodedBytes);
+        assert buffer.getInt(8 + 8 + 8) == SP_TYPE_BIG_STRING;
+        return buffer.getLong(8 + 8 + 8 + 4 + 4);
+    }
+
     private static final Logger log = LoggerFactory.getLogger(CompressedValue.class);
 
     /**

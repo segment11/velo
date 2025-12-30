@@ -330,6 +330,7 @@ class CompressedValueTest extends Specification {
         def bufferBigStringMeta = ByteBuffer.wrap(cvDecoded.compressedData)
         then:
         cv.getBigStringMetaUuid() == 890L
+        CompressedValue.getBigStringMetaUuid(encodedBigString) == 890L
         cvDecoded.isBigString()
         bufferBigStringMeta.getLong() == 890L
         // dict seq

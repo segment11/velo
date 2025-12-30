@@ -1408,7 +1408,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     @VisibleForTesting
     int intervalRemoveExpiredLastBucketIndex = 0;
 
-    void intervalRemoveExpired() {
+    void intervalRemoveExpiredForSaveMemory() {
         assert ConfForGlobal.pureMemoryV2;
 
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
@@ -1428,11 +1428,49 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         }
     }
 
+    /**
+     * Get persisted big string uuid list, not expired.
+     *
+     * @param bucketIndex The bucket index.
+     * @return The persisted big string uuid list.
+     */
+    List<Long> getPersistedBigStringUuidList(int bucketIndex) {
+        // pure memory, todo
+
+        var list = new ArrayList<Long>();
+        var currentTimeMillis = System.currentTimeMillis();
+
+        var keyBuckets = readKeyBuckets(bucketIndex);
+        for (var keyBucket : keyBuckets) {
+            if (keyBucket == null) {
+                continue;
+            }
+
+            keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+                if (expireAt == CompressedValue.NO_EXPIRE || expireAt > currentTimeMillis) {
+                    var buf = Unpooled.wrappedBuffer(valueBytes);
+                    var cv = CompressedValue.decode(buf, keyBytes, keyHash);
+                    if (cv.isBigString()) {
+                        list.add(cv.getBigStringMetaUuid());
+                    }
+                }
+            });
+        }
+        return list;
+    }
+
     @VisibleForTesting
     int intervalDeleteExpiredBigStringFilesLastBucketIndex = 0;
 
+    /**
+     * Delete expired big string files.
+     *
+     * @return The count of deleted big string files.
+     */
     @VisibleForTesting
     int intervalDeleteExpiredBigStringFiles() {
+        // pure memory, todo
+
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
         final int[] countArray = {0};

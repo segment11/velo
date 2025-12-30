@@ -1228,4 +1228,59 @@ class OneSlotTest extends Specification {
         ConfForGlobal.pureMemory = false
         ConfForGlobal.pureMemoryV2 = false
     }
+
+    def 'test interval delete overwrite big string files'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        when:
+        oneSlot.intervalDeleteOverwriteBigStringFiles()
+        then:
+        oneSlot.intervalDeleteOverwriteBigStringFilesLastBucketIndex == 1
+
+        when:
+        oneSlot.intervalDeleteOverwriteBigStringFilesLastBucketIndex = oneSlot.keyLoader.bucketsPerSlot - 1
+        oneSlot.delayToDeleteBigStringFiles << new BigStringFiles.Id(1234L, 0)
+        oneSlot.intervalDeleteOverwriteBigStringFiles()
+        then:
+        oneSlot.intervalDeleteOverwriteBigStringFilesLastBucketIndex == 0
+
+        when:
+        oneSlot.bigStringFiles.writeBigStringBytes(1234L, '1234', 0, '1234'.bytes)
+        oneSlot.bigStringFiles.writeBigStringBytes(2345L, '2345', 0, '2345'.bytes)
+        oneSlot.getWalByBucketIndex(0).bigStringFileUuids << 1234L
+        oneSlot.intervalDeleteOverwriteBigStringFiles()
+        then:
+        oneSlot.delayToDeleteBigStringFiles.size() == 1
+
+        when:
+        oneSlot.bigStringFiles.deleteAllBigStringFiles()
+        oneSlot.delayToDeleteBigStringFiles.clear()
+        oneSlot.bigStringFiles.writeBigStringBytes(1234L, '1234', 0, '1234'.bytes)
+        oneSlot.bigStringFiles.writeBigStringBytes(2345L, '2345', 0, '2345'.bytes)
+        oneSlot.bigStringFiles.writeBigStringBytes(3456L, '3456', 0, '3456'.bytes)
+        oneSlot.getWalByBucketIndex(0).clear()
+        oneSlot.getWalByBucketIndex(0).bigStringFileUuids << 2345L
+        def sKey = BaseCommand.slot('1234'.bytes, slotNumber)
+        def cv = new CompressedValue()
+        cv.seq = 1234L
+        cv.keyHash = sKey.keyHash()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
+        oneSlot.keyLoader.putValueByKey(0, '1234'.bytes, sKey.keyHash(), sKey.keyHash32(), 0L, 1234L, cv.encode())
+        oneSlot.intervalDeleteOverwriteBigStringFilesLastBucketIndex = 0
+        oneSlot.intervalDeleteOverwriteBigStringFiles()
+        then:
+        oneSlot.delayToDeleteBigStringFiles.size() == 1
+        oneSlot.delayToDeleteBigStringFiles.first.uuid() == 3456L
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.pureMemory = false
+        ConfForGlobal.pureMemoryV2 = false
+    }
 }

@@ -27,6 +27,9 @@ import java.util.Map;
  * using an LRU cache in a specified slot.
  */
 public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, CanSaveAndLoad, HandlerWhenCvExpiredOrDeleted {
+    record Id(long uuid, int bucketIndex) {
+    }
+
 
     private final short slot;
     final File bigStringDir;

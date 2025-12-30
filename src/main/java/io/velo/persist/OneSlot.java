@@ -1369,6 +1369,63 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                             slot, wal.groupIndex, count);
                 }
             }
+
+            intervalDeleteOverwriteBigStringFiles();
+        }
+    }
+
+    @VisibleForTesting
+    final LinkedList<BigStringFiles.Id> delayToDeleteBigStringFiles = new LinkedList<>();
+
+    @VisibleForTesting
+    int intervalDeleteOverwriteBigStringFilesLastBucketIndex = 0;
+
+    /**
+     * Delete big string files those are overwritten.
+     */
+    void intervalDeleteOverwriteBigStringFiles() {
+        if (!delayToDeleteBigStringFiles.isEmpty()) {
+            var oneId = delayToDeleteBigStringFiles.removeFirst();
+            bigStringFiles.deleteBigStringFileIfExist(oneId.uuid(), oneId.bucketIndex());
+        }
+
+        var uuidList = bigStringFiles.getBigStringFileUuidList(intervalDeleteOverwriteBigStringFilesLastBucketIndex);
+        if (!uuidList.isEmpty()) {
+            var walGroupIndex = Wal.calcWalGroupIndex(intervalDeleteOverwriteBigStringFilesLastBucketIndex);
+            var targetWal = walArray[walGroupIndex];
+
+            int count = 0;
+            var persistedUuidList = keyLoader.getPersistedBigStringUuidList(intervalDeleteOverwriteBigStringFilesLastBucketIndex);
+            if (persistedUuidList.isEmpty()) {
+                for (var uuid : uuidList) {
+                    if (targetWal.bigStringFileUuids.contains(uuid)) {
+                        continue;
+                    }
+
+                    delayToDeleteBigStringFiles.add(new BigStringFiles.Id(uuid, intervalDeleteOverwriteBigStringFilesLastBucketIndex));
+                    count++;
+                }
+            } else {
+                var set = new HashSet<>(persistedUuidList);
+                // check those not exists in persisted
+                for (var uuid : uuidList) {
+                    if (set.contains(uuid)) {
+                        continue;
+                    }
+                    if (targetWal.bigStringFileUuids.contains(uuid)) {
+                        continue;
+                    }
+
+                    delayToDeleteBigStringFiles.add(new BigStringFiles.Id(uuid, intervalDeleteOverwriteBigStringFilesLastBucketIndex));
+                    count++;
+                }
+            }
+            log.info("Interval delete overwrite big string files, slot={}, bucket index={}, count={}", slot, intervalDeleteOverwriteBigStringFilesLastBucketIndex, count);
+        }
+
+        intervalDeleteOverwriteBigStringFilesLastBucketIndex++;
+        if (intervalDeleteOverwriteBigStringFilesLastBucketIndex >= keyLoader.bucketsPerSlot) {
+            intervalDeleteOverwriteBigStringFilesLastBucketIndex = 0;
         }
     }
 
@@ -1500,7 +1557,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         @Override
         public void run() {
             assert oneSlot.keyLoader != null;
-            oneSlot.keyLoader.intervalRemoveExpired();
+            oneSlot.keyLoader.intervalRemoveExpiredForSaveMemory();
 
             final var maxSegmentIndex = oneSlot.chunk.getMaxSegmentIndex();
 

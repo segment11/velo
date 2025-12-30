@@ -31,6 +31,7 @@ class KeyLoaderTest extends Specification {
     }
 
     final short slot = 0
+    final short slotNumber = 1
     final byte splitIndex = 0
 
     def 'test base'() {
@@ -445,9 +446,9 @@ class KeyLoaderTest extends Specification {
         keyLoader.readKeyBucketForSingleKey(0, (byte) 2, (byte) 3, false) != null
 
         when:
-        keyLoader.intervalRemoveExpired()
+        keyLoader.intervalRemoveExpiredForSaveMemory()
         keyLoader.intervalRemoveExpiredLastBucketIndex = ConfForSlot.global.confBucket.bucketsPerSlot - 1
-        keyLoader.intervalRemoveExpired()
+        keyLoader.intervalRemoveExpiredForSaveMemory()
         then:
         1 == 1
 
@@ -459,6 +460,17 @@ class KeyLoaderTest extends Specification {
         keyLoader.intervalDeleteExpiredBigStringFiles()
         then:
         1 == 1
+
+        when:
+        def sKey = BaseCommand.slot('1234'.bytes, slotNumber)
+        def cvBigString = new CompressedValue()
+        cvBigString.seq = 1234L
+        cvBigString.keyHash = sKey.keyHash()
+        cvBigString.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigString.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
+        keyLoader.putValueByKey(0, '1234'.bytes, sKey.keyHash(), sKey.keyHash32(), 0L, 1234L, cvBigString.encode())
+        then:
+        keyLoader.getPersistedBigStringUuidList(0).size() == 1
 
         when:
         keyLoader.putValueByKey(0, 'a'.bytes, 10L, 10, 0L, 1L, encodeAsShortStringA)

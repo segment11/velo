@@ -358,6 +358,8 @@ public class Wal implements InMemoryEstimate {
     @SlaveNeedReplay
     HashMap<String, V> delayToKeyBucketShortValues;
 
+    HashSet<Long> bigStringFileUuids = new HashSet<>();
+
     final long fileToWriteIndex;
 
     /**
@@ -536,6 +538,10 @@ public class Wal implements InMemoryEstimate {
             lastSeq = v.seq;
             position += v.encodeLength();
             n++;
+
+            if (isShortValue) {
+                addBigStringUuidIfMatch(v);
+            }
         }
 
         if (isShortValue) {
@@ -546,6 +552,17 @@ public class Wal implements InMemoryEstimate {
             lastSeqAfterPut = lastSeq;
         }
         return n;
+    }
+
+    private void addBigStringUuidIfMatch(V v) {
+        // deleted flag or test value
+        if (v.cvEncoded.length < 28) {
+            return;
+        }
+
+        if (CompressedValue.onlyReadSpType(v.cvEncoded) == CompressedValue.SP_TYPE_BIG_STRING) {
+            bigStringFileUuids.add(CompressedValue.getBigStringMetaUuid(v.cvEncoded));
+        }
     }
 
     private void resetWal(boolean isShortValue) {
@@ -589,6 +606,7 @@ public class Wal implements InMemoryEstimate {
     void clear(boolean writeBytes0ToRaf) {
         delayToKeyBucketValues.clear();
         delayToKeyBucketShortValues.clear();
+        bigStringFileUuids.clear();
 
         if (writeBytes0ToRaf) {
             resetWal(false);
@@ -611,6 +629,7 @@ public class Wal implements InMemoryEstimate {
     @SlaveNeedReplay
     public void clearShortValues() {
         delayToKeyBucketShortValues.clear();
+        bigStringFileUuids.clear();
         resetWal(true);
 
         clearShortValuesCount++;
@@ -913,6 +932,11 @@ public class Wal implements InMemoryEstimate {
                     }
                 }
             }
+
+            if (!needPersist) {
+                addBigStringUuidIfMatch(v);
+            }
+
             return new PutResult(needPersist, true, null, needPersist ? 0 : offset);
         }
 
@@ -1056,6 +1080,7 @@ public class Wal implements InMemoryEstimate {
 
         delayToKeyBucketValues.clear();
         delayToKeyBucketShortValues.clear();
+        bigStringFileUuids.clear();
         var n1 = readBytesToList(delayToKeyBucketValues, false, bytes, realDataOffset, oneGroupBufferSize);
         var n2 = readBytesToList(delayToKeyBucketShortValues, true, bytes, realDataOffset + oneGroupBufferSize, oneGroupBufferSize);
         if (groupIndex1 % 100 == 0) {

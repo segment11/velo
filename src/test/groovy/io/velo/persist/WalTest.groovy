@@ -96,7 +96,19 @@ class WalTest extends Specification {
 
         when:
         ConfForGlobal.pureMemory = false
-        def vList = Mock.prepareValueList(10)
+        def vList = Mock.prepareValueList(10, 0) { v ->
+            if (v.seq() == 9) {
+                def cv = CompressedValue.decode(Unpooled.wrappedBuffer(v.cvEncoded()), v.key().bytes, v.keyHash())
+                cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+                cv.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
+                def bigStringEncoded = cv.encode()
+                def v2 = new Wal.V(v.seq(), v.bucketIndex(), v.keyHash(), CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                        v.key(), bigStringEncoded, false)
+                return v2
+            }
+
+            return v
+        }
         vList.each { v ->
             def key = v.key()
             wal.put(true, key, v)
@@ -116,6 +128,8 @@ class WalTest extends Specification {
         toMap.size() == 10
         wal.keyCount == 10
         wal.lastSeqShortValueAfterPut == vList[-1].seq()
+        wal.bigStringFileUuids.size() == 1
+        wal.bigStringFileUuids.first() == 1234L
 
         when:
         def vBytes = new byte[2]
