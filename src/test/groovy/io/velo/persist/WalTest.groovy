@@ -563,7 +563,8 @@ class WalTest extends Specification {
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.keyHash = KeyHash.hash('a'.bytes)
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
-        def v = new Wal.V(1, 0, cv.keyHash, System.currentTimeMillis() - 1000, 0, 'a', cv.encodeAsBigStringShort(1234L, Dict.SELF_ZSTD_DICT_SEQ), false)
+        cv.setCompressedDataAsBigString(1234L, Dict.SELF_ZSTD_DICT_SEQ)
+        def v = new Wal.V(1, 0, cv.keyHash, System.currentTimeMillis() - 1000, 0, 'a', cv.encode(), false)
         wal.put(true, 'xxxx', v)
         count = wal.intervalDeleteExpiredBigStringFiles()
         then:

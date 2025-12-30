@@ -2077,7 +2077,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 }
 
                 // encode again
-                var cvBigStringEncoded = cv.encodeAsBigStringShort(uuid, cv.getDictSeqOrSpType());
+                cv.setDictSeqOrSpType(CompressedValue.SP_TYPE_BIG_STRING);
+                cv.setCompressedDataAsBigString(uuid, cv.getDictSeqOrSpType());
+                var cvBigStringEncoded = cv.encode();
                 var xBigStrings = new XBigStrings(uuid, key, cvBigStringEncoded);
                 appendBinlog(xBigStrings);
 

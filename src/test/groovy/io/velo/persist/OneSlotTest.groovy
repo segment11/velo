@@ -539,10 +539,10 @@ class OneSlotTest extends Specification {
         when:
         def cvBigString3 = Mock.prepareCompressedValueList(1)[0]
         cvBigString3.seq = oneSlot.snowFlake.nextId()
-        cvBigString3.setCompressedDataAsBigString(cvBigString3.seq, Dict.SELF_ZSTD_DICT_SEQ)
         cvBigString3.expireAt = System.currentTimeMillis() + 10000
         cvBigString3.keyHash = sBigString.keyHash()
         cvBigString3.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigString3.setCompressedDataAsBigString(cvBigString3.seq, Dict.SELF_ZSTD_DICT_SEQ)
         oneSlot.put(bigStringKey, sBigString.bucketIndex(), cvBigString3)
         rBigString = oneSlot.get(bigStringKey.bytes, sBigString.bucketIndex(), sBigString.keyHash(), sBigString.keyHash32())
         then:

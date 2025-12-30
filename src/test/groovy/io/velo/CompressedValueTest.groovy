@@ -323,19 +323,18 @@ class CompressedValueTest extends Specification {
         CompressedValue.getSeqFromNumberOrShortStringEncodedBytes(new byte[10]) == 0
 
         when:
-        cv.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
         cv.setCompressedDataAsBigString(890L, Dict.SELF_ZSTD_DICT_SEQ)
-        def encodedBigStringMeta = cv.encodeAsBigStringShort(890L, Dict.SELF_ZSTD_DICT_SEQ)
-        def cvDecodeBigStringMeta = CompressedValue.decode(Unpooled.wrappedBuffer(encodedBigStringMeta), null, 0L)
-        def bufferBigStringMeta = ByteBuffer.wrap(cvDecodeBigStringMeta.compressedData)
+        def encodedBigString = cv.encode()
+        def cvDecoded = CompressedValue.decode(Unpooled.wrappedBuffer(encodedBigString), null, 0L)
+        def bufferBigStringMeta = ByteBuffer.wrap(cvDecoded.compressedData)
         then:
-        cv.isUseDict()
         cv.getBigStringMetaUuid() == 890L
-        cvDecodeBigStringMeta.isBigString()
+        cvDecoded.isBigString()
         bufferBigStringMeta.getLong() == 890L
         // dict seq
         bufferBigStringMeta.getInt() == Dict.SELF_ZSTD_DICT_SEQ
-        CompressedValue.onlyReadSpType(encodedBigStringMeta) == CompressedValue.SP_TYPE_BIG_STRING
+        CompressedValue.onlyReadSpType(encodedBigString) == CompressedValue.SP_TYPE_BIG_STRING
     }
 
     def 'test encode corner case'() {

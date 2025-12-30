@@ -797,32 +797,10 @@ public class CompressedValue {
     }
 
     public void setCompressedDataAsBigString(long uuid, int dictSeq) {
+        assert dictSeqOrSpType == SP_TYPE_BIG_STRING;
         // UUID + dict int.
         compressedData = new byte[12];
         ByteBuffer.wrap(compressedData).putLong(uuid).putInt(dictSeq);
-    }
-
-    /**
-     * Encodes to bytes as big string metadata.
-     * Encoded length = 8 + 8 + 4 + 8 + 4 + 4 + 12 = 48.
-     *
-     * @param uuid    Big string UUID for file name.
-     * @param dictSeq Compressed dictionary sequence number.
-     * @return Encoded bytes.
-     */
-    public byte[] encodeAsBigStringShort(long uuid, int dictSeq) {
-        setCompressedDataAsBigString(uuid, dictSeq);
-
-        var bytes = new byte[encodedLength()];
-        var buf = ByteBuf.wrapForWriting(bytes);
-        buf.writeLong(seq);
-        buf.writeLong(expireAt);
-        buf.writeLong(keyHash);
-        buf.writeInt(SP_TYPE_BIG_STRING);
-        buf.writeInt(getCompressedLength());
-        buf.write(compressedData);
-
-        return bytes;
     }
 
     /**
