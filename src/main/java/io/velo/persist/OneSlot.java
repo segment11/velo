@@ -1420,7 +1420,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     count++;
                 }
             }
-            log.info("Interval delete overwrite big string files, slot={}, bucket index={}, count={}", slot, intervalDeleteOverwriteBigStringFilesLastBucketIndex, count);
+
+            if (count > 0) {
+                log.info("Interval delete overwrite big string files, slot={}, bucket index={}, count={}", slot, intervalDeleteOverwriteBigStringFilesLastBucketIndex, count);
+            }
         }
 
         intervalDeleteOverwriteBigStringFilesLastBucketIndex++;
