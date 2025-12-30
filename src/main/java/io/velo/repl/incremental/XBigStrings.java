@@ -17,6 +17,7 @@ import java.nio.ByteBuffer;
  */
 public class XBigStrings implements BinlogContent {
     private final long uuid;
+    private final int bucketIndex;
     private final String key;
     private final byte[] cvEncoded;
 
@@ -27,6 +28,15 @@ public class XBigStrings implements BinlogContent {
      */
     public long getUuid() {
         return uuid;
+    }
+
+    /**
+     * Retrieves the bucket index associated with this big string operation.
+     *
+     * @return The bucket index.
+     */
+    public int getBucketIndex() {
+        return bucketIndex;
     }
 
     /**
@@ -50,12 +60,14 @@ public class XBigStrings implements BinlogContent {
     /**
      * Constructs a new XBigStrings object with the specified UUID, key, and encoded compressed value.
      *
-     * @param uuid      The unique identifier for this operation.
-     * @param key       The key associated with the big string.
-     * @param cvEncoded The encoded bytes of the compressed value.
+     * @param uuid        The unique identifier for this operation.
+     * @param bucketIndex The bucket index.
+     * @param key         The key associated with the big string.
+     * @param cvEncoded   The encoded bytes of the compressed value.
      */
-    public XBigStrings(long uuid, String key, byte[] cvEncoded) {
+    public XBigStrings(long uuid, int bucketIndex, String key, byte[] cvEncoded) {
         this.uuid = uuid;
+        this.bucketIndex = bucketIndex;
         this.key = key;
         this.cvEncoded = cvEncoded;
     }
@@ -78,9 +90,9 @@ public class XBigStrings implements BinlogContent {
     @Override
     public int encodedLength() {
         // 1 byte for type, 4 bytes for encoded length for check
-        // 8 bytes for uuid, 2 bytes for key length, key bytes
+        // 8 bytes for uuid, 4 bytes for bucket index, 2 bytes for key length, key bytes
         // 4 bytes for cvEncoded length, cvEncoded bytes
-        return 1 + 4 + 8 + 2 + key.length() + 4 + cvEncoded.length;
+        return 1 + 4 + 8 + 4 + 2 + key.length() + 4 + cvEncoded.length;
     }
 
     /**
@@ -96,6 +108,7 @@ public class XBigStrings implements BinlogContent {
         buffer.put(type().code());
         buffer.putInt(bytes.length);
         buffer.putLong(uuid);
+        buffer.putInt(bucketIndex);
         buffer.putShort((short) key.length());
         buffer.put(key.getBytes());
         buffer.putInt(cvEncoded.length);
@@ -116,6 +129,7 @@ public class XBigStrings implements BinlogContent {
         var encodedLength = buffer.getInt();
 
         var uuid = buffer.getLong();
+        var bucketIndex = buffer.getInt();
         var keyLength = buffer.getShort();
 
         if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
@@ -130,7 +144,7 @@ public class XBigStrings implements BinlogContent {
         var cvEncoded = new byte[cvEncodedLength];
         buffer.get(cvEncoded);
 
-        var r = new XBigStrings(uuid, key, cvEncoded);
+        var r = new XBigStrings(uuid, bucketIndex, key, cvEncoded);
         if (encodedLength != r.encodedLength()) {
             throw new IllegalStateException("Invalid encoded length=" + encodedLength);
         }
@@ -149,7 +163,6 @@ public class XBigStrings implements BinlogContent {
     @Override
     public void apply(short slot, ReplPair replPair) {
         var keyHash = KeyHash.hash(key.getBytes());
-        var bucketIndex = KeyHash.bucketIndex(keyHash, ConfForSlot.global.confBucket.bucketsPerSlot);
         var cv = CompressedValue.decode(Unpooled.wrappedBuffer(cvEncoded), key.getBytes(), keyHash);
 
         var oneSlot = localPersist.oneSlot(slot);

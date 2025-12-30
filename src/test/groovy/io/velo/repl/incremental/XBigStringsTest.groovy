@@ -17,10 +17,14 @@ class XBigStringsTest extends Specification {
         def uuid = 1L
         def key = 'test-big-string-key'
         def cv = new CompressedValue()
+        cv.seq = 1234L
         cv.keyHash = KeyHash.hash(key.bytes)
+        cv.expireAt = System.currentTimeMillis() + 1000
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
         def cvEncoded = cv.encode()
 
-        def xBigStrings = new XBigStrings(uuid, key, cvEncoded)
+        def xBigStrings = new XBigStrings(uuid, 0, key, cvEncoded)
 
         expect:
         xBigStrings.type() == BinlogContent.Type.big_strings
@@ -33,6 +37,7 @@ class XBigStringsTest extends Specification {
         then:
         xBigStrings2.encodedLength() == encoded.length
         xBigStrings2.uuid == xBigStrings.uuid
+        xBigStrings2.bucketIndex == xBigStrings.bucketIndex
         xBigStrings2.key == xBigStrings.key
         xBigStrings2.cvEncoded == xBigStrings.cvEncoded
 
@@ -51,7 +56,7 @@ class XBigStringsTest extends Specification {
 
         when:
         exception = false
-        buffer.putShort(1 + 4 + 8, (CompressedValue.KEY_MAX_LENGTH + 1).shortValue())
+        buffer.putShort(1 + 4 + 8 + 4, (CompressedValue.KEY_MAX_LENGTH + 1).shortValue())
         buffer.position(1)
         try {
             xBigStrings.decodeFrom(buffer)
@@ -64,7 +69,7 @@ class XBigStringsTest extends Specification {
 
         when:
         exception = false
-        buffer.putShort(1 + 4 + 8, (short) 0)
+        buffer.putShort(1 + 4 + 8 + 4, (short) 0)
         buffer.position(1)
         try {
             xBigStrings.decodeFrom(buffer)

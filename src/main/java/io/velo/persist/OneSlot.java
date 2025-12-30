@@ -2071,7 +2071,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             if (isPersistLengthOverSegmentLength || key.contains("kerry-test-big-string-")) {
                 var uuid = snowFlake.nextId();
                 var bytes = cv.getCompressedData();
-                var isWriteOk = bigStringFiles.writeBigStringBytes(uuid, key, bytes);
+                var isWriteOk = bigStringFiles.writeBigStringBytes(uuid, key, bucketIndex, bytes);
                 if (!isWriteOk) {
                     throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
                 }
@@ -2080,7 +2080,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 cv.setDictSeqOrSpType(CompressedValue.SP_TYPE_BIG_STRING);
                 cv.setCompressedDataAsBigString(uuid, cv.getDictSeqOrSpType());
                 var cvBigStringEncoded = cv.encode();
-                var xBigStrings = new XBigStrings(uuid, key, cvBigStringEncoded);
+                var xBigStrings = new XBigStrings(uuid, bucketIndex, key, cvBigStringEncoded);
                 appendBinlog(xBigStrings);
 
                 v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),

@@ -278,7 +278,7 @@ class BaseCommandTest extends Specification {
 
         when:
         def bigStringBytes = ('aaaaabbbbbccccc' * 10).bytes
-        oneSlot.bigStringFiles.writeBigStringBytes(1234L, bigStringKey, bigStringBytes)
+        oneSlot.bigStringFiles.writeBigStringBytes(1234L, bigStringKey, sBigString.bucketIndex(), bigStringBytes)
         then:
         c.getCv(bigStringKey.bytes, sBigString).compressedData == bigStringBytes
 
@@ -656,13 +656,13 @@ class BaseCommandTest extends Specification {
         def bigValueBytes = ('x' * 10000).bytes
         c.set(key.bytes, bigValueBytes, sKey, 0, System.currentTimeMillis() + 1000)
         then:
-        oneSlot.bigStringFiles.getBigStringFileUuidList().size() > 0
+        oneSlot.bigStringFiles.getBigStringFileUuidList(0).size() > 0
 
         when:
         ConfForGlobal.bigStringNoCompressMinSize = 500
         c.set(key.bytes, bigValueBytes, sKey, 0, System.currentTimeMillis() + 1000)
         then:
-        oneSlot.bigStringFiles.getBigStringFileUuidList().size() > 0
+        oneSlot.bigStringFiles.getBigStringFileUuidList(0).size() > 0
 
         cleanup:
         ConfForGlobal.bigStringNoCompressMinSize = 1024 * 256

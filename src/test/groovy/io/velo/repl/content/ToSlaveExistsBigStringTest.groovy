@@ -16,10 +16,10 @@ class ToSlaveExistsBigStringTest extends Specification {
         List<Long> uuidListInMaster = []
         List<Long> sentUuidList = []
 
-        def content = new ToSlaveExistsBigString(bigStringDir, uuidListInMaster, sentUuidList)
+        def content = new ToSlaveExistsBigString(0, bigStringDir, uuidListInMaster, sentUuidList)
 
         expect:
-        content.encodeLength() == 5
+        content.encodeLength() == 9
 
         when:
         def bytes = new byte[content.encodeLength()]
@@ -28,7 +28,8 @@ class ToSlaveExistsBigStringTest extends Specification {
         def buffer = ByteBuffer.wrap(bytes)
         then:
         buffer.getInt() == 0
-        buffer.get() == 1
+        buffer.getInt() == 0
+        buffer.get() == (byte) 1
 
         when:
         uuidListInMaster << 1L
@@ -37,16 +38,16 @@ class ToSlaveExistsBigStringTest extends Specification {
         uuidListInMaster << 4L
         sentUuidList << 1L
         sentUuidList << 2L
-        content = new ToSlaveExistsBigString(bigStringDir, uuidListInMaster, sentUuidList)
+        content = new ToSlaveExistsBigString(0, bigStringDir, uuidListInMaster, sentUuidList)
         then:
-        content.encodeLength() == 5
+        content.encodeLength() == 9
 
         when:
-        new File(bigStringDir, '1').text = '1' * 10
-        new File(bigStringDir, '3').text = '3' * 30
-        content = new ToSlaveExistsBigString(bigStringDir, uuidListInMaster, sentUuidList)
+        new File(bigStringDir, '0_1').text = '1' * 10
+        new File(bigStringDir, '0_3').text = '3' * 30
+        content = new ToSlaveExistsBigString(0, bigStringDir, uuidListInMaster, sentUuidList)
         then:
-        content.encodeLength() == 5 + (8 + 4) * 1 + 30
+        content.encodeLength() == 9 + (8 + 4) * 1 + 30
 
         when:
         bytes = new byte[content.encodeLength()]
@@ -54,8 +55,9 @@ class ToSlaveExistsBigStringTest extends Specification {
         content.encodeTo(buf)
         buffer = ByteBuffer.wrap(bytes)
         then:
+        buffer.getInt() == 0
         buffer.getInt() == 1
-        buffer.get() == 1
+        buffer.get() == (byte) 1
         buffer.getLong() == 3L
         buffer.getInt() == 30
 
@@ -63,16 +65,17 @@ class ToSlaveExistsBigStringTest extends Specification {
         uuidListInMaster.clear()
         (ToSlaveExistsBigString.ONCE_SEND_BIG_STRING_COUNT * 2).times {
             uuidListInMaster << (it as long)
-            new File(bigStringDir, it.toString()).text = it.toString() * 10
+            new File(bigStringDir, 0 + '_' + it).text = it.toString() * 10
         }
-        content = new ToSlaveExistsBigString(bigStringDir, uuidListInMaster, sentUuidList)
+        content = new ToSlaveExistsBigString(0, bigStringDir, uuidListInMaster, sentUuidList)
         bytes = new byte[content.encodeLength()]
         buf = ByteBuf.wrapForWriting(bytes)
         content.encodeTo(buf)
         buffer = ByteBuffer.wrap(bytes)
         then:
+        buffer.getInt() == 0
         buffer.getInt() == ToSlaveExistsBigString.ONCE_SEND_BIG_STRING_COUNT
-        buffer.get() == 0
+        buffer.get() == (byte) 0
 
         cleanup:
         bigStringDir.deleteDir()

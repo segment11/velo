@@ -15,6 +15,7 @@ import java.util.List;
  * It includes a list of UUIDs of big strings that need to be sent and whether all of them are being sent in one batch.
  */
 public class ToSlaveExistsBigString implements ReplContent {
+    private final int bucketIndex;
     private final File bigStringDir;
     private final List<Long> toSendUuidList;
     private final boolean isSendAllOnce;
@@ -27,11 +28,13 @@ public class ToSlaveExistsBigString implements ReplContent {
     /**
      * Constructs a new {@link ToSlaveExistsBigString} message.
      *
+     * @param bucketIndex      The bucket index in which the big strings are stored.
      * @param bigStringDir     The directory containing the big strings (files).
      * @param uuidListInMaster The list of UUIDs of big strings in the master.
      * @param sentUuidList     The list of UUIDs of big strings that have already been sent to the slave.
      */
-    public ToSlaveExistsBigString(File bigStringDir, List<Long> uuidListInMaster, List<Long> sentUuidList) {
+    public ToSlaveExistsBigString(int bucketIndex, File bigStringDir, List<Long> uuidListInMaster, List<Long> sentUuidList) {
+        this.bucketIndex = bucketIndex;
         this.bigStringDir = bigStringDir;
 
         var toSendUuidList = new ArrayList<Long>();
@@ -52,16 +55,18 @@ public class ToSlaveExistsBigString implements ReplContent {
 
     /**
      * The length of the header in the encoded message, which includes:
+     * - 4 bytes for the bucket index.
      * - 4 bytes for the(send big string count).
      * - 1 byte as a flag indicating whether all big strings are sent in one batch.
      */
-    private static final int HEADER_LENGTH = 4 + 1;
+    private static final int HEADER_LENGTH = 4 + 4 + 1;
 
     /**
      * Encodes the content of this message to the given {@link ByteBuf}.
      * <p>
      * The encoding format is as follows:
-     * - First 4 bytes: the count of big strings to send.
+     * - First 4 bytes: the bucket index.
+     * - Next 4 bytes: the count of big strings to send.
      * - Next 1 byte: a flag indicating if all big strings are sent in one batch (1 for true, 0 for false).
      * - For each big string to send:
      * - 8 bytes: the UUID of the big string.
@@ -74,6 +79,8 @@ public class ToSlaveExistsBigString implements ReplContent {
      */
     @Override
     public void encodeTo(ByteBuf toBuf) {
+        toBuf.writeInt(bucketIndex);
+
         if (toSendUuidList.isEmpty()) {
             toBuf.writeInt(0);
             toBuf.writeByte((byte) 1);
@@ -85,7 +92,7 @@ public class ToSlaveExistsBigString implements ReplContent {
 
         var existCount = 0;
         for (var uuid : toSendUuidList) {
-            var file = new File(bigStringDir, String.valueOf(uuid));
+            var file = new File(bigStringDir, bucketIndex + "_" + uuid);
             if (!file.exists()) {
                 continue;
             }
@@ -97,7 +104,7 @@ public class ToSlaveExistsBigString implements ReplContent {
             toBuf.writeInt(bigStringBytesLength);
 
             try {
-                byte[] bytes = FileUtils.readFileToByteArray(file);
+                var bytes = FileUtils.readFileToByteArray(file);
                 toBuf.write(bytes);
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -105,7 +112,7 @@ public class ToSlaveExistsBigString implements ReplContent {
         }
 
         if (existCount != toSendUuidList.size()) {
-            toBuf.tail(0);
+            toBuf.tail(4);
             toBuf.writeInt(existCount);
         }
     }
@@ -130,7 +137,7 @@ public class ToSlaveExistsBigString implements ReplContent {
 
         var length = HEADER_LENGTH;
         for (var uuid : toSendUuidList) {
-            var file = new File(bigStringDir, String.valueOf(uuid));
+            var file = new File(bigStringDir, bucketIndex + "_" + uuid);
             if (!file.exists()) {
                 continue;
             }

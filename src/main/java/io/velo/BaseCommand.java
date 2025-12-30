@@ -578,7 +578,7 @@ public abstract class BaseCommand {
             var uuid = buffer.getLong();
             var realDictSeq = buffer.getInt();
 
-            var bigStringBytes = oneSlot.getBigStringFiles().getBigStringBytes(uuid, true);
+            var bigStringBytes = oneSlot.getBigStringFiles().getBigStringBytes(uuid, s.bucketIndex, true);
             if (bigStringBytes == null) {
                 return null;
             }
@@ -874,7 +874,7 @@ public abstract class BaseCommand {
                 compressStats.compressedTotalLength += cr.data().length;
                 compressStats.compressedCostTimeTotalUs += costT;
 
-                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(uuid, key, cr.data());
+                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(uuid, key, slotWithKeyHash.bucketIndex, cr.data());
                 if (!isWriteOk) {
                     throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
                 }
@@ -882,7 +882,8 @@ public abstract class BaseCommand {
                 cvAsBigString.setCompressedDataAsBigString(uuid, cr.isCompressed() ? Dict.SELF_ZSTD_DICT_SEQ : CompressedValue.NULL_DICT_SEQ);
             } else {
                 // do not compress
-                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(uuid, key, valueBytes, bigStringNoMemoryCopy.offset, bigStringNoMemoryCopy.length);
+                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(uuid, key, slotWithKeyHash.bucketIndex,
+                        valueBytes, bigStringNoMemoryCopy.offset, bigStringNoMemoryCopy.length);
                 if (!isWriteOk) {
                     throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
                 }
@@ -891,7 +892,7 @@ public abstract class BaseCommand {
             }
 
             var cvBigStringEncoded = cvAsBigString.encode();
-            var xBigStrings = new XBigStrings(uuid, key, cvBigStringEncoded);
+            var xBigStrings = new XBigStrings(uuid, slotWithKeyHash.bucketIndex, key, cvBigStringEncoded);
             oneSlot.appendBinlog(xBigStrings);
 
             oneSlot.put(new String(keyBytes), slotWithKeyHash.bucketIndex, cvAsBigString);
@@ -946,7 +947,7 @@ public abstract class BaseCommand {
         }
 
         var slot = slotWithKeyHash.slot;
-        var setSeq = snowFlake.nextId();
+        var seq = snowFlake.nextId();
         if (ConfForGlobal.isValueSetUseCompression && preferDoCompress && dict != null) {
             var beginT = System.nanoTime();
             // dict may be null
@@ -954,7 +955,7 @@ public abstract class BaseCommand {
             var costT = (System.nanoTime() - beginT) / 1000;
 
             var cv = new CompressedValue();
-            cv.setSeq(setSeq);
+            cv.setSeq(seq);
             cv.setKeyHash(slotWithKeyHash.keyHash);
             cv.setExpireAt(expireAt);
             cv.setDictSeqOrSpType(cr.isCompressed() ? dict.getSeq() : CompressedValue.NULL_DICT_SEQ);
@@ -982,7 +983,7 @@ public abstract class BaseCommand {
             }
         } else {
             var cvRaw = new CompressedValue();
-            cvRaw.setSeq(setSeq);
+            cvRaw.setSeq(seq);
             cvRaw.setKeyHash(slotWithKeyHash.keyHash);
             cvRaw.setExpireAt(expireAt);
             cvRaw.setDictSeqOrSpType(spType);
@@ -1016,7 +1017,7 @@ public abstract class BaseCommand {
             indexHandlerPool.getKeyAnalysisHandler().addKey(key, valueLengthHigh24WithShortTypeLow8);
         }
 
-        SocketInspector.updateLastSetSeq(socket, setSeq, slot);
+        SocketInspector.updateLastSetSeq(socket, seq, slot);
     }
 
     /**

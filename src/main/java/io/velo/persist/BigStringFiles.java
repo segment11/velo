@@ -1,9 +1,6 @@
 package io.velo.persist;
 
-import io.velo.CompressedValue;
-import io.velo.ConfForGlobal;
-import io.velo.ConfForSlot;
-import io.velo.NullableOnlyTest;
+import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
@@ -53,7 +50,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     private LRUMap<Long, byte[]> bigStringBytesByUuidLRU;
 
-    private final HashMap<Long, byte[]> allBytesByUuid = new HashMap<>();
+    private final HashMap<Integer, HashMap<Long, byte[]>> allBytesByBucketIndexAndUuid = new HashMap<>();
 
     private int bigStringFilesCount = 0;
 
@@ -128,7 +125,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     @Override
     public long estimate(@NotNull StringBuilder sb) {
         long size = RamUsageEstimator.sizeOfMap(bigStringBytesByUuidLRU);
-        size += RamUsageEstimator.sizeOfMap(allBytesByUuid);
+        size += RamUsageEstimator.sizeOfMap(allBytesByBucketIndexAndUuid);
         sb.append("Big string files: ").append(size).append("\n");
         return size;
     }
@@ -146,10 +143,11 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         for (int i = 0; i < bigStringFilesCount; i++) {
             // uuid long, bytes length int
             var uuid = is.readLong();
+            var bucketIndex = is.readInt();
             var bytesLength = is.readInt();
             var bytes = new byte[bytesLength];
             is.readFully(bytes);
-            allBytesByUuid.put(uuid, bytes);
+            allBytesByBucketIndexAndUuid.computeIfAbsent(bucketIndex, k -> new HashMap<>()).put(uuid, bytes);
         }
         log.warn("Load big string files from last saved file, count={}", bigStringFilesCount);
     }
@@ -162,25 +160,32 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      */
     @Override
     public void writeToSavedFileWhenPureMemory(@NotNull DataOutputStream os) throws IOException {
-        os.writeInt(allBytesByUuid.size());
-        for (var entry : allBytesByUuid.entrySet()) {
-            os.writeLong(entry.getKey());
-            var bytes = entry.getValue();
-            os.writeInt(bytes.length);
-            os.write(bytes);
+        os.writeInt(allBytesByBucketIndexAndUuid.size());
+        for (var entry : allBytesByBucketIndexAndUuid.entrySet()) {
+            var bucketIndex = entry.getKey();
+            for (var entry2 : entry.getValue().entrySet()) {
+                var uuid = entry2.getKey();
+                var bytes = entry2.getValue();
+                os.writeLong(uuid);
+                os.writeInt(bucketIndex);
+                os.writeInt(bytes.length);
+                os.write(bytes);
+            }
         }
     }
 
     /**
      * Retrieves a list of UUIDs of big string files.
      *
+     * @param bucketIndex The bucket index.
      * @return A list of UUIDs.
      */
-    public List<Long> getBigStringFileUuidList() {
+    public List<Long> getBigStringFileUuidList(int bucketIndex) {
         var list = new ArrayList<Long>();
         if (ConfForGlobal.pureMemory) {
-            for (var entry : allBytesByUuid.entrySet()) {
-                list.add(entry.getKey());
+            var map = allBytesByBucketIndexAndUuid.get(bucketIndex);
+            if (map != null) {
+                list.addAll(map.keySet());
             }
             return list;
         }
@@ -191,7 +196,13 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
 
         for (File file : files) {
-            list.add(Long.parseLong(file.getName()));
+            var fileName = file.getName();
+            var arr = fileName.split("_");
+            if (arr.length != 2) {
+                continue;
+            }
+            var uuid = Long.parseLong(arr[1]);
+            list.add(uuid);
         }
         return list;
     }
@@ -199,23 +210,29 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Retrieves bytes of big string file corresponding to the given UUID from the cache or file system.
      *
-     * @param uuid UUID of the big string file.
+     * @param uuid        UUID of the big string file.
+     * @param bucketIndex The bucket index.
      * @return Bytes of the big string file or null if not found.
      */
-    public byte[] getBigStringBytes(long uuid) {
-        return getBigStringBytes(uuid, false);
+    public byte[] getBigStringBytes(long uuid, int bucketIndex) {
+        return getBigStringBytes(uuid, bucketIndex, false);
     }
 
     /**
      * Retrieves bytes of big string file corresponding to the given UUID from the cache or file system.
      *
-     * @param uuid       UUID of the big string file.
-     * @param doLRUCache Whether to cache the bytes in the LRU cache.
+     * @param uuid        UUID of the big string file.
+     * @param bucketIndex The bucket index.
+     * @param doLRUCache  Whether to cache the bytes in the LRU cache.
      * @return Bytes of the big string file or null if not found.
      */
-    public byte[] getBigStringBytes(long uuid, boolean doLRUCache) {
+    public byte[] getBigStringBytes(long uuid, int bucketIndex, boolean doLRUCache) {
         if (ConfForGlobal.pureMemory) {
-            return allBytesByUuid.get(uuid);
+            var map = allBytesByBucketIndexAndUuid.get(bucketIndex);
+            if (map == null) {
+                return null;
+            }
+            return map.get(uuid);
         }
 
         var bytesCached = bigStringBytesByUuidLRU != null ? bigStringBytesByUuidLRU.get(uuid) : null;
@@ -223,7 +240,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             return bytesCached;
         }
 
-        var bytes = readBigStringBytes(uuid);
+        var bytes = readBigStringBytes(uuid, bucketIndex);
         if (bytes != null && doLRUCache && bigStringBytesByUuidLRU != null) {
             bigStringBytesByUuidLRU.put(uuid, bytes);
         }
@@ -233,11 +250,12 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Reads bytes of a big string file from the file system.
      *
-     * @param uuid UUID of the big string file.
+     * @param uuid        UUID of the big string file.
+     * @param bucketIndex The bucket index.
      * @return Bytes of the big string file or null if the file doesn't exist or an error occurs.
      */
-    private byte[] readBigStringBytes(long uuid) {
-        var file = new File(bigStringDir, String.valueOf(uuid));
+    private byte[] readBigStringBytes(long uuid, int bucketIndex) {
+        var file = new File(bigStringDir, bucketIndex + "_" + uuid);
         if (!file.exists()) {
             log.warn("Big string file not exists, uuid={}, slot={}", uuid, slot);
             return null;
@@ -263,35 +281,37 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Writes bytes to a big string file.
      *
-     * @param uuid  UUID of the big string file.
-     * @param key   Key associated with the big string.
-     * @param bytes Bytes to write.
+     * @param uuid        UUID of the big string file.
+     * @param key         Key associated with the big string.
+     * @param bucketIndex The bucket index.
+     * @param bytes       Bytes to write.
      * @return true if the operation was successful; false otherwise.
      */
-    public boolean writeBigStringBytes(long uuid, @NotNull String key, byte[] bytes) {
-        return writeBigStringBytes(uuid, key, bytes, 0, bytes.length);
+    public boolean writeBigStringBytes(long uuid, @NotNull String key, int bucketIndex, byte[] bytes) {
+        return writeBigStringBytes(uuid, key, bucketIndex, bytes, 0, bytes.length);
     }
 
     /**
      * Writes bytes to a big string file.
      *
-     * @param uuid   UUID of the big string file.
-     * @param key    Key associated with the big string.
-     * @param bytes  Bytes to write.
-     * @param offset Offset within the bytes array.
-     * @param length Length of bytes to write.
+     * @param uuid        UUID of the big string file.
+     * @param key         Key associated with the big string.
+     * @param bucketIndex The bucket index.
+     * @param bytes       Bytes to write.
+     * @param offset      Offset within the bytes array.
+     * @param length      Length of bytes to write.
      * @return true if the operation was successful; false otherwise.
      */
-    public boolean writeBigStringBytes(long uuid, @NotNull String key, byte[] bytes, int offset, int length) {
+    public boolean writeBigStringBytes(long uuid, @NotNull String key, int bucketIndex, byte[] bytes, int offset, int length) {
         if (ConfForGlobal.pureMemory) {
-            var r = allBytesByUuid.put(uuid, bytes);
+            var r = allBytesByBucketIndexAndUuid.computeIfAbsent(bucketIndex, k -> new HashMap<>()).put(uuid, bytes);
             if (r == null) {
                 bigStringFilesCount++;
             }
             return true;
         }
 
-        var file = new File(bigStringDir, String.valueOf(uuid));
+        var file = new File(bigStringDir, bucketIndex + "_" + uuid);
         try {
             var beginT = System.currentTimeMillis();
             FileUtils.writeByteArrayToFile(file, bytes, offset, length, false);
@@ -315,12 +335,13 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Deletes a big string file if it exists.
      *
-     * @param uuid UUID of the big string file to delete.
+     * @param uuid        UUID of the big string file to delete.
+     * @param bucketIndex The bucket index.
      * @return true if the file was successfully deleted or doesn't exist; false otherwise.
      */
-    public boolean deleteBigStringFileIfExist(long uuid) {
+    public boolean deleteBigStringFileIfExist(long uuid, int bucketIndex) {
         if (ConfForGlobal.pureMemory) {
-            var r = allBytesByUuid.remove(uuid);
+            var r = allBytesByBucketIndexAndUuid.computeIfAbsent(bucketIndex, k -> new HashMap<>()).remove(uuid);
             if (r != null) {
                 bigStringFilesCount--;
             }
@@ -331,7 +352,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             bigStringBytesByUuidLRU.remove(uuid);
         }
 
-        var file = new File(bigStringDir, String.valueOf(uuid));
+        var file = new File(bigStringDir, bucketIndex + "_" + uuid);
         if (file.exists()) {
             bigStringFilesCount--;
             diskUsage -= file.length();
@@ -348,7 +369,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     @SlaveReplay
     public void deleteAllBigStringFiles() {
         if (ConfForGlobal.pureMemory) {
-            allBytesByUuid.clear();
+            allBytesByBucketIndexAndUuid.clear();
             return;
         }
 
@@ -370,8 +391,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * Handles expiration or deletion of a compressed value.
      *
      * @param key           The key associated with the value.
-     * @param shortStringCv The compressed value (may be null).
-     * @param pvm           The persist value metadata (may be null).
+     * @param shortStringCv The compressed value (maybe null).
+     * @param pvm           The persist value metadata (maybe null).
      */
     @Override
     public void handleWhenCvExpiredOrDeleted(@NotNull String key, @Nullable CompressedValue shortStringCv, @Nullable PersistValueMeta pvm) {
@@ -384,7 +405,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
 
         var uuid = shortStringCv.getBigStringMetaUuid();
-        var isDeleted = deleteBigStringFileIfExist(uuid);
+        var bucketIndex = KeyHash.bucketIndex(shortStringCv.getKeyHash(), ConfForSlot.global.confBucket.bucketsPerSlot);
+        var isDeleted = deleteBigStringFileIfExist(uuid, bucketIndex);
         if (!isDeleted) {
             throw new RuntimeException("Delete big string file error, s=" + slot + ", key=" + key + ", uuid=" + uuid);
         } else {

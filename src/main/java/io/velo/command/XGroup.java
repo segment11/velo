@@ -451,7 +451,7 @@ public class XGroup extends BaseCommand {
         var firstSlot = localPersist.oneSlots()[0].slot();
         if (firstSlot != slot) {
             log.warn("Repl slave skip fetch exists dict, slot={}", slot);
-            return fetchExistsBigString(slot, oneSlot);
+            return fetchExistsBigString(slot, 0, oneSlot);
         }
 
         // begin to fetch exist data from master
@@ -932,18 +932,20 @@ public class XGroup extends BaseCommand {
         // server received from client
         var buffer = ByteBuffer.wrap(contentBytes);
         var uuid = buffer.getLong();
-        log.warn("Repl master fetch incremental big string, uuid={}, slot={}", uuid, slot);
+        var bucketIndex = buffer.getInt();
+        log.warn("Repl master fetch incremental big string, uuid={}, bucket index={}, slot={}", uuid, bucketIndex, slot);
 
         var oneSlot = localPersist.oneSlot(slot);
         var bigStringFiles = oneSlot.getBigStringFiles();
-        var bigStringBytes = bigStringFiles.getBigStringBytes(uuid);
+        var bigStringBytes = bigStringFiles.getBigStringBytes(uuid, bucketIndex);
         if (bigStringBytes == null) {
             bigStringBytes = new byte[0];
         }
 
-        var responseBytes = new byte[8 + bigStringBytes.length];
+        var responseBytes = new byte[8 + 4 + bigStringBytes.length];
         var responseBuffer = ByteBuffer.wrap(responseBytes);
         responseBuffer.putLong(uuid);
+        responseBuffer.putInt(bucketIndex);
         if (bigStringBytes.length > 0) {
             responseBuffer.put(bigStringBytes);
         }
@@ -955,15 +957,16 @@ public class XGroup extends BaseCommand {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
         var uuid = buffer.getLong();
+        var bucketIndex = buffer.getInt();
 
         // master big string file already deleted, skip
-        if (contentBytes.length != 8) {
-            var bigStringBytes = new byte[contentBytes.length - 8];
+        if (contentBytes.length > 12) {
+            var bigStringBytes = new byte[contentBytes.length - 12];
             buffer.get(bigStringBytes);
 
             var oneSlot = localPersist.oneSlot(slot);
             var bigStringFiles = oneSlot.getBigStringFiles();
-            bigStringFiles.writeBigStringBytes(uuid, "ignore", bigStringBytes);
+            bigStringFiles.writeBigStringBytes(uuid, "ignore", bucketIndex, bigStringBytes);
             log.warn("Repl slave fetch incremental big string done, uuid={}, slot={}", uuid, slot);
         }
 
@@ -976,26 +979,26 @@ public class XGroup extends BaseCommand {
         // server received from client
         // send back exists big string to client, with flag can do next step
         // client already persisted big string uuid, send to client exclude sent big string
+        var buffer = ByteBuffer.wrap(contentBytes);
+        var bucketIndex = buffer.getInt();
         var sentUuidList = new ArrayList<Long>();
-        if (contentBytes.length >= 8) {
-            var sentUuidCount = contentBytes.length / 8;
-
-            var buffer = ByteBuffer.wrap(contentBytes);
-            for (int i = 0; i < sentUuidCount; i++) {
-                sentUuidList.add(buffer.getLong());
-            }
+        while (buffer.hasRemaining()) {
+            var uuid = buffer.getLong();
+            sentUuidList.add(uuid);
         }
-        log.warn("Repl master fetch exists big string, slave sent uuid list={}, slot={}", sentUuidList, slot);
+        log.warn("Repl master fetch exists big string, slave sent uuid list={}, bucket index={}, slot={}", sentUuidList, bucketIndex, slot);
+
+        var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
         var oneSlot = localPersist.oneSlot(slot);
         var bigStringFiles = oneSlot.getBigStringFiles();
-        var uuidListInMaster = bigStringFiles.getBigStringFileUuidList();
-        if (uuidListInMaster.isEmpty()) {
+        var uuidListInMaster = bigStringFiles.getBigStringFileUuidList(bucketIndex);
+        if (uuidListInMaster.isEmpty() && bucketIndex == bucketsPerSlot - 1) {
             return Repl.reply(slot, replPair, s_exists_big_string, NextStepContent.INSTANCE);
         }
 
         var bigStringDir = oneSlot.getBigStringDir();
-        var toSlaveExistsBigString = new ToSlaveExistsBigString(bigStringDir, uuidListInMaster, sentUuidList);
+        var toSlaveExistsBigString = new ToSlaveExistsBigString(bucketIndex, bigStringDir, uuidListInMaster, sentUuidList);
         return Repl.reply(slot, replPair, s_exists_big_string, toSlaveExistsBigString);
     }
 
@@ -1011,15 +1014,18 @@ public class XGroup extends BaseCommand {
         }
 
         var buffer = ByteBuffer.wrap(contentBytes);
+        var bucketIndex = buffer.getInt();
         var bigStringCount = buffer.getShort();
         var isSendAllOnce = buffer.get() == 1;
 
-        if (bigStringCount == 0) {
+        var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
+
+        if (bigStringCount == 0 && bucketIndex == bucketsPerSlot - 1) {
             // next step, fetch meta key bucket split number
             log.warn("Repl slave fetch data, go to step={}, slot={}", meta_key_bucket_split_number.name(), slot);
             return Repl.reply(slot, replPair, meta_key_bucket_split_number, NextStepContent.INSTANCE);
         }
-        log.warn("Repl slave fetch exists big string, master sent big string count={}, slot={}", bigStringCount, slot);
+        log.warn("Repl slave fetch exists big string, master sent big string count={}, bucket index={}, slot={}", bigStringCount, bucketIndex, slot);
 
         var oneSlot = localPersist.oneSlot(slot);
         var bigStringDir = oneSlot.getBigStringDir();
@@ -1030,8 +1036,7 @@ public class XGroup extends BaseCommand {
                 var bigStringBytes = new byte[bigStringBytesLength];
                 buffer.get(bigStringBytes);
 
-                var uuidAsFileName = String.valueOf(uuid);
-                var file = new File(bigStringDir, uuidAsFileName);
+                var file = new File(bigStringDir, bucketIndex + "_" + uuid);
                 FileUtils.writeByteArrayToFile(file, bigStringBytes);
             }
         } catch (IOException e) {
@@ -1039,24 +1044,29 @@ public class XGroup extends BaseCommand {
         }
 
         if (isSendAllOnce) {
-            // next step, fetch meta key bucket split number
-            log.warn("Repl slave fetch data, go to step={}, slot={}", meta_key_bucket_split_number.name(), slot);
-            return Repl.reply(slot, replPair, meta_key_bucket_split_number, NextStepContent.INSTANCE);
+            if (bucketIndex == bucketsPerSlot - 1) {
+                // next step, fetch meta key bucket split number
+                log.warn("Repl slave fetch data, go to step={}, slot={}", meta_key_bucket_split_number.name(), slot);
+                return Repl.reply(slot, replPair, meta_key_bucket_split_number, NextStepContent.INSTANCE);
+            } else {
+                return fetchExistsBigString(slot, bucketIndex + 1, oneSlot);
+            }
         } else {
-            return fetchExistsBigString(slot, oneSlot);
+            return fetchExistsBigString(slot, bucketIndex, oneSlot);
         }
     }
 
     @VisibleForTesting
-    Repl.ReplReply fetchExistsBigString(short slot, OneSlot oneSlot) {
+    Repl.ReplReply fetchExistsBigString(short slot, int bucketIndex, OneSlot oneSlot) {
         var bigStringFiles = oneSlot.getBigStringFiles();
-        var uuidListLocal = bigStringFiles.getBigStringFileUuidList();
+        var uuidListLocal = bigStringFiles.getBigStringFileUuidList(bucketIndex);
         if (uuidListLocal.isEmpty()) {
             return Repl.reply(slot, replPair, exists_big_string, NextStepContent.INSTANCE);
         }
 
-        var rawBytes = new byte[8 * uuidListLocal.size()];
+        var rawBytes = new byte[4 + 8 * uuidListLocal.size()];
         var rawBuffer = ByteBuffer.wrap(rawBytes);
+        rawBuffer.putInt(bucketIndex);
         for (var uuid : uuidListLocal) {
             rawBuffer.putLong(uuid);
         }
@@ -1125,7 +1135,7 @@ public class XGroup extends BaseCommand {
 
         // next step, fetch big string
         log.warn("Repl slave fetch data, go to step={}, slot={}", exists_big_string.name(), slot);
-        return fetchExistsBigString(slot, oneSlot);
+        return fetchExistsBigString(slot, 0, oneSlot);
     }
 
     @VisibleForTesting

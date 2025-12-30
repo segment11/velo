@@ -1,8 +1,10 @@
 package io.velo.command
 
+import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.netty.buffer.Unpooled
 import io.velo.*
+import io.velo.decode.Request
 import io.velo.persist.*
 import io.velo.repl.*
 import io.velo.repl.Repl.ReplReply
@@ -38,6 +40,8 @@ class XGroupTest extends Specification {
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, null, Config.create())
+        def _XXGroup2 = new XGroup(null, null, null, requestHandler, new Request(null, false, false))
 
         and:
         data2[1] = 'sub_cmd'.bytes
@@ -487,27 +491,27 @@ class XGroupTest extends Specification {
         // incremental_big_string
         when:
         data4[2][0] = ReplType.incremental_big_string.code
-        // big string uuid long
-        contentBytes = new byte[8]
+        // big string uuid long + bucket index int
+        contentBytes = new byte[8 + 4]
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_incremental_big_string)
-        r.buffer().limit() == Repl.HEADER_LENGTH + 8
+        r.buffer().limit() == Repl.HEADER_LENGTH + 8 + 4
 
         when:
         def bigStringUuid = 1L
-        oneSlot.bigStringFiles.writeBigStringBytes(bigStringUuid, 'test-big-string-key', new byte[1024])
-        ByteBuffer.wrap(contentBytes).putLong(bigStringUuid)
+        oneSlot.bigStringFiles.writeBigStringBytes(bigStringUuid, 'test-big-string-key', 0, new byte[1024])
+        ByteBuffer.wrap(contentBytes).putLong(bigStringUuid).putInt(0)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_incremental_big_string)
-        r.buffer().limit() == Repl.HEADER_LENGTH + 8 + 1024
+        r.buffer().limit() == Repl.HEADER_LENGTH + 8 + 4 + 1024
 
         // exists_big_string
         when:
         data4[2][0] = ReplType.exists_big_string.code
-        contentBytes = new byte[1]
+        contentBytes = new byte[4]
         data4[3] = contentBytes
         // master has one big string
         r = x.handleRepl()
@@ -515,15 +519,18 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.s_exists_big_string)
 
         when:
-        oneSlot.bigStringFiles.deleteBigStringFileIfExist(bigStringUuid)
+        oneSlot.bigStringFiles.deleteBigStringFileIfExist(bigStringUuid, 0)
         // master has no big string
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_big_string)
 
         when:
-        contentBytes = new byte[8 * 2]
+        contentBytes = new byte[4 + 8 * 2]
         requestBuffer = ByteBuffer.wrap(contentBytes)
+        // bucket index
+        requestBuffer.putInt(0)
+        // uuid0, uuid1
         requestBuffer.putLong(1L)
         requestBuffer.putLong(2L)
         data4[3] = contentBytes
@@ -1027,25 +1034,29 @@ class XGroupTest extends Specification {
         // s_incremental_big_string
         when:
         data4[2][0] = ReplType.s_incremental_big_string.code
-        contentBytes = new byte[8]
+        contentBytes = new byte[8 + 4]
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
         r.isEmpty()
 
         when:
-        contentBytes = new byte[8 + 1024]
+        contentBytes = new byte[8 + 4 + 1024]
         requestBuffer = ByteBuffer.wrap(contentBytes)
+        // uuid
         requestBuffer.putLong(1L)
+        // bucket index
+        requestBuffer.putInt(0)
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
         r.isEmpty()
-        oneSlot.bigStringFiles.getBigStringBytes(1L).length == 1024
+        oneSlot.bigStringFiles.getBigStringBytes(1L, 0).length == 1024
 
         // s_exists_big_string
         when:
         data4[2][0] = ReplType.s_exists_big_string.code
+        // next step
         contentBytes = new byte[1]
         data4[3] = contentBytes
         r = x.handleRepl()
@@ -1054,8 +1065,10 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.meta_key_bucket_split_number)
 
         when:
-        contentBytes = new byte[2 + 1]
+        contentBytes = new byte[4 + 2 + 1]
         requestBuffer = ByteBuffer.wrap(contentBytes)
+        // bucket index
+        requestBuffer.putInt(0)
         // big string count short
         requestBuffer.putShort((short) 0)
         // is sent all once flag
@@ -1063,13 +1076,22 @@ class XGroupTest extends Specification {
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
+        // next bucket index
+        r.isReplType(ReplType.exists_big_string)
+
+        when:
+        // last bucket index
+        requestBuffer.position(0).putInt(ConfForSlot.global.confBucket.bucketsPerSlot - 1)
+        r = x.handleRepl()
+        then:
         // next step
         r.isReplType(ReplType.meta_key_bucket_split_number)
 
         when:
         // mock two big string fetched
-        contentBytes = new byte[2 + 1 + (8 + 4 + 1024) * 2]
+        contentBytes = new byte[4 + 2 + 1 + (8 + 4 + 1024) * 2]
         requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
         requestBuffer.putShort((short) 2)
         requestBuffer.put((byte) 1)
         requestBuffer.putLong(1L)
@@ -1080,25 +1102,33 @@ class XGroupTest extends Specification {
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
-        // next step
-        r.isReplType(ReplType.meta_key_bucket_split_number)
+        // next bucket index
+        r.isReplType(ReplType.exists_big_string)
 
         when:
         // is sent all false
-        requestBuffer.put(2, (byte) 0)
+        requestBuffer.put(4 + 2, (byte) 0)
         r = x.handleRepl()
         then:
         // next batch
         r.isReplType(ReplType.exists_big_string)
 
         when:
-        def bigStringFileUuidList = oneSlot.bigStringFiles.bigStringFileUuidList
+        // last bucket index
+        requestBuffer.position(0).putInt(ConfForSlot.global.confBucket.bucketsPerSlot - 1)
+        requestBuffer.put(4 + 2, (byte) 1)
+        r = x.handleRepl()
+        then:
+        r.isReplType(ReplType.meta_key_bucket_split_number)
+
+        when:
+        def bigStringFileUuidList = oneSlot.bigStringFiles.getBigStringFileUuidList(0)
         if (bigStringFileUuidList) {
             for (uuid in bigStringFileUuidList) {
-                oneSlot.bigStringFiles.deleteBigStringFileIfExist(uuid)
+                oneSlot.bigStringFiles.deleteBigStringFileIfExist(uuid, 0)
             }
         }
-        r = x.fetchExistsBigString(slot, oneSlot)
+        r = x.fetchExistsBigString(slot, 0, oneSlot)
         then:
         // empty content return
         r.isReplType(ReplType.exists_big_string)
