@@ -297,7 +297,7 @@ maxmemory_human:${totalMaxHumanReadable}
     private static String cpu() {
         def process = RuntimeCpuCollector.collect()
 
-        def r = """# Cpu
+        def r = """# CPU
 used_cpu_sys:${(process.getKernelTime() / 1000).round(6)}
 used_cpu_user:${(process.getUserTime() / 1000).round(6)}
 """
