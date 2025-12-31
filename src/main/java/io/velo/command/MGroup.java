@@ -185,8 +185,8 @@ public class MGroup extends BaseCommand {
         if (!isCrossRequestWorker) {
             for (int i = 1, j = 0; i < data.length; i += 2, j++) {
                 var valueBytes = data[i + 1];
-                var s = slotWithKeyHashListParsed.get(j);
-                set(valueBytes, s);
+                var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
+                set(valueBytes, slotWithKeyHash);
             }
             return OKReply.INSTANCE;
         }
@@ -237,16 +237,16 @@ public class MGroup extends BaseCommand {
 
         if (!isCrossRequestWorker) {
             for (int i = 1, j = 0; i < data.length; i += 2, j++) {
-                var s = slotWithKeyHashListParsed.get(j);
-                if (exists(s.slot(), s.bucketIndex(), s.rawKey(), s.keyHash(), s.keyHash32())) {
+                var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
+                if (exists(slotWithKeyHash)) {
                     return IntegerReply.REPLY_0;
                 }
             }
 
             for (int i = 1, j = 0; i < data.length; i += 2, j++) {
                 var valueBytes = data[i + 1];
-                var s = slotWithKeyHashListParsed.get(j);
-                set(valueBytes, s);
+                var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
+                set(valueBytes, slotWithKeyHash);
             }
             return IntegerReply.REPLY_1;
         }
@@ -267,8 +267,7 @@ public class MGroup extends BaseCommand {
             var oneSlot = localPersist.oneSlot(slot);
             var p = oneSlot.asyncCall(() -> {
                 for (var one : subList) {
-                    var s = one.slotWithKeyHash;
-                    if (exists(s.slot(), s.bucketIndex(), s.rawKey(), s.keyHash(), s.keyHash32())) {
+                    if (exists(one.slotWithKeyHash)) {
                         return true;
                     }
                 }
@@ -395,13 +394,13 @@ public class MGroup extends BaseCommand {
         if (!isCrossRequestWorker) {
             int count = 0;
             for (var key : keys) {
-                var s = slot(key);
-                var cv = getCv(s);
+                var slotWithKeyHash = slot(key);
+                var cv = getCv(slotWithKeyHash);
                 if (cv == null) {
                     continue;
                 }
 
-                var dumpBytes = dGroup.dumpBytes(cv, s);
+                var dumpBytes = dGroup.dumpBytes(cv, slotWithKeyHash);
                 if (dumpBytes == null) {
                     continue;
                 }
@@ -414,7 +413,7 @@ public class MGroup extends BaseCommand {
 
                 count++;
                 if (isReplace) {
-                    removeDelay(s.slot(), s.bucketIndex(), key, s.keyHash());
+                    removeDelay(slotWithKeyHash);
                 }
             }
             log.info("Migrate {} keys to {}:{}", count, host, port);
@@ -481,10 +480,10 @@ public class MGroup extends BaseCommand {
 
                             count++;
                             if (isReplaceFinal) {
-                                var s = one.slotWithKeyHash;
-                                var oneSlot = localPersist.oneSlot(s.slot());
+                                var slotWithKeyHash = one.slotWithKeyHash;
+                                var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
                                 oneSlot.asyncRun(() -> {
-                                    removeDelay(s.slot(), s.bucketIndex(), key, s.keyHash());
+                                    removeDelay(slotWithKeyHash);
                                 });
                             }
                         }

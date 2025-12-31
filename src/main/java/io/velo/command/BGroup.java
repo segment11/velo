@@ -347,9 +347,9 @@ public class BGroup extends BaseCommand {
             items.add(item);
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         RedisBF redisBF;
-        var cv = getCv(s);
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             redisBF = new RedisBF(true);
         } else {
@@ -368,7 +368,7 @@ public class BGroup extends BaseCommand {
         var isPut = isPutList.stream().anyMatch(x -> x);
         if (isPut) {
             var encoded = redisBF.encode();
-            set(encoded, s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+            set(encoded, slotWithKeyHash, CompressedValue.SP_TYPE_BLOOM_BITMAP);
         }
 
         if (isMulti) {
@@ -387,8 +387,8 @@ public class BGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(s);
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return IntegerReply.REPLY_0;
         }
@@ -418,8 +418,8 @@ public class BGroup extends BaseCommand {
             items.add(item);
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(s);
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             if (isMulti) {
                 var replies = new Reply[items.size()];
@@ -459,8 +459,8 @@ public class BGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(s);
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return MultiBulkReply.EMPTY;
         }
@@ -579,15 +579,15 @@ public class BGroup extends BaseCommand {
             }
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
-        var isExists = exists(s.slot(), s.bucketIndex(), s.rawKey(), s.keyHash(), s.keyHash32());
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var isExists = exists(slotWithKeyHash);
 
         RedisBF redisBF;
         if (isExists) {
             if (needCreateNew) {
                 return ErrorReply.BF_ALREADY_EXISTS;
             }
-            var cv = getCv(s);
+            var cv = getCv(slotWithKeyHash);
             if (!cv.isBloomFilter()) {
                 return ErrorReply.WRONG_TYPE;
             }
@@ -609,7 +609,7 @@ public class BGroup extends BaseCommand {
         }
 
         if (isPut) {
-            set(redisBF.encode(), s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+            set(redisBF.encode(), slotWithKeyHash, CompressedValue.SP_TYPE_BLOOM_BITMAP);
         }
 
         return new MultiBulkReply(replies);
@@ -620,7 +620,7 @@ public class BGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
         var iteratorBytes = data[2];
         int iterator = 0;
@@ -640,7 +640,7 @@ public class BGroup extends BaseCommand {
         var encoded = new byte[encodedLength];
 
         Zstd.decompressByteArray(encoded, 0, encodedLength, dumpBytes, 4, dumpBytes.length - 4);
-        set(encoded, s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+        set(encoded, slotWithKeyHash, CompressedValue.SP_TYPE_BLOOM_BITMAP);
         return OKReply.INSTANCE;
     }
 
@@ -649,7 +649,7 @@ public class BGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
         var iteratorBytes = data[2];
         int iterator = 0;
@@ -663,7 +663,7 @@ public class BGroup extends BaseCommand {
             return ErrorReply.INVALID_INTEGER;
         }
 
-        var cv = getCv(s);
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return MultiBulkReply.EMPTY;
         }
@@ -717,15 +717,15 @@ public class BGroup extends BaseCommand {
             }
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
-        var isExists = exists(s.slot(), s.bucketIndex(), s.rawKey(), s.keyHash(), s.keyHash32());
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var isExists = exists(slotWithKeyHash);
 
         if (isExists) {
             return ErrorReply.BF_ALREADY_EXISTS;
         }
 
         var redisBF = new RedisBF(initCapacity, initFpp, initExpansion, nonScaling);
-        set(redisBF.encode(), s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+        set(redisBF.encode(), slotWithKeyHash, CompressedValue.SP_TYPE_BLOOM_BITMAP);
         return OKReply.INSTANCE;
     }
 

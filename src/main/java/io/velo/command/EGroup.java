@@ -98,9 +98,9 @@ public class EGroup extends BaseCommand {
                     return ErrorReply.KEY_TOO_LONG;
                 }
 
-                var s = slotWithKeyHashListParsed.get(j);
+                var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
                 // remove delay, perf better
-                var isExists = exists(s.slot(), s.bucketIndex(), new String(keyBytes), s.keyHash(), s.keyHash32());
+                var isExists = exists(slotWithKeyHash);
                 if (isExists) {
                     n++;
                 }
@@ -118,8 +118,8 @@ public class EGroup extends BaseCommand {
             var oneSlot = localPersist.oneSlot(slot);
             var p = oneSlot.asyncCall(() -> {
                 ArrayList<Boolean> valueList = new ArrayList<>();
-                for (var s : subList) {
-                    var isExists = exists(oneSlot.slot(), s.bucketIndex(), s.rawKey(), s.keyHash(), s.keyHash32());
+                for (var slotWithKeyHash : subList) {
+                    var isExists = exists(slotWithKeyHash);
                     valueList.add(isExists);
                 }
                 return valueList;

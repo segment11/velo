@@ -240,8 +240,8 @@ public class IGroup extends BaseCommand {
                                 }
 
                                 var key = keyPrefix + lineArray[finalKeyFieldIndex];
-                                var s = slot(key);
-                                if (s.slot() != oneSlot.slot()) {
+                                var slotWithKeyHash = slot(key);
+                                if (slotWithKeyHash.slot() != oneSlot.slot()) {
                                     r[1]++;
                                     continue;
                                 }
@@ -261,7 +261,7 @@ public class IGroup extends BaseCommand {
                                     }
                                     value = sb.toString();
                                 }
-                                set(value.getBytes(), s);
+                                set(value.getBytes(), slotWithKeyHash);
                             } else {
                                 // json
                                 var map = objectMapper.readValue(line, HashMap.class);
@@ -270,8 +270,8 @@ public class IGroup extends BaseCommand {
                                 }
 
                                 var key = keyPrefix + map.get(keyField);
-                                var s = slot(key);
-                                if (s.slot() != oneSlot.slot()) {
+                                var slotWithKeyHash = slot(key);
+                                if (slotWithKeyHash.slot() != oneSlot.slot()) {
                                     r[1]++;
                                     continue;
                                 }
@@ -288,7 +288,7 @@ public class IGroup extends BaseCommand {
                                     }
                                     value = objectMapper.writeValueAsString(subMap);
                                 }
-                                set(value.getBytes(), s);
+                                set(value.getBytes(), slotWithKeyHash);
                             }
                         }
                     } catch (IOException e) {
@@ -415,11 +415,11 @@ public class IGroup extends BaseCommand {
                     var keyBytes = it.key();
                     var valueBytes = it.value();
 
-                    var s = slot(keyBytes, slotNumber);
-                    if (s.slot() != oneSlot.slot()) {
+                    var slotWithKeyHash = slot(keyBytes, slotNumber);
+                    if (slotWithKeyHash.slot() != oneSlot.slot()) {
                         r[1]++;
                     } else {
-                        set(valueBytes, s);
+                        set(valueBytes, slotWithKeyHash);
                         r[0]++;
                     }
 

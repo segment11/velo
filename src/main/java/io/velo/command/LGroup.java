@@ -228,7 +228,7 @@ public class LGroup extends BaseCommand {
 
     static void saveRedisList(RedisList rl, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
         if (rl.size() == 0) {
-            baseCommand.removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), slotWithKeyHash.rawKey(), slotWithKeyHash.keyHash());
+            baseCommand.removeDelay(slotWithKeyHash);
             return;
         }
 
@@ -787,7 +787,7 @@ public class LGroup extends BaseCommand {
 
         int size = rl.size();
         if (start > size || start > end) {
-            removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), new String(keyBytes), slotWithKeyHash.keyHash());
+            removeDelay(slotWithKeyHash);
             return OKReply.INSTANCE;
         }
 

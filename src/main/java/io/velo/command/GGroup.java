@@ -129,11 +129,10 @@ public class GGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var valueBytes = get(slotWithKeyHash);
         if (valueBytes != null) {
-            removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), new String(keyBytes), slotWithKeyHash.keyHash());
+            removeDelay(slotWithKeyHash);
             return new BulkReply(valueBytes);
         } else {
             return NilReply.INSTANCE;
@@ -353,7 +352,7 @@ public class GGroup extends BaseCommand {
     @VisibleForTesting
     void saveRedisGeo(RedisGeo rg, SlotWithKeyHash slotWithKeyHash) {
         if (rg.isEmpty()) {
-            removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), slotWithKeyHash.rawKey(), slotWithKeyHash.keyHash());
+            removeDelay(slotWithKeyHash);
             return;
         }
 
@@ -365,7 +364,7 @@ public class GGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
         boolean isNx = false;
         boolean isXx = false;
@@ -400,7 +399,7 @@ public class GGroup extends BaseCommand {
             return ErrorReply.SYNTAX;
         }
 
-        var rg = getRedisGeo(s);
+        var rg = getRedisGeo(slotWithKeyHash);
         if (rg == null) {
             rg = new RedisGeo();
         }
@@ -435,7 +434,7 @@ public class GGroup extends BaseCommand {
 
         var handled = added + changed;
         if (handled > 0) {
-            saveRedisGeo(rg, s);
+            saveRedisGeo(rg, slotWithKeyHash);
         }
         return new IntegerReply(isIncludeCh ? changed + added : added);
     }
@@ -445,7 +444,7 @@ public class GGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
         var m0 = new String(data[2]);
         var m1 = new String(data[3]);
@@ -459,7 +458,7 @@ public class GGroup extends BaseCommand {
             }
         }
 
-        var rg = getRedisGeo(s);
+        var rg = getRedisGeo(slotWithKeyHash);
         if (rg == null) {
             return NilReply.INSTANCE;
         }
@@ -479,10 +478,10 @@ public class GGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var replies = new Reply[data.length - 2];
 
-        var rg = getRedisGeo(s);
+        var rg = getRedisGeo(slotWithKeyHash);
         if (rg == null) {
             Arrays.fill(replies, NilReply.INSTANCE);
         } else {
@@ -512,7 +511,7 @@ public class GGroup extends BaseCommand {
     }
 
     private Reply geosearch(byte[][] dd, byte[] dstKeyBytes, SlotWithKeyHash dstS) {
-        var s = slotWithKeyHashListParsed.getFirst();
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
         double fromLon = 0d;
         double fromLat = 0d;
@@ -625,7 +624,7 @@ public class GGroup extends BaseCommand {
 
         var isNeedStoreToDstKey = dstKeyBytes != null;
 
-        var rg = getRedisGeo(s);
+        var rg = getRedisGeo(slotWithKeyHash);
         if (rg == null) {
             return isNeedStoreToDstKey ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
         }

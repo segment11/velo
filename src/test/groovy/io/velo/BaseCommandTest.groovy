@@ -614,24 +614,24 @@ class BaseCommandTest extends Specification {
         c.set(longValueBytes, sKey, 0, CompressedValue.NO_EXPIRE)
         then:
         inMemoryGetSet.getBuf(slot, key, sKey.bucketIndex(), sKey.keyHash()).cv().compressedLength < longValueBytes.length
-        c.remove(slot, sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
+        c.remove(sKey)
 
         when:
         c.byPassGetSet = null
         c.set(longValueBytes, sKey, 0, CompressedValue.NO_EXPIRE)
         then:
         c.getCv(sKey).compressedLength < longValueBytes.length
-        c.remove(slot, sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
+        c.remove(sKey)
 
         when:
         c.byPassGetSet = inMemoryGetSet
         c.set('1234'.bytes, sKey, 0, CompressedValue.NO_EXPIRE)
         then:
-        c.exists(slot, sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
-        !c.exists(slot, sKey.bucketIndex(), 'no-exist-key', sKey.keyHash(), sKey.keyHash32())
+        c.exists(sKey)
+        !c.exists(c.slot('no-exist-key', slotNumber))
 
         when:
-        c.removeDelay(slot, sKey.bucketIndex(), key, sKey.keyHash())
+        c.removeDelay(sKey)
         then:
         inMemoryGetSet.getBuf(slot, key, sKey.bucketIndex(), sKey.keyHash()) == null
 
@@ -639,13 +639,13 @@ class BaseCommandTest extends Specification {
         c.byPassGetSet = null
         c.set('1234'.bytes, sKey, 0, CompressedValue.NO_EXPIRE)
         then:
-        c.exists(slot, sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
+        c.exists(sKey)
 
         when:
-        c.removeDelay(slot, sKey.bucketIndex(), key, sKey.keyHash())
+        c.removeDelay(sKey)
         then:
         c.getCv(sKey) == null
-        !c.exists(slot, sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
+        !c.exists(sKey)
 
         when:
         // big string
@@ -771,17 +771,17 @@ class BaseCommandTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
 
         and:
-        def s = BaseCommand.slot('a'.bytes, (short) 1)
+        def sKey = BaseCommand.slot('a'.bytes, (short) 1)
         def c = new SubCommand('set', null, null)
         c.from(BaseCommand.mockAGroup())
 
         when:
-        c.set('a'.bytes, s)
+        c.set('a'.bytes, sKey)
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = 1
-        c.setCv(cv, s)
-        c.remove(slot, s.bucketIndex(), 'a', s.keyHash(), s.keyHash32())
-        c.removeDelay(slot, s.bucketIndex(), 'a', s.keyHash())
+        c.setCv(cv, sKey)
+        c.remove(sKey)
+        c.removeDelay(sKey)
         Thread.sleep(1000)
         then:
         1 == 1

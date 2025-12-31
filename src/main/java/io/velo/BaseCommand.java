@@ -65,7 +65,7 @@ public abstract class BaseCommand {
     /**
      * Adds slot-key hash mappings for relevant keys in the command data array.
      *
-     * @param slotWithKeyHashList The list to store slot-key hash mappings
+     * @param slotWithKeyHashList Precomputed slot and hash information
      * @param data                All data array received from the client including command
      * @param slotNumber          Total number of slots in the velo running instance
      * @param isKeyBytes          Predicate to determine which array indices contain keys
@@ -1038,58 +1038,48 @@ public abstract class BaseCommand {
     /**
      * Removes a key from the persistence layer.
      *
-     * @param slot        Target slot number
-     * @param bucketIndex Precomputed bucket index
-     * @param key         The key string to remove
-     * @param keyHash     Main 64-bit key hash
-     * @param keyHash32   Another 32-bit key hash
+     * @param slotWithKeyHash Precomputed slot and hash information
      * @return true if the key was found and removed
      */
-    public boolean remove(short slot, int bucketIndex, String key, long keyHash, int keyHash32) {
+    public boolean remove(SlotWithKeyHash slotWithKeyHash) {
         if (byPassGetSet != null) {
-            return byPassGetSet.remove(slot, key);
+            return byPassGetSet.remove(slotWithKeyHash.slot, slotWithKeyHash.rawKey);
         }
 
-        var oneSlot = localPersist.oneSlot(slot);
-        return oneSlot.remove(key, bucketIndex, keyHash, keyHash32);
+        var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
+        return oneSlot.remove(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash, slotWithKeyHash.keyHash32);
     }
 
     /**
      * Schedules a key for delayed removal (asynchronous deletion).
      *
-     * @param slot        Target slot number
-     * @param bucketIndex Precomputed bucket index
-     * @param key         The key string to remove
-     * @param keyHash     Main 64-bit key hash
+     * @param slotWithKeyHash Precomputed slot and hash information
      */
-    public void removeDelay(short slot, int bucketIndex, String key, long keyHash) {
+    public void removeDelay(SlotWithKeyHash slotWithKeyHash) {
         if (byPassGetSet != null) {
-            byPassGetSet.remove(slot, key);
+            byPassGetSet.remove(slotWithKeyHash.slot, slotWithKeyHash.rawKey);
             return;
         }
 
-        var oneSlot = localPersist.oneSlot(slot);
-        oneSlot.removeDelay(key, bucketIndex, keyHash);
+        var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
+        oneSlot.removeDelay(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
     }
 
     /**
      * Checks if a key exists in the persistence layer.
      *
-     * @param slot        Target slot number
-     * @param bucketIndex Precomputed bucket index
-     * @param key         The key string to check
-     * @param keyHash     Main 64-bit key hash
-     * @param keyHash32   Another 32 bits of key hash
+     * @param slotWithKeyHash Precomputed slot and hash information
      * @return true if the key exists and is not expired
      */
-    public boolean exists(short slot, int bucketIndex, String key, long keyHash, int keyHash32) {
+    public boolean exists(SlotWithKeyHash slotWithKeyHash) {
         if (byPassGetSet != null) {
-            var bufOrCompressedValue = byPassGetSet.getBuf(slot, key, bucketIndex, keyHash);
+            var bufOrCompressedValue = byPassGetSet.getBuf(slotWithKeyHash.slot, slotWithKeyHash.rawKey,
+                    slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
             return bufOrCompressedValue != null;
         }
 
-        var oneSlot = localPersist.oneSlot(slot);
-        return oneSlot.exists(key, bucketIndex, keyHash, keyHash32);
+        var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
+        return oneSlot.exists(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash, slotWithKeyHash.keyHash32);
     }
 
     @VisibleForTesting

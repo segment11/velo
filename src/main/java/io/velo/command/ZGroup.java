@@ -344,7 +344,7 @@ public class ZGroup extends BaseCommand {
 
     static void saveRedisZSet(RedisZSet rz, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
         if (rz.isEmpty()) {
-            baseCommand.removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), slotWithKeyHash.rawKey(), slotWithKeyHash.keyHash());
+            baseCommand.removeDelay(slotWithKeyHash);
             return;
         }
 

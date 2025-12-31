@@ -158,8 +158,8 @@ public class PGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(s);
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return IntegerReply.REPLY_0;
         }
@@ -169,7 +169,7 @@ public class PGroup extends BaseCommand {
         }
 
         cv.setExpireAt(CompressedValue.NO_EXPIRE);
-        putToOneSlot(s.slot(), s, cv);
+        putToOneSlot(slotWithKeyHash.slot(), slotWithKeyHash, cv);
         return IntegerReply.REPLY_1;
     }
 
@@ -227,9 +227,9 @@ public class PGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
-        var hll = getHll(s);
+        var hll = getHll(slotWithKeyHash);
         if (hll == null) {
             hll = HyperLogLog.builder()
                     .setEncoding(HyperLogLog.EncodingType.DENSE)
@@ -246,7 +246,7 @@ public class PGroup extends BaseCommand {
 
         if (isChanged) {
             try {
-                saveHll(s, hll);
+                saveHll(slotWithKeyHash, hll);
             } catch (IOException e) {
                 return new ErrorReply(e.getMessage());
             }

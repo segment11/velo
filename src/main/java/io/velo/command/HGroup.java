@@ -171,10 +171,10 @@ public class HGroup extends BaseCommand {
 
     void saveRedisHashKeys(RedisHashKeys rhk, String key) {
         var keysKey = RedisHashKeys.keysKey(key);
-        var slotWithKeyHashForKeys = slot(keysKey);
+        var slotWithKeyHash = slot(keysKey);
 
         if (rhk.size() == 0) {
-            removeDelay(slotWithKeyHashForKeys.slot(), slotWithKeyHashForKeys.bucketIndex(), keysKey, slotWithKeyHashForKeys.keyHash());
+            removeDelay(slotWithKeyHash);
             return;
         }
 
@@ -183,7 +183,7 @@ public class HGroup extends BaseCommand {
         if (preferDict == null) {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
-        set(rhk.encode(preferDict), slotWithKeyHashForKeys, CompressedValue.SP_TYPE_HASH);
+        set(rhk.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_HASH);
     }
 
     private RedisHH getRedisHH(SlotWithKeyHash slotWithKeyHash) {
@@ -197,7 +197,7 @@ public class HGroup extends BaseCommand {
 
     void saveRedisHH(RedisHH rhh, SlotWithKeyHash slotWithKeyHash) {
         if (rhh.size() == 0) {
-            removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), slotWithKeyHash.rawKey(), slotWithKeyHash.keyHash());
+            removeDelay(slotWithKeyHash);
             return;
         }
 
@@ -259,9 +259,7 @@ public class HGroup extends BaseCommand {
 
                 var fieldKey = RedisHashKeys.fieldKey(key, field);
                 var slotWithKeyHashThisField = slot(fieldKey);
-                var bucketIndex = slotWithKeyHashThisField.bucketIndex();
-                var keyHash = slotWithKeyHashThisField.keyHash();
-                removeDelay(slotWithKeyHash.slot(), bucketIndex, fieldKey, keyHash);
+                removeDelay(slotWithKeyHashThisField);
             }
         }
 

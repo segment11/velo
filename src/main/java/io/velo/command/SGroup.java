@@ -727,7 +727,7 @@ public class SGroup extends BaseCommand {
 
     static void saveRedisSet(RedisHashKeys rhk, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
         if (rhk.size() == 0) {
-            baseCommand.removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), slotWithKeyHash.rawKey(), slotWithKeyHash.keyHash());
+            baseCommand.removeDelay(slotWithKeyHash);
             return;
         }
 
@@ -956,16 +956,16 @@ public class SGroup extends BaseCommand {
             var first = list.getFirst();
             var rhk = getRedisSet(first);
             if (rhk == null) {
-                removeDelay(dstSlotWithKeyHash.slot(), dstSlotWithKeyHash.bucketIndex(), new String(dstKeyBytes), dstSlotWithKeyHash.keyHash());
+                removeDelay(dstSlotWithKeyHash);
                 return IntegerReply.REPLY_0;
             }
             if (rhk.size() == 0) {
                 if (isInter) {
-                    removeDelay(dstSlotWithKeyHash.slot(), dstSlotWithKeyHash.bucketIndex(), new String(dstKeyBytes), dstSlotWithKeyHash.keyHash());
+                    removeDelay(dstSlotWithKeyHash);
                     return IntegerReply.REPLY_0;
                 }
                 if (!isUnion) {
-                    removeDelay(dstSlotWithKeyHash.slot(), dstSlotWithKeyHash.bucketIndex(), new String(dstKeyBytes), dstSlotWithKeyHash.keyHash());
+                    removeDelay(dstSlotWithKeyHash);
                     return IntegerReply.REPLY_0;
                 }
             }
@@ -1005,18 +1005,18 @@ public class SGroup extends BaseCommand {
 
             var rhk = promises.getFirst().getResult();
             if (rhk == null) {
-                removeDelay(dstSlotWithKeyHash.slot(), dstSlotWithKeyHash.bucketIndex(), new String(dstKeyBytes), dstSlotWithKeyHash.keyHash());
+                removeDelay(dstSlotWithKeyHash);
                 finalPromise.set(IntegerReply.REPLY_0);
                 return;
             }
             if (rhk.size() == 0) {
                 if (isInter) {
-                    removeDelay(dstSlotWithKeyHash.slot(), dstSlotWithKeyHash.bucketIndex(), new String(dstKeyBytes), dstSlotWithKeyHash.keyHash());
+                    removeDelay(dstSlotWithKeyHash);
                     finalPromise.set(IntegerReply.REPLY_0);
                     return;
                 }
                 if (!isUnion) {
-                    removeDelay(dstSlotWithKeyHash.slot(), dstSlotWithKeyHash.bucketIndex(), new String(dstKeyBytes), dstSlotWithKeyHash.keyHash());
+                    removeDelay(dstSlotWithKeyHash);
                     finalPromise.set(IntegerReply.REPLY_0);
                     return;
                 }
@@ -1339,8 +1339,8 @@ public class SGroup extends BaseCommand {
             return new ErrorReply("sort by pattern not support yet");
         }
 
-        var s = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(s);
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return isStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
         }
@@ -1349,7 +1349,7 @@ public class SGroup extends BaseCommand {
             return ErrorReply.WRONG_TYPE;
         }
 
-        var encodedBytes = getValueBytesByCv(cv, s);
+        var encodedBytes = getValueBytesByCv(cv, slotWithKeyHash);
         if (cv.isList()) {
             var rl = RedisList.decode(encodedBytes);
             var list = rl.getList();
