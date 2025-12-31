@@ -38,6 +38,15 @@ public class BulkReply implements Reply {
     }
 
     /**
+     * Constructs a BulkReply with the specified string.
+     *
+     * @param content the string to be converted to bytes
+     */
+    public BulkReply(String content) {
+        this(content.getBytes());
+    }
+
+    /**
      * Constructs a BulkReply with the specified raw bytes.
      *
      * @param raw the raw bytes of the reply

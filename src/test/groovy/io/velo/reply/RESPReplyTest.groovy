@@ -70,12 +70,13 @@ class RESPReplyTest extends Specification {
 
         new BulkReply('bulk'.bytes).raw == 'bulk'.bytes
         new BulkReply('bulk'.bytes).asString() == 'bulk'
+        new BulkReply('bulk').asString() == 'bulk'
         new BulkReply(1L).raw == '1'.bytes
         new BulkReply(1.0d).raw == '1.0'.bytes
         new BulkReply('bulk'.bytes).buffer().asArray() == "\$4\r\nbulk\r\n".bytes
         new BulkReply('bulk'.bytes).bufferAsResp3().asArray() == "+bulk\r\n".bytes
         new BulkReply(''.bytes).bufferAsResp3().asArray() == "+\r\n".bytes
-        new BulkReply(null).bufferAsResp3().asArray() == "+\r\n".bytes
+        new BulkReply((byte[]) null).bufferAsResp3().asArray() == "+\r\n".bytes
         // blob string as too long
         new BulkReply(('12345678' * 5).bytes).bufferAsResp3().asArray()[0] == '$'.bytes[0]
         // blob string as has not printable char

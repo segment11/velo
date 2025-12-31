@@ -64,8 +64,7 @@ public class OneSlotRead {
         var beginT = System.currentTimeMillis();
         for (int i = 0; i < initKeyNumber; i++) {
             var key = KEY_PREFIX + i;
-            var keyBytes = key.getBytes();
-            var s = BaseCommand.slot(keyBytes, slotNumber);
+            var s = BaseCommand.slot(key, slotNumber);
             var cv = new CompressedValue();
 
             cv.setSeq(snowFlake.nextId());
@@ -97,9 +96,8 @@ public class OneSlotRead {
         var localPersist = LocalPersist.getInstance();
         var oneSlot = localPersist.oneSlot((short) 0);
 
-        var keyBytes = key.getBytes();
-        var s = BaseCommand.slot(keyBytes, slotNumber);
-        var result = oneSlot.get(keyBytes, s.bucketIndex(), s.keyHash(), s.keyHash32());
+        var s = BaseCommand.slot(key, slotNumber);
+        var result = oneSlot.get(s.rawKey(), s.bucketIndex(), s.keyHash(), s.keyHash32());
         assert result != null;
     }
 

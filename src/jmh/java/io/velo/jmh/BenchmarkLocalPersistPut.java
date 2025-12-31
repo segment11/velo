@@ -177,7 +177,7 @@ TIPS: 512MB write buffer for each slot, so the real write qps is in logs. (100w 
     @Benchmark
     public void put() {
         var key = keys[random.nextInt(keyNumber)];
-        var s = BaseCommand.slot(key.getBytes(), slotNumber);
+        var s = BaseCommand.slot(key, slotNumber);
         var oneSlot = localPersist.oneSlot(s.slot());
         var eventloop = slotWorkerEventloopArray[s.slot() % slotWorkers];
 

@@ -432,7 +432,7 @@ sunionstore
         def slotWithKeyHash = sGroup.slotWithKeyHashListParsed[0]
         then:
         reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().compressedData == 'value'.bytes
 
         when:
@@ -494,35 +494,35 @@ sunionstore
         reply = sGroup.execute('set a value ex 10')
         then:
         reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt > System.currentTimeMillis() + 9000
 
         when:
         reply = sGroup.execute('set a value px 10000')
         then:
         reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt > System.currentTimeMillis() + 9000
 
         when:
         reply = sGroup.execute('set a value exat ' + ((System.currentTimeMillis() / 1000).intValue() + 10))
         then:
         reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt > System.currentTimeMillis() + 9000
 
         when:
         reply = sGroup.execute('set a value pxat ' + (System.currentTimeMillis() + 10000))
         then:
         reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt > System.currentTimeMillis() + 9000
 
         when:
         reply = sGroup.execute('set a value pxat -1')
         then:
         reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt == CompressedValue.NO_EXPIRE
 
         when:
@@ -688,7 +688,7 @@ sunionstore
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 6
-        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().compressedData[1..-1] == 'value'.bytes
 
         when:
@@ -705,7 +705,7 @@ sunionstore
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 10
-        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().compressedData == '1value7890'.bytes
 
         when:
@@ -714,7 +714,7 @@ sunionstore
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 10
-        inMemoryGetSet.getBuf(slot, 'a'.bytes, slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().compressedData == 'value67890'.bytes
 
         when:
@@ -1151,14 +1151,14 @@ sunionstore
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1
-        RedisHashKeys.decode(inMemoryGetSet.getBuf(slot, 'dst'.bytes, 0, 0L).cv().compressedData).contains('2')
+        RedisHashKeys.decode(inMemoryGetSet.getBuf(slot, 'dst', 0, 0L).cv().compressedData).contains('2')
 
         when:
         reply = sGroup.sdiffstore(true, false)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1
-        RedisHashKeys.decode(inMemoryGetSet.getBuf(slot, 'dst'.bytes, 0, 0L).cv().compressedData).contains('1')
+        RedisHashKeys.decode(inMemoryGetSet.getBuf(slot, 'dst', 0, 0L).cv().compressedData).contains('1')
 
         when:
         rhkB.remove('1')

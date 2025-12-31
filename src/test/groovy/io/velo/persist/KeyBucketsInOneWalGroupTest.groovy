@@ -28,10 +28,10 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         inner.putAll(shortValueList)
         then:
         shortValueList.every {
-            inner.getValueX(it.bucketIndex(), it.key().bytes, it.keyHash()).valueBytes() == it.cvEncoded()
+            inner.getValueX(it.bucketIndex(), it.key(), it.keyHash()).valueBytes() == it.cvEncoded()
         }
         inner.isSplit == (n > KeyBucket.INIT_CAPACITY)
-        inner.getValueX(2, 'xxx'.bytes, 100L) == null
+        inner.getValueX(2, 'xxx', 100L) == null
 
         when:
         def sharedBytesList = inner.writeAfterPutBatch()
@@ -42,7 +42,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         keyLoader.writeSharedBytesList(sharedBytesList, inner.beginBucketIndex)
         def isSplitNumberChanged = keyLoader.updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp)
         def firstShortValue = shortValueList[0]
-        def valueBytesWithExpireAt = keyLoader.getValueXByKey(firstShortValue.bucketIndex(), firstShortValue.key().bytes,
+        def valueBytesWithExpireAt = keyLoader.getValueXByKey(firstShortValue.bucketIndex(), firstShortValue.key(),
                 firstShortValue.keyHash(), KeyHash.hash32(firstShortValue.key().bytes))
         then:
         isSplitNumberChanged == inner.isSplit
@@ -105,7 +105,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         when:
         def keyBucket = new KeyBucket(slot, bucketIndex, (byte) 0, (byte) 1, null, snowFlake)
         pvmList10ThisBucket[0..<5].each {
-            keyBucket.put(it.keyBytes, it.keyHash, 0L, 0L, it.extendBytes)
+            keyBucket.put(it.key, it.keyHash, 0L, 0L, it.extendBytes)
         }
         inner.listList = [[keyBucket]]
         needAddNewList.clear()
@@ -138,7 +138,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         pvmList10ThisBucket.clear()
         pvmList10ThisBucket << firstPvm
         keyBucket.clearAll()
-        keyBucket.put(firstPvm.keyBytes, firstPvm.keyHash, 0L, firstPvm.seq + 1, 'value'.bytes)
+        keyBucket.put(firstPvm.key, firstPvm.keyHash, 0L, firstPvm.seq + 1, 'value'.bytes)
         needAddNewList.clear()
         needUpdateList.clear()
         needDeleteList.clear()
@@ -193,7 +193,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         needDeleteList.clear()
         for (pvmInner in pvmList3) {
             // cost 4 cells
-            pvmInner.keyBytes = new byte[100]
+            pvmInner.key = new String(new byte[100])
             pvmInner.extendBytes = new byte[100]
         }
         def splitMultiStep7 = inner2.checkIfNeedSplit(pvmList3, needAddNewList, needUpdateList, needDeleteList,
@@ -217,23 +217,23 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         inner.listList.clear()
         inner.listList.add(null)
         then:
-        inner.getExpireAtAndSeq(0, targetKey.bytes, targetKeyHash) == null
-        inner.getValueX(0, targetKey.bytes, targetKeyHash) == null
+        inner.getExpireAtAndSeq(0, targetKey, targetKeyHash) == null
+        inner.getValueX(0, targetKey, targetKeyHash) == null
 
         when:
         ArrayList<KeyBucket> list = []
         list.add(null)
         inner.listList.set(0, list)
         then:
-        inner.getExpireAtAndSeq(0, targetKey.bytes, targetKeyHash) == null
-        inner.getValueX(0, targetKey.bytes, targetKeyHash) == null
+        inner.getExpireAtAndSeq(0, targetKey, targetKeyHash) == null
+        inner.getValueX(0, targetKey, targetKeyHash) == null
 
         when:
         def snowFlake = new SnowFlake(1, 1)
         def keyBucket = new KeyBucket(slot, 0, (byte) 0, (byte) 3, null, snowFlake)
         list.set(0, keyBucket)
         ('a'..'z').eachWithIndex { it, i ->
-            keyBucket.put(it.bytes, 97L + i, 0L, 97L + i, it.bytes)
+            keyBucket.put(it, 97L + i, 0L, 97L + i, it.bytes)
         }
         def shortValueList = Mock.prepareShortValueList(KeyBucket.INIT_CAPACITY)
         List<PersistValueMeta> pvmList = []
@@ -242,27 +242,27 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         }
         inner.putPvmListToTargetBucket(pvmList, 0)
         then:
-        inner.getExpireAtAndSeq(0, 'a'.bytes, 97L).expireAt() == 0L
-        inner.getValueX(0, 'a'.bytes, 97L).valueBytes() == 'a'.bytes
+        inner.getExpireAtAndSeq(0, 'a', 97L).expireAt() == 0L
+        inner.getValueX(0, 'a', 97L).valueBytes() == 'a'.bytes
 
         when:
         keyBucket.clearAll()
         def inner2 = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
         inner2.listList.set(0, list)
         ('a'..'z').eachWithIndex { it, i ->
-            keyBucket.put(it.bytes, 97L + i, 0L, 97L + i, it.bytes)
+            keyBucket.put(it, 97L + i, 0L, 97L + i, it.bytes)
         }
         // mock update
         def firstPvm = pvmList[0]
-        keyBucket.put(firstPvm.keyBytes, firstPvm.keyHash, 0L, firstPvm.seq, 'value'.bytes)
+        keyBucket.put(firstPvm.key, firstPvm.keyHash, 0L, firstPvm.seq, 'value'.bytes)
         // mock delete
         def lastPvm = pvmList[-1]
         lastPvm.expireAt = CompressedValue.EXPIRE_NOW
-        keyBucket.put(lastPvm.keyBytes, lastPvm.keyHash, 0L, lastPvm.seq, lastPvm.extendBytes)
+        keyBucket.put(lastPvm.key, lastPvm.keyHash, 0L, lastPvm.seq, lastPvm.extendBytes)
         inner2.putPvmListToTargetBucket(pvmList, 0)
         then:
-        inner2.getValueX(0, 'a'.bytes, 97L).valueBytes() == 'a'.bytes
-        inner2.getValueX(0, firstPvm.keyBytes, firstPvm.keyHash).valueBytes() != 'value'.bytes
+        inner2.getValueX(0, 'a', 97L).valueBytes() == 'a'.bytes
+        inner2.getValueX(0, firstPvm.key, firstPvm.keyHash).valueBytes() != 'value'.bytes
 
         cleanup:
         keyLoader.cleanUp()
@@ -316,7 +316,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
                 def p = new PersistValueMeta()
                 p.expireAt = 0L
                 p.seq = 100L
-                p.keyBytes = key.bytes
+                p.key = key
                 p.keyHash = KeyHash.hash(key.bytes)
                 p.bucketIndex = 0
                 p.isFromMerge = false
@@ -338,7 +338,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         def pvm = new PersistValueMeta()
         pvm.expireAt = 0L
         pvm.seq = 97L
-        pvm.keyBytes = 'a'.bytes
+        pvm.key = 'a'
         pvm.keyHash = KeyHash.hash('a'.bytes)
         pvm.keyHash32 = KeyHash.hash32('a'.bytes)
         pvm.bucketIndex = 0
@@ -380,11 +380,11 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         def keyBucket = new KeyBucket(slot, 0, (byte) 0, (byte) 1, null, snowFlake)
         list.set(0, keyBucket)
         // hash conflict
-        keyBucket.put('a'.bytes, 97L, 0L, 0L, 'a'.bytes)
+        keyBucket.put('a', 97L, 0L, 0L, 'a'.bytes)
         def pvm = new PersistValueMeta()
         pvm.expireAt = 0L
         pvm.seq = 97L
-        pvm.keyBytes = 'aa'.bytes
+        pvm.key = 'aa'
         pvm.keyHash = 97L
         pvm.keyHash32 = 97L
         pvm.bucketIndex = 0
@@ -393,7 +393,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         def pvm2 = new PersistValueMeta()
         pvm2.expireAt = 0L
         pvm2.seq = 97L
-        pvm2.keyBytes = 'a'.bytes
+        pvm2.key = 'a'
         pvm2.keyHash = 97L
         pvm2.bucketIndex = 0
         pvm2.isFromMerge = false
@@ -431,7 +431,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         when:
         // need delete
         def keyBucket2 = new KeyBucket(slot, 0, (byte) 0, (byte) 1, null, snowFlake)
-        keyBucket2.put('aa'.bytes, 97L, 0L, 0L, 'aa'.bytes)
+        keyBucket2.put('aa', 97L, 0L, 0L, 'aa'.bytes)
         list2.set(0, keyBucket2)
         inner2.putPvmListToTargetBucket(pvmList, 0)
         then:
@@ -451,14 +451,14 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         when:
         // delete but not exists
         def keyBucket3 = new KeyBucket(slot, 0, (byte) 0, (byte) 1, null, snowFlake)
-        keyBucket3.put('aaa'.bytes, 97L, 0L, 0L, 'aaa'.bytes)
+        keyBucket3.put('aaa', 97L, 0L, 0L, 'aaa'.bytes)
         list3.set(0, keyBucket3)
         inner3.putPvmListToTargetBucketAfterClearAllIfSplit([], [], pvmList, 0)
         then:
         !inner3.isUpdatedBySplitIndex[0]
 
         when:
-        keyBucket3.put('aa'.bytes, 97L, 0L, 0L, 'aa'.bytes)
+        keyBucket3.put('aa', 97L, 0L, 0L, 'aa'.bytes)
         // update
         pvmList[0].expireAt = 0L
         inner3.putPvmListToTargetBucketAfterClearAllIfSplit([], pvmList, [], 0)

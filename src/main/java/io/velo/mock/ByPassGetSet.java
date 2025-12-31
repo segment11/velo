@@ -46,10 +46,10 @@ public interface ByPassGetSet {
      * Retrieves a value from the storage system based on the provided key and bucket index.
      *
      * @param slot        the slot number where the value is stored.
-     * @param keyBytes    the key in byte-array form associated with the value to be retrieved.
+     * @param key         the key with the value to be retrieved.
      * @param bucketIndex the index of the bucket in the slot where the value is stored.
      * @param keyHash     the hash of the key.
      * @return the value stored, either as a buffer or a compressed value.
      */
-    OneSlot.BufOrCompressedValue getBuf(short slot, byte[] keyBytes, int bucketIndex, long keyHash);
+    OneSlot.BufOrCompressedValue getBuf(short slot, String key, int bucketIndex, long keyHash);
 }

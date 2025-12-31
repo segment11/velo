@@ -240,7 +240,7 @@ public class IGroup extends BaseCommand {
                                 }
 
                                 var key = keyPrefix + lineArray[finalKeyFieldIndex];
-                                var s = slot(key.getBytes());
+                                var s = slot(key);
                                 if (s.slot() != oneSlot.slot()) {
                                     r[1]++;
                                     continue;
@@ -261,7 +261,7 @@ public class IGroup extends BaseCommand {
                                     }
                                     value = sb.toString();
                                 }
-                                set(key.getBytes(), value.getBytes(), s);
+                                set(value.getBytes(), s);
                             } else {
                                 // json
                                 var map = objectMapper.readValue(line, HashMap.class);
@@ -270,7 +270,7 @@ public class IGroup extends BaseCommand {
                                 }
 
                                 var key = keyPrefix + map.get(keyField);
-                                var s = slot(key.getBytes());
+                                var s = slot(key);
                                 if (s.slot() != oneSlot.slot()) {
                                     r[1]++;
                                     continue;
@@ -288,7 +288,7 @@ public class IGroup extends BaseCommand {
                                     }
                                     value = objectMapper.writeValueAsString(subMap);
                                 }
-                                set(key.getBytes(), value.getBytes(), s);
+                                set(value.getBytes(), s);
                             }
                         }
                     } catch (IOException e) {
@@ -316,7 +316,7 @@ public class IGroup extends BaseCommand {
 
                                 if (fieldName.equals(keyField)) {
                                     key = keyPrefix + fieldValue;
-                                    s = slot(key.getBytes());
+                                    s = slot(key);
                                     if (s.slot() != oneSlot.slot()) {
                                         r[1]++;
                                         continue outer;
@@ -331,7 +331,7 @@ public class IGroup extends BaseCommand {
                             if (key == null) {
                                 throw new IllegalArgumentException("parquet file: " + file.getAbsolutePath() + " key_field: " + keyField + " not found");
                             }
-                            set(key.getBytes(), objectMapper.writeValueAsBytes(map), s);
+                            set(objectMapper.writeValueAsBytes(map), s);
                         }
                     } catch (IOException e) {
                         log.error("read parquet file error, file={}", file.getName(), e);
@@ -415,11 +415,11 @@ public class IGroup extends BaseCommand {
                     var keyBytes = it.key();
                     var valueBytes = it.value();
 
-                    var s = slot(keyBytes);
+                    var s = slot(keyBytes, slotNumber);
                     if (s.slot() != oneSlot.slot()) {
                         r[1]++;
                     } else {
-                        set(keyBytes, valueBytes, s);
+                        set(valueBytes, s);
                         r[0]++;
                     }
 

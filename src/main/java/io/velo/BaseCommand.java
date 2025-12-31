@@ -469,11 +469,23 @@ public abstract class BaseCommand {
     /**
      * Calculates slot assignment and hash information for a key.
      *
-     * @param keyBytes   Original key bytes
+     * @param keyBytes   The key bytes
      * @param slotNumber Total number of slots in the velo running instance
      * @return SlotWithKeyHash containing full positioning information
      */
     public static SlotWithKeyHash slot(byte[] keyBytes, int slotNumber) {
+        return slot(new String(keyBytes), slotNumber);
+    }
+
+    /**
+     * Calculates slot assignment and hash information for a key.
+     *
+     * @param key        The key
+     * @param slotNumber Total number of slots in the velo running instance
+     * @return SlotWithKeyHash containing full positioning information
+     */
+    public static SlotWithKeyHash slot(String key, int slotNumber) {
+        var keyBytes = key.getBytes();
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
         var keyHash = KeyHash.hash(keyBytes);
@@ -485,7 +497,7 @@ public abstract class BaseCommand {
             // use crc16
             var toClientSlot = JedisClusterCRC16.getSlot(keyBytes);
             var innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot);
-            return new SlotWithKeyHash(innerSlot, (short) toClientSlot, (int) bucketIndex, keyHash, keyHash32, new String(keyBytes));
+            return new SlotWithKeyHash(innerSlot, (short) toClientSlot, (int) bucketIndex, keyHash, keyHash32, key);
         }
 
         final int halfSlotNumber = slotNumber / 2;
@@ -495,22 +507,22 @@ public abstract class BaseCommand {
         if (tagHash != 0L) {
             var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) & (halfSlotNumber - 1));
             var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-            return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, keyHash32, new String(keyBytes));
+            return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, keyHash32, key);
         }
 
         var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) & (halfSlotNumber - 1));
         var slot = keyHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-        return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, keyHash32, new String(keyBytes));
+        return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, keyHash32, key);
     }
 
     /**
      * Calculates slot assignment for a key using instance-configured slot number.
      *
-     * @param keyBytes Original key bytes
+     * @param key The key
      * @return SlotWithKeyHash Key hash information including slot number, bucket index, and key hash.
      */
-    public SlotWithKeyHash slot(byte[] keyBytes) {
-        return slot(keyBytes, slotNumber);
+    public SlotWithKeyHash slot(String key) {
+        return slot(key, slotNumber);
     }
 
     // for mock test
@@ -524,13 +536,12 @@ public abstract class BaseCommand {
     /**
      * Gets expiration time for a key in milliseconds since epoch.
      *
-     * @param keyBytes        Original key bytes
      * @param slotWithKeyHash Precomputed slot and hash information
      * @return Expiration time or null if no expiration set
      */
-    public Long getExpireAt(byte[] keyBytes, @NotNull SlotWithKeyHash slotWithKeyHash) {
+    public Long getExpireAt(SlotWithKeyHash slotWithKeyHash) {
         if (byPassGetSet != null) {
-            var cv = getCv(keyBytes, slotWithKeyHash);
+            var cv = getCv(slotWithKeyHash);
             if (cv == null) {
                 return null;
             }
@@ -538,27 +549,27 @@ public abstract class BaseCommand {
         } else {
             var slot = slotWithKeyHash.slot();
             var oneSlot = localPersist.oneSlot(slot);
-            return oneSlot.getExpireAt(keyBytes, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash, slotWithKeyHash.keyHash32);
+            return oneSlot.getExpireAt(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash, slotWithKeyHash.keyHash32);
         }
     }
 
     /**
      * Gets the CompressedValue for a key and precomputed slot and hash information.
      *
-     * @param keyBytes Original key bytes
-     * @param s        Precomputed slot and hash information
+     * @param s Precomputed slot and hash information
      * @return CompressedValue or null if expired/not found
      * @throws DictMissingException If using compression dictionary is missing
      */
-    public CompressedValue getCv(byte[] keyBytes, SlotWithKeyHash s) {
+    public CompressedValue getCv(SlotWithKeyHash s) {
+        var key = s.rawKey();
         var slot = s.slot();
 
         OneSlot.BufOrCompressedValue bufOrCompressedValue;
         if (byPassGetSet != null) {
-            bufOrCompressedValue = byPassGetSet.getBuf(slot, keyBytes, s.bucketIndex, s.keyHash);
+            bufOrCompressedValue = byPassGetSet.getBuf(slot, key, s.bucketIndex, s.keyHash);
         } else {
             var oneSlot = localPersist.oneSlot(slot);
-            bufOrCompressedValue = oneSlot.get(keyBytes, s.bucketIndex, s.keyHash, s.keyHash32);
+            bufOrCompressedValue = oneSlot.get(key, s.bucketIndex, s.keyHash, s.keyHash32);
         }
 
         if (bufOrCompressedValue == null) {
@@ -566,7 +577,7 @@ public abstract class BaseCommand {
         }
 
         var cv = bufOrCompressedValue.cv() != null ? bufOrCompressedValue.cv() :
-                CompressedValue.decode(bufOrCompressedValue.buf(), keyBytes, s.keyHash());
+                CompressedValue.decode(bufOrCompressedValue.buf(), key.getBytes(), s.keyHash());
         if (cv.isExpired()) {
             return null;
         }
@@ -592,19 +603,18 @@ public abstract class BaseCommand {
 
     @TestOnly
     byte[] getValueBytesByCv(CompressedValue cv) {
-        return getValueBytesByCv(cv, null, null);
+        return getValueBytesByCv(cv, null);
     }
 
     /**
      * Get value bytes from a CompressedValue.
      *
      * @param cv              The CompressedValue to decompress
-     * @param keyBytes        Original key bytes
      * @param slotWithKeyHash Precomputed slot and hash information
      * @return Decompressed value bytes
      * @throws DictMissingException If using compression dictionary is missing
      */
-    public byte[] getValueBytesByCv(CompressedValue cv, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
+    public byte[] getValueBytesByCv(CompressedValue cv, SlotWithKeyHash slotWithKeyHash) {
         if (cv.isTypeNumber()) {
             return String.valueOf(cv.numberValue()).getBytes();
         }
@@ -637,13 +647,13 @@ public abstract class BaseCommand {
             compressStats.decompressedCostTimeTotalNs += costT;
 
             if (slotWithKeyHash != null && byPassGetSet == null) {
-                localPersist.oneSlot(slotWithKeyHash.slot).monitorBigKeyByValueLength(keyBytes, decompressed.length);
+                localPersist.oneSlot(slotWithKeyHash.slot).monitorBigKeyByValueLength(slotWithKeyHash.rawKey, decompressed.length);
             }
             return decompressed;
         } else {
             var compressedData = cv.getCompressedData();
             if (slotWithKeyHash != null && byPassGetSet == null) {
-                localPersist.oneSlot(slotWithKeyHash.slot).monitorBigKeyByValueLength(keyBytes, compressedData.length);
+                localPersist.oneSlot(slotWithKeyHash.slot).monitorBigKeyByValueLength(slotWithKeyHash.rawKey, compressedData.length);
             }
             return compressedData;
         }
@@ -652,12 +662,11 @@ public abstract class BaseCommand {
     /**
      * Get value bytes from a key.
      *
-     * @param keyBytes        Original key bytes
      * @param slotWithKeyHash Precomputed slot and hash information
      * @return Value bytes or null if not found
      */
-    public byte[] get(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
-        return get(keyBytes, slotWithKeyHash, false);
+    public byte[] get(SlotWithKeyHash slotWithKeyHash) {
+        return get(slotWithKeyHash, false);
     }
 
     private static boolean contain(Integer[] expectSpTypeArray, int spType) {
@@ -672,14 +681,13 @@ public abstract class BaseCommand {
     /**
      * Get value bytes from a key.
      *
-     * @param keyBytes          Original key bytes
      * @param slotWithKeyHash   Precomputed slot and hash information
      * @param expectTypeString  Expect return CompressValue is a string type or ignore
      * @param expectSpTypeArray Expect return CompressValue a sp type array
      * @return Value bytes or null if not found
      */
-    public byte[] get(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, boolean expectTypeString, Integer... expectSpTypeArray) {
-        var cv = getCv(keyBytes, slotWithKeyHash);
+    public byte[] get(SlotWithKeyHash slotWithKeyHash, boolean expectTypeString, Integer... expectSpTypeArray) {
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return null;
         }
@@ -689,84 +697,82 @@ public abstract class BaseCommand {
         if (expectSpTypeArray.length > 0 && !contain(expectSpTypeArray, cv.getDictSeqOrSpType())) {
             throw new TypeMismatchException("Expect sp type array=" + Arrays.toString(expectSpTypeArray) + ", but got sp type=" + cv.getDictSeqOrSpType());
         }
-        return getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+        return getValueBytesByCv(cv, slotWithKeyHash);
     }
 
     /**
      * Set a number value to a key.
      *
-     * @param keyBytes             Original key bytes
      * @param value                Number value
      * @param slotWithKeyHashReuse Precomputed slot and hash information
      */
-    public void setNumber(byte[] keyBytes, Number value, SlotWithKeyHash slotWithKeyHashReuse) {
-        setNumber(keyBytes, value, slotWithKeyHashReuse, CompressedValue.NO_EXPIRE);
+    public void setNumber(Number value, SlotWithKeyHash slotWithKeyHashReuse) {
+        setNumber(value, slotWithKeyHashReuse, CompressedValue.NO_EXPIRE);
     }
 
     /**
      * Set a number value to a key.
      *
-     * @param keyBytes             Original key bytes
      * @param value                Number value
      * @param slotWithKeyHashReuse Precomputed slot and hash information
      * @param expireAt             Given expire time
      */
-    public void setNumber(byte[] keyBytes, Number value, SlotWithKeyHash slotWithKeyHashReuse, long expireAt) {
+    public void setNumber(Number value, SlotWithKeyHash slotWithKeyHashReuse, long expireAt) {
         if (value instanceof Byte) {
             byte byteValue = value.byteValue();
             var newValueBytes = new byte[1];
             newValueBytes[0] = byteValue;
-            set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_BYTE, expireAt);
+            set(newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_BYTE, expireAt);
         } else if (value instanceof Short) {
             short shortValue = value.shortValue();
             if (shortValue <= Byte.MAX_VALUE && shortValue >= Byte.MIN_VALUE) {
                 var newValueBytes = new byte[1];
                 newValueBytes[0] = (byte) shortValue;
-                set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_BYTE, expireAt);
+                set(newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_BYTE, expireAt);
             } else {
                 var newValueBytes = new byte[2];
                 ByteBuffer.wrap(newValueBytes).putShort(shortValue);
-                set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_SHORT, expireAt);
+                set(newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_SHORT, expireAt);
             }
         } else if (value instanceof Integer) {
             int intValue = value.intValue();
             if (intValue <= Byte.MAX_VALUE && intValue >= Byte.MIN_VALUE) {
                 var newValueBytes = new byte[1];
                 newValueBytes[0] = (byte) intValue;
-                set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_BYTE, expireAt);
+                set(newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_BYTE, expireAt);
             } else if (intValue <= Short.MAX_VALUE && intValue >= Short.MIN_VALUE) {
                 var newValueBytes = new byte[2];
                 ByteBuffer.wrap(newValueBytes).putShort((short) intValue);
-                set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_SHORT, expireAt);
+                set(newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_SHORT, expireAt);
             } else {
                 var newValueBytes = new byte[4];
                 ByteBuffer.wrap(newValueBytes).putInt(intValue);
-                set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_INT, expireAt);
+                set(newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_INT, expireAt);
             }
         } else if (value instanceof Long) {
             long longValue = value.longValue();
             if (longValue <= Byte.MAX_VALUE && longValue >= Byte.MIN_VALUE) {
                 var newValueBytes = new byte[1];
                 newValueBytes[0] = (byte) longValue;
-                set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_BYTE, expireAt);
+                set(newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_BYTE, expireAt);
             } else if (longValue <= Short.MAX_VALUE && longValue >= Short.MIN_VALUE) {
                 var newValueBytes = new byte[2];
                 ByteBuffer.wrap(newValueBytes).putShort((short) longValue);
-                set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_SHORT, expireAt);
+                set(newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_SHORT, expireAt);
             } else if (longValue <= Integer.MAX_VALUE && longValue >= Integer.MIN_VALUE) {
                 var newValueBytes = new byte[4];
                 ByteBuffer.wrap(newValueBytes).putInt((int) longValue);
-                set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_INT, expireAt);
+                set(newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_INT, expireAt);
             } else {
                 var newValueBytes = new byte[8];
                 ByteBuffer.wrap(newValueBytes).putLong(longValue);
-                set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_LONG, expireAt);
+                set(newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_LONG, expireAt);
             }
         } else if (value instanceof Double) {
             double doubleValue = value.doubleValue();
             var newValueBytes = new byte[8];
             ByteBuffer.wrap(newValueBytes).putDouble(doubleValue);
-            set(keyBytes, newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_DOUBLE, expireAt);
+            set(newValueBytes, slotWithKeyHashReuse, CompressedValue.SP_TYPE_NUM_DOUBLE, expireAt);
         } else {
             throw new IllegalArgumentException("Not support number type=" + value.getClass());
         }
@@ -775,14 +781,12 @@ public abstract class BaseCommand {
     /**
      * Stores a CompressedValue in the persistence layer.
      *
-     * @param keyBytes             Original key bytes
-     * @param cv                   CompressedValue to store
-     * @param slotWithKeyHashReuse Precomputed slot and hash information
+     * @param cv              CompressedValue to store
+     * @param slotWithKeyHash Precomputed slot and hash information
      */
-    public void setCv(byte[] keyBytes, CompressedValue cv, SlotWithKeyHash slotWithKeyHashReuse) {
-        var slotWithKeyHash = slotWithKeyHashReuse != null ? slotWithKeyHashReuse : slot(keyBytes);
+    public void setCv(CompressedValue cv, @NotNull SlotWithKeyHash slotWithKeyHash) {
         if (cv.isTypeNumber()) {
-            setNumber(keyBytes, cv.numberValue(), slotWithKeyHash, cv.getExpireAt());
+            setNumber(cv.numberValue(), slotWithKeyHash, cv.getExpireAt());
         } else {
             // update to new seq
             cv.setSeq(snowFlake.nextId());
@@ -791,10 +795,9 @@ public abstract class BaseCommand {
 
             if (cv.isCompressed()) {
                 // set cv directly if the value is already compressed
-                var dstKey = new String(keyBytes);
                 var slot = slotWithKeyHash.slot();
 
-                putToOneSlot(slot, dstKey, slotWithKeyHash, cv);
+                putToOneSlot(slot, slotWithKeyHash, cv);
 
                 var indexHandlerPool = localPersist.getIndexHandlerPool();
                 if (indexHandlerPool != null) {
@@ -805,37 +808,35 @@ public abstract class BaseCommand {
                 }
             } else {
                 // check if the value needs do compression
-                set(keyBytes, cv.getCompressedData(), slotWithKeyHash, 0, cv.getExpireAt());
+                set(cv.getCompressedData(), slotWithKeyHash, 0, cv.getExpireAt());
             }
         }
     }
 
     @TestOnly
-    public void set(byte[] keyBytes, byte[] valueBytes) {
-        set(keyBytes, valueBytes, slot(keyBytes, slotNumber), CompressedValue.NULL_DICT_SEQ, CompressedValue.NO_EXPIRE);
+    public void set(String key, byte[] valueBytes) {
+        set(valueBytes, slot(key, slotNumber), CompressedValue.NULL_DICT_SEQ, CompressedValue.NO_EXPIRE);
     }
 
     /**
      * Stores a value in the persistence layer.
      *
-     * @param keyBytes             Original key bytes
      * @param valueBytes           Value bytes
      * @param slotWithKeyHashReuse Precomputed slot and hash information
      */
-    public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHashReuse) {
-        set(keyBytes, valueBytes, slotWithKeyHashReuse, CompressedValue.NULL_DICT_SEQ, CompressedValue.NO_EXPIRE);
+    public void set(byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHashReuse) {
+        set(valueBytes, slotWithKeyHashReuse, CompressedValue.NULL_DICT_SEQ, CompressedValue.NO_EXPIRE);
     }
 
     /**
      * Stores a value in the persistence layer.
      *
-     * @param keyBytes        Original key bytes
      * @param valueBytes      Value bytes
      * @param slotWithKeyHash Precomputed slot and hash information
      * @param spType          Given as CompressValue spType
      */
-    public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType) {
-        set(keyBytes, valueBytes, slotWithKeyHash, spType, CompressedValue.NO_EXPIRE);
+    public void set(byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType) {
+        set(valueBytes, slotWithKeyHash, spType, CompressedValue.NO_EXPIRE);
     }
 
     private static final int MAX_LONG_VALUE_IN_BYTES_LENGTH = String.valueOf(Long.MAX_VALUE).length();
@@ -843,16 +844,14 @@ public abstract class BaseCommand {
     /**
      * Stores a value in the persistence layer.
      *
-     * @param keyBytes        Original key bytes
      * @param valueBytes      Value bytes
      * @param slotWithKeyHash Precomputed slot and hash information
      * @param spType          Given as CompressValue spType
      * @param expireAt        Given expire time
      */
-    public void set(byte[] keyBytes, byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType, long expireAt) {
+    public void set(byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType, long expireAt) {
+        var key = slotWithKeyHash.rawKey;
         if (bigStringNoMemoryCopy != null) {
-            var key = new String(keyBytes);
-
             var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
             var seq = snowFlake.nextId();
             var keyHashAsUuid = slotWithKeyHash.keyHash;
@@ -896,7 +895,7 @@ public abstract class BaseCommand {
             var xBigStrings = new XBigStrings(keyHashAsUuid, slotWithKeyHash.bucketIndex, key, cvBigStringEncoded);
             oneSlot.appendBinlog(xBigStrings);
 
-            oneSlot.put(new String(keyBytes), slotWithKeyHash.bucketIndex, cvAsBigString);
+            oneSlot.put(key, slotWithKeyHash.bucketIndex, cvAsBigString);
             return;
         }
 
@@ -911,7 +910,7 @@ public abstract class BaseCommand {
             long longValue;
             try {
                 longValue = Long.parseLong(value);
-                setNumber(keyBytes, longValue, slotWithKeyHash, expireAt);
+                setNumber(longValue, slotWithKeyHash, expireAt);
                 return;
             } catch (NumberFormatException ignore) {
             }
@@ -919,13 +918,12 @@ public abstract class BaseCommand {
             double doubleValue;
             try {
                 doubleValue = Double.parseDouble(value);
-                setNumber(keyBytes, doubleValue, slotWithKeyHash, expireAt);
+                setNumber(doubleValue, slotWithKeyHash, expireAt);
                 return;
             } catch (NumberFormatException ignore) {
             }
         }
 
-        var key = new String(keyBytes);
         var preferDoCompress = valueBytes.length >= DictMap.TO_COMPRESS_MIN_DATA_LENGTH && valueBytes.length <= ConfForGlobal.bigStringNoCompressMinSize;
         var preferDoCompressUseSelfDict = valueBytes.length >= DictMap.TO_COMPRESS_USE_SELF_DICT_MIN_DATA_LENGTH;
 
@@ -962,7 +960,7 @@ public abstract class BaseCommand {
             cv.setDictSeqOrSpType(cr.isCompressed() ? dict.getSeq() : CompressedValue.NULL_DICT_SEQ);
             cv.setCompressedData(cr.data());
 
-            putToOneSlot(slot, key, slotWithKeyHash, cv);
+            putToOneSlot(slot, slotWithKeyHash, cv);
 
             // stats
             compressStats.compressedCount++;
@@ -990,7 +988,7 @@ public abstract class BaseCommand {
             cvRaw.setDictSeqOrSpType(spType);
             cvRaw.setCompressedData(valueBytes);
 
-            putToOneSlot(slot, key, slotWithKeyHash, cvRaw);
+            putToOneSlot(slot, slotWithKeyHash, cvRaw);
 
             if (ConfForGlobal.isValueSetUseCompression && ConfForGlobal.isOnDynTrainDictForCompression) {
                 // add to the train sample list
@@ -1025,16 +1023,15 @@ public abstract class BaseCommand {
      * Store a CompressedValue to a specific slot's storage.
      *
      * @param slot            Target slot number
-     * @param key             Original key string
      * @param slotWithKeyHash Precomputed slot and hash information
      * @param cv              CompressedValue to store
      */
-    protected void putToOneSlot(short slot, String key, @NotNull SlotWithKeyHash slotWithKeyHash, CompressedValue cv) {
+    protected void putToOneSlot(short slot, @NotNull SlotWithKeyHash slotWithKeyHash, CompressedValue cv) {
         if (byPassGetSet != null) {
-            byPassGetSet.put(slot, key, slotWithKeyHash.bucketIndex, cv);
+            byPassGetSet.put(slot, slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, cv);
         } else {
             var oneSlot = localPersist.oneSlot(slot);
-            oneSlot.put(key, slotWithKeyHash.bucketIndex, cv);
+            oneSlot.put(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, cv);
         }
     }
 
@@ -1087,7 +1084,7 @@ public abstract class BaseCommand {
      */
     public boolean exists(short slot, int bucketIndex, String key, long keyHash, int keyHash32) {
         if (byPassGetSet != null) {
-            var bufOrCompressedValue = byPassGetSet.getBuf(slot, key.getBytes(), bucketIndex, keyHash);
+            var bufOrCompressedValue = byPassGetSet.getBuf(slot, key, bucketIndex, keyHash);
             return bufOrCompressedValue != null;
         }
 

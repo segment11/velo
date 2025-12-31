@@ -136,8 +136,8 @@ class BlockingListTest extends Specification {
         bGroup.byPassGetSet = inMemoryGetSet
         bGroup.from(BaseCommand.mockAGroup())
 
-        def slotForKeyB = BaseCommand.slot('b'.bytes, (short) 1)
-        def xx = new BlockingList.DstKeyAndDstLeftWhenMove('b'.bytes, slotForKeyB, true)
+        def slotForKeyB = BaseCommand.slot('b', (short) 1)
+        def xx = new BlockingList.DstKeyAndDstLeftWhenMove(slotForKeyB, true)
 
         BlockingList.clearBlockingListPromisesForAllKeys()
         def settablePromise7 = new SettablePromise<Reply>()
@@ -149,7 +149,7 @@ class BlockingListTest extends Specification {
         settablePromise7.isComplete()
         (settablePromise7.getResult() as BulkReply).raw == 'a'.bytes
         bb7.length == 0
-        inMemoryGetSet.getBuf(slot, 'b'.bytes, slotForKeyB.bucketIndex(), slotForKeyB.keyHash()) != null
+        inMemoryGetSet.getBuf(slot, 'b', slotForKeyB.bucketIndex(), slotForKeyB.keyHash()) != null
 
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()

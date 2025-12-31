@@ -161,9 +161,8 @@ public class HGroup extends BaseCommand {
     private RedisHashKeys getRedisHashKeys(byte[] keyBytes) {
         var key = new String(keyBytes);
         var keysKey = RedisHashKeys.keysKey(key);
-        var keysKeyBytes = keysKey.getBytes();
 
-        var keysValueBytes = get(keysKeyBytes, slot(keysKeyBytes), false, CompressedValue.SP_TYPE_HASH);
+        var keysValueBytes = get(slot(keysKey), false, CompressedValue.SP_TYPE_HASH);
         if (keysValueBytes == null) {
             return null;
         }
@@ -173,8 +172,7 @@ public class HGroup extends BaseCommand {
 
     void saveRedisHashKeys(RedisHashKeys rhk, String key) {
         var keysKey = RedisHashKeys.keysKey(key);
-        var keysKeyBytes = keysKey.getBytes();
-        var slotWithKeyHashForKeys = slot(keysKeyBytes);
+        var slotWithKeyHashForKeys = slot(keysKey);
 
         if (rhk.size() == 0) {
             removeDelay(slotWithKeyHashForKeys.slot(), slotWithKeyHashForKeys.bucketIndex(), keysKey, slotWithKeyHashForKeys.keyHash());
@@ -186,11 +184,11 @@ public class HGroup extends BaseCommand {
         if (preferDict == null) {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
-        set(keysKeyBytes, rhk.encode(preferDict), slotWithKeyHashForKeys, CompressedValue.SP_TYPE_HASH);
+        set(rhk.encode(preferDict), slotWithKeyHashForKeys, CompressedValue.SP_TYPE_HASH);
     }
 
-    private RedisHH getRedisHH(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
-        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_HH);
+    private RedisHH getRedisHH(SlotWithKeyHash slotWithKeyHash) {
+        var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_HH);
         if (encodedBytes == null) {
             return null;
         }
@@ -198,19 +196,18 @@ public class HGroup extends BaseCommand {
         return RedisHH.decode(encodedBytes);
     }
 
-    void saveRedisHH(RedisHH rhh, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
-        var key = new String(keyBytes);
+    void saveRedisHH(RedisHH rhh, SlotWithKeyHash slotWithKeyHash) {
         if (rhh.size() == 0) {
-            removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());
+            removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), slotWithKeyHash.rawKey(), slotWithKeyHash.keyHash());
             return;
         }
 
-        var keyPrefixOrSuffix = TrainSampleJob.keyPrefixOrSuffixGroup(key);
+        var keyPrefixOrSuffix = TrainSampleJob.keyPrefixOrSuffixGroup(slotWithKeyHash.rawKey());
         var preferDict = dictMap.getDict(keyPrefixOrSuffix);
         if (preferDict == null) {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
-        set(keyBytes, rhh.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_HH);
+        set(rhh.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_HH);
     }
 
     @VisibleForTesting
@@ -247,7 +244,7 @@ public class HGroup extends BaseCommand {
         }
 
         if (isUseHH(keyBytes)) {
-            return hdel2(keyBytes, fields);
+            return hdel2(fields);
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -263,7 +260,7 @@ public class HGroup extends BaseCommand {
                 removed++;
 
                 var fieldKey = RedisHashKeys.fieldKey(key, field);
-                var slotWithKeyHashThisField = slot(fieldKey.getBytes());
+                var slotWithKeyHashThisField = slot(fieldKey);
                 var bucketIndex = slotWithKeyHashThisField.bucketIndex();
                 var keyHash = slotWithKeyHashThisField.keyHash();
                 removeDelay(slotWithKeyHash.slot(), bucketIndex, fieldKey, keyHash);
@@ -275,9 +272,9 @@ public class HGroup extends BaseCommand {
     }
 
     @VisibleForTesting
-    Reply hdel2(byte[] keyBytes, ArrayList<String> fields) {
+    Reply hdel2(ArrayList<String> fields) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
             return IntegerReply.REPLY_0;
         }
@@ -289,7 +286,7 @@ public class HGroup extends BaseCommand {
             }
         }
 
-        saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+        saveRedisHH(rhh, slotWithKeyHash);
         return new IntegerReply(removed);
     }
 
@@ -393,13 +390,13 @@ public class HGroup extends BaseCommand {
         }
 
         if (isUseHH(keyBytes)) {
-            return hexists2(keyBytes, fieldBytes);
+            return hexists2(fieldBytes);
         }
 
         var key = new String(keyBytes);
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
-        var fieldCv = getCv(fieldKey.getBytes(), slot(fieldKey.getBytes()));
+        var fieldCv = getCv(slot(fieldKey));
         return fieldCv != null ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
 
 //        var rhk = getRedisHashKeys(keyBytes);
@@ -411,9 +408,9 @@ public class HGroup extends BaseCommand {
     }
 
     @VisibleForTesting
-    Reply hexists2(byte[] keyBytes, byte[] fieldBytes) {
+    Reply hexists2(byte[] fieldBytes) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_HH);
+        var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_HH);
         if (encodedBytes == null) {
             return IntegerReply.REPLY_0;
         }
@@ -476,7 +473,7 @@ public class HGroup extends BaseCommand {
         }
 
         if (isUseHH(keyBytes)) {
-            return hIterateFields2(keyBytes, fields, isPersist, isMilliseconds, isTtl);
+            return hIterateFields2(fields, isPersist, isMilliseconds, isTtl);
         }
 
         var rhk = getRedisHashKeys(keyBytes);
@@ -499,8 +496,8 @@ public class HGroup extends BaseCommand {
             }
 
             var fieldKey = RedisHashKeys.fieldKey(key, field);
-            var fieldSlotWithKeyHash = slot(fieldKey.getBytes());
-            var fieldCv = getCv(fieldKey.getBytes(), fieldSlotWithKeyHash);
+            var fieldSlotWithKeyHash = slot(fieldKey);
+            var fieldCv = getCv(fieldSlotWithKeyHash);
             if (fieldCv == null) {
                 // may be expired at just this time
                 replies[i] = FIELD_NOT_FOUND;
@@ -517,7 +514,7 @@ public class HGroup extends BaseCommand {
                 // remove expiration
                 fieldCv.setSeq(snowFlake.nextId());
                 fieldCv.setExpireAt(CompressedValue.NO_EXPIRE);
-                setCv(fieldKey.getBytes(), fieldCv, fieldSlotWithKeyHash);
+                setCv(fieldCv, fieldSlotWithKeyHash);
 
                 replies[i] = IntegerReply.REPLY_1;
             } else if (isTtl) {
@@ -532,9 +529,9 @@ public class HGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    private Reply hIterateFields2(byte[] keyBytes, ArrayList<String> fields, boolean isPersist, boolean isMilliseconds, boolean isTtl) {
+    private Reply hIterateFields2(ArrayList<String> fields, boolean isPersist, boolean isMilliseconds, boolean isTtl) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
             var replies = new Reply[fields.size()];
             for (int i = 0; i < fields.size(); i++) {
@@ -575,7 +572,7 @@ public class HGroup extends BaseCommand {
         }
 
         if (isPersist) {
-            saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+            saveRedisHH(rhh, slotWithKeyHash);
         }
         return new MultiBulkReply(replies);
     }
@@ -665,7 +662,7 @@ public class HGroup extends BaseCommand {
         }
 
         if (isUseHH(keyBytes)) {
-            return hexpire2(keyBytes, expireAt, isNx, isXx, isGt, isLt, fields);
+            return hexpire2(expireAt, isNx, isXx, isGt, isLt, fields);
         }
 
         var rhk = getRedisHashKeys(keyBytes);
@@ -688,8 +685,8 @@ public class HGroup extends BaseCommand {
             }
 
             var fieldKey = RedisHashKeys.fieldKey(key, field);
-            var fieldSlotWithKeyHash = slot(fieldKey.getBytes());
-            var fieldCv = getCv(fieldKey.getBytes(), fieldSlotWithKeyHash);
+            var fieldSlotWithKeyHash = slot(fieldKey);
+            var fieldCv = getCv(fieldSlotWithKeyHash);
             if (fieldCv == null) {
                 // may be expired at just this time
                 replies[i] = FIELD_NOT_FOUND;
@@ -705,7 +702,7 @@ public class HGroup extends BaseCommand {
             // set expiration
             fieldCv.setSeq(snowFlake.nextId());
             fieldCv.setExpireAt(expireAt);
-            setCv(fieldKey.getBytes(), fieldCv, fieldSlotWithKeyHash);
+            setCv(fieldCv, fieldSlotWithKeyHash);
 
             replies[i] = IntegerReply.REPLY_1;
         }
@@ -733,9 +730,9 @@ public class HGroup extends BaseCommand {
         return false;
     }
 
-    private Reply hexpire2(byte[] keyBytes, long expireAt, boolean isNx, boolean isXx, boolean isGt, boolean isLt, ArrayList<String> fields) {
+    private Reply hexpire2(long expireAt, boolean isNx, boolean isXx, boolean isGt, boolean isLt, ArrayList<String> fields) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
             var replies = new Reply[fields.size()];
             for (int i = 0; i < fields.size(); i++) {
@@ -767,7 +764,7 @@ public class HGroup extends BaseCommand {
             replies[i] = IntegerReply.REPLY_1;
         }
 
-        saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+        saveRedisHH(rhh, slotWithKeyHash);
         return new MultiBulkReply(replies);
     }
 
@@ -787,27 +784,27 @@ public class HGroup extends BaseCommand {
         }
 
         if (isUseHH(keyBytes)) {
-            return hget2(keyBytes, fieldBytes, onlyReturnLength);
+            return hget2(fieldBytes, onlyReturnLength);
         }
 
         var key = new String(keyBytes);
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
-        var sFieldKey = slot(fieldKey.getBytes());
-        var fieldCv = getCv(fieldKey.getBytes(), sFieldKey);
+        var sFieldKey = slot(fieldKey);
+        var fieldCv = getCv(sFieldKey);
 
         if (fieldCv == null) {
             return onlyReturnLength ? IntegerReply.REPLY_0 : NilReply.INSTANCE;
         }
 
-        var fieldValueBytes = getValueBytesByCv(fieldCv, fieldBytes, sFieldKey);
+        var fieldValueBytes = getValueBytesByCv(fieldCv, sFieldKey);
         return onlyReturnLength ? new IntegerReply(fieldValueBytes.length) : new BulkReply(fieldValueBytes);
     }
 
     @VisibleForTesting
-    Reply hget2(byte[] keyBytes, byte[] fieldBytes, boolean onlyReturnLength) {
+    Reply hget2(byte[] fieldBytes, boolean onlyReturnLength) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_HH);
+        var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_HH);
         if (encodedBytes == null) {
             return onlyReturnLength ? IntegerReply.REPLY_0 : NilReply.INSTANCE;
         }
@@ -858,10 +855,10 @@ public class HGroup extends BaseCommand {
         int i = 0;
         for (var field : set) {
             var fieldKey = RedisHashKeys.fieldKey(key, field);
-            var sFieldKey = slot(fieldKey.getBytes());
-            var fieldCv = getCv(fieldKey.getBytes(), sFieldKey);
+            var sFieldKey = slot(fieldKey);
+            var fieldCv = getCv(sFieldKey);
             replies[i++] = new BulkReply(field.getBytes());
-            replies[i++] = fieldCv == null ? NilReply.INSTANCE : new BulkReply(getValueBytesByCv(fieldCv, fieldKey.getBytes(), sFieldKey));
+            replies[i++] = fieldCv == null ? NilReply.INSTANCE : new BulkReply(getValueBytesByCv(fieldCv, sFieldKey));
         }
         return new MultiBulkReply(replies);
     }
@@ -869,7 +866,7 @@ public class HGroup extends BaseCommand {
     @VisibleForTesting
     Reply hgetall2(byte[] keyBytes) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
             return MultiBulkReply.EMPTY;
         }
@@ -943,7 +940,7 @@ public class HGroup extends BaseCommand {
     @VisibleForTesting
     Reply hincrby2(byte[] keyBytes, byte[] fieldBytes, int by, double byFloat, boolean isByFloat) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
             rhh = new RedisHH();
         }
@@ -957,13 +954,13 @@ public class HGroup extends BaseCommand {
                 var newValueBytes = newValue.toPlainString().getBytes();
                 rhh.put(field, newValueBytes);
 
-                saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+                saveRedisHH(rhh, slotWithKeyHash);
                 return new DoubleReply(newValue);
             } else {
                 var newValueBytes = String.valueOf(by).getBytes();
                 rhh.put(field, newValueBytes);
 
-                saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+                saveRedisHH(rhh, slotWithKeyHash);
                 return new IntegerReply(by);
             }
         } else {
@@ -988,14 +985,14 @@ public class HGroup extends BaseCommand {
                 var newValueBytes = newValue.toPlainString().getBytes();
                 rhh.put(field, newValueBytes);
 
-                saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+                saveRedisHH(rhh, slotWithKeyHash);
                 return new DoubleReply(newValue);
             } else {
                 long newValue = longValue + by;
                 var newValueBytes = String.valueOf(newValue).getBytes();
                 rhh.put(field, newValueBytes);
 
-                saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+                saveRedisHH(rhh, slotWithKeyHash);
                 return new IntegerReply(newValue);
             }
         }
@@ -1017,9 +1014,8 @@ public class HGroup extends BaseCommand {
 
         var key = new String(keyBytes);
         var keysKey = RedisHashKeys.keysKey(key);
-        var keysKeyBytes = keysKey.getBytes();
 
-        var keysValueBytes = get(keysKeyBytes, slot(keysKeyBytes));
+        var keysValueBytes = get(slot(keysKey));
         if (keysValueBytes == null) {
             return onlyReturnSize ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
         }
@@ -1046,7 +1042,7 @@ public class HGroup extends BaseCommand {
     @VisibleForTesting
     Reply hkeys2(byte[] keyBytes, boolean onlyReturnSize) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_HH);
+        var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_HH);
         if (encodedBytes == null) {
             return onlyReturnSize ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
         }
@@ -1100,7 +1096,7 @@ public class HGroup extends BaseCommand {
         int i = 0;
         for (var field : fields) {
             var fieldKey = RedisHashKeys.fieldKey(key, field);
-            var fieldValueBytes = get(fieldKey.getBytes(), slot(fieldKey.getBytes()));
+            var fieldValueBytes = get(slot(fieldKey));
             replies[i++] = fieldValueBytes == null ? NilReply.INSTANCE : new BulkReply(fieldValueBytes);
         }
         return new MultiBulkReply(replies);
@@ -1109,7 +1105,7 @@ public class HGroup extends BaseCommand {
     @VisibleForTesting
     Reply hmget2(byte[] keyBytes, ArrayList<String> fields) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        var rhh = getRedisHH(slotWithKeyHash);
 
         var replies = new Reply[fields.size()];
         int i = 0;
@@ -1166,8 +1162,8 @@ public class HGroup extends BaseCommand {
             var field = entry.getKey();
             var fieldKey = RedisHashKeys.fieldKey(key, field);
             var fieldValueBytes = entry.getValue();
-            var slotWithKeyHashThisField = slot(fieldKey.getBytes());
-            set(fieldKey.getBytes(), fieldValueBytes, slotWithKeyHashThisField);
+            var slotWithKeyHashThisField = slot(fieldKey);
+            set(fieldValueBytes, slotWithKeyHashThisField);
 
             rhk.add(field);
         }
@@ -1183,7 +1179,7 @@ public class HGroup extends BaseCommand {
     @VisibleForTesting
     Reply hmset2(byte[] keyBytes, LinkedHashMap<String, byte[]> fieldValues, boolean isHset) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
             rhh = new RedisHH();
         }
@@ -1196,7 +1192,7 @@ public class HGroup extends BaseCommand {
             rhh.put(entry.getKey(), entry.getValue());
         }
 
-        saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+        saveRedisHH(rhh, slotWithKeyHash);
         if (isHset) {
             return new IntegerReply(fieldValues.size());
         } else {
@@ -1260,7 +1256,7 @@ public class HGroup extends BaseCommand {
                 replies[i++] = new BulkReply(field.getBytes());
                 if (withValues) {
                     var fieldKey = RedisHashKeys.fieldKey(key, field);
-                    var fieldValueBytes = get(fieldKey.getBytes(), slot(fieldKey.getBytes()));
+                    var fieldValueBytes = get(slot(fieldKey));
                     replies[i++] = fieldValueBytes == null ? NilReply.INSTANCE : new BulkReply(fieldValueBytes);
                 }
             }
@@ -1272,7 +1268,7 @@ public class HGroup extends BaseCommand {
     @VisibleForTesting
     Reply hrandfield2(byte[] keyBytes, int count, boolean withValues) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
             return withValues ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
         }
@@ -1432,7 +1428,7 @@ public class HGroup extends BaseCommand {
 
     Reply hscan2(byte[] keyBytes, long cursorLong, String matchPattern, int count, boolean noValues) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null || rhh.size() == 0) {
             return MultiBulkReply.SCAN_EMPTY;
         }
@@ -1516,17 +1512,15 @@ public class HGroup extends BaseCommand {
 
         var key = new String(keyBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
-        var fieldKeyBytes = fieldKey.getBytes();
+        var slotWithKeyHashThisField = slot(fieldKey);
 
-        var slotWithKeyHashThisField = slot(fieldKeyBytes);
-
-        var fieldCv = getCv(fieldKeyBytes, slotWithKeyHashThisField);
+        var fieldCv = getCv(slotWithKeyHashThisField);
         if (fieldCv != null) {
             throw new IllegalStateException("Hash field cv exists, key=" + key + ", field=" + field);
 //            return IntegerReply.REPLY_0;
         }
 
-        set(fieldKeyBytes, fieldValueBytes, slotWithKeyHashThisField);
+        set(fieldValueBytes, slotWithKeyHashThisField);
         rhk.add(field);
         saveRedisHashKeys(rhk, key);
         return IntegerReply.REPLY_1;
@@ -1535,7 +1529,7 @@ public class HGroup extends BaseCommand {
     @VisibleForTesting
     Reply hsetnx2(byte[] keyBytes, byte[] fieldBytes, byte[] fieldValueBytes) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
             rhh = new RedisHH();
         }
@@ -1546,7 +1540,7 @@ public class HGroup extends BaseCommand {
         }
 
         rhh.put(field, fieldValueBytes);
-        saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+        saveRedisHH(rhh, slotWithKeyHash);
         return IntegerReply.REPLY_1;
     }
 
@@ -1579,7 +1573,7 @@ public class HGroup extends BaseCommand {
         int i = 0;
         for (var field : set) {
             var fieldKey = RedisHashKeys.fieldKey(key, field);
-            var fieldValueBytes = get(fieldKey.getBytes(), slot(fieldKey.getBytes()));
+            var fieldValueBytes = get(slot(fieldKey));
             replies[i++] = fieldValueBytes == null ? NilReply.INSTANCE : new BulkReply(fieldValueBytes);
         }
         return new MultiBulkReply(replies);
@@ -1588,7 +1582,7 @@ public class HGroup extends BaseCommand {
     @VisibleForTesting
     Reply hvals2(byte[] keyBytes) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(keyBytes, slotWithKeyHash);
+        var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
             return MultiBulkReply.EMPTY;
         }

@@ -115,7 +115,7 @@ public class GGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var valueBytes = get(keyBytes, slotWithKeyHash);
+        var valueBytes = get(slotWithKeyHash);
         if (valueBytes == null) {
             return IntegerReply.REPLY_0;
         }
@@ -131,7 +131,7 @@ public class GGroup extends BaseCommand {
 
         var keyBytes = data[1];
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var valueBytes = get(keyBytes, slotWithKeyHash);
+        var valueBytes = get(slotWithKeyHash);
         if (valueBytes != null) {
             removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), new String(keyBytes), slotWithKeyHash.keyHash());
             return new BulkReply(valueBytes);
@@ -192,12 +192,13 @@ public class GGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, slotWithKeyHash);
+        var key = slotWithKeyHash.rawKey();
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return NilReply.INSTANCE;
         }
 
-        var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+        var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
 
         long expireAt = cv.getExpireAt();
         long expireAtOld = expireAt;
@@ -215,7 +216,7 @@ public class GGroup extends BaseCommand {
 
         if (expireAt != expireAtOld) {
             cv.setExpireAt(expireAt);
-            setCv(keyBytes, cv, slotWithKeyHash);
+            setCv(cv, slotWithKeyHash);
         }
         return new BulkReply(valueBytes);
     }
@@ -239,7 +240,7 @@ public class GGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var valueBytes = get(keyBytes, slotWithKeyHash);
+        var valueBytes = get(slotWithKeyHash);
         if (valueBytes == null) {
             return NilReply.INSTANCE;
         }
@@ -267,9 +268,9 @@ public class GGroup extends BaseCommand {
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         // not only for type string, other types will be overwritten
-        var valueBytesExist = get(keyBytes, slotWithKeyHash);
+        var valueBytesExist = get(slotWithKeyHash);
 
-        set(keyBytes, valueBytes, slotWithKeyHash);
+        set(valueBytes, slotWithKeyHash);
 
         if (valueBytesExist == null) {
             return NilReply.INSTANCE;
@@ -343,8 +344,8 @@ public class GGroup extends BaseCommand {
     private record GeoItem(double lon, double lat, String member) {
     }
 
-    private RedisGeo getRedisGeo(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
-        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_GEO);
+    private RedisGeo getRedisGeo(SlotWithKeyHash slotWithKeyHash) {
+        var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_GEO);
         if (encodedBytes == null) {
             return null;
         }
@@ -353,14 +354,13 @@ public class GGroup extends BaseCommand {
     }
 
     @VisibleForTesting
-    void saveRedisGeo(RedisGeo rg, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
-        var key = new String(keyBytes);
+    void saveRedisGeo(RedisGeo rg, SlotWithKeyHash slotWithKeyHash) {
         if (rg.isEmpty()) {
-            removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());
+            removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), slotWithKeyHash.rawKey(), slotWithKeyHash.keyHash());
             return;
         }
 
-        set(keyBytes, rg.encode(), slotWithKeyHash, CompressedValue.SP_TYPE_GEO);
+        set(rg.encode(), slotWithKeyHash, CompressedValue.SP_TYPE_GEO);
     }
 
     private Reply geoadd() {
@@ -404,7 +404,7 @@ public class GGroup extends BaseCommand {
             return ErrorReply.SYNTAX;
         }
 
-        var rg = getRedisGeo(keyBytes, s);
+        var rg = getRedisGeo(s);
         if (rg == null) {
             rg = new RedisGeo();
         }
@@ -439,7 +439,7 @@ public class GGroup extends BaseCommand {
 
         var handled = added + changed;
         if (handled > 0) {
-            saveRedisGeo(rg, keyBytes, s);
+            saveRedisGeo(rg, s);
         }
         return new IntegerReply(isIncludeCh ? changed + added : added);
     }
@@ -464,7 +464,7 @@ public class GGroup extends BaseCommand {
             }
         }
 
-        var rg = getRedisGeo(keyBytes, s);
+        var rg = getRedisGeo(s);
         if (rg == null) {
             return NilReply.INSTANCE;
         }
@@ -488,7 +488,7 @@ public class GGroup extends BaseCommand {
         var s = slotWithKeyHashListParsed.getFirst();
         var replies = new Reply[data.length - 2];
 
-        var rg = getRedisGeo(keyBytes, s);
+        var rg = getRedisGeo(s);
         if (rg == null) {
             Arrays.fill(replies, NilReply.INSTANCE);
         } else {
@@ -632,7 +632,7 @@ public class GGroup extends BaseCommand {
 
         var isNeedStoreToDstKey = dstKeyBytes != null;
 
-        var rg = getRedisGeo(keyBytes, s);
+        var rg = getRedisGeo(s);
         if (rg == null) {
             return isNeedStoreToDstKey ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
         }
@@ -691,7 +691,7 @@ public class GGroup extends BaseCommand {
             }
 
             if (!isCrossRequestWorker) {
-                saveRedisGeo(dstRg, dstKeyBytes, dstS);
+                saveRedisGeo(dstRg, dstS);
                 return new IntegerReply(dstRg.size());
             } else {
                 var dstOneSlot = localPersist.oneSlot(dstS.slot());
@@ -700,7 +700,7 @@ public class GGroup extends BaseCommand {
                 var asyncReply = new AsyncReply(finalPromise);
 
                 var p = dstOneSlot.asyncRun(() -> {
-                    saveRedisGeo(dstRg, dstKeyBytes, dstS);
+                    saveRedisGeo(dstRg, dstS);
                 });
 
                 p.whenComplete((v, t) -> {

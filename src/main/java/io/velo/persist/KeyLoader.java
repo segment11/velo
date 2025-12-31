@@ -932,12 +932,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Retrieves the expiration time for a key in a specific bucket.
      *
      * @param bucketIndex The bucket index.
-     * @param keyBytes    The key bytes.
+     * @param key         The key.
      * @param keyHash     The hash of the key.
      * @param keyHash32   The 32-bit hash of the key.
      * @return The expiration time or null if not found.
      */
-    Long getExpireAt(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
+    Long getExpireAt(int bucketIndex, String key, long keyHash, int keyHash32) {
         if (ConfForGlobal.pureMemoryV2) {
             var recordX = allKeyHashBuckets.get(keyHash32, bucketIndex);
             if (recordX == null) {
@@ -946,7 +946,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return recordX.expireAt();
         }
 
-        var r = getExpireAtAndSeqByKey(bucketIndex, keyBytes, keyHash, keyHash32);
+        var r = getExpireAtAndSeqByKey(bucketIndex, key, keyHash, keyHash32);
         return r == null ? null : r.expireAt();
     }
 
@@ -954,12 +954,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Retrieves the expiration time and sequence number for a key in a specific bucket.
      *
      * @param bucketIndex The bucket index.
-     * @param keyBytes    The key bytes.
+     * @param key         The key.
      * @param keyHash     The hash of the key.
      * @param keyHash32   The 32-bit hash of the key.
      * @return An ExpireAtAndSeq object containing the expiration time and sequence number or null if not found.
      */
-    KeyBucket.ExpireAtAndSeq getExpireAtAndSeqByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
+    KeyBucket.ExpireAtAndSeq getExpireAtAndSeqByKey(int bucketIndex, String key, long keyHash, int keyHash32) {
         if (ConfForGlobal.pureMemoryV2) {
             var recordX = allKeyHashBuckets.get(keyHash32, bucketIndex);
             if (recordX == null) {
@@ -978,19 +978,19 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return null;
         }
 
-        return keyBucket.getExpireAtAndSeqByKey(keyBytes, keyHash);
+        return keyBucket.getExpireAtAndSeqByKey(key, keyHash);
     }
 
     /**
      * Retrieves the value, expiration time, and sequence number for a key in a specific bucket.
      *
      * @param bucketIndex The bucket index.
-     * @param keyBytes    The key bytes.
+     * @param key         The key.
      * @param keyHash     The hash of the key.
      * @param keyHash32   The 32-bit hash of the key.
      * @return A ValueBytesWithExpireAtAndSeq object containing the value, expiration time, and sequence number or null if not found.
      */
-    KeyBucket.ValueBytesWithExpireAtAndSeq getValueXByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
+    KeyBucket.ValueBytesWithExpireAtAndSeq getValueXByKey(int bucketIndex, String key, long keyHash, int keyHash32) {
         if (ConfForGlobal.pureMemoryV2) {
             var recordX = allKeyHashBuckets.get(keyHash32, bucketIndex);
             if (recordX == null) {
@@ -1009,7 +1009,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return null;
         }
 
-        return keyBucket.getValueXByKey(keyBytes, keyHash);
+        return keyBucket.getValueXByKey(key, keyHash);
     }
 
     /**
@@ -1033,7 +1033,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * not exact correct when split, just for test or debug, not public
      *
      * @param bucketIndex The bucket index.
-     * @param keyBytes    The key bytes.
+     * @param key         The key.
      * @param keyHash     The hash of the key.
      * @param keyHash32   The 32-bit hash of the key.
      * @param expireAt    The expiration time.
@@ -1041,7 +1041,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param valueBytes  The value bytes.
      */
     @TestOnly
-    void putValueByKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32, long expireAt, long seq, byte[] valueBytes) {
+    void putValueByKey(int bucketIndex, String key, long keyHash, int keyHash32, long expireAt, long seq, byte[] valueBytes) {
         if (ConfForGlobal.pureMemoryV2) {
             // seq as record id
             var putR = allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, seq, (short) valueBytes.length, typeAsByteIgnore, seq);
@@ -1060,7 +1060,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             keyBucket = new KeyBucket(slot, bucketIndex, splitIndex, splitNumber, null, snowFlake);
         }
 
-        keyBucket.put(keyBytes, keyHash, expireAt, seq, valueBytes);
+        keyBucket.put(key, keyHash, expireAt, seq, valueBytes);
         updateKeyBucketInner(bucketIndex, keyBucket, true);
     }
 
@@ -1374,13 +1374,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * use wal delay remove instead of remove immediately
      *
      * @param bucketIndex The bucket index.
-     * @param keyBytes    The key bytes.
+     * @param key         The key.
      * @param keyHash     The hash of the key.
      * @param keyHash32   The 32-bit hash of the key.
      * @return true if the key was successfully removed, false otherwise.
      */
     @TestOnly
-    boolean removeSingleKey(int bucketIndex, byte[] keyBytes, long keyHash, int keyHash32) {
+    boolean removeSingleKey(int bucketIndex, String key, long keyHash, int keyHash32) {
         if (ConfForGlobal.pureMemoryV2) {
             var removeR = allKeyHashBuckets.remove(keyHash32, bucketIndex);
             if (removeR.isExists()) {
@@ -1397,7 +1397,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return false;
         }
 
-        var isDeleted = keyBucket.del(keyBytes, keyHash, true);
+        var isDeleted = keyBucket.del(key, keyHash, true);
         if (isDeleted) {
             updateKeyBucketInner(bucketIndex, keyBucket, false);
         }
@@ -1446,12 +1446,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 continue;
             }
 
-            keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+            keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (expireAt == CompressedValue.NO_EXPIRE || expireAt > currentTimeMillis) {
                     var buf = Unpooled.wrappedBuffer(valueBytes);
-                    var cv = CompressedValue.decode(buf, keyBytes, keyHash);
+                    var cv = CompressedValue.decode(buf, key.getBytes(), keyHash);
                     if (cv.isBigString()) {
-                        list.add(new BigStringFiles.IdWithKey(cv.getBigStringMetaUuid(), new String(keyBytes)));
+                        list.add(new BigStringFiles.IdWithKey(cv.getBigStringMetaUuid(), key));
                     }
                 }
             });
@@ -1482,12 +1482,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 continue;
             }
 
-            keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+            keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
                     var buf = Unpooled.wrappedBuffer(valueBytes);
-                    var cv = CompressedValue.decode(buf, keyBytes, keyHash);
+                    var cv = CompressedValue.decode(buf, key.getBytes(), keyHash);
                     if (cv.isBigString()) {
-                        KeyLoader.this.cvExpiredOrDeletedCallBack.handle(new String(keyBytes), cv);
+                        KeyLoader.this.cvExpiredOrDeletedCallBack.handle(key, cv);
                         countArray[0]++;
                     }
                 }

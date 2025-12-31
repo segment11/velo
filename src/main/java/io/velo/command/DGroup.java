@@ -147,9 +147,8 @@ public class DGroup extends BaseCommand {
 
         var subCmd = new String(data[1]).toLowerCase();
         if ("object".equals(subCmd)) {
-            var keyBytes = data[2];
             var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-            var cv = getCv(keyBytes, slotWithKeyHash);
+            var cv = getCv(slotWithKeyHash);
             if (cv == null) {
                 return NilReply.INSTANCE;
             }
@@ -278,7 +277,7 @@ public class DGroup extends BaseCommand {
         double doubleValue = 0;
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, slotWithKeyHash);
+        var cv = getCv(slotWithKeyHash);
 
         if (cv != null && cv.isTypeNumber()) {
             if (isByFloat) {
@@ -309,20 +308,20 @@ public class DGroup extends BaseCommand {
             var newValue = BigDecimal.valueOf(doubleValue).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP)
                     .subtract(BigDecimal.valueOf(byFloat).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP));
 
-            setNumber(keyBytes, newValue.doubleValue(), slotWithKeyHash);
+            setNumber(newValue.doubleValue(), slotWithKeyHash);
             return new DoubleReply(newValue);
         } else {
             long newValue = longValue - by;
-            setNumber(keyBytes, newValue, slotWithKeyHash);
+            setNumber(newValue, slotWithKeyHash);
             return new IntegerReply(newValue);
         }
     }
 
-    boolean isUseHH(byte[] keyBytes) {
+    boolean isUseHH(String key) {
         int checkPrefixLength = RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX.length;
-        if (keyBytes.length > checkPrefixLength) {
+        if (key.length() > checkPrefixLength) {
             // check prefix match
-            if (Arrays.equals(keyBytes, 0, checkPrefixLength,
+            if (Arrays.equals(key.getBytes(), 0, checkPrefixLength,
                     RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX, 0, checkPrefixLength)) {
                 return false;
             }
@@ -330,12 +329,12 @@ public class DGroup extends BaseCommand {
         return localPersist.getIsHashSaveMemberTogether();
     }
 
-    byte[] dumpBytes(CompressedValue cv, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
+    byte[] dumpBytes(CompressedValue cv, SlotWithKeyHash slotWithKeyHash) {
         if (cv.isTypeString()) {
-            var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+            var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
             return RDBParser.dumpString(valueBytes);
         } else if (cv.isSet()) {
-            var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+            var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
             var rhk = RedisHashKeys.decode(valueBytes);
             if (rhk.size() == 0) {
                 return null;
@@ -343,8 +342,8 @@ public class DGroup extends BaseCommand {
 
             return RDBParser.dumpSet(rhk);
         } else if (cv.isHash()) {
-            if (isUseHH(keyBytes)) {
-                var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+            if (isUseHH(slotWithKeyHash.rawKey())) {
+                var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
                 var rhh = RedisHH.decode(valueBytes);
                 if (rhh.size() == 0) {
                     return null;
@@ -352,26 +351,25 @@ public class DGroup extends BaseCommand {
 
                 return RDBParser.dumpHash(rhh);
             } else {
-                var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+                var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
                 var rhk = RedisHashKeys.decode(valueBytes);
                 if (rhk.getSet().isEmpty()) {
                     return null;
                 }
 
                 var rhh = new RedisHH();
-                var key = new String(keyBytes);
                 for (var field : rhk.getSet()) {
-                    var fieldKey = RedisHashKeys.fieldKey(key, field);
-                    var sFieldKey = slot(fieldKey.getBytes());
-                    var fieldCv = getCv(fieldKey.getBytes(), sFieldKey);
-                    var fieldValueBytes = getValueBytesByCv(fieldCv, fieldKey.getBytes(), sFieldKey);
+                    var fieldKey = RedisHashKeys.fieldKey(slotWithKeyHash.rawKey(), field);
+                    var sFieldKey = slot(fieldKey);
+                    var fieldCv = getCv(sFieldKey);
+                    var fieldValueBytes = getValueBytesByCv(fieldCv, sFieldKey);
                     rhh.put(field, fieldValueBytes);
                 }
 
                 return RDBParser.dumpHash(rhh);
             }
         } else if (cv.isList()) {
-            var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+            var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
             var rl = RedisList.decode(valueBytes);
             if (rl.size() == 0) {
                 return null;
@@ -379,7 +377,7 @@ public class DGroup extends BaseCommand {
 
             return RDBParser.dumpList(rl);
         } else if (cv.isZSet()) {
-            var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+            var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
             var rz = RedisZSet.decode(valueBytes);
             if (rz.isEmpty()) {
                 return null;
@@ -400,12 +398,12 @@ public class DGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, slotWithKeyHash);
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return NilReply.INSTANCE;
         }
 
-        var dumpBytes = dumpBytes(cv, keyBytes, slotWithKeyHash);
+        var dumpBytes = dumpBytes(cv, slotWithKeyHash);
         if (dumpBytes == null) {
             return NilReply.INSTANCE;
         }

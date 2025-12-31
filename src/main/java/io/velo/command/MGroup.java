@@ -85,10 +85,10 @@ public class MGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    record KeyBytesAndSlotWithKeyHash(byte[] keyBytes, int index, SlotWithKeyHash slotWithKeyHash) {
+    record IndexAndSlotWithKeyHash(int index, SlotWithKeyHash slotWithKeyHash) {
     }
 
-    record KeyValueBytesAndSlotWithKeyHash(byte[] keyBytes, byte[] valueBytes, SlotWithKeyHash slotWithKeyHash) {
+    record ValueBytesAndSlotWithKeyHash(byte[] valueBytes, SlotWithKeyHash slotWithKeyHash) {
     }
 
     private record ValueBytesAndIndex(byte[] valueBytes, int index) {
@@ -105,22 +105,22 @@ public class MGroup extends BaseCommand {
             for (int i = 1, j = 0; i < data.length; i++, j++) {
                 var keyBytes = data[i];
                 var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-                var cv = getCv(keyBytes, slotWithKeyHash);
+                var cv = getCv(slotWithKeyHash);
                 if (cv == null || !cv.isTypeString()) {
                     replies[j] = NilReply.INSTANCE;
                 } else {
-                    var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+                    var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
                     replies[j] = new BulkReply(valueBytes);
                 }
             }
             return new MultiBulkReply(replies);
         }
 
-        ArrayList<KeyBytesAndSlotWithKeyHash> list = new ArrayList<>();
+        ArrayList<IndexAndSlotWithKeyHash> list = new ArrayList<>();
         for (int i = 1, j = 0; i < data.length; i++, j++) {
             var keyBytes = data[i];
             var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-            list.add(new KeyBytesAndSlotWithKeyHash(keyBytes, j, slotWithKeyHash));
+            list.add(new IndexAndSlotWithKeyHash(j, slotWithKeyHash));
         }
 
         ArrayList<Promise<ArrayList<ValueBytesAndIndex>>> promises = new ArrayList<>();
@@ -133,12 +133,12 @@ public class MGroup extends BaseCommand {
             var p = oneSlot.asyncCall(() -> {
                 ArrayList<ValueBytesAndIndex> valueList = new ArrayList<>();
                 for (var one : subList) {
-                    var cv = getCv(one.keyBytes, one.slotWithKeyHash);
+                    var cv = getCv(one.slotWithKeyHash);
                     byte[] valueBytes;
                     if (cv == null || !cv.isTypeString()) {
                         valueBytes = null;
                     } else {
-                        valueBytes = getValueBytesByCv(cv, one.keyBytes, one.slotWithKeyHash);
+                        valueBytes = getValueBytesByCv(cv, one.slotWithKeyHash);
                     }
                     valueList.add(new ValueBytesAndIndex(valueBytes, one.index));
                 }
@@ -186,20 +186,18 @@ public class MGroup extends BaseCommand {
 
         if (!isCrossRequestWorker) {
             for (int i = 1, j = 0; i < data.length; i += 2, j++) {
-                var keyBytes = data[i];
                 var valueBytes = data[i + 1];
                 var s = slotWithKeyHashListParsed.get(j);
-                set(keyBytes, valueBytes, s);
+                set(valueBytes, s);
             }
             return OKReply.INSTANCE;
         }
 
-        ArrayList<KeyValueBytesAndSlotWithKeyHash> list = new ArrayList<>();
+        ArrayList<ValueBytesAndSlotWithKeyHash> list = new ArrayList<>();
         for (int i = 1, j = 0; i < data.length; i += 2, j++) {
-            var keyBytes = data[i];
             var valueBytes = data[i + 1];
             var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-            list.add(new KeyValueBytesAndSlotWithKeyHash(keyBytes, valueBytes, slotWithKeyHash));
+            list.add(new ValueBytesAndSlotWithKeyHash(valueBytes, slotWithKeyHash));
         }
 
         ArrayList<Promise<Void>> promises = new ArrayList<>();
@@ -211,7 +209,7 @@ public class MGroup extends BaseCommand {
             var oneSlot = localPersist.oneSlot(slot);
             var p = oneSlot.asyncRun(() -> {
                 for (var one : subList) {
-                    set(one.keyBytes, one.valueBytes, one.slotWithKeyHash);
+                    set(one.valueBytes, one.slotWithKeyHash);
                 }
             });
             promises.add(p);
@@ -248,20 +246,18 @@ public class MGroup extends BaseCommand {
             }
 
             for (int i = 1, j = 0; i < data.length; i += 2, j++) {
-                var keyBytes = data[i];
                 var valueBytes = data[i + 1];
                 var s = slotWithKeyHashListParsed.get(j);
-                set(keyBytes, valueBytes, s);
+                set(valueBytes, s);
             }
             return IntegerReply.REPLY_1;
         }
 
-        ArrayList<KeyValueBytesAndSlotWithKeyHash> list = new ArrayList<>();
+        ArrayList<ValueBytesAndSlotWithKeyHash> list = new ArrayList<>();
         for (int i = 1, j = 0; i < data.length; i += 2, j++) {
-            var keyBytes = data[i];
             var valueBytes = data[i + 1];
             var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-            list.add(new KeyValueBytesAndSlotWithKeyHash(keyBytes, valueBytes, slotWithKeyHash));
+            list.add(new ValueBytesAndSlotWithKeyHash(valueBytes, slotWithKeyHash));
         }
 
         ArrayList<Promise<Boolean>> anyKeyExistsPromises = new ArrayList<>();
@@ -306,7 +302,7 @@ public class MGroup extends BaseCommand {
                 var oneSlot = localPersist.oneSlot(slot);
                 oneSlot.asyncRun(() -> {
                     for (var one : subList) {
-                        set(one.keyBytes, one.valueBytes, one.slotWithKeyHash);
+                        set(one.valueBytes, one.slotWithKeyHash);
                     }
                 });
             }
@@ -401,13 +397,13 @@ public class MGroup extends BaseCommand {
         if (!isCrossRequestWorker) {
             int count = 0;
             for (var key : keys) {
-                var s = slot(key.getBytes());
-                var cv = getCv(key.getBytes(), s);
+                var s = slot(key);
+                var cv = getCv(s);
                 if (cv == null) {
                     continue;
                 }
 
-                var dumpBytes = dGroup.dumpBytes(cv, key.getBytes(), s);
+                var dumpBytes = dGroup.dumpBytes(cv, s);
                 if (dumpBytes == null) {
                     continue;
                 }
@@ -430,11 +426,11 @@ public class MGroup extends BaseCommand {
 
             return count != 0 ? OKReply.INSTANCE : NOKEY_REPLY;
         } else {
-            ArrayList<KeyBytesAndSlotWithKeyHash> list = new ArrayList<>();
+            ArrayList<IndexAndSlotWithKeyHash> list = new ArrayList<>();
             for (int i = 0; i < keys.size(); i++) {
                 var key = keys.get(i);
-                var slotWithKeyHash = slot(key.getBytes());
-                list.add(new KeyBytesAndSlotWithKeyHash(key.getBytes(), i, slotWithKeyHash));
+                var slotWithKeyHash = slot(key);
+                list.add(new IndexAndSlotWithKeyHash(i, slotWithKeyHash));
             }
 
             ArrayList<Promise<ArrayList<DumpBytesAndTtlAndIndex>>> promises = new ArrayList<>();
@@ -447,12 +443,12 @@ public class MGroup extends BaseCommand {
                 var p = oneSlot.asyncCall(() -> {
                     ArrayList<DumpBytesAndTtlAndIndex> dumpBytesList = new ArrayList<>();
                     for (var one : subList) {
-                        var cv = getCv(one.keyBytes, one.slotWithKeyHash);
+                        var cv = getCv(one.slotWithKeyHash);
                         if (cv == null) {
                             continue;
                         }
 
-                        var dumpBytes = dGroup.dumpBytes(cv, one.keyBytes, one.slotWithKeyHash);
+                        var dumpBytes = dGroup.dumpBytes(cv, one.slotWithKeyHash);
                         dumpBytesList.add(new DumpBytesAndTtlAndIndex(dumpBytes, cv.getExpireAt(), one.index));
                     }
                     return dumpBytesList;

@@ -240,7 +240,7 @@ zunionstore
     }
 
     private RedisZSet fromMem(InMemoryGetSet inMemoryGetSet, String key) {
-        def buf = inMemoryGetSet.getBuf(slot, key.bytes, 0, 0L)
+        def buf = inMemoryGetSet.getBuf(slot, key, 0, 0L)
         RedisZSet.decode(buf.cv().compressedData)
     }
 
@@ -1613,7 +1613,7 @@ zunionstore
 
     def 'test zrange'() {
         given:
-        def dstKeyBytes = 'dst'.bytes
+        def dstKey = 'dst'
 
         def inMemoryGetSet = new InMemoryGetSet()
 
@@ -1628,7 +1628,7 @@ zunionstore
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1643,7 +1643,7 @@ zunionstore
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1693,7 +1693,11 @@ zunionstore
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        def tmpData5 = new byte[5][]
+        tmpData5[1] = dstKey
+        tmpData5[2] = 'a'.bytes
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1704,28 +1708,26 @@ zunionstore
         (reply as MultiBulkReply).replies.length == 2
 
         when:
-        def tmpData5 = new byte[5][]
-        tmpData5[1] = dstKeyBytes
-        tmpData5[2] = 'a'.bytes
         zGroup.execute('zrange a (1 (4 byscore byscore limit 0 0 byscore')
         zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 2
-        inMemoryGetSet.getBuf(slot, dstKeyBytes, 0, 0L) != null
+        inMemoryGetSet.getBuf(slot, dstKey, 0, 0L) != null
 
         when:
         zGroup.execute('zrange a (1 (5 byscore byscore limit 0 2 byscore')
         zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 2
 
         when:
         zGroup.execute('zrange a 1.1 1.2 byscore rev limit 0 0 byscore')
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1762,7 +1764,8 @@ zunionstore
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1773,7 +1776,8 @@ zunionstore
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1785,7 +1789,8 @@ zunionstore
         (reply as MultiBulkReply).replies.length == 2
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 2
@@ -1797,7 +1802,8 @@ zunionstore
         (reply as MultiBulkReply).replies.length == 3
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 3
@@ -1808,7 +1814,8 @@ zunionstore
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1819,7 +1826,8 @@ zunionstore
         (reply as MultiBulkReply).replies.length == 2
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 2
@@ -1831,7 +1839,8 @@ zunionstore
         (reply as MultiBulkReply).replies.length == 2
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 2
@@ -1842,7 +1851,8 @@ zunionstore
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1872,7 +1882,8 @@ zunionstore
         (reply as MultiBulkReply).replies.length == 2
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 2
@@ -1883,7 +1894,8 @@ zunionstore
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1894,7 +1906,8 @@ zunionstore
         (reply as MultiBulkReply).replies.length == 10
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 10
@@ -1916,7 +1929,8 @@ zunionstore
         (reply as MultiBulkReply).replies.length == 4
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 4
@@ -1927,7 +1941,8 @@ zunionstore
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
 
@@ -1938,7 +1953,8 @@ zunionstore
         (reply as MultiBulkReply).replies.length == 2
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 2
@@ -1961,7 +1977,8 @@ zunionstore
         reply == MultiBulkReply.EMPTY
 
         when:
-        reply = zGroup.zrange(zGroup.data, dstKeyBytes)
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
+        reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
 

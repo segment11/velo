@@ -75,11 +75,11 @@ public class TGroup extends BaseCommand {
 
         // need not decompress at all, todo: optimize
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, slotWithKeyHash);
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             // hash keys changed
             var keysKey = RedisHashKeys.keysKey(new String(keyBytes));
-            cv = getCv(keysKey.getBytes(), slot(keysKey.getBytes()));
+            cv = getCv(slot(keysKey));
 
             if (cv == null) {
                 return NilReply.INSTANCE;
@@ -117,7 +117,7 @@ public class TGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var expireAt = getExpireAt(keyBytes, slotWithKeyHash);
+        var expireAt = getExpireAt(slotWithKeyHash);
         if (expireAt == null) {
             return new IntegerReply(-2);
         }

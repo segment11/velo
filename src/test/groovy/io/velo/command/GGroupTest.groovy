@@ -231,7 +231,7 @@ class GGroupTest extends Specification {
         cv.expireAt = System.currentTimeMillis() + 1000 * 60
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = gGroup.execute('getex a persist')
-        def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
+        def bufOrCv = inMemoryGetSet.getBuf(slot, 'a', 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt == CompressedValue.NO_EXPIRE
 
@@ -242,7 +242,7 @@ class GGroupTest extends Specification {
 
         when:
         reply = gGroup.execute('getex a ex 60')
-        bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'a', 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt > System.currentTimeMillis()
 
@@ -258,21 +258,21 @@ class GGroupTest extends Specification {
 
         when:
         reply = gGroup.execute('getex a px 60000')
-        bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'a', 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt > System.currentTimeMillis()
 
         when:
         def pxatStr = (System.currentTimeMillis() + 1000 * 60).toString()
         reply = gGroup.execute('getex a pxat ' + pxatStr)
-        bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'a', 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt.toString().bytes == pxatStr.bytes
 
         when:
         def exatStr = ((System.currentTimeMillis() / 1000).intValue() + 60).toString()
         reply = gGroup.execute('getex a exat ' + exatStr)
-        bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'a', 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt > System.currentTimeMillis()
 
@@ -333,7 +333,7 @@ class GGroupTest extends Specification {
         def reply = gGroup.execute('getset a value')
         then:
         reply == NilReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, 0L).cv().compressedData == 'value'.bytes
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().compressedData == 'value'.bytes
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -345,7 +345,7 @@ class GGroupTest extends Specification {
         (reply as BulkReply).raw == 'abc'.bytes
 
         when:
-        def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, 0L)
+        def bufOrCv = inMemoryGetSet.getBuf(slot, 'a', 0, 0L)
         then:
         bufOrCv.cv().compressedData == 'value2'.bytes
     }
@@ -668,10 +668,10 @@ class GGroupTest extends Specification {
         when:
         def dstRg = new RedisGeo()
         // removed
-        def sss = gGroup.slot('yyy'.bytes)
-        gGroup.saveRedisGeo(dstRg, 'yyy'.bytes, sss)
+        def sss = gGroup.slot('yyy')
+        gGroup.saveRedisGeo(dstRg, sss)
         then:
-        inMemoryGetSet.getBuf(slot, 'yyy'.bytes, sss.bucketIndex(), sss.keyHash()) == null
+        inMemoryGetSet.getBuf(slot, 'yyy', sss.bucketIndex(), sss.keyHash()) == null
 
         cleanup:
         eventloop.breakEventloop()

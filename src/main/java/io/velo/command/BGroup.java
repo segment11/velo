@@ -166,7 +166,7 @@ public class BGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, slotWithKeyHash);
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return IntegerReply.REPLY_0;
         }
@@ -175,7 +175,7 @@ public class BGroup extends BaseCommand {
             return ErrorReply.WRONG_TYPE;
         }
 
-        var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+        var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
         var canIndexValueBytesLength = isIndexUseBit ? valueBytes.length * 8 : valueBytes.length;
 
         var startEndWith = IndexStartEndReset.reset(start, end, canIndexValueBytesLength);
@@ -244,7 +244,7 @@ public class BGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, slotWithKeyHash);
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return new IntegerReply(-1);
         }
@@ -253,7 +253,7 @@ public class BGroup extends BaseCommand {
             return ErrorReply.WRONG_TYPE;
         }
 
-        var valueBytes = getValueBytesByCv(cv, keyBytes, slotWithKeyHash);
+        var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
         var canIndexValueBytesLength = isIndexUseBit ? valueBytes.length * 8 : valueBytes.length;
 
         var startEndWith = IndexStartEndReset.reset(start, end, canIndexValueBytesLength);
@@ -350,7 +350,7 @@ public class BGroup extends BaseCommand {
 
         var s = slotWithKeyHashListParsed.getFirst();
         RedisBF redisBF;
-        var cv = getCv(keyBytes, s);
+        var cv = getCv(s);
         if (cv == null) {
             redisBF = new RedisBF(true);
         } else {
@@ -369,7 +369,7 @@ public class BGroup extends BaseCommand {
         var isPut = isPutList.stream().anyMatch(x -> x);
         if (isPut) {
             var encoded = redisBF.encode();
-            set(keyBytes, encoded, s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+            set(encoded, s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
         }
 
         if (isMulti) {
@@ -391,7 +391,7 @@ public class BGroup extends BaseCommand {
         var keyBytes = data[1];
 
         var s = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, s);
+        var cv = getCv(s);
         if (cv == null) {
             return IntegerReply.REPLY_0;
         }
@@ -423,7 +423,7 @@ public class BGroup extends BaseCommand {
         }
 
         var s = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, s);
+        var cv = getCv(s);
         if (cv == null) {
             if (isMulti) {
                 var replies = new Reply[items.size()];
@@ -466,7 +466,7 @@ public class BGroup extends BaseCommand {
         var keyBytes = data[1];
 
         var s = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, s);
+        var cv = getCv(s);
         if (cv == null) {
             return MultiBulkReply.EMPTY;
         }
@@ -596,7 +596,7 @@ public class BGroup extends BaseCommand {
             if (needCreateNew) {
                 return ErrorReply.BF_ALREADY_EXISTS;
             }
-            var cv = getCv(keyBytes, s);
+            var cv = getCv(s);
             if (!cv.isBloomFilter()) {
                 return ErrorReply.WRONG_TYPE;
             }
@@ -618,7 +618,7 @@ public class BGroup extends BaseCommand {
         }
 
         if (isPut) {
-            set(keyBytes, redisBF.encode(), s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+            set(redisBF.encode(), s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
         }
 
         return new MultiBulkReply(replies);
@@ -650,7 +650,7 @@ public class BGroup extends BaseCommand {
         var encoded = new byte[encodedLength];
 
         Zstd.decompressByteArray(encoded, 0, encodedLength, dumpBytes, 4, dumpBytes.length - 4);
-        set(keyBytes, encoded, s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+        set(encoded, s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
         return OKReply.INSTANCE;
     }
 
@@ -674,7 +674,7 @@ public class BGroup extends BaseCommand {
             return ErrorReply.INVALID_INTEGER;
         }
 
-        var cv = getCv(keyBytes, s);
+        var cv = getCv(s);
         if (cv == null) {
             return MultiBulkReply.EMPTY;
         }
@@ -738,7 +738,7 @@ public class BGroup extends BaseCommand {
         }
 
         var redisBF = new RedisBF(initCapacity, initFpp, initExpansion, nonScaling);
-        set(keyBytes, redisBF.encode(), s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
+        set(redisBF.encode(), s, CompressedValue.SP_TYPE_BLOOM_BITMAP);
         return OKReply.INSTANCE;
     }
 
@@ -777,7 +777,7 @@ public class BGroup extends BaseCommand {
         var firstKeyBytes = data[1];
         var firstSlotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
-        var rl = LGroup.getRedisList(firstKeyBytes, firstSlotWithKeyHash, this);
+        var rl = LGroup.getRedisList(firstSlotWithKeyHash, this);
         if (rl == null || rl.size() == 0) {
             // performance bad, get all other values
             if (keys.size() > 1) {
@@ -792,13 +792,13 @@ public class BGroup extends BaseCommand {
 
                     var oneSlot = localPersist.oneSlot(otherSlotWithKeyHash.slot());
                     var p = oneSlot.asyncCall(() -> {
-                        var otherRl = LGroup.getRedisList(otherKeyBytes, otherSlotWithKeyHash, this);
+                        var otherRl = LGroup.getRedisList(otherSlotWithKeyHash, this);
                         if (otherRl == null || otherRl.size() == 0) {
                             return null;
                         }
 
                         var otherValueBytes = isLeft ? otherRl.removeFirst() : otherRl.removeLast();
-                        LGroup.saveRedisList(otherRl, otherKeyBytes, otherSlotWithKeyHash, this, dictMap);
+                        LGroup.saveRedisList(otherRl, otherSlotWithKeyHash, this, dictMap);
                         return otherValueBytes;
                     });
 
@@ -874,7 +874,7 @@ public class BGroup extends BaseCommand {
         }
 
         var valueBytes = isLeft ? rl.removeFirst() : rl.removeLast();
-        LGroup.saveRedisList(rl, firstKeyBytes, firstSlotWithKeyHash, this, dictMap);
+        LGroup.saveRedisList(rl, firstSlotWithKeyHash, this, dictMap);
 
         var replies = new Reply[2];
         replies[0] = new BulkReply(firstKeyBytes);

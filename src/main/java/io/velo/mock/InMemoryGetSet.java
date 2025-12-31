@@ -49,14 +49,14 @@ public class InMemoryGetSet implements ByPassGetSet {
      * Retrieves a {@link CompressedValue} from the in-memory map.
      *
      * @param slot        the slot number (not used in this implementation)
-     * @param keyBytes    the key bytes to retrieve the value for
+     * @param key         the key to retrieve the value for
      * @param bucketIndex the bucket index (not used in this implementation)
      * @param keyHash     the hash of the key (not used in this implementation)
      * @return a {@link OneSlot.BufOrCompressedValue} containing the retrieved value, or null if the key is not found
      */
     @Override
-    public OneSlot.BufOrCompressedValue getBuf(short slot, byte[] keyBytes, int bucketIndex, long keyHash) {
-        var cv = map.get(new String(keyBytes));
+    public OneSlot.BufOrCompressedValue getBuf(short slot, String key, int bucketIndex, long keyHash) {
+        var cv = map.get(key);
         if (cv == null) {
             return null;
         }

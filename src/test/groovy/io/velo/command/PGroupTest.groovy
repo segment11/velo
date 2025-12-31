@@ -270,7 +270,7 @@ class PGroupTest extends Specification {
         reply == IntegerReply.REPLY_1
 
         when:
-        def bufOrCv = inMemoryGetSet.getBuf(slot, 'a'.bytes, 0, cv.keyHash)
+        def bufOrCv = inMemoryGetSet.getBuf(slot, 'a', 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt == CompressedValue.NO_EXPIRE
 

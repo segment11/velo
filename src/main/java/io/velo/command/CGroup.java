@@ -198,7 +198,7 @@ public class CGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var srcCv = getCv(srcKeyBytes, slotWithKeyHash);
+        var srcCv = getCv(slotWithKeyHash);
         if (srcCv == null) {
             return IntegerReply.REPLY_0;
         }
@@ -214,24 +214,24 @@ public class CGroup extends BaseCommand {
 
             boolean finalReplace = replace;
             dstOneSlot.asyncRun(() -> {
-                var dstCv = getCv(dstKeyBytes, dstSlotWithKeyHash);
+                var dstCv = getCv(dstSlotWithKeyHash);
                 if (dstCv != null && !finalReplace) {
                     finalPromise.set(IntegerReply.REPLY_0);
                     return;
                 }
 
-                setCv(dstKeyBytes, srcCv, dstSlotWithKeyHash);
+                setCv(srcCv, dstSlotWithKeyHash);
                 finalPromise.set(IntegerReply.REPLY_1);
             });
 
             return asyncReply;
         } else {
-            var existCv = getCv(dstKeyBytes, dstSlotWithKeyHash);
+            var existCv = getCv(dstSlotWithKeyHash);
             if (existCv != null && !replace) {
                 return IntegerReply.REPLY_0;
             }
 
-            setCv(dstKeyBytes, srcCv, dstSlotWithKeyHash);
+            setCv(srcCv, dstSlotWithKeyHash);
             return IntegerReply.REPLY_1;
         }
     }

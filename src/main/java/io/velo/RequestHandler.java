@@ -483,7 +483,7 @@ public class RequestHandler {
                 reuseGGroup.resetContext(cmd, data, socket, request);
                 var slotWithKeyHashList = request.getSlotWithKeyHashList();
                 try {
-                    var bytes = reuseGGroup.get(keyBytes, slotWithKeyHashList.getFirst(), true);
+                    var bytes = reuseGGroup.get(slotWithKeyHashList.getFirst(), true);
                     return bytes != null ? new BulkReply(bytes) : NilReply.INSTANCE;
                 } catch (TypeMismatchException e) {
                     return new ErrorReply(e.getMessage());
@@ -512,7 +512,7 @@ public class RequestHandler {
                 reuseSGroup.resetContext(cmd, data, socket, request);
                 var slotWithKeyHashList = request.getSlotWithKeyHashList();
                 try {
-                    reuseSGroup.set(keyBytes, valueBytes, slotWithKeyHashList.getFirst());
+                    reuseSGroup.set(valueBytes, slotWithKeyHashList.getFirst());
                 } catch (ReadonlyException e) {
                     log.warn("Set but server is readonly, key={}", new String(keyBytes));
                     return ErrorReply.READONLY;

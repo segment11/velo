@@ -179,7 +179,7 @@ public class BenchmarkLocalPersistGet {
     public void putBatch() {
         for (int i = 0; i < keyNumber; i++) {
             var key = keys[random.nextInt(keyNumber)];
-            var s = BaseCommand.slot(key.getBytes(), slotNumber);
+            var s = BaseCommand.slot(key, slotNumber);
             var oneSlot = localPersist.oneSlot(s.slot());
             var eventloop = slotWorkerEventloopArray[s.slot() % slotWorkers];
 
@@ -227,7 +227,7 @@ TIPS: 512MB write buffer for each slot, so the real write qps is in logs. (100w 
     @Benchmark
     public void get() {
         var key = keys[random.nextInt(keyNumber)];
-        var s = BaseCommand.slot(key.getBytes(), slotNumber);
+        var s = BaseCommand.slot(key, slotNumber);
         var oneSlot = localPersist.oneSlot(s.slot());
         var eventloop = slotWorkerEventloopArray[s.slot() % slotWorkers];
 
@@ -236,7 +236,7 @@ TIPS: 512MB write buffer for each slot, so the real write qps is in logs. (100w 
                 return;
             }
 
-            oneSlot.get(key.getBytes(), s.bucketIndex(), s.keyHash(), s.keyHash32());
+            oneSlot.get(key, s.bucketIndex(), s.keyHash(), s.keyHash32());
 
             var c = getCount.incrementAndGet();
             if (c % 1_000_000 == 0) {

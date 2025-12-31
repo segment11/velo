@@ -66,7 +66,7 @@ class KGroupTest extends Specification {
         when:
         10.times {
             def key = 'key:' + it
-            kGroup.set(key.bytes, key.bytes)
+            kGroup.set(key, key.bytes)
         }
         def reply = kGroup.execute('keys key:.*')
         then:

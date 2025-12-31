@@ -184,18 +184,19 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         for (var v : list) {
             crcCalBuffer.putLong(v.keyHash());
 
-            var keyBytes = v.key().getBytes();
-            buffer.putShort((short) keyBytes.length);
-            buffer.put(keyBytes);
+            var key = v.key();
+            assert key.length() <= Short.MAX_VALUE;
+            buffer.putShort((short) key.length());
+            buffer.put(key.getBytes());
             buffer.put(v.cvEncoded());
 
             int length = v.persistLength();
 
             var pvm = new PersistValueMeta();
-            pvm.keyBytes = keyBytes;
+            pvm.key = key;
             pvm.keyHash = v.keyHash();
             // calc again, for perf, can reuse from slot with key hash, todo
-            pvm.keyHash32 = KeyHash.hash32(keyBytes);
+            pvm.keyHash32 = KeyHash.hash32(key.getBytes());
             pvm.bucketIndex = v.bucketIndex();
             pvm.isFromMerge = v.isFromMerge();
 

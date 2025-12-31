@@ -319,7 +319,7 @@ class RGroupTest extends Specification {
         reply = rGroup.execute('restore string0 0 bbb replace') { data ->
             data[3] = RDBParser.dumpString('values'.bytes)
         }
-        def bufOrCv = inMemoryGetSet.getBuf(slot, 'string0'.bytes, 0, 0L)
+        def bufOrCv = inMemoryGetSet.getBuf(slot, 'string0', 0, 0L)
         then:
         reply == OKReply.INSTANCE
         bufOrCv.cv().compressedData == 'values'.bytes
@@ -328,7 +328,7 @@ class RGroupTest extends Specification {
         reply = rGroup.execute('restore int0 0 bbb replace') { data ->
             data[3] = RDBParser.dumpString('1'.bytes)
         }
-        bufOrCv = inMemoryGetSet.getBuf(slot, 'int0'.bytes, 0, 0L)
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'int0', 0, 0L)
         then:
         reply == OKReply.INSTANCE
         bufOrCv.cv().isTypeNumber()
@@ -342,7 +342,7 @@ class RGroupTest extends Specification {
             rl.addLast('c'.bytes)
             data[3] = RDBParser.dumpList(rl)
         }
-        bufOrCv = inMemoryGetSet.getBuf(slot, 'list0'.bytes, 0, 0L)
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'list0', 0, 0L)
         then:
         reply == OKReply.INSTANCE
         bufOrCv.cv().isList()
@@ -357,7 +357,7 @@ class RGroupTest extends Specification {
             rhh.put('c', 'c'.bytes)
             data[3] = RDBParser.dumpHash(rhh)
         }
-        bufOrCv = inMemoryGetSet.getBuf(slot, 'hash0'.bytes, 0, 0L)
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'hash0', 0, 0L)
         then:
         reply == OKReply.INSTANCE
         bufOrCv.cv().isHash()
@@ -373,7 +373,7 @@ class RGroupTest extends Specification {
             data[3] = RDBParser.dumpHash(rhh)
         }
         var keysKey = RedisHashKeys.keysKey('hash1')
-        bufOrCv = inMemoryGetSet.getBuf(slot, keysKey.bytes, 0, 0L)
+        bufOrCv = inMemoryGetSet.getBuf(slot, keysKey, 0, 0L)
         then:
         reply == OKReply.INSTANCE
         bufOrCv.cv().isHash()
@@ -387,7 +387,7 @@ class RGroupTest extends Specification {
             rhk.add('c')
             data[3] = RDBParser.dumpSet(rhk)
         }
-        bufOrCv = inMemoryGetSet.getBuf(slot, 'set0'.bytes, 0, 0L)
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'set0', 0, 0L)
         then:
         reply == OKReply.INSTANCE
         bufOrCv.cv().isSet()
@@ -401,7 +401,7 @@ class RGroupTest extends Specification {
             rz.add(3.0d, 'c')
             data[3] = RDBParser.dumpZSet(rz)
         }
-        bufOrCv = inMemoryGetSet.getBuf(slot, 'zset0'.bytes, 0, 0L)
+        bufOrCv = inMemoryGetSet.getBuf(slot, 'zset0', 0, 0L)
         then:
         reply == OKReply.INSTANCE
         bufOrCv.cv().isZSet()
@@ -456,7 +456,7 @@ class RGroupTest extends Specification {
         def reply = rGroup.role()
         then:
         reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies[0] == new BulkReply('master'.bytes)
+        (reply as MultiBulkReply).replies[0] == new BulkReply('master')
         (reply as MultiBulkReply).replies[1] == IntegerReply.REPLY_0
         (reply as MultiBulkReply).replies[2] == MultiBulkReply.EMPTY
 
@@ -466,7 +466,7 @@ class RGroupTest extends Specification {
         reply = rGroup.role()
         then:
         reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies[0] == new BulkReply('master'.bytes)
+        (reply as MultiBulkReply).replies[0] == new BulkReply('master')
         (reply as MultiBulkReply).replies[2] instanceof MultiBulkReply
         ((MultiBulkReply) (reply as MultiBulkReply).replies[2]).replies[0] instanceof MultiBulkReply
 
@@ -622,11 +622,11 @@ class RGroupTest extends Specification {
         when:
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')
-        def s1 = BaseCommand.slot('a'.bytes, 1)
-        def s2 = BaseCommand.slot('b'.bytes, 1)
+        def s1 = BaseCommand.slot('a', 1)
+        def s2 = BaseCommand.slot('b', 1)
         def reply = rGroup.moveBlock(
-                'a'.bytes, s1,
-                'b'.bytes, s2,
+                s1,
+                s2,
                 true, true, 0)
         then:
         reply == NilReply.INSTANCE
@@ -637,8 +637,8 @@ class RGroupTest extends Specification {
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
         reply = rGroup.moveBlock(
-                'a'.bytes, s1,
-                'b'.bytes, s2,
+                s1,
+                s2,
                 true, true, 1)
         Thread.sleep(2000)
         eventloopCurrent.run()
@@ -655,16 +655,16 @@ class RGroupTest extends Specification {
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = rGroup.moveBlock(
-                'a'.bytes, s1,
-                'b'.bytes, s2,
+                s1,
+                s2,
                 true, true, 0)
         then:
         reply == NilReply.INSTANCE
 
         when:
         reply = rGroup.moveBlock(
-                'a'.bytes, s1,
-                'b'.bytes, s2,
+                s1,
+                s2,
                 true, true, 1)
         Thread.sleep(2000)
         eventloopCurrent.run()
@@ -679,8 +679,8 @@ class RGroupTest extends Specification {
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = rGroup.moveBlock(
-                'a'.bytes, s1,
-                'b'.bytes, s2,
+                s1,
+                s2,
                 true, true, 0)
         then:
         reply instanceof BulkReply
@@ -705,8 +705,8 @@ class RGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cv)
         rGroup.crossRequestWorker = true
         reply = rGroup.moveBlock(
-                'a'.bytes, s1,
-                'b'.bytes, s2,
+                s1,
+                s2,
                 true, true, 0)
         then:
         reply instanceof AsyncReply

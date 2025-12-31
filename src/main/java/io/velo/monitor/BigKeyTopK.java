@@ -2,7 +2,6 @@ package io.velo.monitor;
 
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 
@@ -20,11 +19,11 @@ public class BigKeyTopK {
     /**
      * A record representing a key and its byte length.
      */
-    public record BigKey(byte[] keyBytes, int length) {
+    public record BigKey(String key, int length) {
         @Override
         public @NotNull String toString() {
             return "BigKey{" +
-                    "key='" + new String(keyBytes) + '\'' +
+                    "key='" + key + '\'' +
                     ", length=" + length +
                     '}';
         }
@@ -38,7 +37,7 @@ public class BigKeyTopK {
                 return false;
             }
             BigKey that = (BigKey) obj;
-            return Arrays.equals(keyBytes, that.keyBytes);
+            return key.equals(that.key);
         }
     }
 
@@ -93,11 +92,11 @@ public class BigKeyTopK {
      * Adds a key to the priority queue if it is larger than the current smallest key in the queue.
      * If an identical key already exists in the queue, it is replaced.
      *
-     * @param keyBytes The byte array representing the key.
-     * @param length   The length of the key's byte array.
+     * @param key    The key.
+     * @param length The length of the key's byte array.
      */
-    public void add(byte[] keyBytes, int length) {
-        BigKey added = new BigKey(keyBytes, length);
+    public void add(String key, int length) {
+        BigKey added = new BigKey(key, length);
         boolean isRemoved = queue.removeIf(one -> one.equals(added));
         if (isRemoved) {
             queue.add(added);

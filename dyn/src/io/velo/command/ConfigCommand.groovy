@@ -35,9 +35,9 @@ class ConfigCommand extends BaseCommand {
         def subCmd = new String(data[1]).toLowerCase()
         if ('help' == subCmd) {
             Reply[] replies = [
-                    new BulkReply('CONFIG <subcommand> arg arg ... arg. Subcommands are:'.bytes),
-                    new BulkReply('GET <pattern> -- Return parameters matching the glob-like <pattern> and their values.'.bytes),
-                    new BulkReply('SET <parameter> <value> -- Set parameter to value.'.bytes),
+                    new BulkReply('CONFIG <subcommand> arg arg ... arg. Subcommands are:'),
+                    new BulkReply('GET <pattern> -- Return parameters matching the glob-like <pattern> and their values.'),
+                    new BulkReply('SET <parameter> <value> -- Set parameter to value.'),
             ]
             return new MultiBulkReply(replies)
         }

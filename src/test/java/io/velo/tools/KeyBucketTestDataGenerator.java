@@ -66,7 +66,7 @@ public class KeyBucketTestDataGenerator implements TestDataGenerator, WalVDataGe
                     var keyBucket = new KeyBucket(slot, bucketIndex, splitIndex, splitNumber, sharedBytes, position, snowFlake);
 
                     for (var v : vListBySplitIndex) {
-                        keyBucket.put(v.key().getBytes(), v.keyHash(), v.expireAt(), v.seq(), v.cvEncoded());
+                        keyBucket.put(v.key(), v.keyHash(), v.expireAt(), v.seq(), v.cvEncoded());
                     }
                     keyBucket.putMeta();
                 }

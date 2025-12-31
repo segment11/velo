@@ -28,11 +28,10 @@ public class BlockingList {
     /**
      * Parameter when do move
      *
-     * @param dstKeyBytes        destination key
      * @param dstSlotWithKeyHash destination key slot and hash value
      * @param dstLeft            destination list, is left or right
      */
-    record DstKeyAndDstLeftWhenMove(byte[] dstKeyBytes, BaseCommand.SlotWithKeyHash dstSlotWithKeyHash,
+    record DstKeyAndDstLeftWhenMove(BaseCommand.SlotWithKeyHash dstSlotWithKeyHash,
                                     boolean dstLeft) {
     }
 
@@ -240,7 +239,7 @@ public class BlockingList {
 
                     var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
                     rGroup.from(baseCommand);
-                    dstOneSlot.asyncRun(() -> rGroup.moveDstCallback(xx.dstKeyBytes, xx.dstSlotWithKeyHash, xx.dstLeft, leftValueBytes, promise.settablePromise::set));
+                    dstOneSlot.asyncRun(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, leftValueBytes, promise.settablePromise::set));
                 } else {
                     var replies = new Reply[2];
                     replies[0] = new BulkReply(key.getBytes());
@@ -271,7 +270,7 @@ public class BlockingList {
 
                     var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
                     rGroup.from(baseCommand);
-                    dstOneSlot.asyncRun(() -> rGroup.moveDstCallback(xx.dstKeyBytes, xx.dstSlotWithKeyHash, xx.dstLeft, rightValueBytes, promise.settablePromise::set));
+                    dstOneSlot.asyncRun(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, rightValueBytes, promise.settablePromise::set));
                 } else {
                     var replies = new Reply[2];
                     replies[0] = new BulkReply(key.getBytes());
@@ -294,7 +293,7 @@ public class BlockingList {
             // sort back
             var fromRightToLeft = new byte[returnBytesArray.length][];
             for (int i = 0; i < fromRightToLeft.length; i++) {
-                fromRightToLeft[i] = fromLeftToRight[fromLeftToRight.length - i - 1];
+                fromRightToLeft[i] = fromLeftToRight[returnBytesArray.length - i - 1];
             }
             return fromRightToLeft;
         } else {

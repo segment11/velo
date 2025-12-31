@@ -153,7 +153,7 @@ class DGroupTest extends Specification {
         // decrby
         data3[1] = 'n'.bytes
         data3[2] = '1'.bytes
-        dGroup.setNumber('n'.bytes, 0, dGroup.slotWithKeyHashListParsed.getFirst())
+        dGroup.setNumber(0, dGroup.slotWithKeyHashListParsed.getFirst())
         reply = dGroup.handle()
         then:
         reply instanceof IntegerReply
@@ -174,7 +174,7 @@ class DGroupTest extends Specification {
         // decrbyfloat
         data3[1] = 'n'.bytes
         data3[2] = '1'.bytes
-        dGroup.setNumber('n'.bytes, 0, dGroup.slotWithKeyHashListParsed.getFirst())
+        dGroup.setNumber(0, dGroup.slotWithKeyHashListParsed.getFirst())
         reply = dGroup.handle()
         then:
         reply instanceof DoubleReply

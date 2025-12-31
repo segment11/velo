@@ -261,10 +261,10 @@ public class KeyBucket {
          * @param keyHash    the hash value of the key.
          * @param expireAt   the expiration time.
          * @param seq        the sequence number.
-         * @param keyBytes   the byte array of the key.
+         * @param key        the key.
          * @param valueBytes the byte array of the value.
          */
-        void call(long keyHash, long expireAt, long seq, byte[] keyBytes, byte[] valueBytes);
+        void call(long keyHash, long expireAt, long seq, String key, byte[] valueBytes);
     }
 
     /**
@@ -284,11 +284,11 @@ public class KeyBucket {
             var seq = buffer.getLong(metaIndex + HASH_VALUE_LENGTH + EXPIRE_AT_VALUE_LENGTH);
             var kvBytes = getFromOneCell(cellIndex);
 
-            callBack.call(cellHashValue, expireAt, seq, kvBytes.keyBytes, kvBytes.valueBytes);
+            callBack.call(cellHashValue, expireAt, seq, kvBytes.key, kvBytes.valueBytes);
         }
     }
 
-    private record KeyBytesAndValueBytes(byte[] keyBytes, byte[] valueBytes) {
+    private record KeyAndValueBytes(String key, byte[] valueBytes) {
     }
 
     /**
@@ -297,7 +297,7 @@ public class KeyBucket {
      * @param cellIndex the index of the cell.
      * @return a record containing the key and value bytes.
      */
-    private KeyBytesAndValueBytes getFromOneCell(int cellIndex) {
+    private KeyAndValueBytes getFromOneCell(int cellIndex) {
         buffer.position(oneCellOffset(cellIndex));
 
         var keyLength = buffer.getShort();
@@ -316,7 +316,7 @@ public class KeyBucket {
         var valueBytes = new byte[valueLength];
         buffer.get(valueBytes);
 
-        return new KeyBytesAndValueBytes(keyBytes, valueBytes);
+        return new KeyAndValueBytes(new String(keyBytes), valueBytes);
     }
 
     /**
@@ -442,7 +442,7 @@ public class KeyBucket {
      * @param i                 the cell index.
      * @param kvBytesAlreadyGet the key-value bytes if already retrieved.
      */
-    private void clearOneExpiredOrDeleted(int i, @Nullable KeyBytesAndValueBytes kvBytesAlreadyGet) {
+    private void clearOneExpiredOrDeleted(int i, @Nullable KeyAndValueBytes kvBytesAlreadyGet) {
         if (i >= capacity) {
             throw new IllegalArgumentException("i >= capacity");
         }
@@ -450,11 +450,11 @@ public class KeyBucket {
         if (cvExpiredOrDeletedCallBack != null) {
             var kvBytes = kvBytesAlreadyGet == null ? getFromOneCell(i) : kvBytesAlreadyGet;
             if (!PersistValueMeta.isPvm(kvBytes.valueBytes)) {
-                var shortStringCv = CompressedValue.decode(Unpooled.wrappedBuffer(kvBytes.valueBytes), kvBytes.keyBytes, 0L);
-                cvExpiredOrDeletedCallBack.handle(new String(kvBytes.keyBytes), shortStringCv);
+                var shortStringCv = CompressedValue.decode(Unpooled.wrappedBuffer(kvBytes.valueBytes), kvBytes.key.getBytes(), 0L);
+                cvExpiredOrDeletedCallBack.handle(kvBytes.key, shortStringCv);
             } else {
                 var pvm = PersistValueMeta.decode(kvBytes.valueBytes);
-                cvExpiredOrDeletedCallBack.handle(new String(kvBytes.keyBytes), pvm);
+                cvExpiredOrDeletedCallBack.handle(kvBytes.key, pvm);
             }
         }
 
@@ -530,21 +530,21 @@ public class KeyBucket {
     /**
      * Add or update a key-value pair in this key bucket.
      *
-     * @param keyBytes   the byte array of the key.
+     * @param key        the key.
      * @param keyHash    the hash value of the key.
      * @param expireAt   the expiration time.
      * @param seq        the sequence number.
      * @param valueBytes the byte array of the value.
      * @return the result of the put operation.
      */
-    public DoPutResult put(byte[] keyBytes, long keyHash, long expireAt, long seq, byte[] valueBytes) {
-        return put(keyBytes, keyHash, expireAt, seq, valueBytes, true);
+    public DoPutResult put(String key, long keyHash, long expireAt, long seq, byte[] valueBytes) {
+        return put(key, keyHash, expireAt, seq, valueBytes, true);
     }
 
     /**
      * Adds or updates a key-value pair in this key bucket.
      *
-     * @param keyBytes    the byte array of the key.
+     * @param key         the key.
      * @param keyHash     the hash value of the key.
      * @param expireAt    the expiration time.
      * @param seq         the sequence number.
@@ -552,14 +552,14 @@ public class KeyBucket {
      * @param doUpdateSeq if true, update the sequence number after putting the key-value pair.
      * @return the result of the put operation, indicating whether the operation was successful and if it was an update.
      */
-    public DoPutResult put(byte[] keyBytes, long keyHash, long expireAt, long seq, byte[] valueBytes, boolean doUpdateSeq) {
-        return put(keyBytes, keyHash, expireAt, seq, valueBytes, doUpdateSeq, true);
+    public DoPutResult put(String key, long keyHash, long expireAt, long seq, byte[] valueBytes, boolean doUpdateSeq) {
+        return put(key, keyHash, expireAt, seq, valueBytes, doUpdateSeq, true);
     }
 
     /**
      * Private method to add or update a key-value pair in this key bucket.
      *
-     * @param keyBytes               the byte array of the key.
+     * @param key                    the key.
      * @param keyHash                the hash value of the key.
      * @param expireAt               the expiration time.
      * @param seq                    the sequence number.
@@ -568,24 +568,24 @@ public class KeyBucket {
      * @param doDeleteTargetKeyFirst if true, delete the target key before putting the new key-value pair.
      * @return the result of the put operation, indicating whether the operation was successful and if it was an update.
      */
-    private DoPutResult put(byte[] keyBytes, long keyHash, long expireAt, long seq, byte[] valueBytes, boolean doUpdateSeq, boolean doDeleteTargetKeyFirst) {
+    private DoPutResult put(String key, long keyHash, long expireAt, long seq, byte[] valueBytes, boolean doUpdateSeq, boolean doDeleteTargetKeyFirst) {
         if (valueBytes.length > Byte.MAX_VALUE) {
             throw new IllegalArgumentException("Value bytes too large, value length=" + valueBytes.length);
         }
 
-        int cellCount = KVMeta.calcCellCount((short) keyBytes.length, (byte) valueBytes.length);
+        int cellCount = KVMeta.calcCellCount((short) key.length(), (byte) valueBytes.length);
         if (cellCount >= INIT_CAPACITY) {
-            throw new IllegalArgumentException("Key with value bytes too large, key length=" + keyBytes.length
+            throw new IllegalArgumentException("Key with value bytes too large, key length=" + key.length()
                     + ", value length=" + valueBytes.length);
         }
 
         // all in memory, performance is not a problem
-        var isExists = doDeleteTargetKeyFirst && del(keyBytes, keyHash, false);
+        var isExists = doDeleteTargetKeyFirst && del(key, keyHash, false);
 
         boolean isUpdate = false;
         int putToCellIndex = -1;
         for (int i = 0; i < capacity; i++) {
-            var canPutResult = canPut(keyBytes, keyHash, i, cellCount);
+            var canPutResult = canPut(key, keyHash, i, cellCount);
             if (canPutResult.flag) {
                 putToCellIndex = i;
                 isUpdate = isExists;
@@ -599,12 +599,12 @@ public class KeyBucket {
                 // need re-put all in this key bucket
                 rePutAll();
                 // put again, but need not delete target key again
-                return put(keyBytes, keyHash, expireAt, seq, valueBytes, doUpdateSeq, false);
+                return put(key, keyHash, expireAt, seq, valueBytes, doUpdateSeq, false);
             }
             return new DoPutResult(false, false);
         }
 
-        putTo(putToCellIndex, cellCount, keyHash, expireAt, seq, keyBytes, valueBytes);
+        putTo(putToCellIndex, cellCount, keyHash, expireAt, seq, key, valueBytes);
         size++;
         cellCost += (short) cellCount;
 
@@ -621,11 +621,11 @@ public class KeyBucket {
     @VisibleForTesting
     void rePutAll() {
         ArrayList<PersistValueMeta> tmpList = new ArrayList<>(INIT_CAPACITY);
-        iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+        iterate((keyHash, expireAt, seq, key, valueBytes) -> {
             var pvm = new PersistValueMeta();
             pvm.expireAt = expireAt;
             pvm.seq = seq;
-            pvm.keyBytes = keyBytes;
+            pvm.key = key;
             pvm.keyHash = keyHash;
             pvm.bucketIndex = bucketIndex;
             pvm.extendBytes = valueBytes;
@@ -636,8 +636,8 @@ public class KeyBucket {
 
         int putToCellIndex = 0;
         for (var pvm : tmpList) {
-            var cellCount = KVMeta.calcCellCount((short) pvm.keyBytes.length, (byte) pvm.extendBytes.length);
-            putTo(putToCellIndex, cellCount, pvm.keyHash, pvm.expireAt, pvm.seq, pvm.keyBytes, pvm.extendBytes);
+            var cellCount = KVMeta.calcCellCount((short) pvm.key.length(), (byte) pvm.extendBytes.length);
+            putTo(putToCellIndex, cellCount, pvm.keyHash, pvm.expireAt, pvm.seq, pvm.key, pvm.extendBytes);
             putToCellIndex += cellCount;
         }
     }
@@ -650,10 +650,10 @@ public class KeyBucket {
      * @param keyHash        the hash value of the key.
      * @param expireAt       the expiration time.
      * @param seq            the sequence number.
-     * @param keyBytes       the byte array of the key.
+     * @param key            the key.
      * @param valueBytes     the byte array of the value.
      */
-    private void putTo(int putToCellIndex, int cellCount, long keyHash, long expireAt, long seq, byte[] keyBytes, byte[] valueBytes) {
+    private void putTo(int putToCellIndex, int cellCount, long keyHash, long expireAt, long seq, String key, byte[] valueBytes) {
         int metaIndex = metaIndex(putToCellIndex);
         buffer.putLong(metaIndex, keyHash);
         buffer.putLong(metaIndex + HASH_VALUE_LENGTH, expireAt);
@@ -685,8 +685,8 @@ public class KeyBucket {
 
         var cellOffset = oneCellOffset(putToCellIndex);
         buffer.position(cellOffset);
-        buffer.putShort((short) keyBytes.length);
-        buffer.put(keyBytes);
+        buffer.putShort((short) key.length());
+        buffer.put(key.getBytes());
         // number or short value or pvm, 1 byte is enough
         buffer.put((byte) valueBytes.length);
         buffer.put(valueBytes);
@@ -695,13 +695,13 @@ public class KeyBucket {
     /**
      * Checks if a key-value pair can be put into the specified cell index.
      *
-     * @param keyBytes  the byte array of the key.
+     * @param key       the key.
      * @param keyHash   the hash value of the key.
      * @param cellIndex the index of the cell to check.
      * @param cellCount the number of cells required for storing the key-value pair.
      * @return a CanPutResult object indicating whether the key-value pair can be put and if it's an update.
      */
-    private CanPutResult canPut(byte[] keyBytes, long keyHash, int cellIndex, int cellCount) {
+    private CanPutResult canPut(String key, long keyHash, int cellIndex, int cellCount) {
         int metaIndex = metaIndex(cellIndex);
         var cellHashValue = buffer.getLong(metaIndex);
         var expireAt = buffer.getLong(metaIndex + HASH_VALUE_LENGTH);
@@ -715,14 +715,14 @@ public class KeyBucket {
             if (expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis()) {
                 clearOneExpiredOrDeleted(cellIndex);
                 // check again
-                return canPut(keyBytes, keyHash, cellIndex, cellCount);
+                return canPut(key, keyHash, cellIndex, cellCount);
             }
 
             if (cellHashValue != keyHash) {
                 return new CanPutResult(false, false);
             }
 
-            var matchMeta = keyMatch(keyBytes, oneCellOffset(cellIndex));
+            var matchMeta = keyMatch(key.getBytes(), oneCellOffset(cellIndex));
             if (matchMeta != null) {
                 // update
                 // never happen here, because before put, always delete target key first
@@ -781,17 +781,17 @@ public class KeyBucket {
     /**
      * Retrieves the expiration time and sequence number of a key-value pair by its key.
      *
-     * @param keyBytes the byte array of the key.
-     * @param keyHash  the hash value of the key.
+     * @param key     the key.
+     * @param keyHash the hash value of the key.
      * @return an ExpireAtAndSeq object containing the expiration time and sequence number, or null if the key does not exist.
      */
-    public ExpireAtAndSeq getExpireAtAndSeqByKey(byte[] keyBytes, long keyHash) {
+    public ExpireAtAndSeq getExpireAtAndSeqByKey(String key, long keyHash) {
         if (size == 0) {
             return null;
         }
 
         for (int i = 0; i < capacity; i++) {
-            var r = getExpireAtAndSeqByKeyWithCellIndex(keyBytes, keyHash, i);
+            var r = getExpireAtAndSeqByKeyWithCellIndex(key, keyHash, i);
             if (r != null) {
                 return r;
             }
@@ -803,12 +803,12 @@ public class KeyBucket {
     /**
      * Retrieves the expiration time and sequence number of a key-value pair by its key and cell index.
      *
-     * @param keyBytes  the byte array of the key.
+     * @param key       the key.
      * @param keyHash   the hash value of the key.
      * @param cellIndex the index of the cell.
      * @return an ExpireAtAndSeq object containing the expiration time and sequence number, or null if the key does not exist.
      */
-    private ExpireAtAndSeq getExpireAtAndSeqByKeyWithCellIndex(byte[] keyBytes, long keyHash, int cellIndex) {
+    private ExpireAtAndSeq getExpireAtAndSeqByKeyWithCellIndex(String key, long keyHash, int cellIndex) {
         int metaIndex = metaIndex(cellIndex);
         var cellHashValue = buffer.getLong(metaIndex);
         // NO_KEY or PRE_KEY
@@ -822,7 +822,7 @@ public class KeyBucket {
         var expireAt = buffer.getLong(metaIndex + HASH_VALUE_LENGTH);
         var seq = buffer.getLong(metaIndex + HASH_VALUE_LENGTH + EXPIRE_AT_VALUE_LENGTH);
 
-        var matchMeta = keyMatch(keyBytes, oneCellOffset(cellIndex));
+        var matchMeta = keyMatch(key.getBytes(), oneCellOffset(cellIndex));
         if (matchMeta == null) {
             // hash conflict
             return null;
@@ -848,17 +848,17 @@ public class KeyBucket {
     /**
      * Retrieves the value bytes, expiration time, and sequence number of a key-value pair by its key.
      *
-     * @param keyBytes the byte array of the key.
-     * @param keyHash  the hash value of the key.
+     * @param key     the key.
+     * @param keyHash the hash value of the key.
      * @return a ValueBytesWithExpireAtAndSeq object containing the value bytes, expiration time, and sequence number, or null if the key does not exist.
      */
-    public ValueBytesWithExpireAtAndSeq getValueXByKey(byte[] keyBytes, long keyHash) {
+    public ValueBytesWithExpireAtAndSeq getValueXByKey(String key, long keyHash) {
         if (size == 0) {
             return null;
         }
 
         for (int i = 0; i < capacity; i++) {
-            var r = getValueXByKeyWithCellIndex(keyBytes, keyHash, i);
+            var r = getValueXByKeyWithCellIndex(key, keyHash, i);
             if (r != null) {
                 return r;
             }
@@ -870,12 +870,12 @@ public class KeyBucket {
     /**
      * Retrieves the value bytes, expiration time, and sequence number of a key-value pair by its key and cell index.
      *
-     * @param keyBytes  the byte array of the key.
+     * @param key       the key.
      * @param keyHash   the hash value of the key.
      * @param cellIndex the index of the cell.
      * @return a ValueBytesWithExpireAtAndSeq object containing the value bytes, expiration time, and sequence number, or null if the key does not exist.
      */
-    private ValueBytesWithExpireAtAndSeq getValueXByKeyWithCellIndex(byte[] keyBytes, long keyHash, int cellIndex) {
+    private ValueBytesWithExpireAtAndSeq getValueXByKeyWithCellIndex(String key, long keyHash, int cellIndex) {
         int metaIndex = metaIndex(cellIndex);
         var cellHashValue = buffer.getLong(metaIndex);
         // NO_KEY or PRE_KEY
@@ -889,7 +889,7 @@ public class KeyBucket {
         var expireAt = buffer.getLong(metaIndex + HASH_VALUE_LENGTH);
         var seq = buffer.getLong(metaIndex + HASH_VALUE_LENGTH + EXPIRE_AT_VALUE_LENGTH);
 
-        var matchMeta = keyMatch(keyBytes, oneCellOffset(cellIndex));
+        var matchMeta = keyMatch(key.getBytes(), oneCellOffset(cellIndex));
         if (matchMeta == null) {
             // hash conflict
             return null;
@@ -925,12 +925,12 @@ public class KeyBucket {
     /**
      * Deletes a key-value pair by its key.
      *
-     * @param keyBytes    the byte array of the key.
+     * @param key         the key.
      * @param keyHash     the hash value of the key.
      * @param doUpdateSeq if true, update the sequence number after deleting the key-value pair.
      * @return true if the key-value pair was successfully deleted, false otherwise.
      */
-    public boolean del(byte[] keyBytes, long keyHash, boolean doUpdateSeq) {
+    public boolean del(String key, long keyHash, boolean doUpdateSeq) {
         if (size == 0) {
             return false;
         }
@@ -947,12 +947,12 @@ public class KeyBucket {
             }
 
             var cellOffset = oneCellOffset(cellIndex);
-            var matchMeta = keyMatch(keyBytes, cellOffset);
+            var matchMeta = keyMatch(key.getBytes(), cellOffset);
             if (matchMeta != null) {
                 var valueBytes = new byte[matchMeta.valueLength];
                 buffer.position(matchMeta.valueOffset()).get(valueBytes);
 
-                clearOneExpiredOrDeleted(cellIndex, new KeyBytesAndValueBytes(keyBytes, valueBytes));
+                clearOneExpiredOrDeleted(cellIndex, new KeyAndValueBytes(key, valueBytes));
 
                 if (doUpdateSeq) {
                     updateSeq();
@@ -964,7 +964,7 @@ public class KeyBucket {
             } else {
                 // hash conflict, just continue
                 System.err.println("Key hash conflict, key hash=" + keyHash + ", target cell index=" + cellIndex
-                        + ", key=" + new String(keyBytes) + ", slot=" + slot + ", bucket index=" + bucketIndex);
+                        + ", key=" + key + ", slot=" + slot + ", bucket index=" + bucketIndex);
             }
         }
 

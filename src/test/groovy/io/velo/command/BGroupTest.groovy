@@ -834,7 +834,7 @@ class BGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         ((reply as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
-        LGroup.getRedisList('a'.bytes, bGroup.slotWithKeyHashListParsed.getFirst(), bGroup) == null
+        LGroup.getRedisList(bGroup.slotWithKeyHashListParsed.getFirst(), bGroup) == null
 
         when:
         // rl is already removed

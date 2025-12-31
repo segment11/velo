@@ -29,7 +29,7 @@ public class VGroup extends BaseCommand {
             if ("add".equals(subCmd)) {
                 var longId = snowFlake.nextId();
                 var key = REVERSE_INDEX_DOC_KEY_PREFIX + longId;
-                var tmpSlot = slot(key.getBytes(), slotNumber);
+                var tmpSlot = slot(key, slotNumber);
 
                 // use long id as key hash for tmp save
                 slotWithKeyHashList.add(new SlotWithKeyHash(tmpSlot.slot(), tmpSlot.bucketIndex(), longId, 0, key));
@@ -318,7 +318,7 @@ public class VGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
-        set(keyBytes, valueBytes, slotWithKeyHash, CompressedValue.NULL_DICT_SEQ,
+        set(valueBytes, slotWithKeyHash, CompressedValue.NULL_DICT_SEQ,
                 System.currentTimeMillis() + 1000L * localPersist.getIndexHandlerPool().getReverseIndexExpiredIfSecondsFromNow());
 
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());

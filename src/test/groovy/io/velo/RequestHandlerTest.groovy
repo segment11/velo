@@ -253,7 +253,7 @@ class RequestHandlerTest extends Specification {
         when:
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def key = 'key'
-        def sKey = BaseCommand.slot(key.bytes, slotNumber)
+        def sKey = BaseCommand.slot(key, slotNumber)
         oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
         def getData2 = new byte[2][]
         getData2[0] = 'get'.bytes

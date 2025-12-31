@@ -424,22 +424,21 @@ public class AGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var valueBytes = data[2];
 
         int length;
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var existsValueBytes = get(keyBytes, slotWithKeyHash);
+        var existsValueBytes = get(slotWithKeyHash);
         if (existsValueBytes == null) {
-            set(keyBytes, valueBytes, slotWithKeyHash);
+            set(valueBytes, slotWithKeyHash);
             length = valueBytes.length;
         } else {
             var newValueBytes = new byte[existsValueBytes.length + valueBytes.length];
             System.arraycopy(existsValueBytes, 0, newValueBytes, 0, existsValueBytes.length);
             System.arraycopy(valueBytes, 0, newValueBytes, existsValueBytes.length, valueBytes.length);
 
-            set(keyBytes, newValueBytes, slotWithKeyHash);
+            set(newValueBytes, slotWithKeyHash);
             length = newValueBytes.length;
         }
 

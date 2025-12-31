@@ -137,7 +137,7 @@ public class LGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
+        var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
         if (encodedBytes == null) {
             // -1 or nil ? todo
             return NilReply.INSTANCE;
@@ -169,10 +169,10 @@ public class LGroup extends BaseCommand {
         return new BulkReply(returnBytesArray[0]);
     }
 
-    private Reply addToList(byte[] keyBytes, byte[][] valueBytesArr, boolean addFirst,
+    private Reply addToList(byte[][] valueBytesArr, boolean addFirst,
                             boolean considerBeforeOrAfter, boolean isBefore, byte[] pivotBytes, boolean needKeyExist) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rl = getRedisList(keyBytes, slotWithKeyHash);
+        var rl = getRedisList(slotWithKeyHash);
         // lpushx / rpushx
         if (rl == null && needKeyExist) {
             return IntegerReply.REPLY_0;
@@ -213,12 +213,12 @@ public class LGroup extends BaseCommand {
             }
         }
 
-        saveRedisList(rl, keyBytes, slotWithKeyHash, dictMap);
+        saveRedisList(rl, slotWithKeyHash, dictMap);
         return new IntegerReply(rl.size());
     }
 
-    public static RedisList getRedisList(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand) {
-        var encodedBytes = baseCommand.get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
+    public static RedisList getRedisList(SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand) {
+        var encodedBytes = baseCommand.get(slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
         if (encodedBytes == null) {
             return null;
         }
@@ -226,27 +226,26 @@ public class LGroup extends BaseCommand {
         return RedisList.decode(encodedBytes);
     }
 
-    static void saveRedisList(RedisList rl, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
-        var key = new String(keyBytes);
+    static void saveRedisList(RedisList rl, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
         if (rl.size() == 0) {
-            baseCommand.removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), key, slotWithKeyHash.keyHash());
+            baseCommand.removeDelay(slotWithKeyHash.slot(), slotWithKeyHash.bucketIndex(), slotWithKeyHash.rawKey(), slotWithKeyHash.keyHash());
             return;
         }
 
-        var keyPrefixOrSuffix = TrainSampleJob.keyPrefixOrSuffixGroup(key);
+        var keyPrefixOrSuffix = TrainSampleJob.keyPrefixOrSuffixGroup(slotWithKeyHash.rawKey());
         var preferDict = dictMap.getDict(keyPrefixOrSuffix);
         if (preferDict == null) {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
-        baseCommand.set(keyBytes, rl.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_LIST);
+        baseCommand.set(rl.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_LIST);
     }
 
-    private RedisList getRedisList(byte[] keyBytes, SlotWithKeyHash slotWithKeyHash) {
-        return getRedisList(keyBytes, slotWithKeyHash, this);
+    private RedisList getRedisList(SlotWithKeyHash slotWithKeyHash) {
+        return getRedisList(slotWithKeyHash, this);
     }
 
-    private void saveRedisList(RedisList rl, byte[] keyBytes, SlotWithKeyHash slotWithKeyHash, DictMap dictMap) {
-        saveRedisList(rl, keyBytes, slotWithKeyHash, this, dictMap);
+    private void saveRedisList(RedisList rl, SlotWithKeyHash slotWithKeyHash, DictMap dictMap) {
+        saveRedisList(rl, slotWithKeyHash, this, dictMap);
     }
 
     private Reply linsert() {
@@ -278,7 +277,7 @@ public class LGroup extends BaseCommand {
 
         byte[][] valueBytesArr = {null};
         valueBytesArr[0] = valueBytes;
-        return addToList(keyBytes, valueBytesArr, false, true, isBefore, pivotBytes, false);
+        return addToList(valueBytesArr, false, true, isBefore, pivotBytes, false);
     }
 
     private Reply llen() {
@@ -293,7 +292,7 @@ public class LGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
+        var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
         if (encodedBytes == null) {
             return IntegerReply.REPLY_0;
         }
@@ -360,9 +359,9 @@ public class LGroup extends BaseCommand {
                 return new ErrorReply("timeout must be <= " + MAX_TIMEOUT_SECONDS);
             }
 
-            return rGroup.moveBlock(srcKeyBytes, srcSlotWithKeyHash, dstKeyBytes, dstSlotWithKeyHash, isSrcLeft, isDstLeft, timeoutSeconds);
+            return rGroup.moveBlock(srcSlotWithKeyHash, dstSlotWithKeyHash, isSrcLeft, isDstLeft, timeoutSeconds);
         } else {
-            return rGroup.move(srcKeyBytes, srcSlotWithKeyHash, dstKeyBytes, dstSlotWithKeyHash, isSrcLeft, isDstLeft);
+            return rGroup.move(srcSlotWithKeyHash, dstSlotWithKeyHash, isSrcLeft, isDstLeft);
         }
     }
 
@@ -394,7 +393,7 @@ public class LGroup extends BaseCommand {
         var isResp3 = SocketInspector.isResp3(socket);
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rl = getRedisList(keyBytes, slotWithKeyHash);
+        var rl = getRedisList(slotWithKeyHash);
         if (rl == null || rl.size() == 0) {
             if (isWithCount) {
                 if (isResp3) {
@@ -422,7 +421,7 @@ public class LGroup extends BaseCommand {
             }
         }
 
-        saveRedisList(rl, keyBytes, slotWithKeyHash, dictMap);
+        saveRedisList(rl, slotWithKeyHash, dictMap);
         if (!isWithCount) {
             return replies.getFirst();
         }
@@ -493,7 +492,7 @@ public class LGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rl = getRedisList(keyBytes, slotWithKeyHash);
+        var rl = getRedisList(slotWithKeyHash);
         if (rl == null) {
             return NilReply.INSTANCE;
         }
@@ -584,14 +583,14 @@ public class LGroup extends BaseCommand {
         var afterPopValueBytesArray = BlockingList.setReplyIfBlockingListExist(key, addFirst, valueBytesArr, this);
         // no blocking for this key
         if (afterPopValueBytesArray == null) {
-            return addToList(keyBytes, valueBytesArr, addFirst, false, false, null, needKeyExist);
+            return addToList(valueBytesArr, addFirst, false, false, null, needKeyExist);
         }
 
         // all elements are popped, need to add to list
         if (afterPopValueBytesArray.length == 0) {
             // no need to add to list
             var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-            var rl = getRedisList(keyBytes, slotWithKeyHash);
+            var rl = getRedisList(slotWithKeyHash);
             if (rl == null || rl.size() == 0) {
                 return IntegerReply.REPLY_1;
             } else {
@@ -599,7 +598,7 @@ public class LGroup extends BaseCommand {
             }
         }
 
-        var reply = addToList(keyBytes, afterPopValueBytesArray, addFirst, false, false, null, needKeyExist);
+        var reply = addToList(afterPopValueBytesArray, addFirst, false, false, null, needKeyExist);
         if (reply instanceof IntegerReply) {
             return new IntegerReply(((IntegerReply) reply).getInteger() + (valueBytesArr.length - afterPopValueBytesArray.length));
         } else {
@@ -627,7 +626,7 @@ public class LGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var encodedBytes = get(keyBytes, slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
+        var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
         if (encodedBytes == null) {
             return MultiBulkReply.EMPTY;
         }
@@ -679,7 +678,7 @@ public class LGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rl = getRedisList(keyBytes, slotWithKeyHash);
+        var rl = getRedisList(slotWithKeyHash);
         if (rl == null) {
             return IntegerReply.REPLY_0;
         }
@@ -704,7 +703,7 @@ public class LGroup extends BaseCommand {
         }
 
         if (removed > 0) {
-            saveRedisList(rl, keyBytes, slotWithKeyHash, dictMap);
+            saveRedisList(rl, slotWithKeyHash, dictMap);
         }
         return new IntegerReply(removed);
     }
@@ -737,7 +736,7 @@ public class LGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rl = getRedisList(keyBytes, slotWithKeyHash);
+        var rl = getRedisList(slotWithKeyHash);
         if (rl == null) {
             return ErrorReply.NO_SUCH_KEY;
         }
@@ -755,7 +754,7 @@ public class LGroup extends BaseCommand {
         rl.setAt(index, valueBytes);
 
         if (!Arrays.equals(valueBytesOld, valueBytes)) {
-            saveRedisList(rl, keyBytes, slotWithKeyHash, dictMap);
+            saveRedisList(rl, slotWithKeyHash, dictMap);
         }
         return OKReply.INSTANCE;
     }
@@ -780,7 +779,7 @@ public class LGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rl = getRedisList(keyBytes, slotWithKeyHash);
+        var rl = getRedisList(slotWithKeyHash);
         if (rl == null) {
             // or ErrorReply.NO_SUCH_KEY
             return OKReply.INSTANCE;
@@ -812,7 +811,7 @@ public class LGroup extends BaseCommand {
             i++;
         }
 
-        saveRedisList(rl, keyBytes, slotWithKeyHash, dictMap);
+        saveRedisList(rl, slotWithKeyHash, dictMap);
         return OKReply.INSTANCE;
     }
 

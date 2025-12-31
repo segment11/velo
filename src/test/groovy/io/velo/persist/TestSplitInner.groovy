@@ -9,12 +9,12 @@ def snowFlake = new SnowFlake(1, 1)
 def keyBucket = new KeyBucket((byte) 0, 0, (byte) 0, (byte) 1, null, 0, snowFlake)
 
 for (key in keysExists) {
-    keyBucket.put(key.bytes, 0L, 0L, 1L, key.bytes)
+    keyBucket.put(key, 0L, 0L, 1L, key.bytes)
 }
 println keyBucket.size
 
 //for (key in keysAdd) {
-//    keyBucket.put(key.bytes, 0L, 0L, 1L, key.bytes)
+//    keyBucket.put(key, 0L, 0L, 1L, key.bytes)
 //}
 
 def inner = new KeyBucketsInOneWalGroup((byte) 0, 0, null)
@@ -26,7 +26,7 @@ for (key in keysAdd) {
     def pvm = new PersistValueMeta()
     pvm.expireAt = 0L
     pvm.seq = 0L
-    pvm.keyBytes = key.bytes
+    pvm.key = key
     pvm.keyHash = 0L
     pvm.keyHash32 = 0L
     pvm.bucketIndex = 0

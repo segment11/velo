@@ -158,9 +158,8 @@ public class PGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var s = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, s);
+        var cv = getCv(s);
         if (cv == null) {
             return IntegerReply.REPLY_0;
         }
@@ -170,7 +169,7 @@ public class PGroup extends BaseCommand {
         }
 
         cv.setExpireAt(CompressedValue.NO_EXPIRE);
-        putToOneSlot(s.slot(), s.rawKey(), s, cv);
+        putToOneSlot(s.slot(), s, cv);
         return IntegerReply.REPLY_1;
     }
 
@@ -188,7 +187,7 @@ public class PGroup extends BaseCommand {
         cv.setDictSeqOrSpType(CompressedValue.SP_TYPE_HLL);
         cv.setKeyHash(s.keyHash());
         cv.setCompressedData(compressed);
-        putToOneSlot(s.slot(), s.rawKey(), s, cv);
+        putToOneSlot(s.slot(), s, cv);
 
         // stats
         compressStats.rawTotalLength += encoded.length;
@@ -197,8 +196,8 @@ public class PGroup extends BaseCommand {
         compressStats.compressedCostTimeTotalUs += costT;
     }
 
-    private HyperLogLog getHll(byte[] keyBytes, SlotWithKeyHash s) {
-        var cv = getCv(keyBytes, s);
+    private HyperLogLog getHll(SlotWithKeyHash s) {
+        var cv = getCv(s);
         if (cv == null) {
             return null;
         }
@@ -228,10 +227,9 @@ public class PGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var s = slotWithKeyHashListParsed.getFirst();
 
-        var hll = getHll(keyBytes, s);
+        var hll = getHll(s);
         if (hll == null) {
             hll = HyperLogLog.builder()
                     .setEncoding(HyperLogLog.EncodingType.DENSE)
@@ -257,8 +255,8 @@ public class PGroup extends BaseCommand {
         return isChanged ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
     }
 
-    private long getHllCount(byte[] keyBytes, SlotWithKeyHash s) {
-        var hll = getHll(keyBytes, s);
+    private long getHllCount(SlotWithKeyHash s) {
+        var hll = getHll(s);
         if (hll == null) {
             return 0;
         }
@@ -273,19 +271,17 @@ public class PGroup extends BaseCommand {
         if (!isCrossRequestWorker) {
             long sum = 0L;
             for (var i = 1; i < data.length; i++) {
-                var keyBytes = data[i];
                 var slotWithKeyHash = slotWithKeyHashListParsed.get(i - 1);
-                var count = getHllCount(keyBytes, slotWithKeyHash);
+                var count = getHllCount(slotWithKeyHash);
                 sum += count;
             }
             return new IntegerReply(sum);
         }
 
-        ArrayList<MGroup.KeyBytesAndSlotWithKeyHash> list = new ArrayList<>();
+        ArrayList<MGroup.IndexAndSlotWithKeyHash> list = new ArrayList<>();
         for (int i = 1, j = 0; i < data.length; i++, j++) {
-            var keyBytes = data[i];
             var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
-            list.add(new MGroup.KeyBytesAndSlotWithKeyHash(keyBytes, j, slotWithKeyHash));
+            list.add(new MGroup.IndexAndSlotWithKeyHash(j, slotWithKeyHash));
         }
 
         ArrayList<Promise<Long>> promises = new ArrayList<>();
@@ -298,7 +294,7 @@ public class PGroup extends BaseCommand {
             var p = oneSlot.asyncCall(() -> {
                 long sum = 0L;
                 for (var one : subList) {
-                    var count = getHllCount(one.keyBytes(), one.slotWithKeyHash());
+                    var count = getHllCount(one.slotWithKeyHash());
                     sum += count;
                 }
                 return sum;
@@ -338,9 +334,8 @@ public class PGroup extends BaseCommand {
                     .setEncoding(HyperLogLog.EncodingType.DENSE)
                     .build();
             for (var i = 2; i < data.length; i++) {
-                var srcKeyBytes = data[i];
                 var srcS = slotWithKeyHashListParsed.get(i - 1);
-                var hll = getHll(srcKeyBytes, srcS);
+                var hll = getHll(srcS);
                 dstHll.merge(hll);
             }
 
@@ -352,11 +347,10 @@ public class PGroup extends BaseCommand {
             }
         }
 
-        ArrayList<MGroup.KeyBytesAndSlotWithKeyHash> list = new ArrayList<>();
+        ArrayList<MGroup.IndexAndSlotWithKeyHash> list = new ArrayList<>();
         for (int i = 2, j = 0; i < data.length; i++, j++) {
-            var srcKeyBytes = data[i];
             var slotWithKeyHash = slotWithKeyHashListParsed.get(i - 1);
-            list.add(new MGroup.KeyBytesAndSlotWithKeyHash(srcKeyBytes, j, slotWithKeyHash));
+            list.add(new MGroup.IndexAndSlotWithKeyHash(j, slotWithKeyHash));
         }
 
         ArrayList<Promise<ArrayList<HyperLogLog>>> promises = new ArrayList<>();
@@ -369,7 +363,7 @@ public class PGroup extends BaseCommand {
             var p = oneSlot.asyncCall(() -> {
                 ArrayList<HyperLogLog> hllList = new ArrayList<>();
                 for (var one : subList) {
-                    var hll = getHll(one.keyBytes(), one.slotWithKeyHash());
+                    var hll = getHll(one.slotWithKeyHash());
                     hllList.add(hll);
                 }
                 return hllList;

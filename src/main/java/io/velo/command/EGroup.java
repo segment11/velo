@@ -190,7 +190,7 @@ public class EGroup extends BaseCommand {
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         // if nx xx gt lt, need not read cv, just read expire at from key bucket, todo
-        var cv = getCv(keyBytes, slotWithKeyHash);
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return IntegerReply.REPLY_0;
         }
@@ -212,7 +212,7 @@ public class EGroup extends BaseCommand {
         cv.setSeq(snowFlake.nextId());
         cv.setExpireAt(expireAt);
 
-        setCv(keyBytes, cv, slotWithKeyHash);
+        setCv(cv, slotWithKeyHash);
         return IntegerReply.REPLY_1;
     }
 
@@ -223,7 +223,7 @@ public class EGroup extends BaseCommand {
 
         var keyBytes = data[1];
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(keyBytes, slotWithKeyHash);
+        var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             return new IntegerReply(-2);
         }

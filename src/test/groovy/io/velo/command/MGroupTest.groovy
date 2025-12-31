@@ -210,8 +210,8 @@ class MGroupTest extends Specification {
         reply == OKReply.INSTANCE
 
         when:
-        def valA = mGroup.get('a'.bytes, mGroup.slotWithKeyHashListParsed[0])
-        def valB = mGroup.get('b'.bytes, mGroup.slotWithKeyHashListParsed[1])
+        def valA = mGroup.get(mGroup.slotWithKeyHashListParsed[0])
+        def valB = mGroup.get(mGroup.slotWithKeyHashListParsed[1])
         then:
         valA == '1'.bytes
         valB == '2'.bytes
@@ -241,8 +241,8 @@ class MGroupTest extends Specification {
         }.result
 
         when:
-        valA = mGroup.get('a'.bytes, mGroup.slotWithKeyHashListParsed[0])
-        valB = mGroup.get('b'.bytes, mGroup.slotWithKeyHashListParsed[1])
+        valA = mGroup.get(mGroup.slotWithKeyHashListParsed[0])
+        valB = mGroup.get(mGroup.slotWithKeyHashListParsed[1])
         then:
         valA == '11'.bytes
         valB == '22'.bytes
@@ -281,8 +281,8 @@ class MGroupTest extends Specification {
         reply == IntegerReply.REPLY_1
 
         when:
-        def valA = mGroup.get('a'.bytes, mGroup.slotWithKeyHashListParsed[0])
-        def valB = mGroup.get('b'.bytes, mGroup.slotWithKeyHashListParsed[1])
+        def valA = mGroup.get(mGroup.slotWithKeyHashListParsed[0])
+        def valB = mGroup.get(mGroup.slotWithKeyHashListParsed[1])
         then:
         valA == '1'.bytes
         valB == '2'.bytes
@@ -320,8 +320,8 @@ class MGroupTest extends Specification {
         }.result
 
         when:
-        valA = mGroup.get('aa'.bytes, mGroup.slotWithKeyHashListParsed[0])
-        valB = mGroup.get('bb'.bytes, mGroup.slotWithKeyHashListParsed[1])
+        valA = mGroup.get(mGroup.slotWithKeyHashListParsed[0])
+        valB = mGroup.get(mGroup.slotWithKeyHashListParsed[1])
         then:
         valA == '11'.bytes
         valB == '22'.bytes

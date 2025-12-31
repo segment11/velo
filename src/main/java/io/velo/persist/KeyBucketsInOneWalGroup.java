@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -112,13 +111,13 @@ public class KeyBucketsInOneWalGroup {
      * Retrieves the expiration time and sequence number for a given key.
      *
      * @param bucketIndex The index of the bucket.
-     * @param keyBytes    The key bytes.
+     * @param key         The key.
      * @param keyHash     The hash of the key.
      * @return The expiration time and sequence number.
      */
-    KeyBucket.ExpireAtAndSeq getExpireAtAndSeq(int bucketIndex, byte[] keyBytes, long keyHash) {
+    KeyBucket.ExpireAtAndSeq getExpireAtAndSeq(int bucketIndex, String key, long keyHash) {
         if (ConfForGlobal.pureMemoryV2) {
-            return keyLoader.getExpireAtAndSeqByKey(bucketIndex, keyBytes, keyHash, KeyHash.hash32(keyBytes));
+            return keyLoader.getExpireAtAndSeqByKey(bucketIndex, key, keyHash, KeyHash.hash32(key.getBytes()));
         }
 
         int relativeBucketIndex = bucketIndex - beginBucketIndex;
@@ -135,20 +134,20 @@ public class KeyBucketsInOneWalGroup {
             return null;
         }
 
-        return keyBucket.getExpireAtAndSeqByKey(keyBytes, keyHash);
+        return keyBucket.getExpireAtAndSeqByKey(key, keyHash);
     }
 
     /**
      * Retrieves the value, expiration time, and sequence number for a given key.
      *
      * @param bucketIndex The index of the bucket.
-     * @param keyBytes    The key bytes.
+     * @param key         The key.
      * @param keyHash     The hash of the key.
      * @return The value, expiration time, and sequence number.
      */
-    KeyBucket.ValueBytesWithExpireAtAndSeq getValueX(int bucketIndex, byte[] keyBytes, long keyHash) {
+    KeyBucket.ValueBytesWithExpireAtAndSeq getValueX(int bucketIndex, String key, long keyHash) {
         if (ConfForGlobal.pureMemoryV2) {
-            return keyLoader.getValueXByKey(bucketIndex, keyBytes, keyHash, KeyHash.hash32(keyBytes));
+            return keyLoader.getValueXByKey(bucketIndex, key, keyHash, KeyHash.hash32(key.getBytes()));
         }
 
         int relativeBucketIndex = bucketIndex - beginBucketIndex;
@@ -165,7 +164,7 @@ public class KeyBucketsInOneWalGroup {
             return null;
         }
 
-        return keyBucket.getValueXByKey(keyBytes, keyHash);
+        return keyBucket.getValueXByKey(key, keyHash);
     }
 
     /**
@@ -266,13 +265,13 @@ public class KeyBucketsInOneWalGroup {
                 list.set(relativeBucketIndex, keyBucket);
             }
 
-            var doPutResult = keyBucket.put(pvm.keyBytes, pvm.keyHash, pvm.expireAt, pvm.seq,
+            var doPutResult = keyBucket.put(pvm.key, pvm.keyHash, pvm.expireAt, pvm.seq,
                     pvm.extendBytes != null ? pvm.extendBytes : pvm.encode(), false);
             if (!doPutResult.isPut()) {
                 // log all keys
-                log.warn("Failed keys to put={}", needAddNewList.stream().map(pvmInner -> new String(pvmInner.keyBytes)).collect(Collectors.toList()));
+                log.warn("Failed keys to put={}", needAddNewList.stream().map(pvmInner -> pvmInner.key).collect(Collectors.toList()));
                 throw new BucketFullException("Bucket full, slot=" + slot + ", bucket index=" + bucketIndex +
-                        ", split index=" + splitIndex + ", key=" + new String(pvm.keyBytes));
+                        ", split index=" + splitIndex + ", key=" + pvm.key);
             }
 
             isUpdatedBySplitIndex[splitIndex] = true;
@@ -290,7 +289,7 @@ public class KeyBucketsInOneWalGroup {
                 continue;
             }
 
-            var isDeleted = keyBucket.del(pvm.keyBytes, pvm.keyHash, true);
+            var isDeleted = keyBucket.del(pvm.key, pvm.keyHash, true);
             if (isDeleted) {
                 isUpdatedBySplitIndex[splitIndex] = true;
                 keyCountForStatsTmp[relativeBucketIndex]--;
@@ -321,7 +320,7 @@ public class KeyBucketsInOneWalGroup {
                 log.warn("Bucket full, split number exceed max split number=" + KeyLoader.MAX_SPLIT_NUMBER + ", slot={}, bucket index={}",
                         slot, bucketIndex);
                 // log all keys
-                log.warn("Failed keys to put={}", pvmListThisBucket.stream().map(pvm -> new String(pvm.keyBytes)).collect(Collectors.toList()));
+                log.warn("Failed keys to put={}", pvmListThisBucket.stream().map(pvm -> pvm.key).collect(Collectors.toList()));
                 throw new BucketFullException("Bucket full, split number exceed max split number=" + KeyLoader.MAX_SPLIT_NUMBER +
                         ", slot=" + slot + ", bucket index=" + bucketIndex);
             }
@@ -342,10 +341,10 @@ public class KeyBucketsInOneWalGroup {
                     continue;
                 }
 
-                keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+                keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                     if (!needUpdateList.isEmpty()) {
                         for (var needUpdatePvm : needUpdateList) {
-                            if (needUpdatePvm.keyHash == keyHash && Arrays.equals(needUpdatePvm.keyBytes, keyBytes)) {
+                            if (needUpdatePvm.keyHash == keyHash && needUpdatePvm.key.equals(key)) {
                                 return;
                             }
                         }
@@ -354,7 +353,7 @@ public class KeyBucketsInOneWalGroup {
                     var pvm = new PersistValueMeta();
                     pvm.expireAt = expireAt;
                     pvm.seq = seq;
-                    pvm.keyBytes = keyBytes;
+                    pvm.key = key;
                     pvm.keyHash = keyHash;
                     pvm.bucketIndex = bucketIndex;
                     pvm.extendBytes = valueBytes;
@@ -437,7 +436,7 @@ public class KeyBucketsInOneWalGroup {
                 continue;
             }
 
-            var currentOne = keyBucket.getValueXByKey(pvm.keyBytes, pvm.keyHash);
+            var currentOne = keyBucket.getValueXByKey(pvm.key, pvm.keyHash);
             if (currentOne != null) {
                 // wal remove delay use expire now
                 if (pvm.expireAt == CompressedValue.EXPIRE_NOW) {
@@ -571,7 +570,7 @@ public class KeyBucketsInOneWalGroup {
         var pvm = new PersistValueMeta();
         pvm.expireAt = v.expireAt();
         pvm.seq = v.seq();
-        pvm.keyBytes = v.key().getBytes();
+        pvm.key = v.key();
         pvm.keyHash = v.keyHash();
         pvm.bucketIndex = v.bucketIndex();
         pvm.isFromMerge = v.isFromMerge();

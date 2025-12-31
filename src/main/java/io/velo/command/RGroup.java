@@ -148,7 +148,7 @@ public class RGroup extends BaseCommand {
             if (keyCount > 0) {
                 var skipN = random.nextInt(keyCount);
                 final int[] countArray = {0};
-                final byte[][] targetKeyBytesArray = new byte[1][1];
+                final String[] targetKeyArray = new String[1];
 
                 var keyBuckets = firstOneSlot.getKeyLoader().readKeyBuckets(bucketIndex);
                 for (var keyBucket : keyBuckets) {
@@ -156,20 +156,20 @@ public class RGroup extends BaseCommand {
                         continue;
                     }
 
-                    keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+                    keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                         if (countArray[0] == skipN) {
-                            targetKeyBytesArray[0] = keyBytes;
+                            targetKeyArray[0] = key;
                             return;
                         }
                         countArray[0]++;
                     });
 
-                    if (targetKeyBytesArray[0] != null) {
+                    if (targetKeyArray[0] != null) {
                         break;
                     }
                 }
 
-                return new BulkReply(targetKeyBytesArray[0]);
+                return new BulkReply(targetKeyArray[0]);
             }
         }
 
@@ -192,7 +192,7 @@ public class RGroup extends BaseCommand {
         }
 
         var srcSlotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var srcCv = getCv(srcKeyBytes, srcSlotWithKeyHash);
+        var srcCv = getCv(srcSlotWithKeyHash);
         if (srcCv == null) {
             return ErrorReply.NO_SUCH_KEY;
         }
@@ -207,7 +207,7 @@ public class RGroup extends BaseCommand {
             }
 
             removeDelay(srcSlotWithKeyHash.slot(), srcSlotWithKeyHash.bucketIndex(), srcSlotWithKeyHash.rawKey(), srcSlotWithKeyHash.keyHash());
-            setCv(dstKeyBytes, srcCv, dstS);
+            setCv(srcCv, dstS);
             return isNx ? IntegerReply.REPLY_1 : OKReply.INSTANCE;
         }
 
@@ -226,7 +226,7 @@ public class RGroup extends BaseCommand {
                 }
             }
 
-            setCv(dstKeyBytes, srcCv, dstS);
+            setCv(srcCv, dstS);
             finalPromise.set(isNx ? IntegerReply.REPLY_1 : OKReply.INSTANCE);
             return true;
         }).whenComplete((r, e) -> {
@@ -311,7 +311,7 @@ public class RGroup extends BaseCommand {
         // check if key exists
 //        replace = true;
         if (!replace) {
-            var cv = getCv(keyBytes, slotWithKeyHash);
+            var cv = getCv(slotWithKeyHash);
             if (cv != null) {
                 return ErrorReply.TARGET_KEY_BUSY;
             }
@@ -326,22 +326,22 @@ public class RGroup extends BaseCommand {
             rdbImporter.restore(buf, new RDBCallback() {
                 @Override
                 public void onString(byte[] valueBytes) {
-                    set(keyBytes, valueBytes, slotWithKeyHash, CompressedValue.NULL_DICT_SEQ, finalExpireAt);
+                    set(valueBytes, slotWithKeyHash, CompressedValue.NULL_DICT_SEQ, finalExpireAt);
                 }
 
                 @Override
                 public void onList(RedisList rl) {
-                    LGroup.saveRedisList(rl, keyBytes, slotWithKeyHash, _rGroup, dictMap);
+                    LGroup.saveRedisList(rl, slotWithKeyHash, _rGroup, dictMap);
                 }
 
                 @Override
                 public void onSet(RedisHashKeys rhk) {
-                    SGroup.saveRedisSet(rhk, keyBytes, slotWithKeyHash, _rGroup, dictMap);
+                    SGroup.saveRedisSet(rhk, slotWithKeyHash, _rGroup, dictMap);
                 }
 
                 @Override
                 public void onZSet(RedisZSet rz) {
-                    ZGroup.saveRedisZSet(rz, keyBytes, slotWithKeyHash, _rGroup, dictMap);
+                    ZGroup.saveRedisZSet(rz, slotWithKeyHash, _rGroup, dictMap);
                 }
 
                 @Override
@@ -351,7 +351,7 @@ public class RGroup extends BaseCommand {
                     hGroup.setSlotWithKeyHashListParsed(_rGroup.slotWithKeyHashListParsed);
 
                     if (hGroup.isUseHH(keyBytes)) {
-                        hGroup.saveRedisHH(rhh, keyBytes, slotWithKeyHash);
+                        hGroup.saveRedisHH(rhh, slotWithKeyHash);
                     } else {
                         var map = rhh.getMap();
                         var rhk = new RedisHashKeys();
@@ -360,8 +360,8 @@ public class RGroup extends BaseCommand {
                             var field = entry.getKey();
                             var fieldKey = RedisHashKeys.fieldKey(key, field);
                             var fieldValueBytes = entry.getValue();
-                            var slotWithKeyHashThisField = slot(fieldKey.getBytes());
-                            set(fieldKey.getBytes(), fieldValueBytes, slotWithKeyHashThisField);
+                            var slotWithKeyHashThisField = slot(fieldKey);
+                            set(fieldKey.getBytes(), slotWithKeyHashThisField);
 
                             rhk.add(field);
                         }
@@ -431,9 +431,9 @@ public class RGroup extends BaseCommand {
         }
     }
 
-    void moveDstCallback(byte[] dstKeyBytes, SlotWithKeyHash dstSlotWithKeyHash, boolean dstLeft, byte[] memberValueBytes,
+    void moveDstCallback(SlotWithKeyHash dstSlotWithKeyHash, boolean dstLeft, byte[] memberValueBytes,
                          Consumer<Reply> consumer) {
-        var cvDst = getCv(dstKeyBytes, dstSlotWithKeyHash);
+        var cvDst = getCv(dstSlotWithKeyHash);
 
         RedisList rlDst;
         if (cvDst == null) {
@@ -444,7 +444,7 @@ public class RGroup extends BaseCommand {
                 return;
             }
 
-            var encodedBytesDst = getValueBytesByCv(cvDst, dstKeyBytes, dstSlotWithKeyHash);
+            var encodedBytesDst = getValueBytesByCv(cvDst, dstSlotWithKeyHash);
             rlDst = RedisList.decode(encodedBytesDst);
         }
 
@@ -454,13 +454,13 @@ public class RGroup extends BaseCommand {
             rlDst.addLast(memberValueBytes);
         }
 
-        set(dstKeyBytes, rlDst.encode(), dstSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
+        set(rlDst.encode(), dstSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
         consumer.accept(new BulkReply(memberValueBytes));
     }
 
-    Reply move(byte[] srcKeyBytes, SlotWithKeyHash srcSlotWithKeyHash, byte[] dstKeyBytes, SlotWithKeyHash dstSlotWithKeyHash,
+    Reply move(SlotWithKeyHash srcSlotWithKeyHash, SlotWithKeyHash dstSlotWithKeyHash,
                boolean srcLeft, boolean dstLeft) {
-        var cvSrc = getCv(srcKeyBytes, srcSlotWithKeyHash);
+        var cvSrc = getCv(srcSlotWithKeyHash);
         if (cvSrc == null) {
             return NilReply.INSTANCE;
         }
@@ -468,7 +468,7 @@ public class RGroup extends BaseCommand {
             return ErrorReply.WRONG_TYPE;
         }
 
-        var valueBytesSrc = getValueBytesByCv(cvSrc, srcKeyBytes, srcSlotWithKeyHash);
+        var valueBytesSrc = getValueBytesByCv(cvSrc, srcSlotWithKeyHash);
         var rlSrc = RedisList.decode(valueBytesSrc);
 
         var size = rlSrc.size();
@@ -478,11 +478,11 @@ public class RGroup extends BaseCommand {
 
         var memberValueBytes = srcLeft ? rlSrc.removeFirst() : rlSrc.removeLast();
         // save after remove
-        set(srcKeyBytes, rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
+        set(rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
 
         if (!isCrossRequestWorker) {
             final Reply[] finalReplyArray = {null};
-            moveDstCallback(dstKeyBytes, dstSlotWithKeyHash, dstLeft, memberValueBytes, reply -> finalReplyArray[0] = reply);
+            moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, reply -> finalReplyArray[0] = reply);
             return finalReplyArray[0];
         }
 
@@ -491,14 +491,14 @@ public class RGroup extends BaseCommand {
 
         var dstSlot = dstSlotWithKeyHash.slot();
         var dstOneSlot = localPersist.oneSlot(dstSlot);
-        dstOneSlot.asyncRun(() -> moveDstCallback(dstKeyBytes, dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
+        dstOneSlot.asyncRun(() -> moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
 
         return asyncReply;
     }
 
     private AsyncReply doBlockWhenMove(String srcKey, boolean srcLeft, int timeoutSeconds,
-                                       byte[] dstKeyBytes, SlotWithKeyHash dstSlotWithKeyHash, boolean dstLeft) {
-        var xx = new BlockingList.DstKeyAndDstLeftWhenMove(dstKeyBytes, dstSlotWithKeyHash, dstLeft);
+                                       SlotWithKeyHash dstSlotWithKeyHash, boolean dstLeft) {
+        var xx = new BlockingList.DstKeyAndDstLeftWhenMove(dstSlotWithKeyHash, dstLeft);
 
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
@@ -517,17 +517,16 @@ public class RGroup extends BaseCommand {
         return asyncReply;
     }
 
-    Reply moveBlock(byte[] srcKeyBytes, SlotWithKeyHash srcSlotWithKeyHash, byte[] dstKeyBytes, SlotWithKeyHash dstSlotWithKeyHash,
+    Reply moveBlock(SlotWithKeyHash srcSlotWithKeyHash, SlotWithKeyHash dstSlotWithKeyHash,
                     boolean srcLeft, boolean dstLeft, int timeoutSeconds) {
         boolean isNoWait = timeoutSeconds <= 0;
 
-        var cvSrc = getCv(srcKeyBytes, srcSlotWithKeyHash);
+        var cvSrc = getCv(srcSlotWithKeyHash);
         if (cvSrc == null) {
             if (isNoWait) {
                 return NilReply.INSTANCE;
             } else {
-                var srcKey = new String(srcKeyBytes);
-                return doBlockWhenMove(srcKey, srcLeft, timeoutSeconds, dstKeyBytes, dstSlotWithKeyHash, dstLeft);
+                return doBlockWhenMove(srcSlotWithKeyHash.rawKey(), srcLeft, timeoutSeconds, dstSlotWithKeyHash, dstLeft);
             }
         }
 
@@ -535,7 +534,7 @@ public class RGroup extends BaseCommand {
             return ErrorReply.WRONG_TYPE;
         }
 
-        var valueBytesSrc = getValueBytesByCv(cvSrc, srcKeyBytes, srcSlotWithKeyHash);
+        var valueBytesSrc = getValueBytesByCv(cvSrc, srcSlotWithKeyHash);
         var rlSrc = RedisList.decode(valueBytesSrc);
 
         var size = rlSrc.size();
@@ -543,18 +542,17 @@ public class RGroup extends BaseCommand {
             if (isNoWait) {
                 return NilReply.INSTANCE;
             } else {
-                var srcKey = new String(srcKeyBytes);
-                return doBlockWhenMove(srcKey, srcLeft, timeoutSeconds, dstKeyBytes, dstSlotWithKeyHash, dstLeft);
+                return doBlockWhenMove(srcSlotWithKeyHash.rawKey(), srcLeft, timeoutSeconds, dstSlotWithKeyHash, dstLeft);
             }
         }
 
         var memberValueBytes = srcLeft ? rlSrc.removeFirst() : rlSrc.removeLast();
         // save after remove
-        set(srcKeyBytes, rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
+        set(rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
 
         if (!isCrossRequestWorker) {
             final Reply[] finalReplyArray = {null};
-            moveDstCallback(dstKeyBytes, dstSlotWithKeyHash, dstLeft, memberValueBytes, reply -> finalReplyArray[0] = reply);
+            moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, reply -> finalReplyArray[0] = reply);
             return finalReplyArray[0];
         }
 
@@ -563,7 +561,7 @@ public class RGroup extends BaseCommand {
 
         var dstSlot = dstSlotWithKeyHash.slot();
         var dstOneSlot = localPersist.oneSlot(dstSlot);
-        dstOneSlot.asyncRun(() -> moveDstCallback(dstKeyBytes, dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
+        dstOneSlot.asyncRun(() -> moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
 
         return asyncReply;
     }
@@ -587,6 +585,6 @@ public class RGroup extends BaseCommand {
         var srcSlotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var dstSlotWithKeyHash = slotWithKeyHashListParsed.getLast();
 
-        return move(srcKeyBytes, srcSlotWithKeyHash, dstKeyBytes, dstSlotWithKeyHash, false, true);
+        return move(srcSlotWithKeyHash, dstSlotWithKeyHash, false, true);
     }
 }

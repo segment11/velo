@@ -20,9 +20,7 @@ public class TestBucketDataSkew {
         for (int i = 0; i < number; i++) {
             // like redis-benchmark key generator
             var key = "key:" + Utils.leftPad(String.valueOf(i), "0", 12);
-            var keyBytes = key.getBytes();
-
-            var slotWithKeyHash = BaseCommand.slot(keyBytes, slotNumber);
+            var slotWithKeyHash = BaseCommand.slot(key, slotNumber);
             bucketKeyCount[slotWithKeyHash.slot()][slotWithKeyHash.bucketIndex()]++;
         }
 

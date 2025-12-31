@@ -176,7 +176,7 @@ class ManageCommand extends BaseCommand {
         } else if (subSubCmd == 'view-big-key-top-k') {
             def queue = oneSlot.bigKeyTopK.queue
             def str = queue.collect {
-                new String(it.keyBytes()) + ': ' + it.length()
+                it.key() + ': ' + it.length()
             }.join(', ')
             return new BulkReply(str.bytes)
         } else if (subSubCmd == 'view-bucket-key-count') {
@@ -384,8 +384,7 @@ class ManageCommand extends BaseCommand {
         def beginT = System.currentTimeMillis()
         for (int i = 0; i < n; i++) {
             def key = keyPrefix + i.toString().padLeft(keyLength - keyPrefix.length(), '0')
-            def keyBytes = key.bytes
-            def s = super.slot(keyBytes)
+            def s = super.slot(key)
             if (s.slot() != oneSlot.slot()) {
                 skipN++
                 continue
@@ -450,14 +449,13 @@ class ManageCommand extends BaseCommand {
         def beginT = System.currentTimeMillis()
         for (int i = 0; i < n; i++) {
             def key = keyPrefix + i.toString().padLeft(keyLength - keyPrefix.length(), '0')
-            def keyBytes = key.bytes
-            def s = super.slot(keyBytes)
+            def s = super.slot(key)
             if (s.slot() != toSlot) {
                 skipN++
                 continue
             }
 
-            set(keyBytes, mockValueBytes, s)
+            set(mockValueBytes, s)
             putN++
         }
         def costT = System.currentTimeMillis() - beginT
@@ -933,7 +931,7 @@ class ManageCommand extends BaseCommand {
 
             // manage debug calc-key-hash key
             def keyBytes = data[3]
-            def slotWithKeyHash = slot(keyBytes)
+            def slotWithKeyHash = slot(keyBytes, slotNumber)
             return new BulkReply(slotWithKeyHash.toString().bytes)
         } else if (subSubCmd == 'key-analysis') {
             if (data.length != 4) {

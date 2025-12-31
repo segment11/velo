@@ -41,7 +41,7 @@ class PersistValueMetaTest extends Specification {
     def 'test some branches'() {
         given:
         def one = new PersistValueMeta()
-        one.keyBytes = 'a'.bytes
+        one.key = 'a'
 
         when:
         def cellCost = one.cellCostInKeyBucket()

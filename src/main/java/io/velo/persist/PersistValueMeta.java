@@ -77,10 +77,10 @@ public class PersistValueMeta {
     int valueBytesLength;
 
     /**
-     * The byte representation of the key associated with this value.
+     * The key associated with this value.
      * Used for efficient lookups and comparisons.
      */
-    byte[] keyBytes;
+    String key;
 
     /**
      * A hash of the key, used for quick comparison in hash-based data structures.
@@ -121,7 +121,7 @@ public class PersistValueMeta {
         if (valueLength > Byte.MAX_VALUE) {
             throw new IllegalArgumentException("Persist value meta extend bytes too long=" + valueLength);
         }
-        return KeyBucket.KVMeta.calcCellCount((short) keyBytes.length, (byte) valueLength);
+        return KeyBucket.KVMeta.calcCellCount((short) key.length(), (byte) valueLength);
     }
 
     /**

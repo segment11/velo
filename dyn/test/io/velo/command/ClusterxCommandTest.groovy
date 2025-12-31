@@ -197,7 +197,7 @@ slots
         // flushslots
         multiShard.shards[0].multiSlotRange.addSingle(0, 1024)
         // has data
-        cGroup.set('a'.bytes, 'a'.bytes)
+        cGroup.set('a', 'a'.bytes)
         reply = clusterx.execute('cluster flushslots')
         then:
         reply instanceof ErrorReply
@@ -289,7 +289,7 @@ slots
         when:
         def toClientSlot0Keys = Mock.prepareToClientSlotKeyList((short) 1, (short) 0)
         for (kk in toClientSlot0Keys) {
-            cGroup.set(kk.bytes, kk.bytes)
+            cGroup.set(kk, kk.bytes)
         }
         Thread.sleep(100)
         reply = clusterx.execute('cluster getkeysinslot 0 10')
