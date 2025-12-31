@@ -228,8 +228,6 @@ public class GGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
-
         int start;
         int end;
         try {
@@ -263,7 +261,6 @@ public class GGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var valueBytes = data[2];
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -368,7 +365,6 @@ public class GGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var s = slotWithKeyHashListParsed.getFirst();
 
         boolean isNx = false;
@@ -449,7 +445,6 @@ public class GGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var s = slotWithKeyHashListParsed.getFirst();
 
         var m0 = new String(data[2]);
@@ -484,7 +479,6 @@ public class GGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var s = slotWithKeyHashListParsed.getFirst();
         var replies = new Reply[data.length - 2];
 
@@ -518,7 +512,6 @@ public class GGroup extends BaseCommand {
     }
 
     private Reply geosearch(byte[][] dd, byte[] dstKeyBytes, SlotWithKeyHash dstS) {
-        var keyBytes = dd[1];
         var s = slotWithKeyHashListParsed.getFirst();
 
         double fromLon = 0d;

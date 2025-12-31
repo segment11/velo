@@ -157,7 +157,6 @@ public class EGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var secondsBytes = data[2];
 
         long seconds;
@@ -221,7 +220,6 @@ public class EGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var cv = getCv(slotWithKeyHash);
         if (cv == null) {

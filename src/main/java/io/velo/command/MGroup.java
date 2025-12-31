@@ -103,7 +103,6 @@ public class MGroup extends BaseCommand {
         if (!isCrossRequestWorker) {
             var replies = new Reply[data.length - 1];
             for (int i = 1, j = 0; i < data.length; i++, j++) {
-                var keyBytes = data[i];
                 var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
                 var cv = getCv(slotWithKeyHash);
                 if (cv == null || !cv.isTypeString()) {
@@ -118,7 +117,6 @@ public class MGroup extends BaseCommand {
 
         ArrayList<IndexAndSlotWithKeyHash> list = new ArrayList<>();
         for (int i = 1, j = 0; i < data.length; i++, j++) {
-            var keyBytes = data[i];
             var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
             list.add(new IndexAndSlotWithKeyHash(j, slotWithKeyHash));
         }

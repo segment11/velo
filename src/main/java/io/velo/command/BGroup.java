@@ -340,7 +340,6 @@ public class BGroup extends BaseCommand {
             }
         }
 
-        var keyBytes = data[1];
         ArrayList<String> items = new ArrayList<>(data.length - 2);
         for (int i = 2; i < data.length; i++) {
             var itemBytes = data[i];
@@ -388,8 +387,6 @@ public class BGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
-
         var s = slotWithKeyHashListParsed.getFirst();
         var cv = getCv(s);
         if (cv == null) {
@@ -414,7 +411,6 @@ public class BGroup extends BaseCommand {
             }
         }
 
-        var keyBytes = data[1];
         ArrayList<String> items = new ArrayList<>(data.length - 2);
         for (int i = 2; i < data.length; i++) {
             var itemBytes = data[i];
@@ -462,8 +458,6 @@ public class BGroup extends BaseCommand {
         if (data.length != 2 && data.length != 3) {
             return ErrorReply.FORMAT;
         }
-
-        var keyBytes = data[1];
 
         var s = slotWithKeyHashListParsed.getFirst();
         var cv = getCv(s);
@@ -519,8 +513,6 @@ public class BGroup extends BaseCommand {
         if (data.length < 4) {
             return ErrorReply.FORMAT;
         }
-
-        var keyBytes = data[1];
 
         var initCapacity = RedisBF.DEFAULT_CAPACITY;
         var initFpp = RedisBF.DEFAULT_FPP;
@@ -628,7 +620,6 @@ public class BGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var s = slotWithKeyHashListParsed.getFirst();
 
         var iteratorBytes = data[2];
@@ -658,7 +649,6 @@ public class BGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var s = slotWithKeyHashListParsed.getFirst();
 
         var iteratorBytes = data[2];
@@ -699,7 +689,6 @@ public class BGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var initExpansion = RedisBF.DEFAULT_EXPANSION;
         boolean nonScaling = false;
 

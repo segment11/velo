@@ -702,7 +702,6 @@ public class SGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var keyBytes = data[1];
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var cv = getCv(slotWithKeyHash);
         if (cv == null) {
