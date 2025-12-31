@@ -1397,6 +1397,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     }
                 }
                 log.info("Init check delete overwrite big string files count={}", n);
+                // no use after init check
+                bigStringFiles.bucketIndexesWhenFirstServerStart.clear();
                 waitF.complete(n);
             } catch (Exception e) {
                 log.error("Init check error for slot=" + slot, e);
