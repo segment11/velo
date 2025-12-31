@@ -854,10 +854,11 @@ public abstract class BaseCommand {
             var key = new String(keyBytes);
 
             var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
-            var uuid = oneSlot.getSnowFlake().nextId();
+            var seq = snowFlake.nextId();
+            var keyHashAsUuid = slotWithKeyHash.keyHash;
 
             var cvAsBigString = new CompressedValue();
-            cvAsBigString.setSeq(uuid);
+            cvAsBigString.setSeq(seq);
             cvAsBigString.setKeyHash(slotWithKeyHash.keyHash);
             cvAsBigString.setExpireAt(expireAt);
             cvAsBigString.setDictSeqOrSpType(CompressedValue.SP_TYPE_BIG_STRING);
@@ -874,25 +875,25 @@ public abstract class BaseCommand {
                 compressStats.compressedTotalLength += cr.data().length;
                 compressStats.compressedCostTimeTotalUs += costT;
 
-                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(uuid, key, slotWithKeyHash.bucketIndex, cr.data());
+                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(keyHashAsUuid, key, slotWithKeyHash.bucketIndex, cr.data());
                 if (!isWriteOk) {
-                    throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
+                    throw new RuntimeException("Write big string file error, uuid=" + keyHashAsUuid + ", key=" + key);
                 }
 
-                cvAsBigString.setCompressedDataAsBigString(uuid, cr.isCompressed() ? Dict.SELF_ZSTD_DICT_SEQ : CompressedValue.NULL_DICT_SEQ);
+                cvAsBigString.setCompressedDataAsBigString(keyHashAsUuid, cr.isCompressed() ? Dict.SELF_ZSTD_DICT_SEQ : CompressedValue.NULL_DICT_SEQ);
             } else {
                 // do not compress
-                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(uuid, key, slotWithKeyHash.bucketIndex,
+                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(keyHashAsUuid, key, slotWithKeyHash.bucketIndex,
                         valueBytes, bigStringNoMemoryCopy.offset, bigStringNoMemoryCopy.length);
                 if (!isWriteOk) {
-                    throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
+                    throw new RuntimeException("Write big string file error, uuid=" + keyHashAsUuid + ", key=" + key);
                 }
 
-                cvAsBigString.setCompressedDataAsBigString(uuid, CompressedValue.NULL_DICT_SEQ);
+                cvAsBigString.setCompressedDataAsBigString(keyHashAsUuid, CompressedValue.NULL_DICT_SEQ);
             }
 
             var cvBigStringEncoded = cvAsBigString.encode();
-            var xBigStrings = new XBigStrings(uuid, slotWithKeyHash.bucketIndex, key, cvBigStringEncoded);
+            var xBigStrings = new XBigStrings(keyHashAsUuid, slotWithKeyHash.bucketIndex, key, cvBigStringEncoded);
             oneSlot.appendBinlog(xBigStrings);
 
             oneSlot.put(new String(keyBytes), slotWithKeyHash.bucketIndex, cvAsBigString);
