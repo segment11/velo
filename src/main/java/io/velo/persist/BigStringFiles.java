@@ -328,13 +328,14 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
 
         var file = new File(bigStringDir, bucketIndex + "/" + uuid);
+        var len = file.exists() ? file.length() : 0;
         try {
             var beginT = System.nanoTime();
             FileUtils.writeByteArrayToFile(file, bytes, offset, length, false);
             var costT = System.nanoTime() - beginT;
 
             bigStringFilesCount++;
-            diskUsage += bytes.length;
+            diskUsage += bytes.length - len;
 
             // stats
             writeByteLengthTotal += bytes.length;
@@ -369,24 +370,24 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
 
         var file = new File(bigStringDir, bucketIndex + "/" + uuid);
-        if (file.exists()) {
-            bigStringFilesCount--;
-            var len = file.length();
-            diskUsage -= len;
-
-            var beginT = System.nanoTime();
-            var r = file.delete();
-            var costT = System.nanoTime() - beginT;
-
-            // stats
-            deleteByteLengthTotal += len;
-            deleteFileCountTotal++;
-            deleteFileCostUsTotal += (costT / 1000);
-
-            return r;
-        } else {
+        if (!file.exists()) {
             return true;
         }
+
+        bigStringFilesCount--;
+        var len = file.length();
+        diskUsage -= len;
+
+        var beginT = System.nanoTime();
+        var r = file.delete();
+        var costT = System.nanoTime() - beginT;
+
+        // stats
+        deleteByteLengthTotal += len;
+        deleteFileCountTotal++;
+        deleteFileCostUsTotal += (costT / 1000);
+
+        return r;
     }
 
     /**
@@ -406,7 +407,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
         try {
             FileUtils.cleanDirectory(bigStringDir);
-            log.warn("Delete all big string files, slot={}", slot);
+            log.warn("Delete all big string files, count={}, slot={}", bigStringFilesCount, slot);
             bigStringFilesCount = 0;
             diskUsage = 0L;
         } catch (IOException e) {

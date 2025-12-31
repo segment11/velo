@@ -36,9 +36,12 @@ class BigStringFilesTest extends Specification {
 
         when:
         def isWriteOk = bigStringFiles1.writeBigStringBytes(1L, 'a', 0, bigString.bytes)
+        def isWriteOk2 = bigStringFiles1.writeBigStringBytes(1L, 'a', 0, bigString.bytes)
         then:
         isWriteOk
+        isWriteOk2
         bigStringFiles1.getBigStringBytes(1L, 0) == bigString.bytes
+        bigStringFiles1.getBigStringBytes(1L, 1) == null
         bigStringFiles1.getBigStringBytes(1L, 0, true) == bigString.bytes
         bigStringFiles1.getBigStringBytes(1L, 0, true) == bigString.bytes
         bigStringFiles1.getBigStringFileUuidList(0).size() == 1
@@ -73,6 +76,7 @@ class BigStringFilesTest extends Specification {
         then:
         isWriteOk
         bigStringFiles.getBigStringBytes(1L, 0) == bigString.bytes
+        bigStringFiles.getBigStringBytes(1L, 1) == null
         bigStringFiles.getBigStringFileUuidList(0).size() == 1
 
         when:
