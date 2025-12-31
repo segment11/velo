@@ -927,7 +927,7 @@ public class HGroup extends BaseCommand {
         byte[][] dd = {null, fieldKey.getBytes()};
         var dGroup = new DGroup(cmd, dd, socket);
         dGroup.from(this);
-        dGroup.setSlotWithKeyHashListParsed(slotWithKeyHashListParsed);
+        dGroup.setSlotWithKeyHashListParsed(dGroup.parseSlots("decr", dd, slotNumber));
 
         if (isFloat) {
             return dGroup.decrBy(0, -byFloat);
