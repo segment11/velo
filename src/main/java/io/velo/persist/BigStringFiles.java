@@ -334,7 +334,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             FileUtils.writeByteArrayToFile(file, bytes, offset, length, false);
             var costT = System.nanoTime() - beginT;
 
-            bigStringFilesCount++;
+            if (len == 0) {
+                bigStringFilesCount++;
+            }
             diskUsage += bytes.length - len;
 
             // stats

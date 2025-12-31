@@ -40,6 +40,7 @@ class BigStringFilesTest extends Specification {
         then:
         isWriteOk
         isWriteOk2
+        bigStringFiles1.bigStringFilesCount == 1
         bigStringFiles1.getBigStringBytes(1L, 0) == bigString.bytes
         bigStringFiles1.getBigStringBytes(1L, 1) == null
         bigStringFiles1.getBigStringBytes(1L, 0, true) == bigString.bytes
@@ -59,6 +60,7 @@ class BigStringFilesTest extends Specification {
         bigStringFiles1.deleteAllBigStringFiles()
         bigStringFiles2.deleteAllBigStringFiles()
         then:
+        bigStringFiles1.bigStringFilesCount == 0
         bigStringFiles1.getBigStringFileUuidList(0).size() == 0
         bigStringFiles2.getBigStringFileUuidList(0).size() == 0
     }
