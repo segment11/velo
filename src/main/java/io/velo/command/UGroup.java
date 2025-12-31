@@ -42,8 +42,8 @@ public class UGroup extends BaseCommand {
         var replies = new Reply[channels.size() * 3];
         int j = 0;
         for (var channel : channels) {
-            replies[j++] = new BulkReply("unsubscribe".getBytes());
-            replies[j++] = new BulkReply(channel.getBytes());
+            replies[j++] = new BulkReply("unsubscribe");
+            replies[j++] = new BulkReply(channel);
             var size = socketInInspector.unsubscribe(channel, isPattern, socket);
             replies[j++] = new IntegerReply(size);
         }

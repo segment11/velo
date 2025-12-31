@@ -479,15 +479,15 @@ public class BGroup extends BaseCommand {
         var field = data.length == 3 ? new String(data[2]).toLowerCase() : null;
         if (field == null) {
             return new MultiBulkReply(new Reply[]{
-                    new BulkReply("Capacity".getBytes()),
+                    new BulkReply("Capacity"),
                     new IntegerReply(redisBF.capacity()),
-                    new BulkReply("Size".getBytes()),
+                    new BulkReply("Size"),
                     new IntegerReply(redisBF.memoryAllocatedEstimate()),
-                    new BulkReply("Number of filters".getBytes()),
+                    new BulkReply("Number of filters"),
                     new IntegerReply(redisBF.listSize()),
-                    new BulkReply("Number of items inserted".getBytes()),
+                    new BulkReply("Number of items inserted"),
                     new IntegerReply(redisBF.itemInserted()),
-                    new BulkReply("Expansion rate".getBytes()),
+                    new BulkReply("Expansion rate"),
                     new IntegerReply(redisBF.getExpansion())
             });
         } else {

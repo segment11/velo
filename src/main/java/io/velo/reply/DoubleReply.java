@@ -57,7 +57,7 @@ public class DoubleReply implements Reply {
     public ByteBuf buffer() {
         var scaled = value.setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP);
         var str = scaled.toPlainString();
-        return new BulkReply(str.getBytes()).buffer();
+        return new BulkReply(str).buffer();
     }
 
     /**

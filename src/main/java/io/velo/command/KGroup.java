@@ -83,7 +83,7 @@ public class KGroup extends BaseCommand {
 
             var replies = new Reply[r.size()];
             for (int i = 0; i < r.size(); i++) {
-                replies[i] = new BulkReply(r.get(i).getBytes());
+                replies[i] = new BulkReply(r.get(i));
             }
             finalPromise.set(new MultiBulkReply(replies));
         });

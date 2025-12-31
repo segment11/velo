@@ -311,7 +311,7 @@ public class U {
      */
     public Reply[] toReplies() {
         var replies = new Reply[10];
-        replies[0] = new BulkReply("flags".getBytes());
+        replies[0] = new BulkReply("flags");
 
         List<String> flags = new ArrayList<>();
         flags.add(isOn ? "on" : "off");
@@ -330,43 +330,43 @@ public class U {
         }
         var flagsReplies = new Reply[flags.size()];
         for (int i = 0; i < flags.size(); i++) {
-            flagsReplies[i] = new BulkReply(flags.get(i).getBytes());
+            flagsReplies[i] = new BulkReply(flags.get(i));
         }
         replies[1] = new MultiBulkReply(flagsReplies);
 
-        replies[2] = new BulkReply("passwords".getBytes());
+        replies[2] = new BulkReply("passwords");
         var isOnlyNoPass = passwords.size() == 1 && passwords.getFirst().isNoPass();
         if (isOnlyNoPass || passwords.isEmpty()) {
             replies[3] = MultiBulkReply.EMPTY;
         } else {
             var passwordsReplies = new Reply[passwords.size()];
             for (int i = 0; i < passwords.size(); i++) {
-                passwordsReplies[i] = new BulkReply(passwords.get(i).passwordEncoded.getBytes());
+                passwordsReplies[i] = new BulkReply(passwords.get(i).passwordEncoded);
             }
             replies[3] = new MultiBulkReply(passwordsReplies);
         }
 
-        replies[4] = new BulkReply("commands".getBytes());
+        replies[4] = new BulkReply("commands");
         var commandsReplies = new Reply[rCmdList.size() + rCmdDisallowList.size()];
         for (int i = 0; i < rCmdList.size(); i++) {
-            commandsReplies[i] = new BulkReply(rCmdList.get(i).literal().getBytes());
+            commandsReplies[i] = new BulkReply(rCmdList.get(i).literal());
         }
         for (int i = 0; i < rCmdDisallowList.size(); i++) {
-            commandsReplies[i + rCmdList.size()] = new BulkReply(rCmdDisallowList.get(i).literal().getBytes());
+            commandsReplies[i + rCmdList.size()] = new BulkReply(rCmdDisallowList.get(i).literal());
         }
         replies[5] = new MultiBulkReply(commandsReplies);
 
-        replies[6] = new BulkReply("keys".getBytes());
+        replies[6] = new BulkReply("keys");
         var keysReplies = new Reply[rKeyList.size()];
         for (int i = 0; i < rKeyList.size(); i++) {
-            keysReplies[i] = new BulkReply(rKeyList.get(i).literal().getBytes());
+            keysReplies[i] = new BulkReply(rKeyList.get(i).literal());
         }
         replies[7] = new MultiBulkReply(keysReplies);
 
-        replies[8] = new BulkReply("channels".getBytes());
+        replies[8] = new BulkReply("channels");
         var channelsReplies = new Reply[rPubSubList.size()];
         for (int i = 0; i < rPubSubList.size(); i++) {
-            channelsReplies[i] = new BulkReply(rPubSubList.get(i).literal().getBytes());
+            channelsReplies[i] = new BulkReply(rPubSubList.get(i).literal());
         }
         replies[9] = new MultiBulkReply(channelsReplies);
 

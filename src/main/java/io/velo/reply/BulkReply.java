@@ -97,7 +97,7 @@ public class BulkReply implements Reply {
     /**
      * A BulkReply instance representing the number 0.
      */
-    public static final BulkReply ZERO = new BulkReply("0".getBytes());
+    public static final BulkReply ZERO = new BulkReply("0");
 
     private static final char CR = '\r';
     private static final char LF = '\n';

@@ -478,7 +478,7 @@ class RGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 5
-        (reply as MultiBulkReply).replies[0] == new BulkReply('slave'.bytes)
+        (reply as MultiBulkReply).replies[0] == new BulkReply('slave')
 
         cleanup:
         localPersist.cleanUp()

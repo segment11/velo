@@ -316,7 +316,7 @@ public class MGroup extends BaseCommand {
     private record DumpBytesAndTtlAndIndex(byte[] dumpBytes, long expireAt, int index) {
     }
 
-    static final Reply NOKEY_REPLY = new BulkReply("NOKEY".getBytes());
+    static final Reply NOKEY_REPLY = new BulkReply("NOKEY");
 
     private Reply migrate() {
         if (data.length < 7) {

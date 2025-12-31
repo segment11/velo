@@ -87,7 +87,7 @@ public class XGroup extends BaseCommand {
             var objectMapper = new ObjectMapper();
             try {
                 var jsonStr = objectMapper.writeValueAsString(map);
-                return new BulkReply(jsonStr.getBytes());
+                return new BulkReply(jsonStr);
             } catch (JsonProcessingException e) {
                 return new ErrorReply(e.getMessage());
             }
@@ -111,7 +111,7 @@ public class XGroup extends BaseCommand {
             if (replPairAsMaster == null) {
                 return NilReply.INSTANCE;
             } else {
-                return new BulkReply(replPairAsMaster.getHostAndPort().getBytes());
+                return new BulkReply(replPairAsMaster.getHostAndPort());
             }
         }
 

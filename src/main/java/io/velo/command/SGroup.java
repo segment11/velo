@@ -256,7 +256,7 @@ public class SGroup extends BaseCommand {
 
             int i = 0;
             for (var key : keys) {
-                keysReplies[i++] = new BulkReply(key.getBytes());
+                keysReplies[i++] = new BulkReply(key);
             }
         }
         return new MultiBulkReply(replies);
@@ -881,7 +881,7 @@ public class SGroup extends BaseCommand {
             var replies = new Reply[set.size()];
             int i = 0;
             for (var value : set) {
-                replies[i++] = new BulkReply(value.getBytes());
+                replies[i++] = new BulkReply(value);
             }
             return new MultiBulkReply(replies);
         }
@@ -919,7 +919,7 @@ public class SGroup extends BaseCommand {
             var replies = new Reply[set.size()];
             int i = 0;
             for (var value : set) {
-                replies[i++] = new BulkReply(value.getBytes());
+                replies[i++] = new BulkReply(value);
             }
             finalPromise.set(new MultiBulkReply(replies));
         });
@@ -1488,7 +1488,7 @@ public class SGroup extends BaseCommand {
 
                 return asyncReply;
             } else {
-                return subList.isEmpty() ? MultiBulkReply.EMPTY : new MultiBulkReply(subList.stream().map(x -> new BulkReply(x.getBytes())).toArray(Reply[]::new));
+                return subList.isEmpty() ? MultiBulkReply.EMPTY : new MultiBulkReply(subList.stream().map(x -> new BulkReply(x)).toArray(Reply[]::new));
             }
         } else {
             var rz = RedisZSet.decode(encodedBytes);
@@ -1563,7 +1563,7 @@ public class SGroup extends BaseCommand {
 
                 return asyncReply;
             } else {
-                return subList.isEmpty() ? MultiBulkReply.EMPTY : new MultiBulkReply(subList.stream().map(x -> new BulkReply(x.getBytes())).toArray(Reply[]::new));
+                return subList.isEmpty() ? MultiBulkReply.EMPTY : new MultiBulkReply(subList.stream().map(x -> new BulkReply(x)).toArray(Reply[]::new));
             }
         }
     }
@@ -1705,11 +1705,11 @@ public class SGroup extends BaseCommand {
         if (hasCount) {
             var replies = new Reply[members.length];
             for (int i = 0; i < members.length; i++) {
-                replies[i] = new BulkReply(members[i].getBytes());
+                replies[i] = new BulkReply(members[i]);
             }
             return new MultiBulkReply(replies);
         } else {
-            return new BulkReply(members[0].getBytes());
+            return new BulkReply(members[0]);
         }
     }
 
@@ -1781,8 +1781,8 @@ public class SGroup extends BaseCommand {
         var replies = new Reply[channels.size() * 3];
         int j = 0;
         for (var channel : channels) {
-            replies[j++] = new BulkReply("subscribe".getBytes());
-            replies[j++] = new BulkReply(channel.getBytes());
+            replies[j++] = new BulkReply("subscribe");
+            replies[j++] = new BulkReply(channel);
             var size = socketInInspector.subscribe(channel, isPattern, socket);
             replies[j++] = new IntegerReply(size);
         }

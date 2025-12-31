@@ -11,17 +11,17 @@ import java.util.ArrayList;
 
 public class TGroup extends BaseCommand {
     @VisibleForTesting
-    static final BulkReply TYPE_STRING = new BulkReply("string".getBytes());
+    static final BulkReply TYPE_STRING = new BulkReply("string");
     @VisibleForTesting
-    static final BulkReply TYPE_HASH = new BulkReply("hash".getBytes());
+    static final BulkReply TYPE_HASH = new BulkReply("hash");
     @VisibleForTesting
-    static final BulkReply TYPE_LIST = new BulkReply("list".getBytes());
+    static final BulkReply TYPE_LIST = new BulkReply("list");
     @VisibleForTesting
-    static final BulkReply TYPE_SET = new BulkReply("set".getBytes());
+    static final BulkReply TYPE_SET = new BulkReply("set");
     @VisibleForTesting
-    static final BulkReply TYPE_ZSET = new BulkReply("zset".getBytes());
+    static final BulkReply TYPE_ZSET = new BulkReply("zset");
     @VisibleForTesting
-    static final BulkReply TYPE_STREAM = new BulkReply("stream".getBytes());
+    static final BulkReply TYPE_STREAM = new BulkReply("stream");
 
     public TGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

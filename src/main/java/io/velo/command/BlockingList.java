@@ -242,7 +242,7 @@ public class BlockingList {
                     dstOneSlot.asyncRun(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, leftValueBytes, promise.settablePromise::set));
                 } else {
                     var replies = new Reply[2];
-                    replies[0] = new BulkReply(key.getBytes());
+                    replies[0] = new BulkReply(key);
                     replies[1] = new BulkReply(leftValueBytes);
                     promise.settablePromise.set(new MultiBulkReply(replies));
                 }
@@ -273,7 +273,7 @@ public class BlockingList {
                     dstOneSlot.asyncRun(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, rightValueBytes, promise.settablePromise::set));
                 } else {
                     var replies = new Reply[2];
-                    replies[0] = new BulkReply(key.getBytes());
+                    replies[0] = new BulkReply(key);
                     replies[1] = new BulkReply(rightValueBytes);
                     promise.settablePromise.set(new MultiBulkReply(replies));
                 }

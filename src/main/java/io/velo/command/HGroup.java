@@ -351,24 +351,24 @@ public class HGroup extends BaseCommand {
         }
 
         var replies = new Reply[14];
-        replies[0] = new BulkReply("server".getBytes());
-        replies[1] = new BulkReply("velo".getBytes());
-        replies[2] = new BulkReply("version".getBytes());
-        replies[3] = new BulkReply("1.0.0".getBytes());
-        replies[4] = new BulkReply("proto".getBytes());
+        replies[0] = new BulkReply("server");
+        replies[1] = new BulkReply("velo");
+        replies[2] = new BulkReply("version");
+        replies[3] = new BulkReply("1.0.0");
+        replies[4] = new BulkReply("proto");
         replies[5] = new IntegerReply(3);
-        replies[6] = new BulkReply("id".getBytes());
+        replies[6] = new BulkReply("id");
         replies[7] = new IntegerReply(socket.hashCode());
-        replies[8] = new BulkReply("mode".getBytes());
+        replies[8] = new BulkReply("mode");
         // no sentinel
-        replies[9] = new BulkReply(ConfForGlobal.clusterEnabled ? "cluster".getBytes() : "standalone".getBytes());
+        replies[9] = new BulkReply(ConfForGlobal.clusterEnabled ? "cluster" : "standalone");
 
-        replies[10] = new BulkReply("role".getBytes());
+        replies[10] = new BulkReply("role");
         var firstOneSlot = localPersist.currentThreadFirstOneSlot();
         var isSlave = firstOneSlot.isAsSlave();
-        replies[11] = new BulkReply(isSlave ? "replica".getBytes() : "master".getBytes());
+        replies[11] = new BulkReply(isSlave ? "replica" : "master");
 
-        replies[12] = new BulkReply("modules".getBytes());
+        replies[12] = new BulkReply("modules");
         replies[13] = MultiBulkReply.EMPTY;
 
         return new MultiBulkReply(replies, isResp3, false);
@@ -857,7 +857,7 @@ public class HGroup extends BaseCommand {
             var fieldKey = RedisHashKeys.fieldKey(key, field);
             var sFieldKey = slot(fieldKey);
             var fieldCv = getCv(sFieldKey);
-            replies[i++] = new BulkReply(field.getBytes());
+            replies[i++] = new BulkReply(field);
             replies[i++] = fieldCv == null ? NilReply.INSTANCE : new BulkReply(getValueBytesByCv(fieldCv, sFieldKey));
         }
         return new MultiBulkReply(replies);
@@ -879,7 +879,7 @@ public class HGroup extends BaseCommand {
         var replies = new Reply[map.size() * 2];
         int i = 0;
         for (var entry : map.entrySet()) {
-            replies[i++] = new BulkReply(entry.getKey().getBytes());
+            replies[i++] = new BulkReply(entry.getKey());
             replies[i++] = new BulkReply(entry.getValue());
         }
         return new MultiBulkReply(replies);
@@ -1034,7 +1034,7 @@ public class HGroup extends BaseCommand {
         var replies = new Reply[set.size()];
         int i = 0;
         for (var field : set) {
-            replies[i++] = new BulkReply(field.getBytes());
+            replies[i++] = new BulkReply(field);
         }
         return new MultiBulkReply(replies);
     }
@@ -1060,7 +1060,7 @@ public class HGroup extends BaseCommand {
         var replies = new Reply[size];
         final int[] i = {0};
         rhh.iterate((field, value, expireAt) -> {
-            replies[i[0]++] = new BulkReply(field.getBytes());
+            replies[i[0]++] = new BulkReply(field);
             return false;
         });
         return new MultiBulkReply(replies);
@@ -1253,7 +1253,7 @@ public class HGroup extends BaseCommand {
         int j = 0;
         for (var field : set) {
             if (indexes.contains(j)) {
-                replies[i++] = new BulkReply(field.getBytes());
+                replies[i++] = new BulkReply(field);
                 if (withValues) {
                     var fieldKey = RedisHashKeys.fieldKey(key, field);
                     var fieldValueBytes = get(slot(fieldKey));
@@ -1293,7 +1293,7 @@ public class HGroup extends BaseCommand {
             if (indexes.contains(j)) {
                 var field = entry.getKey();
                 var fieldValueBytes = entry.getValue();
-                replies[i++] = new BulkReply(field.getBytes());
+                replies[i++] = new BulkReply(field);
                 if (withValues) {
                     replies[i++] = new BulkReply(fieldValueBytes);
                 }
@@ -1417,13 +1417,13 @@ public class HGroup extends BaseCommand {
         var replies = new Reply[matchFields.size()];
         int i = 0;
         for (var field : matchFields) {
-            replies[i++] = new BulkReply(field.getBytes());
+            replies[i++] = new BulkReply(field);
         }
 
         var isEnd = loopCount == set.size();
         var nextCursor = String.valueOf(isEnd ? 0 : skipCount + matchFields.size());
         // always end
-        return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor.getBytes()), new MultiBulkReply(replies)});
+        return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor), new MultiBulkReply(replies)});
     }
 
     Reply hscan2(byte[] keyBytes, long cursorLong, String matchPattern, int count, boolean noValues) {
@@ -1462,7 +1462,7 @@ public class HGroup extends BaseCommand {
         var replies = new Reply[noValues ? matchFields.size() : matchFields.size() * 2];
         int i = 0;
         for (var field : matchFields) {
-            replies[i++] = new BulkReply(field.getBytes());
+            replies[i++] = new BulkReply(field);
             if (!noValues) {
                 replies[i++] = new BulkReply(rhh.get(field));
             }
@@ -1470,7 +1470,7 @@ public class HGroup extends BaseCommand {
 
         var isEnd = loopCount == rhh.size();
         var nextCursor = String.valueOf(isEnd ? 0 : skipCount + matchFields.size());
-        return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor.getBytes()), new MultiBulkReply(replies)});
+        return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor), new MultiBulkReply(replies)});
     }
 
     private Reply hsetnx() {

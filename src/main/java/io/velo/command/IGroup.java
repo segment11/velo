@@ -347,7 +347,7 @@ public class IGroup extends BaseCommand {
             for (int i = 0; i < resultList.size(); i++) {
                 var r = resultList.get(i);
                 var str = "slot: " + i + " put: " + r[0] + " skip: " + r[1];
-                replies[i] = new BulkReply(str.getBytes());
+                replies[i] = new BulkReply(str);
             }
 
             debug.bulkLoad = false;
@@ -437,7 +437,7 @@ public class IGroup extends BaseCommand {
             for (int i = 0; i < resultList.size(); i++) {
                 var r = resultList.get(i);
                 var str = "slot: " + i + " put: " + r[0] + " skip: " + r[1];
-                replies[i] = new BulkReply(str.getBytes());
+                replies[i] = new BulkReply(str);
             }
 
             debug.bulkLoad = false;

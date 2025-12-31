@@ -403,7 +403,7 @@ public class PGroup extends BaseCommand {
         return asyncReply;
     }
 
-    private static final BulkReply MESSAGE = new BulkReply("message".getBytes());
+    private static final BulkReply MESSAGE = new BulkReply("message");
 
     public static Reply publish(byte[][] dataGiven, ITcpSocket socket) {
         if (dataGiven.length != 3) {
@@ -426,8 +426,8 @@ public class PGroup extends BaseCommand {
 
         var replies = new Reply[3];
         replies[0] = MESSAGE;
-        replies[1] = new BulkReply(channel.getBytes());
-        replies[2] = new BulkReply(message.getBytes());
+        replies[1] = new BulkReply(channel);
+        replies[2] = new BulkReply(message);
 
         var n = socketInInspector.subscribeSocketCount(channel, false);
 
@@ -454,7 +454,7 @@ public class PGroup extends BaseCommand {
             } else {
                 var replies = new Reply[ones.size()];
                 for (int i = 0; i < ones.size(); i++) {
-                    replies[i] = new BulkReply(ones.get(i).getChannel().getBytes());
+                    replies[i] = new BulkReply(ones.get(i).getChannel());
                 }
                 return new MultiBulkReply(replies);
             }
@@ -474,7 +474,7 @@ public class PGroup extends BaseCommand {
             int j = 0;
             for (var channel : channels) {
                 var size = socketInspector.subscribeSocketCount(channel, true);
-                replies[j++] = new BulkReply(channel.getBytes());
+                replies[j++] = new BulkReply(channel);
                 replies[j++] = new IntegerReply(size);
             }
             return new MultiBulkReply(replies);

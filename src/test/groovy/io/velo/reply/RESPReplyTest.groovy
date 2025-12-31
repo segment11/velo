@@ -68,21 +68,20 @@ class RESPReplyTest extends Specification {
         BulkReply.numToBytes(257, false) == "257".bytes
         BulkReply.numToBytes(-1, false) == "-1".bytes
 
-        new BulkReply('bulk'.bytes).raw == 'bulk'.bytes
+        new BulkReply('bulk').raw == 'bulk'.bytes
         new BulkReply('bulk'.bytes).asString() == 'bulk'
-        new BulkReply('bulk').asString() == 'bulk'
         new BulkReply(1L).raw == '1'.bytes
         new BulkReply(1.0d).raw == '1.0'.bytes
-        new BulkReply('bulk'.bytes).buffer().asArray() == "\$4\r\nbulk\r\n".bytes
-        new BulkReply('bulk'.bytes).bufferAsResp3().asArray() == "+bulk\r\n".bytes
-        new BulkReply(''.bytes).bufferAsResp3().asArray() == "+\r\n".bytes
+        new BulkReply('bulk').buffer().asArray() == "\$4\r\nbulk\r\n".bytes
+        new BulkReply('bulk').bufferAsResp3().asArray() == "+bulk\r\n".bytes
+        new BulkReply('').bufferAsResp3().asArray() == "+\r\n".bytes
         new BulkReply((byte[]) null).bufferAsResp3().asArray() == "+\r\n".bytes
         // blob string as too long
-        new BulkReply(('12345678' * 5).bytes).bufferAsResp3().asArray()[0] == '$'.bytes[0]
+        new BulkReply('12345678' * 5).bufferAsResp3().asArray()[0] == '$'.bytes[0]
         // blob string as has not printable char
-        new BulkReply(('\r').bytes).bufferAsResp3().asArray()[0] == '$'.bytes[0]
-        new BulkReply('bulk'.bytes).bufferAsHttp().asArray() == "bulk".bytes
-        new BulkReply('bulk'.bytes).dumpForTest(new StringBuilder(), 0)
+        new BulkReply(('\r')).bufferAsResp3().asArray()[0] == '$'.bytes[0]
+        new BulkReply('bulk').bufferAsHttp().asArray() == "bulk".bytes
+        new BulkReply('bulk').dumpForTest(new StringBuilder(), 0)
         !new BulkReply(1L).equals(null)
         !new BulkReply(1L).equals(new Object())
         !new BulkReply(1L).equals(new BulkReply(2L))
@@ -90,7 +89,7 @@ class RESPReplyTest extends Specification {
         new MultiBulkReply(null).buffer().asArray() == "*-1\r\n".bytes
         new MultiBulkReply(null).bufferAsResp3().asArray() == "*-1\r\n".bytes
         Reply[] replies = [
-                new BulkReply('bulk1'.bytes),
+                new BulkReply('bulk1'),
                 BoolReply.T,
                 new DoubleReply(1.0)
         ]
@@ -108,9 +107,9 @@ class RESPReplyTest extends Specification {
 
         when:
         Reply[] repliesMap = [
-                new BulkReply('key1'.bytes),
-                new BulkReply('value1'.bytes),
-                new BulkReply('key2'.bytes),
+                new BulkReply('key1'),
+                new BulkReply('value1'),
+                new BulkReply('key2'),
                 BoolReply.T
         ]
         then:

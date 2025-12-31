@@ -324,7 +324,7 @@ public class RequestHandler {
                 var sw = new StringWriter();
                 try {
                     TextFormat.write004(sw, CollectorRegistry.defaultRegistry.metricFamilySamples());
-                    return new BulkReply(sw.toString().getBytes());
+                    return new BulkReply(sw.toString());
                 } catch (IOException e) {
                     return new ErrorReply(e.getMessage());
                 }
@@ -342,7 +342,7 @@ public class RequestHandler {
                     var isMaster = leaderSelector.hasLeadership();
                     if (isMaster) {
                         // will response 200 status
-                        return new BulkReply("master".getBytes());
+                        return new BulkReply("master");
                     } else {
                         // will response 404 status
                         return NilReply.INSTANCE;
@@ -350,13 +350,13 @@ public class RequestHandler {
                 }
                 case URL_QUERY_FOR_HAPROXY_FILTER_MASTER_OR_SLAVE -> {
                     // will response 200 status
-                    return new BulkReply("master or slave".getBytes());
+                    return new BulkReply("master or slave");
                 }
                 case URL_QUERY_FOR_HAPROXY_FILTER_SLAVE -> {
                     var isMaster = leaderSelector.hasLeadership();
                     if (!isMaster) {
                         // will response 200 status
-                        return new BulkReply("slave".getBytes());
+                        return new BulkReply("slave");
                     } else {
                         // will response 404 status
                         return NilReply.INSTANCE;
@@ -375,7 +375,7 @@ public class RequestHandler {
 
                 if (targetZone.equals(ConfForGlobal.targetAvailableZone)) {
                     // will response 200 status
-                    return new BulkReply(("slave with zone " + targetZone).getBytes());
+                    return new BulkReply("slave with zone " + targetZone);
                 } else {
                     // will response 404 status
                     return NilReply.INSTANCE;

@@ -731,12 +731,12 @@ public class GGroup extends BaseCommand {
             var result = resultList.get(i);
             // only return member
             if (subRepliesLength == 1) {
-                replies[i] = new BulkReply(result.member().getBytes());
+                replies[i] = new BulkReply(result.member());
                 continue;
             }
 
             var subReplies = new Reply[subRepliesLength];
-            subReplies[0] = new BulkReply(result.member().getBytes());
+            subReplies[0] = new BulkReply(result.member());
 
             var ii = 1;
             if (isWithDist) {

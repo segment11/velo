@@ -155,26 +155,26 @@ public class DGroup extends BaseCommand {
 
             if (cv.isTypeNumber()) {
                 if (cv.isTypeDouble()) {
-                    return new BulkReply(wrapEncodingType("embstr", cv).getBytes());
+                    return new BulkReply(wrapEncodingType("embstr", cv));
                 } else {
-                    return new BulkReply(wrapEncodingType("int", cv).getBytes());
+                    return new BulkReply(wrapEncodingType("int", cv));
                 }
             } else if (cv.isHash()) {
-                return new BulkReply(wrapEncodingType("hashtable", cv).getBytes());
+                return new BulkReply(wrapEncodingType("hashtable", cv));
             } else if (cv.isList()) {
-                return new BulkReply(wrapEncodingType("quicklist", cv).getBytes());
+                return new BulkReply(wrapEncodingType("quicklist", cv));
             } else if (cv.isSet()) {
                 // intset
-                return new BulkReply(wrapEncodingType("hashtable", cv).getBytes());
+                return new BulkReply(wrapEncodingType("hashtable", cv));
             } else if (cv.isZSet()) {
                 // skiplist
-                return new BulkReply(wrapEncodingType("ziplist", cv).getBytes());
+                return new BulkReply(wrapEncodingType("ziplist", cv));
             } else if (cv.isStream()) {
-                return new BulkReply(wrapEncodingType("stream", cv).getBytes());
+                return new BulkReply(wrapEncodingType("stream", cv));
             } else if (cv.isTypeString()) {
-                return new BulkReply(wrapEncodingType("embstr", cv).getBytes());
+                return new BulkReply(wrapEncodingType("embstr", cv));
             } else {
-                return new BulkReply(wrapEncodingType("unknown", cv).getBytes());
+                return new BulkReply(wrapEncodingType("unknown", cv));
             }
         } else if ("log".equals(subCmd)) {
             final String prefix = "DEBUG LOG:";

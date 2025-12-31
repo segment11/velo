@@ -102,7 +102,7 @@ class MultiWorkerServerTest extends Specification {
         1 == 1
 
         when:
-        def httpReply = m.wrapHttpResponse(new BulkReply('xxx'.bytes))
+        def httpReply = m.wrapHttpResponse(new BulkReply('xxx'))
         def httpResponseBody = new String(httpReply.array())
         then:
         httpResponseBody.contains('200')

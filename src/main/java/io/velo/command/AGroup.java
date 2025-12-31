@@ -92,7 +92,7 @@ public class AGroup extends BaseCommand {
             if (category == null) {
                 var replies = new Reply[categories.length];
                 for (int i = 0; i < categories.length; i++) {
-                    replies[i] = new BulkReply(categories[i].name().getBytes());
+                    replies[i] = new BulkReply(categories[i].name());
                 }
                 return new MultiBulkReply(replies);
             } else {
@@ -110,7 +110,7 @@ public class AGroup extends BaseCommand {
                 var cmdList = Category.getCmdListByCategory(categories[index]);
                 var replies = new Reply[cmdList.size()];
                 for (int i = 0; i < cmdList.size(); i++) {
-                    replies[i] = new BulkReply(cmdList.get(i).getBytes());
+                    replies[i] = new BulkReply(cmdList.get(i));
                 }
                 return new MultiBulkReply(replies);
             }
@@ -187,7 +187,7 @@ public class AGroup extends BaseCommand {
             }
 
             var randomChars = Utils.generateRandomChars(len);
-            return new BulkReply(randomChars.getBytes());
+            return new BulkReply(randomChars);
         } else if ("getuser".equals(subCmd)) {
             if (data.length != 3) {
                 return ErrorReply.SYNTAX;
@@ -209,7 +209,7 @@ public class AGroup extends BaseCommand {
 
             var replies = new Reply[users.size()];
             for (int i = 0; i < users.size(); i++) {
-                replies[i] = new BulkReply(users.get(i).literal().getBytes());
+                replies[i] = new BulkReply(users.get(i).literal());
             }
             return new MultiBulkReply(replies);
         } else if ("load".equals(subCmd)) {
@@ -381,7 +381,7 @@ public class AGroup extends BaseCommand {
 
             var replies = new Reply[users.size()];
             for (int i = 0; i < users.size(); i++) {
-                replies[i] = new BulkReply(users.get(i).getUser().getBytes());
+                replies[i] = new BulkReply(users.get(i).getUser());
             }
             return new MultiBulkReply(replies);
         } else if ("whoami".equals(subCmd)) {
@@ -390,7 +390,7 @@ public class AGroup extends BaseCommand {
             }
 
             var u = getAuthU();
-            return new BulkReply(u.getUser().getBytes());
+            return new BulkReply(u.getUser());
         }
 
         return ErrorReply.SYNTAX;

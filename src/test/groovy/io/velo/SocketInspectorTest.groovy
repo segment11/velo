@@ -205,7 +205,7 @@ class SocketInspectorTest extends Specification {
         when:
         def channel = 'test_channel'
         def channel2 = 'test_channel2'
-        def messageReply = new BulkReply('test_message'.bytes)
+        def messageReply = new BulkReply('test_message')
         def n = inspector.publish(channel, messageReply, (s, r) -> { })
         then:
         n == 0

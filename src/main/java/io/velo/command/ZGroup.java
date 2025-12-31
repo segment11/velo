@@ -924,7 +924,7 @@ public class ZGroup extends BaseCommand {
                 var replies = new Reply[rz.size() * (withScores ? 2 : 1)];
                 int i = 0;
                 for (var sv : rz.getSet()) {
-                    replies[i++] = new BulkReply(sv.member().getBytes());
+                    replies[i++] = new BulkReply(sv.member());
                     if (withScores) {
                         replies[i++] = new BulkReply(sv.score());
                     }
@@ -983,7 +983,7 @@ public class ZGroup extends BaseCommand {
                 var replies = new Reply[finalRz.size() * (finalWithScores ? 2 : 1)];
                 int i = 0;
                 for (var sv : finalRz.getSet()) {
-                    replies[i++] = new BulkReply(sv.member().getBytes());
+                    replies[i++] = new BulkReply(sv.member());
                     if (finalWithScores) {
                         replies[i++] = new BulkReply(sv.score());
                     }
@@ -1335,7 +1335,7 @@ public class ZGroup extends BaseCommand {
             for (int k = 0; k < indexes.size(); k++) {
                 Integer index = indexes.get(k);
                 if (index != null && index == j) {
-                    replies[k * (withScores ? 2 : 1)] = new BulkReply(sv.member().getBytes());
+                    replies[k * (withScores ? 2 : 1)] = new BulkReply(sv.member());
                     if (withScores) {
                         replies[k * 2 + 1] = new BulkReply(sv.score());
                     }
@@ -1589,7 +1589,7 @@ public class ZGroup extends BaseCommand {
                         dstRz.add(sv.score(), sv.member());
                     }
 
-                    replies[i++] = new BulkReply(sv.member().getBytes());
+                    replies[i++] = new BulkReply(sv.member());
                     if (withScores) {
                         replies[i++] = new BulkReply(sv.score());
                     }
@@ -1672,7 +1672,7 @@ public class ZGroup extends BaseCommand {
             int i = 0;
             while (it2.hasNext()) {
                 var entry = it2.next();
-                replies[i++] = new BulkReply(entry.getKey().getBytes());
+                replies[i++] = new BulkReply(entry.getKey());
                 if (withScores) {
                     replies[i++] = new BulkReply(entry.getValue().score());
                 }
@@ -1734,7 +1734,7 @@ public class ZGroup extends BaseCommand {
             int i = 0;
             while (it2.hasNext()) {
                 var entry = it2.next();
-                replies[i++] = new BulkReply(entry.member().getBytes());
+                replies[i++] = new BulkReply(entry.member());
                 if (withScores) {
                     replies[i++] = new BulkReply(entry.score());
                 }

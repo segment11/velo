@@ -140,7 +140,7 @@ public class RGroup extends BaseCommand {
                 var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
                 var keyInLRU = firstOneSlot.randomKeyInLRU(walGroupIndex);
                 if (keyInLRU != null) {
-                    return new BulkReply(keyInLRU.getBytes());
+                    return new BulkReply(keyInLRU);
                 }
             }
 
@@ -378,7 +378,7 @@ public class RGroup extends BaseCommand {
     }
 
     private static final MultiBulkReply ROLE_AS_MASTER_REPLY = new MultiBulkReply(new Reply[]{
-            new BulkReply("master".getBytes()),
+            new BulkReply("master"),
             IntegerReply.REPLY_0,
             MultiBulkReply.EMPTY
     });
@@ -400,7 +400,7 @@ public class RGroup extends BaseCommand {
                 return ROLE_AS_MASTER_REPLY;
             } else {
                 var array = slaveReplPairList.stream().map(x -> new MultiBulkReply(new Reply[]{
-                        new BulkReply(x.getHost().getBytes()),
+                        new BulkReply(x.getHost()),
                         new BulkReply(x.getPort()),
                         new BulkReply(x.getSlaveLastCatchUpBinlogAsReplOffset())
                 })).toArray();
@@ -410,7 +410,7 @@ public class RGroup extends BaseCommand {
                 }
 
                 return new MultiBulkReply(new Reply[]{
-                        new BulkReply("master".getBytes()),
+                        new BulkReply("master"),
                         new IntegerReply(firstOneSlot.getBinlog().currentReplOffset()),
                         new MultiBulkReply(replies)
                 });
@@ -421,10 +421,10 @@ public class RGroup extends BaseCommand {
             assert replPair != null;
 
             var replies = new Reply[]{
-                    new BulkReply("slave".getBytes()),
-                    new BulkReply(replPair.getHost().getBytes()),
+                    new BulkReply("slave"),
+                    new BulkReply(replPair.getHost()),
                     new IntegerReply(replPair.getPort()),
-                    new BulkReply("connected".getBytes()),
+                    new BulkReply("connected"),
                     new IntegerReply(replPair.getSlaveLastCatchUpBinlogAsReplOffset())
             };
             return new MultiBulkReply(replies);

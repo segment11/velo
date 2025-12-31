@@ -73,7 +73,7 @@ public class CGroup extends BaseCommand {
 
             var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
             var clientName = veloUserData.getClientName();
-            return clientName == null ? NilReply.INSTANCE : new BulkReply(clientName.getBytes());
+            return clientName == null ? NilReply.INSTANCE : new BulkReply(clientName);
         }
 
         if ("id".equals(subCmd)) {
@@ -82,7 +82,7 @@ public class CGroup extends BaseCommand {
 
         if ("info".equals(subCmd)) {
             var clientInfo = SocketInspector.getClientInfo(socket);
-            return new BulkReply(clientInfo.getBytes());
+            return new BulkReply(clientInfo);
         }
 
         if ("reply".equals(subCmd)) {
