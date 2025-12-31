@@ -530,6 +530,7 @@ class OneSlotTest extends Specification {
 
         when:
         def cvBigString2 = Mock.prepareCompressedValueList(1)[0]
+        cvBigString2.keyHash = sBigString.keyHash()
         cvBigString2.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
         oneSlot.put(bigStringKey, sBigString.bucketIndex(), cvBigString2)
         rBigString = oneSlot.get(bigStringKey.bytes, sBigString.bucketIndex(), sBigString.keyHash(), sBigString.keyHash32())

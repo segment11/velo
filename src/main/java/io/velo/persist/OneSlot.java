@@ -2179,22 +2179,25 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             // for big string, use single file
             if (isPersistLengthOverSegmentLength || key.contains("kerry-test-big-string-")) {
-                var uuid = snowFlake.nextId();
+                var keyHashAsUuid = cv.getKeyHash();
                 var bytes = cv.getCompressedData();
-                var isWriteOk = bigStringFiles.writeBigStringBytes(uuid, key, bucketIndex, bytes);
+                var isWriteOk = bigStringFiles.writeBigStringBytes(keyHashAsUuid, key, bucketIndex, bytes);
                 if (!isWriteOk) {
-                    throw new RuntimeException("Write big string file error, uuid=" + uuid + ", key=" + key);
+                    throw new RuntimeException("Write big string file error, uuid=" + keyHashAsUuid + ", key=" + key);
                 }
 
-                cv.setCompressedDataAsBigString(uuid, cv.getDictSeqOrSpType());
-                // update type to big string
-                cv.setDictSeqOrSpType(CompressedValue.SP_TYPE_BIG_STRING);
+                var cvAsBigString = new CompressedValue();
+                cvAsBigString.setSeq(cv.getSeq());
+                cvAsBigString.setKeyHash(cv.getKeyHash());
+                cvAsBigString.setExpireAt(cv.getExpireAt());
+                cvAsBigString.setDictSeqOrSpType(CompressedValue.SP_TYPE_BIG_STRING);
+                cvAsBigString.setCompressedDataAsBigString(keyHashAsUuid, cv.getDictSeqOrSpType());
 
-                var cvBigStringEncoded = cv.encode();
-                var xBigStrings = new XBigStrings(uuid, bucketIndex, key, cvBigStringEncoded);
+                var cvBigStringEncoded = cvAsBigString.encode();
+                var xBigStrings = new XBigStrings(keyHashAsUuid, bucketIndex, key, cvBigStringEncoded);
                 appendBinlog(xBigStrings);
 
-                v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
+                v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), CompressedValue.SP_TYPE_BIG_STRING,
                         key, cvBigStringEncoded, isFromMerge);
 
                 isValueShort = true;
