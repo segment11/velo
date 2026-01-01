@@ -20,9 +20,9 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
     /**
      * Constructs a new XChunkSegmentSlimUpdate object with the specified segment index and slim segment bytes.
      *
-     * @param segmentIndex     The index of the segment to update.
-     * @param valueBytesLength The value bytes length for fill ratio calc, for pure memory v2.
-     * @param segmentBytesSlim The byte array representing the slim segment.
+     * @param segmentIndex     the index of the segment to update
+     * @param valueBytesLength the value bytes length for fill ratio calc, for pure memory v2
+     * @param segmentBytesSlim the byte array representing the slim segment
      */
     public XChunkSegmentSlimUpdate(int segmentIndex, int valueBytesLength, byte[] segmentBytesSlim) {
         this.segmentIndex = segmentIndex;
@@ -33,7 +33,7 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
     /**
      * Returns the type of this binlog content.
      *
-     * @return The type of this binlog content.
+     * @return the type of this binlog content
      */
     @Override
     public Type type() {
@@ -43,7 +43,7 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
     /**
      * Calculates the total number of bytes required to encode this binlog content.
      *
-     * @return The total number of bytes required for encoding.
+     * @return the total number of bytes required for encoding
      */
     @Override
     public int encodedLength() {
@@ -54,7 +54,7 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
     /**
      * Encodes this binlog content into a byte array, including the type byte and length check.
      *
-     * @return The byte array representation of this binlog content.
+     * @return the byte array representation of this binlog content
      */
     @Override
     public byte[] encodeWithType() {
@@ -72,8 +72,8 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
     /**
      * Decodes a binlog content from the provided ByteBuffer.
      *
-     * @param buffer The ByteBuffer containing the encoded binlog content.
-     * @return The decoded XChunkSegmentSlimUpdate object.
+     * @param buffer the ByteBuffer containing the encoded binlog content
+     * @return the decoded XChunkSegmentSlimUpdate object
      */
     public static XChunkSegmentSlimUpdate decodeFrom(ByteBuffer buffer) {
         // already read type byte
@@ -91,8 +91,8 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
      * Applies this binlog content to the specified replication slot and repl pair.
      * This method updates the segment in the local storage with the new slim segment bytes.
      *
-     * @param slot     The replication slot to which this content is applied.
-     * @param replPair The repl pair associated with this replication session.
+     * @param slot     the replication slot to which this content is applied
+     * @param replPair the repl pair associated with this replication session
      */
     @Override
     public void apply(short slot, ReplPair replPair) {

@@ -19,9 +19,9 @@ public class XWalRewrite implements BinlogContent {
     /**
      * Constructs a new XWalRewrite instance.
      *
-     * @param isValueShort Indicates whether the value is short or not.
-     * @param groupIndex   Wal group index.
-     * @param writeBytes   The bytes representing the WAL rewrite operation.
+     * @param isValueShort whether the value is short
+     * @param groupIndex   the WAL group index
+     * @param writeBytes   the bytes representing the WAL rewrite operation
      */
     public XWalRewrite(boolean isValueShort, int groupIndex, byte[] writeBytes) {
         this.isValueShort = isValueShort;
@@ -32,7 +32,7 @@ public class XWalRewrite implements BinlogContent {
     /**
      * Returns the type of this binlog content.
      *
-     * @return The type of this binlog content.
+     * @return the type of this binlog content
      */
     @Override
     public Type type() {
@@ -42,7 +42,7 @@ public class XWalRewrite implements BinlogContent {
     /**
      * Calculates the total number of bytes required to encode this binlog content.
      *
-     * @return The total number of bytes required for encoding.
+     * @return the total number of bytes required for encoding
      */
     @Override
     public int encodedLength() {
@@ -54,7 +54,7 @@ public class XWalRewrite implements BinlogContent {
     /**
      * Encodes this binlog content into a byte array, including the type byte and length check.
      *
-     * @return The byte array representation of this binlog content.
+     * @return the byte array representation of this binlog content
      */
     @Override
     public byte[] encodeWithType() {
@@ -74,8 +74,8 @@ public class XWalRewrite implements BinlogContent {
     /**
      * Decodes a binlog content from the provided ByteBuffer.
      *
-     * @param buffer The ByteBuffer containing the encoded binlog content.
-     * @return The decoded XWalRewrite object.
+     * @param buffer the ByteBuffer containing the encoded binlog content
+     * @return the decoded XWalRewrite object
      * @throws IllegalStateException If the key length is invalid or the encoded length does not match the expected length.
      */
     public static XWalRewrite decodeFrom(ByteBuffer buffer) {
@@ -101,8 +101,8 @@ public class XWalRewrite implements BinlogContent {
      * Applies this binlog content to the specified replication slot and repl pair.
      * This method updates the local WAL.
      *
-     * @param slot     The replication slot to which this content is applied.
-     * @param replPair The repl pair associated with this replication session.
+     * @param slot     the replication slot to which this content is applied
+     * @param replPair the repl pair associated with this replication session
      */
     @Override
     public void apply(short slot, ReplPair replPair) {

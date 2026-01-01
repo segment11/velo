@@ -20,7 +20,7 @@ public class XReverseIndexPutWord implements BinlogContent {
     /**
      * Retrieves the lower case word associated with this reverse index operation.
      *
-     * @return The lower case word.
+     * @return the lower case word
      */
     public String getLowerCaseWord() {
         return lowerCaseWord;
@@ -29,7 +29,7 @@ public class XReverseIndexPutWord implements BinlogContent {
     /**
      * Retrieves the long ID associated with this reverse index operation.
      *
-     * @return The long ID.
+     * @return the long ID
      */
     public long getLongId() {
         return longId;
@@ -38,8 +38,8 @@ public class XReverseIndexPutWord implements BinlogContent {
     /**
      * Constructs a new XReverseIndexPutWord object with the specified lower case word and long ID.
      *
-     * @param lowerCaseWord The lower case word associated with the operation.
-     * @param longId        The long ID associated with the operation.
+     * @param lowerCaseWord the lower case word associated with the operation
+     * @param longId        the long ID associated with the operation
      */
     public XReverseIndexPutWord(String lowerCaseWord, long longId) {
         this.lowerCaseWord = lowerCaseWord;
@@ -51,7 +51,7 @@ public class XReverseIndexPutWord implements BinlogContent {
     /**
      * Returns the type of this binlog content.
      *
-     * @return The type of this binlog content.
+     * @return the type of this binlog content
      */
     @Override
     public Type type() {
@@ -61,7 +61,7 @@ public class XReverseIndexPutWord implements BinlogContent {
     /**
      * Calculates the total number of bytes required to encode this binlog content.
      *
-     * @return The total number of bytes required for encoding.
+     * @return the total number of bytes required for encoding
      */
     @Override
     public int encodedLength() {
@@ -73,7 +73,7 @@ public class XReverseIndexPutWord implements BinlogContent {
     /**
      * Encodes this binlog content into a byte array, including the type byte and length check.
      *
-     * @return The byte array representation of this binlog content.
+     * @return the byte array representation of this binlog content
      */
     @Override
     public byte[] encodeWithType() {
@@ -92,8 +92,8 @@ public class XReverseIndexPutWord implements BinlogContent {
     /**
      * Decodes a binlog content from the provided ByteBuffer.
      *
-     * @param buffer The ByteBuffer containing the encoded binlog content.
-     * @return The decoded XReverseIndexPutWord object.
+     * @param buffer the ByteBuffer containing the encoded binlog content
+     * @return the decoded XReverseIndexPutWord object
      */
     public static XReverseIndexPutWord decodeFrom(ByteBuffer buffer) {
         // already read type byte
@@ -114,8 +114,8 @@ public class XReverseIndexPutWord implements BinlogContent {
      * Applies this binlog content to the specified replication slot and repl pair.
      * This method submits a job to update the reverse index by putting the word and adding the long ID.
      *
-     * @param slot     The replication slot to which this content is applied.
-     * @param replPair The repl pair associated with this replication session.
+     * @param slot     the replication slot to which this content is applied
+     * @param replPair the repl pair associated with this replication session
      */
     @Override
     public void apply(short slot, ReplPair replPair) {

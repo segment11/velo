@@ -22,7 +22,7 @@ public class XDict implements BinlogContent {
     /**
      * Retrieves the key prefix or suffix associated with this dictionary operation.
      *
-     * @return The key prefix or suffix.
+     * @return the key prefix or suffix
      */
     public String getKeyPrefixOrSuffix() {
         return keyPrefixOrSuffix;
@@ -31,7 +31,7 @@ public class XDict implements BinlogContent {
     /**
      * Retrieves the dictionary associated with this operation.
      *
-     * @return The dictionary.
+     * @return the dictionary
      */
     public Dict getDict() {
         return dict;
@@ -40,8 +40,8 @@ public class XDict implements BinlogContent {
     /**
      * Constructs a new XDict object with the specified key prefix or suffix and dictionary.
      *
-     * @param keyPrefixOrSuffix The key prefix or suffix.
-     * @param dict              The dictionary associated with the operation.
+     * @param keyPrefixOrSuffix the key prefix or suffix
+     * @param dict              the dictionary associated with the operation
      */
     public XDict(String keyPrefixOrSuffix, Dict dict) {
         this.keyPrefixOrSuffix = keyPrefixOrSuffix;
@@ -53,7 +53,7 @@ public class XDict implements BinlogContent {
     /**
      * Returns the type of this binlog content.
      *
-     * @return The type of this binlog content.
+     * @return the type of this binlog content
      */
     @Override
     public Type type() {
@@ -63,7 +63,7 @@ public class XDict implements BinlogContent {
     /**
      * Calculates the total number of bytes required to encode this binlog content.
      *
-     * @return The total number of bytes required for encoding.
+     * @return the total number of bytes required for encoding
      */
     @Override
     public int encodedLength() {
@@ -76,7 +76,7 @@ public class XDict implements BinlogContent {
     /**
      * Encodes this binlog content into a byte array, including the type byte and length check.
      *
-     * @return The byte array representation of this binlog content.
+     * @return the byte array representation of this binlog content
      */
     @Override
     public byte[] encodeWithType() {
@@ -98,8 +98,8 @@ public class XDict implements BinlogContent {
     /**
      * Decodes a binlog content from the provided ByteBuffer.
      *
-     * @param buffer The ByteBuffer containing the encoded binlog content.
-     * @return The decoded XDict object.
+     * @param buffer the ByteBuffer containing the encoded binlog content
+     * @return the decoded XDict object
      * @throws IllegalStateException If the key prefix length is invalid or the encoded length does not match the expected length.
      */
     public static XDict decodeFrom(ByteBuffer buffer) {
@@ -137,8 +137,8 @@ public class XDict implements BinlogContent {
      * Applies this binlog content to the specified replication slot and repl pair.
      * This method logs the dictionary information and updates the global dictionary map.
      *
-     * @param slot     The replication slot to which this content is applied.
-     * @param replPair The repl pair associated with this replication session.
+     * @param slot     the replication slot to which this content is applied
+     * @param replPair the repl pair associated with this replication session
      */
     @Override
     public void apply(short slot, ReplPair replPair) {

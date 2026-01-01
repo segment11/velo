@@ -27,8 +27,8 @@ public class XSkipApply implements BinlogContent {
     /**
      * Constructs a new XSkipApply instance with the given sequence number and chunk segment index.
      *
-     * @param seq                      The sequence number to skip.
-     * @param chunkCurrentSegmentIndex The current segment index of the chunk to skip.
+     * @param seq                      the sequence number to skip
+     * @param chunkCurrentSegmentIndex the current segment index of the chunk to skip
      */
     public XSkipApply(long seq, int chunkCurrentSegmentIndex) {
         this.seq = seq;
@@ -38,7 +38,7 @@ public class XSkipApply implements BinlogContent {
     /**
      * Returns the sequence number associated with this skip apply instruction.
      *
-     * @return The sequence number.
+     * @return the sequence number
      */
     public long getSeq() {
         return seq;
@@ -47,7 +47,7 @@ public class XSkipApply implements BinlogContent {
     /**
      * Returns the current segment index of the chunk associated with this skip apply instruction.
      *
-     * @return The chunk segment index.
+     * @return the chunk segment index
      */
     public int getChunkCurrentSegmentIndex() {
         return chunkCurrentSegmentIndex;
@@ -56,7 +56,7 @@ public class XSkipApply implements BinlogContent {
     /**
      * Returns the type of this binlog content, which is {@link Type#skip_apply}.
      *
-     * @return The type of this binlog content.
+     * @return the type of this binlog content
      */
     @Override
     public Type type() {
@@ -66,7 +66,7 @@ public class XSkipApply implements BinlogContent {
     /**
      * Returns the length of this object when encoded, including the type byte.
      *
-     * @return The encoded length.
+     * @return the encoded length
      */
     @Override
     public int encodedLength() {
@@ -79,7 +79,7 @@ public class XSkipApply implements BinlogContent {
     /**
      * Encodes this object into a byte array, including the type byte.
      *
-     * @return The encoded byte array.
+     * @return the encoded byte array
      */
     @Override
     public byte[] encodeWithType() {
@@ -96,8 +96,8 @@ public class XSkipApply implements BinlogContent {
     /**
      * Decodes an XSkipApply object from a ByteBuffer that has already read the type byte.
      *
-     * @param buffer The ByteBuffer containing the encoded XSkipApply data.
-     * @return A new XSkipApply instance decoded from the buffer.
+     * @param buffer the ByteBuffer containing the encoded XSkipApply data
+     * @return the new XSkipApply instance decoded from the buffer
      */
     public static XSkipApply decodeFrom(ByteBuffer buffer) {
         // already read type byte
@@ -120,8 +120,8 @@ public class XSkipApply implements BinlogContent {
      * Applies this skip apply instruction to the specified slot and replication pair.
      * This logs a warning, updates the slot's chunk segment index, and sets the last sequence caught up by the slave.
      *
-     * @param slot     The slot number to apply the skip instruction to.
-     * @param replPair The replication pair involved in the replication process.
+     * @param slot     the slot number to apply the skip instruction to
+     * @param replPair the replication pair involved in the replication process
      */
     @Override
     public void apply(short slot, ReplPair replPair) {

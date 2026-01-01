@@ -30,11 +30,11 @@ public class Repl {
     /**
      * Creates a buffer containing the encoded REPL message.
      *
-     * @param slaveUuid Unique identifier of the slave node.
-     * @param slot      Slot number associated with the message.
-     * @param type      Type of the REPL message.
-     * @param content   Content of the REPL message.
-     * @return Byte buffer containing the encoded message.
+     * @param slaveUuid the unique identifier of the slave node
+     * @param slot      the slot number associated with the message
+     * @param type      the type of the REPL message
+     * @param content   the content of the REPL message
+     * @return the byte buffer containing the encoded message
      */
     public static io.activej.bytebuf.ByteBuf buffer(long slaveUuid, short slot, ReplType type, ReplContent content) {
         var encodeLength = content.encodeLength();
@@ -68,8 +68,8 @@ public class Repl {
         /**
          * Checks if the reply message type matches the specified type.
          *
-         * @param type Type to compare with.
-         * @return True if the types match, false otherwise.
+         * @param type the type to compare with
+         * @return true if the types match, false otherwise
          */
         public boolean isReplType(ReplType type) {
             return this.type == type;
@@ -78,7 +78,7 @@ public class Repl {
         /**
          * Checks if the reply message content is empty.
          *
-         * @return True if the content is empty, false otherwise.
+         * @return true if the content is empty, false otherwise
          */
         public boolean isEmpty() {
             return content == BYTE_0_CONTENT;
@@ -88,11 +88,11 @@ public class Repl {
     /**
      * Creates a REPL reply message.
      *
-     * @param slot     Slot number associated with the message.
-     * @param replPair Pair containing the slave UUID.
-     * @param type     Type of the REPL message.
-     * @param content  Content of the REPL message.
-     * @return REPL reply message.
+     * @param slot     the slot number associated with the message
+     * @param replPair the pair containing the slave UUID
+     * @param type     the type of the REPL message
+     * @param content  the content of the REPL message
+     * @return the REPL reply message
      */
     public static ReplReply reply(short slot, ReplPair replPair, ReplType type, ReplContent content) {
         return new ReplReply(replPair.getSlaveUuid(), slot, type, content);
@@ -101,10 +101,10 @@ public class Repl {
     /**
      * Creates a REPL error message.
      *
-     * @param slot         Slot number associated with the message.
-     * @param replPair     Pair containing the slave UUID.
-     * @param errorMessage Error message to include in the reply.
-     * @return REPL error message.
+     * @param slot         the slot number associated with the message
+     * @param replPair     the pair containing the slave UUID
+     * @param errorMessage the error message to include in the reply
+     * @return the REPL error message
      */
     public static ReplReply error(short slot, ReplPair replPair, String errorMessage) {
         return reply(slot, replPair, ReplType.error, new RawBytesContent(errorMessage.getBytes()));
@@ -115,10 +115,10 @@ public class Repl {
     /**
      * Creates a REPL error message.
      *
-     * @param slot         Slot number associated with the message.
-     * @param slaveUuid    Unique identifier of the slave node.
-     * @param errorMessage Error message to include in the reply.
-     * @return REPL error message.
+     * @param slot         the slot number associated with the message
+     * @param slaveUuid    the unique identifier of the slave node
+     * @param errorMessage the error message to include in the reply
+     * @return the REPL error message
      */
     public static ReplReply error(short slot, long slaveUuid, String errorMessage) {
         return new ReplReply(slaveUuid, slot, ReplType.error,
@@ -128,10 +128,10 @@ public class Repl {
     /**
      * Creates a test REPL message for testing purposes.
      *
-     * @param slot     Slot number associated with the message.
-     * @param replPair Pair containing the slave UUID.
-     * @param message  Test message to include in the reply.
-     * @return Test REPL message.
+     * @param slot     the slot number associated with the message
+     * @param replPair the pair containing the slave UUID
+     * @param message  the test message to include in the reply
+     * @return the test REPL message
      */
     @TestOnly
     public static ReplReply test(short slot, ReplPair replPair, String message) {
@@ -154,7 +154,7 @@ public class Repl {
     /**
      * Returns an empty REPL reply message.
      *
-     * @return Empty REPL reply message.
+     * @return the empty REPL reply message
      */
     public static ReplReply emptyReply() {
         return EMPTY_REPLY;
@@ -163,8 +163,8 @@ public class Repl {
     /**
      * Decodes a byte buffer into a REPL message data array.
      *
-     * @param buf Buffer containing the encoded REPL message.
-     * @return Array of byte arrays containing the decoded message data (slave UUID, slot, type, content), or null if decoding fails.
+     * @param buf the buffer containing the encoded REPL message
+     * @return the array of byte arrays containing the decoded message data (slave UUID, slot, type, content), or null if decoding fails
      */
     public static byte[][] decode(ByteBuf buf) {
         if (buf.readableBytes() <= HEADER_LENGTH) {

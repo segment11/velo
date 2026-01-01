@@ -25,8 +25,8 @@ public class XUpdateSeq implements BinlogContent {
     /**
      * Constructs an XUpdateSeq object.
      *
-     * @param seq        The sequence number that master last updated.
-     * @param timeMillis The time in milliseconds that master last updated.
+     * @param seq        the sequence number that master last updated
+     * @param timeMillis the time in milliseconds that master last updated
      */
     public XUpdateSeq(long seq, long timeMillis) {
         this.seq = seq;
@@ -36,7 +36,7 @@ public class XUpdateSeq implements BinlogContent {
     /**
      * Returns the sequence number that master last updated.
      *
-     * @return The sequence number.
+     * @return the sequence number
      */
     public long getSeq() {
         return seq;
@@ -45,7 +45,7 @@ public class XUpdateSeq implements BinlogContent {
     /**
      * Returns the time in milliseconds that master last updated.
      *
-     * @return The time in milliseconds.
+     * @return the time in milliseconds
      */
     public long getTimeMillis() {
         return timeMillis;
@@ -54,7 +54,7 @@ public class XUpdateSeq implements BinlogContent {
     /**
      * Returns the type of this binlog content, which is {@link Type#update_seq}.
      *
-     * @return The type of this binlog content.
+     * @return the type of this binlog content
      */
     @Override
     public Type type() {
@@ -64,7 +64,7 @@ public class XUpdateSeq implements BinlogContent {
     /**
      * Returns the length of this object when encoded, including the type byte.
      *
-     * @return The encoded length.
+     * @return the encoded length
      */
     @Override
     public int encodedLength() {
@@ -77,7 +77,7 @@ public class XUpdateSeq implements BinlogContent {
     /**
      * Encodes this object into a byte array, including the type byte.
      *
-     * @return The encoded byte array.
+     * @return the encoded byte array
      */
     @Override
     public byte[] encodeWithType() {
@@ -94,8 +94,8 @@ public class XUpdateSeq implements BinlogContent {
     /**
      * Decodes an XUpdateSeq object from a ByteBuffer that has already read the type byte.
      *
-     * @param buffer The ByteBuffer containing the encoded XUpdateSeq data.
-     * @return A new XUpdateSeq instance decoded from the buffer.
+     * @param buffer the ByteBuffer containing the encoded XUpdateSeq data
+     * @return the new XUpdateSeq instance decoded from the buffer
      */
     public static XUpdateSeq decodeFrom(ByteBuffer buffer) {
         // already read type byte
@@ -113,8 +113,8 @@ public class XUpdateSeq implements BinlogContent {
      * Applies this skip apply instruction to the specified slot and replication pair.
      * This logs a warning, updates the slot's chunk segment index, and sets the last sequence caught up by the slave.
      *
-     * @param slot     The slot number to apply the skip instruction to.
-     * @param replPair The replication pair involved in the replication process.
+     * @param slot     the slot number to apply the skip instruction to
+     * @param replPair the replication pair involved in the replication process
      */
     @Override
     public void apply(short slot, ReplPair replPair) {

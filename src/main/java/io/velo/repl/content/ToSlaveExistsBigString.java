@@ -28,10 +28,10 @@ public class ToSlaveExistsBigString implements ReplContent {
     /**
      * Constructs a new {@link ToSlaveExistsBigString} message.
      *
-     * @param bucketIndex      The bucket index in which the big strings are stored.
-     * @param bigStringDir     The directory containing the big strings (files).
-     * @param uuidListInMaster The list of UUIDs of big strings in the master.
-     * @param sentUuidList     The list of UUIDs of big strings that have already been sent to the slave.
+     * @param bucketIndex      the bucket index in which the big strings are stored
+     * @param bigStringDir     the directory containing the big strings (files)
+     * @param uuidListInMaster the list of UUIDs of big strings in the master
+     * @param sentUuidList     the list of UUIDs of big strings that have already been sent to the slave
      */
     public ToSlaveExistsBigString(int bucketIndex, File bigStringDir, List<Long> uuidListInMaster, List<Long> sentUuidList) {
         this.bucketIndex = bucketIndex;
@@ -75,7 +75,7 @@ public class ToSlaveExistsBigString implements ReplContent {
      * <p>
      * If not all big strings exist, the message is adjusted to reflect the actual number of big strings sent.
      *
-     * @param toBuf The buffer to which the encoded message content will be written.
+     * @param toBuf the buffer to which the encoded message content will be written
      */
     @Override
     public void encodeTo(ByteBuf toBuf) {
@@ -127,7 +127,7 @@ public class ToSlaveExistsBigString implements ReplContent {
      * - 4 bytes for the length of the big string.
      * - The length of the big string data.
      *
-     * @return The length of the encoded message content in bytes.
+     * @return the length of the encoded message content in bytes
      */
     @Override
     public int encodeLength() {

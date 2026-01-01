@@ -84,7 +84,7 @@ public class HttpHeaderBody {
     /**
      * Parses the HTTP action of the request.
      *
-     * @return The action (e.g., "GET", "POST").
+     * @return the action (e.g., "GET", "POST")
      */
     public String action() {
         return action;
@@ -93,7 +93,7 @@ public class HttpHeaderBody {
     /**
      * Parses the HTTP request type (method).
      *
-     * @return The request type (e.g., "GET", "POST").
+     * @return the request type (e.g., "GET", "POST")
      */
     public String requestType() {
         return requestType;
@@ -102,7 +102,7 @@ public class HttpHeaderBody {
     /**
      * Parses the HTTP version.
      *
-     * @return The HTTP version (e.g., "HTTP/1.1").
+     * @return the HTTP version (e.g., "HTTP/1.1")
      */
     public String httpVersion() {
         return httpVersion;
@@ -111,7 +111,7 @@ public class HttpHeaderBody {
     /**
      * Retrieves the URL from the HTTP request.
      *
-     * @return The URL of the request.
+     * @return the URL of the request
      */
     public String url() {
         return url;
@@ -120,7 +120,7 @@ public class HttpHeaderBody {
     /**
      * Checks if the HTTP request is correctly parsed.
      *
-     * @return True if the request is correctly parsed, false otherwise.
+     * @return true if the request is correctly parsed, false otherwise
      */
     public boolean isOk() {
         return isOk;
@@ -129,7 +129,7 @@ public class HttpHeaderBody {
     /**
      * Retrieves all headers from the HTTP request.
      *
-     * @return A map of headers and their values.
+     * @return the map of headers and their values
      */
     public Map<String, String> getHeaders() {
         return headers;
@@ -138,8 +138,8 @@ public class HttpHeaderBody {
     /**
      * Retrieves the value of a specific header.
      *
-     * @param name The name of the header.
-     * @return The value of the header, or null if the header is not found.
+     * @param name the name of the header
+     * @return the value of the header, or null if the header is not found
      */
     public String header(String name) {
         return headers.get(name);
@@ -148,7 +148,7 @@ public class HttpHeaderBody {
     /**
      * Retrieves the content length from the HTTP request headers.
      *
-     * @return The content length of the request body.
+     * @return the content length of the request body
      */
     public int contentLength() {
         if (contentLengthCache == -1) {
@@ -161,7 +161,7 @@ public class HttpHeaderBody {
     /**
      * Retrieves the body of the HTTP request.
      *
-     * @return The body of the request as a byte array.
+     * @return the body of the request as a byte array
      */
     public byte[] body() {
         return body;
@@ -170,7 +170,7 @@ public class HttpHeaderBody {
     /**
      * Feeds byte data into the parser.
      *
-     * @param data The byte data to feed.
+     * @param data the byte data to feed
      */
     public void feed(byte[] data) {
         feed(data, data.length, 0);
@@ -179,9 +179,9 @@ public class HttpHeaderBody {
     /**
      * Feeds a portion of byte data into the parser.
      *
-     * @param data   The byte data to feed.
-     * @param count  The number of bytes to feed.
-     * @param offset The offset in the byte array to start feeding from.
+     * @param data   the byte data to feed
+     * @param count  the number of bytes to feed
+     * @param offset the offset in the byte array to start feeding from
      */
     public void feed(byte[] data, int count, int offset) {
         feed(Unpooled.wrappedBuffer(data), count, offset);
@@ -190,9 +190,9 @@ public class HttpHeaderBody {
     /**
      * Feeds a portion of byte data from a ByteBuf into the parser.
      *
-     * @param buf    The ByteBuf containing the byte data.
-     * @param count  The number of bytes to feed.
-     * @param offset The offset in the ByteBuf to start feeding from.
+     * @param buf    the ByteBuf containing the byte data
+     * @param count  the number of bytes to feed
+     * @param offset the offset in the ByteBuf to start feeding from
      */
     public void feed(ByteBuf buf, int count, int offset) {
         if (count > HEADER_BUFFER_LENGTH) {

@@ -22,7 +22,7 @@ public class XOneWalGroupPersist implements BinlogContent {
      * Sets whether the value to be persisted is a short value.
      * This method is intended for testing purposes only.
      *
-     * @param isShortValue true if the value is a short value, false otherwise.
+     * @param isShortValue whether the value is a short value
      */
     @TestOnly
     public void setShortValue(boolean isShortValue) {
@@ -33,7 +33,7 @@ public class XOneWalGroupPersist implements BinlogContent {
      * Sets whether the WAL should be cleared after applying the operation.
      * This method is intended for testing purposes only.
      *
-     * @param clearWalAfterApply true if the WAL should be cleared, false otherwise.
+     * @param clearWalAfterApply whether the WAL should be cleared
      */
     @TestOnly
     public void setClearWalAfterApply(boolean clearWalAfterApply) {
@@ -43,9 +43,9 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Constructs a new XOneWalGroupPersist object with the specified parameters.
      *
-     * @param isShortValue       true if the value to be persisted is a short value, false otherwise.
-     * @param clearWalAfterApply true if the WAL should be cleared after applying the operation, false otherwise.
-     * @param walGroupIndex      The index of the WAL group to be persisted.
+     * @param isShortValue       whether the value to be persisted is a short value
+     * @param clearWalAfterApply whether the WAL should be cleared after applying the operation
+     * @param walGroupIndex      the index of the WAL group to be persisted
      */
     public XOneWalGroupPersist(boolean isShortValue, boolean clearWalAfterApply, int walGroupIndex) {
         this.isShortValue = isShortValue;
@@ -58,7 +58,7 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Sets the beginning bucket index for the WAL group.
      *
-     * @param beginBucketIndex The beginning bucket index.
+     * @param beginBucketIndex the beginning bucket index
      */
     public void setBeginBucketIndex(int beginBucketIndex) {
         this.beginBucketIndex = beginBucketIndex;
@@ -69,7 +69,7 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Sets the array of key counts for statistical purposes.
      *
-     * @param keyCountForStatsTmp The array of key counts.
+     * @param keyCountForStatsTmp the array of key counts
      */
     public void setKeyCountForStatsTmp(short[] keyCountForStatsTmp) {
         this.keyCountForStatsTmp = keyCountForStatsTmp;
@@ -80,7 +80,7 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Sets the array of record bytes.
      *
-     * @param recordXBytesArray The array of record bytes.
+     * @param recordXBytesArray the array of record bytes
      */
     public void setRecordXBytesArray(byte[][] recordXBytesArray) {
         this.recordXBytesArray = recordXBytesArray;
@@ -91,7 +91,7 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Sets the array of shared bytes by split index.
      *
-     * @param sharedBytesListBySplitIndex The array of shared bytes.
+     * @param sharedBytesListBySplitIndex the array of shared bytes
      */
     public void setSharedBytesListBySplitIndex(byte[][] sharedBytesListBySplitIndex) {
         this.sharedBytesListBySplitIndex = sharedBytesListBySplitIndex;
@@ -102,7 +102,7 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Sets the array of WAL group sequences by split index.
      *
-     * @param oneWalGroupSeqArrayBySplitIndex The array of WAL group sequences.
+     * @param oneWalGroupSeqArrayBySplitIndex the array of WAL group sequences
      */
     public void setOneWalGroupSeqArrayBySplitIndex(long[] oneWalGroupSeqArrayBySplitIndex) {
         this.oneWalGroupSeqArrayBySplitIndex = oneWalGroupSeqArrayBySplitIndex;
@@ -113,7 +113,7 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Sets the split number after the put operation.
      *
-     * @param splitNumberAfterPut The split number.
+     * @param splitNumberAfterPut the split number
      */
     public void setSplitNumberAfterPut(byte[] splitNumberAfterPut) {
         this.splitNumberAfterPut = splitNumberAfterPut;
@@ -122,8 +122,8 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Record to hold segment flag and sequence number.
      *
-     * @param flagByte The flag byte.
-     * @param seq      The sequence number.
+     * @param flagByte the flag byte
+     * @param seq      the sequence number
      */
     record SegmentFlagWithSeq(byte flagByte, long seq) {
     }
@@ -133,9 +133,9 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Adds a segment flag with sequence number to the map.
      *
-     * @param segmentIndex The segment index.
-     * @param flagByte     The flag byte.
-     * @param seq          The sequence number.
+     * @param segmentIndex the segment index
+     * @param flagByte     the flag byte
+     * @param seq          the sequence number
      */
     public void putUpdatedChunkSegmentFlagWithSeq(int segmentIndex, byte flagByte, long seq) {
         updatedChunkSegmentFlagWithSeqMap.put(segmentIndex, new SegmentFlagWithSeq(flagByte, seq));
@@ -146,8 +146,8 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Adds segment bytes to the map.
      *
-     * @param segmentIndex The segment index.
-     * @param bytes        The segment bytes.
+     * @param segmentIndex the segment index
+     * @param bytes        the segment bytes
      */
     public void putUpdatedChunkSegmentBytes(int segmentIndex, byte[] bytes) {
         updatedChunkSegmentBytesMap.put(segmentIndex, bytes);
@@ -158,7 +158,7 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Sets the chunk segment index after persisting.
      *
-     * @param chunkSegmentIndexAfterPersist The chunk segment index.
+     * @param chunkSegmentIndexAfterPersist the chunk segment index
      */
     public void setChunkSegmentIndexAfterPersist(int chunkSegmentIndexAfterPersist) {
         this.chunkSegmentIndexAfterPersist = chunkSegmentIndexAfterPersist;
@@ -169,7 +169,7 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Sets the last segment sequence number.
      *
-     * @param lastSegmentSeq The last segment sequence number.
+     * @param lastSegmentSeq the last segment sequence number
      */
     public void setLastSegmentSeq(long lastSegmentSeq) {
         this.lastSegmentSeq = lastSegmentSeq;
@@ -178,9 +178,9 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Record to hold information for merging a group by WAL group.
      *
-     * @param walGroupIndex     The index of the WAL group.
-     * @param beginSegmentIndex The beginning segment index.
-     * @param segmentCount      The number of segments.
+     * @param walGroupIndex     the index of the WAL group
+     * @param beginSegmentIndex the beginning segment index
+     * @param segmentCount      the number of segments
      */
     public record ToFindForMergeGroupByWalGroup(int walGroupIndex, int beginSegmentIndex, short segmentCount) {
     }
@@ -190,7 +190,7 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Sets the information for merging a group by WAL group.
      *
-     * @param toFindForMergeGroupByWalGroup The merge group information.
+     * @param toFindForMergeGroupByWalGroup the merge group information
      */
     public void setToFindForMergeGroupByWalGroup(ToFindForMergeGroupByWalGroup toFindForMergeGroupByWalGroup) {
         this.toFindForMergeGroupByWalGroup = toFindForMergeGroupByWalGroup;
@@ -275,7 +275,7 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Encodes this binlog content into a byte array, including the type byte and length check.
      *
-     * @return The byte array representation of this binlog content.
+     * @return the byte array representation of this binlog content
      */
     @Override
     public byte[] encodeWithType() {
@@ -365,8 +365,8 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Decodes a binlog content from the provided ByteBuffer.
      *
-     * @param buffer The ByteBuffer containing the encoded binlog content.
-     * @return The decoded XOneWalGroupPersist object.
+     * @param buffer the ByteBuffer containing the encoded binlog content
+     * @return the decoded XOneWalGroupPersist object
      * @throws IllegalStateException If the encoded length does not match the expected length.
      */
     public static XOneWalGroupPersist decodeFrom(ByteBuffer buffer) {
@@ -462,8 +462,8 @@ public class XOneWalGroupPersist implements BinlogContent {
     /**
      * Applies this binlog content to the specified replication slot and repl pair.
      *
-     * @param slot     The replication slot to which this content is applied.
-     * @param replPair The repl pair associated with this replication session.
+     * @param slot     the replication slot to which this content is applied
+     * @param replPair the repl pair associated with this replication session
      */
     @Override
     public void apply(short slot, ReplPair replPair) {

@@ -15,7 +15,7 @@ public class ExtendProtocolCommand implements ProtocolCommand {
     /**
      * Constructs a new instance of ExtendProtocolCommand with the specified command.
      *
-     * @param command The command name as a string.
+     * @param command the command name as a string
      * @throws IllegalArgumentException if the provided command is null or empty.
      * @since 1.0.0
      */
@@ -30,7 +30,7 @@ public class ExtendProtocolCommand implements ProtocolCommand {
      * Returns the raw byte array representation of the command. This method is typically
      * used by Jedis to convert the command into the format expected by the Redis server.
      *
-     * @return A byte array representing the command.
+     * @return the byte array representing the command
      * @since 1.0.0
      */
     @Override

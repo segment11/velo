@@ -18,7 +18,7 @@ public class XAclUpdate implements BinlogContent {
     /**
      * Constructs an XAclUpdate with the provided line.
      *
-     * @param line The line of this ACL update.
+     * @param line the line of this ACL update
      */
     public XAclUpdate(String line) {
         this.line = line;
@@ -27,7 +27,7 @@ public class XAclUpdate implements BinlogContent {
     /**
      * Returns the type of this binlog content.
      *
-     * @return The type of this binlog content.
+     * @return the type of this binlog content
      */
     @Override
     public Type type() {
@@ -37,7 +37,7 @@ public class XAclUpdate implements BinlogContent {
     /**
      * Calculates the total number of bytes required to encode this binlog content.
      *
-     * @return The total number of bytes required for encoding.
+     * @return the total number of bytes required for encoding
      */
     @Override
     public int encodedLength() {
@@ -49,7 +49,7 @@ public class XAclUpdate implements BinlogContent {
     /**
      * Encodes this binlog content into a byte array, including the type byte and length check.
      *
-     * @return The byte array representation of this binlog content.
+     * @return the byte array representation of this binlog content
      */
     @Override
     public byte[] encodeWithType() {
@@ -67,8 +67,8 @@ public class XAclUpdate implements BinlogContent {
     /**
      * Decodes a binlog content from the provided ByteBuffer.
      *
-     * @param buffer The ByteBuffer containing the encoded binlog content.
-     * @return The decoded XAclUpdate object.
+     * @param buffer the ByteBuffer containing the encoded binlog content
+     * @return the decoded XAclUpdate object
      * @throws IllegalStateException If the encoded content is invalid.
      */
     public static XAclUpdate decodeFrom(ByteBuffer buffer) {
@@ -91,8 +91,8 @@ public class XAclUpdate implements BinlogContent {
      * Applies this binlog content to the specified replication slot and repl pair.
      * This method updates the local configuration with the new dynamic configuration settings.
      *
-     * @param slot     The replication slot to which this content is applied.
-     * @param replPair The repl pair associated with this replication session.
+     * @param slot     the replication slot to which this content is applied
+     * @param replPair the repl pair associated with this replication session
      */
     @Override
     public void apply(short slot, ReplPair replPair) {

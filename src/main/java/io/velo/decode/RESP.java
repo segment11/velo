@@ -30,8 +30,8 @@ public class RESP {
         /**
          * Process a byte to form a number.
          *
-         * @param value The byte value to process.
-         * @return true to continue processing, false to stop.
+         * @param value the byte value to process
+         * @return true to continue processing, false to stop
          * @throws IllegalArgumentException if the byte value is not a digit.
          */
         @Override
@@ -46,7 +46,7 @@ public class RESP {
         /**
          * Get the processed number.
          *
-         * @return The processed number.
+         * @return the processed number
          */
         public int content() {
             return result;
@@ -67,8 +67,8 @@ public class RESP {
     /**
      * Parse a Redis number from a ByteBuf.
      *
-     * @param in The ByteBuf containing the number.
-     * @return The parsed integer.
+     * @param in the ByteBuf containing the number
+     * @return the parsed integer
      * @throws IllegalArgumentException if the number is malformed or too large.
      */
     private int parseRedisNumber(ByteBuf in) {
@@ -96,8 +96,8 @@ public class RESP {
     /**
      * Read a line from the ByteBuf until the CR LF sequence.
      *
-     * @param in The ByteBuf to read from.
-     * @return A ByteBuf slice containing the read line without the CR LF sequence, or null if a complete line is not available.
+     * @param in the ByteBuf to read from
+     * @return the ByteBuf slice containing the read line without the CR LF sequence, or null if a complete line is not available
      */
     private ByteBuf readLine(ByteBuf in) {
         // \r\n
@@ -118,8 +118,8 @@ public class RESP {
     /**
      * Decode a RESP message from a ByteBuf.
      *
-     * @param bb The ByteBuf containing the RESP message.
-     * @return A 2D byte array where each element is a RESP message.
+     * @param bb the ByteBuf containing the RESP message
+     * @return the 2D byte array where each element is a RESP message
      * @throws IllegalArgumentException if the RESP message format is incorrect.
      */
     public byte[][] decode(ByteBuf bb) {

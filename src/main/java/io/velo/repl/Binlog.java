@@ -795,10 +795,10 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     /**
      * Decode from one segment bytes and apply to slave repl pair
      *
-     * @param slot            the replication slot to which this content is applied.
-     * @param oneSegmentBytes one segment bytes
-     * @param skipBytesN      skip bytes number
-     * @param replPair        the repl pair associated with this replication session.
+     * @param slot            the replication slot to which this content is applied
+     * @param oneSegmentBytes the one segment bytes
+     * @param skipBytesN      the skip bytes number
+     * @param replPair        the repl pair associated with this replication session
      * @return the number of decoded content
      */
     public static int decodeAndApply(short slot,

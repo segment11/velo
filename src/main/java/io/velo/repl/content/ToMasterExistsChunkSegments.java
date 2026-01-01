@@ -19,9 +19,9 @@ public class ToMasterExistsChunkSegments implements ReplContent {
     /**
      * Constructs a new {@link ToMasterExistsChunkSegments} message.
      *
-     * @param beginSegmentIndex The index of the first segment in the range being checked.
-     * @param segmentCount      The number of segments being checked.
-     * @param metaBytes         Additional meta data associated with the segments.
+     * @param beginSegmentIndex the index of the first segment in the range being checked
+     * @param segmentCount      the number of segments being checked
+     * @param metaBytes         the additional meta data associated with the segments
      */
     public ToMasterExistsChunkSegments(int beginSegmentIndex, int segmentCount, byte[] metaBytes) {
         this.beginSegmentIndex = beginSegmentIndex;
@@ -37,7 +37,7 @@ public class ToMasterExistsChunkSegments implements ReplContent {
      * - Next 4 bytes: the count of segments (segmentCount).
      * - Following bytes: the meta data (metaBytes).
      *
-     * @param toBuf The buffer to which the encoded message content will be written.
+     * @param toBuf the buffer to which the encoded message content will be written
      */
     @Override
     public void encodeTo(ByteBuf toBuf) {
@@ -54,7 +54,7 @@ public class ToMasterExistsChunkSegments implements ReplContent {
      * - 4 bytes for the segmentCount.
      * - The length of the metaBytes array.
      *
-     * @return The length of the encoded message content in bytes.
+     * @return the length of the encoded message content in bytes
      */
     @Override
     public int encodeLength() {
@@ -65,10 +65,10 @@ public class ToMasterExistsChunkSegments implements ReplContent {
      * Checks if the meta data from a slave matches the meta data expected by a master for the same batch
      * of chunk segments.
      *
-     * @param metaBytesMaster       The meta data expected by the master.
-     * @param contentBytesFromSlave The content bytes received from the slave, which includes the
-     *                              beginSegmentIndex, segmentCount, and metaBytes.
-     * @return true if the meta data matches; false otherwise.
+     * @param metaBytesMaster       the meta data expected by the master
+     * @param contentBytesFromSlave the content bytes received from the slave, which includes the
+     *                              beginSegmentIndex, segmentCount, and metaBytes
+     * @return true if the meta data matches, false otherwise
      * @throws IllegalArgumentException if the length of the content bytes from the slave is not as expected.
      */
     public static boolean isSlaveSameForThisBatch(byte[] metaBytesMaster, byte[] contentBytesFromSlave) {

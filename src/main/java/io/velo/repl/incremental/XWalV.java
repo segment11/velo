@@ -23,7 +23,7 @@ public class XWalV implements BinlogContent {
     /**
      * Retrieves the WAL value associated with this operation.
      *
-     * @return The WAL value.
+     * @return the WAL value
      */
     public Wal.V getV() {
         return v;
@@ -32,7 +32,7 @@ public class XWalV implements BinlogContent {
     /**
      * Checks if the value is short.
      *
-     * @return True if the value is short, false otherwise.
+     * @return true if the value is short, false otherwise
      */
     public boolean isValueShort() {
         return isValueShort;
@@ -41,7 +41,7 @@ public class XWalV implements BinlogContent {
     /**
      * Retrieves the offset of the WAL value.
      *
-     * @return The offset.
+     * @return the offset
      */
     public int getOffset() {
         return offset;
@@ -50,7 +50,7 @@ public class XWalV implements BinlogContent {
     /**
      * Checks if this is a put operation, not store to the target offset.
      *
-     * @return True if this is a put operation, false otherwise.
+     * @return true if this is a put operation, false otherwise
      */
     public boolean isOnlyPut() {
         return isOnlyPut;
@@ -59,10 +59,10 @@ public class XWalV implements BinlogContent {
     /**
      * Constructs a new XWalV object with the specified WAL value, value short flag, and offset.
      *
-     * @param v            The WAL value associated with the operation.
-     * @param isValueShort A flag indicating if the value is short.
-     * @param offset       The offset of the WAL value.
-     * @param isOnlyPut    A flag indicating if this is a put operation, not store to the target offset.
+     * @param v            the WAL value associated with the operation
+     * @param isValueShort whether the value is short
+     * @param offset       the offset of the WAL value
+     * @param isOnlyPut    whether this is a put operation, not store to the target offset
      */
     public XWalV(Wal.V v, boolean isValueShort, int offset, boolean isOnlyPut) {
         this.v = v;
@@ -75,7 +75,7 @@ public class XWalV implements BinlogContent {
      * Constructs a new XWalV object with the specified WAL value, using default values for isValueShort and offset.
      * This constructor is intended for testing purposes.
      *
-     * @param v The WAL value associated with the operation.
+     * @param v the WAL value associated with the operation
      */
     @TestOnly
     public XWalV(Wal.V v) {
@@ -85,7 +85,7 @@ public class XWalV implements BinlogContent {
     /**
      * Returns the type of this binlog content.
      *
-     * @return The type of this binlog content.
+     * @return the type of this binlog content
      */
     @Override
     public BinlogContent.Type type() {
@@ -95,7 +95,7 @@ public class XWalV implements BinlogContent {
     /**
      * Calculates the total number of bytes required to encode this binlog content.
      *
-     * @return The total number of bytes required for encoding.
+     * @return the total number of bytes required for encoding
      */
     @Override
     public int encodedLength() {
@@ -109,7 +109,7 @@ public class XWalV implements BinlogContent {
     /**
      * Encodes this binlog content into a byte array, including the type byte and length check.
      *
-     * @return The byte array representation of this binlog content.
+     * @return the byte array representation of this binlog content
      */
     @Override
     public byte[] encodeWithType() {
@@ -137,8 +137,8 @@ public class XWalV implements BinlogContent {
     /**
      * Decodes a binlog content from the provided ByteBuffer.
      *
-     * @param buffer The ByteBuffer containing the encoded binlog content.
-     * @return The decoded XWalV object.
+     * @param buffer the ByteBuffer containing the encoded binlog content
+     * @return the decoded XWalV object
      * @throws IllegalStateException If the key length is invalid or the encoded length does not match the expected length.
      */
     public static XWalV decodeFrom(ByteBuffer buffer) {
@@ -179,8 +179,8 @@ public class XWalV implements BinlogContent {
      * Applies this binlog content to the specified replication slot and repl pair.
      * This method updates the local WAL and sets the last sequence number of the slave.
      *
-     * @param slot     The replication slot to which this content is applied.
-     * @param replPair The repl pair associated with this replication session.
+     * @param slot     the replication slot to which this content is applied
+     * @param replPair the repl pair associated with this replication session
      */
     @Override
     public void apply(short slot, ReplPair replPair) {

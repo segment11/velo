@@ -18,9 +18,9 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
     /**
      * Adds an updated segment flag and sequence to the map.
      *
-     * @param segmentIndex The index of the segment to update.
-     * @param flagByte     The new flag byte for the segment.
-     * @param seq          The sequence number associated with the update.
+     * @param segmentIndex the index of the segment to update
+     * @param flagByte     the new flag byte for the segment
+     * @param seq          the sequence number associated with the update
      */
     public void putUpdatedChunkSegmentFlagWithSeq(int segmentIndex, Byte flagByte, long seq) {
         updatedChunkSegmentFlagWithSeqMap.put(segmentIndex, new XOneWalGroupPersist.SegmentFlagWithSeq(flagByte, seq));
@@ -29,7 +29,7 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
     /**
      * Checks if the map of updated chunk segment flags is empty.
      *
-     * @return {@code true} if the map is empty, {@code false} otherwise.
+     * @return true if the map is empty, false otherwise
      */
     public boolean isEmpty() {
         return updatedChunkSegmentFlagWithSeqMap.isEmpty();
@@ -38,7 +38,7 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
     /**
      * Returns the type of this binlog content.
      *
-     * @return The type of this binlog content.
+     * @return the type of this binlog content
      */
     @Override
     public Type type() {
@@ -48,7 +48,7 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
     /**
      * Calculates the total number of bytes required to encode this binlog content.
      *
-     * @return The total number of bytes required for encoding.
+     * @return the total number of bytes required for encoding
      */
     @Override
     public int encodedLength() {
@@ -66,7 +66,7 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
     /**
      * Encodes this binlog content into a byte array, including the type byte and length check.
      *
-     * @return The byte array representation of this binlog content.
+     * @return the byte array representation of this binlog content
      */
     @Override
     public byte[] encodeWithType() {
@@ -88,8 +88,8 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
     /**
      * Decodes a binlog content from the provided ByteBuffer.
      *
-     * @param buffer The ByteBuffer containing the encoded binlog content.
-     * @return The decoded XChunkSegmentFlagUpdate object.
+     * @param buffer the ByteBuffer containing the encoded binlog content
+     * @return the decoded XChunkSegmentFlagUpdate object
      * @throws IllegalStateException If the encoded length does not match the expected length.
      */
     public static XChunkSegmentFlagUpdate decodeFrom(ByteBuffer buffer) {
@@ -117,8 +117,8 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
      * Applies this binlog content to the specified replication slot and repl pair.
      * This method updates the segment flags in the local storage with the new flags and sequence numbers.
      *
-     * @param slot     The replication slot to which this content is applied.
-     * @param replPair The repl pair associated with this replication session.
+     * @param slot     the replication slot to which this content is applied
+     * @param replPair the repl pair associated with this replication session
      */
     @Override
     public void apply(short slot, ReplPair replPair) {

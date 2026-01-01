@@ -28,7 +28,7 @@ public class JedisPoolHolder implements NeedCleanUp {
     /**
      * Returns the singleton instance of JedisPoolHolder.
      *
-     * @return The singleton instance of JedisPoolHolder.
+     * @return the singleton instance of JedisPoolHolder
      * @since 1.0.0
      */
     public static JedisPoolHolder getInstance() {
@@ -43,9 +43,9 @@ public class JedisPoolHolder implements NeedCleanUp {
      * Creates a Jedis pool for the specified host and port. If a pool already exists for the given host and port,
      * it returns the existing pool.
      *
-     * @param host The Redis server host.
-     * @param port The Redis server port.
-     * @return The Jedis pool for the specified host and port.
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @return the Jedis pool for the specified host and port
      * @since 1.0.0
      */
     public synchronized JedisPool createIfNotCached(String host, int port) {
@@ -89,10 +89,10 @@ public class JedisPoolHolder implements NeedCleanUp {
      * Executes a callback using the provided Jedis pool. This method ensures that the Jedis resource is properly
      * closed after the callback execution.
      *
-     * @param jedisPool The Jedis pool to use.
-     * @param callback  The callback to execute.
-     * @param <R>       The type of result returned by the callback.
-     * @return The result of the callback execution.
+     * @param jedisPool the Jedis pool to use
+     * @param callback  the callback to execute
+     * @param <R>       the type of result returned by the callback
+     * @return the result of the callback execution
      * @since 1.0.0
      */
     public static <R> R exe(JedisPool jedisPool, JedisCallback<R> callback) {

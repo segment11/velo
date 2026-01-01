@@ -20,9 +20,9 @@ public class ToSlaveExistsDict implements ReplContent {
     /**
      * Constructs a new {@link ToSlaveExistsDict} message.
      *
-     * @param cacheDict       A map of UUID strings to dictionaries that exist in the cache.
-     * @param cacheDictBySeq  A map of sequence numbers to dictionaries that exist in the cache.
-     * @param sentDictSeqList A list of sequence numbers of dictionaries that have already been sent to the slave.
+     * @param cacheDict       the map of UUID strings to dictionaries that exist in the cache
+     * @param cacheDictBySeq  the map of sequence numbers to dictionaries that exist in the cache
+     * @param sentDictSeqList the list of sequence numbers of dictionaries that have already been sent to the slave
      */
     public ToSlaveExistsDict(HashMap<String, Dict> cacheDict, TreeMap<Integer, Dict> cacheDictBySeq, ArrayList<Integer> sentDictSeqList) {
         var cacheKeyByDict = new HashMap<Dict, String>();
@@ -50,7 +50,7 @@ public class ToSlaveExistsDict implements ReplContent {
      * - 4 bytes: the length of the encoded dictionary.
      * - Following bytes: the encoded dictionary.
      *
-     * @param toBuf The buffer to which the encoded message content will be written.
+     * @param toBuf the buffer to which the encoded message content will be written
      */
     @Override
     public void encodeTo(ByteBuf toBuf) {
@@ -80,7 +80,7 @@ public class ToSlaveExistsDict implements ReplContent {
      * - 4 bytes for the length of the encoded dictionary.
      * - The length of the encoded dictionary.
      *
-     * @return The length of the encoded message content in bytes.
+     * @return the length of the encoded message content in bytes
      */
     @Override
     public int encodeLength() {
