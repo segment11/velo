@@ -965,7 +965,7 @@ public class MultiWorkerServer extends Launcher {
     /**
      * Performs replication after leader selection.
      *
-     * @param slot the slot number
+     * @param slot the slot index
      */
     static void doReplAfterLeaderSelect(short slot) {
         var leaderSelector = LeaderSelector.getInstance();

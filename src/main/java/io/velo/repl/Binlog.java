@@ -140,7 +140,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
      * Constructor
      *
      * @param slot      slot
-     * @param slotDir   slot dir
+     * @param slotDir   the directory of the slot
      * @param dynConfig dyn config
      * @throws IOException when io error
      */

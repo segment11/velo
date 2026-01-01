@@ -555,7 +555,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
      * @param relativeOffsetInBatchBytes the starting offset within the segment data
      * @param chunkSegmentLength         the length of each chunk segment
      * @param segmentIndex               the segment index
-     * @param slot                       the slot number associated with this segment batch
+     * @param slot                       the slot index associated with this segment batch
      * @return the count of expired entries encountered during processing
      */
     static int readToCvList(ArrayList<CvWithKeyAndSegmentOffset> cvList, byte[] segmentBytesBatchRead, int relativeOffsetInBatchBytes,

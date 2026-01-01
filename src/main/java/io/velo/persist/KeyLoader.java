@@ -39,7 +39,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Constructor for KeyLoader used in unit testing.
      *
-     * @param slot           the slot number
+     * @param slot           the slot index
      * @param bucketsPerSlot the number of buckets in the slot
      * @param slotDir        the directory of the slot
      * @param snowFlake      the Snowflake instance used for generating unique identifiers
@@ -52,7 +52,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Constructor for KeyLoader.
      *
-     * @param slot           the slot number
+     * @param slot           the slot index
      * @param bucketsPerSlot the number of buckets in the slot
      * @param slotDir        the directory of the slot
      * @param snowFlake      the Snowflake instance used for generating unique identifiers

@@ -414,7 +414,7 @@ public abstract class BaseCommand {
      * Represents a key's slot assignment and hash information.
      *
      * @param slot         the internal slot index used for sharding
-     * @param toClientSlot the slot number exposed to Redis clients when cluster enabled
+     * @param toClientSlot the slot index exposed to Redis clients when cluster enabled
      * @param bucketIndex  the bucket index within the slot
      * @param keyHash      the main 64-bit hash of the key
      * @param keyHash32    another 32 bits of the key

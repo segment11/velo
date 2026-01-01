@@ -120,7 +120,7 @@ public class XSkipApply implements BinlogContent {
      * Applies this skip apply instruction to the specified slot and replication pair.
      * This logs a warning, updates the slot's chunk segment index, and sets the last sequence caught up by the slave.
      *
-     * @param slot     the slot number to apply the skip instruction to
+     * @param slot     the slot index to apply the skip instruction to
      * @param replPair the replication pair involved in the replication process
      */
     @Override

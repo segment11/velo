@@ -178,7 +178,7 @@ public class KeyBucket {
     /**
      * Create a new key bucket with the specified parameters.
      *
-     * @param slot        the slot number of this key bucket
+     * @param slot        the slot index of this key bucket
      * @param bucketIndex the index of this key bucket in the slot
      * @param splitIndex  the split index
      * @param splitNumber the split number
@@ -192,7 +192,7 @@ public class KeyBucket {
     /**
      * Create a new key bucket with the specified parameters.
      *
-     * @param slot        the slot number of this key bucket
+     * @param slot        the slot index of this key bucket
      * @param bucketIndex the index of this key bucket in the slot
      * @param splitIndex  the split index
      * @param splitNumber the split number

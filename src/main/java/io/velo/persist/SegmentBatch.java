@@ -358,7 +358,7 @@ public class SegmentBatch implements InSlotMetricCollector {
     /**
      * Decompresses a segment from one sub-block.
      *
-     * @param slot                 the slot number associated with the segment
+     * @param slot                 the slot index associated with the segment
      * @param tightBytesWithLength the byte array containing the tight-packed segment data
      * @param pvm                  the metadata about the persisted value
      * @param chunk                the chunk containing the segment

@@ -22,7 +22,7 @@ public class KeyBucketsInOneWalGroup {
     /**
      * Constructs a KeyBucketsInOneWalGroup instance.
      *
-     * @param slot          the slot number to which the key buckets belong
+     * @param slot          the slot index to which the key buckets belong
      * @param walGroupIndex the index of the WAL group
      * @param keyLoader     the KeyLoader instance used to load key data
      */

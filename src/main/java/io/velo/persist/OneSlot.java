@@ -48,7 +48,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * Constructor for unit testing only, with specified slot, directory, key loader, and write-ahead log (WAL).
      *
      * @param slot      the slot index
-     * @param slotDir   the slot directory
+     * @param slotDir   the directory of the slot
      * @param keyLoader the key loader
      * @param wal       the write-ahead log
      * @throws IOException if an I/O error occurs

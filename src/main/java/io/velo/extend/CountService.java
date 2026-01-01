@@ -380,9 +380,9 @@ public class CountService implements InMemoryEstimate, InSlotMetricCollector, Ca
     }
 
     /**
-     * Sets the slot number.
+     * Sets the slot index.
      *
-     * @param slot the slot number
+     * @param slot the slot index
      */
     public void setSlot(byte slot) {
         this.slot = slot;

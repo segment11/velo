@@ -71,7 +71,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
      * Initializes the in-memory cache and file storage for metadata based on the provided slot and slot directory.
      *
      * @param slot    the slot index
-     * @param slotDir the directory where the slot data is stored
+     * @param slotDir the directory of the slot
      * @throws IOException If an I/O error occurs during file operations.
      */
     public MetaChunkSegmentIndex(short slot, @NotNull File slotDir) throws IOException {

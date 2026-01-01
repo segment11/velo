@@ -23,7 +23,7 @@ public class InMemoryGetSet implements ByPassGetSet {
     /**
      * Stores a {@link CompressedValue} in the in-memory map.
      *
-     * @param slot        the slot number (not used in this implementation)
+     * @param slot        the slot index (not used in this implementation)
      * @param key         the key associated with the value
      * @param bucketIndex the bucket index (not used in this implementation)
      * @param cv          the {@link CompressedValue} to store
@@ -36,7 +36,7 @@ public class InMemoryGetSet implements ByPassGetSet {
     /**
      * Removes a {@link CompressedValue} from the in-memory map.
      *
-     * @param slot the slot number (not used in this implementation)
+     * @param slot the slot index (not used in this implementation)
      * @param key  the key associated with the value to be removed
      * @return true if the value was successfully removed, false otherwise
      */
@@ -48,7 +48,7 @@ public class InMemoryGetSet implements ByPassGetSet {
     /**
      * Retrieves a {@link CompressedValue} from the in-memory map.
      *
-     * @param slot        the slot number (not used in this implementation)
+     * @param slot        the slot index (not used in this implementation)
      * @param key         the key to retrieve the value for
      * @param bucketIndex the bucket index (not used in this implementation)
      * @param keyHash     the hash of the key (not used in this implementation)

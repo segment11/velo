@@ -80,8 +80,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Constructs a new BigStringFiles instance for a given slot and directory.
      *
-     * @param slot    the slot number
-     * @param slotDir the directory where big string files are stored
+     * @param slot    the slot index
+     * @param slotDir the directory of the slot
      * @throws IOException if an I/O error occurs
      */
     public BigStringFiles(short slot, @NullableOnlyTest File slotDir) throws IOException {
@@ -300,7 +300,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @param uuid        the UUID of the big string file
      * @param key         the key associated with the big string
      * @param bucketIndex the bucket index
-     * @param bytes      the bytes to write
+     * @param bytes       the bytes to write
      * @return true if the operation was successful, false otherwise
      */
     public boolean writeBigStringBytes(long uuid, @NotNull String key, int bucketIndex, byte[] bytes) {

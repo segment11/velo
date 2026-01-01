@@ -16,7 +16,7 @@ public interface ByPassGetSet {
     /**
      * Puts a compressed value into the storage system.
      *
-     * @param slot        the slot number where the value should be stored.
+     * @param slot        the slot index where the value should be stored.
      * @param key         the key associated with the value.
      * @param bucketIndex the index of the bucket in the slot where the value should be stored.
      * @param cv          the compressed value to be stored.
@@ -36,7 +36,7 @@ public interface ByPassGetSet {
     /**
      * Removes a value from the storage system associated with a given key.
      *
-     * @param slot the slot number where the value is stored.
+     * @param slot the slot index where the value is stored.
      * @param key  the key associated with the value to be removed.
      * @return true if the value was successfully removed, false otherwise.
      */
@@ -45,7 +45,7 @@ public interface ByPassGetSet {
     /**
      * Retrieves a value from the storage system based on the provided key and bucket index.
      *
-     * @param slot        the slot number where the value is stored.
+     * @param slot        the slot index where the value is stored.
      * @param key         the key with the value to be retrieved.
      * @param bucketIndex the index of the bucket in the slot where the value is stored.
      * @param keyHash     the hash of the key.

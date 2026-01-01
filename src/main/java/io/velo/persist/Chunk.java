@@ -122,8 +122,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     /**
      * Constructs a new chunk with the given slot, directory, and slot context.
      *
-     * @param slot    the slot number this chunk belongs to
-     * @param slotDir the directory where the chunk data is stored
+     * @param slot    the slot index this chunk belongs to
+     * @param slotDir the directory of the slot
      * @param oneSlot the context for the slot, used for various data operations
      */
     public Chunk(short slot, @NotNull File slotDir, @NullableOnlyTest OneSlot oneSlot) {

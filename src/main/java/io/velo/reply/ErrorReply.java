@@ -197,7 +197,7 @@ public class ErrorReply implements Reply {
     /**
      * Creates a new ErrorReply for a MOVED error, indicating that the client should move to a different node.
      *
-     * @param toClientSlot the slot number to which the client should move
+     * @param toClientSlot the slot index to which the client should move
      * @param host         the host of the new node
      * @param port         the port of the new node
      * @return a new ErrorReply with the MOVED message

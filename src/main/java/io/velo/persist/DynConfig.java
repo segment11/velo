@@ -67,7 +67,7 @@ public class DynConfig {
         /**
          * Constructs the AfterUpdateCallbackInner.
          *
-         * @param currentSlot the slot number corresponding to this dynamic configuration
+         * @param currentSlot the slot index corresponding to this dynamic configuration
          * @param oneSlot     the OneSlot instance associated with this dynamic configuration
          */
         public AfterUpdateCallbackInner(short currentSlot, OneSlot oneSlot) {
@@ -245,7 +245,7 @@ public class DynConfig {
     /**
      * Constructs a DynConfig instance for a specific slot.
      *
-     * @param slot          the slot number
+     * @param slot          the slot index
      * @param dynConfigFile the JSON file where the dynamic configuration is stored
      * @param oneSlot       the OneSlot instance associated with this configuration
      * @throws IOException If an error occurs while reading from or writing to the configuration file.

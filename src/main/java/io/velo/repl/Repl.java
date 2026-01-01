@@ -31,7 +31,7 @@ public class Repl {
      * Creates a buffer containing the encoded REPL message.
      *
      * @param slaveUuid the unique identifier of the slave node
-     * @param slot      the slot number associated with the message
+     * @param slot      the slot index associated with the message
      * @param type      the type of the REPL message
      * @param content   the content of the REPL message
      * @return the byte buffer containing the encoded message
@@ -88,7 +88,7 @@ public class Repl {
     /**
      * Creates a REPL reply message.
      *
-     * @param slot     the slot number associated with the message
+     * @param slot     the slot index associated with the message
      * @param replPair the pair containing the slave UUID
      * @param type     the type of the REPL message
      * @param content  the content of the REPL message
@@ -101,7 +101,7 @@ public class Repl {
     /**
      * Creates a REPL error message.
      *
-     * @param slot         the slot number associated with the message
+     * @param slot         the slot index associated with the message
      * @param replPair     the pair containing the slave UUID
      * @param errorMessage the error message to include in the reply
      * @return the REPL error message
@@ -115,7 +115,7 @@ public class Repl {
     /**
      * Creates a REPL error message.
      *
-     * @param slot         the slot number associated with the message
+     * @param slot         the slot index associated with the message
      * @param slaveUuid    the unique identifier of the slave node
      * @param errorMessage the error message to include in the reply
      * @return the REPL error message
@@ -128,7 +128,7 @@ public class Repl {
     /**
      * Creates a test REPL message for testing purposes.
      *
-     * @param slot     the slot number associated with the message
+     * @param slot     the slot index associated with the message
      * @param replPair the pair containing the slave UUID
      * @param message  the test message to include in the reply
      * @return the test REPL message

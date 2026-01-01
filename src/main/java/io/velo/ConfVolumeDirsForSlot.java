@@ -36,7 +36,7 @@ public class ConfVolumeDirsForSlot {
     /**
      * Retrieves the volume directory for a specific slot.
      *
-     * @param slot the slot number
+     * @param slot the slot index
      * @return the volume directory for the given slot, or null if not configured
      */
     public static String getVolumeDirBySlot(short slot) {
