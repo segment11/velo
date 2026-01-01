@@ -14,7 +14,7 @@ public class RedisBitSet {
     /**
      * Construct a RedisBitSet with given value bytes.
      *
-     * @param valueBytes the value bytes of the RedisBitSet.
+     * @param valueBytes the value bytes of the RedisBitSet
      */
     public RedisBitSet(byte[] valueBytes) {
         this.valueBytes = valueBytes == null ? new byte[8] : valueBytes;
@@ -24,7 +24,7 @@ public class RedisBitSet {
     /**
      * Get the value bytes of the RedisBitSet.
      *
-     * @return the value bytes of the RedisBitSet.
+     * @return the value bytes of the RedisBitSet
      */
     public byte[] getValueBytes() {
         return valueBytes;
@@ -33,8 +33,8 @@ public class RedisBitSet {
     /**
      * Expand the value bytes of the RedisBitSet if needed.
      *
-     * @param offset the offset of the bit to set.
-     * @return true if the value bytes is expanded, false otherwise.
+     * @param offset the offset of the bit to set
+     * @return true if the value bytes is expanded, false otherwise
      */
     private boolean expand(int offset) {
         var newByteLength = (offset + 7) / 8 + 1;
@@ -51,9 +51,9 @@ public class RedisBitSet {
     /**
      * Result of set operation.
      *
-     * @param isExpanded is the value bytes is expanded.
-     * @param isChanged  is the bit is changed.
-     * @param isOldBit1  is the old bit is 1.
+     * @param isExpanded whether the value bytes is expanded
+     * @param isChanged  whether the bit is changed
+     * @param isOldBit1  whether the old bit is 1
      */
     public record SetResult(boolean isExpanded, boolean isChanged, boolean isOldBit1) {
         @Override
@@ -69,9 +69,9 @@ public class RedisBitSet {
     /**
      * Set the bit at the given offset to the given value.
      *
-     * @param offset the offset of the bit to set.
-     * @param isBit1 the value to set, true means 1.
-     * @return the result of set operation.
+     * @param offset the offset of the bit to set
+     * @param isBit1 the value to set, true means 1
+     * @return the result of set operation
      */
     public SetResult set(int offset, boolean isBit1) {
         var isExpanded = expand(offset) || isExpandedWhenInit;
@@ -94,8 +94,8 @@ public class RedisBitSet {
     /**
      * Get the bit at the given offset.
      *
-     * @param offset the offset of the bit to get.
-     * @return true if the bit is 1, false otherwise.
+     * @param offset the offset of the bit to get
+     * @return true if the bit is 1, false otherwise
      */
     public boolean get(int offset) {
         var byteIndex = offset / 8;

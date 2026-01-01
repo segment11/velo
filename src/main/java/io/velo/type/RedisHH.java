@@ -40,7 +40,7 @@ public class RedisHH {
     /**
      * Returns the internal map containing key-value pairs.
      *
-     * @return The internal map.
+     * @return the internal map
      */
     public HashMap<String, byte[]> getMap() {
         return map;
@@ -49,7 +49,7 @@ public class RedisHH {
     /**
      * Returns the number of key-value pairs in the map.
      *
-     * @return The size of the map.
+     * @return the size of the map
      */
     public int size() {
         return map.size();
@@ -58,8 +58,8 @@ public class RedisHH {
     /**
      * Adds a key-value pair to the map.
      *
-     * @param key   The key of the pair.
-     * @param value The value of the pair.
+     * @param key   the key of the pair
+     * @param value the value of the pair
      */
     public void put(String key, byte[] value) {
         put(key, value, null);
@@ -68,10 +68,10 @@ public class RedisHH {
     /**
      * Adds a key-value pair to the map.
      *
-     * @param key      The key of the pair.
-     * @param value    The value of the pair.
-     * @param expireAt The expire at milliseconds of the pair.
-     * @throws IllegalArgumentException if the key or value length exceeds the maximum allowed length.
+     * @param key      the key of the pair
+     * @param value    the value of the pair
+     * @param expireAt the expiration time in milliseconds of the pair
+     * @throws IllegalArgumentException if the key or value length exceeds the maximum allowed length
      */
     public void put(String key, byte[] value, Long expireAt) {
         if (key.length() > CompressedValue.KEY_MAX_LENGTH) {
@@ -90,8 +90,8 @@ public class RedisHH {
     /**
      * Removes a key-value pair from the map by key.
      *
-     * @param key The key of the pair to remove.
-     * @return True if the pair was removed, false otherwise.
+     * @param key the key of the pair to remove
+     * @return true if the pair was removed, false otherwise
      */
     public boolean remove(String key) {
         mapExpireAt.remove(key);
@@ -101,7 +101,7 @@ public class RedisHH {
     /**
      * Adds all key-value pairs from the provided map to the internal map.
      *
-     * @param map The map containing key-value pairs to add.
+     * @param map the map containing key-value pairs to add
      */
     public void putAll(HashMap<String, byte[]> map) {
         this.map.putAll(map);
@@ -110,8 +110,8 @@ public class RedisHH {
     /**
      * Retrieves the value associated with the specified key.
      *
-     * @param key The key of the pair to retrieve.
-     * @return The value associated with the key, or null if the key is not found.
+     * @param key the key of the pair to retrieve
+     * @return the value associated with the key, or null if the key is not found
      */
     public byte[] get(String key) {
         return map.get(key);
@@ -120,8 +120,8 @@ public class RedisHH {
     /**
      * Retrieves the expire at milliseconds associated with the specified key.
      *
-     * @param key The key of the pair to retrieve.
-     * @return The expire at milliseconds associated with the key, or 0 if the key is not found.
+     * @param key the key of the pair to retrieve
+     * @return the expiration time in milliseconds associated with the key, or 0 if the key is not found
      */
     public long getExpireAt(String key) {
         var l = mapExpireAt.get(key);
@@ -131,8 +131,8 @@ public class RedisHH {
     /**
      * Puts the expire at milliseconds associated with the specified key.
      *
-     * @param key      The key of the pair to put.
-     * @param expireAt The expire at milliseconds to put.
+     * @param key      the key of the pair to put
+     * @param expireAt the expiration time in milliseconds to put
      */
     public void putExpireAt(String key, long expireAt) {
         mapExpireAt.put(key, expireAt);
@@ -141,7 +141,7 @@ public class RedisHH {
     /**
      * Encodes the map to a byte array without compression.
      *
-     * @return The encoded byte array.
+     * @return the encoded byte array
      */
     public byte[] encodeButDoNotCompress() {
         return encode(null);
@@ -150,7 +150,7 @@ public class RedisHH {
     /**
      * Encodes the map to a byte array with compression using the default dictionary.
      *
-     * @return The encoded and compressed byte array.
+     * @return the encoded and compressed byte array
      */
     public byte[] encode() {
         return encode(Dict.SELF_ZSTD_DICT);
@@ -159,8 +159,8 @@ public class RedisHH {
     /**
      * Encodes the map to a byte array with optional compression using the specified dictionary.
      *
-     * @param dict The dictionary to use for compression, or null if no compression is desired.
-     * @return The encoded byte array, possibly compressed.
+     * @param dict the dictionary to use for compression, or null if no compression is desired
+     * @return the encoded byte array, possibly compressed
      */
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
@@ -218,12 +218,12 @@ public class RedisHH {
     /**
      * Compresses the byte array if the compressed size is within the preferred compression ratio.
      *
-     * @param dict               The dictionary to use for compression.
-     * @param bodyBytesLength    The length of the body bytes.
-     * @param rawBytesWithHeader The raw byte array with header.
-     * @param size               The size of the map.
-     * @param crc                The CRC value.
-     * @return The compressed byte array if compression is successful, otherwise null.
+     * @param dict               the dictionary to use for compression
+     * @param bodyBytesLength    the length of the body bytes
+     * @param rawBytesWithHeader the raw byte array with header
+     * @param size               the size of the map
+     * @param crc                the CRC value
+     * @return the compressed byte array if compression is successful, otherwise null
      */
     static byte[] compressIfBytesLengthIsLong(Dict dict, int bodyBytesLength, byte[] rawBytesWithHeader, short size, int crc) {
         var dictSeq = dict.getSeq();
@@ -252,8 +252,8 @@ public class RedisHH {
     /**
      * Decodes a byte array to a RedisHH object. Checks the CRC32 by default.
      *
-     * @param data The byte array to decode.
-     * @return The RedisHH object.
+     * @param data the byte array to decode
+     * @return the RedisHH object
      */
     public static RedisHH decode(byte[] data) {
         return decode(data, true);
@@ -262,9 +262,9 @@ public class RedisHH {
     /**
      * Decodes a byte array to a RedisHH object with optional CRC32 check.
      *
-     * @param data         The byte array to decode.
-     * @param doCheckCrc32 Whether to check the CRC32.
-     * @return The RedisHH object.
+     * @param data         the byte array to decode
+     * @param doCheckCrc32 whether to check the CRC32
+     * @return the RedisHH object
      */
     public static RedisHH decode(byte[] data, boolean doCheckCrc32) {
         var r = new RedisHH();
@@ -285,10 +285,10 @@ public class RedisHH {
         /**
          * Called for each field and value pair.
          *
-         * @param field      The field name.
-         * @param valueBytes The value bytes.
-         * @param expireAt   The expire at milliseconds.
-         * @return True to break the iteration, false to continue.
+         * @param field      the field name
+         * @param valueBytes the value bytes
+         * @param expireAt   the expiration time in milliseconds
+         * @return true to break the iteration, false to continue
          */
         boolean onField(String field, byte[] valueBytes, long expireAt);
     }
@@ -296,7 +296,7 @@ public class RedisHH {
     /**
      * Iterates over the fields and values in a RedisHH object.
      *
-     * @param callback The callback to be called for each field and value pair.
+     * @param callback the callback to be called for each field and value pair
      */
     public void iterate(IterateCallback callback) {
         for (var entry : map.entrySet()) {
@@ -312,9 +312,9 @@ public class RedisHH {
     /**
      * Iterates over the fields and values in a byte array representing a RedisHH object.
      *
-     * @param data         The byte array containing the encoded map.
-     * @param doCheckCrc32 Whether to check the CRC32.
-     * @param callback     The callback to be called for each field and value pair.
+     * @param data         the byte array containing the encoded map
+     * @param doCheckCrc32 whether to check the CRC32
+     * @param callback     the callback to be called for each field and value pair
      */
     public static void iterate(byte[] data, boolean doCheckCrc32, IterateCallback callback) {
         var buffer = ByteBuffer.wrap(data);
@@ -373,12 +373,12 @@ public class RedisHH {
     /**
      * Decompresses a byte array using the specified dictionary sequence.
      *
-     * @param dictSeq         The dictionary sequence.
-     * @param bodyBytesLength The length of the body bytes.
-     * @param data            The byte array to decompress.
-     * @return The decompressed ByteBuffer.
-     * @throws IllegalStateException if decompression fails.
-     * @throws DictMissingException  if the dictionary is not found.
+     * @param dictSeq         the dictionary sequence
+     * @param bodyBytesLength the length of the body bytes
+     * @param data            the byte array to decompress
+     * @return the decompressed ByteBuffer
+     * @throws IllegalStateException if decompression fails
+     * @throws DictMissingException  if the dictionary is not found
      */
     static ByteBuffer decompressIfUseDict(int dictSeq, int bodyBytesLength, byte[] data) {
         if (dictSeq == Dict.SELF_ZSTD_DICT_SEQ) {

@@ -31,8 +31,8 @@ public enum Category {
     /**
      * Checks if a given command is a write command.
      *
-     * @param cmd The command to check.
-     * @return true if the command is a write command, false otherwise.
+     * @param cmd the command to check
+     * @return true if the command is a write command, false otherwise
      */
     public static boolean isWriteCmd(String cmd) {
         return writeCmdSet.contains(cmd);
@@ -877,8 +877,8 @@ public enum Category {
     /**
      * Returns the list of commands for the given category.
      *
-     * @param category The category for which to fetch commands.
-     * @return A list of commands belonging to the specified category.
+     * @param category the category for which to fetch commands
+     * @return the list of commands belonging to the specified category
      */
     public static List<String> getCmdListByCategory(Category category) {
         return CMD_LIST_BY_CATEGORY.get(category);
@@ -887,8 +887,8 @@ public enum Category {
     /**
      * Returns the list of categories for the given command.
      *
-     * @param cmd The command for which to fetch categories.
-     * @return A list of categories to which the specified command belongs.
+     * @param cmd the command for which to fetch categories
+     * @return the list of categories to which the specified command belongs
      */
     public static List<Category> getCategoryListByCmd(String cmd) {
         return CATEGORY_LIST_BY_CMD.get(cmd);

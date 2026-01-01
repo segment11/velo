@@ -39,9 +39,9 @@ public class RCmd {
     /**
      * Checks if the given command and first argument match this rule.
      *
-     * @param cmd      The command to check.
-     * @param firstArg The first argument of the command to check.
-     * @return true if the command and argument match the rule, false otherwise.
+     * @param cmd      the command to check
+     * @param firstArg the first argument of the command to check
+     * @return true if the command and argument match the rule, false otherwise
      */
     boolean match(String cmd, String firstArg) {
         if (type == Type.all) {
@@ -77,7 +77,7 @@ public class RCmd {
     /**
      * Converts the rule to a literal string representation.
      *
-     * @return A string representing the literal form of the rule.
+     * @return the string representing the literal form of the rule
      */
     String literal() {
         if (type == Type.all) {
@@ -94,8 +94,8 @@ public class RCmd {
     /**
      * Checks if a given literal string represents an allow rule.
      *
-     * @param str The literal string to check.
-     * @return true if the string represents an allow rule, false otherwise.
+     * @param str the literal string to check
+     * @return true if the string represents an allow rule, false otherwise
      */
     public static boolean isAllowLiteral(String str) {
         return str.startsWith(ALLOW_LITERAL_PREFIX) || "allcommands".equals(str);
@@ -104,8 +104,8 @@ public class RCmd {
     /**
      * Checks if a given literal string is a valid RCmd literal.
      *
-     * @param str The literal string to check.
-     * @return true if the string is a valid RCmd literal, false otherwise.
+     * @param str the literal string to check
+     * @return true if the string is a valid RCmd literal, false otherwise
      */
     public static boolean isRCmdLiteral(String str) {
         return str.startsWith(ALLOW_LITERAL_PREFIX)
@@ -117,9 +117,9 @@ public class RCmd {
     /**
      * Creates an RCmd object from a literal string.
      *
-     * @param str The literal string to convert.
-     * @return An RCmd object representing the literal string.
-     * @throws IllegalArgumentException if the literal string is invalid.
+     * @param str the literal string to convert
+     * @return the RCmd object representing the literal string
+     * @throws IllegalArgumentException if the literal string is invalid
      */
     public static RCmd fromLiteral(String str) {
         if ("allcommands".equals(str)) {

@@ -17,11 +17,11 @@ public class BFSerializer {
     /**
      * Deserializes a Bloom Filter from a byte array.
      *
-     * @param bytes  The byte array containing the serialized Bloom Filter.
-     * @param offset The starting offset in the byte array.
-     * @param length The number of bytes to read from the byte array.
-     * @return The deserialized Bloom Filter.
-     * @throws RuntimeException if an IOException occurs during deserialization.
+     * @param bytes  the byte array containing the serialized Bloom Filter
+     * @param offset the starting offset in the byte array
+     * @param length the number of bytes to read from the byte array
+     * @return the deserialized Bloom Filter
+     * @throws RuntimeException if an IOException occurs during deserialization
      */
     public static BloomFilter<CharSequence> fromBytes(byte[] bytes, int offset, int length) {
         BloomFilter<CharSequence> filter;
@@ -39,9 +39,9 @@ public class BFSerializer {
     /**
      * Serializes a Bloom Filter to a byte array.
      *
-     * @param filter The Bloom Filter to serialize.
-     * @return The byte array containing the serialized Bloom Filter.
-     * @throws RuntimeException if an IOException occurs during serialization.
+     * @param filter the Bloom Filter to serialize
+     * @return the byte array containing the serialized Bloom Filter
+     * @throws RuntimeException if an IOException occurs during serialization
      */
     public static byte[] toBytes(BloomFilter<CharSequence> filter) {
         var bos = new java.io.ByteArrayOutputStream();

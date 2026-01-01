@@ -64,7 +64,7 @@ public class RPubSub {
      * or should be equal to "allchannels".
      *
      * @param str the literal string to convert
-     * @return an RPubSub instance representing the literal pattern
+     * @return the RPubSub instance representing the literal pattern
      * @throws IllegalArgumentException if the given string is not a valid RPubSub literal
      */
     public static RPubSub fromLiteral(String str) {

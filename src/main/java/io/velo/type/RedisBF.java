@@ -35,7 +35,7 @@ public class RedisBF {
         /**
          * Checks if the Bloom Filter is full (i.e., more than 90% of its capacity is used).
          *
-         * @return True if the Bloom Filter is full, false otherwise.
+         * @return true if the Bloom Filter is full, false otherwise
          */
         public boolean isFull() {
             return itemInserted / (double) capacity >= 0.9;
@@ -85,7 +85,7 @@ public class RedisBF {
     /**
      * Returns the expansion factor for the Bloom Filters.
      *
-     * @return The expansion factor.
+     * @return the expansion factor
      */
     public byte getExpansion() {
         return expansion;
@@ -94,7 +94,7 @@ public class RedisBF {
     /**
      * Checks if the Bloom Filter is non-scaling.
      *
-     * @return True if the Bloom Filter is non-scaling, false otherwise.
+     * @return true if the Bloom Filter is non-scaling, false otherwise
      */
     public boolean isNonScaling() {
         return nonScaling;
@@ -126,10 +126,10 @@ public class RedisBF {
     /**
      * Constructs a new instance of RedisBF with specified parameters.
      *
-     * @param initCapacity  The initial capacity for each Bloom Filter.
-     * @param initFpp       The false positive probability for each Bloom Filter.
-     * @param initExpansion The expansion factor for scaling the Bloom Filters.
-     * @param nonScaling    A flag indicating whether the Bloom Filter is non-scaling.
+     * @param initCapacity  the initial capacity for each Bloom Filter
+     * @param initFpp       the false positive probability for each Bloom Filter
+     * @param initExpansion the expansion factor for scaling the Bloom Filters
+     * @param nonScaling    whether the Bloom Filter is non-scaling
      */
     public RedisBF(int initCapacity, double initFpp, byte initExpansion, boolean nonScaling) {
         this.fpp = initFpp;
@@ -146,7 +146,7 @@ public class RedisBF {
     /**
      * Returns the total number of items inserted across all Bloom Filters.
      *
-     * @return The total number of items inserted.
+     * @return the total number of items inserted
      */
     public int itemInserted() {
         return list.stream().mapToInt(one -> one.itemInserted).sum();
@@ -155,7 +155,7 @@ public class RedisBF {
     /**
      * Returns the total capacity across all Bloom Filters.
      *
-     * @return The total capacity.
+     * @return the total capacity
      */
     public int capacity() {
         return list.stream().mapToInt(one -> one.capacity).sum();
@@ -164,7 +164,7 @@ public class RedisBF {
     /**
      * Returns the number of Bloom Filters in the list.
      *
-     * @return The size of the list.
+     * @return the size of the list
      */
     public int listSize() {
         return list.size();
@@ -173,7 +173,7 @@ public class RedisBF {
     /**
      * Estimates the memory allocated by the Bloom Filters.
      *
-     * @return The estimated memory allocation (not yet implemented).
+     * @return the estimated memory allocation (not yet implemented)
      */
     public int memoryAllocatedEstimate() {
         // todo
@@ -183,8 +183,8 @@ public class RedisBF {
     /**
      * Checks if an item might be in any of the Bloom Filters.
      *
-     * @param item The item to check.
-     * @return True if the item might be in any of the Bloom Filters, false otherwise.
+     * @param item the item to check
+     * @return true if the item might be in any of the Bloom Filters, false otherwise
      */
     public boolean mightContain(String item) {
         return list.stream().anyMatch(one -> one.filter.mightContain(item));
@@ -193,9 +193,9 @@ public class RedisBF {
     /**
      * Adds an item to the Bloom Filters.
      *
-     * @param item The item to add.
-     * @return True if the item was added, false if it was already present in any of the Bloom Filters.
-     * @throws RuntimeException if the Bloom Filters cannot be expanded or if the list size is too large.
+     * @param item the item to add
+     * @return true if the item was added, false if it was already present in any of the Bloom Filters
+     * @throws RuntimeException if the Bloom Filters cannot be expanded or if the list size is too large
      */
     public boolean put(String item) {
         for (var one : list) {
@@ -246,7 +246,7 @@ public class RedisBF {
     /**
      * Encodes the Bloom Filters to a byte array.
      *
-     * @return The encoded byte array.
+     * @return the encoded byte array
      */
     public byte[] encode() {
         ArrayList<byte[]> filterBytesList = new ArrayList<>();
@@ -287,8 +287,8 @@ public class RedisBF {
     /**
      * Decodes a byte array to a RedisBF object.
      *
-     * @param data The byte array to decode.
-     * @return The RedisBF object.
+     * @param data the byte array to decode
+     * @return the RedisBF object
      */
     public static RedisBF decode(byte[] data) {
         var buffer = ByteBuffer.wrap(data);

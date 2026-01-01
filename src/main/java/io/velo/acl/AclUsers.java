@@ -24,7 +24,7 @@ public class AclUsers {
     /**
      * Returns the singleton instance of AclUsers.
      *
-     * @return The singleton AclUsers instance.
+     * @return the singleton AclUsers instance
      */
     public static AclUsers getInstance() {
         return instance;
@@ -36,7 +36,7 @@ public class AclUsers {
     /**
      * Callback interface for updating user objects within the ACL.
      *
-     * @param <U> The type of user object.
+     * @param <U> the type of user object
      */
     public interface UpdateCallback<U> {
         void doUpdate(U u) throws AclInvalidRuleException;
@@ -59,7 +59,7 @@ public class AclUsers {
     /**
      * Initializes the AclUsers instance with event loops associated with slot worker threads.
      *
-     * @param slotWorkerEventloopArray Array of Eventloop instances.
+     * @param slotWorkerEventloopArray the array of Eventloop instances
      */
     public void initBySlotWorkerEventloopArray(Eventloop[] slotWorkerEventloopArray) {
         this.slotWorkerEventloopArray = slotWorkerEventloopArray;
@@ -85,7 +85,7 @@ public class AclUsers {
     /**
      * Returns the Inner instance associated with the current thread.
      *
-     * @return The Inner instance or null if no matching instance is found.
+     * @return the Inner instance, or null if no matching instance is found
      */
     public Inner getInner() {
         var currentThreadId = Thread.currentThread().threadId();
@@ -148,7 +148,7 @@ public class AclUsers {
          * Constructs an Inner instance for a given thread ID.
          * Initializes users list with a default user.
          *
-         * @param expectThreadId The thread ID this inner instance is expected to handle.
+         * @param expectThreadId the thread ID this inner instance is expected to handle
          */
         Inner(long expectThreadId) {
             this.expectThreadId = expectThreadId;
@@ -165,7 +165,7 @@ public class AclUsers {
         /**
          * Returns a copy of the current list of users.
          *
-         * @return An immutable list of users.
+         * @return the immutable list of users
          */
         public List<U> getUsers() {
             return new ArrayList<>(users);
@@ -174,8 +174,8 @@ public class AclUsers {
         /**
          * Retrieves a user by username.
          *
-         * @param user The username to look up.
-         * @return The user object if found; otherwise null.
+         * @param user the username to look up
+         * @return the user object if found, otherwise null
          */
         public U get(String user) {
             return users.stream().filter(u -> u.user.equals(user)).findFirst().orElse(null);
@@ -186,8 +186,8 @@ public class AclUsers {
          * If the user already exists, the UpdateCallback is called with the existing user object.
          * If the user does not exist, a new user is created, the callback is called, and the user is added to the list.
          *
-         * @param user     The username to update or insert.
-         * @param callback The callback to perform the update operation.
+         * @param user     the username to update or insert
+         * @param callback the callback to perform the update operation
          */
         public void upInsert(String user, UpdateCallback<U> callback) {
             var one = users.stream().filter(u1 -> u1.user.equals(user)).findFirst();
@@ -203,8 +203,8 @@ public class AclUsers {
         /**
          * Deletes a user from the list based on the provided username.
          *
-         * @param user The username to delete.
-         * @return true if the user was successfully deleted; otherwise false.
+         * @param user the username to delete
+         * @return true if the user was successfully deleted, otherwise false
          */
         public boolean delete(String user) {
             return users.removeIf(u -> u.user.equals(user));
@@ -214,8 +214,8 @@ public class AclUsers {
     /**
      * Retrieves a user by username.
      *
-     * @param user The username to look up.
-     * @return The user object if found; otherwise null.
+     * @param user the username to look up
+     * @return the user object if found, otherwise null
      */
     public U get(String user) {
         var inner = getInner();
@@ -233,7 +233,7 @@ public class AclUsers {
      * Executes a given operation on the inner instance associated with the current thread.
      * If the inner instance is not associated with the current thread, the operation is scheduled to run on the target event loop.
      *
-     * @param doInTargetEventloop The operation to perform.
+     * @param doInTargetEventloop the operation to perform
      */
     private void changeUser(DoInTargetEventloop doInTargetEventloop) {
         var currentThreadId = Thread.currentThread().threadId();
@@ -253,8 +253,8 @@ public class AclUsers {
     /**
      * Updates or inserts a user across all Inner instances.
      *
-     * @param user     The username to update or insert.
-     * @param callback The callback to perform the update operation.
+     * @param user     the username to update or insert
+     * @param callback the callback to perform the update operation
      */
     public void upInsert(String user, UpdateCallback<U> callback) {
         var inner = getInner();
@@ -266,8 +266,8 @@ public class AclUsers {
     /**
      * Deletes a user from all Inner instances.
      *
-     * @param user The username to delete.
-     * @return true if the user was successfully deleted from any Inner instance; otherwise false.
+     * @param user the username to delete
+     * @return true if the user was successfully deleted from any Inner instance, otherwise false
      */
     public boolean delete(String user) {
         var inner = getInner();
@@ -282,7 +282,7 @@ public class AclUsers {
     /**
      * Replaces the list of users in all Inner instances with a new list of users.
      *
-     * @param users The new list of user objects.
+     * @param users the new list of user objects
      */
     public void replaceUsers(List<U> users) {
         var inner = getInner();

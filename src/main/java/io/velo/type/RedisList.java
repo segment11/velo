@@ -38,7 +38,7 @@ public class RedisList {
     /**
      * Returns the internal list containing byte arrays.
      *
-     * @return The internal list.
+     * @return the internal list
      */
     public LinkedList<byte[]> getList() {
         return list;
@@ -56,7 +56,7 @@ public class RedisList {
     /**
      * Adds an element to the beginning of the list.
      *
-     * @param e The element to add.
+     * @param e the element to add
      */
     public void addFirst(byte[] e) {
         list.addFirst(e);
@@ -65,7 +65,7 @@ public class RedisList {
     /**
      * Adds an element to the end of the list.
      *
-     * @param e The element to add.
+     * @param e the element to add
      */
     public void addLast(byte[] e) {
         list.add(e);
@@ -74,8 +74,8 @@ public class RedisList {
     /**
      * Adds an element at the specified index in the list.
      *
-     * @param index The index at which to add the element.
-     * @param e     The element to add.
+     * @param index the index at which to add the element
+     * @param e     the element to add
      */
     public void addAt(int index, byte[] e) {
         list.add(index, e);
@@ -84,8 +84,8 @@ public class RedisList {
     /**
      * Sets the element at the specified index in the list.
      *
-     * @param index The index at which to set the element.
-     * @param e     The element to set.
+     * @param index the index at which to set the element
+     * @param e     the element to set
      */
     public void setAt(int index, byte[] e) {
         list.set(index, e);
@@ -94,8 +94,8 @@ public class RedisList {
     /**
      * Returns the index of the specified element in the list.
      *
-     * @param b The element to search for.
-     * @return The index of the element, or -1 if the element is not found.
+     * @param b the element to search for
+     * @return the index of the element, or -1 if the element is not found
      */
     public int indexOf(byte[] b) {
         int i = 0;
@@ -111,8 +111,8 @@ public class RedisList {
     /**
      * Retrieves the element at the specified index.
      *
-     * @param index The index of the element to retrieve.
-     * @return The element at the specified index.
+     * @param index the index of the element to retrieve
+     * @return the element at the specified index
      */
     public byte[] get(int index) {
         return list.get(index);
@@ -121,7 +121,7 @@ public class RedisList {
     /**
      * Removes and returns the first element from the list.
      *
-     * @return The first element in the list.
+     * @return the first element in the list
      */
     public byte[] removeFirst() {
         return list.removeFirst();
@@ -130,7 +130,7 @@ public class RedisList {
     /**
      * Removes and returns the last element from the list.
      *
-     * @return The last element in the list.
+     * @return the last element in the list
      */
     public byte[] removeLast() {
         return list.removeLast();
@@ -139,7 +139,7 @@ public class RedisList {
     /**
      * Encodes the list to a byte array without compression.
      *
-     * @return The encoded byte array.
+     * @return the encoded byte array
      */
     public byte[] encodeButDoNotCompress() {
         return encode(null);
@@ -148,7 +148,7 @@ public class RedisList {
     /**
      * Encodes the list to a byte array with compression using the default dictionary.
      *
-     * @return The encoded and compressed byte array.
+     * @return the encoded and compressed byte array
      */
     public byte[] encode() {
         return encode(Dict.SELF_ZSTD_DICT);
@@ -157,8 +157,8 @@ public class RedisList {
     /**
      * Encodes the list to a byte array with optional compression using the specified dictionary.
      *
-     * @param dict The dictionary to use for compression, or null if no compression is desired.
-     * @return The encoded byte array, possibly compressed.
+     * @param dict the dictionary to use for compression, or null if no compression is desired
+     * @return the encoded byte array, possibly compressed
      */
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
@@ -202,8 +202,8 @@ public class RedisList {
     /**
      * Retrieves the size of the list without decoding the entire byte array.
      *
-     * @param data The byte array containing the encoded list.
-     * @return The size of the list.
+     * @param data the byte array containing the encoded list
+     * @return the size of the list
      */
     public static int getSizeWithoutDecode(byte[] data) {
         var buffer = ByteBuffer.wrap(data);
@@ -213,8 +213,8 @@ public class RedisList {
     /**
      * Decodes a byte array to a RedisList object. Checks the CRC32 by default.
      *
-     * @param data The byte array to decode.
-     * @return The RedisList object.
+     * @param data the byte array to decode
+     * @return the RedisList object
      */
     public static RedisList decode(byte[] data) {
         return decode(data, true);
@@ -223,9 +223,9 @@ public class RedisList {
     /**
      * Decodes a byte array to a RedisList object with optional CRC32 check.
      *
-     * @param data         The byte array to decode.
-     * @param doCheckCrc32 Whether to check the CRC32.
-     * @return The RedisList object.
+     * @param data         the byte array to decode
+     * @param doCheckCrc32 whether to check the CRC32
+     * @return the RedisList object
      */
     public static RedisList decode(byte[] data, boolean doCheckCrc32) {
         var buffer = ByteBuffer.wrap(data);
@@ -264,8 +264,8 @@ public class RedisList {
         /**
          * Called for each element.
          *
-         * @param bytes The element bytes.
-         * @param index The index of the element.
+         * @param bytes the element bytes
+         * @param index the index of the element
          * @return true to break, false to continue
          */
         boolean on(byte[] bytes, int index);
@@ -274,9 +274,9 @@ public class RedisList {
     /**
      * Iterates over the byte array and calls the callback for each element.
      *
-     * @param data         The byte array to iterate.
-     * @param doCheckCrc32 Whether to check the CRC32.
-     * @param callback     The callback to call for each element.
+     * @param data         the byte array to iterate
+     * @param doCheckCrc32 whether to check the CRC32
+     * @param callback     the callback to call for each element
      */
     public static void iterate(byte[] data, boolean doCheckCrc32, IterateCallback callback) {
         var buffer = ByteBuffer.wrap(data);

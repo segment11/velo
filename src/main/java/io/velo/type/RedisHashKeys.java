@@ -37,8 +37,8 @@ public class RedisHashKeys {
     /**
      * Generates a key for storing the keys of a hash, ensuring all keys are in the same slot.
      *
-     * @param key The base key of the hash.
-     * @return The generated key.
+     * @param key the base key of the hash
+     * @return the generated key
      */
     // may be length > CompressedValue.KEY_MAX_LENGTH
     public static String keysKey(String key) {
@@ -49,9 +49,9 @@ public class RedisHashKeys {
     /**
      * Generates a key for storing a field of a hash, ensuring all fields of the same key are in the same slot.
      *
-     * @param key   The base key of the hash.
-     * @param field The field name.
-     * @return The generated key.
+     * @param key   the base key of the hash
+     * @param field the field name
+     * @return the generated key
      */
     // may be length > CompressedValue.KEY_MAX_LENGTH
     public static String fieldKey(String key, String field) {
@@ -68,7 +68,7 @@ public class RedisHashKeys {
     /**
      * Returns the internal sorted set containing field names.
      *
-     * @return The internal set.
+     * @return the internal set
      */
     public TreeSet<String> getSet() {
         return set;
@@ -86,8 +86,8 @@ public class RedisHashKeys {
     /**
      * Checks if the set contains the specified field name.
      *
-     * @param field The field name to check.
-     * @return True if the field name is contained in the set, false otherwise.
+     * @param field the field name to check
+     * @return true if the field name is contained in the set, false otherwise
      */
     public boolean contains(String field) {
         return set.contains(field);
@@ -96,8 +96,8 @@ public class RedisHashKeys {
     /**
      * Removes the specified field name from the set.
      *
-     * @param field The field name to remove.
-     * @return True if the field name was removed, false otherwise.
+     * @param field the field name to remove
+     * @return true if the field name was removed, false otherwise
      */
     public boolean remove(String field) {
         return set.remove(field);
@@ -106,8 +106,8 @@ public class RedisHashKeys {
     /**
      * Adds a field name to the set.
      *
-     * @param field The field name to add.
-     * @return True if the field name was added, false if it was already present.
+     * @param field the field name to add
+     * @return true if the field name was added, false if it was already present
      */
     public boolean add(String field) {
         return set.add(field);
@@ -116,7 +116,7 @@ public class RedisHashKeys {
     /**
      * Encodes the set of field names to a byte array without compression.
      *
-     * @return The encoded byte array.
+     * @return the encoded byte array
      */
     public byte[] encodeButDoNotCompress() {
         return encode(null);
@@ -125,7 +125,7 @@ public class RedisHashKeys {
     /**
      * Encodes the set of field names to a byte array with compression using the default dictionary.
      *
-     * @return The encoded and compressed byte array.
+     * @return the encoded and compressed byte array
      */
     public byte[] encode() {
         return encode(Dict.SELF_ZSTD_DICT);
@@ -134,8 +134,8 @@ public class RedisHashKeys {
     /**
      * Encodes the set of field names to a byte array with optional compression using the specified dictionary.
      *
-     * @param dict The dictionary to use for compression, or null if no compression is desired.
-     * @return The encoded byte array, possibly compressed.
+     * @param dict the dictionary to use for compression, or null if no compression is desired
+     * @return the encoded byte array, possibly compressed
      */
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
@@ -179,8 +179,8 @@ public class RedisHashKeys {
     /**
      * Retrieves the size of the set without decoding the entire byte array.
      *
-     * @param data The byte array containing the encoded set.
-     * @return The size of the set.
+     * @param data the byte array containing the encoded set
+     * @return the size of the set
      */
     public static int getSizeWithoutDecode(byte[] data) {
         var buffer = ByteBuffer.wrap(data);
@@ -190,8 +190,8 @@ public class RedisHashKeys {
     /**
      * Decodes a byte array to a RedisHashKeys object. Checks the CRC32 by default.
      *
-     * @param data The byte array to decode.
-     * @return The RedisHashKeys object.
+     * @param data the byte array to decode
+     * @return the RedisHashKeys object
      */
     public static RedisHashKeys decode(byte[] data) {
         return decode(data, true);
@@ -200,9 +200,9 @@ public class RedisHashKeys {
     /**
      * Decodes a byte array to a RedisHashKeys object with optional CRC32 check.
      *
-     * @param data         The byte array to decode.
-     * @param doCheckCrc32 Whether to check the CRC32.
-     * @return The RedisHashKeys object.
+     * @param data         the byte array to decode
+     * @param doCheckCrc32 whether to check the CRC32
+     * @return the RedisHashKeys object
      */
     public static RedisHashKeys decode(byte[] data, boolean doCheckCrc32) {
         var buffer = ByteBuffer.wrap(data);
@@ -245,8 +245,8 @@ public class RedisHashKeys {
         /**
          * Called for each element.
          *
-         * @param bytes The element bytes.
-         * @param index The index of the element.
+         * @param bytes the element bytes
+         * @param index the index of the element
          * @return true to break, false to continue
          */
         boolean on(byte[] bytes, int index);
@@ -255,9 +255,9 @@ public class RedisHashKeys {
     /**
      * Iterates over the byte array and calls the callback for each element.
      *
-     * @param data         The byte array to iterate.
-     * @param doCheckCrc32 Whether to check the CRC32.
-     * @param callback     The callback to call for each element.
+     * @param data         the byte array to iterate
+     * @param doCheckCrc32 whether to check the CRC32
+     * @param callback     the callback to call for each element
      */
     public static void iterate(byte[] data, boolean doCheckCrc32, IterateCallback callback) {
         var buffer = ByteBuffer.wrap(data);
