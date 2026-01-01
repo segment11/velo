@@ -140,7 +140,7 @@ public class PersistValueMeta {
     /**
      * Returns a short string representation of this PersistValueMeta instance, focusing on the segment-related fields.
      *
-     * @return a short string representation of this metadata
+     * @return the short string representation of this metadata
      */
     public String shortString() {
         return "si=" + segmentIndex + ", sbi=" + subBlockIndex + ", so=" + segmentOffset;
@@ -149,7 +149,7 @@ public class PersistValueMeta {
     /**
      * Returns a full string representation of this PersistValueMeta instance, including all fields.
      *
-     * @return a string representation of this metadata
+     * @return the string representation of this metadata
      */
     @Override
     public String toString() {
@@ -185,7 +185,7 @@ public class PersistValueMeta {
      * The byte array should be in the format produced by the encode() method.
      *
      * @param bytes the byte array to decode
-     * @return a PersistValueMeta instance represented by the byte array
+     * @return the PersistValueMeta instance represented by the byte array
      */
     public static PersistValueMeta decode(byte[] bytes) {
         var buf = ByteBuf.wrapForReading(bytes);

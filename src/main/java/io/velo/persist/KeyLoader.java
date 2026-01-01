@@ -39,10 +39,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Constructor for KeyLoader used in unit testing.
      *
-     * @param slot           The slot number.
-     * @param bucketsPerSlot The number of buckets in the slot.
-     * @param slotDir        The directory of the slot.
-     * @param snowFlake      The Snowflake instance used for generating unique identifiers.
+     * @param slot           the slot number
+     * @param bucketsPerSlot the number of buckets in the slot
+     * @param slotDir        the directory of the slot
+     * @param snowFlake      the Snowflake instance used for generating unique identifiers
      */
     @TestOnly
     KeyLoader(short slot, int bucketsPerSlot, @NotNull File slotDir, @NotNull SnowFlake snowFlake) {
@@ -52,11 +52,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Constructor for KeyLoader.
      *
-     * @param slot           The slot number.
-     * @param bucketsPerSlot The number of buckets in the slot.
-     * @param slotDir        The directory of the slot.
-     * @param snowFlake      The Snowflake instance used for generating unique identifiers.
-     * @param oneSlot        The OneSlot instance representing this slot.
+     * @param slot           the slot number
+     * @param bucketsPerSlot the number of buckets in the slot
+     * @param slotDir        the directory of the slot
+     * @param snowFlake      the Snowflake instance used for generating unique identifiers
+     * @param oneSlot        the OneSlot instance representing this slot
      */
     public KeyLoader(short slot, int bucketsPerSlot, @NotNull File slotDir, @NotNull SnowFlake snowFlake, @Nullable OneSlot oneSlot) {
         this.slot = slot;
@@ -105,7 +105,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Returns a string representation of the KeyLoader.
      *
-     * @return a string representation of the KeyLoader.
+     * @return the string representation of the KeyLoader
      */
     @Override
     public String toString() {
@@ -118,8 +118,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Estimates the memory usage of the KeyLoader and appends the details to the provided string builder.
      *
-     * @param sb the string builder to append the memory usage details.
-     * @return the total estimated memory usage.
+     * @param sb the string builder to append the memory usage details
+     * @return the total estimated memory usage
      */
     @Override
     public long estimate(@NotNull StringBuilder sb) {
@@ -174,8 +174,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Loads the state from the last saved file when in pure memory mode.
      *
-     * @param is the data input stream to read from.
-     * @throws IOException if an I/O error occurs.
+     * @param is the data input stream to read from
+     * @throws IOException if an I/O error occurs
      */
     @Override
     public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
@@ -215,7 +215,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Writes the state to the saved file when in pure memory mode.
      *
-     * @param os the data output stream to write to.
+     * @param os the data output stream to write to
      * @throws IOException if an I/O error occurs.
      */
     @Override
@@ -273,9 +273,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Retrieves a batch of meta key bucket split numbers.
      *
-     * @param beginBucketIndex the starting bucket index.
-     * @param bucketCount      the number of buckets in the batch.
-     * @return the batch of meta key bucket split numbers.
+     * @param beginBucketIndex the starting bucket index
+     * @param bucketCount      the number of buckets in the batch
+     * @return the batch of meta key bucket split numbers
      * @throws IllegalArgumentException if the bucket index is out of range.
      */
     byte[] getMetaKeyBucketSplitNumberBatch(int beginBucketIndex, int bucketCount) {
@@ -288,9 +288,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Updates a batch of meta key bucket split numbers if they have changed.
      *
-     * @param beginBucketIndex the starting bucket index.
-     * @param splitNumberArray the new split numbers.
-     * @return true if the split numbers were updated, false otherwise.
+     * @param beginBucketIndex the starting bucket index
+     * @param splitNumberArray the new split numbers
+     * @return true if the split numbers were updated, false otherwise
      * @throws IllegalArgumentException if the bucket index is out of range.
      */
     @SlaveNeedReplay
@@ -314,7 +314,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Returns the maximum split number used for replay.
      *
-     * @return the maximum split number.
+     * @return the maximum split number
      */
     public byte maxSplitNumberForRepl() {
         return metaKeyBucketSplitNumber.maxSplitNumber();
@@ -324,7 +324,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Retrieves the bytes representing the meta key bucket split numbers for slave nodes.
      * Read only.
      *
-     * @return the bytes representing the meta key bucket split numbers.
+     * @return the bytes representing the meta key bucket split numbers
      */
     @SlaveReplay
     public byte[] getMetaKeyBucketSplitNumberBytesToSlaveExists() {
@@ -334,7 +334,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Overwrites the meta key bucket split number bytes from the master node for slave nodes.
      *
-     * @param bytes the meta key bucket split number bytes from the master node.
+     * @param bytes the meta key bucket split number bytes from the master node
      */
     @SlaveReplay
     public void overwriteMetaKeyBucketSplitNumberBytesFromMasterExists(byte[] bytes) {
@@ -345,8 +345,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Sets the meta key bucket split number for a specific bucket index.
      *
-     * @param bucketIndex the bucket index.
-     * @param splitNumber the split number.
+     * @param bucketIndex the bucket index
+     * @param splitNumber the split number
      * @throws IllegalArgumentException if the bucket index is out of range.
      */
     @TestOnly
@@ -365,9 +365,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Retrieves the WAL group sequence for a specific split index and bucket index.
      *
-     * @param splitIndex  the split index.
-     * @param bucketIndex the bucket index.
-     * @return the WAL group sequence.
+     * @param splitIndex  the split index
+     * @param bucketIndex the bucket index
+     * @return the WAL group sequence
      */
     public long getMetaOneWalGroupSeq(byte splitIndex, int bucketIndex) {
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);

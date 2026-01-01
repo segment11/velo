@@ -66,7 +66,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Collects metrics related to this instance.
      *
-     * @return A map of metric names to their corresponding values.
+     * @return the map of metric names to their corresponding values
      */
     @Override
     public Map<String, Double> collect() {
@@ -80,9 +80,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Constructs a new BigStringFiles instance for a given slot and directory.
      *
-     * @param slot    The slot number.
-     * @param slotDir The directory where big string files are stored.
-     * @throws IOException if an I/O error occurs.
+     * @param slot    the slot number
+     * @param slotDir the directory where big string files are stored
+     * @throws IOException if an I/O error occurs
      */
     public BigStringFiles(short slot, @NullableOnlyTest File slotDir) throws IOException {
         this.slot = slot;
@@ -140,8 +140,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Estimates the memory usage of this instance.
      *
-     * @param sb StringBuilder to append the memory usage estimate.
-     * @return The estimated memory usage in bytes.
+     * @param sb the StringBuilder to append the memory usage estimate
+     * @return the estimated memory usage in bytes
      */
     @Override
     public long estimate(@NotNull StringBuilder sb) {
@@ -154,8 +154,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Loads big string data from a saved file when in pure memory mode.
      *
-     * @param is DataInputStream to read from.
-     * @throws IOException if an I/O error occurs.
+     * @param is the DataInputStream to read from
+     * @throws IOException if an I/O error occurs
      */
     @Override
     public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
@@ -176,8 +176,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Writes big string data to a saved file when in pure memory mode.
      *
-     * @param os DataOutputStream to write to.
-     * @throws IOException if an I/O error occurs.
+     * @param os the DataOutputStream to write to
+     * @throws IOException if an I/O error occurs
      */
     @Override
     public void writeToSavedFileWhenPureMemory(@NotNull DataOutputStream os) throws IOException {
@@ -198,8 +198,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Retrieves a list of UUIDs of big string files.
      *
-     * @param bucketIndex The bucket index.
-     * @return A list of UUIDs.
+     * @param bucketIndex the bucket index
+     * @return the list of UUIDs
      */
     public List<Long> getBigStringFileUuidList(int bucketIndex) {
         var list = new ArrayList<Long>();
@@ -226,9 +226,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Retrieves bytes of big string file corresponding to the given UUID from the cache or file system.
      *
-     * @param uuid        UUID of the big string file.
-     * @param bucketIndex The bucket index.
-     * @return Bytes of the big string file or null if not found.
+     * @param uuid        the UUID of the big string file
+     * @param bucketIndex the bucket index
+     * @return the bytes of the big string file, or null if not found
      */
     public byte[] getBigStringBytes(long uuid, int bucketIndex) {
         return getBigStringBytes(uuid, bucketIndex, false);
@@ -237,10 +237,10 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Retrieves bytes of big string file corresponding to the given UUID from the cache or file system.
      *
-     * @param uuid        UUID of the big string file.
-     * @param bucketIndex The bucket index.
-     * @param doLRUCache  Whether to cache the bytes in the LRU cache.
-     * @return Bytes of the big string file or null if not found.
+     * @param uuid        the UUID of the big string file
+     * @param bucketIndex the bucket index
+     * @param doLRUCache  whether to cache the bytes in the LRU cache
+     * @return the bytes of the big string file, or null if not found
      */
     public byte[] getBigStringBytes(long uuid, int bucketIndex, boolean doLRUCache) {
         if (ConfForGlobal.pureMemory) {
@@ -266,9 +266,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Reads bytes of a big string file from the file system.
      *
-     * @param uuid        UUID of the big string file.
-     * @param bucketIndex The bucket index.
-     * @return Bytes of the big string file or null if the file doesn't exist or an error occurs.
+     * @param uuid        the UUID of the big string file
+     * @param bucketIndex the bucket index
+     * @return the bytes of the big string file, or null if the file doesn't exist or an error occurs
      */
     private byte[] readBigStringBytes(long uuid, int bucketIndex) {
         var file = new File(bigStringDir, bucketIndex + "/" + uuid);
@@ -297,11 +297,11 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Writes bytes to a big string file.
      *
-     * @param uuid        UUID of the big string file.
-     * @param key         Key associated with the big string.
-     * @param bucketIndex The bucket index.
-     * @param bytes       Bytes to write.
-     * @return true if the operation was successful; false otherwise.
+     * @param uuid        the UUID of the big string file
+     * @param key         the key associated with the big string
+     * @param bucketIndex the bucket index
+     * @param bytes      the bytes to write
+     * @return true if the operation was successful, false otherwise
      */
     public boolean writeBigStringBytes(long uuid, @NotNull String key, int bucketIndex, byte[] bytes) {
         return writeBigStringBytes(uuid, key, bucketIndex, bytes, 0, bytes.length);
@@ -310,13 +310,13 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Writes bytes to a big string file.
      *
-     * @param uuid        UUID of the big string file.
-     * @param key         Key associated with the big string.
-     * @param bucketIndex The bucket index.
-     * @param bytes       Bytes to write.
-     * @param offset      Offset within the bytes array.
-     * @param length      Length of bytes to write.
-     * @return true if the operation was successful; false otherwise.
+     * @param uuid        the UUID of the big string file
+     * @param key         the key associated with the big string
+     * @param bucketIndex the bucket index
+     * @param bytes       the bytes to write
+     * @param offset      the offset within the bytes array
+     * @param length      the length of bytes to write
+     * @return true if the operation was successful, false otherwise
      */
     public boolean writeBigStringBytes(long uuid, @NotNull String key, int bucketIndex, byte[] bytes, int offset, int length) {
         if (ConfForGlobal.pureMemory) {
@@ -354,9 +354,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Deletes a big string file if it exists.
      *
-     * @param uuid        UUID of the big string file to delete.
-     * @param bucketIndex The bucket index.
-     * @return true if the file was successfully deleted or doesn't exist; false otherwise.
+     * @param uuid        the UUID of the big string file to delete
+     * @param bucketIndex the bucket index
+     * @return true if the file was successfully deleted or doesn't exist, false otherwise
      */
     public boolean deleteBigStringFileIfExist(long uuid, int bucketIndex) {
         if (ConfForGlobal.pureMemory) {
@@ -420,9 +420,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     /**
      * Handles expiration or deletion of a compressed value.
      *
-     * @param key           The key associated with the value.
-     * @param shortStringCv The compressed value (maybe null).
-     * @param pvm           The persist value metadata (maybe null).
+     * @param key           the key associated with the value
+     * @param shortStringCv the compressed value (maybe null)
+     * @param pvm           the persist value metadata (maybe null)
      */
     @Override
     public void handleWhenCvExpiredOrDeleted(@NotNull String key, @Nullable CompressedValue shortStringCv, @Nullable PersistValueMeta pvm) {

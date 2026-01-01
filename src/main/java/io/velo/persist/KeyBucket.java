@@ -94,8 +94,8 @@ public class KeyBucket {
     /**
      * Calculate the offset for a given cell index.
      *
-     * @param cellIndex the index of the cell.
-     * @return the offset in bytes for the given cell index.
+     * @param cellIndex the index of the cell
+     * @return the offset in bytes for the given cell index
      */
     private int oneCellOffset(int cellIndex) {
         return HEADER_LENGTH + capacity * ONE_CELL_META_LENGTH + cellIndex * ONE_CELL_LENGTH;
@@ -104,8 +104,8 @@ public class KeyBucket {
     /**
      * Calculate the meta index for a given cell index.
      *
-     * @param cellIndex the index of the cell.
-     * @return the meta index in bytes for the given cell index.
+     * @param cellIndex the index of the cell
+     * @return the meta index in bytes for the given cell index
      */
     private int metaIndex(int cellIndex) {
         return HEADER_LENGTH + cellIndex * ONE_CELL_META_LENGTH;
@@ -122,7 +122,7 @@ public class KeyBucket {
     /**
      * Get the split number of this key bucket.
      *
-     * @return the split number.
+     * @return the split number
      */
     public byte getSplitNumber() {
         return splitNumber;
@@ -131,7 +131,7 @@ public class KeyBucket {
     /**
      * Get the split index of this key bucket.
      *
-     * @return the split index.
+     * @return the split index
      */
     public byte getSplitIndex() {
         return splitIndex;
@@ -158,7 +158,7 @@ public class KeyBucket {
     /**
      * Check if this key bucket shares bytes with another key bucket.
      *
-     * @return true if the bytes are shared, false otherwise.
+     * @return true if the bytes are shared, false otherwise
      */
     boolean isSharedBytes() {
         return bytes.length != KEY_BUCKET_ONE_COST_SIZE;
@@ -178,12 +178,12 @@ public class KeyBucket {
     /**
      * Create a new key bucket with the specified parameters.
      *
-     * @param slot        the slot number of this key bucket.
-     * @param bucketIndex the index of this key bucket in the slot.
-     * @param splitIndex  the split index.
-     * @param splitNumber the split number.
-     * @param bytes       the byte array containing the key-value pairs.
-     * @param snowFlake   a SnowFlake instance for generating unique sequence numbers.
+     * @param slot        the slot number of this key bucket
+     * @param bucketIndex the index of this key bucket in the slot
+     * @param splitIndex  the split index
+     * @param splitNumber the split number
+     * @param bytes       the byte array containing the key-value pairs
+     * @param snowFlake   the SnowFlake instance for generating unique sequence numbers
      */
     public KeyBucket(short slot, int bucketIndex, byte splitIndex, byte splitNumber, @Nullable byte[] bytes, @NotNull SnowFlake snowFlake) {
         this(slot, bucketIndex, splitIndex, splitNumber, bytes, 0, snowFlake);
@@ -192,13 +192,13 @@ public class KeyBucket {
     /**
      * Create a new key bucket with the specified parameters.
      *
-     * @param slot        the slot number of this key bucket.
-     * @param bucketIndex the index of this key bucket in the slot.
-     * @param splitIndex  the split index.
-     * @param splitNumber the split number.
-     * @param sharedBytes the shared byte array containing the key-value pairs.
-     * @param position    the position in the shared byte array.
-     * @param snowFlake   a SnowFlake instance for generating unique sequence numbers.
+     * @param slot        the slot number of this key bucket
+     * @param bucketIndex the index of this key bucket in the slot
+     * @param splitIndex  the split index
+     * @param splitNumber the split number
+     * @param sharedBytes the shared byte array containing the key-value pairs
+     * @param position    the position in the shared byte array
+     * @param snowFlake   the SnowFlake instance for generating unique sequence numbers
      */
     public KeyBucket(short slot, int bucketIndex, byte splitIndex, byte splitNumber, @Nullable byte[] sharedBytes, int position, @NotNull SnowFlake snowFlake) {
         this.slot = slot;
@@ -258,11 +258,11 @@ public class KeyBucket {
         /**
          * Callback method for each key-value pair.
          *
-         * @param keyHash    the hash value of the key.
-         * @param expireAt   the expiration time.
-         * @param seq        the sequence number.
-         * @param key        the key.
-         * @param valueBytes the byte array of the value.
+         * @param keyHash    the hash value of the key
+         * @param expireAt   the expiration time
+         * @param seq        the sequence number
+         * @param key        the key
+         * @param valueBytes the byte array of the value
          */
         void call(long keyHash, long expireAt, long seq, String key, byte[] valueBytes);
     }
@@ -270,7 +270,7 @@ public class KeyBucket {
     /**
      * Iterate over all key-value pairs in this key bucket and call the callback for each pair.
      *
-     * @param callBack the callback to be called for each key-value pair.
+     * @param callBack the callback to be called for each key-value pair
      */
     public void iterate(@NotNull IterateCallBack callBack) {
         for (int cellIndex = 0; cellIndex < capacity; cellIndex++) {
@@ -294,8 +294,8 @@ public class KeyBucket {
     /**
      * Retrieve the key and value bytes from a specific cell.
      *
-     * @param cellIndex the index of the cell.
-     * @return a record containing the key and value bytes.
+     * @param cellIndex the index of the cell
+     * @return the record containing the key and value bytes
      */
     private KeyAndValueBytes getFromOneCell(int cellIndex) {
         buffer.position(oneCellOffset(cellIndex));
@@ -326,7 +326,7 @@ public class KeyBucket {
         /**
          * Calculate the offset of the value bytes.
          *
-         * @return the offset of the value bytes.
+         * @return the offset of the value bytes
          */
         int valueOffset() {
             return offset + Short.BYTES + keyLength + Byte.BYTES;
@@ -349,9 +349,9 @@ public class KeyBucket {
         /**
          * Calculate the number of cells required to store a key-value pair with the given key and value lengths.
          *
-         * @param keyLength   the length of the key.
-         * @param valueLength the length of the value.
-         * @return the number of cells.
+         * @param keyLength   the length of the key
+         * @param valueLength the length of the value
+         * @return the number of cells
          */
         static int calcCellCount(short keyLength, byte valueLength) {
             int keyWithValueBytesLength = Short.BYTES + keyLength + Byte.BYTES + valueLength;
@@ -385,8 +385,8 @@ public class KeyBucket {
     /**
      * Encode this key bucket into a byte array.
      *
-     * @param doUpdateSeq if true, update the sequence number before encoding.
-     * @return the byte array representation of this key bucket.
+     * @param doUpdateSeq whether to update the sequence number before encoding
+     * @return the byte array representation of this key bucket
      */
     public byte[] encode(boolean doUpdateSeq) {
         if (doUpdateSeq) {
@@ -410,16 +410,16 @@ public class KeyBucket {
         /**
          * Callback method for expired key-value pairs.
          *
-         * @param key           the key.
-         * @param shortStringCv the CompressedValue of the expired key-value pair.
+         * @param key           the key
+         * @param shortStringCv the CompressedValue of the expired key-value pair
          */
         void handle(@NotNull String key, @NotNull CompressedValue shortStringCv);
 
         /**
          * Callback method for deleted key-value pairs.
          *
-         * @param key the key.
-         * @param cv  the PersistValueMeta of the deleted key-value pair.
+         * @param key the key
+         * @param cv  the PersistValueMeta of the deleted key-value pair
          */
         void handle(@NotNull String key, @NotNull PersistValueMeta cv);
     }
@@ -429,7 +429,7 @@ public class KeyBucket {
     /**
      * Clear an expired or deleted key-value pair at the specified cell index.
      *
-     * @param i the cell index.
+     * @param i the cell index
      */
     @VisibleForTesting
     void clearOneExpiredOrDeleted(int i) {
@@ -439,8 +439,8 @@ public class KeyBucket {
     /**
      * Clear an expired or deleted key-value pair at the specified cell index.
      *
-     * @param i                 the cell index.
-     * @param kvBytesAlreadyGet the key-value bytes if already retrieved.
+     * @param i                 the cell index
+     * @param kvBytesAlreadyGet the key-value bytes if already retrieved
      */
     private void clearOneExpiredOrDeleted(int i, @Nullable KeyAndValueBytes kvBytesAlreadyGet) {
         if (i >= capacity) {
@@ -494,7 +494,7 @@ public class KeyBucket {
     /**
      * Print all key-value pairs in this key bucket.
      *
-     * @return a string representation of all key-value pairs.
+     * @return the string representation of all key-value pairs
      */
     @TestOnly
     String allPrint() {
@@ -530,12 +530,12 @@ public class KeyBucket {
     /**
      * Add or update a key-value pair in this key bucket.
      *
-     * @param key        the key.
-     * @param keyHash    the hash value of the key.
-     * @param expireAt   the expiration time.
-     * @param seq        the sequence number.
-     * @param valueBytes the byte array of the value.
-     * @return the result of the put operation.
+     * @param key        the key
+     * @param keyHash    the hash value of the key
+     * @param expireAt   the expiration time
+     * @param seq        the sequence number
+     * @param valueBytes the byte array of the value
+     * @return the result of the put operation
      */
     public DoPutResult put(String key, long keyHash, long expireAt, long seq, byte[] valueBytes) {
         return put(key, keyHash, expireAt, seq, valueBytes, true);

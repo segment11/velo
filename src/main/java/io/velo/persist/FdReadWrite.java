@@ -67,7 +67,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Collects and returns metrics related to file operations and memory usage.
      *
-     * @return a map of metric names and their corresponding values
+     * @return the map of metric names and their corresponding values
      */
     @Override
     public Map<String, Double> collect() {
@@ -160,7 +160,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Returns a string representation of this file descriptor.
      *
-     * @return a string representation of this file descriptor
+     * @return the string representation of this file descriptor
      */
     @Override
     public String toString() {
@@ -491,8 +491,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Checks if the target segment index is null in memory.
      *
-     * @param segmentIndex the segment index to check.
-     * @return true if the segment index is null, false otherwise.
+     * @param segmentIndex the segment index to check
+     * @return true if the segment index is null, false otherwise
      */
     @PureMemoryMode
     boolean isTargetSegmentIndexNullInMemory(int segmentIndex) {
@@ -502,7 +502,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Clears the target segment index in memory.
      *
-     * @param segmentIndex the segment index to clear.
+     * @param segmentIndex the segment index to clear
      */
     @PureMemoryMode
     void clearTargetSegmentIndexInMemory(int segmentIndex) {
@@ -539,8 +539,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Initializes the byte buffers for read and write operations.
      *
-     * @param isChunkFd true if this is a chunk fd, false if it is a key bucket fd.
-     * @param fdIndex   the index of array.
+     * @param isChunkFd whether this is a chunk fd
+     * @param fdIndex   the index of array
      */
     public void initByteBuffers(boolean isChunkFd, int fdIndex) {
         var oneInnerLength = isChunkFd ? ConfForSlot.global.confChunk.segmentLength : KeyLoader.KEY_BUCKET_ONE_COST_SIZE;
@@ -599,8 +599,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Estimates the memory usage of this instance.
      *
-     * @param sb the StringBuilder to append the estimate details.
-     * @return the estimated memory usage in bytes.
+     * @param sb the StringBuilder to append the estimate details
+     * @return the estimated memory usage in bytes
      */
     @Override
     public long estimate(@NotNull StringBuilder sb) {
@@ -646,8 +646,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Initializes the LRU cache.
      *
-     * @param isChunkFd      true if this is a chunk fd, false if it is a key bucket fd.
-     * @param oneInnerLength the length of one inner segment.
+     * @param isChunkFd      whether this is a chunk fd
+     * @param oneInnerLength the length of one inner segment
      */
     private void initLRU(boolean isChunkFd, int oneInnerLength) {
         if (ConfForGlobal.pureMemory) {
@@ -774,10 +774,10 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Reads inner bytes from a buffer.
      *
-     * @param oneInnerIndex     the index of the inner segment.
-     * @param buffer            the buffer to read from.
-     * @param isRefreshLRUCache true if the LRU cache should be refreshed, false otherwise.
-     * @return the read bytes.
+     * @param oneInnerIndex     the index of the inner segment
+     * @param buffer            the buffer to read from
+     * @param isRefreshLRUCache whether the LRU cache should be refreshed
+     * @return the read bytes
      */
     @NotPureMemoryMode
     private byte[] readInnerByBuffer(int oneInnerIndex, @NotNull ByteBuffer buffer, boolean isRefreshLRUCache) {
@@ -787,7 +787,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Warms up the key bucket fd by reading and caching data.
      *
-     * @return the number of buckets warmed up.
+     * @return the number of buckets warmed up
      */
     @TestOnly
     @NotPureMemoryMode
@@ -853,11 +853,11 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Reads inner bytes from a buffer with a specified length.
      *
-     * @param oneInnerIndex     the index of the inner segment.
-     * @param buffer            the buffer to read from.
-     * @param isRefreshLRUCache true if the LRU cache should be refreshed, false otherwise.
-     * @param length            the length of bytes to read.
-     * @return the read bytes.
+     * @param oneInnerIndex     the index of the inner segment
+     * @param buffer            the buffer to read from
+     * @param isRefreshLRUCache whether the LRU cache should be refreshed
+     * @param length            the length of bytes to read
+     * @return the read bytes
      */
     @NotPureMemoryMode
     private byte[] readInnerByBuffer(int oneInnerIndex, @NotNull ByteBuffer buffer, boolean isRefreshLRUCache, int length) {
@@ -970,11 +970,11 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Writes inner bytes to a buffer.
      *
-     * @param oneInnerIndex     the index of the inner segment.
-     * @param buffer            the buffer to write to.
-     * @param prepare           the preparation logic for the buffer.
-     * @param isRefreshLRUCache true if the LRU cache should be refreshed, false otherwise.
-     * @return the number of bytes written.
+     * @param oneInnerIndex     the index of the inner segment
+     * @param buffer            the buffer to write to
+     * @param prepare           the preparation logic for the buffer
+     * @param isRefreshLRUCache whether the LRU cache should be refreshed
+     * @return the number of bytes written
      */
     @NotPureMemoryMode
     private int writeInnerByBuffer(int oneInnerIndex, @NotNull ByteBuffer buffer, @NotNull WriteBufferPrepare prepare, boolean isRefreshLRUCache) {
@@ -1047,9 +1047,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Reads a batch of inner segments from memory.
      *
-     * @param oneInnerIndex the starting index of the inner segment.
-     * @param oneInnerCount the number of inner segments to read.
-     * @return the read bytes.
+     * @param oneInnerIndex the starting index of the inner segment
+     * @param oneInnerCount the number of inner segments to read
+     * @return the read bytes
      */
     @VisibleForTesting
     @PureMemoryMode
@@ -1084,9 +1084,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Reads an inner segment.
      *
-     * @param oneInnerIndex     the index of the inner segment.
-     * @param isRefreshLRUCache true if the LRU cache should be refreshed, false otherwise.
-     * @return the read bytes.
+     * @param oneInnerIndex     the index of the inner segment
+     * @param isRefreshLRUCache whether the LRU cache should be refreshed
+     * @return the read bytes
      */
     public byte[] readOneInner(int oneInnerIndex, boolean isRefreshLRUCache) {
         if (ConfForGlobal.pureMemory) {
@@ -1099,9 +1099,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Reads segments for merge.
      *
-     * @param beginSegmentIndex the starting index of the segment.
-     * @param segmentCount      the number of segments to read.
-     * @return the read bytes.
+     * @param beginSegmentIndex the starting index of the segment
+     * @param segmentCount      the number of segments to read
+     * @return the read bytes
      */
     public byte[] readSegmentsForMerge(int beginSegmentIndex, int segmentCount) {
         if (ConfForGlobal.pureMemory) {
@@ -1114,8 +1114,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Reads a batch of segments for replication.
      *
-     * @param oneInnerIndex the starting index of the inner segment.
-     * @return the read bytes.
+     * @param oneInnerIndex the starting index of the inner segment
+     * @return the read bytes
      */
     public byte[] readBatchForRepl(int oneInnerIndex) {
         if (ConfForGlobal.pureMemory) {
@@ -1128,8 +1128,8 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Reads shared bytes for key buckets in one WAL group.
      *
-     * @param beginBucketIndex the starting bucket index.
-     * @return the read bytes.
+     * @param beginBucketIndex the starting bucket index
+     * @return the read bytes
      */
     public byte[] readKeyBucketsSharedBytesInOneWalGroup(int beginBucketIndex) {
         if (ConfForGlobal.pureMemory) {
@@ -1142,7 +1142,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Clears one key bucket in memory.
      *
-     * @param bucketIndex the index of the key bucket.
+     * @param bucketIndex the index of the key bucket
      */
     @TestOnly
     @PureMemoryMode
@@ -1163,7 +1163,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Clears key buckets in memory.
      *
-     * @param bucketIndex the index of the key bucket.
+     * @param bucketIndex the index of the key bucket
      */
     @TestOnly
     @PureMemoryMode
@@ -1175,7 +1175,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Clears all key buckets in one WAL group in memory.
      *
-     * @param walGroupIndex the index of the WAL group.
+     * @param walGroupIndex the index of the WAL group
      */
     @TestOnly
     @PureMemoryMode
@@ -1186,7 +1186,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Updates the write index.
      *
-     * @param updatedOneIndex the updated index.
+     * @param updatedOneIndex the updated index
      */
     private void updateWriteIndex(int updatedOneIndex) {
         writeIndex = Math.max(writeIndex, (long) updatedOneIndex * oneInnerLength);
@@ -1195,10 +1195,10 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Writes a batch of inner segments to memory.
      *
-     * @param beginOneInnerIndex the starting index of the inner segment.
-     * @param bytes              the bytes to write.
-     * @param position           the position in the bytes array.
-     * @return the number of bytes written.
+     * @param beginOneInnerIndex the starting index of the inner segment
+     * @param bytes              the bytes to write
+     * @param position           the position in the bytes array
+     * @return the number of bytes written
      */
     @VisibleForTesting
     @PureMemoryMode
@@ -1258,10 +1258,10 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Writes an inner segment.
      *
-     * @param oneInnerIndex     the index of the inner segment.
-     * @param bytes             the bytes to write.
-     * @param isRefreshLRUCache true if the LRU cache should be refreshed, false otherwise.
-     * @return the number of bytes written.
+     * @param oneInnerIndex     the index of the inner segment
+     * @param bytes             the bytes to write
+     * @param isRefreshLRUCache whether the LRU cache should be refreshed
+     * @return the number of bytes written
      */
     @SlaveNeedReplay
     public int writeOneInner(int oneInnerIndex, byte[] bytes, boolean isRefreshLRUCache) {
@@ -1282,10 +1282,10 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Writes a batch of segments.
      *
-     * @param beginOneInnerIndex the starting index of the inner segment.
-     * @param bytes              the bytes to write.
-     * @param isRefreshLRUCache  true if the LRU cache should be refreshed, false otherwise.
-     * @return the number of bytes written.
+     * @param beginOneInnerIndex the starting index of the inner segment
+     * @param bytes              the bytes to write
+     * @param isRefreshLRUCache  whether the LRU cache should be refreshed
+     * @return the number of bytes written
      */
     @SlaveNeedReplay
     public int writeSegmentsBatch(int beginOneInnerIndex, byte[] bytes, boolean isRefreshLRUCache) {
@@ -1307,9 +1307,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Writes a batch of segments for replication.
      *
-     * @param beginSegmentIndex the starting index of the segment.
-     * @param bytes             the bytes to write.
-     * @return the number of bytes written.
+     * @param beginSegmentIndex the starting index of the segment
+     * @param bytes             the bytes to write
+     * @return the number of bytes written
      */
     @SlaveReplay
     @NotPureMemoryMode
@@ -1323,9 +1323,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Writes shared bytes for key buckets in one WAL group.
      *
-     * @param bucketIndex the index of the key bucket.
-     * @param sharedBytes the shared bytes to write.
-     * @return the number of bytes written.
+     * @param bucketIndex the index of the key bucket
+     * @param sharedBytes the shared bytes to write
+     * @return the number of bytes written
      */
     @SlaveNeedReplay
     @SlaveReplay
@@ -1382,7 +1382,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Truncates the file after a target segment index.
      *
-     * @param targetSegmentIndex the target segment index.
+     * @param targetSegmentIndex the target segment index
      */
     public void truncateAfterTargetSegmentIndex(int targetSegmentIndex) {
         var length = (long) targetSegmentIndex * oneInnerLength;

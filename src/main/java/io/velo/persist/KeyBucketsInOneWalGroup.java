@@ -22,9 +22,9 @@ public class KeyBucketsInOneWalGroup {
     /**
      * Constructs a KeyBucketsInOneWalGroup instance.
      *
-     * @param slot          The slot number to which the key buckets belong.
-     * @param walGroupIndex The index of the WAL group.
-     * @param keyLoader     The KeyLoader instance used to load key data.
+     * @param slot          the slot number to which the key buckets belong
+     * @param walGroupIndex the index of the WAL group
+     * @param keyLoader     the KeyLoader instance used to load key data
      */
     public KeyBucketsInOneWalGroup(short slot, int walGroupIndex, @NotNull KeyLoader keyLoader) {
         this.slot = slot;
@@ -110,10 +110,10 @@ public class KeyBucketsInOneWalGroup {
     /**
      * Retrieves the expiration time and sequence number for a given key.
      *
-     * @param bucketIndex The index of the bucket.
-     * @param key         The key.
-     * @param keyHash     The hash of the key.
-     * @return The expiration time and sequence number.
+     * @param bucketIndex the index of the bucket
+     * @param key         the key
+     * @param keyHash     the hash of the key
+     * @return the expiration time and sequence number
      */
     KeyBucket.ExpireAtAndSeq getExpireAtAndSeq(int bucketIndex, String key, long keyHash) {
         if (ConfForGlobal.pureMemoryV2) {
@@ -140,10 +140,10 @@ public class KeyBucketsInOneWalGroup {
     /**
      * Retrieves the value, expiration time, and sequence number for a given key.
      *
-     * @param bucketIndex The index of the bucket.
-     * @param key         The key.
-     * @param keyHash     The hash of the key.
-     * @return The value, expiration time, and sequence number.
+     * @param bucketIndex the index of the bucket
+     * @param key         the key
+     * @param keyHash     the hash of the key
+     * @return the value, expiration time, and sequence number
      */
     KeyBucket.ValueBytesWithExpireAtAndSeq getValueX(int bucketIndex, String key, long keyHash) {
         if (ConfForGlobal.pureMemoryV2) {
@@ -170,7 +170,7 @@ public class KeyBucketsInOneWalGroup {
     /**
      * Writes changes to the key buckets and returns the updated shared bytes.
      *
-     * @return The updated shared bytes.
+     * @return the updated shared bytes
      */
     byte[][] writeAfterPutBatch() {
         byte maxSplitNumberTmp = 1;
@@ -235,10 +235,10 @@ public class KeyBucketsInOneWalGroup {
     /**
      * Puts a list of PersistValueMeta objects into the target bucket after clearing it if split is needed.
      *
-     * @param needAddNewList List of PersistValueMeta objects to add.
-     * @param needUpdateList List of PersistValueMeta objects to update.
-     * @param needDeleteList List of PersistValueMeta objects to delete.
-     * @param bucketIndex    The index of the bucket.
+     * @param needAddNewList the list of PersistValueMeta objects to add
+     * @param needUpdateList the list of PersistValueMeta objects to update
+     * @param needDeleteList the list of PersistValueMeta objects to delete
+     * @param bucketIndex    the index of the bucket
      */
     @VisibleForTesting
     void putPvmListToTargetBucketAfterClearAllIfSplit(@NotNull List<PersistValueMeta> needAddNewList,
@@ -300,8 +300,8 @@ public class KeyBucketsInOneWalGroup {
     /**
      * Puts a list of PersistValueMeta objects into the target bucket.
      *
-     * @param pvmListThisBucket List of PersistValueMeta objects.
-     * @param bucketIndex       The index of the bucket.
+     * @param pvmListThisBucket the list of PersistValueMeta objects
+     * @param bucketIndex       the index of the bucket
      */
     @VisibleForTesting
     void putPvmListToTargetBucket(@NotNull List<PersistValueMeta> pvmListThisBucket, Integer bucketIndex) {
@@ -380,13 +380,13 @@ public class KeyBucketsInOneWalGroup {
     /**
      * Checks if the bucket needs to be split based on the given PersistValueMeta list.
      *
-     * @param pvmListThisBucket  List of PersistValueMeta objects.
-     * @param needAddNewList     List to store keys that need to be added.
-     * @param needUpdateList     List to store keys that need to be updated.
-     * @param needDeleteList     List to store keys that need to be deleted.
-     * @param bucketIndex        The index of the bucket.
-     * @param currentSplitNumber The current split number of the bucket.
-     * @return The number of splits needed.
+     * @param pvmListThisBucket  the list of PersistValueMeta objects
+     * @param needAddNewList     the list to store keys that need to be added
+     * @param needUpdateList     the list to store keys that need to be updated
+     * @param needDeleteList     the list to store keys that need to be deleted
+     * @param bucketIndex        the index of the bucket
+     * @param currentSplitNumber the current split number of the bucket
+     * @return the number of splits needed
      */
     @VisibleForTesting
     int checkIfNeedSplit(@NotNull List<PersistValueMeta> pvmListThisBucket,
@@ -533,7 +533,7 @@ public class KeyBucketsInOneWalGroup {
     /**
      * Puts a list of PersistValueMeta objects.
      *
-     * @param pvmList List of PersistValueMeta objects.
+     * @param pvmList the list of PersistValueMeta objects
      */
     void putAllPvmList(@NotNull ArrayList<PersistValueMeta> pvmList) {
         // group by bucket index
@@ -549,7 +549,7 @@ public class KeyBucketsInOneWalGroup {
     /**
      * Puts a list of Wal.V objects.
      *
-     * @param shortValueList List of Wal.V objects.
+     * @param shortValueList the list of Wal.V objects
      */
     void putAll(@NotNull Collection<Wal.V> shortValueList) {
         var pvmList = new ArrayList<PersistValueMeta>();
@@ -562,8 +562,8 @@ public class KeyBucketsInOneWalGroup {
     /**
      * Transfer Wal.V to PersistValueMeta
      *
-     * @param v Wal.V object
-     * @return PersistValueMeta object
+     * @param v the Wal.V object
+     * @return the PersistValueMeta object
      */
     @VisibleForTesting
     static PersistValueMeta transferWalV(@NotNull Wal.V v) {

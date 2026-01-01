@@ -36,8 +36,8 @@ public class DynConfig {
     /**
      * Retrieves the value associated with a given key.
      *
-     * @param key The key whose associated value is to be returned.
-     * @return The value associated with the specified key, or null if the key is not present.
+     * @param key the key whose associated value is to be returned
+     * @return the value associated with the specified key, or null if the key is not present
      */
     public Object get(@NotNull String key) {
         return data.get(key);
@@ -50,8 +50,8 @@ public class DynConfig {
         /**
          * Called after a dynamic configuration update.
          *
-         * @param key   The key that was updated.
-         * @param value The new value for the key.
+         * @param key   the key that was updated
+         * @param value the new value for the key
          */
         void afterUpdate(@NotNull String key, @NotNull Object value);
     }
@@ -67,8 +67,8 @@ public class DynConfig {
         /**
          * Constructs the AfterUpdateCallbackInner.
          *
-         * @param currentSlot The slot number corresponding to this dynamic configuration.
-         * @param oneSlot     The OneSlot instance associated with this dynamic configuration.
+         * @param currentSlot the slot number corresponding to this dynamic configuration
+         * @param oneSlot     the OneSlot instance associated with this dynamic configuration
          */
         public AfterUpdateCallbackInner(short currentSlot, OneSlot oneSlot) {
             this.currentSlot = currentSlot;
@@ -112,7 +112,7 @@ public class DynConfig {
     /**
      * Returns the after-update callback associated with this dynamic configuration.
      *
-     * @return The AfterUpdateCallback instance.
+     * @return the AfterUpdateCallback instance
      */
     public AfterUpdateCallback getAfterUpdateCallback() {
         return afterUpdateCallback;
@@ -121,7 +121,7 @@ public class DynConfig {
     /**
      * Retrieves the Master UUID from the configuration.
      *
-     * @return The Master UUID or null if not set.
+     * @return the Master UUID, or null if not set
      */
     public Long getMasterUuid() {
         Object val = get("masterUuid");
@@ -131,7 +131,7 @@ public class DynConfig {
     /**
      * Sets the Master UUID in the configuration.
      *
-     * @param masterUuid The UUID to set as the Master.
+     * @param masterUuid the UUID to set as the Master
      * @throws IOException If an error occurs while writing to the configuration file.
      */
     public void setMasterUuid(long masterUuid) throws IOException {
@@ -141,7 +141,7 @@ public class DynConfig {
     /**
      * Checks if the slot is read-only.
      *
-     * @return True if the slot is read-only, false otherwise.
+     * @return true if the slot is read-only, false otherwise
      */
     public boolean isReadonly() {
         var obj = get("readonly");
@@ -151,7 +151,7 @@ public class DynConfig {
     /**
      * Sets the read-only status of the slot.
      *
-     * @param readonly The read-only status to set for the slot.
+     * @param readonly the read-only status to set for the slot
      * @throws IOException If an error occurs while writing to the configuration file.
      */
     public void setReadonly(boolean readonly) throws IOException {
@@ -161,7 +161,7 @@ public class DynConfig {
     /**
      * Checks if the slot is readable.
      *
-     * @return True if the slot is readable, false otherwise.
+     * @return true if the slot is readable, false otherwise
      */
     public boolean isCanRead() {
         var obj = get("canRead");
@@ -171,7 +171,7 @@ public class DynConfig {
     /**
      * Sets the readability status of the slot.
      *
-     * @param canRead The readability status to set for the slot.
+     * @param canRead the readability status to set for the slot
      * @throws IOException If an error occurs while writing to the configuration file.
      */
     public void setCanRead(boolean canRead) throws IOException {
@@ -181,7 +181,7 @@ public class DynConfig {
     /**
      * Checks if the slot is writable.
      *
-     * @return True if the slot is writable, false otherwise.
+     * @return true if the slot is writable, false otherwise
      */
     public boolean isCanWrite() {
         var obj = get("canWrite");
@@ -191,7 +191,7 @@ public class DynConfig {
     /**
      * Sets the writability status of the slot.
      *
-     * @param canWrite The writability status to set for the slot.
+     * @param canWrite the writability status to set for the slot
      * @throws IOException If an error occurs while writing to the configuration file.
      */
     public void setCanWrite(boolean canWrite) throws IOException {
@@ -202,7 +202,7 @@ public class DynConfig {
      * Retrieves the testKey from the configuration.
      * This is a testing method marked with @TestOnly.
      *
-     * @return The value of testKey, defaulting to 10 if not set.
+     * @return the value of testKey, defaulting to 10 if not set
      */
     @TestOnly
     public int getTestKey() {
@@ -214,7 +214,7 @@ public class DynConfig {
      * Sets the testKey in the configuration.
      * This is a testing method marked with @TestOnly.
      *
-     * @param testValueInt The value to set for testKey.
+     * @param testValueInt the value to set for testKey
      * @throws IOException If an error occurs while writing to the configuration file.
      */
     @TestOnly
@@ -225,7 +225,7 @@ public class DynConfig {
     /**
      * Checks if the binlog is on.
      *
-     * @return True if the binlog is on, false otherwise.
+     * @return true if the binlog is on, false otherwise
      */
     public boolean isBinlogOn() {
         var obj = get("binlogOn");
@@ -235,7 +235,7 @@ public class DynConfig {
     /**
      * Sets whether the binlog is on.
      *
-     * @param binlogOn The binlog status to set.
+     * @param binlogOn the binlog status to set
      * @throws IOException If an error occurs while writing to the configuration file.
      */
     public void setBinlogOn(boolean binlogOn) throws IOException {
@@ -245,9 +245,9 @@ public class DynConfig {
     /**
      * Constructs a DynConfig instance for a specific slot.
      *
-     * @param slot          The slot number.
-     * @param dynConfigFile The JSON file where the dynamic configuration is stored.
-     * @param oneSlot       The OneSlot instance associated with this configuration.
+     * @param slot          the slot number
+     * @param dynConfigFile the JSON file where the dynamic configuration is stored
+     * @param oneSlot       the OneSlot instance associated with this configuration
      * @throws IOException If an error occurs while reading from or writing to the configuration file.
      */
     public DynConfig(short slot, @NotNull File dynConfigFile, @NotNull OneSlot oneSlot) throws IOException {
@@ -274,8 +274,8 @@ public class DynConfig {
     /**
      * Updates a configuration value and writes the updated configuration to the JSON file.
      *
-     * @param key   The key to update.
-     * @param value The new value for the key.
+     * @param key   the key to update
+     * @param value the new value for the key
      * @throws IOException If an error occurs while writing to the configuration file.
      */
     public void update(@NotNull String key, @NotNull Object value) throws IOException {

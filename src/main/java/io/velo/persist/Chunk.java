@@ -70,7 +70,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     /**
      * Get a string representation of this chunk, including its slot, segment count, FD count, etc.
      *
-     * @return a string representation of this chunk
+     * @return the string representation of this chunk
      */
     @Override
     public String toString() {
@@ -124,7 +124,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      *
      * @param slot    the slot number this chunk belongs to
      * @param slotDir the directory where the chunk data is stored
-     * @param oneSlot the context for the slot, used for various data operations.
+     * @param oneSlot the context for the slot, used for various data operations
      */
     public Chunk(short slot, @NotNull File slotDir, @NullableOnlyTest OneSlot oneSlot) {
         var confChunk = ConfForSlot.global.confChunk;
@@ -313,7 +313,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      *
      * @param beginSegmentIndex the starting segment index for the read
      * @param segmentCount      the number of segments to read
-     * @return a byte array containing the read segment data
+     * @return the byte array containing the read segment data
      * @throws IllegalArgumentException if the requested segment count is too large
      */
     byte[] preadForMerge(int beginSegmentIndex, int segmentCount) {
@@ -332,7 +332,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * Read bytes from the chunk for a replication operation.
      *
      * @param beginSegmentIndex the starting segment index for the read
-     * @return a byte array containing the read segment data
+     * @return the byte array containing the read segment data
      */
     byte[] preadForRepl(int beginSegmentIndex) {
         var fdIndex = targetFdIndex(beginSegmentIndex);
@@ -362,7 +362,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * Read a single segment from the chunk.
      *
      * @param targetSegmentIndex the segment index to read
-     * @return a byte array containing the read segment data
+     * @return the byte array containing the read segment data
      */
     byte[] preadOneSegment(int targetSegmentIndex) {
         return preadOneSegment(targetSegmentIndex, true);
@@ -373,7 +373,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      *
      * @param targetSegmentIndex the segment index to read
      * @param isRefreshLRUCache  whether to refresh the LRU cache
-     * @return a byte array containing the read segment data
+     * @return the byte array containing the read segment data
      */
     byte[] preadOneSegment(int targetSegmentIndex, boolean isRefreshLRUCache) {
         var fdIndex = targetFdIndex(targetSegmentIndex);
@@ -499,7 +499,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         /**
          * Get a string representation of this flag, including its byte value.
          *
-         * @return a string representation of this flag
+         * @return the string representation of this flag
          */
         @Override
         public String toString() {
@@ -514,7 +514,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         /**
          * Get a string representation of this segment flag.
          *
-         * @return a string representation of this segment flag
+         * @return the string representation of this segment flag
          */
         @Override
         public @NotNull String toString() {
