@@ -83,7 +83,7 @@ public class LocalPersist implements NeedCleanUp {
     /**
      * Retrieves all the slots.
      *
-     * @return an array of OneSlot instances
+     * @return the array of OneSlot instances
      */
     public OneSlot[] oneSlots() {
         return oneSlots;
@@ -103,9 +103,9 @@ public class LocalPersist implements NeedCleanUp {
      * Performs an operation in all slots asynchronously.
      *
      * @param fnApplyOneSlot the function to apply to each slot
-     * @param fn             a function to aggregate the results from all slots
+     * @param fn             the function to aggregate the results from all slots
      * @param <R>            the type of result from fnApplyOneSlot
-     * @return an AsyncReply containing the aggregated results
+     * @return the AsyncReply containing the aggregated results
      */
     public <R> AsyncReply doSthInSlots(@NotNull Function<OneSlot, R> fnApplyOneSlot, @NotNull Function<ArrayList<R>, Reply> fn) {
         Promise<R>[] promises = new Promise[oneSlots.length];
@@ -178,7 +178,7 @@ public class LocalPersist implements NeedCleanUp {
      *
      * @param netWorkers    the number of network workers
      * @param slotNumber    the number of slots to initialize
-     * @param snowFlakes    array of SnowFlake instances for generating unique identifiers
+     * @param snowFlakes    the array of SnowFlake instances for generating unique identifiers
      * @param persistDir    the directory for persistence storage
      * @param persistConfig the configuration for persistence
      * @throws IOException if an I/O error occurs during initialization

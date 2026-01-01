@@ -25,7 +25,7 @@ public class EmptyReply implements Reply {
     /**
      * Returns an empty {@code ByteBuf} object representing the absence of data.
      *
-     * @return a {@code ByteBuf} object that is empty
+     * @return the {@code ByteBuf} object that is empty
      */
     @Override
     public ByteBuf buffer() {

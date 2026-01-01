@@ -85,7 +85,7 @@ public class IntegerReply implements Reply {
      * Preloads the buffer with the specified integer value.
      *
      * @param x the integer value to be preloaded
-     * @return a ByteBuf containing the preloaded integer value
+     * @return the ByteBuf containing the preloaded integer value
      */
     static ByteBuf bufferPreload(Long x) {
         if (x == null) {
@@ -104,7 +104,7 @@ public class IntegerReply implements Reply {
     /**
      * Returns a ByteBuf containing the stored integer value.
      *
-     * @return a ByteBuf containing the integer value
+     * @return the ByteBuf containing the integer value
      */
     @Override
     public ByteBuf buffer() {
@@ -114,7 +114,7 @@ public class IntegerReply implements Reply {
     /**
      * Returns a ByteBuf containing the stored integer value formatted as a string for HTTP use.
      *
-     * @return a ByteBuf containing the integer value formatted as a string
+     * @return the ByteBuf containing the integer value formatted as a string
      */
     @Override
     public ByteBuf bufferAsHttp() {

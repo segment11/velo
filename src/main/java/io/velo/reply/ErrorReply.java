@@ -17,7 +17,7 @@ public class ErrorReply implements Reply {
     /**
      * Generates a wrong number of arguments error reply for a given command.
      *
-     * @param cmd given command
+     * @param cmd the given command
      * @return the error reply
      */
     public static ErrorReply WRONG_NUMBER(String cmd) {
@@ -197,10 +197,10 @@ public class ErrorReply implements Reply {
     /**
      * Creates a new ErrorReply for a MOVED error, indicating that the client should move to a different node.
      *
-     * @param toClientSlot The slot number to which the client should move.
-     * @param host         The host of the new node.
-     * @param port         The port of the new node.
-     * @return A new ErrorReply with the MOVED message.
+     * @param toClientSlot the slot number to which the client should move
+     * @param host         the host of the new node
+     * @param port         the port of the new node
+     * @return a new ErrorReply with the MOVED message
      */
     public static ErrorReply clusterMoved(int toClientSlot, String host, int port) {
         return new ErrorReply("MOVED " + toClientSlot + " " + host + ":" + port);
@@ -211,7 +211,7 @@ public class ErrorReply implements Reply {
     /**
      * Constructs a new ErrorReply with the specified error message.
      *
-     * @param message The error message to be returned.
+     * @param message the error message to be returned
      */
     public ErrorReply(String message) {
         this.message = message;
@@ -220,7 +220,7 @@ public class ErrorReply implements Reply {
     /**
      * Returns the error message associated with this ErrorReply.
      *
-     * @return The error message.
+     * @return the error message
      */
     public String getMessage() {
         return message;
@@ -236,7 +236,7 @@ public class ErrorReply implements Reply {
     /**
      * Returns a ByteBuf containing the error message formatted for the Velocity protocol.
      *
-     * @return A ByteBuf with the formatted error message.
+     * @return the ByteBuf with the formatted error message
      */
     @Override
     public ByteBuf buffer() {
@@ -247,7 +247,7 @@ public class ErrorReply implements Reply {
     /**
      * Returns a ByteBuf containing the error message suitable for HTTP responses.
      *
-     * @return A ByteBuf with the error message.
+     * @return the ByteBuf with the error message
      */
     @Override
     public ByteBuf bufferAsHttp() {

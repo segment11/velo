@@ -28,7 +28,7 @@ public class DoubleReply implements Reply {
     /**
      * Constructs a new DoubleReply with the specified BigDecimal value.
      *
-     * @param value The BigDecimal value to be stored in the DoubleReply.
+     * @param value the BigDecimal value to be stored in the DoubleReply
      */
     public DoubleReply(BigDecimal value) {
         this.value = value;
@@ -38,7 +38,7 @@ public class DoubleReply implements Reply {
      * Returns the double value of this DoubleReply object.
      * This method is intended for testing purposes.
      *
-     * @return The double value.
+     * @return the double value
      */
     @TestOnly
     public double doubleValue() {
@@ -51,7 +51,7 @@ public class DoubleReply implements Reply {
      * then converted to a plain string. The string is wrapped in a BulkReply
      * object and its buffer is returned.
      *
-     * @return ByteBuf representation of the DoubleReply.
+     * @return the ByteBuf representation of the DoubleReply
      */
     @Override
     public ByteBuf buffer() {
@@ -65,7 +65,7 @@ public class DoubleReply implements Reply {
      * The double marker is prepended to the scaled double value, followed by CRLF (\r\n).
      * The result is wrapped in a ByteBuf object and returned.
      *
-     * @return ByteBuf representation of the DoubleReply in RESP3 format.
+     * @return the ByteBuf representation of the DoubleReply in RESP3 format
      */
     @Override
     public ByteBuf bufferAsResp3() {

@@ -36,7 +36,7 @@ public class PongReply implements Reply {
      * Returns a {@link ByteBuf} wrapping the byte array representing
      * the Pong reply suitable for standard communication.
      *
-     * @return A ByteBuf containing the standard Pong reply.
+     * @return the ByteBuf containing the standard Pong reply
      */
     @Override
     public ByteBuf buffer() {
@@ -47,7 +47,7 @@ public class PongReply implements Reply {
      * Returns a {@link ByteBuf} wrapping the byte array representing
      * the Pong reply suitable for HTTP responses.
      *
-     * @return A ByteBuf containing the HTTP body of the Pong reply.
+     * @return the ByteBuf containing the HTTP body of the Pong reply
      */
     @Override
     public ByteBuf bufferAsHttp() {

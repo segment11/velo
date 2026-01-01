@@ -13,7 +13,7 @@ public class AsyncReply implements Reply {
     /**
      * Constructs an instance of {@link AsyncReply} with a given {@link SettablePromise}.
      *
-     * @param settablePromise A promise that will be used to set the reply asynchronously.
+     * @param settablePromise the promise that will be used to set the reply asynchronously
      */
     public AsyncReply(SettablePromise<Reply> settablePromise) {
         this.settablePromise = settablePromise;
@@ -22,7 +22,7 @@ public class AsyncReply implements Reply {
     /**
      * Returns the {@link SettablePromise} associated with this reply.
      *
-     * @return The settable promise for this reply.
+     * @return the settable promise for this reply
      */
     public SettablePromise<Reply> getSettablePromise() {
         return settablePromise;
@@ -32,7 +32,7 @@ public class AsyncReply implements Reply {
      * Returns the buffer associated with this reply. In the case of {@link AsyncReply},
      * the buffer is not used and returns null.
      *
-     * @return The buffer associated with this reply, or null if there is none.
+     * @return the buffer associated with this reply, or null if there is none
      */
     @Override
     public ByteBuf buffer() {

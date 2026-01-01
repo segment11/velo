@@ -80,8 +80,8 @@ public class U {
         /**
          * Checks if the provided raw password matches this password.
          *
-         * @param passwordRaw The raw password to check.
-         * @return true if the provided password matches, false otherwise.
+         * @param passwordRaw the raw password to check
+         * @return true if the provided password matches, false otherwise
          */
         boolean check(String passwordRaw) {
             if (isNoPass()) {
@@ -98,8 +98,8 @@ public class U {
         /**
          * Creates a plain password instance.
          *
-         * @param passwordRaw The raw password.
-         * @return A Password instance with the plain encoding type.
+         * @param passwordRaw the raw password
+         * @return the Password instance with the plain encoding type
          */
         public static Password plain(String passwordRaw) {
             return new Password(passwordRaw, PasswordEncodedType.plain);
@@ -108,8 +108,8 @@ public class U {
         /**
          * Creates a SHA-256 hashed password instance.
          *
-         * @param passwordRaw The raw password.
-         * @return A Password instance with the SHA-256 encoding type.
+         * @param passwordRaw the raw password
+         * @return the Password instance with the SHA-256 encoding type
          */
         public static Password sha256Hex(String passwordRaw) {
             return new Password(DigestUtils.sha256Hex(passwordRaw), PasswordEncodedType.sha256Hex);
@@ -118,8 +118,8 @@ public class U {
         /**
          * Creates a Password instance from a pre-encoded SHA-256 hash.
          *
-         * @param passwordSha256Hex The pre-encoded SHA-256 hash.
-         * @return A Password instance with the SHA-256 encoding type.
+         * @param passwordSha256Hex the pre-encoded SHA-256 hash
+         * @return the Password instance with the SHA-256 encoding type
          */
         public static Password sha256HexEncoded(String passwordSha256Hex) {
             return new Password(passwordSha256Hex, PasswordEncodedType.sha256Hex);
@@ -146,7 +146,7 @@ public class U {
     /**
      * Constructs a new user with the given username.
      *
-     * @param user The username.
+     * @param user the username
      */
     public U(String user) {
         this.user = user;
@@ -155,7 +155,7 @@ public class U {
     /**
      * Returns the username.
      *
-     * @return The username.
+     * @return the username
      */
     public String getUser() {
         return user;
@@ -178,7 +178,7 @@ public class U {
     /**
      * Sets the user's enabled status.
      *
-     * @param on True to enable the user, false to disable the user.
+     * @param on true to enable the user, false to disable the user
      */
     public void setOn(boolean on) {
         isOn = on;
@@ -192,7 +192,7 @@ public class U {
     /**
      * Adds a password to the user.
      *
-     * @param password The password to add.
+     * @param password the password to add
      */
     public void addPassword(Password password) {
         // check duplicate
@@ -205,7 +205,7 @@ public class U {
     /**
      * Removes a password from the user.
      *
-     * @param password The password to remove.
+     * @param password the password to remove
      */
     public void removePassword(Password password) {
         passwords.stream().filter(p -> p.equals(password)).findFirst().ifPresent(passwords::remove);
@@ -221,8 +221,8 @@ public class U {
     /**
      * Checks if the provided raw password matches any of the user's passwords.
      *
-     * @param passwordRaw The raw password to check.
-     * @return true if the password matches, false otherwise.
+     * @param passwordRaw the raw password to check
+     * @return true if the password matches, false otherwise
      */
     public boolean checkPassword(String passwordRaw) {
         // reset password
@@ -235,7 +235,7 @@ public class U {
     /**
      * Sets the user's password. Clears any existing passwords.
      *
-     * @param password The password to set.
+     * @param password the password to set
      */
     @TestOnly
     public void setPassword(Password password) {
@@ -246,7 +246,7 @@ public class U {
     /**
      * Returns the first password of the user.
      *
-     * @return The first password, or null if there are no passwords.
+     * @return the first password, or null if there are no passwords
      */
     @TestOnly
     public Password getFirstPassword() {
@@ -269,7 +269,7 @@ public class U {
     /**
      * Returns a string representation of the user in a literal format.
      *
-     * @return A string representation of the user.
+     * @return the string representation of the user
      */
     public String literal() {
         var sb = new StringBuilder();
@@ -307,7 +307,7 @@ public class U {
     /**
      * Returns an array of Redis replies representing the user's properties.
      *
-     * @return An array of Redis replies representing the user's properties.
+     * @return the array of Redis replies representing the user's properties
      */
     public Reply[] toReplies() {
         var replies = new Reply[10];
@@ -376,8 +376,8 @@ public class U {
     /**
      * Creates a user instance from a literal string representation.
      *
-     * @param str The literal string representation of the user.
-     * @return A user instance, or null if the string is invalid.
+     * @param str the literal string representation of the user
+     * @return the user instance, or null if the string is invalid
      */
     public static U fromLiteral(String str) {
         if (!str.startsWith("user")) {
@@ -469,8 +469,8 @@ public class U {
     /**
      * Adds command rules to the user.
      *
-     * @param clear If true, clears existing command rules before adding.
-     * @param rCmd  Command rules to add.
+     * @param clear if true, clears existing command rules before adding
+     * @param rCmd  the command rules to add
      */
     public void addRCmd(boolean clear, RCmd... rCmd) {
         if (clear) {
@@ -482,8 +482,8 @@ public class U {
     /**
      * Adds disallowed command rules to the user.
      *
-     * @param clear If true, clears existing disallowed command rules before adding.
-     * @param rCmd  Disallowed command rules to add.
+     * @param clear if true, clears existing disallowed command rules before adding
+     * @param rCmd  the disallowed command rules to add
      */
     public void addRCmdDisallow(boolean clear, RCmd... rCmd) {
         if (clear) {
@@ -495,8 +495,8 @@ public class U {
     /**
      * Adds key rules to the user.
      *
-     * @param clear If true, clears existing key rules before adding.
-     * @param rKey  Key rules to add.
+     * @param clear if true, clears existing key rules before adding
+     * @param rKey  the key rules to add
      */
     public void addRKey(boolean clear, RKey... rKey) {
         if (clear) {
@@ -508,8 +508,8 @@ public class U {
     /**
      * Adds channel rules to the user.
      *
-     * @param clear   If true, clears existing channel rules before adding.
-     * @param rPubSub Channel rules to add.
+     * @param clear   if true, clears existing channel rules before adding
+     * @param rPubSub the channel rules to add
      */
     public void addRPubSub(boolean clear, RPubSub... rPubSub) {
         if (clear) {
@@ -521,8 +521,8 @@ public class U {
     /**
      * Merges rules from another user into this user.
      *
-     * @param another The user whose rules are to be merged.
-     * @param isReset If true, resets this user's rules before merging.
+     * @param another the user whose rules are to be merged
+     * @param isReset if true, resets this user's rules before merging
      */
     public void mergeRulesFromAnother(U another, boolean isReset) {
         if (isReset) {
@@ -541,8 +541,8 @@ public class U {
     /**
      * Access check result when checking command and key access.
      *
-     * @param isOk      Whether the result is OK.
-     * @param isKeyFail Whether the result is due to a key failure. When false means is due to a command failure.
+     * @param isOk      whether the result is OK
+     * @param isKeyFail whether the result is due to a key failure; when false means it is due to a command failure
      */
     public record CheckCmdAndKeyResult(boolean isOk, boolean isKeyFail) {
         public boolean asBoolean() {
@@ -557,10 +557,10 @@ public class U {
     /**
      * Checks if the user has access to the given command and key.
      *
-     * @param cmd                 The command.
-     * @param data                The command arguments.
-     * @param slotWithKeyHashList The keys.
-     * @return A CheckCmdAndKeyResult instance representing the access check result.
+     * @param cmd                 the command
+     * @param data                the command arguments
+     * @param slotWithKeyHashList the keys
+     * @return the CheckCmdAndKeyResult instance representing the access check result
      */
     public CheckCmdAndKeyResult checkCmdAndKey(String cmd, byte[][] data, ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList) {
         if (rCmdList.isEmpty()) {
@@ -607,8 +607,8 @@ public class U {
     /**
      * Checks if the user has access to the given channels.
      *
-     * @param channels The channels.
-     * @return true if the user has access to all the channels, false otherwise.
+     * @param channels the channels
+     * @return true if the user has access to all the channels, false otherwise
      */
     public boolean checkChannels(String... channels) {
         if (rPubSubList.isEmpty()) {

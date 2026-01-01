@@ -38,7 +38,7 @@ public class NilReply implements Reply {
     /**
      * Returns a {@link ByteBuf} containing the NIL reply in RESP2 format.
      *
-     * @return A ByteBuf with the NIL reply.
+     * @return the ByteBuf with the NIL reply
      */
     @Override
     public ByteBuf buffer() {
@@ -48,7 +48,7 @@ public class NilReply implements Reply {
     /**
      * Returns a {@link ByteBuf} containing the NIL reply in RESP3 format.
      *
-     * @return A ByteBuf with the NIL reply in RESP3 format.
+     * @return the ByteBuf with the NIL reply in RESP3 format
      */
     @Override
     public ByteBuf bufferAsResp3() {
@@ -58,7 +58,7 @@ public class NilReply implements Reply {
     /**
      * Returns a {@link ByteBuf} containing the NIL reply in HTTP format, which is an empty body.
      *
-     * @return A ByteBuf with an empty HTTP body.
+     * @return the ByteBuf with an empty HTTP body
      */
     @Override
     public ByteBuf bufferAsHttp() {
@@ -69,9 +69,9 @@ public class NilReply implements Reply {
      * Dumps the string representation of the NIL reply to the provided StringBuilder for testing purposes.
      * This method is annotated with @TestOnly to indicate it is intended for testing only.
      *
-     * @param sb        The StringBuilder to append the string representation to.
-     * @param nestCount The nesting level, not used in this implementation.
-     * @return Always returns true.
+     * @param sb        the StringBuilder to append the string representation to
+     * @param nestCount the nesting level, not used in this implementation
+     * @return always returns true
      */
     @TestOnly
     @Override

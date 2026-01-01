@@ -76,7 +76,7 @@ public class MultiBulkReply implements Reply {
     /**
      * Retrieves the replies contained in this multi-bulk reply.
      *
-     * @return an array of {@link Reply} objects.
+     * @return the array of {@link Reply} objects
      */
     public Reply[] getReplies() {
         return replies;
@@ -93,7 +93,7 @@ public class MultiBulkReply implements Reply {
     /**
      * Constructs a new MultiBulkReply with the given array of replies.
      *
-     * @param replies the replies to be contained in this multi-bulk reply.
+     * @param replies the replies to be contained in this multi-bulk reply
      */
     public MultiBulkReply(Reply[] replies) {
         this(replies, false, false);
@@ -102,9 +102,9 @@ public class MultiBulkReply implements Reply {
     /**
      * Dumps the multi-bulk reply to a StringBuilder for testing purposes.
      *
-     * @param sb        the StringBuilder to append the dump to.
-     * @param nestCount the level of nesting for indentation.
-     * @return always returns true.
+     * @param sb        the StringBuilder to append the dump to
+     * @param nestCount the level of nesting for indentation
+     * @return always returns true
      */
     @TestOnly
     @Override
@@ -129,7 +129,7 @@ public class MultiBulkReply implements Reply {
     /**
      * Returns a {@link ByteBuf} containing the multi-bulk reply encoded in RESP format.
      *
-     * @return a {@link ByteBuf} with the encoded multi-bulk reply.
+     * @return the {@link ByteBuf} with the encoded multi-bulk reply
      */
     @Override
     public ByteBuf buffer() {
@@ -169,7 +169,7 @@ public class MultiBulkReply implements Reply {
      * Returns a {@link ByteBuf} containing the multi-bulk reply encoded in HTTP format.
      * Current implementation delegates to {@link #buffer()}.
      *
-     * @return a {@link ByteBuf} with the encoded multi-bulk reply.
+     * @return the {@link ByteBuf} with the encoded multi-bulk reply
      */
     @Override
     public ByteBuf bufferAsHttp() {

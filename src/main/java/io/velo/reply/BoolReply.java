@@ -38,7 +38,7 @@ public enum BoolReply implements Reply {
     /**
      * Returns a ByteBuf representing this boolean value in RESP2 format.
      *
-     * @return a ByteBuf containing "true" or "false"
+     * @return the ByteBuf containing "true" or "false"
      */
     @Override
     public ByteBuf buffer() {
@@ -49,7 +49,7 @@ public enum BoolReply implements Reply {
      * Returns a ByteBuf representing this boolean value in RESP3 format.
      * The format is either "#t\r\n" for true or "#f\r\n" for false.
      *
-     * @return a ByteBuf containing the boolean value in RESP3 format
+     * @return the ByteBuf containing the boolean value in RESP3 format
      */
     @Override
     public ByteBuf bufferAsResp3() {

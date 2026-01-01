@@ -105,7 +105,7 @@ public class CompressedValue {
     /**
      * Returns the current sequence number used for version tracking.
      *
-     * @return The current sequence number.
+     * @return the current sequence number
      */
     public long getSeq() {
         return seq;
@@ -114,7 +114,7 @@ public class CompressedValue {
     /**
      * Sets a new sequence number.
      *
-     * @param seq The new sequence number to set.
+     * @param seq the new sequence number to set
      */
     public void setSeq(long seq) {
         this.seq = seq;
@@ -128,7 +128,7 @@ public class CompressedValue {
     /**
      * Returns the 64-bit hash value of the associated key.
      *
-     * @return The 64-bit hash value of the associated key.
+     * @return the 64-bit hash value of the associated key
      */
     public long getKeyHash() {
         return keyHash;
@@ -137,7 +137,7 @@ public class CompressedValue {
     /**
      * Sets the key hash value.
      *
-     * @param keyHash The 64-bit hash of the associated key.
+     * @param keyHash the 64-bit hash of the associated key
      */
     public void setKeyHash(long keyHash) {
         this.keyHash = keyHash;
@@ -151,7 +151,7 @@ public class CompressedValue {
     /**
      * Returns the expiration time in milliseconds or {@link #NO_EXPIRE} if not set.
      *
-     * @return The expiration time in milliseconds or {@link #NO_EXPIRE} if not set.
+     * @return the expiration time in milliseconds or {@link #NO_EXPIRE} if not set
      */
     public long getExpireAt() {
         return expireAt;
@@ -160,7 +160,7 @@ public class CompressedValue {
     /**
      * Sets the expiration time.
      *
-     * @param expireAt Milliseconds since epoch or {@link #NO_EXPIRE}.
+     * @param expireAt the milliseconds since epoch or {@link #NO_EXPIRE}
      */
     public void setExpireAt(long expireAt) {
         this.expireAt = expireAt;
@@ -177,7 +177,7 @@ public class CompressedValue {
     /**
      * Returns the Zstd dictionary ID or special type marker.
      *
-     * @return The Zstd dictionary ID or special type marker.
+     * @return the Zstd dictionary ID or special type marker
      */
     public int getDictSeqOrSpType() {
         return dictSeqOrSpType;
@@ -186,7 +186,7 @@ public class CompressedValue {
     /**
      * Sets the Zstd dictionary ID or special type marker.
      *
-     * @param dictSeqOrSpType Must be either a valid Zstd dictionary ID or special type constant.
+     * @param dictSeqOrSpType the Zstd dictionary ID or special type constant
      */
     public void setDictSeqOrSpType(int dictSeqOrSpType) {
         this.dictSeqOrSpType = dictSeqOrSpType;
@@ -195,7 +195,7 @@ public class CompressedValue {
     /**
      * Returns the length of the original data before compression.
      *
-     * @return The length of the original data before compression.
+     * @return the length of the original data before compression
      */
     public int getUncompressedLength() {
         if (!isCompressed()) {
@@ -209,7 +209,7 @@ public class CompressedValue {
      * Returns the length of the compressed data.  If not compressed, this is the raw data length.
      * Only use 24 bits.
      *
-     * @return The length of the compressed data.
+     * @return the length of the compressed data
      */
     public int getCompressedLength() {
         if (compressedData == null) {
@@ -230,8 +230,8 @@ public class CompressedValue {
     /**
      * Static version of type check for numeric values.
      *
-     * @param spType The type marker to check.
-     * @return {@code true} if the type is any of the numeric special types.
+     * @param spType the type marker to check
+     * @return {@code true} if the type is any of the numeric special types
      */
     public static boolean isTypeNumber(int spType) {
         return spType <= SP_TYPE_NUM_BYTE && spType >= SP_TYPE_NUM_DOUBLE;
@@ -249,8 +249,8 @@ public class CompressedValue {
     /**
      * Static version of type check for double values.
      *
-     * @param spType The type marker to check.
-     * @return {@code true} if the type is {@link #SP_TYPE_NUM_DOUBLE}.
+     * @param spType the type marker to check
+     * @return {@code true} if the type is {@link #SP_TYPE_NUM_DOUBLE}
      */
     public static boolean isTypeDouble(int spType) {
         return spType == SP_TYPE_NUM_DOUBLE;
@@ -259,7 +259,7 @@ public class CompressedValue {
     /**
      * Encodes numeric values with type-specific serialization.
      *
-     * @return Byte array containing type header, sequence number, and value bytes.
+     * @return the byte array containing type header, sequence number, and value bytes
      * @throws IllegalStateException if called on a non-numeric type.
      */
     public byte[] encodeAsNumber() {
@@ -299,7 +299,7 @@ public class CompressedValue {
     /**
      * Encodes a short string value with header information.
      *
-     * @return Encoded byte array with type header, sequence, and data.
+     * @return the encoded byte array with type header, sequence, and data
      */
     public byte[] encodeAsShortString() {
         return encodeAsShortString(seq, compressedData);
@@ -308,9 +308,9 @@ public class CompressedValue {
     /**
      * Static version of encoding a short string value with header information.
      *
-     * @param seq  Sequence number for version tracking.
-     * @param data The string data bytes to encode.
-     * @return Encoded byte array with type header, sequence, and data.
+     * @param seq  the sequence number for version tracking
+     * @param data the string data bytes to encode
+     * @return the encoded byte array with type header, sequence, and data
      */
     public static byte[] encodeAsShortString(long seq, byte[] data) {
         var buf = ByteBuffer.allocate(1 + 8 + data.length);
@@ -323,8 +323,8 @@ public class CompressedValue {
     /**
      * Extracts only the sequence number from encoded numeric or short string values.
      *
-     * @param bytes Encoded value bytes.
-     * @return The sequence number stored in the encoding.
+     * @param bytes the encoded value bytes
+     * @return the sequence number stored in the encoding
      */
     public static long getSeqFromNumberOrShortStringEncodedBytes(byte[] bytes) {
         return ByteBuffer.wrap(bytes).getLong(1);
@@ -333,7 +333,7 @@ public class CompressedValue {
     /**
      * Extracts the numeric value from the compressed data.
      *
-     * @return The numeric value as an appropriate Number subtype.
+     * @return the numeric value as an appropriate Number subtype
      * @throws IllegalStateException if the value is not a numeric type.
      */
     public Number numberValue() {
@@ -369,8 +369,8 @@ public class CompressedValue {
     /**
      * Static version of hash type check.
      *
-     * @param spType The type marker to check.
-     * @return {@code true} if the type is {@link #SP_TYPE_HH} or {@link #SP_TYPE_HASH}.
+     * @param spType the type marker to check
+     * @return {@code true} if the type is {@link #SP_TYPE_HH} or {@link #SP_TYPE_HASH}
      */
     public static boolean isHash(int spType) {
         return spType == SP_TYPE_HH ||
@@ -389,8 +389,8 @@ public class CompressedValue {
     /**
      * Static version of list type check.
      *
-     * @param spType The type marker to check.
-     * @return {@code true} if the type is {@link #SP_TYPE_LIST}.
+     * @param spType the type marker to check
+     * @return {@code true} if the type is {@link #SP_TYPE_LIST}
      */
     public static boolean isList(int spType) {
         return spType == SP_TYPE_LIST;
@@ -408,8 +408,8 @@ public class CompressedValue {
     /**
      * Static version of set type check.
      *
-     * @param spType The type marker to check.
-     * @return {@code true} if the type is {@link #SP_TYPE_SET}.
+     * @param spType the type marker to check
+     * @return {@code true} if the type is {@link #SP_TYPE_SET}
      */
     public static boolean isSet(int spType) {
         return spType == SP_TYPE_SET;
@@ -427,8 +427,8 @@ public class CompressedValue {
     /**
      * Static version of sorted set type check.
      *
-     * @param spType The type marker to check.
-     * @return {@code true} if the type is {@link #SP_TYPE_ZSET}.
+     * @param spType the type marker to check
+     * @return {@code true} if the type is {@link #SP_TYPE_ZSET}
      */
     public static boolean isZSet(int spType) {
         return spType == SP_TYPE_ZSET;
@@ -446,8 +446,8 @@ public class CompressedValue {
     /**
      * Static version of the geospatial type check.
      *
-     * @param spType The type marker to check.
-     * @return {@code true} if the type is {@link #SP_TYPE_GEO}.
+     * @param spType the type marker to check
+     * @return {@code true} if the type is {@link #SP_TYPE_GEO}
      */
     public static boolean isGeo(int spType) {
         return spType == SP_TYPE_GEO;
@@ -465,8 +465,8 @@ public class CompressedValue {
     /**
      * Static version of stream type check.
      *
-     * @param spType The type marker to check.
-     * @return {@code true} if the type is {@link #SP_TYPE_STREAM}.
+     * @param spType the type marker to check
+     * @return {@code true} if the type is {@link #SP_TYPE_STREAM}
      */
     public static boolean isStream(int spType) {
         return spType == SP_TYPE_STREAM;
@@ -484,8 +484,8 @@ public class CompressedValue {
     /**
      * Static version of Bloom filter type check.
      *
-     * @param spType The type marker to check.
-     * @return {@code true} if the type is {@link #SP_TYPE_BLOOM_BITMAP}.
+     * @param spType the type marker to check
+     * @return {@code true} if the type is {@link #SP_TYPE_BLOOM_BITMAP}
      */
     public static boolean isBloomFilter(int spType) {
         return spType == SP_TYPE_BLOOM_BITMAP;
@@ -503,8 +503,8 @@ public class CompressedValue {
     /**
      * Static version of HyperLogLog type check.
      *
-     * @param spType The type marker to check.
-     * @return {@code true} if the type is {@link #SP_TYPE_HLL}.
+     * @param spType the type marker to check
+     * @return {@code true} if the type is {@link #SP_TYPE_HLL}
      */
     public static boolean isHll(int spType) {
         return spType == SP_TYPE_HLL;
@@ -526,7 +526,7 @@ public class CompressedValue {
     /**
      * Returns the compressed data. If not compressed, this is raw data.
      *
-     * @return The compressed data.
+     * @return the compressed data
      */
     public byte[] getCompressedData() {
         return compressedData;
@@ -535,7 +535,7 @@ public class CompressedValue {
     /**
      * Sets the compressed data.
      *
-     * @param compressedData The compressed data.
+     * @param compressedData the compressed data
      */
     public void setCompressedData(byte[] compressedData) {
         this.compressedData = compressedData;
@@ -571,8 +571,8 @@ public class CompressedValue {
     /**
      * Static check for string type values.
      *
-     * @param spType The type marker to check.
-     * @return {@code true} if the type is {@link #SP_TYPE_BIG_STRING} or higher (including number types).
+     * @param spType the type marker to check
+     * @return {@code true} if the type is {@link #SP_TYPE_BIG_STRING} or higher (including number types)
      */
     public static boolean isTypeString(int spType) {
         return spType >= SP_TYPE_BIG_STRING;
@@ -599,8 +599,8 @@ public class CompressedValue {
     /**
      * Decompresses the compressed data using the given Zstd dictionary.
      *
-     * @param dict Given Zstd dictionary; {@code null} means use the self-trained dictionary.
-     * @return Decompressed data.
+     * @param dict the given Zstd dictionary; {@code null} means use the self-trained dictionary
+     * @return the decompressed data
      */
     public byte[] decompress(@Nullable Dict dict) {
         assert compressedData != null;
@@ -620,8 +620,8 @@ public class CompressedValue {
     /**
      * Compress result.
      *
-     * @param data         Compressed data or raw data.
-     * @param isCompressed true if the data is compressed.
+     * @param data         the compressed data or raw data
+     * @param isCompressed true if the data is compressed
      */
     public record CompressResult(byte[] data, boolean isCompressed) {
     }
@@ -629,9 +629,9 @@ public class CompressedValue {
     /**
      * Compresses the given data using the given Zstd dictionary.
      *
-     * @param data The data to compress.
-     * @param dict Given Zstd dictionary; {@code null} means use the self-trained dictionary.
-     * @return Compress result.
+     * @param data the data to compress
+     * @param dict the given Zstd dictionary; {@code null} means use the self-trained dictionary
+     * @return the compress result
      */
     public static CompressResult compress(byte[] data, @Nullable Dict dict) {
         return compress(data, 0, data.length, dict);
@@ -640,11 +640,11 @@ public class CompressedValue {
     /**
      * Compresses the given data using the given Zstd dictionary.
      *
-     * @param data   The data to compress.
-     * @param offset The offset in the data array.
-     * @param length The length of the data to compress.
-     * @param dict   Given Zstd dictionary; {@code null} means use the self-trained dictionary.
-     * @return Compress result.
+     * @param data   the data to compress
+     * @param offset the offset in the data array
+     * @param length the length of the data to compress
+     * @param dict   the given Zstd dictionary; {@code null} means use the self-trained dictionary
+     * @return the compress result
      */
     public static CompressResult compress(byte[] data, int offset, int length, @Nullable Dict dict) {
         // Memory copy is too much, use direct buffer better.
@@ -689,8 +689,8 @@ public class CompressedValue {
     /**
      * Checks if the given encoded bytes represent a deleted value.
      *
-     * @param encoded Encoded bytes.
-     * @return {@code true} if the encoded bytes represent a deleted value.
+     * @param encoded the encoded bytes
+     * @return {@code true} if the encoded bytes represent a deleted value
      */
     public static boolean isDeleted(byte[] encoded) {
         return encoded.length == 1 && encoded[0] == SP_FLAG_DELETE_TMP;
@@ -699,7 +699,7 @@ public class CompressedValue {
     /**
      * Calculates the total encoded length including headers.
      *
-     * @return Total byte length required for serialization.
+     * @return the total byte length required for serialization
      */
     public int encodedLength() {
         return VALUE_HEADER_LENGTH + getCompressedLength();
@@ -708,8 +708,8 @@ public class CompressedValue {
     /**
      * Only reads the sequence number from the encoded bytes.
      *
-     * @param encodedBytes Encoded bytes.
-     * @return Sequence number.
+     * @param encodedBytes the encoded bytes
+     * @return the sequence number
      */
     public static long onlyReadSeq(byte[] encodedBytes) {
         var buffer = ByteBuffer.wrap(encodedBytes);
@@ -729,8 +729,8 @@ public class CompressedValue {
     /**
      * Only reads the Zstd dictionary ID or type marker from the encoded bytes.
      *
-     * @param encodedBytes Encoded bytes.
-     * @return Zstd dictionary ID or type marker.
+     * @param encodedBytes the encoded bytes
+     * @return the Zstd dictionary ID or type marker
      */
     public static int onlyReadSpType(byte[] encodedBytes) {
         var buffer = ByteBuffer.wrap(encodedBytes);
@@ -748,7 +748,7 @@ public class CompressedValue {
     /**
      * Encodes to bytes.
      *
-     * @return Encoded bytes.
+     * @return the encoded bytes
      */
     public byte[] encode() {
         var bytes = new byte[encodedLength()];
@@ -767,7 +767,7 @@ public class CompressedValue {
     /**
      * Encodes to the target buffer.
      *
-     * @param buf Target buffer.
+     * @param buf the target buffer
      */
     public void encodeTo(ByteBuf buf) {
         buf.writeLong(seq);
@@ -790,7 +790,7 @@ public class CompressedValue {
     /**
      * Gets the big string UUID from the encoded bytes.
      *
-     * @return Big string UUID.
+     * @return the big string UUID
      */
     public long getBigStringMetaUuid() {
         return ByteBuffer.wrap(compressedData).getLong();
@@ -799,8 +799,8 @@ public class CompressedValue {
     /**
      * Gets the big string UUID from the encoded bytes.
      *
-     * @param encodedBytes Encoded bytes.
-     * @return Big string UUID.
+     * @param encodedBytes the encoded bytes
+     * @return the big string UUID
      */
     public static long getBigStringMetaUuid(byte[] encodedBytes) {
         assert encodedBytes.length >= 8 + 8 + 8 + 4 + 4 + 8;
@@ -816,10 +816,10 @@ public class CompressedValue {
      * Decodes from the buffer.
      * No memory copy when iterating over many compressed values.
      *
-     * @param buf      Buffer.
-     * @param keyBytes Key bytes.
-     * @param keyHash  64-bit key hash.
-     * @return Decoded compressed value.
+     * @param buf      the buffer
+     * @param keyBytes the key bytes
+     * @param keyHash  the 64-bit key hash
+     * @return the decoded compressed value
      */
     public static CompressedValue decode(io.netty.buffer.ByteBuf buf, byte[] keyBytes, long keyHash) {
         var cv = new CompressedValue();

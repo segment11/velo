@@ -38,7 +38,7 @@ public class OKReply implements Reply {
      * This method is typically used in protocols that require the full
      * "+OK\r\n" response format.
      *
-     * @return ByteBuf containing the "+OK\r\n" response.
+     * @return the ByteBuf containing the "+OK\r\n" response
      */
     @Override
     public ByteBuf buffer() {
@@ -50,7 +50,7 @@ public class OKReply implements Reply {
      * This method is typically used in HTTP responses where only the
      * OK status is needed.
      *
-     * @return ByteBuf containing the "OK" response body.
+     * @return the ByteBuf containing the "OK" response body
      */
     @Override
     public ByteBuf bufferAsHttp() {
