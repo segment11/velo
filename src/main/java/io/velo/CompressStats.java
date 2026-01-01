@@ -49,8 +49,8 @@ public class CompressStats {
     /**
      * Initializes a new instance of the CompressStats class with the specified name and prefix.
      *
-     * @param name   The name of the statistics instance.
-     * @param prefix The prefix used for metric labels.
+     * @param name   the name of the statistics instance
+     * @param prefix the prefix used for metric labels
      */
     public CompressStats(String name, String prefix) {
         compressStatsGauge.addRawGetter(() -> {

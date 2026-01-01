@@ -36,8 +36,8 @@ public class ConfVolumeDirsForSlot {
     /**
      * Retrieves the volume directory for a specific slot.
      *
-     * @param slot The slot number.
-     * @return The volume directory for the given slot, or null if not configured.
+     * @param slot the slot number
+     * @return the volume directory for the given slot, or null if not configured
      */
     public static String getVolumeDirBySlot(short slot) {
         if (volumeDirsBySlot == null) {
@@ -51,8 +51,8 @@ public class ConfVolumeDirsForSlot {
      * Example config: persist.volumeDirsBySlot=/mnt/data0:0-32,/mnt/data1:33-64,/mnt/data2:65-96,/mnt/data3:97-128
      * Means that the first 32 slots are stored in /mnt/data0, the next 32 in /mnt/data1, and so on.
      *
-     * @param persistConfig The configuration object containing volume directory settings.
-     * @param slotNumber    The total number of slots.
+     * @param persistConfig the configuration object containing volume directory settings
+     * @param slotNumber    the total number of slots
      * @throws IllegalArgumentException if the configuration is invalid.
      */
     public static void initFromConfig(Config persistConfig, short slotNumber) {

@@ -86,7 +86,7 @@ public class BlockingList {
     /**
      * Returns the Inner instance associated with the current thread.
      *
-     * @return The Inner instance or null if no matching instance is found.
+     * @return the Inner instance, or null if no matching instance is found
      */
     private static Inner getInner() {
         var currentThreadId = Thread.currentThread().threadId();

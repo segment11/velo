@@ -25,8 +25,8 @@ public class TaskRunnable implements Runnable {
     /**
      * Constructs a TaskRunnable with the specified slot worker ID and total number of slot workers.
      *
-     * @param slotWorkerId The ID of the slot worker.
-     * @param slotWorkers  The total number of slot workers.
+     * @param slotWorkerId the ID of the slot worker
+     * @param slotWorkers  the total number of slot workers
      */
     public TaskRunnable(byte slotWorkerId, byte slotWorkers) {
         this.slotWorkerId = slotWorkerId;
@@ -43,7 +43,7 @@ public class TaskRunnable implements Runnable {
      * Adds slots to the task runnable based on the worker ID.
      * Only slots where slot() % netWorkers equals netWorkerId are added to this worker's list.
      *
-     * @param oneSlots The array of slots to be potentially added to this worker's list.
+     * @param oneSlots the array of slots to be potentially added to this worker's list
      */
     public void chargeOneSlots(OneSlot[] oneSlots) {
         for (var oneSlot : oneSlots) {
@@ -64,7 +64,7 @@ public class TaskRunnable implements Runnable {
     /**
      * Sets the event loop for this slot worker.
      *
-     * @param slotWorkerEventloop The event loop to be used.
+     * @param slotWorkerEventloop the event loop to be used
      */
     public void setSlotWorkerEventloop(Eventloop slotWorkerEventloop) {
         this.slotWorkerEventloop = slotWorkerEventloop;
@@ -78,7 +78,7 @@ public class TaskRunnable implements Runnable {
     /**
      * Sets the request handler for this slot worker.
      *
-     * @param requestHandler The request handler to be used.
+     * @param requestHandler the request handler to be used
      */
     public void setRequestHandler(RequestHandler requestHandler) {
         this.requestHandler = requestHandler;
@@ -122,7 +122,7 @@ public class TaskRunnable implements Runnable {
     /**
      * Sets the start done flag for this task runnable.
      *
-     * @param isStartDone The flag indicating whether the task runnable has started.
+     * @param isStartDone the flag indicating whether the task runnable has started
      */
     public void startDone(boolean isStartDone) {
         this.isStartDone = isStartDone;

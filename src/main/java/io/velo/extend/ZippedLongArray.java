@@ -57,7 +57,7 @@ public class ZippedLongArray {
     /**
      * Constructs a ZippedLongArray with an initial capacity based on the count of numbers expected.
      *
-     * @param count The number of long values that are expected to be stored.
+     * @param count the number of long values that are expected to be stored
      */
     public ZippedLongArray(int count) {
         shardCount = count / SHARD_SIZE + 1;
@@ -75,7 +75,7 @@ public class ZippedLongArray {
      * Adds a long value to the array. This method will throw an IllegalArgumentException
      * if the value exceeds the maximum supported value.
      *
-     * @param value The long value to add to the array.
+     * @param value the long value to add to the array
      * @throws IllegalArgumentException if the provided number is too large to be compressed.
      */
     public void add(long value) {
@@ -121,8 +121,8 @@ public class ZippedLongArray {
     /**
      * Retrieves the long value at the specified index.
      *
-     * @param ix The index of the value to retrieve.
-     * @return The long value at the specified index.
+     * @param ix the index of the value to retrieve
+     * @return the long value at the specified index
      * @throws ArrayIndexOutOfBoundsException if the index is out of bounds.
      */
     public long get(int ix) {
@@ -161,8 +161,8 @@ public class ZippedLongArray {
     /**
      * Compresses a long value into a byte array for storage.
      *
-     * @param num The long value to compress.
-     * @return A byte array containing the compressed representation of the long.
+     * @param num the long value to compress
+     * @return the byte array containing the compressed representation of the long
      */
     private static byte[] deflate(long num) {
         int negative = num < 0 ? 0x01 : 0x00;
@@ -187,8 +187,8 @@ public class ZippedLongArray {
     /**
      * Decompresses a byte array back into a long value.
      *
-     * @param bag The byte array containing the compressed data.
-     * @return The decompressed long value.
+     * @param bag the byte array containing the compressed data
+     * @return the decompressed long value
      */
     private static long inflate(byte[] bag) {
         return inflate(bag, 0, bag.length);
@@ -197,10 +197,10 @@ public class ZippedLongArray {
     /**
      * Decompresses a byte array back into a long value, starting at a specific position and using specified length.
      *
-     * @param shard  The byte array containing the compressed data.
-     * @param numPos The starting position in the byte array.
-     * @param len    The number of bytes to decompress.
-     * @return The decompressed long value.
+     * @param shard  the byte array containing the compressed data
+     * @param numPos the starting position in the byte array
+     * @param len    the number of bytes to decompress
+     * @return the decompressed long value
      */
     private static long inflate(byte[] shard, int numPos, int len) {
         long data = 0;
@@ -217,7 +217,7 @@ public class ZippedLongArray {
     /**
      * Gets the total number of bytes used by this ZippedLongArray.
      *
-     * @return The total number of bytes used, including array references.
+     * @return the total number of bytes used, including array references
      */
     public long getTotalBytesUsed() {
         long bytes = Arrays.stream(shards).mapToLong(t -> t == null ? 0 : t.length).sum();
@@ -227,7 +227,7 @@ public class ZippedLongArray {
     /**
      * Returns the total number of long values stored in the array.
      *
-     * @return The total number of long values.
+     * @return the total number of long values
      */
     public int size() {
         return size;
@@ -236,9 +236,9 @@ public class ZippedLongArray {
     /**
      * Gets an iterator that can be used to traverse a subset of the stored numbers.
      *
-     * @param startIndex The starting index of the subset.
-     * @param count      The number of elements in the subset.
-     * @return A ZippedIterator that can be used to traverse the subset.
+     * @param startIndex the starting index of the subset
+     * @param count      the number of elements in the subset
+     * @return the ZippedIterator that can be used to traverse the subset
      */
     public ZippedIterator getIterator(int startIndex, int count) {
         return new ZippedIterator(startIndex, count);
@@ -256,8 +256,8 @@ public class ZippedLongArray {
         /**
          * Constructs a new ZippedIterator for the specified subset.
          *
-         * @param ix    The starting index of the subset.
-         * @param count The number of elements in the subset.
+         * @param ix    the starting index of the subset
+         * @param count the number of elements in the subset
          * @throws IndexOutOfBoundsException if the requested subset is out of bounds.
          */
         private ZippedIterator(int ix, int count) {
@@ -282,7 +282,7 @@ public class ZippedLongArray {
         /**
          * Retrieves the next long value in the subset.
          *
-         * @return The next long value in the subset.
+         * @return the next long value in the subset
          */
         public long nextLong() {
             var shard = shards[shardIndex];

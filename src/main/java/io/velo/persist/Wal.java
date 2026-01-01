@@ -258,7 +258,7 @@ public class Wal implements InMemoryEstimate {
     /**
      * Estimates the in-memory usage of this WAL instance.
      *
-     * @param sb the StringBuilder to append the estimate details
+     * @param sb the StringBuilder to append the memory usage estimate
      * @return the estimated memory usage in bytes
      */
     @Override

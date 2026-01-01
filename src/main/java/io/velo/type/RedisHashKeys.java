@@ -77,7 +77,7 @@ public class RedisHashKeys {
     /**
      * Returns the number of field names in the set.
      *
-     * @return The size of the set.
+     * @return the size of the set
      */
     public int size() {
         return set.size();

@@ -41,7 +41,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
      * Retrieves the in-memory cached bytes representing the metadata.
      * For save and reload
      *
-     * @return A copy of the in-memory cached bytes.
+     * @return the copy of the in-memory cached bytes
      */
     byte[] getInMemoryCachedBytes() {
         var dst = new byte[inMemoryCachedBytes.length];
@@ -53,7 +53,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
      * Overwrites the in-memory cached bytes with the provided bytes.
      * For save and reload
      *
-     * @param bytes The bytes to overwrite the in-memory cache with.
+     * @param bytes the bytes to overwrite the in-memory cache with
      * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
      */
     void overwriteInMemoryCachedBytes(byte[] bytes) {
@@ -70,8 +70,8 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
      * Constructs a new instance of MetaChunkSegmentIndex.
      * Initializes the in-memory cache and file storage for metadata based on the provided slot and slot directory.
      *
-     * @param slot    The slot index.
-     * @param slotDir The directory where the slot data is stored.
+     * @param slot    the slot index
+     * @param slotDir the directory where the slot data is stored
      * @throws IOException If an I/O error occurs during file operations.
      */
     public MetaChunkSegmentIndex(short slot, @NotNull File slotDir) throws IOException {
@@ -110,7 +110,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
      * If the configuration is set for pure memory operations, it directly updates the in-memory cache.
      * Otherwise, it writes the segment index to the file and updates the in-memory cache.
      *
-     * @param segmentIndex The chunk segment index to set.
+     * @param segmentIndex the chunk segment index to set
      */
     @SlaveNeedReplay
     void set(int segmentIndex) {
@@ -131,10 +131,10 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     /**
      * Sets the master UUID, data fetch flag, binlog file index, and binlog offset.
      *
-     * @param masterUuid                           The master UUID.
-     * @param isExistsDataAllFetched               The flag indicating if all data has been fetched from the master.
-     * @param masterBinlogFileIndexNextTimeToFetch The binlog file index to fetch next time.
-     * @param masterBinlogOffsetNextTimeToFetch    The binlog offset to fetch next time.
+     * @param masterUuid                           the master UUID
+     * @param isExistsDataAllFetched               the flag indicating if all data has been fetched from the master
+     * @param masterBinlogFileIndexNextTimeToFetch the binlog file index to fetch next time
+     * @param masterBinlogOffsetNextTimeToFetch    the binlog offset to fetch next time
      */
     public void setMasterBinlogFileIndexAndOffset(long masterUuid, boolean isExistsDataAllFetched,
                                                   int masterBinlogFileIndexNextTimeToFetch, long masterBinlogOffsetNextTimeToFetch) {
@@ -154,11 +154,11 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
      * If the configuration is set for pure memory operations, it directly updates the in-memory cache.
      * Otherwise, it writes the metadata to the file and updates the in-memory cache.
      *
-     * @param segmentIndex           The chunk segment index.
-     * @param masterUuid             The master UUID.
-     * @param isExistsDataAllFetched The flag indicating if all data has been fetched from the master.
-     * @param masterBinlogFileIndex  The binlog file index.
-     * @param masterBinlogOffset     The binlog offset.
+     * @param segmentIndex           the chunk segment index
+     * @param masterUuid             the master UUID
+     * @param isExistsDataAllFetched the flag indicating if all data has been fetched from the master
+     * @param masterBinlogFileIndex  the binlog file index
+     * @param masterBinlogOffset     the binlog offset
      */
     @VisibleForTesting
     void setAll(int segmentIndex, long masterUuid, boolean isExistsDataAllFetched,
@@ -188,7 +188,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     /**
      * Retrieves the chunk segment index.
      *
-     * @return The chunk segment index.
+     * @return the chunk segment index
      */
     int get() {
         return inMemoryCachedByteBuffer.getInt(0);
@@ -197,7 +197,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     /**
      * Retrieves the master UUID.
      *
-     * @return The master UUID.
+     * @return the master UUID
      */
     public long getMasterUuid() {
         return inMemoryCachedByteBuffer.getLong(4);
@@ -206,7 +206,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     /**
      * Checks if all data has been fetched from the master.
      *
-     * @return The flag indicating if all data has been fetched from the master.
+     * @return the flag indicating if all data has been fetched from the master
      */
     public boolean isExistsDataAllFetched() {
         return inMemoryCachedByteBuffer.getInt(12) == 1;
@@ -215,7 +215,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     /**
      * Retrieves the master binlog file index and offset.
      *
-     * @return The {@link Binlog.FileIndexAndOffset} object containing the file index and offset.
+     * @return the {@link Binlog.FileIndexAndOffset} object containing the file index and offset
      */
     public Binlog.FileIndexAndOffset getMasterBinlogFileIndexAndOffset() {
         return new Binlog.FileIndexAndOffset(inMemoryCachedByteBuffer.getInt(16), inMemoryCachedByteBuffer.getLong(20));

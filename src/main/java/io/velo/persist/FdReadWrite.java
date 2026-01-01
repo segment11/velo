@@ -599,7 +599,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
     /**
      * Estimates the memory usage of this instance.
      *
-     * @param sb the StringBuilder to append the estimate details
+     * @param sb the StringBuilder to append the memory usage estimate
      * @return the estimated memory usage in bytes
      */
     @Override

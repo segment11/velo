@@ -47,7 +47,7 @@ public class RedisList {
     /**
      * Returns the number of elements in the list.
      *
-     * @return The size of the list.
+     * @return the size of the list
      */
     public int size() {
         return list.size();

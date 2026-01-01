@@ -35,7 +35,7 @@ public class VeloUserDataInSocket {
     /**
      * Returns the last sequence number set by the client.
      *
-     * @return The last sequence number set by the client.
+     * @return the last sequence number set by the client
      */
     public long getLastSetSeq() {
         return lastSetSeq;
@@ -49,7 +49,7 @@ public class VeloUserDataInSocket {
     /**
      * Returns the slot index of the last set command execute by the client.
      *
-     * @return The slot index of the last set command execute by the client.
+     * @return the slot index of the last set command execute by the client
      */
     public short getLastSetSlot() {
         return lastSetSlot;
@@ -82,7 +82,7 @@ public class VeloUserDataInSocket {
     /**
      * Sets the name of the library used by the client.
      *
-     * @param libName The name of the library used by the client.
+     * @param libName the name of the library used by the client
      */
     public void setLibName(String libName) {
         this.libName = libName;
@@ -96,7 +96,7 @@ public class VeloUserDataInSocket {
     /**
      * Sets the version of the library used by the client.
      *
-     * @param libVer The version of the library used by the client.
+     * @param libVer the version of the library used by the client
      */
     public void setLibVer(String libVer) {
         this.libVer = libVer;
@@ -116,8 +116,8 @@ public class VeloUserDataInSocket {
         /**
          * Converts a string to the corresponding ReplyMode enum value.
          *
-         * @param str The string representation of the reply mode.
-         * @return The ReplyMode enum value.
+         * @param str the string representation of the reply mode
+         * @return the ReplyMode enum value
          */
         public static ReplyMode from(String str) {
             return switch (str) {
@@ -136,7 +136,7 @@ public class VeloUserDataInSocket {
     /**
      * Sets the reply mode for the socket connection.
      *
-     * @param replyMode The new reply mode.
+     * @param replyMode the new reply mode
      */
     public void setReplyMode(ReplyMode replyMode) {
         this.replyMode = replyMode;
@@ -150,7 +150,7 @@ public class VeloUserDataInSocket {
     /**
      * Returns the last scan assign cursor.
      *
-     * @return The last scan assign cursor.
+     * @return the last scan assign cursor
      */
     public long getLastScanAssignCursor() {
         return lastScanAssignCursor;
@@ -159,7 +159,7 @@ public class VeloUserDataInSocket {
     /**
      * Sets the last scan assign cursor.
      *
-     * @param lastScanAssignCursor The new last scan assign cursor.
+     * @param lastScanAssignCursor the new last scan assign cursor
      */
     public void setLastScanAssignCursor(long lastScanAssignCursor) {
         this.lastScanAssignCursor = lastScanAssignCursor;
@@ -173,7 +173,7 @@ public class VeloUserDataInSocket {
     /**
      * Returns the beginning scan sequence.
      *
-     * @return The beginning scan sequence.
+     * @return the beginning scan sequence
      */
     public long getBeginScanSeq() {
         return beginScanSeq;
@@ -182,7 +182,7 @@ public class VeloUserDataInSocket {
     /**
      * Sets the beginning scan sequence.
      *
-     * @param beginScanSeq The new beginning scan sequence.
+     * @param beginScanSeq the new beginning scan sequence
      */
     public void setBeginScanSeq(long beginScanSeq) {
         this.beginScanSeq = beginScanSeq;
@@ -196,7 +196,7 @@ public class VeloUserDataInSocket {
     /**
      * Returns the name of the client.
      *
-     * @return The name of the client.
+     * @return the name of the client
      */
     public String getClientName() {
         return clientName;
@@ -205,7 +205,7 @@ public class VeloUserDataInSocket {
     /**
      * Sets the name of the client.
      *
-     * @param clientName The new name of the client.
+     * @param clientName the new name of the client
      */
     public void setClientName(String clientName) {
         this.clientName = clientName;
@@ -225,7 +225,7 @@ public class VeloUserDataInSocket {
     /**
      * Constructs a new instance of VeloUserDataInSocket with the specified ReplPair.
      *
-     * @param replPairAsSlaveInTcpClient The ReplPair representing the slave in the TCP client.
+     * @param replPairAsSlaveInTcpClient the ReplPair representing the slave in the TCP client
      */
     public VeloUserDataInSocket(ReplPair replPairAsSlaveInTcpClient) {
         this.replPairAsSlaveInTcpClient = replPairAsSlaveInTcpClient;

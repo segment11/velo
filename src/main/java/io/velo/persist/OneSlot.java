@@ -2671,8 +2671,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     /**
      * Gets the merge flag for a segment.
      *
-     * @param segmentIndex The segment index.
-     * @return Segment flag with segment sequence number and wal group index.
+     * @param segmentIndex the segment index
+     * @return the segment flag with segment sequence number and wal group index
      */
     SegmentFlag getSegmentMergeFlag(int segmentIndex) {
         checkSegmentIndex(segmentIndex);
@@ -2682,9 +2682,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     /**
      * Gets the merge flag for a batch of segments.
      *
-     * @param beginSegmentIndex The beginning segment index.
-     * @param segmentCount      The number of segments to retrieve.
-     * @return A list of segment flags.
+     * @param beginSegmentIndex the beginning segment index
+     * @param segmentCount      the number of segments to retrieve
+     * @return the list of segment flags
      */
     ArrayList<SegmentFlag> getSegmentMergeFlagBatch(int beginSegmentIndex, int segmentCount) {
         checkBeginSegmentIndex(beginSegmentIndex, segmentCount);
@@ -2694,9 +2694,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     /**
      * Gets a list of segment sequence numbers for a batch of segments. For replication.
      *
-     * @param beginSegmentIndex The beginning segment index.
-     * @param segmentCount      The number of segments to retrieve.
-     * @return A list of segment sequence numbers.
+     * @param beginSegmentIndex the beginning segment index
+     * @param segmentCount      the number of segments to retrieve
+     * @return the list of segment sequence numbers
      */
     public List<Long> getSegmentSeqListBatchForRepl(int beginSegmentIndex, int segmentCount) {
         checkCurrentThreadId();

@@ -259,7 +259,7 @@ public class SocketInspector implements TcpSocket.Inspector {
     /**
      * Gets the total network input bytes length across all network workers.
      *
-     * @return The total network input bytes length.
+     * @return the total network input bytes length
      */
     public long netInBytesLength() {
         var total = 0L;
@@ -272,7 +272,7 @@ public class SocketInspector implements TcpSocket.Inspector {
     /**
      * Gets the total network output bytes length across all network workers.
      *
-     * @return The total network output bytes length.
+     * @return the total network output bytes length
      */
     public long netOutBytesLength() {
         var total = 0L;

@@ -34,7 +34,7 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
      * Retrieves the in-memory cached bytes representing sequence numbers.
      * For save and reload.
      *
-     * @return A copy of the in-memory cached bytes.
+     * @return the copy of the in-memory cached bytes
      */
     byte[] getInMemoryCachedBytes() {
         var dst = new byte[inMemoryCachedBytes.length];
@@ -46,7 +46,7 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
      * Overwrites the in-memory cached bytes with the provided bytes.
      * For save and reload.
      *
-     * @param bytes The bytes to overwrite the in-memory cache with.
+     * @param bytes the bytes to overwrite the in-memory cache with
      * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
      */
     void overwriteInMemoryCachedBytes(byte[] bytes) {
@@ -63,8 +63,8 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
      * Constructs a new instance of MetaOneWalGroupSeq.
      * Initializes the in-memory cache and file storage for sequence numbers based on the provided slot and slot directory.
      *
-     * @param slot    The slot index.
-     * @param slotDir The directory where the slot data is stored.
+     * @param slot    the slot index
+     * @param slotDir the directory where the slot data is stored
      * @throws IOException If an I/O error occurs during file operations.
      */
     public MetaOneWalGroupSeq(short slot, @NotNull File slotDir) throws IOException {
@@ -109,8 +109,8 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
     /**
      * Estimates the capacity used by this instance.
      *
-     * @param sb The StringBuilder to append the estimate details.
-     * @return The estimated capacity.
+     * @param sb the StringBuilder to append the estimate details to
+     * @return the estimated capacity
      */
     @Override
     public long estimate(@NotNull StringBuilder sb) {
@@ -121,9 +121,9 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
     /**
      * Retrieves the sequence number for a specific WAL group and split index.
      *
-     * @param oneWalGroupIndex The index of the WAL group.
-     * @param splitIndex       The split index.
-     * @return The sequence number for the specified WAL group and split.
+     * @param oneWalGroupIndex the index of the WAL group
+     * @param splitIndex       the split index
+     * @return the sequence number for the specified WAL group and split
      */
     long get(int oneWalGroupIndex, byte splitIndex) {
         var offset = 8 * oneWalGroupIndex + 8 * walGroupNumber * splitIndex;
@@ -135,9 +135,9 @@ public class MetaOneWalGroupSeq implements InMemoryEstimate, NeedCleanUp {
      * If the configuration is set for pure memory operations, it directly updates the in-memory cache.
      * Otherwise, it writes the sequence number to the file and updates the in-memory cache.
      *
-     * @param oneWalGroupIndex The index of the WAL group.
-     * @param splitIndex       The split index.
-     * @param seq              The sequence number to set.
+     * @param oneWalGroupIndex the index of the WAL group
+     * @param splitIndex       the split index
+     * @param seq              the sequence number to set
      */
     @SlaveNeedReplay
     void set(int oneWalGroupIndex, byte splitIndex, long seq) {

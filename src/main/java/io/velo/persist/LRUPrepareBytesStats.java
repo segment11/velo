@@ -40,10 +40,10 @@ public class LRUPrepareBytesStats {
     /**
      * Adds a new memory usage statistics entry to the list.
      *
-     * @param type               The type of data structure (key bucket, chunk data, etc.).
-     * @param key                The key associated with the data structure.
-     * @param lruMemoryRequireMB The amount of memory required by the data structure in MB.
-     * @param isExact            Indicates if the memory requirement is exact.
+     * @param type               the type of data structure (key bucket, chunk data, etc.)
+     * @param key                the key associated with the data structure
+     * @param lruMemoryRequireMB the amount of memory required by the data structure in MB
+     * @param isExact            indicates if the memory requirement is exact
      */
     static void add(@NotNull Type type, @NotNull String key, int lruMemoryRequireMB, boolean isExact) {
         list.add(new One(type, key, lruMemoryRequireMB, isExact));
@@ -52,8 +52,8 @@ public class LRUPrepareBytesStats {
     /**
      * Removes a memory usage statistics entry from the list based on its type and key.
      *
-     * @param type The type of data structure.
-     * @param key  The key associated with the data structure.
+     * @param type the type of data structure
+     * @param key  the key associated with the data structure
      */
     static void removeOne(@NotNull Type type, @NotNull String key) {
         list.removeIf(one -> one.type == type && one.key.equals(key));
@@ -62,7 +62,7 @@ public class LRUPrepareBytesStats {
     /**
      * Computes the total memory required by all entries in the list.
      *
-     * @return The total memory required in MB.
+     * @return the total memory required in MB
      */
     static int sum() {
         return list.stream().mapToInt(one -> one.lruMemoryRequireMB).sum();
@@ -71,8 +71,8 @@ public class LRUPrepareBytesStats {
     /**
      * Computes the total memory required by entries of a specific type in the list.
      *
-     * @param type The type of data structure.
-     * @return The total memory required for the specified type in MB.
+     * @param type the type of data structure
+     * @return the total memory required for the specified type in MB
      */
     static int sum(@NotNull Type type) {
         return list.stream().filter(one -> one.type == type).mapToInt(one -> one.lruMemoryRequireMB).sum();

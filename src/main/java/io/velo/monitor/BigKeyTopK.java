@@ -51,7 +51,7 @@ public class BigKeyTopK {
     /**
      * Returns the priority queue holding the keys.
      *
-     * @return The priority queue of BigKey objects.
+     * @return the priority queue of BigKey objects
      */
     public PriorityQueue<BigKey> getQueue() {
         return queue;
@@ -60,7 +60,7 @@ public class BigKeyTopK {
     /**
      * Returns the number of keys currently held in the priority queue.
      *
-     * @return The size of the queue.
+     * @return the size of the queue
      */
     public int size() {
         return queue.size();
@@ -69,8 +69,8 @@ public class BigKeyTopK {
     /**
      * Counts the number of keys in the queue that have a length greater than or equal to the specified checkLength.
      *
-     * @param checkLength The minimum length of keys to count.
-     * @return The number of keys with length >= checkLength.
+     * @param checkLength the minimum length of keys to count
+     * @return the number of keys with length >= checkLength
      */
     public int sizeIfBiggerThan(int checkLength) {
         return (int) queue.stream()
@@ -81,7 +81,7 @@ public class BigKeyTopK {
     /**
      * Constructs a BigKeyTopK object with a specified capacity for the priority queue.
      *
-     * @param k The number of top keys to track.
+     * @param k the number of top keys to track
      */
     public BigKeyTopK(int k) {
         this.k = k;
@@ -92,8 +92,8 @@ public class BigKeyTopK {
      * Adds a key to the priority queue if it is larger than the current smallest key in the queue.
      * If an identical key already exists in the queue, it is replaced.
      *
-     * @param key    The key.
-     * @param length The length of the key's byte array.
+     * @param key    the key
+     * @param length the length of the key's byte array
      */
     public void add(String key, int length) {
         BigKey added = new BigKey(key, length);

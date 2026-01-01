@@ -25,7 +25,7 @@ public final class CountListProto {
          *
          * <code>repeated sint32 keyHash32AndCount = 1;</code>
          *
-         * @return A list containing the keyHash32AndCount.
+         * @return the list containing the keyHash32AndCount
          */
         java.util.List<Integer> getKeyHash32AndCountList();
 
@@ -36,7 +36,7 @@ public final class CountListProto {
          *
          * <code>repeated sint32 keyHash32AndCount = 1;</code>
          *
-         * @return The count of keyHash32AndCount.
+         * @return the count of keyHash32AndCount
          */
         int getKeyHash32AndCountCount();
 
@@ -47,8 +47,8 @@ public final class CountListProto {
          *
          * <code>repeated sint32 keyHash32AndCount = 1;</code>
          *
-         * @param index The index of the element to return.
-         * @return The keyHash32AndCount at the given index.
+         * @param index the index of the element to return
+         * @return the keyHash32AndCount at the given index
          */
         int getKeyHash32AndCount(int index);
     }
@@ -75,7 +75,7 @@ public final class CountListProto {
          *
          * <code>repeated sint32 keyHash32AndCount = 1;</code>
          *
-         * @return A list containing the keyHash32AndCount.
+         * @return the list containing the keyHash32AndCount
          */
         @Override
         public java.util.List<Integer>
@@ -90,7 +90,7 @@ public final class CountListProto {
          *
          * <code>repeated sint32 keyHash32AndCount = 1;</code>
          *
-         * @return The count of keyHash32AndCount.
+         * @return the count of keyHash32AndCount
          */
         @Override
         public int getKeyHash32AndCountCount() {
@@ -104,8 +104,8 @@ public final class CountListProto {
          *
          * <code>repeated sint32 keyHash32AndCount = 1;</code>
          *
-         * @param index The index of the element to return.
-         * @return The keyHash32AndCount at the given index.
+         * @param index the index of the element to return
+         * @return the keyHash32AndCount at the given index
          */
         @Override
         public int getKeyHash32AndCount(int index) {
@@ -129,8 +129,8 @@ public final class CountListProto {
          *
          * <code>repeated sint32 keyHash32AndCount = 1;</code>
          *
-         * @param index The index to set the value at.
-         * @param value The keyHash32AndCount to set.
+         * @param index the index to set the value at
+         * @param value the keyHash32AndCount to set
          */
         private void setKeyHash32AndCount(
                 int index, int value) {
@@ -145,7 +145,7 @@ public final class CountListProto {
          *
          * <code>repeated sint32 keyHash32AndCount = 1;</code>
          *
-         * @param value The keyHash32AndCount to add.
+         * @param value the keyHash32AndCount to add
          */
         private void addKeyHash32AndCount(int value) {
             ensureKeyHash32AndCountIsMutable();
@@ -159,7 +159,7 @@ public final class CountListProto {
          *
          * <code>repeated sint32 keyHash32AndCount = 1;</code>
          *
-         * @param values The keyHash32AndCount to add.
+         * @param values the keyHash32AndCount to add
          */
         private void addAllKeyHash32AndCount(
                 Iterable<? extends Integer> values) {
@@ -293,7 +293,7 @@ public final class CountListProto {
              *
              * <code>repeated sint32 keyHash32AndCount = 1;</code>
              *
-             * @return A list containing the keyHash32AndCount.
+             * @return the list containing the keyHash32AndCount
              */
             @Override
             public java.util.List<Integer>
@@ -309,7 +309,7 @@ public final class CountListProto {
              *
              * <code>repeated sint32 keyHash32AndCount = 1;</code>
              *
-             * @return The count of keyHash32AndCount.
+             * @return the count of keyHash32AndCount
              */
             @Override
             public int getKeyHash32AndCountCount() {
@@ -323,8 +323,8 @@ public final class CountListProto {
              *
              * <code>repeated sint32 keyHash32AndCount = 1;</code>
              *
-             * @param index The index of the element to return.
-             * @return The keyHash32AndCount at the given index.
+             * @param index the index of the element to return
+             * @return the keyHash32AndCount at the given index
              */
             @Override
             public int getKeyHash32AndCount(int index) {
@@ -338,7 +338,7 @@ public final class CountListProto {
              *
              * <code>repeated sint32 keyHash32AndCount = 1;</code>
              *
-             * @param value The keyHash32AndCount to set.
+             * @param value the keyHash32AndCount to set
              * @return This builder for chaining.
              */
             public Builder setKeyHash32AndCount(
@@ -355,7 +355,7 @@ public final class CountListProto {
              *
              * <code>repeated sint32 keyHash32AndCount = 1;</code>
              *
-             * @param value The keyHash32AndCount to add.
+             * @param value the keyHash32AndCount to add
              * @return This builder for chaining.
              */
             public Builder addKeyHash32AndCount(int value) {
@@ -371,7 +371,7 @@ public final class CountListProto {
              *
              * <code>repeated sint32 keyHash32AndCount = 1;</code>
              *
-             * @param values The keyHash32AndCount to add.
+             * @param values the keyHash32AndCount to add
              * @return This builder for chaining.
              */
             public Builder addAllKeyHash32AndCount(

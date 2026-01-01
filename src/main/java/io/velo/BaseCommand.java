@@ -84,7 +84,7 @@ public abstract class BaseCommand {
     /**
      * Gets the command string received from the client.
      *
-     * @return The command string received from the client
+     * @return the command string received from the client
      */
     public String getCmd() {
         return cmd;
@@ -102,7 +102,7 @@ public abstract class BaseCommand {
     /**
      * Gets the network socket connection for the command.
      *
-     * @return The TCP socket connection to the client
+     * @return the TCP socket connection to the client
      */
     public ITcpSocket getSocket() {
         return socket;

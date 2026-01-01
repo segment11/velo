@@ -25,7 +25,7 @@ public final class NumberListProto {
          *
          * <code>repeated sint32 numbers32 = 1;</code>
          *
-         * @return A list containing the numbers32.
+         * @return the list containing the numbers32
          */
         java.util.List<Integer> getNumbers32List();
 
@@ -36,7 +36,7 @@ public final class NumberListProto {
          *
          * <code>repeated sint32 numbers32 = 1;</code>
          *
-         * @return The count of numbers32.
+         * @return the count of numbers32
          */
         int getNumbers32Count();
 
@@ -47,30 +47,30 @@ public final class NumberListProto {
          *
          * <code>repeated sint32 numbers32 = 1;</code>
          *
-         * @param index The index of the element to return.
-         * @return The numbers32 at the given index.
+         * @param index the index of the element to return
+         * @return the numbers32 at the given index
          */
         int getNumbers32(int index);
 
         /**
          * <code>repeated sint64 numbers64 = 2;</code>
          *
-         * @return A list containing the numbers64.
+         * @return the list containing the numbers64
          */
         java.util.List<Long> getNumbers64List();
 
         /**
          * <code>repeated sint64 numbers64 = 2;</code>
          *
-         * @return The count of numbers64.
+         * @return the count of numbers64
          */
         int getNumbers64Count();
 
         /**
          * <code>repeated sint64 numbers64 = 2;</code>
          *
-         * @param index The index of the element to return.
-         * @return The numbers64 at the given index.
+         * @param index the index of the element to return
+         * @return the numbers64 at the given index
          */
         long getNumbers64(int index);
     }
@@ -98,7 +98,7 @@ public final class NumberListProto {
          *
          * <code>repeated sint32 numbers32 = 1;</code>
          *
-         * @return A list containing the numbers32.
+         * @return the list containing the numbers32
          */
         @Override
         public java.util.List<Integer>
@@ -113,7 +113,7 @@ public final class NumberListProto {
          *
          * <code>repeated sint32 numbers32 = 1;</code>
          *
-         * @return The count of numbers32.
+         * @return the count of numbers32
          */
         @Override
         public int getNumbers32Count() {
@@ -127,8 +127,8 @@ public final class NumberListProto {
          *
          * <code>repeated sint32 numbers32 = 1;</code>
          *
-         * @param index The index of the element to return.
-         * @return The numbers32 at the given index.
+         * @param index the index of the element to return
+         * @return the numbers32 at the given index
          */
         @Override
         public int getNumbers32(int index) {
@@ -152,8 +152,8 @@ public final class NumberListProto {
          *
          * <code>repeated sint32 numbers32 = 1;</code>
          *
-         * @param index The index to set the value at.
-         * @param value The numbers32 to set.
+         * @param index the index to set the value at
+         * @param value the numbers32 to set
          */
         private void setNumbers32(
                 int index, int value) {
@@ -168,7 +168,7 @@ public final class NumberListProto {
          *
          * <code>repeated sint32 numbers32 = 1;</code>
          *
-         * @param value The numbers32 to add.
+         * @param value the numbers32 to add
          */
         private void addNumbers32(int value) {
             ensureNumbers32IsMutable();
@@ -182,7 +182,7 @@ public final class NumberListProto {
          *
          * <code>repeated sint32 numbers32 = 1;</code>
          *
-         * @param values The numbers32 to add.
+         * @param values the numbers32 to add
          */
         private void addAllNumbers32(
                 Iterable<? extends Integer> values) {
@@ -208,7 +208,7 @@ public final class NumberListProto {
         /**
          * <code>repeated sint64 numbers64 = 2;</code>
          *
-         * @return A list containing the numbers64.
+         * @return the list containing the numbers64
          */
         @Override
         public java.util.List<Long>
@@ -219,7 +219,7 @@ public final class NumberListProto {
         /**
          * <code>repeated sint64 numbers64 = 2;</code>
          *
-         * @return The count of numbers64.
+         * @return the count of numbers64
          */
         @Override
         public int getNumbers64Count() {
@@ -229,8 +229,8 @@ public final class NumberListProto {
         /**
          * <code>repeated sint64 numbers64 = 2;</code>
          *
-         * @param index The index of the element to return.
-         * @return The numbers64 at the given index.
+         * @param index the index of the element to return
+         * @return the numbers64 at the given index
          */
         @Override
         public long getNumbers64(int index) {
@@ -250,8 +250,8 @@ public final class NumberListProto {
         /**
          * <code>repeated sint64 numbers64 = 2;</code>
          *
-         * @param index The index to set the value at.
-         * @param value The numbers64 to set.
+         * @param index the index to set the value at
+         * @param value the numbers64 to set
          */
         private void setNumbers64(
                 int index, long value) {
@@ -262,7 +262,7 @@ public final class NumberListProto {
         /**
          * <code>repeated sint64 numbers64 = 2;</code>
          *
-         * @param value The numbers64 to add.
+         * @param value the numbers64 to add
          */
         private void addNumbers64(long value) {
             ensureNumbers64IsMutable();
@@ -272,7 +272,7 @@ public final class NumberListProto {
         /**
          * <code>repeated sint64 numbers64 = 2;</code>
          *
-         * @param values The numbers64 to add.
+         * @param values the numbers64 to add
          */
         private void addAllNumbers64(
                 Iterable<? extends Long> values) {
@@ -402,7 +402,7 @@ public final class NumberListProto {
              *
              * <code>repeated sint32 numbers32 = 1;</code>
              *
-             * @return A list containing the numbers32.
+             * @return the list containing the numbers32
              */
             @Override
             public java.util.List<Integer>
@@ -418,7 +418,7 @@ public final class NumberListProto {
              *
              * <code>repeated sint32 numbers32 = 1;</code>
              *
-             * @return The count of numbers32.
+             * @return the count of numbers32
              */
             @Override
             public int getNumbers32Count() {
@@ -432,8 +432,8 @@ public final class NumberListProto {
              *
              * <code>repeated sint32 numbers32 = 1;</code>
              *
-             * @param index The index of the element to return.
-             * @return The numbers32 at the given index.
+             * @param index the index of the element to return
+             * @return the numbers32 at the given index
              */
             @Override
             public int getNumbers32(int index) {
@@ -447,7 +447,7 @@ public final class NumberListProto {
              *
              * <code>repeated sint32 numbers32 = 1;</code>
              *
-             * @param value The numbers32 to set.
+             * @param value the numbers32 to set
              * @return This builder for chaining.
              */
             public Builder setNumbers32(
@@ -464,7 +464,7 @@ public final class NumberListProto {
              *
              * <code>repeated sint32 numbers32 = 1;</code>
              *
-             * @param value The numbers32 to add.
+             * @param value the numbers32 to add
              * @return This builder for chaining.
              */
             public Builder addNumbers32(int value) {
@@ -480,7 +480,7 @@ public final class NumberListProto {
              *
              * <code>repeated sint32 numbers32 = 1;</code>
              *
-             * @param values The numbers32 to add.
+             * @param values the numbers32 to add
              * @return This builder for chaining.
              */
             public Builder addAllNumbers32(
@@ -508,7 +508,7 @@ public final class NumberListProto {
             /**
              * <code>repeated sint64 numbers64 = 2;</code>
              *
-             * @return A list containing the numbers64.
+             * @return the list containing the numbers64
              */
             @Override
             public java.util.List<Long>
@@ -520,7 +520,7 @@ public final class NumberListProto {
             /**
              * <code>repeated sint64 numbers64 = 2;</code>
              *
-             * @return The count of numbers64.
+             * @return the count of numbers64
              */
             @Override
             public int getNumbers64Count() {
@@ -530,8 +530,8 @@ public final class NumberListProto {
             /**
              * <code>repeated sint64 numbers64 = 2;</code>
              *
-             * @param index The index of the element to return.
-             * @return The numbers64 at the given index.
+             * @param index the index of the element to return
+             * @return the numbers64 at the given index
              */
             @Override
             public long getNumbers64(int index) {
@@ -541,7 +541,7 @@ public final class NumberListProto {
             /**
              * <code>repeated sint64 numbers64 = 2;</code>
              *
-             * @param value The numbers64 to set.
+             * @param value the numbers64 to set
              * @return This builder for chaining.
              */
             public Builder setNumbers64(
@@ -554,7 +554,7 @@ public final class NumberListProto {
             /**
              * <code>repeated sint64 numbers64 = 2;</code>
              *
-             * @param value The numbers64 to add.
+             * @param value the numbers64 to add
              * @return This builder for chaining.
              */
             public Builder addNumbers64(long value) {
@@ -566,7 +566,7 @@ public final class NumberListProto {
             /**
              * <code>repeated sint64 numbers64 = 2;</code>
              *
-             * @param values The numbers64 to add.
+             * @param values the numbers64 to add
              * @return This builder for chaining.
              */
             public Builder addAllNumbers64(

@@ -30,7 +30,7 @@ public class TrainSampleJob {
     /**
      * Constructs a new instance of TrainSampleJob with the given worker ID.
      *
-     * @param workerId The unique identifier for the worker.
+     * @param workerId the unique identifier for the worker
      */
     public TrainSampleJob(byte workerId) {
         this.workerId = workerId;
@@ -64,7 +64,7 @@ public class TrainSampleJob {
     /**
      * Resets the list of samples to be trained with a new list.
      *
-     * @param list The new list of samples.
+     * @param list the new list of samples
      */
     public void resetSampleToTrainList(List<TrainSampleKV> list) {
         sampleToTrainListCopy = new ArrayList<>(list);
@@ -79,7 +79,7 @@ public class TrainSampleJob {
     /**
      * Sets the size of the dictionary to be trained.
      *
-     * @param dictSize The size of the dictionary.
+     * @param dictSize the size of the dictionary
      */
     public void setDictSize(int dictSize) {
         this.dictSize = dictSize;
@@ -93,7 +93,7 @@ public class TrainSampleJob {
     /**
      * Sets the minimum body length of samples required to start training a dictionary.
      *
-     * @param trainSampleMinBodyLength The minimum body length of samples.
+     * @param trainSampleMinBodyLength the minimum body length of samples
      */
     public void setTrainSampleMinBodyLength(int trainSampleMinBodyLength) {
         this.trainSampleMinBodyLength = trainSampleMinBodyLength;
@@ -107,7 +107,7 @@ public class TrainSampleJob {
     /**
      * Sets the exclusive end index for the dictionary key prefix.
      *
-     * @param dictKeyPrefixEndIndex The end index for the dictionary key prefix.
+     * @param dictKeyPrefixEndIndex the end index for the dictionary key prefix
      */
     public static void setDictKeyPrefixEndIndex(int dictKeyPrefixEndIndex) {
         TrainSampleJob.dictKeyPrefixEndIndex = dictKeyPrefixEndIndex;
@@ -126,7 +126,7 @@ public class TrainSampleJob {
     /**
      * Returns the list of key prefix or suffix groups.
      *
-     * @return The list of key prefix or suffix groups.
+     * @return the list of key prefix or suffix groups
      */
     public static ArrayList<String> getKeyPrefixOrSuffixGroupList() {
         return keyPrefixOrSuffixGroupList;
@@ -135,7 +135,7 @@ public class TrainSampleJob {
     /**
      * Sets the list of key prefix or suffix groups.
      *
-     * @param keyPrefixOrSuffixGroupList The list of key prefix or suffix groups.
+     * @param keyPrefixOrSuffixGroupList the list of key prefix or suffix groups
      */
     public synchronized static void setKeyPrefixOrSuffixGroupList(ArrayList<String> keyPrefixOrSuffixGroupList) {
         // longer first
@@ -146,7 +146,7 @@ public class TrainSampleJob {
     /**
      * Adds a key prefix group to the list if it does not already exist.
      *
-     * @param keyPrefixOrSuffixGroup The key prefix group to add.
+     * @param keyPrefixOrSuffixGroup the key prefix group to add
      */
     public synchronized static void addKeyPrefixGroupIfNotExist(String keyPrefixOrSuffixGroup) {
         if (keyPrefixOrSuffixGroupList.contains(keyPrefixOrSuffixGroup)) {
@@ -160,8 +160,8 @@ public class TrainSampleJob {
     /**
      * Trains a new dictionary using the provided list of samples.
      *
-     * @param list The list of samples to be used for training.
-     * @return The trained dictionary or null if training fails.
+     * @param list the list of samples to be used for training
+     * @return the trained dictionary, or null if training fails
      */
     private Dict trainNewDict(List<TrainSampleKV> list) {
         int sampleBodyLength = 0;
@@ -205,8 +205,8 @@ public class TrainSampleJob {
     /**
      * Determines the key prefix or suffix for a given key.
      *
-     * @param key The key for which to determine the prefix or suffix.
-     * @return The key prefix or suffix.
+     * @param key the key for which to determine the prefix or suffix
+     * @return the key prefix or suffix
      */
     public static String keyPrefixOrSuffixGroup(String key) {
         if (!keyPrefixOrSuffixGroupList.isEmpty()) {
@@ -238,7 +238,7 @@ public class TrainSampleJob {
     /**
      * Trains dictionaries for the samples in the list.
      *
-     * @return The result of the training process, including the trained dictionaries and the list of removed sample sequence numbers.
+     * @return the result of the training process, including the trained dictionaries and the list of removed sample sequence numbers
      */
     public TrainSampleResult train() {
         trainCount++;

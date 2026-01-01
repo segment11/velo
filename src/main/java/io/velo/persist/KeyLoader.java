@@ -531,7 +531,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Initializes file descriptors (FDs) for reading and writing key bucket data.
      *
-     * @param splitNumber The number of splits to initialize FDs for.
+     * @param splitNumber the number of splits to initialize FDs for
      */
     @VisibleForTesting
     void initFds(byte splitNumber) {
@@ -594,8 +594,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Checks if the provided byte array at a specific position contains valid key bucket data.
      *
-     * @param bytes    The byte array containing the key bucket data.
-     * @param position The starting position within the byte array.
+     * @param bytes    the byte array containing the key bucket data
+     * @param position the starting position within the byte array
      * @return true if the data is valid, false otherwise.
      */
     @VisibleForTesting
@@ -612,8 +612,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Calculates the position in shared bytes for a given bucket index.
      *
-     * @param bucketIndex The bucket index.
-     * @return The calculated position.
+     * @param bucketIndex the bucket index
+     * @return the calculated position
      */
     static int getPositionInSharedBytes(int bucketIndex) {
         int firstBucketIndexInTargetWalGroup;
@@ -638,8 +638,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Converts a CompressedValue type to its corresponding short type byte.
      *
-     * @param spType The CompressedValue type.
-     * @return The corresponding short type byte.
+     * @param spType the CompressedValue type
+     * @return the corresponding short type byte
      */
     public static byte transferToShortType(int spType) {
         if (CompressedValue.isTypeString(spType) || CompressedValue.isGeo(spType) || CompressedValue.isBloomFilter(spType)) {
@@ -663,8 +663,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Checks if a key matches a given pattern.
      * todo, need change to glob match
      *
-     * @param key          The key to check.
-     * @param matchPattern The pattern to match against.
+     * @param key          the key to check
+     * @param matchPattern the pattern to match against
      * @return true if the key matches the pattern, false otherwise.
      */
     public static boolean isKeyMatch(@NotNull String key, @Nullable String matchPattern) {
@@ -692,16 +692,16 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Reads keys from a specific WAL group and split index into a list, applying filters such as skip count, type, and match pattern.
      *
-     * @param keys          The list to populate with keys.
-     * @param walGroupIndex The WAL group index.
-     * @param splitIndex    The split index.
-     * @param skipCount     The number of entries to skip.
-     * @param typeAsByte    The type filter as a byte.
-     * @param matchPattern  The key match pattern.
-     * @param countArray    The remaining count array.
-     * @param beginScanSeq  The sequence number to start scanning from.
-     * @param inWalKeys     The set of keys already in the WAL.
-     * @return A ScanCursor indicating the next scan position or null if no more keys are found.
+     * @param keys          the list to populate with keys
+     * @param walGroupIndex the WAL group index
+     * @param splitIndex    the split index
+     * @param skipCount     the number of entries to skip
+     * @param typeAsByte    the type filter as a byte
+     * @param matchPattern  the key match pattern
+     * @param countArray    the remaining count array
+     * @param beginScanSeq  the sequence number to start scanning from
+     * @param inWalKeys     the set of keys already in the WAL
+     * @return the ScanCursor indicating the next scan position, or null if no more keys are found
      */
     private ScanCursor readKeysToList(final @NotNull ArrayList<String> keys,
                                       final int walGroupIndex,
@@ -817,14 +817,14 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Scans through key buckets starting from a given WAL group index and split index, applying filters such as skip count, type, and match pattern.
      * need skip already wal keys
      *
-     * @param walGroupIndex The WAL group index to start scanning from.
-     * @param splitIndex    The split index to start scanning from.
-     * @param skipCount     The number of entries to skip at the beginning.
-     * @param typeAsByte    The type filter as a byte.
-     * @param matchPattern  The key match pattern.
-     * @param count         The maximum number of keys to return.
-     * @param beginScanSeq  The sequence number to start scanning from.
-     * @return A ScanCursorWithReturnKeys object containing the scan cursor and the list of keys found.
+     * @param walGroupIndex the WAL group index to start scanning from
+     * @param splitIndex    the split index to start scanning from
+     * @param skipCount     the number of entries to skip at the beginning
+     * @param typeAsByte    the type filter as a byte
+     * @param matchPattern  the key match pattern
+     * @param count         the maximum number of keys to return
+     * @param beginScanSeq   the sequence number to start scanning from
+     * @return the ScanCursorWithReturnKeys object containing the scan cursor and the list of keys found
      */
     public @NotNull ScanCursorWithReturnKeys scan(final int walGroupIndex,
                                                   final byte splitIndex,
@@ -895,11 +895,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Reads a single key bucket for a specific bucket index, split index, and split number.
      *
-     * @param bucketIndex       The bucket index.
-     * @param splitIndex        The split index.
-     * @param splitNumber       The split number.
-     * @param isRefreshLRUCache Whether to refresh the LRU cache.
-     * @return A KeyBucket object or null if not found.
+     * @param bucketIndex       the bucket index
+     * @param splitIndex        the split index
+     * @param splitNumber       the split number
+     * @param isRefreshLRUCache whether to refresh the LRU cache
+     * @return the KeyBucket object, or null if not found
      */
     @VisibleForTesting
     KeyBucket readKeyBucketForSingleKey(int bucketIndex, byte splitIndex, byte splitNumber, boolean isRefreshLRUCache) {
@@ -931,11 +931,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Retrieves the expiration time for a key in a specific bucket.
      *
-     * @param bucketIndex The bucket index.
-     * @param key         The key.
-     * @param keyHash     The hash of the key.
-     * @param keyHash32   The 32-bit hash of the key.
-     * @return The expiration time or null if not found.
+     * @param bucketIndex the bucket index
+     * @param key         the key
+     * @param keyHash     the hash of the key
+     * @param keyHash32   the 32-bit hash of the key
+     * @return the expiration time, or null if not found
      */
     Long getExpireAt(int bucketIndex, String key, long keyHash, int keyHash32) {
         if (ConfForGlobal.pureMemoryV2) {
@@ -953,11 +953,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Retrieves the expiration time and sequence number for a key in a specific bucket.
      *
-     * @param bucketIndex The bucket index.
-     * @param key         The key.
-     * @param keyHash     The hash of the key.
-     * @param keyHash32   The 32-bit hash of the key.
-     * @return An ExpireAtAndSeq object containing the expiration time and sequence number or null if not found.
+     * @param bucketIndex the bucket index
+     * @param key         the key
+     * @param keyHash     the hash of the key
+     * @param keyHash32   the 32-bit hash of the key
+     * @return the ExpireAtAndSeq object containing the expiration time and sequence number, or null if not found
      */
     KeyBucket.ExpireAtAndSeq getExpireAtAndSeqByKey(int bucketIndex, String key, long keyHash, int keyHash32) {
         if (ConfForGlobal.pureMemoryV2) {
@@ -984,11 +984,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Retrieves the value, expiration time, and sequence number for a key in a specific bucket.
      *
-     * @param bucketIndex The bucket index.
-     * @param key         The key.
-     * @param keyHash     The hash of the key.
-     * @param keyHash32   The 32-bit hash of the key.
-     * @return A ValueBytesWithExpireAtAndSeq object containing the value, expiration time, and sequence number or null if not found.
+     * @param bucketIndex the bucket index
+     * @param key         the key
+     * @param keyHash     the hash of the key
+     * @param keyHash32   the 32-bit hash of the key
+     * @return the ValueBytesWithExpireAtAndSeq object containing the value, expiration time, and sequence number, or null if not found
      */
     KeyBucket.ValueBytesWithExpireAtAndSeq getValueXByKey(int bucketIndex, String key, long keyHash, int keyHash32) {
         if (ConfForGlobal.pureMemoryV2) {
@@ -1015,7 +1015,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Warms up the file descriptor read/write managers by performing operations that prepare them for use.
      *
-     * @return The number of warmed-up file descriptors.
+     * @return the number of warmed-up file descriptors
      */
     int warmUp() {
         int n = 0;
@@ -1032,13 +1032,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Puts a value into a specific bucket. This method is intended for testing or debugging purposes only.
      * not exact correct when split, just for test or debug, not public
      *
-     * @param bucketIndex The bucket index.
-     * @param key         The key.
-     * @param keyHash     The hash of the key.
-     * @param keyHash32   The 32-bit hash of the key.
-     * @param expireAt    The expiration time.
-     * @param seq         The sequence number.
-     * @param valueBytes  The value bytes.
+     * @param bucketIndex the bucket index
+     * @param key         the key
+     * @param keyHash     the hash of the key
+     * @param keyHash32   the 32-bit hash of the key
+     * @param expireAt    the expiration time
+     * @param seq         the sequence number
+     * @param valueBytes  the value bytes
      */
     @TestOnly
     void putValueByKey(int bucketIndex, String key, long keyHash, int keyHash32, long expireAt, long seq, byte[] valueBytes) {
@@ -1068,8 +1068,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Reads all key buckets for a specific bucket index.
      * not exact correct when split, just for test or debug, not public
      *
-     * @param bucketIndex The bucket index.
-     * @return A list of KeyBucket objects.
+     * @param bucketIndex the bucket index
+     * @return the list of KeyBucket objects
      */
     public ArrayList<KeyBucket> readKeyBuckets(int bucketIndex) {
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
@@ -1107,8 +1107,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Reads all key buckets for a specific bucket index and returns their string representation for debugging purposes.
      *
-     * @param bucketIndex The bucket index.
-     * @return A string representation of the key buckets.
+     * @param bucketIndex the bucket index
+     * @return the string representation of the key buckets
      */
     @TestOnly
     public String readKeyBucketsToStringForDebug(int bucketIndex) {
@@ -1124,9 +1124,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Updates the internal state of a key bucket after modifications. This method is intended for testing or debugging purposes only.
      *
-     * @param bucketIndex       The bucket index.
-     * @param keyBucket         The KeyBucket object to update.
-     * @param isRefreshLRUCache Whether to refresh the LRU cache.
+     * @param bucketIndex       the bucket index
+     * @param keyBucket         the KeyBucket object to update
+     * @param isRefreshLRUCache whether to refresh the LRU cache
      */
     @TestOnly
     private void updateKeyBucketInner(int bucketIndex, @NotNull KeyBucket keyBucket, boolean isRefreshLRUCache) {
@@ -1145,9 +1145,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Reads a batch of key buckets from a specific WAL group and split index.
      *
-     * @param splitIndex       The split index.
-     * @param beginBucketIndex The starting bucket index.
-     * @return The shared bytes representing the batch of key buckets.
+     * @param splitIndex       the split index
+     * @param beginBucketIndex the starting bucket index
+     * @return the shared bytes representing the batch of key buckets
      */
     public byte[] readBatchInOneWalGroup(byte splitIndex, int beginBucketIndex) {
         var fdReadWrite = fdReadWriteArray[splitIndex];
@@ -1160,9 +1160,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Performs actions after putting all key buckets in a WAL group.
      *
-     * @param walGroupIndex The WAL group index.
-     * @param xForBinlog    The XOneWalGroupPersist object for binlog operations.
-     * @param inner         The KeyBucketsInOneWalGroup object containing the key buckets.
+     * @param walGroupIndex the WAL group index
+     * @param xForBinlog    the XOneWalGroupPersist object for binlog operations
+     * @param inner         the KeyBucketsInOneWalGroup object containing the key buckets
      */
     private void doAfterPutAll(int walGroupIndex, @NotNull XOneWalGroupPersist xForBinlog, @NotNull KeyBucketsInOneWalGroup inner) {
         if (ConfForGlobal.pureMemoryV2) {
@@ -1209,10 +1209,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Updates a batch of PersistValueMeta objects after writing segments.
      *
-     * @param walGroupIndex                The WAL group index.
-     * @param pvmList                      The list of PersistValueMeta objects.
-     * @param xForBinlog                   The XOneWalGroupPersist object for binlog operations.
-     * @param keyBucketsInOneWalGroupGiven The KeyBucketsInOneWalGroup object containing the key buckets or null.
+     * @param walGroupIndex                the WAL group index
+     * @param pvmList                      the list of PersistValueMeta objects
+     * @param xForBinlog                   the XOneWalGroupPersist object for binlog operations
+     * @param keyBucketsInOneWalGroupGiven the KeyBucketsInOneWalGroup object containing the key buckets, or null
      */
     public void updatePvmListBatchAfterWriteSegments(int walGroupIndex,
                                                      @NotNull ArrayList<PersistValueMeta> pvmList,
@@ -1267,9 +1267,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Persists a batch of short values in a specific WAL group.
      *
-     * @param walGroupIndex  The WAL group index.
-     * @param shortValueList The collection of short values.
-     * @param xForBinlog     The XOneWalGroupPersist object for binlog operations.
+     * @param walGroupIndex  the WAL group index
+     * @param shortValueList the collection of short values
+     * @param xForBinlog     the XOneWalGroupPersist object for binlog operations
      */
     public void persistShortValueListBatchInOneWalGroup(int walGroupIndex,
                                                         @NotNull Collection<Wal.V> shortValueList,
@@ -1284,8 +1284,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Retrieves the records bytes array in a specific WAL group.
      *
-     * @param beginBucketIndex The starting bucket index.
-     * @return The records bytes array.
+     * @param beginBucketIndex the starting bucket index
+     * @return the records bytes array
      */
     public byte[][] getRecordsBytesArrayInOneWalGroup(int beginBucketIndex) {
         var walGroupIndex = Wal.calcWalGroupIndex(beginBucketIndex);
@@ -1295,8 +1295,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Updates the records bytes array for slave nodes.
      *
-     * @param recordXBytesArray The records bytes array.
-     * @return The total number of records updated.
+     * @param recordXBytesArray the records bytes array
+     * @return the total number of records updated
      */
     @SlaveNeedReplay
     @SlaveReplay
@@ -1337,9 +1337,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Writes a shared bytes list for a specific WAL group. Do this after the key buckets updated in this WAL group.
      *
-     * @param sharedBytesListBySplitIndex The shared bytes list indexed by split index.
-     * @param beginBucketIndex            The starting bucket index.
-     * @return An array of sequence numbers corresponding to each split index.
+     * @param sharedBytesListBySplitIndex the shared bytes list indexed by split index
+     * @param beginBucketIndex            the starting bucket index
+     * @return the array of sequence numbers corresponding to each split index
      */
     @SlaveNeedReplay
     @SlaveReplay
@@ -1373,11 +1373,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Removes a single key from a specific bucket. This method uses WAL delay removal instead of immediate removal.
      * use wal delay remove instead of remove immediately
      *
-     * @param bucketIndex The bucket index.
-     * @param key         The key.
-     * @param keyHash     The hash of the key.
-     * @param keyHash32   The 32-bit hash of the key.
-     * @return true if the key was successfully removed, false otherwise.
+     * @param bucketIndex the bucket index
+     * @param key         the key
+     * @param keyHash     the hash of the key
+     * @param keyHash32   the 32-bit hash of the key
+     * @return true if the key was successfully removed, false otherwise
      */
     @TestOnly
     boolean removeSingleKey(int bucketIndex, String key, long keyHash, int keyHash32) {
@@ -1431,8 +1431,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Get persisted big string uuid list, not expired.
      *
-     * @param bucketIndex The bucket index.
-     * @return The persisted big string uuid with key list.
+     * @param bucketIndex the bucket index
+     * @return the persisted big string uuid with key list
      */
     List<BigStringFiles.IdWithKey> getPersistedBigStringUuidList(int bucketIndex) {
         // pure memory, todo
@@ -1465,7 +1465,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Delete expired big string files.
      *
-     * @return The count of deleted big string files.
+     * @return the count of deleted big string files
      */
     @VisibleForTesting
     int intervalDeleteExpiredBigStringFiles() {
@@ -1553,7 +1553,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Collects metrics about the KeyLoader.
      *
-     * @return A map of metric names to their double values.
+     * @return the map of metric names to their double values
      */
     @Override
     public Map<String, Double> collect() {

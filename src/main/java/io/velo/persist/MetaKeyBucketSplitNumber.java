@@ -34,7 +34,7 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     /**
      * Retrieves the in-memory cached bytes representing the split numbers.
      *
-     * @return A copy of the in-memory cached bytes.
+     * @return the copy of the in-memory cached bytes
      */
     @SlaveReplay
     byte[] getInMemoryCachedBytes() {
@@ -48,7 +48,7 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
      * If operating in pure memory mode, it directly updates the in-memory cache.
      * Otherwise, it writes the bytes to the file and updates the in-memory cache.
      *
-     * @param bytes The bytes to overwrite the in-memory cache with.
+     * @param bytes the bytes to overwrite the in-memory cache with
      * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
      * @throws RuntimeException         If an I/O error occurs during file operations.
      */
@@ -78,8 +78,8 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
      * Constructs a new instance of MetaKeyBucketSplitNumber.
      * Initializes the in-memory cache and file storage for the split numbers based on the provided slot and slot directory.
      *
-     * @param slot    The slot index.
-     * @param slotDir The directory where the slot data is stored.
+     * @param slot    the slot index
+     * @param slotDir the directory where the slot data is stored
      * @throws IOException If an I/O error occurs during file operations.
      */
     public MetaKeyBucketSplitNumber(short slot, @NotNull File slotDir) throws IOException {
@@ -125,8 +125,8 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     /**
      * Estimates the size of the in-memory cached bytes and appends it to the provided StringBuilder.
      *
-     * @param sb The StringBuilder to append the estimate to.
-     * @return The estimated size in bytes.
+     * @param sb the StringBuilder to append the estimate to
+     * @return the estimated size in bytes
      */
     @Override
     public long estimate(@NotNull StringBuilder sb) {
@@ -139,8 +139,8 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
      * If operating in pure memory mode, it directly updates the in-memory cache.
      * Otherwise, it writes the split number to the file and updates the in-memory cache.
      *
-     * @param bucketIndex The index of the bucket.
-     * @param splitNumber The split number to set.
+     * @param bucketIndex the index of the bucket
+     * @param splitNumber the split number to set
      */
     @TestOnly
     void set(int bucketIndex, byte splitNumber) {
@@ -163,8 +163,8 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
      * If operating in pure memory mode, it directly updates the in-memory cache.
      * Otherwise, it writes the split numbers to the file and updates the in-memory cache.
      *
-     * @param beginBucketIndex The starting index of the batch.
-     * @param splitNumberArray The array of split numbers to set.
+     * @param beginBucketIndex the starting index of the batch
+     * @param splitNumberArray the array of split numbers to set
      */
     void setBatch(int beginBucketIndex, byte[] splitNumberArray) {
         if (ConfForGlobal.pureMemory) {
@@ -184,9 +184,9 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     /**
      * Retrieves the split numbers for a batch of buckets starting from a specific index.
      *
-     * @param beginBucketIndex The starting index of the batch.
-     * @param bucketCount      The number of buckets in the batch.
-     * @return An array of split numbers for the batch.
+     * @param beginBucketIndex the starting index of the batch
+     * @param bucketCount      the number of buckets in the batch
+     * @return the array of split numbers for the batch
      */
     byte[] getBatch(int beginBucketIndex, int bucketCount) {
         var dst = new byte[bucketCount];
@@ -197,8 +197,8 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     /**
      * Retrieves the split number for a specific bucket index.
      *
-     * @param bucketIndex The index of the bucket.
-     * @return The split number for the specified bucket.
+     * @param bucketIndex the index of the bucket
+     * @return the split number for the specified bucket
      */
     byte get(int bucketIndex) {
         return inMemoryCachedByteBuffer.get(bucketIndex);
@@ -207,7 +207,7 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     /**
      * Finds the maximum split number among all buckets.
      *
-     * @return The maximum split number.
+     * @return the maximum split number
      */
     byte maxSplitNumber() {
         byte max = 1;

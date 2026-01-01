@@ -251,7 +251,7 @@ public class RedisZSet {
     /**
      * Returns the number of score-value pairs in the zset.
      *
-     * @return The size of the zset.
+     * @return the size of the zset
      */
     public int size() {
         return memberMap.size();

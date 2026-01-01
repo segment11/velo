@@ -14,10 +14,10 @@ public class Utils {
     /**
      * Pads the right side of the string with the specified padding string until the total length of the string reaches the specified length.
      *
-     * @param s   The original string.
-     * @param pad The string to use for padding.
-     * @param len The desired total length of the string.
-     * @return The right-padded string.
+     * @param s   the original string
+     * @param pad the string to use for padding
+     * @param len the desired total length of the string
+     * @return the right-padded string
      */
     public static String rightPad(String s, String pad, int len) {
         if (s.length() >= len) {
@@ -33,10 +33,10 @@ public class Utils {
     /**
      * Pads the left side of the string with the specified padding string until the total length of the string reaches the specified length.
      *
-     * @param s   The original string.
-     * @param pad The string to use for padding.
-     * @param len The desired total length of the string.
-     * @return The left-padded string.
+     * @param s   the original string
+     * @param pad the string to use for padding
+     * @param len the desired total length of the string
+     * @return the left-padded string
      */
     public static String leftPad(String s, String pad, int len) {
         if (s.length() >= len) {
@@ -70,8 +70,8 @@ public class Utils {
     /**
      * Returns the absolute path to a file or directory relative to the project's root directory.
      *
-     * @param relativePath The relative path to the file or directory.
-     * @return The absolute path to the file or directory.
+     * @param relativePath the relative path to the file or directory
+     * @return the absolute path to the file or directory
      */
     public static String projectPath(String relativePath) {
         return workDir + relativePath;

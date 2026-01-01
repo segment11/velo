@@ -60,7 +60,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Retrieves the in-memory cached bytes representing the segment flags and sequence numbers.
      *
-     * @return The in-memory cached bytes.
+     * @return the in-memory cached bytes
      */
     byte[] getInMemoryCachedBytes() {
         // usually more than 10M, do not copy
@@ -72,7 +72,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
      * If operating in pure memory mode, it directly updates the in-memory cache.
      * Otherwise, it writes the bytes to the file and updates the in-memory cache.
      *
-     * @param bytes The bytes to overwrite the in-memory cache with.
+     * @param bytes the bytes to overwrite the in-memory cache with
      * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
      * @throws RuntimeException         If an I/O error occurs during file operations.
      */
@@ -88,9 +88,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Retrieves a batch of segment flags and sequence numbers starting from a specific index.
      *
-     * @param beginBucketIndex The starting index of the batch.
-     * @param bucketCount      The number of segments in the batch.
-     * @return An array of bytes representing the segment flags and sequence numbers for the batch.
+     * @param beginBucketIndex the starting index of the batch
+     * @param bucketCount      the number of segments in the batch
+     * @return the array of bytes representing the segment flags and sequence numbers for the batch
      */
     public byte[] getOneBatch(int beginBucketIndex, int bucketCount) {
         var dst = new byte[bucketCount * ONE_LENGTH];
@@ -104,9 +104,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
      * If operating in pure memory mode, it directly updates the in-memory cache.
      * Otherwise, it writes the bytes to the file and updates the in-memory cache.
      *
-     * @param bytes            The bytes to overwrite the batch with.
-     * @param beginBucketIndex The starting index of the batch.
-     * @param bucketCount      The number of segments in the batch.
+     * @param bytes            the bytes to overwrite the batch with
+     * @param beginBucketIndex the starting index of the batch
+     * @param bucketCount      the number of segments in the batch
      * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
      * @throws RuntimeException         If an I/O error occurs during file operations.
      */
@@ -138,7 +138,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Initializes the segment flags to the initial state.
      *
-     * @param innerBytes The byte array to initialize.
+     * @param innerBytes the byte array to initialize
      */
     private void fillSegmentFlagInit(byte[] innerBytes) {
         var initBytes = new byte[ONE_LENGTH];
@@ -210,8 +210,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
      * Constructs a new instance of MetaChunkSegmentFlagSeq.
      * Initializes the in-memory cache and file storage for segment flags and sequence numbers based on the provided slot and slot directory.
      *
-     * @param slot    The slot index.
-     * @param slotDir The directory where the slot data is stored.
+     * @param slot    the slot index
+     * @param slotDir the directory where the slot data is stored
      * @throws IOException If an I/O error occurs during file operations.
      */
     public MetaChunkSegmentFlagSeq(short slot, @NotNull File slotDir) throws IOException {
@@ -276,8 +276,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Estimates the size of the in-memory cached bytes and appends it to the provided StringBuilder.
      *
-     * @param sb The StringBuilder to append the estimate to.
-     * @return The estimated size in bytes.
+     * @param sb the StringBuilder to append the memory usage estimate
+     * @return the estimated size in bytes
      */
     @Override
     public long estimate(@NotNull StringBuilder sb) {
@@ -293,8 +293,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Updates the bit set for segment reuse for a specific segment index.
      *
-     * @param fdIndex            The file descriptor index.
-     * @param targetSegmentIndex The target segment index.
+     * @param fdIndex            the file descriptor index
+     * @param targetSegmentIndex the target segment index
      * @param canReuse           Whether the segment can be reused.
      */
     void updateBitSetCanReuseForSegmentIndex(int fdIndex, int targetSegmentIndex, boolean canReuse) {
@@ -315,9 +315,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Finds a segment index that can be reused starting from a specific index.
      *
-     * @param beginSegmentIndex The starting index to search for a reusable segment.
-     * @param segmentCount      The number of segments to find.
-     * @return The index of the first segment that can be reused, or -1 if no such segment is found.
+     * @param beginSegmentIndex the starting index to search for a reusable segment
+     * @param segmentCount      the number of segments to find
+     * @return the index of the first segment that can be reused, or -1 if no such segment is found
      */
     int findCanReuseSegmentIndex(int beginSegmentIndex, int segmentCount) {
         int currentSegmentIndex = beginSegmentIndex;
@@ -354,7 +354,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Returns the name of the task.
      *
-     * @return The name of the task, "segments all merged check for truncate file".
+     * @return the name of the task, "segments all merged check for truncate file"
      */
     @Override
     public String name() {
@@ -407,7 +407,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Returns the number of times the task should execute after the loop count.
      *
-     * @return The number of times the task should execute, every 100 milliseconds.
+     * @return the number of times the task should execute, every 100 milliseconds
      */
     @Override
     public int executeOnceAfterLoopCount() {
@@ -423,7 +423,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Reloads the marked persisted segment index.
      *
-     * @return The number of marked segments.
+     * @return the number of marked segments
      */
     @VisibleForTesting
     int reloadMarkPersistedSegmentIndex() {
@@ -467,7 +467,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Prints the marked persisted segment index for a specific wal group index. Only used for testing.
      *
-     * @param walGroupIndex The wal group index for which to print the marked persisted segment index.
+     * @param walGroupIndex the wal group index for which to print the marked persisted segment index
      */
     @TestOnly
     void printMarkedPersistedSegmentIndex(int walGroupIndex) {
@@ -497,8 +497,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Marks the persisted segment index for a specific wal group index. After Chunk persist some segments of one WAL group.
      *
-     * @param walGroupIndex     The wal group index.
-     * @param beginSegmentIndex The begin segment index.
+     * @param walGroupIndex     the wal group index
+     * @param beginSegmentIndex the begin segment index
      * @param segmentCount      Persisted segment count.
      */
     public void markPersistedSegmentIndexToTargetWalGroup(int walGroupIndex, int beginSegmentIndex, short segmentCount) {
@@ -526,8 +526,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Finds the segments that need to be merged for a specific wal group index. Calculating by marked segment index.
      *
-     * @param walGroupIndex The wal group index.
-     * @return The segment index and count that need to be merged.
+     * @param walGroupIndex the wal group index
+     * @return the segment index and count that need to be merged
      */
     int[] findThoseNeedToMerge(int walGroupIndex) {
         if (!isOverHalfSegmentNumberForFirstReuseLoop) {
@@ -578,9 +578,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Iterates over a range of segments and calls the provided callback for each segment.
      *
-     * @param beginSegmentIndex The beginning segment index.
-     * @param segmentCount      The number of segments to iterate over.
-     * @param callBack          The callback to be invoked for each segment.
+     * @param beginSegmentIndex the beginning segment index
+     * @param segmentCount      the number of segments to iterate over
+     * @param callBack          the callback to be invoked for each segment
      */
     public void iterateRange(int beginSegmentIndex, int segmentCount, @NotNull IterateCallBack callBack) {
         var end = Math.min(beginSegmentIndex + segmentCount, maxSegmentNumber);
@@ -598,7 +598,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Iterates over all segments and calls the provided callback for each segment.
      *
-     * @param callBack The callback to be invoked for each segment.
+     * @param callBack the callback to be invoked for each segment
      */
     public void iterateAll(@NotNull IterateCallBack callBack) {
         for (int segmentIndex = 0; segmentIndex < maxSegmentNumber; segmentIndex++) {
@@ -615,9 +615,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Gets a list of segment sequence numbers for a batch of segments. For replication.
      *
-     * @param beginSegmentIndex The beginning segment index.
-     * @param segmentCount      The number of segments to retrieve.
-     * @return A list of segment sequence numbers.
+     * @param beginSegmentIndex the beginning segment index
+     * @param segmentCount      the number of segments to retrieve
+     * @return the list of segment sequence numbers
      */
     List<Long> getSegmentSeqListBatchForRepl(int beginSegmentIndex, int segmentCount) {
         var offset = beginSegmentIndex * ONE_LENGTH;
@@ -632,10 +632,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Sets the merge flag for a segment.
      *
-     * @param segmentIndex  The segment index.
-     * @param flagByte      The flag byte.
-     * @param segmentSeq    The segment sequence number.
-     * @param walGroupIndex The wal group index.
+     * @param segmentIndex  the segment index
+     * @param flagByte      the flag byte
+     * @param segmentSeq    the segment sequence number
+     * @param walGroupIndex the wal group index
      */
     @SlaveNeedReplay
     public void setSegmentMergeFlag(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex) {
@@ -663,11 +663,11 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Sets the merge flag for a batch of segments.
      *
-     * @param beginSegmentIndex The beginning segment index.
-     * @param segmentCount      The number of segments to set.
-     * @param flagByte          The flag byte.
-     * @param segmentSeqList    The segment sequence numbers.
-     * @param walGroupIndex     The wal group index.
+     * @param beginSegmentIndex the beginning segment index
+     * @param segmentCount      the number of segments to set
+     * @param flagByte          the flag byte
+     * @param segmentSeqList    the segment sequence numbers
+     * @param walGroupIndex     the wal group index
      */
     void setSegmentMergeFlagBatch(int beginSegmentIndex,
                                   int segmentCount,
@@ -704,8 +704,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Gets the merge flag for a segment.
      *
-     * @param segmentIndex The segment index.
-     * @return Segment flag with segment sequence number and wal group index.
+     * @param segmentIndex the segment index
+     * @return the segment flag with segment sequence number and wal group index
      */
     Chunk.SegmentFlag getSegmentMergeFlag(int segmentIndex) {
         var offset = segmentIndex * ONE_LENGTH;
@@ -717,9 +717,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Gets the merge flag for a batch of segments.
      *
-     * @param beginSegmentIndex The beginning segment index.
-     * @param segmentCount      The number of segments to retrieve.
-     * @return A list of segment flags.
+     * @param beginSegmentIndex the beginning segment index
+     * @param segmentCount      the number of segments to retrieve
+     * @return the list of segment flags
      */
     ArrayList<Chunk.SegmentFlag> getSegmentMergeFlagBatch(int beginSegmentIndex, int segmentCount) {
         var list = new ArrayList<Chunk.SegmentFlag>(segmentCount);
@@ -736,9 +736,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Check if target segments are not write or merged.
      *
-     * @param beginSegmentIndex The beginning segment index.
-     * @param segmentCount      The number of segments to check.
-     * @return True if all segments are not write or merged, false otherwise.
+     * @param beginSegmentIndex the beginning segment index
+     * @param segmentCount      the number of segments to check
+     * @return true if all segments are not write or merged, false otherwise
      */
     boolean isAllFlagsNotWrite(int beginSegmentIndex, int segmentCount) {
         var offset = beginSegmentIndex * ONE_LENGTH;

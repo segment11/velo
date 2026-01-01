@@ -153,7 +153,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     /**
      * Estimate the memory usage of this chunk and append the details to the provided StringBuilder.
      *
-     * @param sb the StringBuilder to append the memory usage details to
+     * @param sb the StringBuilder to append the memory usage estimate
      * @return the estimated memory usage in bytes
      */
     @Override
@@ -723,7 +723,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * This method updates the current segment index by adding the provided segment count. If the new index exceeds the maximum allowed index,
      * it wraps around to 0 or throws an exception if it exceeds the maximum segment index. It handles both single and multiple segment increments.
      *
-     * @param segmentCount The number of segments to move forward.
+     * @param segmentCount the number of segments to move forward
      */
     @VisibleForTesting
     void moveSegmentIndexNext(int segmentCount) {
@@ -759,8 +759,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * based on the half-segment boundary.
      *
      * @param isNewAppend    Whether this is a new append operation.
-     * @param bySegmentIndex The current segment index.
-     * @return The adjusted segment index for merging.
+     * @param bySegmentIndex the current segment index
+     * @return the adjusted segment index for merging
      */
     int prevFindSegmentIndexSkipHalf(boolean isNewAppend, int bySegmentIndex) {
         int segmentIndexToMerge = -1;
@@ -779,7 +779,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     /**
      * Checks if all bytes in the provided byte array are zero.
      *
-     * @param bytes The byte array to check.
+     * @param bytes the byte array to check
      * @return {@code true} if all bytes are zero, {@code false} otherwise.
      */
     private boolean isAllZero(byte[] bytes) {
@@ -799,10 +799,10 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * This method writes the provided bytes to the specified segment index. It supports writing multiple segments at once and handles
      * cases where the bytes are all zeros by clearing the target segment index in memory.
      *
-     * @param bytes              The byte array containing the data to write.
-     * @param segmentIndex       The starting segment index to write to.
-     * @param segmentCount       The number of segments to write.
-     * @param segmentRealLengths The real length of each segment.
+     * @param bytes              the byte array containing the data to write
+     * @param segmentIndex       the starting segment index to write to
+     * @param segmentCount       the number of segments to write
+     * @param segmentRealLengths the real length of each segment
      */
     @SlaveReplay
     public void writeSegmentsFromMasterExistsOrAfterSegmentSlim(byte[] bytes, int segmentIndex, int segmentCount, int[] segmentRealLengths) {
@@ -850,8 +850,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * <p>
      * This method sets the current segment index to the target index and writes the provided bytes to that segment.
      *
-     * @param bytes              The byte array containing the data to write.
-     * @param targetSegmentIndex The target segment index to write to.
+     * @param bytes              the byte array containing the data to write
+     * @param targetSegmentIndex the target segment index to write to
      * @return {@code true} if the write was successful, {@code false} otherwise.
      */
     @SlaveReplay
@@ -866,8 +866,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * This method writes the provided bytes to the current segment index. It supports writing multiple segments at once and updates the
      * file descriptor lengths accordingly.
      *
-     * @param bytes        The byte array containing the data to write.
-     * @param segmentCount The number of segments to write.
+     * @param bytes        the byte array containing the data to write
+     * @param segmentCount the number of segments to write
      * @return {@code true} if this is a new append operation, {@code false} otherwise.
      */
     @SlaveNeedReplay
@@ -902,8 +902,8 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * This method writes the provided bytes to the current segment index for replication purposes. It ensures that the segment count does
      * not exceed the predefined limit for replication operations.
      *
-     * @param bytes        The byte array containing the data to write.
-     * @param segmentCount The number of segments to write.
+     * @param bytes        the byte array containing the data to write
+     * @param segmentCount the number of segments to write
      */
     @SlaveReplay
     private void writeSegmentsForRepl(byte[] bytes, int segmentCount) {
@@ -929,7 +929,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * This method gathers various metrics about the chunk, such as the current segment index, maximum segment index, and performance statistics.
      * It also includes metrics from associated components like segment batches and file descriptor read-write objects.
      *
-     * @return A map containing the collected metrics.
+     * @return the map containing the collected metrics
      */
     @Override
     public Map<String, Double> collect() {

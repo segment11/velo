@@ -15,7 +15,7 @@ public class PrimaryTaskRunnable implements Runnable {
     /**
      * Constructs a PrimaryTaskRunnable with a specified task.
      *
-     * @param task a Consumer<Integer> that defines the task to be executed. The integer parameter can be used as a loop count.
+     * @param task the Consumer<Integer> that defines the task to be executed; the integer parameter can be used as a loop count
      */
     public PrimaryTaskRunnable(Consumer<Integer> task) {
         this.task = task;

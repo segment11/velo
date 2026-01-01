@@ -69,7 +69,7 @@ public class NilReply implements Reply {
      * Dumps the string representation of the NIL reply to the provided StringBuilder for testing purposes.
      * This method is annotated with @TestOnly to indicate it is intended for testing only.
      *
-     * @param sb        the StringBuilder to append the string representation to
+     * @param sb        the StringBuilder to append the dump to
      * @param nestCount the nesting level, not used in this implementation
      * @return always returns true
      */

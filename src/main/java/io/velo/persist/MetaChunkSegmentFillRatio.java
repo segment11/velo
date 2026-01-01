@@ -54,8 +54,8 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
     /**
      * Set the fill ratio of a segment.
      *
-     * @param segmentIndex         The segment index
-     * @param initValueBytesLength The initial value length
+     * @param segmentIndex         the segment index
+     * @param initValueBytesLength the initial value length
      */
     public void set(int segmentIndex, int initValueBytesLength) {
         var offset = segmentIndex * 9;
@@ -80,8 +80,8 @@ public class MetaChunkSegmentFillRatio implements InMemoryEstimate, CanSaveAndLo
     /**
      * Update the segment fill ratio.
      *
-     * @param segmentIndex     The segment index
-     * @param valueBytesLength Removed value bytes length (Wal.V persist length)
+     * @param segmentIndex     the segment index
+     * @param valueBytesLength the removed value bytes length (Wal.V persist length)
      */
     public void remove(int segmentIndex, int valueBytesLength) {
         var offset = segmentIndex * 9;

@@ -68,8 +68,8 @@ public enum ConfForSlot {
     /**
      * Retrieves the appropriate configuration based on the estimated number of keys.
      *
-     * @param estimateKeyNumber The estimated number of keys.
-     * @return The appropriate configuration for the given number of keys.
+     * @param estimateKeyNumber the estimated number of keys
+     * @return the appropriate configuration for the given number of keys
      */
     public static ConfForSlot from(long estimateKeyNumber) {
         if (estimateKeyNumber <= 100_000L) {
@@ -84,7 +84,7 @@ public enum ConfForSlot {
     /**
      * Returns a map of values that need to be matched for a slave to be considered compatible with the master.
      *
-     * @return A map of configuration values.
+     * @return the map of configuration values
      */
     public HashMap<String, Object> slaveCanMatchCheckValues() {
         var map = new HashMap<String, Object>();
@@ -117,7 +117,7 @@ public enum ConfForSlot {
     /**
      * Initializes the configuration based on the estimated number of keys.
      *
-     * @param estimateKeyNumber The estimated number of keys.
+     * @param estimateKeyNumber the estimated number of keys
      */
     ConfForSlot(long estimateKeyNumber) {
         if (estimateKeyNumber == 100_000L) {
@@ -156,7 +156,7 @@ public enum ConfForSlot {
         /**
          * Initializes the LRU cache with the specified maximum size.
          *
-         * @param maxSize The maximum size of the LRU cache.
+         * @param maxSize the maximum size of the LRU cache
          */
         public ConfLru(int maxSize) {
             this.maxSize = maxSize;
@@ -185,8 +185,8 @@ public enum ConfForSlot {
         /**
          * Initializes the bucket configuration with the specified parameters.
          *
-         * @param bucketsPerSlot     The number of buckets per slot.
-         * @param initialSplitNumber The initialized split number.
+         * @param bucketsPerSlot     the number of buckets per slot
+         * @param initialSplitNumber the initialized split number
          */
         ConfBucket(int bucketsPerSlot, byte initialSplitNumber) {
             this.bucketsPerSlot = bucketsPerSlot;
@@ -254,9 +254,9 @@ public enum ConfForSlot {
         /**
          * Initializes the chunk configuration with the specified parameters.
          *
-         * @param segmentNumberPerFd The number of segments per file descriptor.
-         * @param fdPerChunk         The number of file descriptors per chunk.
-         * @param segmentLength      The length of each segment.
+         * @param segmentNumberPerFd the number of segments per file descriptor
+         * @param fdPerChunk         the number of file descriptors per chunk
+         * @param segmentLength      the length of each segment
          */
         ConfChunk(int segmentNumberPerFd, byte fdPerChunk, int segmentLength) {
             this.segmentNumberPerFd = segmentNumberPerFd;
@@ -308,7 +308,7 @@ public enum ConfForSlot {
         /**
          * Calculates the maximum number of segments.
          *
-         * @return The maximum number of segments.
+         * @return the maximum number of segments
          */
         public int maxSegmentNumber() {
             return segmentNumberPerFd * fdPerChunk;
@@ -371,9 +371,9 @@ public enum ConfForSlot {
         /**
          * Initializes the WAL configuration with the specified parameters.
          *
-         * @param oneChargeBucketNumber The number of buckets to charge at once.
-         * @param valueSizeTrigger      The trigger size for values.
-         * @param shortValueSizeTrigger The trigger size for short values.
+         * @param oneChargeBucketNumber the number of buckets to charge at once
+         * @param valueSizeTrigger      the trigger size for values
+         * @param shortValueSizeTrigger the trigger size for short values
          */
         ConfWal(int oneChargeBucketNumber, int valueSizeTrigger, int shortValueSizeTrigger) {
             this.oneChargeBucketNumber = oneChargeBucketNumber;
