@@ -4,7 +4,6 @@ import groovy.transform.CompileStatic
 import io.velo.BaseCommand
 import io.velo.ConfForGlobal
 import io.velo.reply.*
-import org.jetbrains.annotations.VisibleForTesting
 
 @CompileStatic
 class CommandCommand extends BaseCommand {
@@ -30,30 +29,41 @@ class CommandCommand extends BaseCommand {
 
         if (data.length < 2) {
             return ErrorReply.FORMAT
-//            return new ErrorReply('wrong number of arguments for \'command\' command')
         }
 
         def subCmd = new String(data[1]).toLowerCase()
         if ('count' == subCmd) {
             // todo
-            return new IntegerReply(200);
+            return new IntegerReply(241)
         } else if ('docs' == subCmd) {
             return docs()
         } else if ('getkeys' == subCmd) {
             return getkeys()
+        } else if ('getkeysandflags' == subCmd) {
+            return getkeys(true)
+        } else if ('help' == subCmd) {
+            // todo
+            return new BulkReply('command help count docs getkeys'.getBytes())
+        } else if ('info' == subCmd) {
+            return info()
+        } else if ('list' == subCmd) {
+            return list()
         } else {
             return ErrorReply.SYNTAX
         }
     }
 
-    @VisibleForTesting
-    Reply docs() {
+    private Reply info() {
         // todo
         MultiBulkReply.EMPTY
     }
 
-    @VisibleForTesting
-    Reply getkeys() {
+    private Reply docs() {
+        // todo
+        MultiBulkReply.EMPTY
+    }
+
+    private Reply getkeys(boolean withFlags = false) {
         if (data.length < 4) {
             return ErrorReply.FORMAT
         }
@@ -79,8 +89,23 @@ class CommandCommand extends BaseCommand {
 
         def replies = new Reply[sList.size()]
         for (int i = 0; i < sList.size(); i++) {
-            replies[i] = new BulkReply(sList[i].rawKey().bytes)
+            def keyBytes = sList[i].rawKey().bytes
+            if (withFlags) {
+                def subReplies = new Reply[2]
+                subReplies[0] = new BulkReply(keyBytes)
+                def flagsReplies = new Reply[2]
+                // todo, add flags reply
+                subReplies[1] = new MultiBulkReply(flagsReplies)
+                replies[i] = new MultiBulkReply(subReplies)
+            } else {
+                replies[i] = new BulkReply(keyBytes)
+            }
         }
         new MultiBulkReply(replies)
+    }
+
+    private Reply list() {
+        // todo
+        MultiBulkReply.EMPTY
     }
 }

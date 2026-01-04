@@ -95,9 +95,14 @@ public class TaskRunnable implements Runnable {
      */
     @Override
     public void run() {
+        if (isStopped) {
+            return;
+        }
+
         final long INTERVAL_MS = 10L;
         if (!isStartDone) {
-            slotWorkerEventloop.delay(INTERVAL_MS, this);
+            // wait 1s if server not started
+            slotWorkerEventloop.delay(INTERVAL_MS * 100, this);
             return;
         }
 
@@ -105,10 +110,6 @@ public class TaskRunnable implements Runnable {
             oneSlot.doTask(loopCount);
         }
         loopCount++;
-
-        if (isStopped) {
-            return;
-        }
 
         slotWorkerEventloop.delay(INTERVAL_MS, this);
     }
