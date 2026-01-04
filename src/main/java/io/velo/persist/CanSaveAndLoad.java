@@ -1,5 +1,6 @@
 package io.velo.persist;
 
+import io.velo.PureMemoryMode;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.DataInputStream;
@@ -9,6 +10,7 @@ import java.io.IOException;
 /**
  * Interface for saving and loading.
  */
+@PureMemoryMode
 public interface CanSaveAndLoad {
     /**
      * Load from last saved file when pure memory.

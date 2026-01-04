@@ -3,6 +3,7 @@ package io.velo.persist;
 import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
+import io.velo.PureMemoryMode;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -25,6 +26,7 @@ import static io.velo.CompressedValue.NO_EXPIRE;
 // pure memory v2
 // refer to faster
 // https://github.com/microsoft/FASTER
+@PureMemoryMode
 public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSaveAndLoad {
     // index -> bucket index
     private final byte[][] allKeyHash32BitBytesArray;
