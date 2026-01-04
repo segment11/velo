@@ -477,6 +477,7 @@ public class KeyBucket {
      * Clear all expired key-value pairs in this key bucket.
      */
     public void clearAllExpired() {
+        final long currentTimeMillis = System.currentTimeMillis();
         for (int i = 0; i < capacity; i++) {
             int metaIndex = metaIndex(i);
             var cellHashValue = buffer.getLong(metaIndex);
@@ -485,7 +486,7 @@ public class KeyBucket {
             }
 
             var expireAt = buffer.getLong(metaIndex + HASH_VALUE_LENGTH);
-            if (expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis()) {
+            if (expireAt != NO_EXPIRE && expireAt < currentTimeMillis) {
                 clearOneExpiredOrDeleted(i);
             }
         }
@@ -513,7 +514,7 @@ public class KeyBucket {
     @VisibleForTesting
     void updateSeq() {
         long seq = snowFlake.nextId();
-        // last 4 bits for split number for data check, max split number is 8
+        // last 4 bits for split number for data check, max split number is 9
         // can not compare bigger or smaller, just compare equal or not, !important
         lastUpdateSeq = seq << 4 | splitNumber;
     }

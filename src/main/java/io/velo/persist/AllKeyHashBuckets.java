@@ -283,6 +283,7 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
         var extendBytes = extendBytesArray[bucketIndex];
         var buffer = ByteBuffer.wrap(bytes);
         var extendBuffer = ByteBuffer.wrap(extendBytes);
+        final long currentTimeMillis = System.currentTimeMillis();
 
         for (int i = 0; i < bytes.length; i += 4) {
             var targetKeyHash32 = buffer.getInt(i);
@@ -293,7 +294,7 @@ public class AllKeyHashBuckets implements InMemoryEstimate, NeedCleanUp, CanSave
             var offset = i * 7;
             var expireAtAndShortType = extendBuffer.getLong(offset + 8);
             var expireAt = expireAtAndShortType >>> 16;
-            if (expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis()) {
+            if (expireAt != NO_EXPIRE && expireAt < currentTimeMillis) {
                 var recordId = extendBuffer.getLong(offset);
                 var segmentIndex = (int) (recordId >> (18 + 18 + 2));
                 var valueBytesLength = extendBuffer.getInt(offset + 24);

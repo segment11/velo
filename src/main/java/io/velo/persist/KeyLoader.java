@@ -1438,7 +1438,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         // pure memory, todo
 
         var list = new ArrayList<BigStringFiles.IdWithKey>();
-        var currentTimeMillis = System.currentTimeMillis();
+        final long currentTimeMillis = System.currentTimeMillis();
 
         var keyBuckets = readKeyBuckets(bucketIndex);
         for (var keyBucket : keyBuckets) {
@@ -1474,7 +1474,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
         final int[] countArray = {0};
-        var currentTimeMillis = System.currentTimeMillis();
+        final long currentTimeMillis = System.currentTimeMillis();
 
         var keyBuckets = readKeyBuckets(intervalDeleteExpiredBigStringFilesLastBucketIndex);
         for (var keyBucket : keyBuckets) {

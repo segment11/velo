@@ -336,7 +336,7 @@ public class RedisHH {
             }
         }
 
-        var currentTimeMillis = System.currentTimeMillis();
+        final long currentTimeMillis = System.currentTimeMillis();
         for (int i = 0; i < size; i++) {
             var expireAt = buffer.getLong();
 

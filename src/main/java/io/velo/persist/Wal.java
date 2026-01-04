@@ -975,7 +975,7 @@ public class Wal implements InMemoryEstimate {
 
     int intervalDeleteExpiredBigStringFiles() {
         int count = 0;
-        var currentTimeMillis = System.currentTimeMillis();
+        final long currentTimeMillis = System.currentTimeMillis();
 
         for (var entry : delayToKeyBucketShortValues.entrySet()) {
             var v = entry.getValue();
