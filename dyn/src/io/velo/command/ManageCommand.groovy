@@ -203,8 +203,8 @@ class ManageCommand extends BaseCommand {
                     if (kb == null) {
                         continue
                     }
-                    kb.iterate { keyHash, expireAt, seq, keyBytes, valueBytes ->
-                        sb << new String(keyBytes) << ','
+                    kb.iterate { keyHash, expireAt, seq, key, valueBytes ->
+                        sb << key << ','
                     }
                 }
                 str = sb.toString()

@@ -746,7 +746,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             final short[] tmpSkipCount = {skipCount};
             final short[] expiredOrNotMatchedCount = {0};
             final long currentTimeMillis = System.currentTimeMillis();
-            keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+            keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (tmpSkipCount[0] > 0) {
                     tmpSkipCount[0]--;
                     return;
@@ -758,7 +758,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                     return;
                 }
 
-                var key = new String(keyBytes);
                 if (!isKeyMatch(key, matchPattern)) {
                     expiredOrNotMatchedCount[0]++;
                     return;
@@ -1185,7 +1184,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             updateKeyCountBatch(walGroupIndex, inner.beginBucketIndex, inner.keyCountForStatsTmp);
             xForBinlog.setKeyCountForStatsTmp(inner.keyCountForStatsTmp);
 
-            var sharedBytesList = inner.writeAfterPutBatch();
+            var sharedBytesList = inner.encodeAfterPutBatch();
             var seqArray = writeSharedBytesList(sharedBytesList, inner.beginBucketIndex);
             xForBinlog.setSharedBytesListBySplitIndex(sharedBytesList);
 

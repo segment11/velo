@@ -190,8 +190,8 @@ class KeyBucketTest extends Specification {
         def longKeyString = 'long-key' * 8
         keyBucket.put(longKeyString, 100L, System.currentTimeMillis() - 1000, 100L, 'long-value'.bytes)
         keyBucket.clearAllExpired()
-        keyBucket.iterate { keyHash, expireAt, seq, keyBytes, valueBytes ->
-            println new String(keyBytes) + ': ' + new String(valueBytes)
+        keyBucket.iterate { keyHash, expireAt, seq, key, valueBytes ->
+            println key + ': ' + new String(valueBytes)
         }
         then:
         keyBucket.size == 3

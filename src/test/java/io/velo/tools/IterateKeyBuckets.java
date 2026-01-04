@@ -102,7 +102,7 @@ public class IterateKeyBuckets {
                 var splitIndexThisKeyBucket = keyBucket.getSplitIndex();
                 int finalI = i;
                 HashMap<String, byte[]> finalMap = map;
-                keyBucket.iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> {
+                keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
 //                    System.out.println("key=" + new String(keyBytes) + ", key hash=" + keyHash);
                     var bucketIndexExpect = KeyHash.bucketIndex(keyHash, bucketsPerSlot);
                     if (bucketIndexExpect != finalI) {
@@ -115,7 +115,7 @@ public class IterateKeyBuckets {
                         System.out.println("split index expect=" + splitIndexExpect + ", split index=" + splitIndexThisKeyBucket);
                         throw new IllegalStateException("split index expect=" + splitIndexExpect + ", split index=" + splitIndexThisKeyBucket);
                     }
-                    finalMap.put(new String(keyBytes), valueBytes);
+                    finalMap.put(key, valueBytes);
                 });
             }
 

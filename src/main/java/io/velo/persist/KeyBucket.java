@@ -500,7 +500,7 @@ public class KeyBucket {
     @TestOnly
     String allPrint() {
         var sb = new StringBuilder();
-        iterate((keyHash, expireAt, seq, keyBytes, valueBytes) -> sb.append("key=").append(new String(keyBytes))
+        iterate((keyHash, expireAt, seq, key, valueBytes) -> sb.append("key=").append(key)
                 .append(", value=").append(PersistValueMeta.isPvm(valueBytes) ? PersistValueMeta.decode(valueBytes) : new String(valueBytes))
                 .append(", expireAt=").append(expireAt)
                 .append(", seq=").append(seq)
