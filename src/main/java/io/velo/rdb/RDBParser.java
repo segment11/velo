@@ -13,6 +13,9 @@ import io.velo.type.RedisZSet;
 import io.velo.type.encode.ListPack;
 import io.velo.type.encode.ZipList;
 
+/**
+ * Parse Redis RDB format bytes buffer and dump data to RDB format bytes.
+ */
 public class RDBParser {
     // Redis RDB type constants
     public static final short RDB_MIN_VERSION = 6;
@@ -39,6 +42,12 @@ public class RDBParser {
     private static final int RDB_TYPE_SET_LIST_PACK = 20;
     private static final int RDB_TYPE_STREAM_LIST_PACK3 = 21;
 
+    /**
+     * Read an entry from the RDB format bytes buffer.
+     *
+     * @param buf      the RDB format bytes buffer
+     * @param callback the callback to handle the entry
+     */
     public void readEntry(ByteBuf buf, RDBCallback callback) {
         int type = buf.readUnsignedByte();
         switch (type) {
@@ -399,7 +408,12 @@ public class RDBParser {
         return result;
     }
 
-    // string or number
+    /**
+     * Dump a string to RDB format bytes
+     *
+     * @param valueBytes the string bytes to dump
+     * @return the RDB format bytes
+     */
     public static byte[] dumpString(byte[] valueBytes) {
         var buf = Unpooled.buffer();
 
@@ -409,6 +423,12 @@ public class RDBParser {
         return writeVersionAndCrc(buf);
     }
 
+    /**
+     * Dump a set to RDB format bytes
+     *
+     * @param rhk the set to dump
+     * @return the RDB format bytes
+     */
     public static byte[] dumpSet(RedisHashKeys rhk) {
         assert rhk != null && rhk.size() > 0;
 
@@ -424,6 +444,12 @@ public class RDBParser {
         return writeVersionAndCrc(buf);
     }
 
+    /**
+     * Dump a hash to RDB format bytes
+     *
+     * @param rhh the hash to dump
+     * @return the RDB format bytes
+     */
     public static byte[] dumpHash(RedisHH rhh) {
         assert rhh != null && rhh.size() > 0;
 
@@ -440,6 +466,12 @@ public class RDBParser {
         return writeVersionAndCrc(buf);
     }
 
+    /**
+     * Dump a list to RDB format bytes
+     *
+     * @param rl the list to dump
+     * @return the RDB format bytes
+     */
     public static byte[] dumpList(RedisList rl) {
         assert rl != null && rl.size() > 0;
 
@@ -453,6 +485,12 @@ public class RDBParser {
         return writeVersionAndCrc(buf);
     }
 
+    /**
+     * Dump a zset to RDB format bytes
+     *
+     * @param rz the zset to dump
+     * @return the RDB format bytes
+     */
     public static byte[] dumpZSet(RedisZSet rz) {
         assert rz != null && !rz.isEmpty();
 
