@@ -38,15 +38,15 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     long readByteLengthTotal = 0L;
     long readFileCountTotal = 0L;
-    long readFileCostUsTotal = 0L;
+    long readFileCostTotalUs = 0L;
 
     long writeByteLengthTotal = 0L;
     long writeFileCountTotal = 0L;
-    long writeFileCostUsTotal = 0L;
+    long writeFileCostTotalUs = 0L;
 
     long deleteByteLengthTotal = 0L;
     long deleteFileCountTotal = 0L;
-    long deleteFileCostUsTotal = 0L;
+    long deleteFileCostTotalUs = 0L;
 
     private static final String BIG_STRING_DIR_NAME = "big-string";
 
@@ -280,12 +280,12 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         try {
             var beginT = System.nanoTime();
             var bytes = FileUtils.readFileToByteArray(file);
-            var costT = System.nanoTime() - beginT;
+            var costT = (System.nanoTime() - beginT) / 1000;
 
             // stats
             readByteLengthTotal += bytes.length;
             readFileCountTotal++;
-            readFileCostUsTotal += (costT / 1000);
+            readFileCostTotalUs += costT;
 
             return bytes;
         } catch (IOException e) {
@@ -332,7 +332,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         try {
             var beginT = System.nanoTime();
             FileUtils.writeByteArrayToFile(file, bytes, offset, length, false);
-            var costT = System.nanoTime() - beginT;
+            var costT = (System.nanoTime() - beginT) / 1000;
 
             if (len == 0) {
                 bigStringFilesCount++;
@@ -342,7 +342,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             // stats
             writeByteLengthTotal += bytes.length;
             writeFileCountTotal++;
-            writeFileCostUsTotal += (costT / 1000);
+            writeFileCostTotalUs += costT;
 
             return true;
         } catch (IOException e) {
@@ -382,12 +382,12 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
         var beginT = System.nanoTime();
         var r = file.delete();
-        var costT = System.nanoTime() - beginT;
+        var costT = (System.nanoTime() - beginT) / 1000;
 
         // stats
         deleteByteLengthTotal += len;
         deleteFileCountTotal++;
-        deleteFileCostUsTotal += (costT / 1000);
+        deleteFileCostTotalUs += costT;
 
         return r;
     }
