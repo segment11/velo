@@ -631,11 +631,18 @@ class KeyLoaderTest extends Specification {
         // no keys put yet
         def r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
         then:
-        r.scanCursor().isWalIterateEnd()
+        // only one slot
+        r.scanCursor() == ScanCursor.END
 
         when:
         // scan all key buckets until to the end
-        ConfForSlot.global.confBucket.onceScanMaxReadCount = ConfForSlot.global.confBucket.initialSplitNumber * Wal.calcWalGroupNumber()
+        ConfForSlot.global.confBucket.onceScanMaxLoopCount = ConfForSlot.global.confBucket.initialSplitNumber * Wal.calcWalGroupNumber()
+        r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
+        then:
+        r.scanCursor() == ScanCursor.END
+
+        when:
+        ConfForSlot.global.confBucket.onceScanMaxLoopCount = 1024
         r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
         then:
         r.scanCursor() == ScanCursor.END
@@ -680,6 +687,14 @@ class KeyLoaderTest extends Specification {
         }
 
         when:
+        // skip first split index
+        r = keyLoader.scan(0, (byte) 1, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, 0L)
+        then:
+        !r.keys().isEmpty()
+        r.keys().size() < 6
+
+        when:
+        // scan seq -1 means skip all keys as there seq is > -1
         r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, -1L)
         then:
         r.keys().isEmpty()

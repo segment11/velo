@@ -412,6 +412,7 @@ public class LocalPersist implements NeedCleanUp {
 
     public @Nullable OneSlot nextOneSlot(short slot) {
         if (!ConfForGlobal.clusterEnabled) {
+            assert slot < oneSlots.length;
             return oneSlots[slot + 1];
         }
 

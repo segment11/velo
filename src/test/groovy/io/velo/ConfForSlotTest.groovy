@@ -85,7 +85,7 @@ class ConfForSlotTest extends Specification {
 
         when:
         exception = false
-        c.confBucket.onceScanMaxReadCount = 0
+        c.confBucket.onceScanMaxLoopCount = 0
         try {
             c.confBucket.checkIfValid()
         } catch (IllegalArgumentException e) {
@@ -97,7 +97,7 @@ class ConfForSlotTest extends Specification {
 
         when:
         exception = false
-        c.confBucket.onceScanMaxReadCount = 200
+        c.confBucket.onceScanMaxLoopCount = 1024 * 2
         try {
             c.confBucket.checkIfValid()
         } catch (IllegalArgumentException e) {

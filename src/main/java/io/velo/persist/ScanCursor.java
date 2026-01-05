@@ -2,9 +2,10 @@ package io.velo.persist;
 
 public record ScanCursor(short slot, int walGroupIndex, short walSkipCount, short keyBucketsSkipCount,
                          byte splitIndex) {
-    public static ScanCursor END = new ScanCursor((short) 0, 0, (short) 0, (short) 0, (byte) 0);
-
+    // one wal group can hold max 200 + 200 < 1024 keys.
     public static final short ONE_WAL_SKIP_COUNT_ITERATE_END = 1023;
+
+    public static ScanCursor END = new ScanCursor((short) 0, 0, ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0);
 
     public boolean isWalIterateEnd() {
         return walSkipCount == ONE_WAL_SKIP_COUNT_ITERATE_END;

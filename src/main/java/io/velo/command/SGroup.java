@@ -235,18 +235,17 @@ public class SGroup extends BaseCommand {
         }, resultList -> OKReply.INSTANCE);
     }
 
-    private MultiBulkReply scanResultToReply(KeyLoader.ScanCursorWithReturnKeys r, VeloUserDataInSocket veloUserData, int count) {
-        if (r.scanCursor() == ScanCursor.END) {
+    private MultiBulkReply scanResultToReply(ScanCursor scanCursor, ArrayList<String> keys, VeloUserDataInSocket veloUserData) {
+        if (scanCursor == ScanCursor.END) {
             // reach the end
             veloUserData.setLastScanAssignCursor(0);
             veloUserData.setBeginScanSeq(0);
         } else {
-            veloUserData.setLastScanAssignCursor(r.scanCursor().toLong());
+            veloUserData.setLastScanAssignCursor(scanCursor.toLong());
         }
 
-        var keys = r.keys();
         var replies = new Reply[2];
-        replies[0] = new BulkReply(r.scanCursor().toLong());
+        replies[0] = new BulkReply(scanCursor.toLong());
 
         if (keys.isEmpty()) {
             replies[1] = MultiBulkReply.EMPTY;
@@ -262,8 +261,7 @@ public class SGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    @VisibleForTesting
-    Reply scan() {
+    private Reply scan() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -293,33 +291,38 @@ public class SGroup extends BaseCommand {
         if (data.length > 2) {
             for (int i = 2; i < data.length; i++) {
                 var tmp = new String(data[i]).toLowerCase();
-                if ("match".equals(tmp)) {
-                    if (data.length <= i + 1) {
+                switch (tmp) {
+                    case "match" -> {
+                        if (data.length <= i + 1) {
+                            return ErrorReply.SYNTAX;
+                        }
+                        matchPattern = new String(data[i + 1]);
+                        i++;
+                    }
+                    case "count" -> {
+                        if (data.length <= i + 1) {
+                            return ErrorReply.SYNTAX;
+                        }
+                        try {
+                            count = Integer.parseInt(new String(data[i + 1]));
+                        } catch (NumberFormatException e) {
+                            return ErrorReply.NOT_INTEGER;
+                        }
+                        if (count < 0) {
+                            return ErrorReply.INVALID_INTEGER;
+                        }
+                        i++;
+                    }
+                    case "type" -> {
+                        if (data.length <= i + 1) {
+                            return ErrorReply.SYNTAX;
+                        }
+                        type = new String(data[i + 1]).toLowerCase();
+                        i++;
+                    }
+                    default -> {
                         return ErrorReply.SYNTAX;
                     }
-                    matchPattern = new String(data[i + 1]);
-                    i++;
-                } else if ("count".equals(tmp)) {
-                    if (data.length <= i + 1) {
-                        return ErrorReply.SYNTAX;
-                    }
-                    try {
-                        count = Integer.parseInt(new String(data[i + 1]));
-                    } catch (NumberFormatException e) {
-                        return ErrorReply.NOT_INTEGER;
-                    }
-                    if (count < 0) {
-                        return ErrorReply.INVALID_INTEGER;
-                    }
-                    i++;
-                } else if ("type".equals(tmp)) {
-                    if (data.length <= i + 1) {
-                        return ErrorReply.SYNTAX;
-                    }
-                    type = new String(data[i + 1]).toLowerCase();
-                    i++;
-                } else {
-                    return ErrorReply.SYNTAX;
                 }
             }
         }
@@ -358,30 +361,50 @@ public class SGroup extends BaseCommand {
 
         int leftCount = count;
 
-        KeyLoader.ScanCursorWithReturnKeys rWal = null;
-        if (!scanCursor.isWalIterateEnd()) {
-            var wal = oneSlot.getWalByGroupIndex(scanCursor.walGroupIndex());
-            rWal = wal.scan(scanCursor.walSkipCount(), typeAsByte, matchPattern, count, veloUserData.getBeginScanSeq());
+        final int onceScanMaxLoopCount = ConfForSlot.global.confWal.onceScanMaxLoopCount;
+        int scanWalLoopCount = 0;
 
-            if (rWal != null) {
-                if (rWal.keys().size() == count) {
-                    // need not scan key buckets
-                    return scanResultToReply(rWal, veloUserData, count);
-                } else {
-                    leftCount -= rWal.keys().size();
-                }
+        boolean isScanWalFirst = false;
+        final ArrayList<String> keys = new ArrayList<>();
+        var lastScanCursor = scanCursor;
+        // scan wal first
+        while (!lastScanCursor.isWalIterateEnd()) {
+            isScanWalFirst = true;
+
+            var wal = oneSlot.getWalByGroupIndex(lastScanCursor.walGroupIndex());
+            var rWal = wal.scan(lastScanCursor.walSkipCount(), typeAsByte, matchPattern, leftCount, veloUserData.getBeginScanSeq());
+            keys.addAll(rWal.keys());
+            lastScanCursor = rWal.scanCursor();
+
+            if (keys.size() == count) {
+                return scanResultToReply(lastScanCursor, keys, veloUserData);
+            } else {
+                leftCount -= rWal.keys().size();
+            }
+
+            scanWalLoopCount++;
+            if (scanWalLoopCount >= onceScanMaxLoopCount) {
+                break;
             }
         }
 
-        var keyLoader = oneSlot.getKeyLoader();
-        var r = keyLoader.scan(scanCursor.walGroupIndex(), scanCursor.splitIndex(), scanCursor.keyBucketsSkipCount(),
-                typeAsByte, matchPattern, leftCount, veloUserData.getBeginScanSeq());
-
-        if (rWal != null) {
-            r.keys().addAll(rWal.keys());
+        if (!lastScanCursor.isWalIterateEnd()) {
+            return scanResultToReply(lastScanCursor, keys, veloUserData);
         }
 
-        return scanResultToReply(r, veloUserData, count);
+        // then scan key buckets
+        var keyLoader = oneSlot.getKeyLoader();
+        KeyLoader.ScanCursorWithReturnKeys rKeyBuckets;
+        if (isScanWalFirst) {
+            rKeyBuckets = keyLoader.scan(0, (byte) 0, (short) 0,
+                    typeAsByte, matchPattern, leftCount, veloUserData.getBeginScanSeq());
+        } else {
+            rKeyBuckets = keyLoader.scan(lastScanCursor.walGroupIndex(), lastScanCursor.splitIndex(), lastScanCursor.keyBucketsSkipCount(),
+                    typeAsByte, matchPattern, leftCount, veloUserData.getBeginScanSeq());
+        }
+        keys.addAll(rKeyBuckets.keys());
+
+        return scanResultToReply(rKeyBuckets.scanCursor(), keys, veloUserData);
     }
 
     private final CachedGroovyClassLoader cl = CachedGroovyClassLoader.getInstance();

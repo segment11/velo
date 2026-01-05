@@ -2982,13 +2982,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             map.put("global_slot_number", new SimpleGauge.ValueWithLabelValues((double) slotNumber, labelValues));
             map.put("global_net_workers", new SimpleGauge.ValueWithLabelValues((double) ConfForGlobal.netWorkers, labelValues));
             map.put("global_slot_workers", new SimpleGauge.ValueWithLabelValues((double) ConfForGlobal.slotWorkers, labelValues));
+
             map.put("global_key_buckets_per_slot", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confBucket.bucketsPerSlot, labelValues));
             map.put("global_key_initial_split_number", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confBucket.initialSplitNumber, labelValues));
-            map.put("global_key_once_scan_max_read_count", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confBucket.onceScanMaxReadCount, labelValues));
+            map.put("global_key_bucket_once_scan_max_loop_count", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confBucket.onceScanMaxLoopCount, labelValues));
+
             map.put("global_chunk_segment_number_per_fd", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confChunk.segmentNumberPerFd, labelValues));
             map.put("global_chunk_fd_per_chunk", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confChunk.fdPerChunk, labelValues));
             map.put("global_chunk_segment_length", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confChunk.segmentLength, labelValues));
+
             map.put("global_wal_one_charge_bucket_number", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confWal.oneChargeBucketNumber, labelValues));
+            map.put("global_key_wal_once_scan_max_loop_count", new SimpleGauge.ValueWithLabelValues((double) ConfForSlot.global.confWal.onceScanMaxLoopCount, labelValues));
 
             // connected clients
             var socketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector;

@@ -24,4 +24,11 @@ class UtilsTest extends Specification {
         expect:
         randomChars.size() == 10
     }
+
+    def 'test nearest power of two'() {
+        given:
+        def n = Utils.nearestPowerOfTwo(10)
+        expect:
+        n == 16
+    }
 }

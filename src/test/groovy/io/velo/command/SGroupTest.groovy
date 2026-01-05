@@ -207,21 +207,12 @@ sunionstore
 
     def 'test scan'() {
         given:
-        def data8 = new byte[8][]
-        data8[1] = new ScanCursor((short) 0, 0, (short) 0, (short) 0, (byte) 0).toLong().toString().bytes
-        data8[2] = 'match'.bytes
-        data8[3] = 'key:*'.bytes
-        data8[4] = 'count'.bytes
-        data8[5] = '10'.bytes
-        data8[6] = 'type'.bytes
-        data8[7] = 'string'.bytes
-
         def inMemoryGetSet = new InMemoryGetSet()
 
         def socket = SocketInspectorTest.mockTcpSocket()
         def veloUserData = SocketInspector.createUserDataIfNotSet(socket)
 
-        def sGroup = new SGroup('scan', data8, socket)
+        def sGroup = new SGroup('scan', null, socket)
         sGroup.byPassGetSet = inMemoryGetSet
         sGroup.from(BaseCommand.mockAGroup())
 
@@ -234,48 +225,57 @@ sunionstore
         def oneSlot = localPersist.oneSlot(slot)
 
         when:
-        def reply = sGroup.scan()
+        def scanCursor = new ScanCursor((short) 0, 0, (short) 0, (short) 0, (byte) 0)
+        def reply = sGroup.execute('scan . match key:* count 10 type string') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
 
         when:
-        data8[7] = 'hash'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count 10 type hash') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply instanceof MultiBulkReply
 
         when:
-        data8[7] = 'list'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count 10 type list') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply instanceof MultiBulkReply
 
         when:
-        data8[7] = 'set'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count 10 type set') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply instanceof MultiBulkReply
 
         when:
-        data8[7] = 'zset'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count 10 type zset') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply instanceof MultiBulkReply
 
         when:
-        data8[7] = 'xxx'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count 10 type xxx') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply instanceof ErrorReply
 
         when:
-        data8[7] = 'string'.bytes
         def shortValueList = Mock.prepareShortValueList(10, 0)
         def xForBinlog = new XOneWalGroupPersist(true, false, 0)
         def keyLoader = oneSlot.keyLoader
         keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList, xForBinlog)
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count 10 type string') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
@@ -284,11 +284,12 @@ sunionstore
         ScanCursor.fromLong(veloUserData.lastScanAssignCursor).keyBucketsSkipCount() == 10
 
         when:
-        // count 5
-        data8[5] = '5'.bytes
         // reset
         veloUserData.lastScanAssignCursor = 0L
-        reply = sGroup.scan()
+        // count 5
+        reply = sGroup.execute('scan . match key:* count 5 type string') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
@@ -305,7 +306,9 @@ sunionstore
         }
         // reset
         veloUserData.lastScanAssignCursor = 0L
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count 5 type string') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
@@ -315,9 +318,11 @@ sunionstore
         ScanCursor.fromLong(veloUserData.lastScanAssignCursor).walSkipCount() == 5
 
         when:
+        veloUserData.lastScanAssignCursor = 0L
         // wal 10 + key buckets 5
-        data8[5] = '15'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count 15 type string') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
@@ -327,9 +332,12 @@ sunionstore
         ScanCursor.fromLong(veloUserData.lastScanAssignCursor).keyBucketsSkipCount() == 5
 
         when:
+        veloUserData.lastScanAssignCursor = 0L
         // key buckets clear, only left wal key values
         keyLoader.flush()
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count 15 type string') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
@@ -337,69 +345,93 @@ sunionstore
         ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 10
 
         when:
+        veloUserData.lastScanAssignCursor = 0L
+        // wal not done
+        ConfForSlot.global.confWal.onceScanMaxLoopCount = 1
+        reply = sGroup.execute('scan . match key:* count 15 type string') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[1] instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 10
+
+        when:
+        ConfForSlot.global.confWal.onceScanMaxLoopCount = 1024
+        veloUserData.lastScanAssignCursor = 0L
         // wal key values clear
         wal.clear()
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count 15 type string') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies[1] == MultiBulkReply.EMPTY
+
+        when:
+        // scan from key buckets
+        def scanCursorFromKeyBuckets = new ScanCursor((short) 0, 0, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0)
+        veloUserData.lastScanAssignCursor = scanCursorFromKeyBuckets.toLong()
+        reply = sGroup.execute('scan . match key:* count 10 type string') { data ->
+            data[1] = scanCursorFromKeyBuckets.toLong().toString().bytes
+        }
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies[1] == MultiBulkReply.EMPTY
 
         when:
         // count, invalid integer
-        data8[5] = 'a'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count a type string') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        data8[5] = '-1'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* count -1 type string') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data8[5] = '10'.bytes
-        data8[4] = 'xxx'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* xxx 10 type string') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
         then:
         reply == ErrorReply.SYNTAX
 
         when:
         veloUserData.lastScanAssignCursor = 0L
-        data8[1] = '1'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan 1 match key:* xxx 10 type string')
         then:
         reply instanceof ErrorReply
 
         when:
-        data8[1] = 'a'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan a match key:* xxx 10 type string')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        def data7 = new byte[7][]
-        data7[1] = new ScanCursor((short) 0, 0, (short) 0, (short) 0, (byte) 0).toLong().toString().bytes
-        data7[2] = 'match'.bytes
-        data7[3] = 'key:*'.bytes
-        data7[4] = 'count'.bytes
-        data7[5] = '10'.bytes
-        data7[6] = 'type'.bytes
-        sGroup.data = data7
-        reply = sGroup.scan()
+        def scanCursor1 = new ScanCursor((short) 0, 0, (short) 0, (short) 0, (byte) 0)
+        reply = sGroup.execute('scan . match key:* xxx 10 type') { data ->
+            data[1] = scanCursor1.toLong().toString().bytes
+        }
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data7[6] = 'count'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match key:* xxx 10 count') { data ->
+            data[1] = scanCursor1.toLong().toString().bytes
+        }
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data7[6] = 'match'.bytes
-        data7[4] = 'match'.bytes
-        reply = sGroup.scan()
+        reply = sGroup.execute('scan . match match xxx 10 match') { data ->
+            data[1] = scanCursor1.toLong().toString().bytes
+        }
         then:
         reply == ErrorReply.SYNTAX
 

@@ -698,7 +698,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param skipCount     the number of entries to skip
      * @param typeAsByte    the type filter as a byte
      * @param matchPattern  the key match pattern
-     * @param countArray    the remaining count array
+     * @param countArray    the remaining count / real scan count array
      * @param beginScanSeq  the sequence number to start scanning from
      * @param inWalKeys     the set of keys already in the WAL
      * @return the ScanCursor indicating the next scan position, or null if no more keys are found
@@ -741,6 +741,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
             var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
             var keyBucket = new KeyBucket(slot, bucketIndex, splitIndex, splitNumber, sharedBytes, position, snowFlake);
+            countArray[1]++;
 
             final short[] addedKeyCount = {0};
             final short[] tmpSkipCount = {skipCount};
@@ -822,7 +823,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param typeAsByte    the type filter as a byte
      * @param matchPattern  the key match pattern
      * @param count         the maximum number of keys to return
-     * @param beginScanSeq   the sequence number to start scanning from
+     * @param beginScanSeq  the sequence number to start scanning from
      * @return the ScanCursorWithReturnKeys object containing the scan cursor and the list of keys found
      */
     public @NotNull ScanCursorWithReturnKeys scan(final int walGroupIndex,
@@ -832,17 +833,18 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                                                   final @Nullable String matchPattern,
                                                   final int count,
                                                   final long beginScanSeq) {
-        final ArrayList<String> keys = new ArrayList<>(count);
+        final ArrayList<String> keys = new ArrayList<>(Utils.nearestPowerOfTwo(count));
         final var inWalKeys = oneSlot.getWalByGroupIndex(walGroupIndex).inWalKeys();
 
         var walGroupNumber = Wal.calcWalGroupNumber();
         var maxSplitNumber = metaKeyBucketSplitNumber.maxSplitNumber();
 
         // for perf, do not read too many, just return empty key list, redis client will do scan again and use last cursor
-        final int onceScanMaxReadCount = ConfForSlot.global.confBucket.onceScanMaxReadCount;
-        int readCount = 0;
+        final int onceScanMaxLoopCount = ConfForSlot.global.confBucket.onceScanMaxLoopCount;
+        int scanLoopCount = 0;
 
-        final int[] countArray = new int[]{count};
+        // the second is real scan loop count, if size == 0, not real scan, just return
+        final int[] countArray = new int[]{count, 0};
         for (int j = walGroupIndex; j < walGroupNumber; j++) {
             for (int i = 0; i < maxSplitNumber; i++) {
                 if (j == walGroupIndex && i < splitIndex) {
@@ -852,29 +854,31 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 final var skipCountInThisWalGroupThisSplitIndex = i == splitIndex && j == walGroupIndex ? skipCount : 0;
                 var scanCursor = readKeysToList(keys, j, (byte) i, skipCountInThisWalGroupThisSplitIndex,
                         typeAsByte, matchPattern, countArray, beginScanSeq, inWalKeys);
-                readCount++;
-                if (scanCursor != null) {
+                if (countArray[1] > 0) {
+                    scanLoopCount++;
+                }
+
+                // read all, return
+                if (scanCursor != null && keys.size() == count) {
                     return new ScanCursorWithReturnKeys(scanCursor, keys);
                 }
 
-                if (i == maxSplitNumber - 1 && j == walGroupNumber - 1) {
-                    return scanNextSlotResult(keys);
-                }
-
-                if (readCount >= onceScanMaxReadCount) {
-                    var isLastSkipIndex = i == maxSplitNumber - 1;
-
-                    var scanCursorTmp = isLastSkipIndex ?
-                            new ScanCursor(slot, j + 1, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0) :
-                            new ScanCursor(slot, j, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) (i + 1));
-                    return new ScanCursorWithReturnKeys(scanCursorTmp, keys);
+                if (scanLoopCount >= onceScanMaxLoopCount) {
+                    ScanCursor scanCursorResult;
+                    var isLastWalGroup = j == walGroupNumber - 1;
+                    if (isLastWalGroup) {
+                        scanCursorResult = new ScanCursor(slot, j, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) (i + 1));
+                    } else {
+                        scanCursorResult = new ScanCursor(slot, j + 1, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0);
+                    }
+                    return new ScanCursorWithReturnKeys(scanCursorResult, keys);
                 }
             }
         }
-        return scanNextSlotResult(keys);
+        return scanNextSlotCursor(keys);
     }
 
-    private @NotNull ScanCursorWithReturnKeys scanNextSlotResult(ArrayList<String> keys) {
+    private @NotNull ScanCursorWithReturnKeys scanNextSlotCursor(ArrayList<String> keys) {
         var localPersist = LocalPersist.getInstance();
         var lastOneSlot = localPersist.lastOneSlot();
         var isLastSlot = lastOneSlot == null || slot == lastOneSlot.slot();
@@ -885,8 +889,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             if (nextOneSlot == null) {
                 return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
             } else {
-                var scanCursorTmp = new ScanCursor((short) (slot + 1), 0, (short) 0, (short) 0, (byte) 0);
-                return new ScanCursorWithReturnKeys(scanCursorTmp, keys);
+                var scanCursorResult = new ScanCursor(nextOneSlot.slot(), 0, (short) 0, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (byte) 0);
+                return new ScanCursorWithReturnKeys(scanCursorResult, keys);
             }
         }
     }

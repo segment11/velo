@@ -204,9 +204,9 @@ public enum ConfForSlot {
         public byte initialSplitNumber;
 
         /**
-         * For performance, when do scan, once max read count.
+         * For performance, when do scan, once max loop count.
          */
-        public int onceScanMaxReadCount = 100;
+        public int onceScanMaxLoopCount = 1024;
 
         /**
          * Configuration for LRU cache per file descriptor.
@@ -227,8 +227,8 @@ public enum ConfForSlot {
             if (initialSplitNumber != 1 && initialSplitNumber != 3) {
                 throw new IllegalArgumentException("Initial split number too large, initial split number should be 1 or 3");
             }
-            if (onceScanMaxReadCount <= 0 || onceScanMaxReadCount > 100) {
-                throw new IllegalArgumentException("Once scan max read count should be between 1 and 100");
+            if (onceScanMaxLoopCount <= 0 || onceScanMaxLoopCount > 1024) {
+                throw new IllegalArgumentException("Once scan max loop count should be between 1 and 1024, given: " + onceScanMaxLoopCount);
             }
         }
 
@@ -237,7 +237,7 @@ public enum ConfForSlot {
             return "ConfBucket{" +
                     "bucketsPerSlot=" + bucketsPerSlot +
                     ", initialSplitNumber=" + initialSplitNumber +
-                    ", onceScanMaxReadCount=" + onceScanMaxReadCount +
+                    ", onceScanMaxLoopCount=" + onceScanMaxLoopCount +
                     ", lruPerFd=" + lruPerFd +
                     '}';
         }
@@ -408,11 +408,19 @@ public enum ConfForSlot {
         public double checkAtLeastDoPersistOnceSizeRate = 0.8;
 
         /**
+         * For performance, when do scan, once max loop count. wal group count.
+         */
+        public int onceScanMaxLoopCount = 1024;
+
+        /**
          * Checks if the WAL configuration is valid.
          */
         public void checkIfValid() {
             if (!Wal.VALID_ONE_CHARGE_BUCKET_NUMBER_LIST.contains(oneChargeBucketNumber)) {
                 throw new IllegalArgumentException("Wal one charge bucket number invalid, wal one charge bucket number should be in " + Wal.VALID_ONE_CHARGE_BUCKET_NUMBER_LIST);
+            }
+            if (onceScanMaxLoopCount <= 0 || onceScanMaxLoopCount > 1024) {
+                throw new IllegalArgumentException("Once scan max loop count should be between 1 and 1024, given: " + onceScanMaxLoopCount);
             }
         }
 
@@ -424,6 +432,7 @@ public enum ConfForSlot {
                     ", shortValueSizeTrigger=" + shortValueSizeTrigger +
                     ", atLeastDoPersistOnceIntervalMs=" + atLeastDoPersistOnceIntervalMs +
                     ", checkAtLeastDoPersistOnceSizeRate=" + checkAtLeastDoPersistOnceSizeRate +
+                    ", onceScanMaxLoopCount=" + onceScanMaxLoopCount +
                     '}';
         }
     }

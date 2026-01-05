@@ -433,7 +433,7 @@ class WalTest extends Specification {
         when:
         def r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
         then:
-        r == null
+        r.keys().isEmpty()
 
         when:
         def shortValueList = Mock.prepareShortValueList(10, 0)
@@ -450,23 +450,26 @@ class WalTest extends Specification {
         then:
         r != null
         r.keys().size() == 5
-        r.scanCursor().walSkipCount() == 10
+        // go to next wal group
+        r.scanCursor().walGroupIndex() == 1
 
         when:
         // all wal v seq is > 0
         r = wal.scan((short) 5, KeyLoader.typeAsByteIgnore, null, 10, 0L)
         then:
-        r == null
+        r.keys().isEmpty()
 
         when:
+        // type is not matched
         r = wal.scan((short) 0, KeyLoader.typeAsByteHash, null, 10, 100L)
         then:
-        r == null
+        r.keys().isEmpty()
 
         when:
+        // prefix is not matched
         r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, 'xxx:', 10, 100L)
         then:
-        r == null
+        r.keys().isEmpty()
 
         when:
         wal.clear()
@@ -486,12 +489,18 @@ class WalTest extends Specification {
         for (shortV in shortValueList2) {
             wal.put(true, shortV.key(), shortV)
         }
-        r = wal.scan((short) 5, KeyLoader.typeAsByteIgnore, null, 10, 100L)
+        r = wal.scan((short) 5, KeyLoader.typeAsByteIgnore, null, 1, 100L)
         then:
-        r != null
         // 1 removed and 5 expired
-        r.keys().size() == 2
-        r.scanCursor().walSkipCount() == 10
+        r.keys().size() == 1
+        r.scanCursor().walSkipCount() == 7
+
+        when:
+        def lastWalGroup = Wal.calcWalGroupNumber() - 1
+        def lastWal = new Wal(slot, null, lastWalGroup, null, null, snowFlake)
+        r = lastWal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
+        then:
+        r.keys().isEmpty()
 
         cleanup:
         ConfForGlobal.pureMemory = false

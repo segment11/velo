@@ -111,4 +111,19 @@ public class Utils {
         }
         return sb.toString();
     }
+
+    /**
+     * Returns the nearest power of two for the given number.
+     *
+     * @param n the number
+     * @return the nearest power of two
+     */
+    public static int nearestPowerOfTwo(int n) {
+        int power = 0;
+        while (n > 0) {
+            power++;
+            n >>= 1;
+        }
+        return 1 << power;
+    }
 }

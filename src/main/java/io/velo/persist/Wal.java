@@ -414,28 +414,29 @@ public class Wal implements InMemoryEstimate {
      *
      * @param skipCount    the number of keys to skip
      * @param typeAsByte   value type, @see KeyLoader.typeAsByteIgnore
-     * @param matchPattern  the pattern to match against keys
-     * @param count         the maximum number of keys to return
-     * @param beginScanSeq  the sequence number set when begin scanning from, return key value need >= this sequence number
+     * @param matchPattern the pattern to match against keys
+     * @param count        the maximum number of keys to return
+     * @param beginScanSeq the sequence number set when begin scanning from, return key value need >= this sequence number
      * @return the KeyLoader.ScanCursorWithReturnKeys instance containing the scan results
      */
-    public KeyLoader.ScanCursorWithReturnKeys scan(final short skipCount,
-                                                   final byte typeAsByte,
-                                                   final @Nullable String matchPattern,
-                                                   final int count,
-                                                   final long beginScanSeq) {
-        if (delayToKeyBucketValues.isEmpty() && delayToKeyBucketShortValues.isEmpty()) {
-            return null;
+    public @NotNull KeyLoader.ScanCursorWithReturnKeys scan(final short skipCount,
+                                                            final byte typeAsByte,
+                                                            final @Nullable String matchPattern,
+                                                            final int count,
+                                                            final long beginScanSeq) {
+        final ArrayList<String> keys = new ArrayList<>(Utils.nearestPowerOfTwo(count));
+        if (delayToKeyBucketShortValues.isEmpty() && delayToKeyBucketValues.isEmpty()) {
+            return scanCursorForNextWalGroup(keys);
         }
-
-        ArrayList<String> keys = new ArrayList<>(count);
 
         short tmpSkipCount = skipCount;
         short removedOrExpiredOrNotMatchedCount = 0;
+        short otherSkippedCount = 0;
 
         var allValues = new HashMap<String, V>();
         allValues.putAll(delayToKeyBucketShortValues);
         allValues.putAll(delayToKeyBucketValues);
+
         for (var entry : allValues.entrySet()) {
             if (tmpSkipCount > 0) {
                 tmpSkipCount--;
@@ -466,6 +467,7 @@ public class Wal implements InMemoryEstimate {
 
             // skip data that is new added after time do scan
             if (v.seq > beginScanSeq) {
+                otherSkippedCount++;
                 continue;
             }
 
@@ -475,12 +477,25 @@ public class Wal implements InMemoryEstimate {
             }
         }
 
-        if (keys.isEmpty()) {
-            return null;
+        var nextTimeSkipCount = skipCount + removedOrExpiredOrNotMatchedCount + otherSkippedCount + keys.size();
+        var isIteratedAll = nextTimeSkipCount >= allValues.size();
+        if (!isIteratedAll) {
+            var scanCursor = new ScanCursor(slot, groupIndex, (short) nextTimeSkipCount, (short) 0, (byte) 0);
+            return new KeyLoader.ScanCursorWithReturnKeys(scanCursor, keys);
+        } else {
+            return scanCursorForNextWalGroup(keys);
         }
+    }
 
-        var nextTimeSkipCount = skipCount + removedOrExpiredOrNotMatchedCount + keys.size();
-        return new KeyLoader.ScanCursorWithReturnKeys(new ScanCursor(slot, groupIndex, (short) nextTimeSkipCount, (short) 0, (byte) 0), keys);
+    private KeyLoader.@NotNull ScanCursorWithReturnKeys scanCursorForNextWalGroup(ArrayList<String> keys) {
+        var isLastWalGroup = groupIndex == calcWalGroupNumber() - 1;
+        ScanCursor scanCursor;
+        if (isLastWalGroup) {
+            scanCursor = new ScanCursor(slot, groupIndex, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0);
+        } else {
+            scanCursor = new ScanCursor(slot, groupIndex + 1, (short) 0, (short) 0, (byte) 0);
+        }
+        return new KeyLoader.ScanCursorWithReturnKeys(scanCursor, keys);
     }
 
     @VisibleForTesting
