@@ -12,6 +12,10 @@ public record ScanCursor(short slot, int walGroupIndex, short walSkipCount, shor
     }
 
     public long toLong() {
+        if (this == END) {
+            return 0L;
+        }
+
         assert (walSkipCount < 1024 && keyBucketsSkipCount < 1024);
         // slot use 16 bits, wal group index use 24 bits
         // wal skip count use 10 bits, key buckets skip count use 10 bits, split index use 4 bits

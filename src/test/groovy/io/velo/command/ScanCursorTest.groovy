@@ -12,6 +12,7 @@ class ScanCursorTest extends Specification {
 
         expect:
         scanCursor.isWalIterateEnd()
+        ScanCursor.END.toLong() == 0L
 
         when:
         def l = scanCursor.toLong()

@@ -261,6 +261,8 @@ public class SGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
+    private final ErrorReply CURSOR_NOT_MATCH = new ErrorReply("cursor is not match");
+
     private Reply scan() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
@@ -281,7 +283,7 @@ public class SGroup extends BaseCommand {
             veloUserData.setLastScanAssignCursor(0);
         } else {
             if (cursorLong != veloUserData.getLastScanAssignCursor()) {
-                return new ErrorReply("cursor is not match");
+                return CURSOR_NOT_MATCH;
             }
         }
 
@@ -356,7 +358,7 @@ public class SGroup extends BaseCommand {
 
         var oneSlot = localPersist.oneSlot(scanCursor.slot());
         if (cursorLong == 0) {
-            veloUserData.setBeginScanSeq(oneSlot.getSnowFlake().getLastNextId());
+            veloUserData.setBeginScanSeq(oneSlot.getSnowFlake().nextId());
         }
 
         int leftCount = count;
