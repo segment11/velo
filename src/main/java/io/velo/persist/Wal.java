@@ -400,12 +400,23 @@ public class Wal implements InMemoryEstimate {
     /**
      * Gets the keys in the WAL. For scan skip when scan key buckets.
      *
+     * @param ltSeq the sequence number to filter keys, for those seq need less than ltSeq
      * @return the keys in the WAL
      */
-    HashSet<String> inWalKeys() {
+    HashSet<String> inWalKeysFormScan(long ltSeq) {
         HashSet<String> set = new HashSet<>();
-        set.addAll(delayToKeyBucketValues.keySet());
-        set.addAll(delayToKeyBucketShortValues.keySet());
+        for (var entry : delayToKeyBucketValues.entrySet()) {
+            var v = entry.getValue();
+            if (v.seq < ltSeq) {
+                set.add(entry.getKey());
+            }
+        }
+        for (var entry : delayToKeyBucketShortValues.entrySet()) {
+            var v = entry.getValue();
+            if (v.seq < ltSeq) {
+                set.add(entry.getKey());
+            }
+        }
         return set;
     }
 

@@ -834,7 +834,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                                                   final int count,
                                                   final long beginScanSeq) {
         final ArrayList<String> keys = new ArrayList<>(Utils.nearestPowerOfTwo(count));
-        final var inWalKeys = oneSlot.getWalByGroupIndex(walGroupIndex).inWalKeys();
+        final var inWalKeys = oneSlot.getWalByGroupIndex(walGroupIndex).inWalKeysFormScan(beginScanSeq);
 
         var walGroupNumber = Wal.calcWalGroupNumber();
         var maxSplitNumber = metaKeyBucketSplitNumber.maxSplitNumber();

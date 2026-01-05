@@ -428,7 +428,7 @@ class WalTest extends Specification {
         def wal = new Wal(slot, null, 0, null, null, snowFlake)
 
         expect:
-        wal.inWalKeys().isEmpty()
+        wal.inWalKeysFormScan(0L).isEmpty()
 
         when:
         def r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
@@ -444,6 +444,7 @@ class WalTest extends Specification {
         then:
         r != null
         r.keys().size() == 10
+        wal.inWalKeysFormScan(100L).size() == 10
 
         when:
         r = wal.scan((short) 5, KeyLoader.typeAsByteIgnore, null, 10, 100L)
@@ -501,6 +502,14 @@ class WalTest extends Specification {
         r = lastWal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
         then:
         r.keys().isEmpty()
+
+        when:
+        def valueList = Mock.prepareValueList(10, 0)
+        for (v in valueList) {
+            wal.put(false, v.key(), v)
+        }
+        then:
+        !wal.inWalKeysFormScan(5L).isEmpty()
 
         cleanup:
         ConfForGlobal.pureMemory = false

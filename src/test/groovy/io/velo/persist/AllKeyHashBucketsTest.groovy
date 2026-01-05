@@ -191,7 +191,7 @@ class AllKeyHashBucketsTest extends Specification {
         def allKeyHashBuckets = keyLoader.allKeyHashBuckets
 
         and:
-        def inWalKeys = oneSlot.getWalByGroupIndex(0).inWalKeys()
+        def inWalKeys = oneSlot.getWalByGroupIndex(0).inWalKeysFormScan(0L)
 
         // test read keys
         when:
@@ -209,8 +209,8 @@ class AllKeyHashBucketsTest extends Specification {
         }
         def r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteIgnore, null, 10, 0L)
         then:
-        // all keys are in wal
-        r.keys().isEmpty()
+        // some keys are in key buckets
+        !r.keys().isEmpty()
 
         when:
         for (i in 0..<Wal.calcWalGroupNumber()) {

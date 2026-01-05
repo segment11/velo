@@ -357,8 +357,13 @@ public class SGroup extends BaseCommand {
         }
 
         var oneSlot = localPersist.oneSlot(scanCursor.slot());
+
+        long beginScanSeq;
         if (cursorLong == 0) {
-            veloUserData.setBeginScanSeq(oneSlot.getSnowFlake().nextId());
+            beginScanSeq = oneSlot.getSnowFlake().nextId();
+            veloUserData.setBeginScanSeq(beginScanSeq);
+        } else {
+            beginScanSeq = veloUserData.getBeginScanSeq();
         }
 
         int leftCount = count;
@@ -374,7 +379,7 @@ public class SGroup extends BaseCommand {
             isScanWalFirst = true;
 
             var wal = oneSlot.getWalByGroupIndex(lastScanCursor.walGroupIndex());
-            var rWal = wal.scan(lastScanCursor.walSkipCount(), typeAsByte, matchPattern, leftCount, veloUserData.getBeginScanSeq());
+            var rWal = wal.scan(lastScanCursor.walSkipCount(), typeAsByte, matchPattern, leftCount, beginScanSeq);
             keys.addAll(rWal.keys());
             lastScanCursor = rWal.scanCursor();
 
@@ -399,10 +404,10 @@ public class SGroup extends BaseCommand {
         KeyLoader.ScanCursorWithReturnKeys rKeyBuckets;
         if (isScanWalFirst) {
             rKeyBuckets = keyLoader.scan(0, (byte) 0, (short) 0,
-                    typeAsByte, matchPattern, leftCount, veloUserData.getBeginScanSeq());
+                    typeAsByte, matchPattern, leftCount, beginScanSeq);
         } else {
             rKeyBuckets = keyLoader.scan(lastScanCursor.walGroupIndex(), lastScanCursor.splitIndex(), lastScanCursor.keyBucketsSkipCount(),
-                    typeAsByte, matchPattern, leftCount, veloUserData.getBeginScanSeq());
+                    typeAsByte, matchPattern, leftCount, beginScanSeq);
         }
         keys.addAll(rKeyBuckets.keys());
 
