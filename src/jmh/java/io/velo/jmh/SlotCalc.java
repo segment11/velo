@@ -24,14 +24,14 @@ public class SlotCalc {
 
     private final Random random = new Random();
 
-    private byte[][] initKeyBytesArray;
+    private String[] initKeyArray;
 
     @Setup
     public void setup() throws IOException {
-        initKeyBytesArray = new byte[initKeyNumber][];
+        initKeyArray = new String[initKeyNumber];
         for (int i = 0; i < initKeyNumber; i++) {
             var key = "key:" + Utils.leftPad(String.valueOf(i), "0", 12);
-            initKeyBytesArray[i] = key.getBytes();
+            initKeyArray[i] = key;
         }
         System.out.println("Done init key bytes array, key number: " + initKeyNumber);
     }
@@ -46,14 +46,14 @@ SlotCalc.calcCrc16        100000000  avgt       0.250          us/op
     @Benchmark
     public void calc() {
         int i = random.nextInt(initKeyNumber);
-        var keyBytes = initKeyBytesArray[i];
-        BaseCommand.slot(keyBytes, slotNumber);
+        var key = initKeyArray[i];
+        BaseCommand.slot(key, slotNumber);
     }
 
     @Benchmark
     public void calcCrc16() {
         int i = random.nextInt(initKeyNumber);
-        var keyBytes = initKeyBytesArray[i];
+        var keyBytes = initKeyArray[i];
         JedisClusterCRC16.getSlot(keyBytes);
     }
 }
