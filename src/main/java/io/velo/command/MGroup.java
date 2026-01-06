@@ -17,6 +17,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.stream.Collectors;
 
+/**
+ * Handles Redis commands starting with letter 'M'.
+ * This includes commands like MANAGE, MGET, MSET, MIGRATE, MOVE.
+ */
 public class MGroup extends BaseCommand {
     public MGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

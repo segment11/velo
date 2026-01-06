@@ -19,6 +19,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
+/**
+ * Handles Redis commands starting with letter 'P'.
+ * This includes commands like PERSIST, PEXPIRE, PFADD, PFMERGE.
+ */
 public class PGroup extends BaseCommand {
     public PGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

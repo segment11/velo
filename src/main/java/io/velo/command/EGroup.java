@@ -14,6 +14,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.stream.Collectors;
 
+/**
+ * Handles Redis commands starting with letter 'E'.
+ * This includes commands like ECHO, EVAL, EXISTS, EXPIRE, EXPIREAT, EXPIRETIME, etc.
+ */
 public class EGroup extends BaseCommand {
     public EGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

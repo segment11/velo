@@ -14,6 +14,10 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+/**
+ * Handles Redis commands starting with letter 'Z'.
+ * This includes commands like ZADD, ZCARD, ZCOUNT, ZRANGE.
+ */
 public class ZGroup extends BaseCommand {
     public ZGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

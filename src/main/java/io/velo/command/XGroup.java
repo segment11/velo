@@ -33,6 +33,10 @@ import java.util.ArrayList;
 
 import static io.velo.repl.ReplType.*;
 
+/**
+ * Handles Redis commands starting with letter 'X'.
+ * This includes commands like XADD, XTRIM, XRANGE.
+ */
 public class XGroup extends BaseCommand {
     public XGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

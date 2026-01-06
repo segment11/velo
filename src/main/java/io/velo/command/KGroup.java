@@ -10,6 +10,10 @@ import java.util.ArrayList;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
+/**
+ * Handles Redis commands starting with letter 'K'.
+ * This includes commands like KEYS.
+ */
 public class KGroup extends BaseCommand {
     public KGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

@@ -8,6 +8,10 @@ import io.velo.reply.*;
 
 import java.util.ArrayList;
 
+/**
+ * Handles Redis commands starting with letter 'W'.
+ * This includes commands like WAIT.
+ */
 public class WGroup extends BaseCommand {
     public WGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

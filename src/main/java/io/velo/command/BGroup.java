@@ -15,6 +15,10 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.BitSet;
 
+/**
+ * Handles Redis commands starting with letter 'B'.
+ * This includes commands like BITCOUNT, BF.*, BLPOP, BRPOP, BGSAVE, etc.
+ */
 public class BGroup extends BaseCommand {
     public BGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

@@ -7,6 +7,10 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 
+/**
+ * Handles Redis commands starting with letter 'U'.
+ * This class is part of command organization where commands are grouped alphabetically.
+ */
 public class UGroup extends BaseCommand {
     public UGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

@@ -21,6 +21,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
+/**
+ * Handles Redis commands starting with letter 'D'.
+ * This includes commands like DEBUG, DEL, DECR, DECRBY, DUMP, etc.
+ */
 public class DGroup extends BaseCommand {
     public DGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

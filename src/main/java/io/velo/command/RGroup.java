@@ -17,6 +17,10 @@ import java.util.ArrayList;
 import java.util.Random;
 import java.util.function.Consumer;
 
+/**
+ * Handles Redis commands starting with letter 'R'.
+ * This includes commands like RANDOMKEY, READONLY, RENAME, RPOP, RPUSH, RSET.
+ */
 public class RGroup extends BaseCommand {
     public RGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

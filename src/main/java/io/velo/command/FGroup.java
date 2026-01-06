@@ -12,6 +12,10 @@ import org.jetbrains.annotations.VisibleForTesting;
 import java.io.IOException;
 import java.util.ArrayList;
 
+/**
+ * Handles Redis commands starting with letter 'F'.
+ * This includes commands like FAILOVER, FLUSHDB, FLUSHALL, etc.
+ */
 public class FGroup extends BaseCommand {
     public FGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

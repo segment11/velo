@@ -24,6 +24,10 @@ import java.util.stream.Collectors;
 
 import static io.velo.CompressedValue.NO_EXPIRE;
 
+/**
+ * Handles Redis commands starting with letter 'S'.
+ * This includes commands like SAVE, SCARD, SDIFF, SET, SINTER.
+ */
 public class SGroup extends BaseCommand {
     public SGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

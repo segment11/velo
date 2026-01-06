@@ -16,6 +16,10 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Random;
 
+/**
+ * Handles Redis commands starting with letter 'H'.
+ * This includes commands like HGET, HSET, HMGET, HMSET, HDEL, HEXISTS, HKEYS, HLEN, HGETALL, etc.
+ */
 public class HGroup extends BaseCommand {
     public HGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

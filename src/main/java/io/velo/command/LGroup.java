@@ -18,6 +18,10 @@ import java.util.Iterator;
 
 import static io.velo.command.BGroup.MAX_TIMEOUT_SECONDS;
 
+/**
+ * Handles Redis commands starting with letter 'L'.
+ * This includes commands like LASTSAVE, LINDEX, LLEN, LPOP, LPUSH, LRANGE, LREM, LSET, LTRIM.
+ */
 public class LGroup extends BaseCommand {
     public LGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

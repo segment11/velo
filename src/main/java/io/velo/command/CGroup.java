@@ -14,6 +14,10 @@ import org.jetbrains.annotations.VisibleForTesting;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+/**
+ * Handles Redis commands starting with letter 'C'.
+ * This includes commands like CLIENT, CLUSTER, COMMAND, CONFIG, COPY, etc.
+ */
 public class CGroup extends BaseCommand {
     public CGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

@@ -12,6 +12,10 @@ import org.jetbrains.annotations.VisibleForTesting;
 import java.util.ArrayList;
 import java.util.TreeSet;
 
+/**
+ * Handles Redis commands starting with letter 'V'.
+ * This class is part of command organization where commands are grouped alphabetically.
+ */
 public class VGroup extends BaseCommand {
     public VGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

@@ -26,6 +26,10 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+/**
+ * Handles Redis commands starting with letter 'I'.
+ * This includes commands like INCR, INCRBY, INFO, etc.
+ */
 public class IGroup extends BaseCommand {
     public IGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

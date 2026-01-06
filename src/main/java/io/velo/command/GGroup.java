@@ -16,6 +16,10 @@ import java.util.List;
 
 import static io.velo.CompressedValue.NO_EXPIRE;
 
+/**
+ * Handles Redis commands starting with letter 'G'.
+ * This includes commands like GET, GETBIT, GETDEL, GETEX, GETRANGE, GETSET, GEO.*, etc.
+ */
 public class GGroup extends BaseCommand {
     public GGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

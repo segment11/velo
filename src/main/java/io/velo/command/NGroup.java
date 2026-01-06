@@ -7,6 +7,10 @@ import io.velo.reply.Reply;
 
 import java.util.ArrayList;
 
+/**
+ * Handles Redis commands starting with letter 'N'.
+ * This class is part of command organization where commands are grouped alphabetically.
+ */
 public class NGroup extends BaseCommand {
     public NGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

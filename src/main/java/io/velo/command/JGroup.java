@@ -7,6 +7,10 @@ import io.velo.reply.Reply;
 
 import java.util.ArrayList;
 
+/**
+ * Handles Redis commands starting with letter 'J'.
+ * Currently used as a placeholder with no specific commands implemented.
+ */
 public class JGroup extends BaseCommand {
     public JGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);

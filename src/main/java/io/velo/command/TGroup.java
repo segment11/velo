@@ -9,6 +9,10 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 
+/**
+ * Handles Redis commands starting with letter 'T'.
+ * This includes commands like TIME, TTL, TOUCH, TYPE.
+ */
 public class TGroup extends BaseCommand {
     @VisibleForTesting
     static final BulkReply TYPE_STRING = new BulkReply("string");

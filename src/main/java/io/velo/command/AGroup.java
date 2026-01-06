@@ -16,6 +16,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Handles Redis commands starting with letter 'A'.
+ * This includes commands like ACL, APPEND, ASKING, etc.
+ */
 public class AGroup extends BaseCommand {
     public AGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
