@@ -1381,7 +1381,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     @VisibleForTesting
-    final LinkedList<BigStringFiles.Id> delayToDeleteBigStringFiles = new LinkedList<>();
+    final LinkedList<BigStringFiles.IdWithKey> delayToDeleteBigStringFileIds = new LinkedList<>();
 
     CompletableFuture<Integer> initCheck() {
         var waitF = new CompletableFuture<Integer>();
@@ -1430,46 +1430,46 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * Delete big string files those are overwritten.
      */
     int intervalDeleteOverwriteBigStringFiles(int targetBucketIndex) {
-        if (!delayToDeleteBigStringFiles.isEmpty()) {
-            var oneId = delayToDeleteBigStringFiles.removeFirst();
-            bigStringFiles.deleteBigStringFileIfExist(oneId.uuid(), oneId.bucketIndex());
+        if (!delayToDeleteBigStringFileIds.isEmpty()) {
+            var oneId = delayToDeleteBigStringFileIds.removeFirst();
+            bigStringFiles.deleteBigStringFileIfExist(oneId.uuid(), oneId.bucketIndex(), oneId.keyHash());
         }
 
         int count = 0;
 
-        var uuidList = bigStringFiles.getBigStringFileUuidList(targetBucketIndex);
-        if (!uuidList.isEmpty()) {
+        var idList = bigStringFiles.getBigStringFileIdList(targetBucketIndex);
+        if (!idList.isEmpty()) {
             var walGroupIndex = Wal.calcWalGroupIndex(targetBucketIndex);
             var targetWal = walArray[walGroupIndex];
 
-            var persistedUuidWithKeyList = keyLoader.getPersistedBigStringUuidList(targetBucketIndex);
-            if (persistedUuidWithKeyList.isEmpty()) {
-                for (var uuid : uuidList) {
-                    if (targetWal.bigStringFileUuidByKey.containsValue(uuid)) {
+            var persistedIdWithKeyList = keyLoader.getPersistedBigStringIdList(targetBucketIndex);
+            if (persistedIdWithKeyList.isEmpty()) {
+                for (var id : idList) {
+                    if (targetWal.bigStringFileUuidByKey.containsValue(id.uuid())) {
                         continue;
                     }
 
-                    delayToDeleteBigStringFiles.add(new BigStringFiles.Id(uuid, targetBucketIndex));
+                    delayToDeleteBigStringFileIds.add(new BigStringFiles.IdWithKey(id.uuid(), targetBucketIndex, id.keyHash(), ""));
                     count++;
                 }
             } else {
                 var map = new HashMap<Long, String>();
-                for (var one : persistedUuidWithKeyList) {
+                for (var one : persistedIdWithKeyList) {
                     map.put(one.uuid(), one.key());
                 }
                 // check those not exists in key buckets or wal cached
-                for (var uuid : uuidList) {
+                for (var id : idList) {
                     boolean canDelete;
-                    if (map.containsKey(uuid)) {
-                        var key = map.get(uuid);
+                    if (map.containsKey(id.uuid())) {
+                        var key = map.get(id.uuid());
                         // wal is newer
                         canDelete = targetWal.hasKey(key);
                     } else {
-                        canDelete = !targetWal.bigStringFileUuidByKey.containsValue(uuid);
+                        canDelete = !targetWal.bigStringFileUuidByKey.containsValue(id.uuid());
                     }
 
                     if (canDelete) {
-                        delayToDeleteBigStringFiles.add(new BigStringFiles.Id(uuid, targetBucketIndex));
+                        delayToDeleteBigStringFileIds.add(new BigStringFiles.IdWithKey(id.uuid(), targetBucketIndex, id.keyHash(), ""));
                         count++;
                     }
                 }
@@ -1531,13 +1531,16 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                         // only slave needs to send ping
                         replPair.ping();
 
-                        var toFetchBigStringUuids = replPair.doingFetchBigStringUuid();
-                        if (toFetchBigStringUuids != BigStringFiles.SKIP_UUID) {
-                            var bytes = new byte[8];
-                            ByteBuffer.wrap(bytes).putLong(toFetchBigStringUuids);
+                        var toFetchBigStringId = replPair.doingFetchBigStringId();
+                        if (toFetchBigStringId != null) {
+                            var bytes = new byte[8 + 4 + toFetchBigStringId.key().length()];
+                            var buffer = ByteBuffer.wrap(bytes);
+                            buffer.putLong(toFetchBigStringId.uuid());
+                            buffer.putInt(toFetchBigStringId.key().length());
+                            buffer.put(toFetchBigStringId.key().getBytes());
                             replPair.write(ReplType.incremental_big_string, new RawBytesContent(bytes));
-                            log.info("Repl do fetch incremental big string, to server={}, uuid={}, slot={}",
-                                    replPair.getHostAndPort(), toFetchBigStringUuids, slot);
+                            log.info("Repl do fetch incremental big string, to server={}, uuid={}, key={}, slot={}",
+                                    replPair.getHostAndPort(), toFetchBigStringId.uuid(), toFetchBigStringId.key(), slot);
                         }
                     } else {
                         isAsMaster = true;
@@ -2179,7 +2182,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             if (isPersistLengthOverSegmentLength || key.contains("kerry-test-big-string-")) {
                 var keyHashAsUuid = cv.getKeyHash();
                 var bytes = cv.getCompressedData();
-                var isWriteOk = bigStringFiles.writeBigStringBytes(keyHashAsUuid, key, bucketIndex, bytes);
+                var isWriteOk = bigStringFiles.writeBigStringBytes(keyHashAsUuid, bucketIndex, keyHashAsUuid, bytes);
                 if (!isWriteOk) {
                     throw new RuntimeException("Write big string file error, uuid=" + keyHashAsUuid + ", key=" + key);
                 }
@@ -2192,7 +2195,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 cvAsBigString.setCompressedDataAsBigString(keyHashAsUuid, cv.getDictSeqOrSpType());
 
                 var cvBigStringEncoded = cvAsBigString.encode();
-                var xBigStrings = new XBigStrings(keyHashAsUuid, bucketIndex, key, cvBigStringEncoded);
+                var xBigStrings = new XBigStrings(keyHashAsUuid, bucketIndex, cv.getKeyHash(), key, cvBigStringEncoded);
                 appendBinlog(xBigStrings);
 
                 v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), CompressedValue.SP_TYPE_BIG_STRING,
@@ -2595,7 +2598,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
                 for (var one : cvList) {
                     var cv = one.cv();
-                    var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash(), keyLoader.bucketsPerSlot);
+                    var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
                     var extWalGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
                     if (extWalGroupIndex != walGroupIndex) {
                         throw new IllegalStateException("Wal group index not match, s=" + slot + ", wal group index=" + walGroupIndex + ", ext wal group index=" + extWalGroupIndex);
@@ -2871,7 +2874,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         for (var one : cvList) {
             var cv = one.cv();
-            var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash(), keyLoader.bucketsPerSlot);
+            var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
 
             var tmpWalValueBytes = getFromWal(one.key(), bucketIndex);
             if (tmpWalValueBytes != null) {
@@ -3091,7 +3094,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             map.put("big_string_files_delete_file_cost_us_avg", (double) bigStringFiles.deleteFileCostTotalUs / bigStringFiles.deleteFileCountTotal);
             map.put("big_string_files_delete_byte_length_avg", (double) bigStringFiles.deleteByteLengthTotal / bigStringFiles.deleteFileCountTotal);
 
-            map.put("big_string_files_delay_to_delete_count", (double) delayToDeleteBigStringFiles.size());
+            map.put("big_string_files_delay_to_delete_count", (double) delayToDeleteBigStringFileIds.size());
         }
 
         if (binlog != null) {

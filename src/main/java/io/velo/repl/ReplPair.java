@@ -3,6 +3,7 @@ package io.velo.repl;
 import io.activej.eventloop.Eventloop;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.velo.ConfForGlobal;
+import io.velo.ConfForSlot;
 import io.velo.RequestHandler;
 import io.velo.persist.BigStringFiles;
 import io.velo.repl.content.Hello;
@@ -151,6 +152,8 @@ public class ReplPair {
         return asMaster;
     }
 
+    private long masterUuid;
+
     /**
      * Gets the UUID of the master.
      *
@@ -169,6 +172,8 @@ public class ReplPair {
         this.masterUuid = masterUuid;
     }
 
+    private long slaveUuid;
+
     /**
      * Gets the UUID of the slave.
      *
@@ -176,6 +181,50 @@ public class ReplPair {
      */
     public long getSlaveUuid() {
         return slaveUuid;
+    }
+
+    @ForSlaveField
+    private boolean isRedoSet = false;
+
+    /**
+     * Checks if the slave only redo set operation.
+     *
+     * @return true if the slave only redo set operation, false the slave can copy key buckets / chunk / wal bytes directly
+     */
+    public boolean isRedoSet() {
+        return isRedoSet;
+    }
+
+    /**
+     * Sets the slave only redo set operation.
+     *
+     * @param isRedoSet the value to set
+     */
+    public void setRedoSet(boolean isRedoSet) {
+        this.isRedoSet = isRedoSet;
+    }
+
+    /**
+     * Remote repl properties. If self is master, this is the slave repl properties. If self is slave, this is the master repl properties.
+     */
+    private ConfForSlot.ReplProperties remoteReplProperties;
+
+    /**
+     * Gets the remote repl properties.
+     *
+     * @return the remote repl properties
+     */
+    public ConfForSlot.ReplProperties getRemoteReplProperties() {
+        return remoteReplProperties;
+    }
+
+    /**
+     * Sets the remote repl properties.
+     *
+     * @param remoteReplProperties the remote repl properties to set
+     */
+    public void setRemoteReplProperties(ConfForSlot.ReplProperties remoteReplProperties) {
+        this.remoteReplProperties = remoteReplProperties;
     }
 
     /**
@@ -186,6 +235,10 @@ public class ReplPair {
     public void setSlaveUuid(long slaveUuid) {
         this.slaveUuid = slaveUuid;
     }
+
+    // client side send ping, server side update timestamp
+    @ForMasterField
+    private long lastPingGetTimestamp;
 
     /**
      * Gets the timestamp of the last received ping from the master.
@@ -205,6 +258,10 @@ public class ReplPair {
         this.lastPingGetTimestamp = lastPingGetTimestamp;
     }
 
+    // server side send pong, client side update timestamp
+    @ForSlaveField
+    private long lastPongGetTimestamp;
+
     /**
      * Gets the timestamp of the last received pong from the slave.
      *
@@ -222,16 +279,6 @@ public class ReplPair {
     public void setLastPongGetTimestamp(long lastPongGetTimestamp) {
         this.lastPongGetTimestamp = lastPongGetTimestamp;
     }
-
-    private long masterUuid;
-    private long slaveUuid;
-
-    // client side send ping, server side update timestamp
-    @ForMasterField
-    private long lastPingGetTimestamp;
-    // server side send pong, client side update timestamp
-    @ForSlaveField
-    private long lastPongGetTimestamp;
 
     @ForSlaveField
     private final long[] statsCountWhenSlaveSkipFetch = new long[3];
@@ -740,25 +787,24 @@ public class ReplPair {
         this.putToDelayListToRemoveTimeMillis = putToDelayListToRemoveTimeMillis;
     }
 
-
     /**
      * Slave need fetch big string files after all catch up.
      */
     @ForSlaveField
-    private final LinkedList<Long> toFetchBigStringUuidList = new LinkedList<>();
+    private final LinkedList<BigStringFiles.IdWithKey> toFetchBigStringIdList = new LinkedList<>();
     /**
      * Slave doing fetch big string files.
      */
     @ForSlaveField
-    private final LinkedList<Long> doFetchingBigStringUuidList = new LinkedList<>();
+    private final LinkedList<BigStringFiles.IdWithKey> doFetchingBigStringIdList = new LinkedList<>();
 
     /**
      * Gets the list of big string file UUIDs to fetch.
      *
      * @return the list of big string file UUIDs
      */
-    public LinkedList<Long> getToFetchBigStringUuidList() {
-        return toFetchBigStringUuidList;
+    public LinkedList<BigStringFiles.IdWithKey> getToFetchBigStringIdList() {
+        return toFetchBigStringIdList;
     }
 
     /**
@@ -766,30 +812,33 @@ public class ReplPair {
      *
      * @return the list of big string file UUIDs
      */
-    public LinkedList<Long> getDoFetchingBigStringUuidList() {
-        return doFetchingBigStringUuidList;
+    public LinkedList<BigStringFiles.IdWithKey> getDoFetchingBigStringIdList() {
+        return doFetchingBigStringIdList;
     }
 
     /**
      * Adds a big string file UUID to the list of files to fetch.
      *
-     * @param uuid the UUID of the big string file to fetch
+     * @param uuid        the UUID of the big string file to fetch
+     * @param bucketIndex the bucket index
+     * @param keyHash     the hash of the key
+     * @param key         the key of the big string file
      */
-    public void addToFetchBigStringUuid(long uuid) {
-        toFetchBigStringUuidList.add(uuid);
+    public void addToFetchBigStringId(long uuid, int bucketIndex, long keyHash, String key) {
+        toFetchBigStringIdList.add(new BigStringFiles.IdWithKey(uuid, bucketIndex, keyHash, key));
     }
 
     /**
-     * Slave fetch a big string file uuid, from to fetch, FIFO list.
+     * Slave fetch a big string file id, from to fetch, FIFO list.
      *
-     * @return to fetch big string uuid, or skip.
+     * @return to fetch big string id, or skip.
      */
-    public long doingFetchBigStringUuid() {
-        if (toFetchBigStringUuidList.isEmpty()) {
-            return BigStringFiles.SKIP_UUID;
+    public BigStringFiles.IdWithKey doingFetchBigStringId() {
+        if (toFetchBigStringIdList.isEmpty()) {
+            return null;
         }
-        var first = toFetchBigStringUuidList.pollFirst();
-        doFetchingBigStringUuidList.add(first);
+        var first = toFetchBigStringIdList.pollFirst();
+        doFetchingBigStringIdList.add(first);
         return first;
     }
 
@@ -799,6 +848,6 @@ public class ReplPair {
      * @param uuid the UUID of the big string file fetched
      */
     public void doneFetchBigStringUuid(long uuid) {
-        doFetchingBigStringUuidList.removeIf(e -> e == uuid);
+        doFetchingBigStringIdList.removeIf(e -> e.uuid() == uuid);
     }
 }

@@ -14,7 +14,7 @@ class HiTest extends Specification {
                 new Binlog.FileIndexAndOffset(0, 0L), 0)
 
         expect:
-        content.encodeLength() == 44
+        content.encodeLength() == 44 + 19
 
         when:
         def bytes = new byte[content.encodeLength()]

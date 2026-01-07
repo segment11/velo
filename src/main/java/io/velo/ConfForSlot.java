@@ -4,6 +4,7 @@ import io.velo.persist.FdReadWrite;
 import io.velo.persist.KeyBucket;
 import io.velo.persist.LocalPersist;
 import io.velo.persist.Wal;
+import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,6 +65,54 @@ public enum ConfForSlot {
      * Configuration for LRU cache for key and compressed value encoded data.
      */
     public final ConfLru lruKeyAndCompressedValueEncoded = new ConfLru(100_000);
+
+    /**
+     * Replication properties for slave.
+     *
+     * @param bucketsPerSlot        the number of buckets per slot
+     * @param segmentNumberPerFd    the number of segments per file
+     * @param fdPerChunk            the number of file descriptors per chunk
+     * @param segmentLength         the length of each segment
+     * @param oneChargeBucketNumber the number of buckets charged in one wal group
+     */
+    public record ReplProperties(int bucketsPerSlot, int segmentNumberPerFd, byte fdPerChunk, int segmentLength,
+                                 int oneChargeBucketNumber) {
+        /**
+         * Check if the slave is redo set, or can copy key buckets / chunk / wal bytes directly.
+         *
+         * @param local configuration for the slave
+         * @return true if the slave is redo set, false otherwise
+         */
+        public boolean isReplRedoSet(ReplProperties local) {
+            if (bucketsPerSlot != local.bucketsPerSlot) {
+                return false;
+            }
+
+            if (segmentNumberPerFd != local.segmentNumberPerFd ||
+                    fdPerChunk != local.fdPerChunk ||
+                    segmentLength != local.segmentLength) {
+                return false;
+            }
+
+            return oneChargeBucketNumber == local.oneChargeBucketNumber;
+        }
+    }
+
+    @TestOnly
+    public boolean isReplRedoSet(ConfForSlot local) {
+        return generateReplProperties().isReplRedoSet(local.generateReplProperties());
+    }
+
+    /**
+     * Generate replication properties.
+     *
+     * @return the replication properties
+     */
+    public ReplProperties generateReplProperties() {
+        return new ReplProperties(confBucket.bucketsPerSlot,
+                confChunk.segmentNumberPerFd, confChunk.fdPerChunk, confChunk.segmentLength,
+                confWal.oneChargeBucketNumber);
+    }
 
     /**
      * Retrieves the appropriate configuration based on the estimated number of keys.

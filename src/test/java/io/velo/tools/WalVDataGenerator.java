@@ -43,14 +43,14 @@ public interface WalVDataGenerator {
                 key, cvEncoded, false);
     }
 
-    default Map<Integer, List<Wal.V>> generateVListByWalGroupIndex(int bucketsPerSlot, int oneChargeBucketNumber, int keyLength, String keyPrefix) {
+    default Map<Integer, List<Wal.V>> generateVListByWalGroupIndex(int oneChargeBucketNumber, int keyLength, String keyPrefix) {
         var n = n();
         ArrayList<Wal.V> list = new ArrayList<>();
         var beginTime = System.currentTimeMillis();
         for (long i = 0; i < n; i++) {
             var key = key(i, keyLength, keyPrefix);
             var keyHash = KeyHash.hash(key.getBytes());
-            var bucketIndex = KeyHash.bucketIndex(keyHash, bucketsPerSlot);
+            var bucketIndex = KeyHash.bucketIndex(keyHash);
             list.add(keyToV(nextId(), bucketIndex, key, keyHash));
         }
         var costTime = System.currentTimeMillis() - beginTime;

@@ -1,6 +1,8 @@
 package io.velo.repl.incremental;
 
+import io.velo.BaseCommand;
 import io.velo.CompressedValue;
+import io.velo.ConfForGlobal;
 import io.velo.persist.LocalPersist;
 import io.velo.persist.Wal;
 import io.velo.repl.BinlogContent;
@@ -184,6 +186,22 @@ public class XWalV implements BinlogContent {
      */
     @Override
     public void apply(short slot, ReplPair replPair) {
+        if (replPair.isRedoSet()) {
+            var key = v.key();
+            var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
+            // bucket index may be changed
+            var v2 = new Wal.V(v.seq(), s.bucketIndex(), v.keyHash(), v.expireAt(), v.spType(), key, v.cvEncoded(), false);
+
+            var oneSlot = localPersist.oneSlot(s.slot());
+            var targetWal = oneSlot.getWalByBucketIndex(s.bucketIndex());
+            oneSlot.asyncRun(() -> {
+                targetWal.put(isValueShort, key, v2);
+            });
+
+            replPair.setSlaveCatchUpLastSeq(v.seq());
+            return;
+        }
+
         var oneSlot = localPersist.oneSlot(slot);
         var targetWal = oneSlot.getWalByBucketIndex(v.bucketIndex());
 

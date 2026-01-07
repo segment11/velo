@@ -1,8 +1,9 @@
 package io.velo.repl.incremental;
 
 import io.netty.buffer.Unpooled;
+import io.velo.BaseCommand;
 import io.velo.CompressedValue;
-import io.velo.ConfForSlot;
+import io.velo.ConfForGlobal;
 import io.velo.KeyHash;
 import io.velo.persist.LocalPersist;
 import io.velo.repl.BinlogContent;
@@ -18,6 +19,7 @@ import java.nio.ByteBuffer;
 public class XBigStrings implements BinlogContent {
     private final long uuid;
     private final int bucketIndex;
+    private final long keyHash;
     private final String key;
     private final byte[] cvEncoded;
 
@@ -37,6 +39,15 @@ public class XBigStrings implements BinlogContent {
      */
     public int getBucketIndex() {
         return bucketIndex;
+    }
+
+    /**
+     * Retrieves the key hash associated with this big string operation.
+     *
+     * @return the key hash
+     */
+    public long getKeyHash() {
+        return keyHash;
     }
 
     /**
@@ -62,12 +73,14 @@ public class XBigStrings implements BinlogContent {
      *
      * @param uuid        the unique identifier for this operation
      * @param bucketIndex the bucket index
+     * @param keyHash     the key hash
      * @param key         the key associated with the big string
      * @param cvEncoded   the encoded bytes of the compressed value
      */
-    public XBigStrings(long uuid, int bucketIndex, String key, byte[] cvEncoded) {
+    public XBigStrings(long uuid, int bucketIndex, long keyHash, String key, byte[] cvEncoded) {
         this.uuid = uuid;
         this.bucketIndex = bucketIndex;
+        this.keyHash = keyHash;
         this.key = key;
         this.cvEncoded = cvEncoded;
     }
@@ -90,9 +103,9 @@ public class XBigStrings implements BinlogContent {
     @Override
     public int encodedLength() {
         // 1 byte for type, 4 bytes for encoded length for check
-        // 8 bytes for uuid, 4 bytes for bucket index, 2 bytes for key length, key bytes
+        // 8 bytes for uuid, 4 bytes for bucket index, 8 bytes for key hash, 2 bytes for key length, key bytes
         // 4 bytes for cvEncoded length, cvEncoded bytes
-        return 1 + 4 + 8 + 4 + 2 + key.length() + 4 + cvEncoded.length;
+        return 1 + 4 + 8 + 4 + 8 + 2 + key.length() + 4 + cvEncoded.length;
     }
 
     /**
@@ -109,6 +122,7 @@ public class XBigStrings implements BinlogContent {
         buffer.putInt(bytes.length);
         buffer.putLong(uuid);
         buffer.putInt(bucketIndex);
+        buffer.putLong(keyHash);
         buffer.putShort((short) key.length());
         buffer.put(key.getBytes());
         buffer.putInt(cvEncoded.length);
@@ -130,6 +144,7 @@ public class XBigStrings implements BinlogContent {
 
         var uuid = buffer.getLong();
         var bucketIndex = buffer.getInt();
+        var keyHash = buffer.getLong();
         var keyLength = buffer.getShort();
 
         if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
@@ -144,7 +159,7 @@ public class XBigStrings implements BinlogContent {
         var cvEncoded = new byte[cvEncodedLength];
         buffer.get(cvEncoded);
 
-        var r = new XBigStrings(uuid, bucketIndex, key, cvEncoded);
+        var r = new XBigStrings(uuid, bucketIndex, keyHash, key, cvEncoded);
         if (encodedLength != r.encodedLength()) {
             throw new IllegalStateException("Invalid encoded length=" + encodedLength);
         }
@@ -165,9 +180,18 @@ public class XBigStrings implements BinlogContent {
         var keyHash = KeyHash.hash(key.getBytes());
         var cv = CompressedValue.decode(Unpooled.wrappedBuffer(cvEncoded), key.getBytes(), keyHash);
 
-        var oneSlot = localPersist.oneSlot(slot);
-        oneSlot.put(key, bucketIndex, cv);
+        if (replPair.isRedoSet()) {
+            var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
+            var oneSlot = localPersist.oneSlot(s.slot());
+            oneSlot.asyncRun(() -> {
+                oneSlot.put(key, s.bucketIndex(), cv);
+            });
+        } else {
+            var oneSlot = localPersist.oneSlot(slot);
+            oneSlot.put(key, bucketIndex, cv);
+        }
 
-        replPair.addToFetchBigStringUuid(uuid);
+        // use remote bucket index
+        replPair.addToFetchBigStringId(uuid, bucketIndex, keyHash, key);
     }
 }

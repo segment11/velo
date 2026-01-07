@@ -1437,7 +1437,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param bucketIndex the bucket index
      * @return the persisted big string uuid with key list
      */
-    List<BigStringFiles.IdWithKey> getPersistedBigStringUuidList(int bucketIndex) {
+    List<BigStringFiles.IdWithKey> getPersistedBigStringIdList(int bucketIndex) {
         // pure memory, todo
 
         var list = new ArrayList<BigStringFiles.IdWithKey>();
@@ -1454,7 +1454,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                     var buf = Unpooled.wrappedBuffer(valueBytes);
                     var cv = CompressedValue.decode(buf, key.getBytes(), keyHash);
                     if (cv.isBigString()) {
-                        list.add(new BigStringFiles.IdWithKey(cv.getBigStringMetaUuid(), key));
+                        list.add(new BigStringFiles.IdWithKey(cv.getBigStringMetaUuid(), bucketIndex, keyHash, key));
                     }
                 }
             });

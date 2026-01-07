@@ -72,6 +72,9 @@ class BaseCommandTest extends Specification {
         def k5 = 'key5{xyz}'
         def s5 = BaseCommand.slot(k5.bytes, 1)
 
+        def slot5 = BaseCommand.calcSlotByKeyHash(KeyHash.hash(k5.bytes), 1)
+        def slot55 = BaseCommand.calcSlotByKeyHash(KeyHash.hash(k5.bytes), 2)
+
         expect:
         s1.slot() == 0
         s1.bucketIndex() < 65536
@@ -278,7 +281,7 @@ class BaseCommandTest extends Specification {
 
         when:
         def bigStringBytes = ('aaaaabbbbbccccc' * 10).bytes
-        oneSlot.bigStringFiles.writeBigStringBytes(1234L, bigStringKey, sBigString.bucketIndex(), bigStringBytes)
+        oneSlot.bigStringFiles.writeBigStringBytes(1234L, sBigString.bucketIndex(), sBigString.keyHash(), bigStringBytes)
         then:
         c.getCv(sBigString).compressedData == bigStringBytes
 
@@ -655,13 +658,13 @@ class BaseCommandTest extends Specification {
         def bigValueBytes = ('x' * 10000).bytes
         c.set(bigValueBytes, sKey, 0, System.currentTimeMillis() + 1000)
         then:
-        oneSlot.bigStringFiles.getBigStringFileUuidList(sKey.bucketIndex()).size() > 0
+        oneSlot.bigStringFiles.getBigStringFileIdList(sKey.bucketIndex()).size() > 0
 
         when:
         ConfForGlobal.bigStringNoCompressMinSize = 500
         c.set(bigValueBytes, sKey, 0, System.currentTimeMillis() + 1000)
         then:
-        oneSlot.bigStringFiles.getBigStringFileUuidList(sKey.bucketIndex()).size() > 0
+        oneSlot.bigStringFiles.getBigStringFileIdList(sKey.bucketIndex()).size() > 0
 
         cleanup:
         ConfForGlobal.bigStringNoCompressMinSize = 1024 * 256

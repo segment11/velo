@@ -94,7 +94,7 @@ class XWalVTest extends Specification {
         xWalV2.apply(slot, replPair)
         def keyHash32 = KeyHash.hash32(v.key().bytes)
         then:
-        localPersist.oneSlot(slot).get(v.key().bytes, v.bucketIndex(), v.keyHash(), keyHash32) != null
+        localPersist.oneSlot(slot).get(v.key(), v.bucketIndex(), v.keyHash(), keyHash32) != null
 
         cleanup:
         localPersist.cleanUp()

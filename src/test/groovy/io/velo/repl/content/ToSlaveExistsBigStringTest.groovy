@@ -1,6 +1,7 @@
 package io.velo.repl.content
 
 import io.activej.bytebuf.ByteBuf
+import io.velo.persist.BigStringFiles
 import io.velo.persist.Consts
 import spock.lang.Specification
 
@@ -13,10 +14,10 @@ class ToSlaveExistsBigStringTest extends Specification {
         if (!bigStringDir.exists()) {
             bigStringDir.mkdirs()
         }
-        List<Long> uuidListInMaster = []
-        List<Long> sentUuidList = []
+        List<BigStringFiles.IdWithKey> idListInMaster = []
+        List<BigStringFiles.IdWithKey> sentIdList = []
 
-        def content = new ToSlaveExistsBigString(0, bigStringDir, uuidListInMaster, sentUuidList)
+        def content = new ToSlaveExistsBigString(0, bigStringDir, idListInMaster, sentIdList)
 
         expect:
         content.encodeLength() == 9
@@ -32,24 +33,24 @@ class ToSlaveExistsBigStringTest extends Specification {
         buffer.get() == (byte) 1
 
         when:
-        uuidListInMaster << 1L
-        uuidListInMaster << 2L
-        uuidListInMaster << 3L
-        uuidListInMaster << 4L
-        sentUuidList << 1L
-        sentUuidList << 2L
-        content = new ToSlaveExistsBigString(0, bigStringDir, uuidListInMaster, sentUuidList)
+        idListInMaster << new BigStringFiles.IdWithKey(1L, 0, 1L, "")
+        idListInMaster << new BigStringFiles.IdWithKey(2L, 0, 2L, "")
+        idListInMaster << new BigStringFiles.IdWithKey(3L, 0, 3L, "")
+        idListInMaster << new BigStringFiles.IdWithKey(4L, 0, 4L, "")
+        sentIdList << new BigStringFiles.IdWithKey(1L, 0, 1L, "")
+        sentIdList << new BigStringFiles.IdWithKey(2L, 0, 2L, "")
+        content = new ToSlaveExistsBigString(0, bigStringDir, idListInMaster, sentIdList)
         then:
         content.encodeLength() == 9
 
         when:
         def subDir = new File(bigStringDir, '0')
         subDir.mkdir()
-        new File(subDir, '1').text = '1' * 10
-        new File(subDir, '3').text = '3' * 30
-        content = new ToSlaveExistsBigString(0, bigStringDir, uuidListInMaster, sentUuidList)
+        new File(subDir, '1_1').text = '1' * 10
+        new File(subDir, '3_3').text = '3' * 30
+        content = new ToSlaveExistsBigString(0, bigStringDir, idListInMaster, sentIdList)
         then:
-        content.encodeLength() == 9 + (8 + 4) * 1 + 30
+        content.encodeLength() == 9 + (8 + 8 + 4) * 1 + 30
 
         when:
         bytes = new byte[content.encodeLength()]
@@ -61,15 +62,16 @@ class ToSlaveExistsBigStringTest extends Specification {
         buffer.getInt() == 1
         buffer.get() == (byte) 1
         buffer.getLong() == 3L
+        buffer.getLong() == 3L
         buffer.getInt() == 30
 
         when:
-        uuidListInMaster.clear()
+        idListInMaster.clear()
         (ToSlaveExistsBigString.ONCE_SEND_BIG_STRING_COUNT * 2).times {
-            uuidListInMaster << (it as long)
-            new File(bigStringDir, 0 + '/' + it).text = it.toString() * 10
+            idListInMaster << new BigStringFiles.IdWithKey(it, 0, it, "")
+            new File(bigStringDir, 0 + '/' + it + '_' + it).text = it.toString() * 10
         }
-        content = new ToSlaveExistsBigString(0, bigStringDir, uuidListInMaster, sentUuidList)
+        content = new ToSlaveExistsBigString(0, bigStringDir, idListInMaster, sentIdList)
         bytes = new byte[content.encodeLength()]
         buf = ByteBuf.wrapForWriting(bytes)
         content.encodeTo(buf)

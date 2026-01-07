@@ -16,7 +16,7 @@ class BigStringFilesTest extends Specification {
         def bigString = 'a' * 10000
 
         println new BigStringFiles.Id(1234L, 0)
-        println new BigStringFiles.IdWithKey(1234L, '1234')
+        println new BigStringFiles.IdWithKey(1234L, 0, 1234L, '1234')
 
         def tmpSlotDir1 = new File('/tmp/tmp-slot-dir')
         def tmpSlotDir2 = new File('/tmp/tmp-slot-dir2')
@@ -35,19 +35,19 @@ class BigStringFilesTest extends Specification {
         bigStringFiles1.collect()
 
         when:
-        def isWriteOk = bigStringFiles1.writeBigStringBytes(1L, 'a', 0, bigString.bytes)
-        def isWriteOk2 = bigStringFiles1.writeBigStringBytes(1L, 'a', 0, bigString.bytes)
+        def isWriteOk = bigStringFiles1.writeBigStringBytes(1L, 0, 1L, bigString.bytes)
+        def isWriteOk2 = bigStringFiles1.writeBigStringBytes(1L, 0, 1L, bigString.bytes)
         then:
         isWriteOk
         isWriteOk2
         bigStringFiles1.bigStringFilesCount == 1
-        bigStringFiles1.getBigStringBytes(1L, 0) == bigString.bytes
-        bigStringFiles1.getBigStringBytes(1L, 1) == null
-        bigStringFiles1.getBigStringBytes(1L, 0, true) == bigString.bytes
-        bigStringFiles1.getBigStringBytes(1L, 0, true) == bigString.bytes
-        bigStringFiles1.getBigStringFileUuidList(0).size() == 1
-        bigStringFiles11.getBigStringFileUuidList(0).size() == 1
-        bigStringFiles2.getBigStringBytes(1L, 0) == null
+        bigStringFiles1.getBigStringBytes(1L, 0, 1L) == bigString.bytes
+        bigStringFiles1.getBigStringBytes(1L, 1, 1L) == null
+        bigStringFiles1.getBigStringBytes(1L, 0, 1L, true) == bigString.bytes
+        bigStringFiles1.getBigStringBytes(1L, 0, 1L, true) == bigString.bytes
+        bigStringFiles1.getBigStringFileIdList(0).size() == 1
+        bigStringFiles11.getBigStringFileIdList(0).size() == 1
+        bigStringFiles2.getBigStringBytes(1L, 0, 1L) == null
 
         when:
         def bigStringFiles111 = new BigStringFiles(slot, tmpSlotDir1)
@@ -55,14 +55,14 @@ class BigStringFilesTest extends Specification {
         bigStringFiles111.bucketIndexesWhenFirstServerStart.size() == 1
 
         when:
-        bigStringFiles1.deleteBigStringFileIfExist(1L, 0)
-        bigStringFiles2.deleteBigStringFileIfExist(1L, 0)
+        bigStringFiles1.deleteBigStringFileIfExist(1L, 0, 1L)
+        bigStringFiles2.deleteBigStringFileIfExist(1L, 0, 1L)
         bigStringFiles1.deleteAllBigStringFiles()
         bigStringFiles2.deleteAllBigStringFiles()
         then:
         bigStringFiles1.bigStringFilesCount == 0
-        bigStringFiles1.getBigStringFileUuidList(0).size() == 0
-        bigStringFiles2.getBigStringFileUuidList(0).size() == 0
+        bigStringFiles1.getBigStringFileIdList(0).size() == 0
+        bigStringFiles2.getBigStringFileIdList(0).size() == 0
     }
 
     def 'test pure memory mode'() {
@@ -74,23 +74,24 @@ class BigStringFilesTest extends Specification {
         println bigStringFiles.estimate(new StringBuilder())
 
         when:
-        def isWriteOk = bigStringFiles.writeBigStringBytes(1L, 'a', 0, bigString.bytes)
+        def isWriteOk = bigStringFiles.writeBigStringBytes(1L, 0, 1L, bigString.bytes)
         then:
         isWriteOk
-        bigStringFiles.getBigStringBytes(1L, 0) == bigString.bytes
-        bigStringFiles.getBigStringBytes(1L, 1) == null
-        bigStringFiles.getBigStringFileUuidList(0).size() == 1
+        bigStringFiles.getBigStringBytes(1L, 0, 1L) == bigString.bytes
+        bigStringFiles.getBigStringBytes(1L, 1, 1L) == null
+        bigStringFiles.getBigStringFileIdList(0).size() == 1
 
         when:
-        bigStringFiles.deleteBigStringFileIfExist(1L, 0)
+        bigStringFiles.deleteBigStringFileIfExist(1L, 0, 1L)
         then:
-        bigStringFiles.getBigStringFileUuidList(0).size() == 0
+        bigStringFiles.getBigStringFileIdList(0).size() == 0
 
         when:
-        bigStringFiles.writeBigStringBytes(1L, 'a', 0, bigString.bytes)
+        bigStringFiles.writeBigStringBytes(1L, 0, 1L, bigString.bytes)
         // skip
         bigStringFiles.handleWhenCvExpiredOrDeleted('a', null, null)
         def cv = new CompressedValue()
+        cv.keyHash = 1L
         // skip as cv type is not big string
         bigStringFiles.handleWhenCvExpiredOrDeleted('a', cv, null)
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
@@ -108,7 +109,7 @@ class BigStringFilesTest extends Specification {
         def is = new DataInputStream(bis)
         bigStringFiles.loadFromLastSavedFileWhenPureMemory(is)
         then:
-        bigStringFiles.getBigStringFileUuidList(0).size() == 1
+        bigStringFiles.getBigStringFileIdList(0).size() == 1
 
         cleanup:
         bigStringFiles.deleteAllBigStringFiles()
@@ -145,7 +146,7 @@ class BigStringFilesTest extends Specification {
                 'posix:permissions', PosixFilePermissions.fromString('r--r--r--'))
 
         def bigString = 'a' * 10000
-        def isWriteOk = bigStringFiles.writeBigStringBytes(1L, 'a', 0, bigString.bytes)
+        def isWriteOk = bigStringFiles.writeBigStringBytes(1L, 0, 1L, bigString.bytes)
 
         then:
         !isWriteOk
@@ -172,7 +173,7 @@ class BigStringFilesTest extends Specification {
                 'posix:permissions', PosixFilePermissions.fromString('-w--w--w-'))
 
         then:
-        bigStringFiles.getBigStringBytes(1L, 0) == null
+        bigStringFiles.getBigStringBytes(1L, 0, 1L) == null
 
         cleanup:
         // delete dir

@@ -12,7 +12,7 @@ class HelloTest extends Specification {
         def content = new Hello(11L, address)
 
         expect:
-        content.encodeLength() == 8 + address.length()
+        content.encodeLength() == 8 + 4 + address.length() + 19
 
         when:
         def bytes = new byte[content.encodeLength()]

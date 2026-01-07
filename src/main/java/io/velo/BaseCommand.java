@@ -516,6 +516,24 @@ public abstract class BaseCommand {
     }
 
     /**
+     * Calculates slot assignment by a key hash.
+     *
+     * @param keyHash    the key hash
+     * @param slotNumber the total number of slots in the velo running instance
+     * @return the slot index
+     */
+    public static short calcSlotByKeyHash(long keyHash, int slotNumber) {
+        var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
+
+        final int halfSlotNumber = slotNumber / 2;
+        final int x = halfSlotNumber * bucketsPerSlot;
+
+        var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) & (halfSlotNumber - 1));
+        var slot = keyHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
+        return (short) slot;
+    }
+
+    /**
      * Calculates slot assignment for a key using instance-configured slot number.
      *
      * @param key the key
@@ -589,7 +607,7 @@ public abstract class BaseCommand {
             var uuid = buffer.getLong();
             var realDictSeq = buffer.getInt();
 
-            var bigStringBytes = oneSlot.getBigStringFiles().getBigStringBytes(uuid, s.bucketIndex, true);
+            var bigStringBytes = oneSlot.getBigStringFiles().getBigStringBytes(uuid, s.bucketIndex, s.keyHash, true);
             if (bigStringBytes == null) {
                 return null;
             }
@@ -874,7 +892,7 @@ public abstract class BaseCommand {
                 compressStats.compressedTotalLength += cr.data().length;
                 compressStats.compressedCostTimeTotalUs += costT;
 
-                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(keyHashAsUuid, key, slotWithKeyHash.bucketIndex, cr.data());
+                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(keyHashAsUuid, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash, cr.data());
                 if (!isWriteOk) {
                     throw new RuntimeException("Write big string file error, uuid=" + keyHashAsUuid + ", key=" + key);
                 }
@@ -882,7 +900,7 @@ public abstract class BaseCommand {
                 cvAsBigString.setCompressedDataAsBigString(keyHashAsUuid, cr.isCompressed() ? Dict.SELF_ZSTD_DICT_SEQ : CompressedValue.NULL_DICT_SEQ);
             } else {
                 // do not compress
-                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(keyHashAsUuid, key, slotWithKeyHash.bucketIndex,
+                var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(keyHashAsUuid, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash,
                         valueBytes, bigStringNoMemoryCopy.offset, bigStringNoMemoryCopy.length);
                 if (!isWriteOk) {
                     throw new RuntimeException("Write big string file error, uuid=" + keyHashAsUuid + ", key=" + key);
@@ -892,7 +910,7 @@ public abstract class BaseCommand {
             }
 
             var cvBigStringEncoded = cvAsBigString.encode();
-            var xBigStrings = new XBigStrings(keyHashAsUuid, slotWithKeyHash.bucketIndex, key, cvBigStringEncoded);
+            var xBigStrings = new XBigStrings(keyHashAsUuid, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash, key, cvBigStringEncoded);
             oneSlot.appendBinlog(xBigStrings);
 
             oneSlot.put(key, slotWithKeyHash.bucketIndex, cvAsBigString);

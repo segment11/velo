@@ -57,14 +57,6 @@ public class Hi implements ReplContent {
 
     /**
      * Encodes the content of this message into the provided {@link ByteBuf}.
-     * The encoding format consists of:
-     * - 8 bytes for the master UUID (written as a long)
-     * - 8 bytes for the slave UUID (written as a long)
-     * - 4 bytes for the current file index (written as an int)
-     * - 8 bytes for the current offset (written as a long)
-     * - 4 bytes for the earliest file index (written as an int)
-     * - 8 bytes for the earliest offset (written as a long)
-     * - 4 bytes for the current segment index (written as an int)
      *
      * @param toBuf the buffer to which the message content will be written
      */
@@ -77,6 +69,8 @@ public class Hi implements ReplContent {
         toBuf.writeInt(earliestFo.fileIndex());
         toBuf.writeLong(earliestFo.offset());
         toBuf.writeInt(currentSegmentIndex);
+
+        Hello.writeReplProperties(toBuf);
     }
 
     /**
@@ -89,11 +83,13 @@ public class Hi implements ReplContent {
      * - 4 bytes for the earliest file index
      * - 8 bytes for the earliest offset
      * - 4 bytes for the current segment index
+     * - 2 bytes for slot number
+     * - 4 + 4 + 1 + 4 + 4 for ReplProperties
      *
      * @return the length in bytes required to encode this message
      */
     @Override
     public int encodeLength() {
-        return 8 + 8 + 4 + 8 + 4 + 8 + 4;
+        return 8 + 8 + 4 + 8 + 4 + 8 + 4 + 2 + 17;
     }
 }

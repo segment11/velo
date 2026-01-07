@@ -751,7 +751,11 @@ public class SGroup extends BaseCommand {
     }
 
     private RedisHashKeys getRedisSet(SlotWithKeyHash slotWithKeyHash) {
-        var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_SET);
+        return getRedisSet(slotWithKeyHash, this);
+    }
+
+    public static RedisHashKeys getRedisSet(SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand) {
+        var encodedBytes = baseCommand.get(slotWithKeyHash, false, CompressedValue.SP_TYPE_SET);
         if (encodedBytes == null) {
             return null;
         }

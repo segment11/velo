@@ -37,6 +37,8 @@ class XSkipApplyTest extends Specification {
         def oneSlot = localPersist.oneSlot(slot)
         def replPair = ReplPairTest.mockAsSlave()
         xSkipApply.apply(slot, replPair)
+        replPair.redoSet = true
+        xSkipApply.apply(slot, replPair)
         then:
         replPair.slaveCatchUpLastSeq == xSkipApply.seq
         oneSlot.getChunkWriteSegmentIndexInt() == xSkipApply.chunkCurrentSegmentIndex

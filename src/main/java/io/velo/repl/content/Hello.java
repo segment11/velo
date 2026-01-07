@@ -1,6 +1,8 @@
 package io.velo.repl.content;
 
 import io.activej.bytebuf.ByteBuf;
+import io.velo.ConfForGlobal;
+import io.velo.ConfForSlot;
 import io.velo.repl.ReplContent;
 
 /**
@@ -34,6 +36,9 @@ public class Hello implements ReplContent {
      * Encodes the content of this message into the provided {@link ByteBuf}.
      * The encoding format consists of:
      * - 8 bytes for the slave UUID (written as a long)
+     * - 4 bytes for net listen addresses length
+     * - 2 bytes for slot number
+     * - 4 + 4 + 1 + 4 + 4 for ReplProperties
      * - The byte array representation of {@code netListenAddresses}
      *
      * @param toBuf the buffer to which the message content will be written
@@ -41,7 +46,20 @@ public class Hello implements ReplContent {
     @Override
     public void encodeTo(ByteBuf toBuf) {
         toBuf.writeLong(slaveUuid);
+        toBuf.writeInt(netListenAddresses.length());
         toBuf.write(netListenAddresses.getBytes());
+
+        writeReplProperties(toBuf);
+    }
+
+    static void writeReplProperties(ByteBuf toBuf) {
+        toBuf.writeShort(ConfForGlobal.slotNumber);
+        var replProperties = ConfForSlot.global.generateReplProperties();
+        toBuf.writeInt(replProperties.bucketsPerSlot());
+        toBuf.writeInt(replProperties.segmentNumberPerFd());
+        toBuf.writeByte(replProperties.fdPerChunk());
+        toBuf.writeInt(replProperties.segmentLength());
+        toBuf.writeInt(replProperties.oneChargeBucketNumber());
     }
 
     /**
@@ -54,6 +72,6 @@ public class Hello implements ReplContent {
      */
     @Override
     public int encodeLength() {
-        return 8 + netListenAddresses.length();
+        return 8 + 4 + netListenAddresses.length() + 2 + 17;
     }
 }

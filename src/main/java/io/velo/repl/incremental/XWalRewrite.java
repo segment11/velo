@@ -106,6 +106,10 @@ public class XWalRewrite implements BinlogContent {
      */
     @Override
     public void apply(short slot, ReplPair replPair) {
+        if (replPair.isRedoSet()) {
+            return;
+        }
+
         var oneSlot = localPersist.oneSlot(slot);
         var targetWal = oneSlot.getWalByGroupIndex(groupIndex);
         targetWal.rewriteOneGroupFromMaster(isValueShort, writeBytes);

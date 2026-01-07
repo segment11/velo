@@ -122,6 +122,10 @@ public class XChunkSegmentFlagUpdate implements BinlogContent {
      */
     @Override
     public void apply(short slot, ReplPair replPair) {
+        if (replPair.isRedoSet()) {
+            return;
+        }
+
         var oneSlot = localPersist.oneSlot(slot);
 
         for (var entry : updatedChunkSegmentFlagWithSeqMap.entrySet()) {

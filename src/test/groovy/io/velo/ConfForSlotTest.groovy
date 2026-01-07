@@ -194,4 +194,44 @@ class ConfForSlotTest extends Specification {
         c1m == ConfForSlot.c1m
         c10m == ConfForSlot.c10m
     }
+
+    def 'test is repl redo set'() {
+        given:
+        def c = ConfForSlot.from(100_000)
+        def c1 = ConfForSlot.from(1_000_000)
+        def c2 = ConfForSlot.from(10_000_000)
+
+        expect:
+        !c.isReplRedoSet(c1)
+        !c.isReplRedoSet(c2)
+
+        when:
+        c1.confBucket.bucketsPerSlot = c.confBucket.bucketsPerSlot * 2
+        then:
+        !c.isReplRedoSet(c1)
+
+        when:
+        c1.confBucket.bucketsPerSlot = c.confBucket.bucketsPerSlot
+        c1.confChunk.segmentNumberPerFd = c.confChunk.segmentNumberPerFd * 2
+        then:
+        !c.isReplRedoSet(c1)
+
+        when:
+        c1.confChunk.segmentNumberPerFd = c.confChunk.segmentNumberPerFd
+        c1.confChunk.fdPerChunk = (byte) (c.confChunk.fdPerChunk * 2)
+        then:
+        !c.isReplRedoSet(c1)
+
+        when:
+        c1.confChunk.fdPerChunk = c.confChunk.fdPerChunk
+        c1.confChunk.segmentLength = c.confChunk.segmentLength * 2
+        then:
+        !c.isReplRedoSet(c1)
+
+        when:
+        c1.confChunk.segmentLength = c.confChunk.segmentLength
+        c1.confWal.oneChargeBucketNumber = c.confWal.oneChargeBucketNumber * 2
+        then:
+        !c.isReplRedoSet(c1)
+    }
 }

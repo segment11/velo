@@ -135,11 +135,11 @@ public class KeyHash {
     /**
      * Computes the bucket index for a given key hash.
      *
-     * @param keyHash        the key hash
-     * @param bucketsPerSlot the number of buckets per slot
+     * @param keyHash the key hash
      * @return the bucket index
      */
-    public static int bucketIndex(long keyHash, int bucketsPerSlot) {
+    public static int bucketIndex(long keyHash) {
+        var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
         return Math.abs((int) (keyHash & (bucketsPerSlot - 1)));
     }
 }

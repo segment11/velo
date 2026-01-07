@@ -46,7 +46,7 @@ class KeyHashTest extends Specification {
         }
 
         for (key in keyList) {
-            println 'key: ' + key + ', bucket index: ' + KeyHash.bucketIndex(KeyHash.hash(key.bytes), 16384)
+            println 'key: ' + key + ', bucket index: ' + KeyHash.bucketIndex(KeyHash.hash(key.bytes))
         }
 
         expect:
@@ -76,7 +76,7 @@ class KeyHashTest extends Specification {
         }
         then:
         inBucket0KeyList.collect {
-            KeyHash.bucketIndex(KeyHash.hash(it.bytes), ConfForSlot.global.confBucket.bucketsPerSlot)
+            KeyHash.bucketIndex(KeyHash.hash(it.bytes))
         }.unique().size() == 1
     }
 }

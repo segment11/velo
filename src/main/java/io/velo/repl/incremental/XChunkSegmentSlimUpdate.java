@@ -96,6 +96,10 @@ public class XChunkSegmentSlimUpdate implements BinlogContent {
      */
     @Override
     public void apply(short slot, ReplPair replPair) {
+        if (replPair.isRedoSet()) {
+            return;
+        }
+
         var segmentRealLengths = new int[1];
         segmentRealLengths[0] = segmentBytesSlim.length;
 

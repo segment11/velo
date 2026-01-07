@@ -129,7 +129,9 @@ public class XSkipApply implements BinlogContent {
                 seq, chunkCurrentSegmentIndex);
 
         var oneSlot = localPersist.oneSlot(slot);
-        oneSlot.setMetaChunkSegmentIndexInt(chunkCurrentSegmentIndex);
+        if (!replPair.isRedoSet()) {
+            oneSlot.setMetaChunkSegmentIndexInt(chunkCurrentSegmentIndex);
+        }
 
         replPair.setSlaveCatchUpLastSeq(seq);
     }

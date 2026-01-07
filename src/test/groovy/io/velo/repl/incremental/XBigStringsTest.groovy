@@ -24,7 +24,7 @@ class XBigStringsTest extends Specification {
         cv.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
         def cvEncoded = cv.encode()
 
-        def xBigStrings = new XBigStrings(uuid, 0, key, cvEncoded)
+        def xBigStrings = new XBigStrings(uuid, 0, cv.keyHash, key, cvEncoded)
 
         expect:
         xBigStrings.type() == BinlogContent.Type.big_strings
@@ -38,6 +38,7 @@ class XBigStringsTest extends Specification {
         xBigStrings2.encodedLength() == encoded.length
         xBigStrings2.uuid == xBigStrings.uuid
         xBigStrings2.bucketIndex == xBigStrings.bucketIndex
+        xBigStrings2.keyHash == xBigStrings.keyHash
         xBigStrings2.key == xBigStrings.key
         xBigStrings2.cvEncoded == xBigStrings.cvEncoded
 
@@ -88,7 +89,7 @@ class XBigStringsTest extends Specification {
         def replPair = ReplPairTest.mockAsSlave()
         xBigStrings.apply(slot, replPair)
         then:
-        replPair.toFetchBigStringUuidList.size() == 1
+        replPair.toFetchBigStringIdList.size() == 1
 
         cleanup:
         localPersist.cleanUp()

@@ -470,7 +470,7 @@ class KeyLoaderTest extends Specification {
         cvBigString.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
         keyLoader.putValueByKey(0, '1234', sKey.keyHash(), sKey.keyHash32(), 0L, 1234L, cvBigString.encode())
         then:
-        keyLoader.getPersistedBigStringUuidList(0).size() == 1
+        keyLoader.getPersistedBigStringIdList(0).size() == 1
 
         when:
         keyLoader.putValueByKey(0, 'a', 10L, 10, 0L, 1L, encodeAsShortStringA)

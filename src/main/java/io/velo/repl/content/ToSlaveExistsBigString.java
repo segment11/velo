@@ -1,6 +1,7 @@
 package io.velo.repl.content;
 
 import io.activej.bytebuf.ByteBuf;
+import io.velo.persist.BigStringFiles;
 import io.velo.repl.ReplContent;
 import org.apache.commons.io.FileUtils;
 
@@ -17,7 +18,7 @@ import java.util.List;
 public class ToSlaveExistsBigString implements ReplContent {
     private final int bucketIndex;
     private final File bigStringDir;
-    private final List<Long> toSendUuidList;
+    private final List<BigStringFiles.IdWithKey> toSendIdList;
     private final boolean isSendAllOnce;
 
     /**
@@ -28,29 +29,36 @@ public class ToSlaveExistsBigString implements ReplContent {
     /**
      * Constructs a new {@link ToSlaveExistsBigString} message.
      *
-     * @param bucketIndex      the bucket index in which the big strings are stored
-     * @param bigStringDir     the directory containing the big strings (files)
-     * @param uuidListInMaster the list of UUIDs of big strings in the master
-     * @param sentUuidList     the list of UUIDs of big strings that have already been sent to the slave
+     * @param bucketIndex    the bucket index in which the big strings are stored
+     * @param bigStringDir   the directory containing the big strings (files)
+     * @param idListInMaster the list of ids of big strings in the master
+     * @param sentIdList     the list of ids of big strings that have already been sent to the slave
      */
-    public ToSlaveExistsBigString(int bucketIndex, File bigStringDir, List<Long> uuidListInMaster, List<Long> sentUuidList) {
+    public ToSlaveExistsBigString(int bucketIndex, File bigStringDir, List<BigStringFiles.IdWithKey> idListInMaster, List<BigStringFiles.IdWithKey> sentIdList) {
         this.bucketIndex = bucketIndex;
         this.bigStringDir = bigStringDir;
 
-        var toSendUuidList = new ArrayList<Long>();
+        var toSendIdList = new ArrayList<BigStringFiles.IdWithKey>();
         // Exclude UUIDs that have already been sent
-        for (var uuid : uuidListInMaster) {
-            if (!sentUuidList.contains(uuid)) {
-                toSendUuidList.add(uuid);
+        for (var id : idListInMaster) {
+            var isSentExist = false;
+            for (var id2 : sentIdList) {
+                if (id2.uuid() == id.uuid() && id2.keyHash() == id.keyHash()) {
+                    isSentExist = true;
+                    break;
+                }
+            }
+            if (!isSentExist) {
+                toSendIdList.add(id);
             }
         }
 
-        this.isSendAllOnce = toSendUuidList.size() <= ONCE_SEND_BIG_STRING_COUNT;
+        this.isSendAllOnce = toSendIdList.size() <= ONCE_SEND_BIG_STRING_COUNT;
         if (!isSendAllOnce) {
-            toSendUuidList = new ArrayList<>(toSendUuidList.subList(0, ONCE_SEND_BIG_STRING_COUNT));
+            toSendIdList = new ArrayList<>(toSendIdList.subList(0, ONCE_SEND_BIG_STRING_COUNT));
         }
 
-        this.toSendUuidList = toSendUuidList;
+        this.toSendIdList = toSendIdList;
     }
 
     /**
@@ -70,6 +78,7 @@ public class ToSlaveExistsBigString implements ReplContent {
      * - Next 1 byte: a flag indicating if all big strings are sent in one batch (1 for true, 0 for false).
      * - For each big string to send:
      * - 8 bytes: the UUID of the big string.
+     * - 8 bytes: the key hash of the big string.
      * - 4 bytes: the length of the big string in bytes.
      * - Following bytes: the big string data.
      * <p>
@@ -81,25 +90,26 @@ public class ToSlaveExistsBigString implements ReplContent {
     public void encodeTo(ByteBuf toBuf) {
         toBuf.writeInt(bucketIndex);
 
-        if (toSendUuidList.isEmpty()) {
+        if (toSendIdList.isEmpty()) {
             toBuf.writeInt(0);
             toBuf.writeByte((byte) 1);
             return;
         }
 
-        toBuf.writeInt(toSendUuidList.size());
+        toBuf.writeInt(toSendIdList.size());
         toBuf.writeByte((byte) (isSendAllOnce ? 1 : 0));
 
         var existCount = 0;
-        for (var uuid : toSendUuidList) {
-            var file = new File(bigStringDir, bucketIndex + "/" + uuid);
+        for (var id : toSendIdList) {
+            var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
             if (!file.exists()) {
                 continue;
             }
 
             existCount++;
 
-            toBuf.writeLong(uuid);
+            toBuf.writeLong(id.uuid());
+            toBuf.writeLong(id.keyHash());
             var bigStringBytesLength = (int) file.length();
             toBuf.writeInt(bigStringBytesLength);
 
@@ -111,7 +121,7 @@ public class ToSlaveExistsBigString implements ReplContent {
             }
         }
 
-        if (existCount != toSendUuidList.size()) {
+        if (existCount != toSendIdList.size()) {
             toBuf.tail(4);
             toBuf.writeInt(existCount);
         }
@@ -124,6 +134,7 @@ public class ToSlaveExistsBigString implements ReplContent {
      * - HEADER_LENGTH for the header.
      * - For each big string to send:
      * - 8 bytes for the UUID.
+     * - 8 bytes for the key hash
      * - 4 bytes for the length of the big string.
      * - The length of the big string data.
      *
@@ -131,19 +142,19 @@ public class ToSlaveExistsBigString implements ReplContent {
      */
     @Override
     public int encodeLength() {
-        if (toSendUuidList.isEmpty()) {
+        if (toSendIdList.isEmpty()) {
             return HEADER_LENGTH;
         }
 
         var length = HEADER_LENGTH;
-        for (var uuid : toSendUuidList) {
-            var file = new File(bigStringDir, bucketIndex + "/" + uuid);
+        for (var id : toSendIdList) {
+            var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
             if (!file.exists()) {
                 continue;
             }
 
             var bigStringBytesLength = (int) file.length();
-            length += 8 + 4 + bigStringBytesLength;
+            length += 8 + 8 + 4 + bigStringBytesLength;
         }
         return length;
     }

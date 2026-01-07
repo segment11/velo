@@ -36,7 +36,6 @@ public class KeyBucketTestDataGenerator implements TestDataGenerator, WalVDataGe
         }
 
         var map = generateVListByWalGroupIndex(
-                confForSlot.confBucket.bucketsPerSlot,
                 confForSlot.confWal.oneChargeBucketNumber,
                 16,
                 "key:");
