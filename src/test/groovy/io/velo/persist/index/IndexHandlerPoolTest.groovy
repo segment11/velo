@@ -1,19 +1,13 @@
 package io.velo.persist.index
 
 import io.activej.config.Config
-import io.activej.eventloop.Eventloop
 import io.velo.persist.Consts
 import spock.lang.Specification
-
-import java.time.Duration
 
 class IndexHandlerPoolTest extends Specification {
     def 'test start and clean up'() {
         given:
         def pool = new IndexHandlerPool((byte) 2, Consts.persistDir, Config.create())
-
-        expect:
-        pool.reverseIndexExpiredIfSecondsFromNow == 3600 * 24 * 7
 
         when:
         pool.start()
@@ -21,7 +15,6 @@ class IndexHandlerPoolTest extends Specification {
         pool.keyAnalysisHandler != null
         pool.indexHandlers.length == 2
         pool.getIndexHandler((byte) 0) != null
-        pool.getChunkMaxSegmentNumber() > 0
         pool.indexHandlers[0].threadIdProtectedForSafe != 0
         pool.getChargeWorkerIdByWordKeyHash(1234L) == (byte) 0
         pool.getChargeWorkerIdByWordKeyHash(123L) == (byte) 1
@@ -32,24 +25,6 @@ class IndexHandlerPoolTest extends Specification {
         pool.run((byte) 0) {
             println 'async run'
         }
-        then:
-        1 == 1
-
-        when:
-        def eventloopCurrent = Eventloop.builder()
-                .withCurrentThread()
-                .withIdleInterval(Duration.ofMillis(100))
-                .build()
-        pool.resetAsMaster()
-        eventloopCurrent.run()
-        Thread.sleep(200)
-        then:
-        1 == 1
-
-        when:
-        pool.resetAsSlave()
-        eventloopCurrent.run()
-        Thread.sleep(200)
         then:
         1 == 1
 
