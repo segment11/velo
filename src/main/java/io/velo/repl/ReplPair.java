@@ -183,27 +183,6 @@ public class ReplPair {
         return slaveUuid;
     }
 
-    @ForSlaveField
-    private boolean isRedoSet = false;
-
-    /**
-     * Checks if the slave only redo set operation.
-     *
-     * @return true if the slave only redo set operation, false the slave can copy key buckets / chunk / wal bytes directly
-     */
-    public boolean isRedoSet() {
-        return isRedoSet;
-    }
-
-    /**
-     * Sets the slave only redo set operation.
-     *
-     * @param isRedoSet the value to set
-     */
-    public void setRedoSet(boolean isRedoSet) {
-        this.isRedoSet = isRedoSet;
-    }
-
     /**
      * Remote repl properties. If self is master, this is the slave repl properties. If self is slave, this is the master repl properties.
      */
@@ -294,8 +273,6 @@ public class ReplPair {
             i = 0;
         } else if (type == ReplType.s_exists_chunk_segments) {
             i = 1;
-        } else if (type == ReplType.s_exists_key_buckets) {
-            i = 2;
         } else {
             return;
         }

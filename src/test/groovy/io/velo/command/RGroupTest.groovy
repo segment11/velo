@@ -6,7 +6,6 @@ import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
 import io.velo.rdb.RDBParser
 import io.velo.repl.ReplPairTest
-import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.reply.*
 import io.velo.type.RedisHH
 import io.velo.type.RedisHashKeys
@@ -190,9 +189,8 @@ class RGroupTest extends Specification {
         def keyLoader = oneSlot.keyLoader
         for (i in 0..<ConfForSlot.global.confBucket.bucketsPerSlot) {
             def shortValueList = Mock.prepareShortValueList(10, i)
-            def xForBinlog = new XOneWalGroupPersist(true, false, 0)
             def walGroupIndex = Wal.calcWalGroupIndex(i)
-            keyLoader.persistShortValueListBatchInOneWalGroup(walGroupIndex, shortValueList, xForBinlog)
+            keyLoader.persistShortValueListBatchInOneWalGroup(walGroupIndex, shortValueList)
         }
         println 'done mock keys'
         reply = rGroup.execute('randomkey')

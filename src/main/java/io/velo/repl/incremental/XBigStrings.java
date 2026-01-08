@@ -180,16 +180,11 @@ public class XBigStrings implements BinlogContent {
         var keyHash = KeyHash.hash(key.getBytes());
         var cv = CompressedValue.decode(Unpooled.wrappedBuffer(cvEncoded), key.getBytes(), keyHash);
 
-        if (replPair.isRedoSet()) {
-            var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
-            var oneSlot = localPersist.oneSlot(s.slot());
-            oneSlot.asyncRun(() -> {
-                oneSlot.put(key, s.bucketIndex(), cv);
-            });
-        } else {
-            var oneSlot = localPersist.oneSlot(slot);
-            oneSlot.put(key, bucketIndex, cv);
-        }
+        var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
+        var oneSlot = localPersist.oneSlot(s.slot());
+        oneSlot.asyncRun(() -> {
+            oneSlot.put(key, s.bucketIndex(), cv);
+        });
 
         // use remote bucket index
         replPair.addToFetchBigStringId(uuid, bucketIndex, keyHash, key);

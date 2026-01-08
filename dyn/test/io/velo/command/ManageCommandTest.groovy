@@ -5,7 +5,6 @@ import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
-import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.reply.*
 import redis.clients.jedis.Jedis
 import spock.lang.Specification
@@ -639,8 +638,7 @@ class ManageCommandTest extends Specification {
         when:
         // set key bucket key / values for iterate
         def shortValueList = Mock.prepareShortValueList(10, 0)
-        oneSlot.keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList,
-                new XOneWalGroupPersist(true, false, 0))
+        oneSlot.keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList)
         data5[4] = ''.bytes
         reply = manage.manageInOneSlot()
         println new String(((BulkReply) reply).raw)

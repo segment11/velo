@@ -47,7 +47,7 @@ class BinlogContentTest extends Specification {
         cv.keyHash = KeyHash.hash(key.bytes)
         def cvEncoded = cv.encode()
 
-        def xBigStrings = new XBigStrings(uuid, key, cvEncoded)
+        def xBigStrings = new XBigStrings(uuid, 0, 1L, key, cvEncoded)
         encoded = xBigStrings.encodeWithType()
         buffer = ByteBuffer.wrap(encoded)
         def xBigStrings2 = BinlogContent.Type.fromCode(buffer.get()).decodeFrom(buffer) as XBigStrings

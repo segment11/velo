@@ -3,7 +3,6 @@ package io.velo.persist;
 import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
-import io.velo.repl.SlaveReplay;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
@@ -38,7 +37,6 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
      *
      * @return the copy of the in-memory cached bytes
      */
-    @SlaveReplay
     byte[] getInMemoryCachedBytes() {
         var dst = new byte[inMemoryCachedBytes.length];
         inMemoryCachedByteBuffer.position(0).get(dst);
@@ -53,7 +51,6 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
      * @param bytes the bytes to overwrite the in-memory cache with
      * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
      */
-    @SlaveReplay
     void overwriteInMemoryCachedBytes(byte[] bytes) {
         if (bytes.length != inMemoryCachedBytes.length) {
             throw new IllegalArgumentException("Repl stat key count in buckets, bytes length not match");

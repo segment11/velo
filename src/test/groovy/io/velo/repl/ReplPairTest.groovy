@@ -45,7 +45,6 @@ class ReplPairTest extends Specification {
         def replPairAsSlave = mockAsSlave()
         println replPairAsMaster
         println replPairAsSlave
-        replPairAsSlave.redoSet = false
         replPairAsSlave.remoteReplProperties = ConfForSlot.global.generateReplProperties()
         ReplPair.parseHostAndPort(null)
         println ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
@@ -114,7 +113,6 @@ class ReplPairTest extends Specification {
         !replPairAsSlave.asMaster
         replPairAsSlave.masterUuid == 0L
         replPairAsSlave.slaveUuid == 1L
-        !replPairAsSlave.redoSet
         replPairAsSlave.remoteReplProperties != null
         replPairAsSlave.lastPongGetTimestamp == 0L
 

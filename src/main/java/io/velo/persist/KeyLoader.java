@@ -5,7 +5,6 @@ import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
-import io.velo.repl.incremental.XOneWalGroupPersist;
 import io.velo.task.ITask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -293,8 +292,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @return true if the split numbers were updated, false otherwise
      * @throws IllegalArgumentException if the bucket index is out of range.
      */
-    @SlaveNeedReplay
-    @SlaveReplay
     public boolean updateMetaKeyBucketSplitNumberBatchIfChanged(int beginBucketIndex, byte[] splitNumberArray) {
         if (beginBucketIndex < 0 || beginBucketIndex >= bucketsPerSlot) {
             throw new IllegalArgumentException("Begin bucket index out of range, slot=" + slot + ", begin bucket index=" + beginBucketIndex);
@@ -309,37 +306,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
         metaKeyBucketSplitNumber.setBatch(beginBucketIndex, splitNumberArray);
         return true;
-    }
-
-    /**
-     * Returns the maximum split number used for replay.
-     *
-     * @return the maximum split number
-     */
-    public byte maxSplitNumberForRepl() {
-        return metaKeyBucketSplitNumber.maxSplitNumber();
-    }
-
-    /**
-     * Retrieves the bytes representing the meta key bucket split numbers for slave nodes.
-     * Read only.
-     *
-     * @return the bytes representing the meta key bucket split numbers
-     */
-    @SlaveReplay
-    public byte[] getMetaKeyBucketSplitNumberBytesToSlaveExists() {
-        return metaKeyBucketSplitNumber.getInMemoryCachedBytes();
-    }
-
-    /**
-     * Overwrites the meta key bucket split number bytes from the master node for slave nodes.
-     *
-     * @param bytes the meta key bucket split number bytes from the master node
-     */
-    @SlaveReplay
-    public void overwriteMetaKeyBucketSplitNumberBytesFromMasterExists(byte[] bytes) {
-        metaKeyBucketSplitNumber.overwriteInMemoryCachedBytes(bytes);
-        log.warn("Repl overwrite meta key bucket split number bytes from master exists, slot={}", slot);
     }
 
     /**
@@ -361,31 +327,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * The meta one WAL group sequence manager.
      */
     private MetaOneWalGroupSeq metaOneWalGroupSeq;
-
-    /**
-     * Retrieves the WAL group sequence for a specific split index and bucket index.
-     *
-     * @param splitIndex  the split index
-     * @param bucketIndex the bucket index
-     * @return the WAL group sequence
-     */
-    public long getMetaOneWalGroupSeq(byte splitIndex, int bucketIndex) {
-        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
-        return metaOneWalGroupSeq.get(walGroupIndex, splitIndex);
-    }
-
-    /**
-     * Sets the WAL group sequence for a specific split index and bucket index.
-     *
-     * @param splitIndex  the split index.
-     * @param bucketIndex the bucket index.
-     * @param seq         the WAL group sequence.
-     */
-    @SlaveReplay
-    public void setMetaOneWalGroupSeq(byte splitIndex, int bucketIndex, long seq) {
-        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
-        metaOneWalGroupSeq.set(walGroupIndex, splitIndex, seq);
-    }
 
     // split 2 times, 1 * 3 * 3 = 9
     // when get bigger, batch persist pvm, will slot stall and read all 9 files, read and write perf will be bad
@@ -427,15 +368,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     MetaChunkSegmentFillRatio metaChunkSegmentFillRatio;
 
     /**
-     * Get the meta chunk segment fill ratio manager, for memory gc.
-     *
-     * @return the meta chunk segment fill ratio manager.
-     */
-    public MetaChunkSegmentFillRatio getMetaChunkSegmentFillRatio() {
-        return metaChunkSegmentFillRatio;
-    }
-
-    /**
      * The logger for this class.
      */
     private static final Logger log = LoggerFactory.getLogger(KeyLoader.class);
@@ -473,27 +405,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * Retrieves the bytes representing the stat key count in buckets for slave nodes.
-     *
-     * @return the bytes representing the stat key count in buckets.
-     */
-    @SlaveReplay
-    public byte[] getStatKeyCountInBucketsBytesToSlaveExists() {
-        return statKeyCountInBuckets.getInMemoryCachedBytes();
-    }
-
-    /**
-     * Overwrites the stat key count in buckets bytes from the master node for slave nodes.
-     *
-     * @param bytes the stat key count in buckets bytes from the master node.
-     */
-    @SlaveReplay
-    public void overwriteStatKeyCountInBucketsBytesFromMasterExists(byte[] bytes) {
-        statKeyCountInBuckets.overwriteInMemoryCachedBytes(bytes);
-        log.warn("Repl overwrite stat key count in buckets bytes from master exists, slot={}", slot);
-    }
-
-    /**
      * Updates a batch of key counts for a specific WAL group index and starting bucket index.
      *
      * @param walGroupIndex    the WAL group index.
@@ -501,8 +412,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param keyCountArray    the new key counts.
      * @throws IllegalArgumentException if the bucket index is out of range.
      */
-    @SlaveNeedReplay
-    @SlaveReplay
     public void updateKeyCountBatch(int walGroupIndex, int beginBucketIndex, short[] keyCountArray) {
         if (beginBucketIndex < 0 || beginBucketIndex + keyCountArray.length > bucketsPerSlot) {
             throw new IllegalArgumentException("Begin bucket index out of range, slot=" + slot + ", begin bucket index=" + beginBucketIndex);
@@ -1164,10 +1073,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Performs actions after putting all key buckets in a WAL group.
      *
      * @param walGroupIndex the WAL group index
-     * @param xForBinlog    the XOneWalGroupPersist object for binlog operations
      * @param inner         the KeyBucketsInOneWalGroup object containing the key buckets
      */
-    private void doAfterPutAll(int walGroupIndex, @NotNull XOneWalGroupPersist xForBinlog, @NotNull KeyBucketsInOneWalGroup inner) {
+    private void doAfterPutAll(int walGroupIndex, @NotNull KeyBucketsInOneWalGroup inner) {
         if (ConfForGlobal.pureMemoryV2) {
             var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
             for (int i = 0; i < oneChargeBucketNumber; i++) {
@@ -1177,20 +1085,16 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             }
 
             updateKeyCountBatch(walGroupIndex, inner.beginBucketIndex, inner.keyCountForStatsTmp);
-            xForBinlog.setKeyCountForStatsTmp(inner.keyCountForStatsTmp);
 
             var seqArray = new long[1];
             // just use first split index
             seqArray[0] = snowFlake.nextId();
             metaOneWalGroupSeq.set(walGroupIndex, (byte) 0, seqArray[0]);
-            xForBinlog.setOneWalGroupSeqArrayBySplitIndex(seqArray);
         } else {
             updateKeyCountBatch(walGroupIndex, inner.beginBucketIndex, inner.keyCountForStatsTmp);
-            xForBinlog.setKeyCountForStatsTmp(inner.keyCountForStatsTmp);
 
             var sharedBytesList = inner.encodeAfterPutBatch();
             var seqArray = writeSharedBytesList(sharedBytesList, inner.beginBucketIndex);
-            xForBinlog.setSharedBytesListBySplitIndex(sharedBytesList);
 
             for (int splitIndex = 0; splitIndex < seqArray.length; splitIndex++) {
                 var seq = seqArray[splitIndex];
@@ -1198,10 +1102,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                     metaOneWalGroupSeq.set(walGroupIndex, (byte) splitIndex, seq);
                 }
             }
-            xForBinlog.setOneWalGroupSeqArrayBySplitIndex(seqArray);
 
             updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp);
-            xForBinlog.setSplitNumberAfterPut(inner.splitNumberTmp);
         }
 
         if (oneSlot != null) {
@@ -1214,16 +1116,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      *
      * @param walGroupIndex                the WAL group index
      * @param pvmList                      the list of PersistValueMeta objects
-     * @param xForBinlog                   the XOneWalGroupPersist object for binlog operations
      * @param keyBucketsInOneWalGroupGiven the KeyBucketsInOneWalGroup object containing the key buckets, or null
      */
     public void updatePvmListBatchAfterWriteSegments(int walGroupIndex,
                                                      @NotNull ArrayList<PersistValueMeta> pvmList,
-                                                     @NotNull XOneWalGroupPersist xForBinlog,
                                                      @Nullable KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
         var inner = keyBucketsInOneWalGroupGiven != null ? keyBucketsInOneWalGroupGiven :
                 new KeyBucketsInOneWalGroup(slot, walGroupIndex, this);
-        xForBinlog.setBeginBucketIndex(inner.beginBucketIndex);
 
         if (ConfForGlobal.pureMemoryV2) {
             // group by bucket index
@@ -1259,12 +1158,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 recordXBytesArray[count] = bos.toByteArray();
                 count++;
             }
-            xForBinlog.setRecordXBytesArray(recordXBytesArray);
         } else {
             inner.putAllPvmList(pvmList);
         }
 
-        doAfterPutAll(walGroupIndex, xForBinlog, inner);
+        doAfterPutAll(walGroupIndex, inner);
     }
 
     /**
@@ -1272,16 +1170,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      *
      * @param walGroupIndex  the WAL group index
      * @param shortValueList the collection of short values
-     * @param xForBinlog     the XOneWalGroupPersist object for binlog operations
      */
     public void persistShortValueListBatchInOneWalGroup(int walGroupIndex,
-                                                        @NotNull Collection<Wal.V> shortValueList,
-                                                        @NotNull XOneWalGroupPersist xForBinlog) {
+                                                        @NotNull Collection<Wal.V> shortValueList) {
         var inner = new KeyBucketsInOneWalGroup(slot, walGroupIndex, this);
-        xForBinlog.setBeginBucketIndex(inner.beginBucketIndex);
 
         inner.putAll(shortValueList);
-        doAfterPutAll(walGroupIndex, xForBinlog, inner);
+        doAfterPutAll(walGroupIndex, inner);
     }
 
     /**
@@ -1296,56 +1191,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * Updates the records bytes array for slave nodes.
-     *
-     * @param recordXBytesArray the records bytes array
-     * @return the total number of records updated
-     */
-    @SlaveNeedReplay
-    @SlaveReplay
-    public int updateRecordXBytesArray(byte[][] recordXBytesArray) {
-        if (!ConfForGlobal.pureMemoryV2) {
-            return 0;
-        }
-
-        var n = 0;
-        for (var bytes : recordXBytesArray) {
-            var buffer = ByteBuffer.wrap(bytes);
-            var bucketIndex = buffer.getInt();
-            var recordSize = buffer.getInt();
-            for (int i = 0; i < recordSize; i++) {
-                var keyHash32 = buffer.getInt();
-                var recordId = buffer.getLong();
-                var expireAtAndShortType = buffer.getLong();
-                var expireAt = expireAtAndShortType >>> 16;
-                byte shortType = (byte) (expireAtAndShortType & 0xFF);
-                var seq = buffer.getLong();
-                var valueBytesLength = buffer.getInt();
-
-                // for unit test
-                if (seq == 0L) {
-                    continue;
-                }
-
-                var putR = allKeyHashBuckets.put(keyHash32, bucketIndex, expireAt, seq, valueBytesLength, shortType, recordId);
-                if (putR.isExists()) {
-                    metaChunkSegmentFillRatio.remove(putR.segmentIndex(), putR.oldValueBytesLength());
-                }
-            }
-            n += recordSize;
-        }
-        return n;
-    }
-
-    /**
      * Writes a shared bytes list for a specific WAL group. Do this after the key buckets updated in this WAL group.
      *
      * @param sharedBytesListBySplitIndex the shared bytes list indexed by split index
      * @param beginBucketIndex            the starting bucket index
      * @return the array of sequence numbers corresponding to each split index
      */
-    @SlaveNeedReplay
-    @SlaveReplay
     public long[] writeSharedBytesList(byte[][] sharedBytesListBySplitIndex, int beginBucketIndex) {
         var seqArray = new long[sharedBytesListBySplitIndex.length];
         for (int splitIndex = 0; splitIndex < sharedBytesListBySplitIndex.length; splitIndex++) {

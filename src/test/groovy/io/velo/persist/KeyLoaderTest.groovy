@@ -1,8 +1,6 @@
 package io.velo.persist
 
 import io.velo.*
-import io.velo.repl.incremental.XOneWalGroupPersist
-import io.velo.repl.incremental.XOneWalGroupPersistTest
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -50,20 +48,10 @@ class KeyLoaderTest extends Specification {
         !keyLoader.isBytesValidAsKeyBucket(new byte[8], 0)
         keyLoader.keyCount == 0
         keyLoader.getKeyCountInBucketIndex(0) == 0
-        keyLoader.statKeyCountInBucketsBytesToSlaveExists.length == bucketsPerSlot * 2
-        keyLoader.maxSplitNumberForRepl() == 1
         KeyLoader.getPositionInSharedBytes(0) == 0
         KeyLoader.getPositionInSharedBytes(1) == oneKeyBucketLength
         KeyLoader.getPositionInSharedBytes(oneChargeBucketNumber) == 0
         KeyLoader.getPositionInSharedBytes(oneChargeBucketNumber + 2) == oneKeyBucketLength * 2
-
-        when:
-        def statKeyCountBytes = new byte[bucketsPerSlot * 2]
-        ByteBuffer.wrap(statKeyCountBytes).putShort(0, (short) 1)
-        keyLoader.overwriteStatKeyCountInBucketsBytesFromMasterExists(statKeyCountBytes)
-        then:
-        keyLoader.keyCount == 1
-        keyLoader.getKeyCountInBucketIndex(0) == 1
 
         when:
         def exception = false
@@ -113,15 +101,6 @@ class KeyLoaderTest extends Specification {
         }
         then:
         exception
-
-        when:
-        def metaSplitNumberBytes = keyLoader.getMetaKeyBucketSplitNumberBytesToSlaveExists()
-        keyLoader.setMetaOneWalGroupSeq((byte) 0, 0, 1L)
-        keyLoader.overwriteMetaKeyBucketSplitNumberBytesFromMasterExists(metaSplitNumberBytes)
-        then:
-        metaSplitNumberBytes != null
-        keyLoader.getMetaOneWalGroupSeq((byte) 0, 0) == 1L
-        metaSplitNumberBytes == keyLoader.getMetaKeyBucketSplitNumberBytesToSlaveExists()
 
         when:
         exception = false
@@ -252,28 +231,6 @@ class KeyLoaderTest extends Specification {
         keyLoader.flush()
         keyLoader.cleanUp()
         Consts.slotDir.deleteDir()
-    }
-
-    def 'test repl'() {
-        given:
-        ConfForGlobal.pureMemory = false
-        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
-        def keyLoader = prepareKeyLoader()
-
-        expect:
-        keyLoader.maxSplitNumberForRepl() == (byte) 1
-
-        when:
-        def metaSplitNumberBytes = keyLoader.getMetaKeyBucketSplitNumberBytesToSlaveExists()
-        keyLoader.overwriteMetaKeyBucketSplitNumberBytesFromMasterExists(metaSplitNumberBytes)
-        then:
-        metaSplitNumberBytes != null
-        metaSplitNumberBytes == keyLoader.getMetaKeyBucketSplitNumberBytesToSlaveExists()
-
-        cleanup:
-        ConfForGlobal.pureMemory = false
-        keyLoader.flush()
-        keyLoader.cleanUp()
     }
 
     def 'test write and read one key'() {
@@ -432,11 +389,9 @@ class KeyLoaderTest extends Specification {
         keyLoader.fdReadWriteArray[1].resetAllBytesByOneWalGroupIndexForKeyBucketOneSplitIndex(walGroupNumber)
         keyLoader.fdReadWriteArray[2].resetAllBytesByOneWalGroupIndexForKeyBucketOneSplitIndex(walGroupNumber)
         keyLoader.writeSharedBytesList(sharedBytesListBySplitIndex, 0)
-        def nn = keyLoader.updateRecordXBytesArray(XOneWalGroupPersistTest.mockRecordXBytesArray(2))
         def bb = keyLoader.getRecordsBytesArrayInOneWalGroup(0)
         def keyBucketListFromMemory = keyLoader.readKeyBuckets(0)
         then:
-        nn == 4
         bb.length == ConfForSlot.global.confWal.oneChargeBucketNumber
         keyBucketListFromMemory.size() == 3
         keyBucketListFromMemory[0] == null
@@ -453,8 +408,25 @@ class KeyLoaderTest extends Specification {
         1 == 1
 
         when:
+        // task interface method, just for code coverage
+        keyLoader.name()
+        keyLoader.executeOnceAfterLoopCount()
+        keyLoader.run()
+        then:
+        1 == 1
+
+        cleanup:
+        keyLoader.flush()
+        keyLoader.cleanUp()
         ConfForGlobal.pureMemory = false
         ConfForGlobal.pureMemoryV2 = false
+    }
+
+    def 'test interval delete big string files'() {
+        given:
+        def keyLoader = prepareKeyLoader()
+
+        when:
         keyLoader.intervalDeleteExpiredBigStringFiles()
         keyLoader.intervalDeleteExpiredBigStringFilesLastBucketIndex = ConfForSlot.global.confBucket.bucketsPerSlot - 1
         keyLoader.intervalDeleteExpiredBigStringFiles()
@@ -473,6 +445,7 @@ class KeyLoaderTest extends Specification {
         keyLoader.getPersistedBigStringIdList(0).size() == 1
 
         when:
+        def encodeAsShortStringA = Mock.prepareShortStringCvEncoded('a', 'a')
         keyLoader.putValueByKey(0, 'a', 10L, 10, 0L, 1L, encodeAsShortStringA)
         def cv = new CompressedValue()
         cv.keyHash = 11L
@@ -483,14 +456,6 @@ class KeyLoaderTest extends Specification {
         int count = keyLoader.intervalDeleteExpiredBigStringFiles()
         then:
         count == 1
-
-        when:
-        // task interface method, just for code coverage
-        keyLoader.name()
-        keyLoader.executeOnceAfterLoopCount()
-        keyLoader.run()
-        then:
-        1 == 1
 
         cleanup:
         keyLoader.flush()
@@ -528,10 +493,12 @@ class KeyLoaderTest extends Specification {
         def pvm = new PersistValueMeta()
         // put a expired pvm so can callback
         keyLoader.putValueByKey(0, 'normal-key', 100L, 100, System.currentTimeMillis() - 1, 100L, pvm.encode())
-        def xForBinlog = new XOneWalGroupPersist(true, false, 0)
-        keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList, xForBinlog)
+        keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList)
         then:
         shortValueList.every {
+            if (it.isExpired()) {
+                return true
+            }
             keyLoader.getValueXByKey(0, it.key(), it.keyHash(), KeyHash.hash32(it.key().bytes)).valueBytes() == it.cvEncoded()
         }
 
@@ -541,9 +508,9 @@ class KeyLoaderTest extends Specification {
         def keyLoader2 = new KeyLoader(slot, ConfForSlot.global.confBucket.bucketsPerSlot, Consts.slotDir2, keyLoader.snowFlake, oneSlot)
         keyLoader2.initFds()
         keyLoader2.initFds((byte) 1)
-        keyLoader2.persistShortValueListBatchInOneWalGroup(0, shortValueList, xForBinlog)
+        keyLoader2.persistShortValueListBatchInOneWalGroup(0, shortValueList)
         // put again
-        keyLoader2.persistShortValueListBatchInOneWalGroup(0, shortValueList, xForBinlog)
+        keyLoader2.persistShortValueListBatchInOneWalGroup(0, shortValueList)
         then:
         1 == 1
 
@@ -574,8 +541,7 @@ class KeyLoaderTest extends Specification {
         }
 
         when:
-        def xForBinlog = new XOneWalGroupPersist(true, false, 0)
-        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog, null)
+        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, null)
         then:
         pvmList.every {
             keyLoader.getValueXByKey(0, it.key, it.keyHash, it.keyHash32).valueBytes() == it.encode()
@@ -587,7 +553,7 @@ class KeyLoaderTest extends Specification {
         def keyLoader2 = new KeyLoader(slot, ConfForSlot.global.confBucket.bucketsPerSlot, Consts.slotDir2, keyLoader.snowFlake, oneSlot)
         keyLoader2.initFds()
         keyLoader2.initFds((byte) 1)
-        keyLoader2.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog, null)
+        keyLoader2.updatePvmListBatchAfterWriteSegments(0, pvmList, null)
         then:
         1 == 1
 
@@ -677,8 +643,7 @@ class KeyLoaderTest extends Specification {
 
             pvmList << pvm
         }
-        def xForBinlog = new XOneWalGroupPersist(true, false, 0)
-        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog, null)
+        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, null)
         r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, 0L)
         then:
         r.keys().size() == 6
@@ -702,7 +667,7 @@ class KeyLoaderTest extends Specification {
         when:
         ConfForGlobal.pureMemoryV2 = true
         keyLoader.resetForPureMemoryV2()
-        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, xForBinlog, null)
+        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, null)
         then:
         1 == 1
 

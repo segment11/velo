@@ -87,44 +87,20 @@ public enum ReplType {
     exists_chunk_segments(false, true, (byte) 20),
 
     /**
-     * Request to master for fetching exists key buckets.
+     * Request to master for fetching exists big strings.
      * It's before slave all catch up.
      * It's sent by a slave.
      * code byte value 21.
      */
-    exists_key_buckets(false, true, (byte) 21),
-
-    /**
-     * Request to master for fetching meta split number of key buckets.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 22.
-     */
-    meta_key_bucket_split_number(false, true, (byte) 22),
-
-    /**
-     * Request to master for fetching stats of key counts in buckets.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 23.
-     */
-    stat_key_count_in_buckets(false, true, (byte) 23),
-
-    /**
-     * Request to master for fetching exists big strings.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 24.
-     */
-    exists_big_string(false, true, (byte) 24),
+    exists_big_string(false, true, (byte) 21),
 
     /**
      * Request to master for fetching incremental big strings.
      * It's after slave all catch up.
      * It's sent by a slave.
-     * code byte value 44.
+     * code byte value 41.
      */
-    incremental_big_string(true, true, (byte) 44),
+    incremental_big_string(true, true, (byte) 41),
 
     /**
      * Request to master for fetching trained dictionaries.
@@ -167,44 +143,20 @@ public enum ReplType {
     s_exists_chunk_segments(false, false, (byte) 30),
 
     /**
-     * Response to slave for fetching exists key buckets.
+     * Response to slave for fetching exists big strings.
      * It's before slave all catch up.
      * It's sent by a master.
      * code byte value 31.
      */
-    s_exists_key_buckets(false, false, (byte) 31),
-
-    /**
-     * Response to slave for fetching meta split number of key buckets.
-     * It's before slave all catch up.
-     * It's sent by a master.
-     * code byte value 32.
-     */
-    s_meta_key_bucket_split_number(false, false, (byte) 32),
-
-    /**
-     * Response to slave for fetching stats of key counts in buckets.
-     * It's before slave all catch up.
-     * It's sent by a master.
-     * code byte value 33.
-     */
-    s_stat_key_count_in_buckets(false, false, (byte) 33),
-
-    /**
-     * Response to slave for fetching exists big strings.
-     * It's before slave all catch up.
-     * It's sent by a master.
-     * code byte value 34.
-     */
-    s_exists_big_string(false, false, (byte) 34),
+    s_exists_big_string(false, false, (byte) 31),
 
     /**
      * Response to slave for fetching incremental big strings.
      * It's after slave all catch up.
      * It's sent by a master.
-     * code byte value 54.
+     * code byte value 51.
      */
-    s_incremental_big_string(true, false, (byte) 54),
+    s_incremental_big_string(true, false, (byte) 51),
 
     /**
      * Response to slave for fetching exists trained dictionaries.

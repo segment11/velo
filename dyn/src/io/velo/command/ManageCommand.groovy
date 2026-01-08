@@ -14,7 +14,6 @@ import io.velo.persist.LocalPersist
 import io.velo.persist.OneSlot
 import io.velo.persist.Wal
 import io.velo.repl.cluster.MultiShard
-import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.repl.support.JedisPoolHolder
 import io.velo.reply.*
 import io.velo.type.RedisHH
@@ -434,8 +433,7 @@ class ManageCommand extends BaseCommand {
                         s.rawKey(), cv.encode(), false))
             }
 
-            def xForBinlog = new XOneWalGroupPersist(true, false, 0)
-            oneSlot.chunk.persist(walGroupIndex, vList, xForBinlog, null)
+            oneSlot.chunk.persist(walGroupIndex, vList, null)
         }
         costT += System.currentTimeMillis() - beginT
         log.warn 'Manage mock-data, set big batch key values, slot={}, costT={}ms', oneSlot.slot(), costT

@@ -7,7 +7,6 @@ import io.velo.NullableOnlyTest;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
-import io.velo.repl.incremental.XOneWalGroupPersist;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -533,14 +532,12 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      *
      * @param walGroupIndex                the index of the WAL group being persisted
      * @param list                         the data to persist, in the form of a list of WAL values
-     * @param xForBinlog                   used for logging purposes during persistence
      * @param keyBucketsInOneWalGroupGiven an optional parameter for details about key buckets in the WAL group
      */
     @SlaveNeedReplay
     // return need merge segment index array
     public void persist(int walGroupIndex,
                         @NotNull ArrayList<Wal.V> list,
-                        @NotNull XOneWalGroupPersist xForBinlog,
                         @Nullable KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
         ArrayList<PersistValueMeta> pvmList = new ArrayList<>();
         var segments = ConfForSlot.global.confChunk.isSegmentUseCompression ?
@@ -590,10 +587,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                 if (ConfForGlobal.pureMemoryV2) {
                     keyLoader.metaChunkSegmentFillRatio.set(targetSegmentIndex, segment.valueBytesLength());
                 }
-
-                xForBinlog.putUpdatedChunkSegmentBytes(targetSegmentIndex, bytes);
-                xForBinlog.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex,
-                        isNewAppendAfterBatch ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
             }
 
             oneSlot.setSegmentMergeFlagBatch(currentSegmentIndex, segmentCount,
@@ -612,10 +605,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                             isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq(), walGroupIndex);
 
                     moveSegmentIndexNext(1);
-
-                    xForBinlog.putUpdatedChunkSegmentBytes(targetSegmentIndex, bytes);
-                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex,
-                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
                 }
             } else {
                 // batch write, perf better ? need test
@@ -643,8 +632,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                         }
 
                         segmentSeqListSubBatch.add(segment.segmentSeq());
-
-                        xForBinlog.putUpdatedChunkSegmentBytes(segment.tmpSegmentIndex() + currentSegmentIndex, bytes);
                     }
 
                     boolean isNewAppend = writeSegments(tmpBatchBytes, BATCH_ONCE_SEGMENT_COUNT_PWRITE);
@@ -652,13 +639,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                     // need set segment flag so that merge worker can merge
                     oneSlot.setSegmentMergeFlagBatch(segmentIndex, BATCH_ONCE_SEGMENT_COUNT_PWRITE,
                             isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segmentSeqListSubBatch, walGroupIndex);
-
-                    for (int j = 0; j < BATCH_ONCE_SEGMENT_COUNT_PWRITE; j++) {
-                        var segment = segments.get(i * BATCH_ONCE_SEGMENT_COUNT_PWRITE + j);
-
-                        xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segment.tmpSegmentIndex() + currentSegmentIndex,
-                                isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq());
-                    }
 
                     moveSegmentIndexNext(BATCH_ONCE_SEGMENT_COUNT_PWRITE);
                 }
@@ -668,10 +648,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                     var bytes = leftSegment.segmentBytes();
                     int targetSegmentIndex = leftSegment.tmpSegmentIndex() + currentSegmentIndex;
                     boolean isNewAppend = writeSegments(bytes, 1);
-
-                    xForBinlog.putUpdatedChunkSegmentBytes(targetSegmentIndex, bytes);
-                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex,
-                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, leftSegment.segmentSeq());
 
                     // need set segment flag so that merge worker can merge
                     oneSlot.setSegmentMergeFlag(targetSegmentIndex,
@@ -705,7 +681,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
 
         var beginT = System.nanoTime();
-        keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, pvmList, xForBinlog, keyBucketsInOneWalGroupGiven);
+        keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, pvmList, keyBucketsInOneWalGroupGiven);
         var costT = (System.nanoTime() - beginT) / 1000;
         updatePvmBatchCostTimeTotalUs += costT;
 
@@ -713,8 +689,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
         // update meta, segment index for next time
         oneSlot.setMetaChunkSegmentIndexInt(segmentIndex);
-        xForBinlog.setChunkSegmentIndexAfterPersist(segmentIndex);
-        xForBinlog.setToFindForMergeGroupByWalGroup(new XOneWalGroupPersist.ToFindForMergeGroupByWalGroup(walGroupIndex, currentSegmentIndex, segmentCount));
     }
 
     /**

@@ -186,30 +186,20 @@ public class XWalV implements BinlogContent {
      */
     @Override
     public void apply(short slot, ReplPair replPair) {
-        if (replPair.isRedoSet()) {
-            var key = v.key();
-            var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
-            // bucket index may be changed
-            var v2 = new Wal.V(v.seq(), s.bucketIndex(), v.keyHash(), v.expireAt(), v.spType(), key, v.cvEncoded(), false);
+        var key = v.key();
+        var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
+        // bucket index may be changed
+        var v2 = new Wal.V(v.seq(), s.bucketIndex(), v.keyHash(), v.expireAt(), v.spType(), key, v.cvEncoded(), false);
 
-            var oneSlot = localPersist.oneSlot(s.slot());
-            var targetWal = oneSlot.getWalByBucketIndex(s.bucketIndex());
-            oneSlot.asyncRun(() -> {
-                targetWal.put(isValueShort, key, v2);
-            });
-
-            replPair.setSlaveCatchUpLastSeq(v.seq());
-            return;
-        }
-
-        var oneSlot = localPersist.oneSlot(slot);
-        var targetWal = oneSlot.getWalByBucketIndex(v.bucketIndex());
-
-        if (isOnlyPut) {
-            targetWal.put(isValueShort, v.key(), v);
-        } else {
-            targetWal.putFromX(v, isValueShort, offset);
-        }
+        var oneSlot = localPersist.oneSlot(s.slot());
+        var walGroupIndex = Wal.calcWalGroupIndex(s.bucketIndex());
+        var targetWal = oneSlot.getWalByGroupIndex(walGroupIndex);
+        oneSlot.asyncRun(() -> {
+            var putResult = targetWal.put(isValueShort, key, v2);
+            if (putResult.needPersist()) {
+                oneSlot.doPersist(walGroupIndex, key, putResult);
+            }
+        });
 
         replPair.setSlaveCatchUpLastSeq(v.seq());
     }

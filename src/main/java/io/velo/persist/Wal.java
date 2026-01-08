@@ -4,7 +4,6 @@ import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
-import io.velo.repl.incremental.XWalRewrite;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -806,11 +805,6 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
-    @TestOnly
-    public PutResult put(boolean isValueShort, @NotNull String key, @NotNull V v) {
-        return put(isValueShort, key, v, 0L);
-    }
-
     /**
      * Rewrite to file for one group
      *
@@ -818,9 +812,9 @@ public class Wal implements InMemoryEstimate {
      * @return the new offset
      */
     @SlaveNeedReplay
-    private int rewriteOneGroup(boolean isValueShort, byte[] writeBytesFromMasterIfIsReplay) {
+    private int rewriteOneGroup(boolean isValueShort) {
         try {
-            var writeBytes = writeBytesFromMasterIfIsReplay != null ? writeBytesFromMasterIfIsReplay : writeToSavedBytes(isValueShort, true);
+            var writeBytes = writeToSavedBytes(isValueShort, true);
             assert writeBytes.length > 4 && writeBytes.length <= ONE_GROUP_BUFFER_SIZE;
 
             // 4 bytes for int 0
@@ -836,20 +830,10 @@ public class Wal implements InMemoryEstimate {
                 writePosition = newOffset;
             }
 
-            if (writeBytesFromMasterIfIsReplay == null) {
-                var xWalRewrite = new XWalRewrite(isValueShort, groupIndex, writeBytes);
-                oneSlot.appendBinlog(xWalRewrite);
-            }
-
             return newOffset;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    @SlaveReplay
-    public void rewriteOneGroupFromMaster(boolean isValueShort, byte[] bytes) {
-        rewriteOneGroup(isValueShort, bytes);
     }
 
     @VisibleForTesting
@@ -900,6 +884,18 @@ public class Wal implements InMemoryEstimate {
      * @param isValueShort      whether the value is short
      * @param key               the key to put
      * @param v                 the log entry to put
+     * @return the result of the put operation
+     */
+    public PutResult put(boolean isValueShort, @NotNull String key, @NotNull V v) {
+        return put(isValueShort, key, v, 0L);
+    }
+
+    /**
+     * Puts a log entry into the WAL.
+     *
+     * @param isValueShort      whether the value is short
+     * @param key               the key to put
+     * @param v                 the log entry to put
      * @param lastPersistTimeMs the last persist time in milliseconds
      * @return the result of the put operation
      */
@@ -913,7 +909,7 @@ public class Wal implements InMemoryEstimate {
             var keyCount = isValueShort ? delayToKeyBucketShortValues.size() : delayToKeyBucketValues.size();
             // hot data, keep in wal
             if (keyCount < (isValueShort ? ConfForSlot.global.confWal.shortValueSizeTrigger / 10 : ConfForSlot.global.confWal.valueSizeTrigger / 10) && isOnRewrite) {
-                var newOffset = rewriteOneGroup(isValueShort, null);
+                var newOffset = rewriteOneGroup(isValueShort);
                 if (newOffset + encodeLength > ONE_GROUP_BUFFER_SIZE) {
                     needPersistCountTotal++;
                     needPersistKvCountTotal += keyCount;

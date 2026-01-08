@@ -3,7 +3,6 @@ package io.velo.persist;
 import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
-import io.velo.repl.SlaveReplay;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
@@ -36,7 +35,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
      *
      * @return the copy of the in-memory cached bytes
      */
-    @SlaveReplay
     byte[] getInMemoryCachedBytes() {
         var dst = new byte[inMemoryCachedBytes.length];
         inMemoryCachedByteBuffer.position(0).get(dst);
@@ -52,7 +50,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
      * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
      * @throws RuntimeException         If an I/O error occurs during file operations.
      */
-    @SlaveReplay
     void overwriteInMemoryCachedBytes(byte[] bytes) {
         if (bytes.length != inMemoryCachedBytes.length) {
             throw new IllegalArgumentException("Repl meta key bucket split number, bytes length not match");

@@ -7,7 +7,6 @@ import io.velo.acl.RPubSub
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
 import io.velo.repl.LeaderSelector
-import io.velo.repl.incremental.XOneWalGroupPersist
 import io.velo.reply.*
 import io.velo.type.RedisHashKeys
 import io.velo.type.RedisList
@@ -270,9 +269,8 @@ sunionstore
 
         when:
         def shortValueList = Mock.prepareShortValueList(10, 0)
-        def xForBinlog = new XOneWalGroupPersist(true, false, 0)
         def keyLoader = oneSlot.keyLoader
-        keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList, xForBinlog)
+        keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList)
         reply = sGroup.execute('scan . match key:* count 10 type string') { data ->
             data[1] = scanCursor.toLong().toString().bytes
         }

@@ -20,19 +20,12 @@ public class XSkipApply implements BinlogContent {
     private final long seq;
 
     /**
-     * The current segment index of the chunk that this skip apply instruction refers to.
-     */
-    private final int chunkCurrentSegmentIndex;
-
-    /**
      * Constructs a new XSkipApply instance with the given sequence number and chunk segment index.
      *
-     * @param seq                      the sequence number to skip
-     * @param chunkCurrentSegmentIndex the current segment index of the chunk to skip
+     * @param seq the sequence number to skip
      */
-    public XSkipApply(long seq, int chunkCurrentSegmentIndex) {
+    public XSkipApply(long seq) {
         this.seq = seq;
-        this.chunkCurrentSegmentIndex = chunkCurrentSegmentIndex;
     }
 
     /**
@@ -42,15 +35,6 @@ public class XSkipApply implements BinlogContent {
      */
     public long getSeq() {
         return seq;
-    }
-
-    /**
-     * Returns the current segment index of the chunk associated with this skip apply instruction.
-     *
-     * @return the chunk segment index
-     */
-    public int getChunkCurrentSegmentIndex() {
-        return chunkCurrentSegmentIndex;
     }
 
     /**
@@ -72,8 +56,7 @@ public class XSkipApply implements BinlogContent {
     public int encodedLength() {
         // 1 byte for type
         // 8 bytes for seq
-        // 4 bytes for chunk segment index
-        return 1 + 8 + 4;
+        return 1 + 8;
     }
 
     /**
@@ -88,7 +71,6 @@ public class XSkipApply implements BinlogContent {
 
         buffer.put(type().code());
         buffer.putLong(seq);
-        buffer.putInt(chunkCurrentSegmentIndex);
 
         return bytes;
     }
@@ -102,8 +84,7 @@ public class XSkipApply implements BinlogContent {
     public static XSkipApply decodeFrom(ByteBuffer buffer) {
         // already read type byte
         var seq = buffer.getLong();
-        var chunkCurrentSegmentIndex = buffer.getInt();
-        return new XSkipApply(seq, chunkCurrentSegmentIndex);
+        return new XSkipApply(seq);
     }
 
     /**
@@ -118,20 +99,14 @@ public class XSkipApply implements BinlogContent {
 
     /**
      * Applies this skip apply instruction to the specified slot and replication pair.
-     * This logs a warning, updates the slot's chunk segment index, and sets the last sequence caught up by the slave.
+     * This logs a warning, and sets the last sequence caught up by the slave.
      *
      * @param slot     the slot index to apply the skip instruction to
      * @param replPair the replication pair involved in the replication process
      */
     @Override
     public void apply(short slot, ReplPair replPair) {
-        log.warn("Repl skip apply, seq={}, chunk segment index={}",
-                seq, chunkCurrentSegmentIndex);
-
-        var oneSlot = localPersist.oneSlot(slot);
-        if (!replPair.isRedoSet()) {
-            oneSlot.setMetaChunkSegmentIndexInt(chunkCurrentSegmentIndex);
-        }
+        log.warn("Repl skip apply, seq={}}", seq);
 
         replPair.setSlaveCatchUpLastSeq(seq);
     }

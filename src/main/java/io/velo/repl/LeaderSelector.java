@@ -331,10 +331,6 @@ public class LeaderSelector implements NeedCleanUp {
                         log.info("Repl reset as master, is already master, do nothing, slot={}", oneSlot.slot());
                     }
                 }
-
-                if (oneSlot.slot() == 0) {
-                    localPersist.getIndexHandlerPool().resetAsMaster();
-                }
             });
         }
 
@@ -425,10 +421,6 @@ public class LeaderSelector implements NeedCleanUp {
 
                 resetAsMasterCount = 0;
                 resetAsSlaveCount++;
-
-                if (oneSlot.slot() == 0) {
-                    localPersist.getIndexHandlerPool().resetAsSlave();
-                }
             });
         }
 

@@ -13,10 +13,12 @@ import io.velo.command.BlockingList;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.metric.SimpleGauge;
 import io.velo.monitor.BigKeyTopK;
-import io.velo.persist.index.IndexHandler;
 import io.velo.repl.*;
 import io.velo.repl.content.RawBytesContent;
-import io.velo.repl.incremental.*;
+import io.velo.repl.incremental.XBigStrings;
+import io.velo.repl.incremental.XFlush;
+import io.velo.repl.incremental.XUpdateSeq;
+import io.velo.repl.incremental.XWalV;
 import io.velo.task.ITask;
 import io.velo.task.TaskChain;
 import org.apache.commons.collections4.map.LRUMap;
@@ -35,7 +37,6 @@ import java.lang.management.OperatingSystemMXBean;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
 import static io.velo.persist.Chunk.Flag;
@@ -669,35 +670,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             log.warn("Pending submit index job run count less than 0, slot={}", OneSlot.this.slot);
             pendingSubmitIndexJobRunCount = 0;
         }
-    }
-
-    /**
-     * Submits an index job to a target worker and runs a consumer on the index handler.
-     *
-     * @param indexWorkerId the target index worker ID
-     * @param consumer      the consumer to run on the index handler
-     * @return the promise representing the asynchronous computation
-     */
-    public Promise<Void> submitIndexToTargetWorkerJobRun(byte indexWorkerId, @NotNull Consumer<IndexHandler> consumer) {
-        var localPersist = LocalPersist.getInstance();
-        var indexHandlerPool = localPersist.getIndexHandlerPool();
-        return indexHandlerPool.run(indexWorkerId, consumer);
-    }
-
-    /**
-     * Submits an index job to a worker based on the hash of a word key, runs a consumer on the index handler, and calls submitIndexJobDone upon completion.
-     *
-     * @param lowerCaseWord the word key
-     * @param consumer      the consumer to run on the index handler
-     * @return the promise representing the asynchronous computation
-     */
-    public Promise<Void> submitIndexJobRun(@NotNull String lowerCaseWord, @NotNull Consumer<IndexHandler> consumer) {
-        pendingSubmitIndexJobRunCount++;
-
-        var localPersist = LocalPersist.getInstance();
-        var indexHandlerPool = localPersist.getIndexHandlerPool();
-        var indexWorkerId = indexHandlerPool.getChargeWorkerIdByWordKeyHash(KeyHash.hash(lowerCaseWord.getBytes()));
-        return indexHandlerPool.run(indexWorkerId, consumer);
     }
 
     private final short slot;
@@ -2241,7 +2213,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param putResult     Wal put result
      */
     @SlaveNeedReplay
-    private void doPersist(int walGroupIndex, @NotNull String key, @NotNull Wal.PutResult putResult) {
+    public void doPersist(int walGroupIndex, @NotNull String key, @NotNull Wal.PutResult putResult) {
         var targetWal = walArray[walGroupIndex];
         putValueToWal(putResult.isValueShort(), targetWal);
         lastPersistTimeMs = System.currentTimeMillis();
@@ -2559,9 +2531,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     void putValueToWal(boolean isShortValue, @NotNull Wal targetWal) {
         var walGroupIndex = targetWal.groupIndex;
-        var xForBinlog = new XOneWalGroupPersist(isShortValue, true, walGroupIndex);
         if (isShortValue) {
-            keyLoader.persistShortValueListBatchInOneWalGroup(walGroupIndex, targetWal.delayToKeyBucketShortValues.values(), xForBinlog);
+            keyLoader.persistShortValueListBatchInOneWalGroup(walGroupIndex, targetWal.delayToKeyBucketShortValues.values());
             return;
         }
 
@@ -2577,14 +2548,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         KeyBucketsInOneWalGroup keyBucketsInOneWalGroup = null;
         if (ext != null) {
             extCvListCheckCountTotal++;
-
-            // add to binlog if some segments flag updated
-            var tmpSegmentList = ext.updatedFlagPersistedSegmentIndexList();
-            if (!tmpSegmentList.isEmpty()) {
-                for (var si : tmpSegmentList) {
-                    xForBinlog.putUpdatedChunkSegmentFlagWithSeq(si, Flag.merged_and_persisted.flagByte, 0L);
-                }
-            }
 
             var cvList = ext.cvList;
             var cvListCount = cvList.size();
@@ -2630,7 +2593,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     slot, walGroupIndex, list.size());
         }
 
-        chunk.persist(walGroupIndex, list, xForBinlog, keyBucketsInOneWalGroup);
+        chunk.persist(walGroupIndex, list, keyBucketsInOneWalGroup);
 
         if (ext != null && !ext.isEmpty()) {
             var segmentIndexList = ext.segmentIndexList;
@@ -2639,13 +2602,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             setSegmentMergeFlagBatch(segmentIndexList.getFirst(), segmentIndexList.size(),
                     Flag.merged_and_persisted.flagByte, null, walGroupIndex);
-
-            for (var segmentIndex : segmentIndexList) {
-                xForBinlog.putUpdatedChunkSegmentFlagWithSeq(segmentIndex, Flag.merged_and_persisted.flagByte, 0L);
-            }
         }
-
-        appendBinlog(xForBinlog);
     }
 
     /**
@@ -2899,10 +2856,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (invalidCvList.size() == cvList.size()) {
             setSegmentMergeFlag(targetSegmentIndex, Flag.merged_and_persisted.flagByte, 0L, 0);
 
-            var xChunkSegmentFlagUpdate = new XChunkSegmentFlagUpdate();
-            xChunkSegmentFlagUpdate.putUpdatedChunkSegmentFlagWithSeq(targetSegmentIndex, Flag.merged_and_persisted.flagByte, 0L);
-            appendBinlog(xChunkSegmentFlagUpdate);
-
             saveMemoryExecuteTotal++;
             saveMemoryBytesTotal += segmentBytes.length;
 
@@ -2924,9 +2877,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 if (ConfForGlobal.pureMemoryV2) {
                     keyLoader.metaChunkSegmentFillRatio.set(targetSegmentIndex, encodedSlimX.valueBytesLength());
                 }
-
-                var xChunkSegmentSlimUpdate = new XChunkSegmentSlimUpdate(targetSegmentIndex, encodedSlimX.valueBytesLength(), encodedSlimBytes);
-                appendBinlog(xChunkSegmentSlimUpdate);
 
                 saveMemoryExecuteTotal++;
                 saveMemoryBytesTotal += (segmentBytes.length - encodedSlimBytes.length);

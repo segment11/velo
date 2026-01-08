@@ -287,11 +287,6 @@ class WalTest extends Specification {
         wal.lastSeqAfterPut == 0
         wal.lastSeqShortValueAfterPut == 0
 
-        when:
-        wal.rewriteOneGroupFromMaster(false, new byte[100 + 4])
-        then:
-        wal.writePosition == 100
-
         cleanup:
         wal.clear()
         wal.clear(false)

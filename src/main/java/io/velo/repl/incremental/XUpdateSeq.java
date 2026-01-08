@@ -2,8 +2,6 @@ package io.velo.repl.incremental;
 
 import io.velo.repl.BinlogContent;
 import io.velo.repl.ReplPair;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
@@ -103,11 +101,6 @@ public class XUpdateSeq implements BinlogContent {
         var timeMillis = buffer.getLong();
         return new XUpdateSeq(seq, timeMillis);
     }
-
-    /**
-     * Logger for logging messages related to this class.
-     */
-    private static final Logger log = LoggerFactory.getLogger(XUpdateSeq.class);
 
     /**
      * Applies this skip apply instruction to the specified slot and replication pair.
