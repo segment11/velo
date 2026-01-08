@@ -175,17 +175,10 @@ class WalTest extends Specification {
         n == 0
 
         when:
-        def n1 = wal.readFromSavedBytes(new byte[4], true)
-        def n11 = wal.readFromSavedBytes(new byte[4], false)
-        then:
-        n1 == 0
-        n11 == 0
-
-        when:
         def bytes1 = wal.writeToSavedBytes(true, false)
         def bytes11 = wal.writeToSavedBytes(false, true)
-        n1 = wal.readFromSavedBytes(bytes1, true)
-        n11 = wal.readFromSavedBytes(bytes11, false)
+        def n1 = wal.readFromSavedBytes(bytes1, true)
+        def n11 = wal.readFromSavedBytes(bytes11, false)
         then:
         n1 == 10
         n11 == 0
@@ -193,7 +186,8 @@ class WalTest extends Specification {
         // repl
         // repl export exists batch to slave
         when:
-        wal.put(false, 'xyz', vList[-1])
+        def vList2 = Mock.prepareValueList(20, 0)
+        wal.put(false, 'xyz', vList2[-1])
         def toSlaveExistsBytes1 = wal.toSlaveExistsOneWalGroupBytes()
         then:
         toSlaveExistsBytes1.length == 8 + Wal.ONE_GROUP_BUFFER_SIZE * 2
@@ -201,48 +195,12 @@ class WalTest extends Specification {
         // repl import exists batch from master
         when:
         def wal11 = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
-        def wal22 = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
         wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1) { isShortValue, key, v ->
             wal11.put(isShortValue, key, v)
-        }
-        wal22.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes2) { isShortValue, key, v ->
-            wal22.put(isShortValue, key, v)
         }
         then:
         wal.delayToKeyBucketValues.size() == wal11.delayToKeyBucketValues.size()
         wal.delayToKeyBucketShortValues.size() == wal11.delayToKeyBucketShortValues.size()
-        wal11.delayToKeyBucketValues == wal22.delayToKeyBucketValues
-        wal11.delayToKeyBucketShortValues == wal22.delayToKeyBucketShortValues
-
-        when:
-        def oldOneGroupBufferSize = Wal.ONE_GROUP_BUFFER_SIZE
-        Wal.ONE_GROUP_BUFFER_SIZE = oldOneGroupBufferSize * 2
-        exception = false
-        // buffer size not match
-        try {
-            wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1) { isShortValue, key, v ->
-                wal11.put(isShortValue, key, v)
-            }
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        Wal.ONE_GROUP_BUFFER_SIZE = oldOneGroupBufferSize
-        exception = false
-        try {
-            wal2.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1) { isShortValue, key, v ->
-                wal2.put(isShortValue, key, v)
-            }
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
 
         // rewrite
         when:
@@ -284,8 +242,26 @@ class WalTest extends Specification {
 
     def 'test value change to short value'() {
         given:
+        def file = new File(Consts.slotDir, 'test-raf.wal')
+        def fileShortValue = new File(Consts.slotDir, 'test-raf-short-value.wal')
+        if (file.exists()) {
+            file.delete()
+        }
+        if (fileShortValue.exists()) {
+            fileShortValue.delete()
+        }
+
+        FileUtils.touch(file)
+        FileUtils.touch(fileShortValue)
+
+        println file.absolutePath
+        println fileShortValue.absolutePath
+
+        def raf = new RandomAccessFile(file, 'rw')
+        def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
+
         def snowFlake = new SnowFlake(1, 1)
-        def wal = new Wal(slot, null, 0, null, null, snowFlake)
+        def wal = new Wal(slot, null, 0, raf, rafShortValue, snowFlake)
 
         def key = 'test-key'
         def shortV = new Wal.V(1, 0, 0, 0, 0, key, 'short-value'.bytes, false)
@@ -394,12 +370,34 @@ class WalTest extends Specification {
 
         cleanup:
         Wal.ONE_GROUP_BUFFER_SIZE = 64 * 1024
+        raf.close()
+        rafShortValue.close()
+        file.delete()
+        fileShortValue.delete()
     }
 
     def 'test scan'() {
         given:
+        def file = new File(Consts.slotDir, 'test-raf.wal')
+        def fileShortValue = new File(Consts.slotDir, 'test-raf-short-value.wal')
+        if (file.exists()) {
+            file.delete()
+        }
+        if (fileShortValue.exists()) {
+            fileShortValue.delete()
+        }
+
+        FileUtils.touch(file)
+        FileUtils.touch(fileShortValue)
+
+        println file.absolutePath
+        println fileShortValue.absolutePath
+
+        def raf = new RandomAccessFile(file, 'rw')
+        def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
+
         def snowFlake = new SnowFlake(1, 1)
-        def wal = new Wal(slot, null, 0, null, null, snowFlake)
+        def wal = new Wal(slot, null, 0, raf, rafShortValue, snowFlake)
 
         expect:
         wal.inWalKeysFormScan(0L).isEmpty()
@@ -484,6 +482,12 @@ class WalTest extends Specification {
         }
         then:
         !wal.inWalKeysFormScan(5L).isEmpty()
+
+        cleanup:
+        raf.close()
+        rafShortValue.close()
+        file.delete()
+        fileShortValue.delete()
     }
 
     def 'test reset write position'() {

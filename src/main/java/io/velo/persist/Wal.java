@@ -520,6 +520,7 @@ public class Wal implements InMemoryEstimate {
         return readBytesToList(toMap, isShortValue, readBytes, 0, ONE_GROUP_BUFFER_SIZE);
     }
 
+    @TestOnly
     int readFromSavedBytes(byte[] readBytes, boolean isShortValue) throws IOException {
         return readBytesToList(isShortValue ? delayToKeyBucketShortValues : delayToKeyBucketValues, isShortValue, readBytes, 0, readBytes.length);
     }

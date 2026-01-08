@@ -179,7 +179,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @return true if the split numbers were updated, false otherwise
      * @throws IllegalArgumentException if the bucket index is out of range.
      */
-    public boolean updateMetaKeyBucketSplitNumberBatchIfChanged(int beginBucketIndex, byte[] splitNumberArray) {
+    @VisibleForTesting
+    boolean updateMetaKeyBucketSplitNumberBatchIfChanged(int beginBucketIndex, byte[] splitNumberArray) {
         if (beginBucketIndex < 0 || beginBucketIndex >= bucketsPerSlot) {
             throw new IllegalArgumentException("Begin bucket index out of range, slot=" + slot + ", begin bucket index=" + beginBucketIndex);
         }

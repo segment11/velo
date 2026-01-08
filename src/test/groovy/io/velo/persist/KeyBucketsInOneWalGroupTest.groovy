@@ -60,6 +60,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         when:
         def sharedBytesList = inner.encodeAfterPutBatch()
         keyLoader.writeSharedBytesList(sharedBytesList, inner.beginBucketIndex)
+        keyLoader.updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp);
         def firstShortValue = shortValueList[0]
         def valueBytesWithExpireAt = keyLoader.getValueXByKey(firstShortValue.bucketIndex(), firstShortValue.key(),
                 firstShortValue.keyHash(), KeyHash.hash32(firstShortValue.key().bytes))
