@@ -2338,11 +2338,16 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public boolean hasData(int beginSegmentIndex, int segmentCount) {
         final boolean[] hasDataArray = {false};
         metaChunkSegmentFlagSeq.iterateRange(beginSegmentIndex, segmentCount, (segmentIndex, flagByte, seq, walGroupIndex) -> {
-            if (!hasDataArray[0]) {
-                if (!Chunk.Flag.canReuse(flagByte)) {
-                    hasDataArray[0] = true;
-                }
+            if (hasDataArray[0]) {
+                return false;
             }
+
+            if (!Chunk.Flag.canReuse(flagByte)) {
+                hasDataArray[0] = true;
+                return false;
+            }
+
+            return true;
         });
         return hasDataArray[0];
     }

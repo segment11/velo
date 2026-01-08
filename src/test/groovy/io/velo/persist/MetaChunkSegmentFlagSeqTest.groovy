@@ -218,6 +218,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         new File('chunk_segment_flag_range.txt').withWriter { writer ->
             one.iterateRange(1024, 1024) { segmentIndex, flagByte, seq, walGroupIndex ->
                 writer.writeLine("$segmentIndex, $flagByte, $seq, $walGroupIndex")
+                true
             }
         }
         then:

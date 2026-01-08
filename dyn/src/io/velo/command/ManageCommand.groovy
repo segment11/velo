@@ -284,6 +284,7 @@ class ManageCommand extends BaseCommand {
                     writer.writeLine Chunk.Flag.values().collect { it.name() + ':' + it.flagByte() }.join(',')
                     oneSlot.metaChunkSegmentFlagSeq.iterateRange(beginSegmentIndex, segmentCount) { segmentIndex, flagByte, seq, walGroupIndex ->
                         writer.writeLine("$segmentIndex, $flagByte, $seq, $walGroupIndex")
+                        true
                     }
                 }
             }

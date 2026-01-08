@@ -572,7 +572,16 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
      * Callback interface for iterating over segments.
      */
     public interface IterateCallBack {
-        void call(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex);
+        /**
+         * Callback method invoked for each segment.
+         *
+         * @param segmentIndex  the segment index
+         * @param flagByte      the flag byte
+         * @param segmentSeq    the segment sequence
+         * @param walGroupIndex the wal group index
+         * @return true to continue iterating, false to stop
+         */
+        boolean call(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex);
     }
 
     /**
@@ -591,7 +600,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             var segmentSeq = inMemoryCachedByteBuffer.getLong(offset + 1);
             var walGroupIndex = inMemoryCachedByteBuffer.getInt(offset + 1 + 8);
 
-            callBack.call(segmentIndex, flagByte, segmentSeq, walGroupIndex);
+            var r = callBack.call(segmentIndex, flagByte, segmentSeq, walGroupIndex);
+            if (!r) {
+                break;
+            }
         }
     }
 

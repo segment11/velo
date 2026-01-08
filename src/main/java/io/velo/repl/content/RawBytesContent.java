@@ -51,4 +51,9 @@ public class RawBytesContent implements ReplContent {
     public int encodeLength() {
         return bytes.length;
     }
+
+    @Override
+    public String toString() {
+        return new String(bytes);
+    }
 }

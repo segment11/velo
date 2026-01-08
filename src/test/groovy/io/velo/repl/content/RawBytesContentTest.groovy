@@ -11,6 +11,7 @@ class RawBytesContentTest extends Specification {
 
         expect:
         content.encodeLength() == rawBytes.length
+        content.toString() == 'xxx'
 
         when:
         def bytes = new byte[content.encodeLength()]

@@ -205,7 +205,7 @@ class WalTest extends Specification {
         wal.put(false, 'xyz', vList[-1])
         def toSlaveExistsBytes1 = wal.toSlaveExistsOneWalGroupBytes()
         then:
-        toSlaveExistsBytes1.length == 32 + Wal.ONE_GROUP_BUFFER_SIZE * 2
+        toSlaveExistsBytes1.length == 8 + Wal.ONE_GROUP_BUFFER_SIZE * 2
 
         when:
         ConfForGlobal.pureMemory = true
@@ -218,8 +218,12 @@ class WalTest extends Specification {
         ConfForGlobal.pureMemory = false
         def wal11 = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
         def wal22 = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
-        wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1)
-        wal22.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes2)
+        wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1) { isShortValue, key, v ->
+            wal11.put(isShortValue, key, v)
+        }
+        wal22.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes2) { isShortValue, key, v ->
+            wal22.put(isShortValue, key, v)
+        }
         then:
         wal.delayToKeyBucketValues.size() == wal11.delayToKeyBucketValues.size()
         wal.delayToKeyBucketShortValues.size() == wal11.delayToKeyBucketShortValues.size()
@@ -232,7 +236,9 @@ class WalTest extends Specification {
         exception = false
         // buffer size not match
         try {
-            wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1)
+            wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1) { isShortValue, key, v ->
+                wal11.put(isShortValue, key, v)
+            }
         } catch (IllegalStateException e) {
             println e.message
             exception = true
@@ -244,7 +250,9 @@ class WalTest extends Specification {
         Wal.ONE_GROUP_BUFFER_SIZE = oldOneGroupBufferSize
         exception = false
         try {
-            wal2.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1)
+            wal2.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1) { isShortValue, key, v ->
+                wal2.put(isShortValue, key, v)
+            }
         } catch (IllegalStateException e) {
             println e.message
             exception = true

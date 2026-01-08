@@ -1,10 +1,10 @@
 package io.velo.command
 
 import io.activej.config.Config
-import io.activej.eventloop.Eventloop
 import io.netty.buffer.Unpooled
 import io.velo.*
 import io.velo.decode.Request
+import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
 import io.velo.repl.*
 import io.velo.repl.Repl.ReplReply
@@ -19,7 +19,6 @@ import io.velo.reply.NilReply
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
-import java.time.Duration
 
 class XGroupTest extends Specification {
     def _XXGroup = new XGroup(null, null, null)
@@ -211,11 +210,6 @@ class XGroupTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
 
-        def eventloopCurrent = Eventloop.builder()
-                .withCurrentThread()
-                .withIdleInterval(Duration.ofMillis(100))
-                .build()
-
         and:
         ConfForGlobal.indexWorkers = (byte) 1
         localPersist.startIndexHandlerPool()
@@ -248,6 +242,7 @@ class XGroupTest extends Specification {
         def data = mockData(replPairAsSlave, ReplType.ping, ping)
 
         def x = new XGroup(null, data, null)
+        x.from(BaseCommand.mockAGroup())
         ReplReply r = x.handleRepl()
         then:
         r.isReplType(ReplType.pong)
@@ -263,6 +258,7 @@ class XGroupTest extends Specification {
         def hello = new Hello(slaveUuid, 'localhost:6380')
         data = mockData(replPairAsSlave, ReplType.hello, hello)
         x = new XGroup(null, data, null)
+        x.from(BaseCommand.mockAGroup())
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.hi)
@@ -279,6 +275,7 @@ class XGroupTest extends Specification {
         when:
         data = mockData(replPairAsSlave, ReplType.bye, ping)
         x = new XGroup(null, data, null)
+        x.from(BaseCommand.mockAGroup())
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.byeBye)
@@ -300,43 +297,37 @@ class XGroupTest extends Specification {
         // master receive hello from slave, then create repl pair again
         data = mockData(replPairAsSlave, ReplType.hello, hello)
         x = new XGroup(null, data, null)
+        x.from(BaseCommand.mockAGroup())
         x.handleRepl()
         ByteBuffer.wrap(data4[0]).putLong(slaveUuid)
         // response exists chunk segments
         data4[2][0] = ReplType.exists_chunk_segments.code
 
-        def metaBytes = oneSlot.getMetaChunkSegmentFlagSeq().getOneBatch(0, FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD)
-        def contentBytes = new byte[4 + 4 + metaBytes.length]
+        // begin segment index, segment count
+        // chunk segment bytes exists
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.init.flagByte(), 1, 0)
+        def contentBytes = new byte[4 + 4]
         def requestBuffer = ByteBuffer.wrap(contentBytes)
         requestBuffer.putInt(0)
         requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD)
-        requestBuffer.put(metaBytes)
         data4[3] = contentBytes
         x = new XGroup(null, data4, null)
+        x.from(BaseCommand.mockAGroup())
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_chunk_segments)
-        // skip as meta bytes is same
-        r.buffer().limit() == Repl.HEADER_LENGTH + 8
-
-        when:
-        // meta bytes not same
-        requestBuffer.put(8, (byte) 1)
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.s_exists_chunk_segments)
-        // only meta bytes, chunk segment bytes not write yet
-        r.buffer().limit() == Repl.HEADER_LENGTH + 4 + 4 + 4 + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * (MetaChunkSegmentFlagSeq.ONE_LENGTH + 4) + 4
+        // begin segment index, segment count, segment length, no data
+        r.buffer().limit() == Repl.HEADER_LENGTH + 12
 
         when:
         // chunk segment bytes exists
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1, 0)
         oneSlot.chunk.writeSegmentToTargetSegmentIndex(new byte[4096], 0)
-        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_chunk_segments)
         // meta bytes with just one chunk segment bytes
-        r.buffer().limit() == Repl.HEADER_LENGTH + 4 + 4 + 4 + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * (MetaChunkSegmentFlagSeq.ONE_LENGTH + 4) + 4 + 4096
+        r.buffer().limit() == Repl.HEADER_LENGTH + 12 + 4096
 
         // response exists wal
         when:
@@ -345,7 +336,9 @@ class XGroupTest extends Specification {
         requestBuffer = ByteBuffer.wrap(contentBytes)
         // wal group index
         requestBuffer.putInt(0)
+        // value last updated seq
         requestBuffer.putLong(0L)
+        // short value last updated seq
         requestBuffer.putLong(0L)
         data4[3] = contentBytes
         r = x.handleRepl()
@@ -421,119 +414,40 @@ class XGroupTest extends Specification {
         // error
         r.isReplType(ReplType.error)
 
-        // response exists key buckets
-        when:
-        data4[2][0] = ReplType.exists_key_buckets.code
-        contentBytes = new byte[1 + 4 + 8]
-        requestBuffer = ByteBuffer.wrap(contentBytes)
-        // split index
-        requestBuffer.put((byte) 0)
-        // begin bucket index
-        requestBuffer.putInt(0)
-        // one wal group seq
-        requestBuffer.putLong(0)
-        data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.s_exists_key_buckets)
-        // refer XGroup method exists_key_buckets
-        r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8
-
-        when:
-        // one wal group seq not match
-        requestBuffer.putLong(1 + 4, -1L)
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.s_exists_key_buckets)
-        // key buckets not exists
-        r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8
-
-        when:
-        def sharedBytesList = new byte[1][]
-        sharedBytesList[0] = new byte[4096 * ConfForSlot.global.confWal.oneChargeBucketNumber]
-        oneSlot.keyLoader.writeSharedBytesList(sharedBytesList, 0)
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.s_exists_key_buckets)
-        // key buckets exists
-        r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8 + sharedBytesList[0].length
-
-        when:
-        ConfForGlobal.pureMemoryV2 = true
-        int oneWalGroupRecordXSize = 4 + 4 + 16 * (28 + 4)
-        oneSlot.keyLoader.resetForPureMemoryV2()
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.s_exists_key_buckets)
-        r.buffer().limit() == Repl.HEADER_LENGTH + 1 + 1 + 4 + 1 + 8 + (4 + (4 + oneWalGroupRecordXSize) * ConfForSlot.global.confWal.oneChargeBucketNumber)
-
-        // stat_key_count_in_buckets
-        when:
-        ByteBuffer.wrap(data4[1]).putShort((short) 0)
-        data4[2][0] = ReplType.stat_key_count_in_buckets.code
-        contentBytes = new byte[0]
-        data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.s_stat_key_count_in_buckets)
-        r.buffer().limit() == Repl.HEADER_LENGTH + ConfForSlot.global.confBucket.bucketsPerSlot * 2
-
-        // meta_key_bucket_split_number
-        when:
-        data4[2][0] = ReplType.meta_key_bucket_split_number.code
-        contentBytes = new byte[0]
-        data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.s_meta_key_bucket_split_number)
-        r.buffer().limit() == Repl.HEADER_LENGTH + ConfForSlot.global.confBucket.bucketsPerSlot
-
         // incremental_big_string
         when:
         data4[2][0] = ReplType.incremental_big_string.code
-        // big string uuid long + bucket index int
-        contentBytes = new byte[8 + 4]
-        data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.s_incremental_big_string)
-        r.buffer().limit() == Repl.HEADER_LENGTH + 8 + 4
-
-        when:
         def bigStringUuid = 1L
-        oneSlot.bigStringFiles.writeBigStringBytes(bigStringUuid, 0, 1L, new byte[1024])
-        ByteBuffer.wrap(contentBytes).putLong(bigStringUuid).putInt(0)
+        def bigStringKey = 'big-string'
+        def sBigString = BaseCommand.slot(bigStringKey, ConfForGlobal.slotNumber)
+        oneSlot.bigStringFiles.writeBigStringBytes(bigStringUuid, sBigString.bucketIndex(), sBigString.keyHash(), new byte[1024])
+        contentBytes = new byte[8 + 4 + bigStringKey.length()]
+        data4[3] = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putLong(bigStringUuid)
+        requestBuffer.putInt(bigStringKey.length())
+        requestBuffer.put(bigStringKey.getBytes())
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_incremental_big_string)
-        r.buffer().limit() == Repl.HEADER_LENGTH + 8 + 4 + 1024
+        r.buffer().limit() == Repl.HEADER_LENGTH + 8 + 4 + bigStringKey.length() + 1024
 
         // exists_big_string
         when:
         data4[2][0] = ReplType.exists_big_string.code
-        contentBytes = new byte[4]
+        contentBytes = new byte[4 + 8 * 2]
         data4[3] = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        // bucket index
+        requestBuffer.putInt(sBigString.bucketIndex())
         // master has one big string
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_big_string)
 
         when:
-        oneSlot.bigStringFiles.deleteBigStringFileIfExist(bigStringUuid, 0)
+        oneSlot.bigStringFiles.deleteBigStringFileIfExist(bigStringUuid, sBigString.bucketIndex(), sBigString.keyHash())
         // master has no big string
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.s_exists_big_string)
-
-        when:
-        contentBytes = new byte[4 + 8 * 2]
-        requestBuffer = ByteBuffer.wrap(contentBytes)
-        // bucket index
-        requestBuffer.putInt(0)
-        // uuid0, uuid1
-        requestBuffer.putLong(1L)
-        requestBuffer.putLong(2L)
-        data4[3] = contentBytes
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_big_string)
@@ -684,6 +598,7 @@ class XGroupTest extends Specification {
         def pong = new Pong('localhost:6379')
         def data = mockData(replPairAsMaster, ReplType.pong, pong)
         def x = new XGroup(null, data, null)
+        x.from(BaseCommand.mockAGroup())
         x.replPair = null
         ReplReply r = x.handleRepl()
         then:
@@ -788,10 +703,15 @@ class XGroupTest extends Specification {
         // fetch exists chunk segments
         data4[2][0] = ReplType.s_exists_chunk_segments.code
 
-        def contentBytes = new byte[8]
+        def contentBytes = new byte[12 + 4096]
         def requestBuffer = ByteBuffer.wrap(contentBytes)
+        // begin segment index
         requestBuffer.putInt(0)
+        // segment count
         requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD)
+        // segment length
+        requestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
+
         data4[3] = contentBytes
         x = new XGroup(null, data4, null)
         r = x.handleRepl()
@@ -815,60 +735,8 @@ class XGroupTest extends Specification {
         then:
         r.isEmpty()
 
-        when:
-        def metaBytes = oneSlot.getMetaChunkSegmentFlagSeq().getOneBatch(0, FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD)
-        contentBytes = new byte[8 + 4 + metaBytes.length + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4 + 4]
-        requestBuffer = ByteBuffer.wrap(contentBytes)
-        requestBuffer.putInt(0)
-        requestBuffer.putInt(1024)
-        requestBuffer.putInt(metaBytes.length)
-        requestBuffer.put(metaBytes)
-        for (i in 0..<FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD) {
-            requestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
-        }
-        requestBuffer.putInt(0)
-        data4[3] = contentBytes
-        x = new XGroup(null, data4, null)
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.exists_chunk_segments)
-
-        when:
-        contentBytes = new byte[8 + 4 + metaBytes.length + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4 + 4 + 4096]
-        requestBuffer = ByteBuffer.wrap(contentBytes)
-        requestBuffer.putInt(0)
-        requestBuffer.putInt(1024)
-        requestBuffer.putInt(metaBytes.length)
-        requestBuffer.put(metaBytes)
-        for (i in 0..<FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD) {
-            requestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
-        }
-        requestBuffer.putInt(4096)
-        data4[3] = contentBytes
-        x = new XGroup(null, data4, null)
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.exists_chunk_segments)
-
-        when:
-        // no next segments
-        requestBuffer.putInt(8 + 4 + metaBytes.length + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4, -1)
-        r = x.handleRepl()
-        then:
-        // next step
-        r.isReplType(ReplType.exists_wal)
-
-        when:
-        ConfForGlobal.pureMemory = true
-        oneSlot.chunk.fdReadWriteArray[0].initPureMemoryByteArray()
-        requestBuffer.putInt(8 + 4 + metaBytes.length + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4, 0)
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.exists_chunk_segments)
-
         // exists wal
         when:
-        ConfForGlobal.pureMemory = false
         data4[2][0] = ReplType.s_exists_wal.code
         contentBytes = new byte[32 + 2 * Wal.ONE_GROUP_BUFFER_SIZE]
         requestBuffer = ByteBuffer.wrap(contentBytes)
@@ -913,145 +781,23 @@ class XGroupTest extends Specification {
         // next step
         r.isReplType(ReplType.exists_all_done)
 
-        // fetch exists key buckets
-        when:
-        data4[2][0] = ReplType.s_exists_key_buckets.code
-        contentBytes = new byte[1 + 1 + 4 + 1 + 8]
-        requestBuffer = ByteBuffer.wrap(contentBytes)
-        // split index
-        requestBuffer.put((byte) 0)
-        // max split number
-        requestBuffer.put((byte) 1)
-        // begin bucket index
-        requestBuffer.putInt(0)
-        // is skip flag
-        requestBuffer.put((byte) 1)
-        // one wal group seq
-        requestBuffer.putLong(0)
-        data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.exists_key_buckets)
-
-//        when:
-//        // is skip flag false
-//        requestBuffer.put(1 + 1 + 4, (byte) 0)
-//        r = x.handleRepl()
-//        then:
-//        r.isReplType(ReplType.exists_key_buckets)
-
-        when:
-        contentBytes = new byte[1 + 1 + 4 + 1 + 8 + 4096 * ConfForSlot.global.confWal.oneChargeBucketNumber]
-        requestBuffer = ByteBuffer.wrap(contentBytes)
-        // split index
-        requestBuffer.put((byte) 0)
-        // max split number
-        requestBuffer.put((byte) 1)
-        // begin bucket index
-        requestBuffer.putInt(0)
-        // is skip flag
-        requestBuffer.put((byte) 0)
-        // one wal group seq
-        requestBuffer.putLong(0)
-        data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.exists_key_buckets)
-
-        when:
-        // last batch in split index 0
-        // max split number
-        requestBuffer.put(1, (byte) 3)
-        requestBuffer.putInt(1 + 1, ConfForSlot.global.confWal.oneChargeBucketNumber * 1024 - ConfForSlot.global.confWal.oneChargeBucketNumber)
-        r = x.handleRepl()
-        then:
-        // delay fetch next batch
-        r.isEmpty()
-
-        when:
-        // last batch in split index 2
-        requestBuffer.put(0, (byte) 2)
-        requestBuffer.putInt(1 + 1, ConfForSlot.global.confBucket.bucketsPerSlot - ConfForSlot.global.confWal.oneChargeBucketNumber)
-        r = x.handleRepl()
-        then:
-        // next step
-        r.isReplType(ReplType.exists_chunk_segments)
-
-        when:
-        ConfForGlobal.pureMemoryV2 = true
-        int oneWalGroupRecordXSize = 4 + 4 + 16 * (28 + 4)
-        oneSlot.keyLoader.resetForPureMemoryV2()
-        contentBytes = new byte[1 + 1 + 4 + 1 + 8 + (4 + (4 + oneWalGroupRecordXSize) * 2)]
-        requestBuffer = ByteBuffer.wrap(contentBytes)
-        // split index
-        requestBuffer.put((byte) 0)
-        // max split number
-        requestBuffer.put((byte) 1)
-        // begin bucket index
-        requestBuffer.putInt(ConfForSlot.global.confBucket.bucketsPerSlot - ConfForSlot.global.confWal.oneChargeBucketNumber)
-        // is skip flag
-        requestBuffer.put((byte) 0)
-        // one wal group seq
-        requestBuffer.putLong(0)
-        // mock 2 buckets record bytes array, length == 2
-        requestBuffer.putInt(2)
-        def recordXBytesArray = oneSlot.keyLoader.getRecordsBytesArrayInOneWalGroup(0)
-        int ccc = 0
-        for (var recordXBytes : recordXBytesArray) {
-            requestBuffer.putInt(recordXBytes.length)
-            requestBuffer.put(recordXBytes)
-            ccc++
-            if (ccc == 2) {
-                break
-            }
-        }
-        data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        // next step
-        r.isReplType(ReplType.exists_chunk_segments)
-
-        // s_stat_key_count_in_buckets
-        when:
-        data4[2][0] = ReplType.s_stat_key_count_in_buckets.code
-        contentBytes = new byte[ConfForSlot.global.confBucket.bucketsPerSlot * 2]
-        data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        // next step
-        r.isReplType(ReplType.exists_key_buckets)
-
-        // s_meta_key_bucket_split_number
-        when:
-        data4[2][0] = ReplType.s_meta_key_bucket_split_number.code
-        contentBytes = new byte[ConfForSlot.global.confBucket.bucketsPerSlot]
-        data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        // next step
-        r.isReplType(ReplType.stat_key_count_in_buckets)
-
         // s_incremental_big_string
         when:
+        def bigStringUuid = 1L
+        def bigStringKey = 'big-string'
+        def sBigString = BaseCommand.slot(bigStringKey, ConfForGlobal.slotNumber)
         data4[2][0] = ReplType.s_incremental_big_string.code
-        contentBytes = new byte[8 + 4]
-        data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        r.isEmpty()
-
-        when:
-        contentBytes = new byte[8 + 4 + 1024]
+        contentBytes = new byte[8 + 4 + bigStringKey.length() + 1024]
         requestBuffer = ByteBuffer.wrap(contentBytes)
-        // uuid
-        requestBuffer.putLong(1L)
-        // bucket index
-        requestBuffer.putInt(0)
+        requestBuffer.putLong(bigStringUuid)
+        requestBuffer.putInt(bigStringKey.length())
+        requestBuffer.put(bigStringKey.getBytes())
+        requestBuffer.put(new byte[1024])
         data4[3] = contentBytes
+        x.from(BaseCommand.mockAGroup())
         r = x.handleRepl()
         then:
         r.isEmpty()
-        oneSlot.bigStringFiles.getBigStringBytes(1L, 0, 1L).length == 1024
 
         // s_exists_big_string
         when:
@@ -1062,7 +808,7 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         // next step
-        r.isReplType(ReplType.meta_key_bucket_split_number)
+        r.isReplType(ReplType.exists_chunk_segments)
 
         when:
         contentBytes = new byte[4 + 2 + 1]
@@ -1085,18 +831,22 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         // next step
-        r.isReplType(ReplType.meta_key_bucket_split_number)
+        r.isReplType(ReplType.exists_chunk_segments)
 
         when:
         // mock two big string fetched
-        contentBytes = new byte[4 + 2 + 1 + (8 + 4 + 1024) * 2]
+        contentBytes = new byte[4 + 2 + 1 + (8 + 8 + 4 + 1024) * 2]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         requestBuffer.putInt(0)
         requestBuffer.putShort((short) 2)
         requestBuffer.put((byte) 1)
+        // big string uuid
+        requestBuffer.putLong(1L)
+        // key hash
         requestBuffer.putLong(1L)
         requestBuffer.putInt(1024)
         requestBuffer.position(requestBuffer.position() + 1024)
+        requestBuffer.putLong(2L)
         requestBuffer.putLong(2L)
         requestBuffer.putInt(1024)
         data4[3] = contentBytes
@@ -1116,18 +866,17 @@ class XGroupTest extends Specification {
         when:
         // last bucket index
         requestBuffer.position(0).putInt(ConfForSlot.global.confBucket.bucketsPerSlot - 1)
+        // is sent all true
         requestBuffer.put(4 + 2, (byte) 1)
         r = x.handleRepl()
         then:
-        r.isReplType(ReplType.meta_key_bucket_split_number)
+        r.isReplType(ReplType.exists_chunk_segments)
 
         when:
-        def bigStringFileIddList = oneSlot.bigStringFiles.getBigStringFileIdList(0)
-        if (bigStringFileIddList) {
-            for (one in bigStringFileIddList) {
-                oneSlot.bigStringFiles.deleteBigStringFileIfExist(one.uuid(), 0, one.keyHash())
-            }
-        }
+        def inMemoryGetSet = new InMemoryGetSet()
+        x.byPassGetSet = inMemoryGetSet
+        def s = x.findKeyMustInSlot(slot, "exists_big_string_uuids_bucket_index_" + 0)
+        x.remove(s)
         r = x.fetchExistsBigString(slot, 0)
         then:
         // empty content return
@@ -1186,12 +935,10 @@ class XGroupTest extends Specification {
         for (v in vList) {
             n += new XWalV(v).encodedLength()
         }
-        contentBytes = new byte[1 + 4 + 4 + 8 + 4 + 8 + 4 + n]
+        contentBytes = new byte[1 + 4 + 8 + 4 + 8 + 4 + n]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         // is readonly flag
         requestBuffer.put((byte) 0)
-        // chunk current segment index
-        requestBuffer.putInt(0)
         // response binlog file index
         requestBuffer.putInt(0)
         // response binlog file offset
@@ -1212,10 +959,9 @@ class XGroupTest extends Specification {
         r.isEmpty()
 
         when:
-        contentBytes = new byte[1 + 4 + 4 + 8 + 4 + 8 + 4 + binlogOneSegmentLength]
+        contentBytes = new byte[1 + 4 + 8 + 4 + 8 + 4 + binlogOneSegmentLength]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         requestBuffer.put((byte) 0)
-        requestBuffer.putInt(0)
         requestBuffer.putInt(0)
         requestBuffer.putLong(0)
         requestBuffer.putInt(0)
@@ -1236,7 +982,7 @@ class XGroupTest extends Specification {
         oneSlot.metaChunkSegmentIndex.masterBinlogFileIndexAndOffset.offset() == binlogOneSegmentLength
 
         when:
-        requestBuffer.position(1 + 4 + 4)
+        requestBuffer.position(1 + 4)
         requestBuffer.putLong(binlogOneSegmentLength)
         r = x.handleRepl()
         then:
@@ -1244,7 +990,7 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.catch_up)
 
         when:
-        requestBuffer.position(1 + 4 + 4)
+        requestBuffer.position(1 + 4)
         requestBuffer.putLong(0)
         requestBuffer.putInt(0)
         requestBuffer.putLong(binlogOneSegmentLength - 1)
@@ -1256,7 +1002,7 @@ class XGroupTest extends Specification {
         r.isEmpty()
 
         when:
-        requestBuffer.position(1 + 4 + 4)
+        requestBuffer.position(1 + 4)
         requestBuffer.putLong(0)
         requestBuffer.putInt(1)
         requestBuffer.putLong(binlogOneSegmentLength)
@@ -1277,7 +1023,7 @@ class XGroupTest extends Specification {
 
         when:
         def binlogOneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength
-        requestBuffer.position(1 + 4 + 4)
+        requestBuffer.position(1 + 4)
         requestBuffer.putLong(binlogOneFileMaxLength - binlogOneSegmentLength)
         requestBuffer.putInt(1)
         requestBuffer.putLong(binlogOneSegmentLength)
@@ -1289,7 +1035,7 @@ class XGroupTest extends Specification {
         r.isEmpty()
 
         when:
-        requestBuffer.position(1 + 4 + 4)
+        requestBuffer.position(1 + 4)
         requestBuffer.putLong(0)
         requestBuffer.putInt(1)
         requestBuffer.putLong(binlogOneSegmentLength)

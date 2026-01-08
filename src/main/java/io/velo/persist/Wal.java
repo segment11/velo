@@ -881,9 +881,9 @@ public class Wal implements InMemoryEstimate {
     /**
      * Puts a log entry into the WAL.
      *
-     * @param isValueShort      whether the value is short
-     * @param key               the key to put
-     * @param v                 the log entry to put
+     * @param isValueShort whether the value is short
+     * @param key          the key to put
+     * @param v            the log entry to put
      * @return the result of the put operation
      */
     public PutResult put(boolean isValueShort, @NotNull String key, @NotNull V v) {
@@ -1028,20 +1028,14 @@ public class Wal implements InMemoryEstimate {
         // encoded length
         // 4 bytes for group index
         // 4 bytes for one group buffer size
-        // 4 bytes for value write position and short value write position
-        // 8 bytes for last seq and 8 bytes short value last seq
         // value encoded + short value encoded
-        int realDataOffset = 4 + 4 + (4 + 4) + (8 + 8);
+        int realDataOffset = 4 + 4;
         int n = realDataOffset + ONE_GROUP_BUFFER_SIZE * 2;
 
         var bytes = new byte[n];
         var buffer = ByteBuffer.wrap(bytes);
         buffer.putInt(groupIndex);
         buffer.putInt(ONE_GROUP_BUFFER_SIZE);
-        buffer.putInt(writePosition);
-        buffer.putInt(writePositionShortValue);
-        buffer.putLong(lastSeqAfterPut);
-        buffer.putLong(lastSeqShortValueAfterPut);
 
         if (ConfForGlobal.pureMemory) {
             for (var entry : delayToKeyBucketValues.entrySet()) {
@@ -1071,6 +1065,10 @@ public class Wal implements InMemoryEstimate {
         return bytes;
     }
 
+    public interface FromMasterVCallback {
+        void handle(boolean isShort, String key, V v);
+    }
+
     /**
      * Decodes a WAL group from a byte array for slave replay. From master to slave.
      *
@@ -1078,46 +1076,29 @@ public class Wal implements InMemoryEstimate {
      * @throws IOException if an I/O error occurs
      */
     @SlaveReplay
-    public void fromMasterExistsOneWalGroupBytes(byte[] bytes) throws IOException {
+    public void fromMasterExistsOneWalGroupBytes(byte[] bytes, FromMasterVCallback handle) throws IOException {
         var buffer = ByteBuffer.wrap(bytes);
-        var groupIndex1 = buffer.getInt();
+        // remote master wal group
+        var groupIndex = buffer.getInt();
         var oneGroupBufferSize = buffer.getInt();
 
-        if (groupIndex1 != groupIndex) {
-            throw new IllegalStateException("Repl slave fetch wal group error, group index=" +
-                    groupIndex1 + ", expect group index=" + groupIndex + ", slot=" + slot);
-        }
-        if (oneGroupBufferSize != ONE_GROUP_BUFFER_SIZE) {
-            throw new IllegalStateException("Repl slave fetch wal group error, group index=" +
-                    groupIndex1 + ", one group buffer size=" + oneGroupBufferSize + ", expect size=" + ONE_GROUP_BUFFER_SIZE + ", slot=" + slot);
-        }
+        int realDataOffset = 4 + 4;
 
-        writePosition = buffer.getInt();
-        writePositionShortValue = buffer.getInt();
+        var tmpValues = new HashMap<String, V>();
+        var tmpShortValues = new HashMap<String, V>();
 
-        lastSeqAfterPut = buffer.getLong();
-        lastSeqShortValueAfterPut = buffer.getLong();
-
-        int realDataOffset = 4 + 4 + (4 + 4) + (8 + 8);
-
-        if (!ConfForGlobal.pureMemory) {
-            var targetGroupBeginOffset = oneGroupBufferSize * groupIndex1;
-
-            walSharedFile.seek(targetGroupBeginOffset);
-            walSharedFile.write(bytes, realDataOffset, oneGroupBufferSize);
-
-            walSharedFileShortValue.seek(targetGroupBeginOffset);
-            walSharedFileShortValue.write(bytes, realDataOffset + oneGroupBufferSize, oneGroupBufferSize);
-        }
-
-        delayToKeyBucketValues.clear();
-        delayToKeyBucketShortValues.clear();
-        bigStringFileUuidByKey.clear();
-        var n1 = readBytesToList(delayToKeyBucketValues, false, bytes, realDataOffset, oneGroupBufferSize);
-        var n2 = readBytesToList(delayToKeyBucketShortValues, true, bytes, realDataOffset + oneGroupBufferSize, oneGroupBufferSize);
-        if (groupIndex1 % 100 == 0) {
+        var n1 = readBytesToList(tmpValues, false, bytes, realDataOffset, oneGroupBufferSize);
+        var n2 = readBytesToList(tmpShortValues, true, bytes, realDataOffset + oneGroupBufferSize, oneGroupBufferSize);
+        if (groupIndex % 100 == 0) {
             log.warn("Repl slave fetch wal group success, group index={}, value size={}, short value size={}, slot={}",
-                    groupIndex1, n1, n2, slot);
+                    groupIndex, n1, n2, slot);
+        }
+
+        for (var entry : tmpValues.entrySet()) {
+            handle.handle(false, entry.getKey(), entry.getValue());
+        }
+        for (var entry : tmpShortValues.entrySet()) {
+            handle.handle(true, entry.getKey(), entry.getValue());
         }
     }
 }
