@@ -1,6 +1,5 @@
 package io.velo.persist;
 
-import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
 import io.velo.StaticMemoryPrepareBytesStats;
@@ -55,83 +54,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     final int allCapacity;
     private final byte[] inMemoryCachedBytes;
     private final ByteBuffer inMemoryCachedByteBuffer;
-    private RandomAccessFile raf;
-
-    /**
-     * Retrieves the in-memory cached bytes representing the segment flags and sequence numbers.
-     *
-     * @return the in-memory cached bytes
-     */
-    byte[] getInMemoryCachedBytes() {
-        // usually more than 10M, do not copy
-        return inMemoryCachedBytes;
-    }
-
-    /**
-     * Overwrites the in-memory cached bytes with the provided bytes.
-     * If operating in pure memory mode, it directly updates the in-memory cache.
-     * Otherwise, it writes the bytes to the file and updates the in-memory cache.
-     *
-     * @param bytes the bytes to overwrite the in-memory cache with
-     * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
-     * @throws RuntimeException         If an I/O error occurs during file operations.
-     */
-    void overwriteInMemoryCachedBytes(byte[] bytes) {
-        if (bytes.length != inMemoryCachedBytes.length) {
-            throw new IllegalArgumentException("Meta chunk segment flag seq, bytes length not match");
-        }
-
-        inMemoryCachedByteBuffer.position(0).put(bytes);
-        updateCanReuseBitSetWhenOverwrite();
-    }
-
-    /**
-     * Retrieves a batch of segment flags and sequence numbers starting from a specific index.
-     *
-     * @param beginBucketIndex the starting index of the batch
-     * @param bucketCount      the number of segments in the batch
-     * @return the array of bytes representing the segment flags and sequence numbers for the batch
-     */
-    public byte[] getOneBatch(int beginBucketIndex, int bucketCount) {
-        var dst = new byte[bucketCount * ONE_LENGTH];
-        var offset = beginBucketIndex * ONE_LENGTH;
-        inMemoryCachedByteBuffer.position(offset).get(dst);
-        return dst;
-    }
-
-    /**
-     * Overwrites a batch of segment flags and sequence numbers starting from a specific index.
-     * If operating in pure memory mode, it directly updates the in-memory cache.
-     * Otherwise, it writes the bytes to the file and updates the in-memory cache.
-     *
-     * @param bytes            the bytes to overwrite the batch with
-     * @param beginBucketIndex the starting index of the batch
-     * @param bucketCount      the number of segments in the batch
-     * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
-     * @throws RuntimeException         If an I/O error occurs during file operations.
-     */
-    public void overwriteOneBatch(byte[] bytes, int beginBucketIndex, int bucketCount) {
-        if (bytes.length != bucketCount * ONE_LENGTH) {
-            throw new IllegalArgumentException("Repl chunk segments from master one batch meta bytes length not match, length=" +
-                    bytes.length + ", bucket count=" + bucketCount + ", one length=" + ONE_LENGTH + ", slot=" + slot);
-        }
-
-        var offset = beginBucketIndex * ONE_LENGTH;
-        if (ConfForGlobal.pureMemory) {
-            inMemoryCachedByteBuffer.position(offset).put(bytes);
-            return;
-        }
-
-        try {
-            raf.seek(offset);
-            raf.write(bytes);
-            inMemoryCachedByteBuffer.position(offset).put(bytes);
-        } catch (IOException e) {
-            throw new RuntimeException("Repl chunk segments from master one batch meta bytes, write file error, slot=" + slot, e);
-        }
-        log.warn("Repl chunk segments from master one batch meta bytes, write file success, begin bucket index={}, bucket count={}, slot={}",
-                beginBucketIndex, bucketCount, slot);
-    }
+    private final RandomAccessFile raf;
 
     private static final Logger log = LoggerFactory.getLogger(MetaChunkSegmentFlagSeq.class);
 
@@ -240,11 +163,6 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         // max max segment number <= 512KB * 8, 512KB * 8 * 13 = 56MB
         this.inMemoryCachedBytes = new byte[allCapacity];
         fillSegmentFlagInit(inMemoryCachedBytes);
-
-        if (ConfForGlobal.pureMemory) {
-            this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
-            return;
-        }
 
         boolean needRead = false;
         var file = new File(slotDir, META_CHUNK_SEGMENT_SEQ_FLAG_FILE);
@@ -727,57 +645,11 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     }
 
     /**
-     * Gets the merge flag for a batch of segments.
-     *
-     * @param beginSegmentIndex the beginning segment index
-     * @param segmentCount      the number of segments to retrieve
-     * @return the list of segment flags
-     */
-    ArrayList<Chunk.SegmentFlag> getSegmentMergeFlagBatch(int beginSegmentIndex, int segmentCount) {
-        var list = new ArrayList<Chunk.SegmentFlag>(segmentCount);
-        var offset = beginSegmentIndex * ONE_LENGTH;
-        for (int i = 0; i < segmentCount; i++) {
-            list.add(new Chunk.SegmentFlag(inMemoryCachedByteBuffer.get(offset),
-                    inMemoryCachedByteBuffer.getLong(offset + 1),
-                    inMemoryCachedByteBuffer.getInt(offset + 1 + 8)));
-            offset += ONE_LENGTH;
-        }
-        return list;
-    }
-
-    /**
-     * Check if target segments are not write or merged.
-     *
-     * @param beginSegmentIndex the beginning segment index
-     * @param segmentCount      the number of segments to check
-     * @return true if all segments are not write or merged, false otherwise
-     */
-    boolean isAllFlagsNotWrite(int beginSegmentIndex, int segmentCount) {
-        var offset = beginSegmentIndex * ONE_LENGTH;
-        for (int i = 0; i < segmentCount; i++) {
-            var flagByte = inMemoryCachedByteBuffer.get(offset);
-            if (flagByte == Chunk.Flag.new_write.flagByte || flagByte == Chunk.Flag.reuse_new.flagByte) {
-                return false;
-            }
-            offset += ONE_LENGTH;
-        }
-
-        return true;
-    }
-
-    /**
      * Clear the meta chunk segment flag sequence. When slot do flush.
      */
     @SlaveNeedReplay
     @SlaveReplay
     void clear() {
-        if (ConfForGlobal.pureMemory) {
-            fillSegmentFlagInit(inMemoryCachedBytes);
-            initBitSetValueAndMarkedSegmentIndexWhenFirstStartOrClear();
-            System.out.println("Meta chunk segment flag seq clear done, set init flags.");
-            return;
-        }
-
         try {
             var tmpBytes = new byte[allCapacity];
             fillSegmentFlagInit(tmpBytes);
@@ -796,13 +668,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
      */
     @Override
     public void cleanUp() {
-        if (ConfForGlobal.pureMemory) {
-            return;
-        }
-
-        // sync all
         try {
-//            raf.getFD().sync();
             raf.close();
             System.out.println("Meta chunk segment flag seq file closed.");
         } catch (IOException e) {

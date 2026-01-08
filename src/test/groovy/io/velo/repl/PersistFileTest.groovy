@@ -3,7 +3,7 @@ package io.velo.repl
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
 
-class ActAsFileTest extends Specification {
+class PersistFileTest extends Specification {
     def 'test all'() {
         given:
         def file = new File('/tmp/test_file.dat')
@@ -12,14 +12,14 @@ class ActAsFileTest extends Specification {
         }
 
         and:
-        def actAsFile = new ActAsFile.PersistFile(file, 0)
+        def persistFile = new PersistFile(file, 0)
 
         expect:
-        actAsFile.fileIndex() == 0
-        actAsFile.length() == 0
-        actAsFile.name == file.name
+        persistFile.fileIndex() == 0
+        persistFile.length() == 0
+        persistFile.name == file.name
 
         cleanup:
-        actAsFile.delete()
+        persistFile.delete()
     }
 }

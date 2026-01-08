@@ -153,46 +153,6 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
-    def 'test save and load'() {
-        given:
-        ConfForGlobal.pureMemory = true
-        LocalPersistTest.prepareLocalPersist()
-        def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        def oneSlot = localPersist.oneSlot(slot)
-
-        when:
-        def cvList = Mock.prepareCompressedValueList(2)
-        def cvAsShortValue = cvList[0]
-        def cv = cvList[1]
-        cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
-        cv.compressedData = new byte[100]
-        100.times {
-            def keyForShortValue = "key:$it"
-            def key = "key:${it + 10000}"
-            def sKeyForShortValue = BaseCommand.slot(keyForShortValue, slotNumber)
-            def sKey = BaseCommand.slot(key, slotNumber)
-            oneSlot.put(keyForShortValue, sKeyForShortValue.bucketIndex(), cvAsShortValue)
-            oneSlot.put(key, sKey.bucketIndex(), cv)
-        }
-        oneSlot.loadFromLastSavedFileWhenPureMemory()
-        oneSlot.writeToSavedFileWhenPureMemory()
-        oneSlot.loadFromLastSavedFileWhenPureMemory()
-        then:
-        oneSlot.allKeyCount == 200
-
-        when:
-        oneSlot.truncateChunkFile(0)
-        oneSlot.truncateChunkFile(0)
-        then:
-        oneSlot.chunk.fdLengths[0] == 0
-
-        cleanup:
-        localPersist.cleanUp()
-        Consts.persistDir.deleteDir()
-        ConfForGlobal.pureMemory = false
-    }
-
     def 'test repl pair'() {
         given:
         LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
@@ -562,8 +522,6 @@ class OneSlotTest extends Specification {
         oneSlot.extCvListCheckCountTotal = 1
         oneSlot.extCvValidCountTotal = 1
         oneSlot.extCvInvalidCountTotal = 1
-        oneSlot.saveMemoryExecuteTotal = 1
-        oneSlot.saveMemoryBytesTotal = 4096
         oneSlot.clearGlobalMetricsCollect()
         oneSlot.addGlobalMetricsCollect()
         oneSlot.globalGauge.collect()
@@ -842,31 +800,6 @@ class OneSlotTest extends Specification {
         oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
         oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
 
-        when:
-        def chunk = oneSlot.chunk
-        ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList = []
-        def segmentBytes = chunk.preadForRepl(testPvm2.segmentIndex)
-        SegmentBatch2.readToCvList(cvList, segmentBytes, 0, segmentBytes.length, testPvm2.segmentIndex, slot)
-        ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> validCvList = []
-        validCvList << cvList[0]
-        def encodedSlimX = SegmentBatch2.encodeValidCvListSlim(validCvList)
-        def encodedSlim = encodedSlimX.bytes()
-        chunk.writeSegmentToTargetSegmentIndex(encodedSlim, testPvm2.segmentIndex)
-        keyBytes2 = oneSlot.getOnlyKeyBytesFromSegment(testPvm2)
-        then:
-        keyBytes2 == key.bytes
-
-        when:
-        valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
-        def testPvm3 = PersistValueMeta.decode(valueBytesWithExpireAtAndSeq.valueBytes())
-        chunk.writeSegmentToTargetSegmentIndex(encodedSlim, testPvm3.segmentIndex)
-        // clear lru and wal
-        oneSlot.clearKvInTargetWalGroupIndexLRU(Wal.calcWalGroupIndex(sKey.bucketIndex()))
-        oneSlot.getWalByBucketIndex(sKey.bucketIndex()).clear()
-        def bufOrCv2 = oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
-        then:
-        bufOrCv2 != null
-
         cleanup:
         oneSlot.resetWritePositionAfterBulkLoad()
         oneSlot.flush()
@@ -885,76 +818,16 @@ class OneSlotTest extends Specification {
         !oneSlot.hasData(0, 10)
 
         when:
-        def bytesForMerge = oneSlot.preadForMerge(0, 10)
-        def bytesForRepl = oneSlot.preadForRepl(0)
+        def bytesForMerge = oneSlot.readForMerge(0, 10)
+        def bytesForRepl = oneSlot.readForRepl(0)
         then:
         bytesForMerge == null
         bytesForRepl == null
 
         when:
-        def mockBytesFromMaster = new byte[oneSlot.chunk.chunkSegmentLength]
-        Arrays.fill(mockBytesFromMaster, (byte) 1)
-        int[] segmentRealLengths = new int[1]
-        segmentRealLengths[0] = oneSlot.chunk.chunkSegmentLength
-        oneSlot.writeChunkSegmentsFromMasterExists(mockBytesFromMaster, 0, 1, segmentRealLengths)
-        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        def bytesOneSegment = oneSlot.preadForMerge(0, 1)
-        def bytesNSegments = oneSlot.preadForRepl(0)
-        then:
-        bytesOneSegment == mockBytesFromMaster
-        bytesNSegments.length == oneSlot.chunk.chunkSegmentLength * FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD
-
-        when:
-        boolean exception = false
-        mockBytesFromMaster = new byte[oneSlot.chunk.chunkSegmentLength + 1]
-        try {
-            oneSlot.writeChunkSegmentsFromMasterExists(mockBytesFromMaster, 0, 1, segmentRealLengths)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        oneSlot.getSegmentMergeFlag(0)
-        oneSlot.getSegmentMergeFlagBatch(0, 1)
-        exception = false
-        try {
-            oneSlot.getSegmentMergeFlag(-1)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        try {
-            oneSlot.getSegmentMergeFlagBatch(-1, 1)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
+        def exception = false
         try {
             oneSlot.getSegmentMergeFlag(oneSlot.chunk.maxSegmentIndex + 1)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        try {
-            oneSlot.getSegmentMergeFlagBatch(0, oneSlot.chunk.maxSegmentIndex + 2)
         } catch (IllegalStateException e) {
             println e.message
             exception = true
@@ -1002,7 +875,6 @@ class OneSlotTest extends Specification {
         e != null
 
         cleanup:
-        ConfForGlobal.pureMemory = false
         oneSlot.cleanUp()
         Consts.persistDir.deleteDir()
     }
@@ -1045,122 +917,6 @@ class OneSlotTest extends Specification {
         cleanup:
         oneSlot.cleanUp()
         Consts.persistDir.deleteDir()
-    }
-
-    def 'test pure memory mode change chunk segment flag'() {
-        given:
-        ConfForGlobal.pureMemory = true
-        LocalPersistTest.prepareLocalPersist()
-        def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        def oneSlot = localPersist.oneSlot(slot)
-        def chunk = oneSlot.chunk
-
-        when:
-        chunk.writeSegmentToTargetSegmentIndex(new byte[4096], 0)
-        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        ArrayList<Long> seqList = [1L]
-        oneSlot.setSegmentMergeFlagBatch(0, 1,
-                Chunk.Flag.new_write.flagByte(), seqList, 0)
-        then:
-        chunk.preadOneSegment(0) != null
-
-        when:
-        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.merged_and_persisted.flagByte(), 1L, 0)
-        oneSlot.setSegmentMergeFlagBatch(0, 1,
-                Chunk.Flag.merged_and_persisted.flagByte(), seqList, 0)
-        then:
-        chunk.preadOneSegment(0) == null
-
-        cleanup:
-        oneSlot.cleanUp()
-        Consts.persistDir.deleteDir()
-        ConfForGlobal.pureMemory = false
-    }
-
-    def 'test check and save memory'() {
-        given:
-        ConfForGlobal.pureMemory = true
-//        ConfForGlobal.pureMemoryV2 = true
-        LocalPersistTest.prepareLocalPersist()
-        def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        def oneSlot = localPersist.oneSlot(slot)
-        def chunk = oneSlot.chunk
-
-        and:
-        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.init.flagByte(), 0L, 0)
-        oneSlot.setSegmentMergeFlag(1, Chunk.Flag.new_write.flagByte(), 1L, 0)
-
-        when:
-        oneSlot.checkAndSaveMemory(0, false)
-        oneSlot.checkAndSaveMemory(1, false)
-        then:
-        1 == 1
-
-        when:
-        // trigger persist wal
-        List<String> bucketIndex0KeyList
-        5.times {
-            bucketIndex0KeyList = batchPut(oneSlot, 100, 100, 1, slotNumber)
-        }
-        // put first key, new value to wal
-        def firstKey = bucketIndex0KeyList[0]
-        def firstS = BaseCommand.slot(firstKey, slotNumber)
-        def firstCv = new CompressedValue()
-        firstCv.keyHash = firstS.keyHash()
-        firstCv.compressedData = new byte[10]
-        firstCv.seq = oneSlot.snowFlake.nextId()
-        oneSlot.put(firstKey, firstS.bucketIndex(), firstCv)
-        // clear wal for test
-        oneSlot.getWalByGroupIndex(0).clear()
-        // remove second key
-        def secondKey = bucketIndex0KeyList[1]
-        def secondS = BaseCommand.slot(secondKey, slotNumber)
-        oneSlot.removeDelay(secondKey, secondS.bucketIndex(), secondS.keyHash())
-        // change some keys in key loader
-        def random = new Random()
-        100.times {
-            def someKey = bucketIndex0KeyList[random.nextInt(bucketIndex0KeyList.size())]
-            def someS = BaseCommand.slot(someKey, slotNumber)
-            oneSlot.keyLoader.removeSingleKey(someS.bucketIndex(), someKey, someS.keyHash(), someS.keyHash32())
-        }
-        // do check, persist begin segment index 2
-        oneSlot.checkAndSaveMemory(2, true)
-        def segmentBytes = chunk.preadOneSegment(2)
-        then:
-        SegmentBatch2.isSegmentBytesSlim(segmentBytes, 0) || SegmentBatch2.isSegmentBytesSlimAndCompressed(segmentBytes, 0)
-
-        when:
-        // mock all values invalid
-        oneSlot.flush()
-        5.times {
-            bucketIndex0KeyList = batchPut(oneSlot, 100, 100, 1, slotNumber)
-        }
-        oneSlot.checkAndSaveMemory(0, false)
-        then:
-        chunk.preadOneSegment(0) == null
-
-        when:
-        chunk.segmentIndex = 0
-        oneSlot.doTask(0)
-        // increase 2 segments
-        chunk.segmentIndex = 2
-        oneSlot.doTask(0)
-        then:
-        1 == 1
-
-        when:
-        oneSlot.updateTaskCheckAndSaveMemoryLastCheckedSegmentIndex(chunk.maxSegmentIndex)
-        oneSlot.doTask(0)
-        then:
-        1 == 1
-
-        cleanup:
-        localPersist.cleanUp()
-        Consts.persistDir.deleteDir()
-        ConfForGlobal.pureMemory = false
-        ConfForGlobal.pureMemoryV2 = false
     }
 
     def 'test interval delete overwrite big string files'() {
@@ -1217,7 +973,5 @@ class OneSlotTest extends Specification {
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
-        ConfForGlobal.pureMemory = false
-        ConfForGlobal.pureMemoryV2 = false
     }
 }

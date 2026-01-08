@@ -1,6 +1,5 @@
 package io.velo.persist;
 
-import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
 import org.apache.commons.io.FileUtils;
@@ -30,47 +29,7 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     final int allCapacity;
     private final byte[] inMemoryCachedBytes;
     private final ByteBuffer inMemoryCachedByteBuffer;
-    private RandomAccessFile raf;
-
-    /**
-     * Retrieves the in-memory cached bytes representing key counts.
-     *
-     * @return the copy of the in-memory cached bytes
-     */
-    byte[] getInMemoryCachedBytes() {
-        var dst = new byte[inMemoryCachedBytes.length];
-        inMemoryCachedByteBuffer.position(0).get(dst);
-        return dst;
-    }
-
-    /**
-     * Overwrites the in-memory cached bytes with the provided bytes.
-     * If the configuration is set for pure memory operations, it directly updates the in-memory cache.
-     * Otherwise, it writes the bytes to the file and updates the in-memory cache.
-     *
-     * @param bytes the bytes to overwrite the in-memory cache with
-     * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
-     */
-    void overwriteInMemoryCachedBytes(byte[] bytes) {
-        if (bytes.length != inMemoryCachedBytes.length) {
-            throw new IllegalArgumentException("Repl stat key count in buckets, bytes length not match");
-        }
-
-        if (ConfForGlobal.pureMemory) {
-            inMemoryCachedByteBuffer.position(0).put(bytes);
-            calcKeyCount();
-            return;
-        }
-
-        try {
-            raf.seek(0);
-            raf.write(bytes);
-            inMemoryCachedByteBuffer.position(0).put(bytes);
-            calcKeyCount();
-        } catch (IOException e) {
-            throw new RuntimeException("Repl stat key count in buckets, write file error", e);
-        }
-    }
+    private final RandomAccessFile raf;
 
     private final int[] keyCountInOneWalGroup;
 
@@ -105,11 +64,6 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
 
         // max 512KB * 2 = 1MB
         this.inMemoryCachedBytes = new byte[allCapacity];
-
-        if (ConfForGlobal.pureMemory) {
-            this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
-            return;
-        }
 
         boolean needRead = false;
         var file = new File(slotDir, STAT_KEY_BUCKET_LAST_UPDATE_COUNT_FILE);
@@ -195,11 +149,6 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
                            byte[] tmpBytes,
                            @NotNull ByteBuffer inMemoryCachedByteBuffer,
                            @NotNull RandomAccessFile raf) {
-        if (ConfForGlobal.pureMemory) {
-            inMemoryCachedByteBuffer.put(offset, tmpBytes);
-            return;
-        }
-
         try {
             raf.seek(offset);
             raf.write(tmpBytes);
@@ -273,13 +222,6 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
      * Resets the total key count cached to zero.
      */
     void clear() {
-        if (ConfForGlobal.pureMemory) {
-            Arrays.fill(inMemoryCachedBytes, (byte) 0);
-            Arrays.fill(keyCountInOneWalGroup, 0);
-            totalKeyCountCached = 0;
-            return;
-        }
-
         try {
             var tmpBytes = new byte[allCapacity];
             Arrays.fill(tmpBytes, (byte) 0);
@@ -300,13 +242,7 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
      */
     @Override
     public void cleanUp() {
-        if (ConfForGlobal.pureMemory) {
-            return;
-        }
-
-        // sync all
         try {
-//            raf.getFD().sync();
             raf.close();
             System.out.println("Stat key count in buckets file closed");
         } catch (IOException e) {

@@ -1,6 +1,9 @@
 package io.velo.persist;
 
-import io.velo.*;
+import io.velo.CompressedValue;
+import io.velo.ConfForSlot;
+import io.velo.KeyHash;
+import io.velo.NullableOnlyTest;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
@@ -12,8 +15,6 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -23,7 +24,7 @@ import java.util.*;
  * This class provides methods to read, write, delete, and manage big string files
  * using an LRU cache in a specified slot.
  */
-public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, CanSaveAndLoad, HandlerWhenCvExpiredOrDeleted {
+public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, HandlerWhenCvExpiredOrDeleted {
     record Id(long uuid, int bucketIndex) {
     }
 
@@ -52,8 +53,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     private LRUMap<Long, byte[]> bigStringBytesByUuidLRU;
 
-    private final HashMap<Integer, HashMap<String, byte[]>> allBytesByBucketIndexAndUuid = new HashMap<>();
-
     int bigStringFilesCount = 0;
 
     HashSet<Integer> bucketIndexesWhenFirstServerStart = new HashSet<>();
@@ -81,13 +80,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      */
     public BigStringFiles(short slot, @NullableOnlyTest File slotDir) throws IOException {
         this.slot = slot;
-        if (ConfForGlobal.pureMemory) {
-            log.warn("Pure memory mode, big string files will not be used, slot={}", slot);
-            this.bigStringDir = null;
-            this.bigStringBytesByUuidLRU = null;
-            return;
-        }
-
         this.bigStringDir = new File(slotDir, BIG_STRING_DIR_NAME);
         if (!bigStringDir.exists()) {
             if (!bigStringDir.mkdirs()) {
@@ -141,62 +133,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     @Override
     public long estimate(@NotNull StringBuilder sb) {
         long size = RamUsageEstimator.sizeOfMap(bigStringBytesByUuidLRU);
-        size += RamUsageEstimator.sizeOfMap(allBytesByBucketIndexAndUuid);
         sb.append("Big string files: ").append(size).append("\n");
         return size;
-    }
-
-    /**
-     * Loads big string data from a saved file when in pure memory mode.
-     *
-     * @param is the DataInputStream to read from
-     * @throws IOException if an I/O error occurs
-     */
-    @Override
-    public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
-        // count int
-        bigStringFilesCount = is.readInt();
-        for (int i = 0; i < bigStringFilesCount; i++) {
-            var bucketIndex = is.readInt();
-            var count = is.readInt();
-            for (int j = 0; j < count; j++) {
-                var uuid = is.readLong();
-                var keyHash = is.readLong();
-                var bytesLength = is.readInt();
-                var bytes = new byte[bytesLength];
-                is.readFully(bytes);
-                allBytesByBucketIndexAndUuid.computeIfAbsent(bucketIndex, k -> new HashMap<>()).put(uuid + "_" + keyHash, bytes);
-            }
-        }
-        log.warn("Load big string files from last saved file, count={}", bigStringFilesCount);
-    }
-
-    /**
-     * Writes big string data to a saved file when in pure memory mode.
-     *
-     * @param os the DataOutputStream to write to
-     * @throws IOException if an I/O error occurs
-     */
-    @Override
-    public void writeToSavedFileWhenPureMemory(@NotNull DataOutputStream os) throws IOException {
-        os.writeInt(allBytesByBucketIndexAndUuid.size());
-        for (var entry : allBytesByBucketIndexAndUuid.entrySet()) {
-            var bucketIndex = entry.getKey();
-            var value = entry.getValue();
-            os.writeInt(bucketIndex);
-            os.writeInt(value.size());
-            for (var entry2 : value.entrySet()) {
-                var key = entry2.getKey();
-                var arr = key.split("_");
-                var uuid = Long.parseLong(arr[0]);
-                var keyHash = Long.parseLong(arr[1]);
-                var bytes = entry2.getValue();
-                os.writeLong(uuid);
-                os.writeLong(keyHash);
-                os.writeInt(bytes.length);
-                os.write(bytes);
-            }
-        }
     }
 
     /**
@@ -207,20 +145,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      */
     public List<IdWithKey> getBigStringFileIdList(int bucketIndex) {
         var list = new ArrayList<IdWithKey>();
-        if (ConfForGlobal.pureMemory) {
-            var map = allBytesByBucketIndexAndUuid.get(bucketIndex);
-            if (map != null) {
-                for (var entry : map.entrySet()) {
-                    var key = entry.getKey();
-                    var arr = key.split("_");
-                    var uuid = Long.parseLong(arr[0]);
-                    var keyHash = Long.parseLong(arr[1]);
-                    list.add(new IdWithKey(uuid, bucketIndex, keyHash, ""));
-                }
-            }
-            return list;
-        }
-
         var files = new File(bigStringDir, bucketIndex + "").listFiles();
         if (files == null) {
             return list;
@@ -257,14 +181,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @return the bytes of the big string file, or null if not found
      */
     public byte[] getBigStringBytes(long uuid, int bucketIndex, long keyHash, boolean doLRUCache) {
-        if (ConfForGlobal.pureMemory) {
-            var map = allBytesByBucketIndexAndUuid.get(bucketIndex);
-            if (map == null) {
-                return null;
-            }
-            return map.get(uuid + "_" + keyHash);
-        }
-
         var bytesCached = bigStringBytesByUuidLRU != null ? bigStringBytesByUuidLRU.get(uuid) : null;
         if (bytesCached != null) {
             return bytesCached;
@@ -333,14 +249,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @return true if the operation was successful, false otherwise
      */
     public boolean writeBigStringBytes(long uuid, int bucketIndex, long keyHash, byte[] bytes, int offset, int length) {
-        if (ConfForGlobal.pureMemory) {
-            var r = allBytesByBucketIndexAndUuid.computeIfAbsent(bucketIndex, k -> new HashMap<>()).put(uuid + "_" + keyHash, bytes);
-            if (r == null) {
-                bigStringFilesCount++;
-            }
-            return true;
-        }
-
         var file = new File(bigStringDir, bucketIndex + "/" + uuid + "_" + keyHash);
         var len = file.exists() ? file.length() : 0;
         try {
@@ -374,14 +282,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @return true if the file was successfully deleted or doesn't exist, false otherwise
      */
     public boolean deleteBigStringFileIfExist(long uuid, int bucketIndex, long keyHash) {
-        if (ConfForGlobal.pureMemory) {
-            var r = allBytesByBucketIndexAndUuid.computeIfAbsent(bucketIndex, k -> new HashMap<>()).remove(getUuid(uuid) + "_" + keyHash);
-            if (r != null) {
-                bigStringFilesCount--;
-            }
-            return true;
-        }
-
         if (bigStringBytesByUuidLRU != null) {
             bigStringBytesByUuidLRU.remove(uuid);
         }
@@ -417,11 +317,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     @SlaveNeedReplay
     @SlaveReplay
     public void deleteAllBigStringFiles() {
-        if (ConfForGlobal.pureMemory) {
-            allBytesByBucketIndexAndUuid.clear();
-            return;
-        }
-
         if (bigStringBytesByUuidLRU != null) {
             bigStringBytesByUuidLRU.clear();
         }

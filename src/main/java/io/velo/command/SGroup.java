@@ -16,7 +16,6 @@ import io.velo.type.RedisList;
 import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.VisibleForTesting;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -225,18 +224,7 @@ public class SGroup extends BaseCommand {
     }
 
     private Reply save() {
-        if (!ConfForGlobal.pureMemory) {
-            return OKReply.INSTANCE;
-        }
-
-        return localPersist.doSthInSlots(oneSlot -> {
-            try {
-                oneSlot.writeToSavedFileWhenPureMemory();
-                return true;
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }, resultList -> OKReply.INSTANCE);
+        return OKReply.INSTANCE;
     }
 
     private MultiBulkReply scanResultToReply(ScanCursor scanCursor, ArrayList<String> keys, VeloUserDataInSocket veloUserData) {

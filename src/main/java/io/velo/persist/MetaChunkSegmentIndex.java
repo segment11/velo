@@ -1,6 +1,5 @@
 package io.velo.persist;
 
-import io.velo.ConfForGlobal;
 import io.velo.NeedCleanUp;
 import io.velo.repl.Binlog;
 import io.velo.repl.SlaveNeedReplay;
@@ -35,34 +34,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     final int allCapacity = 4 + 8 + 4 + 4 + 8;
     private final byte[] inMemoryCachedBytes;
     private final ByteBuffer inMemoryCachedByteBuffer;
-    private RandomAccessFile raf;
-
-    /**
-     * Retrieves the in-memory cached bytes representing the metadata.
-     * For save and reload
-     *
-     * @return the copy of the in-memory cached bytes
-     */
-    byte[] getInMemoryCachedBytes() {
-        var dst = new byte[inMemoryCachedBytes.length];
-        inMemoryCachedByteBuffer.position(0).get(dst);
-        return dst;
-    }
-
-    /**
-     * Overwrites the in-memory cached bytes with the provided bytes.
-     * For save and reload
-     *
-     * @param bytes the bytes to overwrite the in-memory cache with
-     * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
-     */
-    void overwriteInMemoryCachedBytes(byte[] bytes) {
-        if (bytes.length != inMemoryCachedBytes.length) {
-            throw new IllegalArgumentException("Meta chunk segment index, bytes length not match");
-        }
-
-        inMemoryCachedByteBuffer.position(0).put(bytes);
-    }
+    private final RandomAccessFile raf;
 
     private static final Logger log = LoggerFactory.getLogger(MetaChunkSegmentIndex.class);
 
@@ -77,11 +49,6 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     public MetaChunkSegmentIndex(short slot, @NotNull File slotDir) throws IOException {
         this.slot = slot;
         this.inMemoryCachedBytes = new byte[allCapacity];
-
-        if (ConfForGlobal.pureMemory) {
-            this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
-            return;
-        }
 
         boolean needRead = false;
         var file = new File(slotDir, META_CHUNK_SEGMENT_INDEX_FILE);
@@ -114,11 +81,6 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
      */
     @SlaveNeedReplay
     void set(int segmentIndex) {
-        if (ConfForGlobal.pureMemory) {
-            this.inMemoryCachedByteBuffer.putInt(0, segmentIndex);
-            return;
-        }
-
         try {
             raf.seek(0);
             raf.writeInt(segmentIndex);
@@ -170,11 +132,6 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
         updatedBuffer.putInt(isExistsDataAllFetched ? 1 : 0);
         updatedBuffer.putInt(masterBinlogFileIndex);
         updatedBuffer.putLong(masterBinlogOffset);
-
-        if (ConfForGlobal.pureMemory) {
-            this.inMemoryCachedByteBuffer.position(0).put(updatedBytes);
-            return;
-        }
 
         try {
             raf.seek(0);
@@ -240,13 +197,7 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
      */
     @Override
     public void cleanUp() {
-        if (ConfForGlobal.pureMemory) {
-            return;
-        }
-
-        // sync all
         try {
-//            raf.getFD().sync();
             raf.close();
             System.out.println("Meta chunk segment index file closed");
         } catch (IOException e) {

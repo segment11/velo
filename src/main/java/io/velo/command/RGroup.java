@@ -140,12 +140,10 @@ public class RGroup extends BaseCommand {
         for (int i = 0; i < maxTryTimes; i++) {
             var bucketIndex = random.nextInt(ConfForSlot.global.confBucket.bucketsPerSlot);
 
-            if (!ConfForGlobal.pureMemory) {
-                var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
-                var keyInLRU = firstOneSlot.randomKeyInLRU(walGroupIndex);
-                if (keyInLRU != null) {
-                    return new BulkReply(keyInLRU);
-                }
+            var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
+            var keyInLRU = firstOneSlot.randomKeyInLRU(walGroupIndex);
+            if (keyInLRU != null) {
+                return new BulkReply(keyInLRU);
             }
 
             var keyCount = firstOneSlot.getKeyLoader().getKeyCountInBucketIndex(bucketIndex);

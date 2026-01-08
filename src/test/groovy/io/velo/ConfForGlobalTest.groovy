@@ -15,13 +15,10 @@ class ConfForGlobalTest extends Specification {
 
         println ConfForGlobal.isValueSetUseCompression
         println ConfForGlobal.isOnDynTrainDictForCompression
-        println ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression
 
         println ConfForGlobal.netListenAddresses
 
         println ConfForGlobal.dirPath
-        println ConfForGlobal.pureMemory
-        println ConfForGlobal.pureMemoryV2
         println ConfForGlobal.slotNumber
         println ConfForGlobal.slotWorkers
         println ConfForGlobal.netWorkers

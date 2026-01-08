@@ -140,8 +140,6 @@ public enum ConfForSlot {
         map.put("datacenterId", ConfForGlobal.datacenterId);
         map.put("machineId", ConfForGlobal.machineId);
         map.put("estimateKeyNumber", ConfForGlobal.estimateKeyNumber);
-        map.put("pureMemory", ConfForGlobal.pureMemory);
-        map.put("pureMemoryV2", ConfForGlobal.pureMemoryV2);
         map.put("slotNumber", ConfForGlobal.slotNumber);
         map.put("bucket.bucketsPerSlot", confBucket.bucketsPerSlot);
         map.put("chunk.segmentNumberPerFd", confChunk.segmentNumberPerFd);
@@ -374,7 +372,7 @@ public enum ConfForSlot {
             if (!ConfForSlot.ConfChunk.VALID_SEGMENT_LENGTH_LIST.contains(segmentLength)) {
                 throw new IllegalArgumentException("Chunk segment length invalid, chunk segment length should be one of " + ConfForSlot.ConfChunk.VALID_SEGMENT_LENGTH_LIST);
             }
-            ConfForSlot.ConfChunk.REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * segmentLength];
+            ConfForSlot.ConfChunk.REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ * segmentLength];
 
             if (ConfForGlobal.estimateOneValueLength > segmentLength / 10) {
                 throw new IllegalArgumentException("Chunk segment length too small, chunk segment length should be larger than " + ConfForGlobal.estimateOneValueLength * 10);
@@ -393,7 +391,7 @@ public enum ConfForSlot {
         /**
          * Empty bytes for once write.
          */
-        public static byte[] REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 4096];
+        public static byte[] REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ * 4096];
 
         @Override
         public String toString() {

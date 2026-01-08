@@ -235,13 +235,6 @@ public class Wal implements InMemoryEstimate {
      * @throws IOException if an I/O error occurs.
      */
     void lazyReadFromFile() throws IOException {
-        if (ConfForGlobal.pureMemory) {
-            if (slot == 0 && groupIndex == 0) {
-                log.info("Pure memory mode, skip read wal file, slot={}, group index={}", slot, groupIndex);
-            }
-            return;
-        }
-
         var n1 = readWal(walSharedFile, delayToKeyBucketValues, false);
         var n2 = readWal(walSharedFileShortValue, delayToKeyBucketShortValues, true);
         initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketValues);
@@ -593,14 +586,12 @@ public class Wal implements InMemoryEstimate {
     private void resetWal(boolean isShortValue) {
         var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
 
-        if (!ConfForGlobal.pureMemory) {
-            var raf = isShortValue ? walSharedFileShortValue : walSharedFile;
-            try {
-                raf.seek(targetGroupBeginOffset);
-                raf.write(EMPTY_BYTES_FOR_ONE_GROUP);
-            } catch (IOException e) {
-                log.error("Truncate wal group error", e);
-            }
+        var raf = isShortValue ? walSharedFileShortValue : walSharedFile;
+        try {
+            raf.seek(targetGroupBeginOffset);
+            raf.write(EMPTY_BYTES_FOR_ONE_GROUP);
+        } catch (IOException e) {
+            log.error("Truncate wal group error", e);
         }
 
         // reset write position
@@ -764,17 +755,15 @@ public class Wal implements InMemoryEstimate {
      */
     @SlaveReplay
     public void putFromX(@NotNull V v, boolean isValueShort, int offset) {
-        if (!ConfForGlobal.pureMemory) {
-            var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
-            putVToFile(v, isValueShort, offset, targetGroupBeginOffset);
+        var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
+        putVToFile(v, isValueShort, offset, targetGroupBeginOffset);
 
-            // update write position
-            var encodeLength = v.encodeLength();
-            if (isValueShort) {
-                writePositionShortValue = offset + encodeLength;
-            } else {
-                writePosition = offset + encodeLength;
-            }
+        // update write position
+        var encodeLength = v.encodeLength();
+        if (isValueShort) {
+            writePositionShortValue = offset + encodeLength;
+        } else {
+            writePosition = offset + encodeLength;
         }
 
         if (isValueShort) {
@@ -931,7 +920,7 @@ public class Wal implements InMemoryEstimate {
         }
 
         // bulk load need not wal write
-        if (!ConfForGlobal.pureMemory && !debug.bulkLoad) {
+        if (!debug.bulkLoad) {
             putVToFile(v, isValueShort, offset, targetGroupBeginOffset);
         }
         if (isValueShort) {
@@ -1036,23 +1025,6 @@ public class Wal implements InMemoryEstimate {
         var buffer = ByteBuffer.wrap(bytes);
         buffer.putInt(groupIndex);
         buffer.putInt(ONE_GROUP_BUFFER_SIZE);
-
-        if (ConfForGlobal.pureMemory) {
-            for (var entry : delayToKeyBucketValues.entrySet()) {
-                var v = entry.getValue();
-                var encodedBytes = v.encode(false);
-                buffer.put(encodedBytes);
-            }
-
-            buffer.position(realDataOffset + ONE_GROUP_BUFFER_SIZE);
-            for (var entry : delayToKeyBucketShortValues.entrySet()) {
-                var v = entry.getValue();
-                var encodedBytes = v.encode(false);
-                buffer.put(encodedBytes);
-            }
-
-            return bytes;
-        }
 
         var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
 

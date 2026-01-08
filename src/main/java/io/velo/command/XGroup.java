@@ -579,7 +579,7 @@ public class XGroup extends BaseCommand {
 
         var oneSlot = localPersist.oneSlot(slot);
 
-        var chunkSegmentsBytes = oneSlot.preadForRepl(beginSegmentIndex);
+        var chunkSegmentsBytes = oneSlot.readForRepl(beginSegmentIndex);
         if (chunkSegmentsBytes == null) {
             var responseBytes = new byte[4 + 4 + 4];
             var responseBuffer = ByteBuffer.wrap(responseBytes);

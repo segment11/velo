@@ -1,10 +1,7 @@
 package io.velo.persist
 
-import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
 import spock.lang.Specification
-
-import static io.velo.persist.FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD
 
 class ChunkTest extends Specification {
     static Chunk prepareOne(short slot, boolean withKeyLoader = false) {
@@ -141,7 +138,7 @@ class ChunkTest extends Specification {
         oneSlot.metaChunkSegmentFlagSeq.cleanUp()
     }
 
-    def 'test pread'() {
+    def 'test read'() {
         given:
         def chunk = prepareOne(slot)
         def oneSlot = chunk.oneSlot
@@ -155,14 +152,14 @@ class ChunkTest extends Specification {
         1 == 1
 
         when:
-        def bytes = chunk.preadForMerge(0, 10)
+        def bytes = chunk.readForMerge(0, 10)
         then:
         bytes == null
 
         when:
         boolean exception = false
         try {
-            chunk.preadForMerge(0, FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE + 1)
+            chunk.readForMerge(0, FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE + 1)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
@@ -171,12 +168,12 @@ class ChunkTest extends Specification {
         exception
 
         when:
-        bytes = chunk.preadForRepl(0)
+        bytes = chunk.readForRepl(0)
         then:
         bytes == null
 
         when:
-        bytes = chunk.preadOneSegment(0)
+        bytes = chunk.readOneSegment(0)
         then:
         bytes == null
 
@@ -223,7 +220,7 @@ class ChunkTest extends Specification {
         }
         chunk.persist(0, vListManyCount, null)
         then:
-        chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE
+        chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE
 
         when:
         int halfSegmentNumber = (confChunk.maxSegmentNumber() / 2).intValue()
@@ -236,7 +233,7 @@ class ChunkTest extends Specification {
         chunk.segmentIndex = 0
         chunk.persist(0, vListManyCount, null)
         then:
-        chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE
+        chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE
 
         when:
         chunk.fdLengths[0] = 0
@@ -246,148 +243,9 @@ class ChunkTest extends Specification {
         1 == 1
 
         when:
-        ConfForGlobal.pureMemory = true
-        chunk.fdReadWriteArray[0].initByteBuffers(true, 0)
-        println 'mock pure memory chunk append segments bytes, fd: ' + chunk.fdReadWriteArray[0].name
-        for (i in 0..<oneSlot.keyLoader.fdReadWriteArray.length) {
-            def frw = oneSlot.keyLoader.fdReadWriteArray[i]
-            if (frw != null) {
-                frw.initByteBuffers(false, i)
-                println 'mock pure memory key loader set key buckets bytes, fd: ' + frw.name
-            }
-        }
-        // begin persist
-        List<Long> blankSeqListMany = []
-        32.times {
-            blankSeqList << 0L
-        }
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqListMany.size(), Chunk.Flag.init.flagByte(), blankSeqListMany, 0)
-        chunk.segmentIndex = 0
-        chunk.persist(0, vListManyCount, null)
-        then:
-        chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE
-
-        when:
-        List<Long> blankSeqListForAll = []
-        ConfForSlot.global.confChunk.maxSegmentNumber().times {
-            blankSeqListForAll << 0L
-        }
-        chunk.segmentIndex = 0
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqListForAll.size(), Chunk.Flag.new_write.flagByte(), blankSeqListForAll, 0)
-        boolean exception = false
+        def exception = false
         try {
-            chunk.persist(0, vList, null)
-        } catch (SegmentOverflowException ignore) {
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        chunk.writeSegmentToTargetSegmentIndex(new byte[4096], 0)
-        then:
-        chunk.segmentIndex == 0
-
-        when:
-        def n = chunk.getSegmentRealLength(0)
-        def n2 = chunk.getSegmentRealLength(1)
-        then:
-        n == 4096
-        n2 == 0
-
-        when:
-        chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(0)
-        then:
-        chunk.preadOneSegment(0) == null
-
-        cleanup:
-        ConfForGlobal.pureMemory = false
-        chunk.cleanUp()
-        oneSlot.keyLoader.flush()
-        oneSlot.keyLoader.cleanUp()
-        oneSlot.metaChunkSegmentFlagSeq.clear()
-        oneSlot.metaChunkSegmentFlagSeq.cleanUp()
-        Consts.slotDir.deleteDir()
-    }
-
-    def 'test save and load'() {
-        given:
-        ConfForGlobal.pureMemory = true
-        LocalPersistTest.prepareLocalPersist()
-        def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        def oneSlot = localPersist.oneSlot(slot)
-        def chunk = oneSlot.chunk
-
-        when:
-        chunk.segmentIndex = 1
-        def contentBytes = new byte[chunk.chunkSegmentLength * 2]
-        contentBytes[0] = (byte) 1
-        contentBytes[4096] = (byte) 1
-        int[] segmentRealLengths = [4096, 4096]
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(contentBytes, 0, 2, segmentRealLengths)
-        def bos = new ByteArrayOutputStream()
-        def os = new DataOutputStream(bos)
-        chunk.writeToSavedFileWhenPureMemory(os)
-        def bis = new ByteArrayInputStream(bos.toByteArray())
-        def is = new DataInputStream(bis)
-        chunk.loadFromLastSavedFileWhenPureMemory(is)
-        then:
-        chunk.segmentIndex == 1
-        !chunk.fdReadWriteArray[0].isTargetSegmentIndexNullInMemory(1)
-
-        when:
-        chunk.truncateChunkFdFromSegmentIndex(1)
-        then:
-        chunk.preadOneSegment(1) == null
-        chunk.preadOneSegment(0) != null
-
-        when:
-        // all byte 0 means clear
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(new byte[chunk.chunkSegmentLength], 0, 1, segmentRealLengths)
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(new byte[chunk.chunkSegmentLength * 2], 1, 2, segmentRealLengths)
-        then:
-        chunk.preadOneSegment(0) == null
-        chunk.preadOneSegment(1) == null
-        chunk.preadOneSegment(2) == null
-
-        when:
-        chunk.clearSegmentBytesWhenPureMemory(0)
-        then:
-        chunk.preadOneSegment(0) == null
-
-        cleanup:
-        localPersist.cleanUp()
-        Consts.persistDir.deleteDir()
-        ConfForGlobal.pureMemory = false
-    }
-
-    def 'test repl'() {
-        given:
-        LocalPersistTest.prepareLocalPersist()
-        def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        def oneSlot = localPersist.oneSlot(slot)
-        def chunk = oneSlot.chunk
-
-        when:
-        def replBytes = new byte[4096]
-        int[] segmentRealLengths = new int[1]
-        segmentRealLengths[0] = 4096
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1, segmentRealLengths)
-        then:
-        1 == 1
-
-        when:
-        // write again, fd length will not change
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1, segmentRealLengths)
-        then:
-        1 == 1
-
-        when:
-        boolean exception = false
-        try {
-            chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, REPL_ONCE_SEGMENT_COUNT_PREAD + 1, segmentRealLengths)
+            chunk.writeSegments(new byte[0], 2)
         } catch (IllegalArgumentException e) {
             println e.message
             exception = true
@@ -395,28 +253,12 @@ class ChunkTest extends Specification {
         then:
         exception
 
-        when:
-        ConfForGlobal.pureMemory = true
-        for (i in 0..<chunk.fdReadWriteArray.length) {
-            def frw = chunk.fdReadWriteArray[i]
-            frw.initByteBuffers(true, i)
-        }
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes, 0, 1, segmentRealLengths)
-        then:
-        1 == 1
-
-        when:
-        def replBytes2 = new byte[4096 * 2]
-        def segmentRealLengths2 = new int[2]
-        segmentRealLengths2[0] = 4096
-        segmentRealLengths2[1] = 4096
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(replBytes2, 0, 2, segmentRealLengths2)
-        then:
-        1 == 1
-
         cleanup:
-        ConfForGlobal.pureMemory = false
-        localPersist.cleanUp()
-        Consts.persistDir.deleteDir()
+        chunk.cleanUp()
+        oneSlot.keyLoader.flush()
+        oneSlot.keyLoader.cleanUp()
+        oneSlot.metaChunkSegmentFlagSeq.clear()
+        oneSlot.metaChunkSegmentFlagSeq.cleanUp()
+        Consts.slotDir.deleteDir()
     }
 }

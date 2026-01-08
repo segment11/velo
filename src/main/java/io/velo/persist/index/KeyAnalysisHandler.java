@@ -18,7 +18,10 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -40,10 +43,6 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     private final int doAddWhenAddLoopIncreaseCount;
     private final long keyAnalysisNumberTotal;
 
-    // thread not safe
-    @VisibleForTesting
-    final TreeMap<String, byte[]> allKeysInMemory = new TreeMap<>(String::compareTo);
-
     // null when do unit test
     private KeyAnalysisTask innerTask;
 
@@ -53,7 +52,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     }
 
     public void resetInnerTask(Config persistConfig) {
-        this.innerTask = new KeyAnalysisTask(this, allKeysInMemory, db, persistConfig);
+        this.innerTask = new KeyAnalysisTask(this, db, persistConfig);
     }
 
     long addLoopCount = 0;
@@ -113,10 +112,8 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         this.persistConfig = persistConfig;
 
         RocksDB.loadLibrary();
-        if (!ConfForGlobal.pureMemory) {
-            createDB();
-        }
-        this.innerTask = new KeyAnalysisTask(this, allKeysInMemory, db, persistConfig);
+        createDB();
+        this.innerTask = new KeyAnalysisTask(this, db, persistConfig);
 
         this.doAddWhenAddLoopIncreaseCount = 100 / ConfForGlobal.keyAnalysisNumberPercent;
         this.keyAnalysisNumberTotal = ConfForGlobal.keyAnalysisNumberPercent *
@@ -144,11 +141,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         var bytes = new byte[4];
         ByteBuffer.wrap(bytes).putInt(valueLengthHigh24WithShortTypeLow8);
         eventloop.submit(() -> {
-            if (ConfForGlobal.pureMemory) {
-                allKeysInMemory.put(key, bytes);
-            } else {
-                db.put(key.getBytes(), bytes);
-            }
+            db.put(key.getBytes(), bytes);
 
             addCount++;
             addValueLengthTotal += (valueLengthHigh24WithShortTypeLow8 >> 8);
@@ -178,18 +171,12 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                 buffer.get(bytes);
                 lastKeyBytes = keyBytes;
 
-                if (ConfForGlobal.pureMemory) {
-                    allKeysInMemory.put(new String(keyBytes), bytes);
-                } else {
-                    wb.put(keyBytes, bytes);
-                }
+                wb.put(keyBytes, bytes);
 
                 keyCount++;
             }
 
-            if (!ConfForGlobal.pureMemory) {
-                db.write(new WriteOptions(), wb);
-            }
+            db.write(new WriteOptions(), wb);
             return new LastKeyBytesWithKeyCount(lastKeyBytes, keyCount);
         }));
     }
@@ -197,38 +184,26 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     @TestOnly
     void removeKey(String key) {
         eventloop.submit(() -> {
-            if (ConfForGlobal.pureMemory) {
-                allKeysInMemory.remove(key);
-            } else {
-                db.delete(key.getBytes());
-            }
+            db.delete(key.getBytes());
         });
     }
 
     public long allKeyCount() {
-        if (ConfForGlobal.pureMemory) {
-            return allKeysInMemory.size();
-        } else {
-            try {
-                return db.getLongProperty("rocksdb.estimate-num-keys");
-            } catch (RocksDBException e) {
-                return -1L;
-            }
+        try {
+            return db.getLongProperty("rocksdb.estimate-num-keys");
+        } catch (RocksDBException e) {
+            return -1L;
         }
     }
 
     void clearAllKeysAfterAnalysis() throws IOException, RocksDBException {
-        if (ConfForGlobal.pureMemory) {
-            allKeysInMemory.clear();
-        } else {
-            db.close();
-            log.warn("Close key analysis db");
-            FileUtils.deleteDirectory(keysDir);
-            log.warn("Delete key analysis dir");
+        db.close();
+        log.warn("Close key analysis db");
+        FileUtils.deleteDirectory(keysDir);
+        log.warn("Delete key analysis dir");
 
-            createDB();
-            this.innerTask = new KeyAnalysisTask(this, allKeysInMemory, db, this.innerTask);
-        }
+        createDB();
+        this.innerTask = new KeyAnalysisTask(this, db, this.innerTask);
 
         addCount = 0;
         addValueLengthTotal = 0;
@@ -261,20 +236,6 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
     public CompletableFuture<Void> iterateKeys(byte[] beginKeyBytes, int batchSize, boolean isIncludeBeginKey, @NotNull BiConsumer<byte[], Integer> consumer) {
         return eventloop.submit(() -> {
-            if (ConfForGlobal.pureMemory) {
-                int count = 0;
-                for (var entry : beginKeyBytes != null ? allKeysInMemory.tailMap(new String(beginKeyBytes), false).entrySet() : allKeysInMemory.entrySet()) {
-                    var key = entry.getKey();
-                    var valueBytes = entry.getValue();
-                    var valueLengthAsInt = ByteBuffer.wrap(valueBytes).getInt();
-                    consumer.accept(key.getBytes(), valueLengthAsInt);
-                    if (++count >= batchSize) {
-                        break;
-                    }
-                }
-                return;
-            }
-
             var iterator = db.newIterator();
             seekIterator(beginKeyBytes, iterator, isIncludeBeginKey);
 
@@ -296,35 +257,6 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                                                            @Nullable Predicate<Integer> valueBytesAsIntFilter) {
         return eventloop.submit(AsyncComputation.of(() -> {
             var result = new ArrayList<String>();
-            if (ConfForGlobal.pureMemory) {
-                for (var entry : beginKeyBytes != null ? allKeysInMemory.tailMap(new String(beginKeyBytes), false).entrySet() : allKeysInMemory.entrySet()) {
-                    boolean isKeyMatch = true;
-                    boolean isValueMatch = true;
-
-                    var key = entry.getKey();
-                    var valueBytes = entry.getValue();
-
-                    if (keyFilter != null) {
-                        isKeyMatch = keyFilter.test(key);
-                    }
-
-                    if (isKeyMatch) {
-                        if (valueBytesAsIntFilter != null) {
-                            var valueLengthAsInt = ByteBuffer.wrap(valueBytes).getInt();
-                            isValueMatch = valueBytesAsIntFilter.test(valueLengthAsInt);
-                        }
-                    }
-
-                    if (isKeyMatch && isValueMatch) {
-                        result.add(key);
-                        if (result.size() >= expectedCount) {
-                            break;
-                        }
-                    }
-                }
-                return result;
-            }
-
             var iterator = db.newIterator();
             seekIterator(beginKeyBytes, iterator, false);
 
@@ -361,25 +293,6 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     public CompletableFuture<ArrayList<String>> prefixMatch(@NotNull String prefix, Pattern pattern, int maxCount) {
         return eventloop.submit(AsyncComputation.of(() -> {
             var result = new ArrayList<String>();
-
-            if (ConfForGlobal.pureMemory) {
-                for (var entry : allKeysInMemory.tailMap(prefix).entrySet()) {
-                    var key = entry.getKey();
-                    if (key.startsWith(prefix)) {
-                        if (pattern.matcher(key).matches()) {
-                            result.add(key);
-                            if (result.size() >= maxCount) {
-                                break;
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                }
-
-                return result;
-            }
-
             var iterator = db.newIterator();
             iterator.seek(prefix.getBytes());
 
@@ -461,9 +374,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         isStopped = true;
         System.out.println("Key analysis handler scheduler stopped");
 
-        if (!ConfForGlobal.pureMemory) {
-            db.close();
-            System.out.println("Close key analysis db");
-        }
+        db.close();
+        System.out.println("Close key analysis db");
     }
 }

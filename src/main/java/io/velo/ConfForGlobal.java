@@ -64,11 +64,6 @@ public class ConfForGlobal {
     public static boolean isOnDynTrainDictForCompression = false;
 
     /**
-     * Flag to indicate if pure memory mode key buckets should use compression.
-     */
-    public static boolean isPureMemoryModeKeyBucketsUseCompression = false;
-
-    /**
      * Network listen addresses.
      */
     public static String netListenAddresses = "localhost:7379";
@@ -77,16 +72,6 @@ public class ConfForGlobal {
      * Directory path for data storage (default is "/tmp/velo-data").
      */
     public static String dirPath = "/tmp/velo-data";
-
-    /**
-     * Flag to indicate if pure memory mode is enabled.
-     */
-    public static boolean pureMemory = false;
-
-    /**
-     * Flag to indicate if pure memory mode version 2 is enabled.
-     */
-    public static boolean pureMemoryV2 = false;
 
     /**
      * Number of slots (default is 1).

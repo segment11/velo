@@ -181,27 +181,9 @@ sunionstore
         sGroup.from(BaseCommand.mockAGroup())
 
         when:
-        ConfForGlobal.pureMemory = false
         def reply = sGroup.execute('save')
         then:
         reply == OKReply.INSTANCE
-
-        when:
-        ConfForGlobal.pureMemory = true
-        LocalPersistTest.prepareLocalPersist()
-        def localPersist = LocalPersist.instance
-        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-        reply = sGroup.execute('save')
-        then:
-        reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == OKReply.INSTANCE
-        }.result
-
-        cleanup:
-        localPersist.cleanUp()
-        Consts.persistDir.deleteDir()
-        ConfForGlobal.pureMemory = false
     }
 
     def 'test scan'() {

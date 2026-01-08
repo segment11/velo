@@ -1,6 +1,5 @@
 package io.velo.persist;
 
-import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
 import org.apache.commons.io.FileUtils;
@@ -28,46 +27,7 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     final int allCapacity;
     private final byte[] inMemoryCachedBytes;
     private final ByteBuffer inMemoryCachedByteBuffer;
-    private RandomAccessFile raf;
-
-    /**
-     * Retrieves the in-memory cached bytes representing the split numbers.
-     *
-     * @return the copy of the in-memory cached bytes
-     */
-    byte[] getInMemoryCachedBytes() {
-        var dst = new byte[inMemoryCachedBytes.length];
-        inMemoryCachedByteBuffer.position(0).get(dst);
-        return dst;
-    }
-
-    /**
-     * Overwrites the in-memory cached bytes with the provided bytes.
-     * If operating in pure memory mode, it directly updates the in-memory cache.
-     * Otherwise, it writes the bytes to the file and updates the in-memory cache.
-     *
-     * @param bytes the bytes to overwrite the in-memory cache with
-     * @throws IllegalArgumentException If the provided bytes array length does not match the expected length.
-     * @throws RuntimeException         If an I/O error occurs during file operations.
-     */
-    void overwriteInMemoryCachedBytes(byte[] bytes) {
-        if (bytes.length != inMemoryCachedBytes.length) {
-            throw new IllegalArgumentException("Repl meta key bucket split number, bytes length not match");
-        }
-
-        if (ConfForGlobal.pureMemory) {
-            inMemoryCachedByteBuffer.position(0).put(bytes);
-            return;
-        }
-
-        try {
-            raf.seek(0);
-            raf.write(bytes);
-            inMemoryCachedByteBuffer.position(0).put(bytes);
-        } catch (IOException e) {
-            throw new RuntimeException("Repl meta key bucket split number, write file error", e);
-        }
-    }
+    private final RandomAccessFile raf;
 
     private static final Logger log = LoggerFactory.getLogger(MetaKeyBucketSplitNumber.class);
 
@@ -87,11 +47,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
         // max 512KB
         this.inMemoryCachedBytes = new byte[allCapacity];
         Arrays.fill(inMemoryCachedBytes, initialSplitNumber);
-
-        if (ConfForGlobal.pureMemory) {
-            this.inMemoryCachedByteBuffer = ByteBuffer.wrap(inMemoryCachedBytes);
-            return;
-        }
 
         boolean needRead = false;
         var file = new File(slotDir, META_KEY_BUCKET_SPLIT_NUMBER_FILE);
@@ -141,11 +96,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
      */
     @TestOnly
     void set(int bucketIndex, byte splitNumber) {
-        if (ConfForGlobal.pureMemory) {
-            inMemoryCachedByteBuffer.put(bucketIndex, splitNumber);
-            return;
-        }
-
         try {
             raf.seek(bucketIndex);
             raf.writeByte(splitNumber);
@@ -164,11 +114,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
      * @param splitNumberArray the array of split numbers to set
      */
     void setBatch(int beginBucketIndex, byte[] splitNumberArray) {
-        if (ConfForGlobal.pureMemory) {
-            inMemoryCachedByteBuffer.position(beginBucketIndex).put(splitNumberArray);
-            return;
-        }
-
         try {
             raf.seek(beginBucketIndex);
             raf.write(splitNumberArray);
@@ -223,11 +168,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
      * Otherwise, it writes the initial split numbers to the file and updates the in-memory cache.
      */
     void clear() {
-        if (ConfForGlobal.pureMemory) {
-            Arrays.fill(inMemoryCachedBytes, initialSplitNumber);
-            return;
-        }
-
         try {
             var tmpBytes = new byte[allCapacity];
             Arrays.fill(tmpBytes, initialSplitNumber);
@@ -246,13 +186,7 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
      */
     @Override
     public void cleanUp() {
-        if (ConfForGlobal.pureMemory) {
-            return;
-        }
-
-        // sync all
         try {
-//            raf.getFD().sync();
             raf.close();
             System.out.println("Meta key bucket split number file closed");
         } catch (IOException e) {

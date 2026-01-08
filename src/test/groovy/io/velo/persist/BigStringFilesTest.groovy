@@ -1,6 +1,5 @@
 package io.velo.persist
 
-import io.velo.CompressedValue
 import io.velo.ConfForGlobal
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
@@ -27,7 +26,6 @@ class BigStringFilesTest extends Specification {
             tmpSlotDir2.mkdirs()
         }
 
-        ConfForGlobal.pureMemory = false
         def bigStringFiles1 = new BigStringFiles(slot, tmpSlotDir1)
         def bigStringFiles11 = new BigStringFiles(slot, tmpSlotDir1)
         def bigStringFiles2 = new BigStringFiles(slot, tmpSlotDir2)
@@ -65,62 +63,9 @@ class BigStringFilesTest extends Specification {
         bigStringFiles2.getBigStringFileIdList(0).size() == 0
     }
 
-    def 'test pure memory mode'() {
-        given:
-        def bigString = 'a' * 10000
-
-        ConfForGlobal.pureMemory = true
-        def bigStringFiles = new BigStringFiles(slot, null)
-        println bigStringFiles.estimate(new StringBuilder())
-
-        when:
-        def isWriteOk = bigStringFiles.writeBigStringBytes(1L, 0, 1L, bigString.bytes)
-        then:
-        isWriteOk
-        bigStringFiles.getBigStringBytes(1L, 0, 1L) == bigString.bytes
-        bigStringFiles.getBigStringBytes(1L, 1, 1L) == null
-        bigStringFiles.getBigStringFileIdList(0).size() == 1
-
-        when:
-        bigStringFiles.deleteBigStringFileIfExist(1L, 0, 1L)
-        then:
-        bigStringFiles.getBigStringFileIdList(0).size() == 0
-
-        when:
-        bigStringFiles.writeBigStringBytes(1L, 0, 1L, bigString.bytes)
-        // skip
-        bigStringFiles.handleWhenCvExpiredOrDeleted('a', null, null)
-        def cv = new CompressedValue()
-        cv.keyHash = 1L
-        // skip as cv type is not big string
-        bigStringFiles.handleWhenCvExpiredOrDeleted('a', cv, null)
-        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
-        cv.compressedData = new byte[8]
-        // uuid not match
-        bigStringFiles.handleWhenCvExpiredOrDeleted('a', cv, null)
-        then:
-        1 == 1
-
-        when:
-        def bos = new ByteArrayOutputStream()
-        def os = new DataOutputStream(bos)
-        bigStringFiles.writeToSavedFileWhenPureMemory(os)
-        def bis = new ByteArrayInputStream(bos.toByteArray())
-        def is = new DataInputStream(bis)
-        bigStringFiles.loadFromLastSavedFileWhenPureMemory(is)
-        then:
-        bigStringFiles.getBigStringFileIdList(0).size() == 1
-
-        cleanup:
-        bigStringFiles.deleteAllBigStringFiles()
-        ConfForGlobal.pureMemory = false
-    }
-
     def 'test write io exception'() {
         given:
         def noPermitDir = new File('/usr/tmp-slot-dir')
-
-        ConfForGlobal.pureMemory = false
 
         when:
         boolean exception = false

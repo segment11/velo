@@ -42,7 +42,6 @@ class WalTest extends Specification {
 
     def 'put and get'() {
         given:
-        ConfForGlobal.pureMemory = false
         ConfForSlot.global = ConfForSlot.debugMode
 
         def file = new File(Consts.slotDir, 'test-raf.wal')
@@ -89,13 +88,6 @@ class WalTest extends Specification {
         1 == 1
 
         when:
-        ConfForGlobal.pureMemory = true
-        wal.lazyReadFromFile()
-        then:
-        1 == 1
-
-        when:
-        ConfForGlobal.pureMemory = false
         def vList = Mock.prepareValueList(10, 0) { v ->
             if (v.seq() == 9) {
                 def cv = CompressedValue.decode(Unpooled.wrappedBuffer(v.cvEncoded()), v.key().bytes, v.keyHash())
@@ -201,21 +193,13 @@ class WalTest extends Specification {
         // repl
         // repl export exists batch to slave
         when:
-        ConfForGlobal.pureMemory = false
         wal.put(false, 'xyz', vList[-1])
         def toSlaveExistsBytes1 = wal.toSlaveExistsOneWalGroupBytes()
         then:
         toSlaveExistsBytes1.length == 8 + Wal.ONE_GROUP_BUFFER_SIZE * 2
 
-        when:
-        ConfForGlobal.pureMemory = true
-        def toSlaveExistsBytes2 = wal.toSlaveExistsOneWalGroupBytes()
-        then:
-        toSlaveExistsBytes2.length == toSlaveExistsBytes1.length
-
         // repl import exists batch from master
         when:
-        ConfForGlobal.pureMemory = false
         def wal11 = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
         def wal22 = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
         wal11.fromMasterExistsOneWalGroupBytes(toSlaveExistsBytes1) { isShortValue, key, v ->
@@ -279,14 +263,6 @@ class WalTest extends Specification {
         1 == 1
 
         when:
-        ConfForGlobal.pureMemory = true
-        wal.putFromX(v1, true, wal.writePositionShortValue)
-        wal.putFromX(v1, false, wal.writePosition)
-        then:
-        1 == 1
-
-        when:
-        ConfForGlobal.pureMemory = false
         wal.clearValues()
         wal.clearShortValues()
         then:
@@ -308,8 +284,6 @@ class WalTest extends Specification {
 
     def 'test value change to short value'() {
         given:
-        ConfForGlobal.pureMemory = true
-
         def snowFlake = new SnowFlake(1, 1)
         def wal = new Wal(slot, null, 0, null, null, snowFlake)
 
@@ -419,14 +393,11 @@ class WalTest extends Specification {
         wal.keyCount == 0
 
         cleanup:
-        ConfForGlobal.pureMemory = false
         Wal.ONE_GROUP_BUFFER_SIZE = 64 * 1024
     }
 
     def 'test scan'() {
         given:
-        ConfForGlobal.pureMemory = true
-
         def snowFlake = new SnowFlake(1, 1)
         def wal = new Wal(slot, null, 0, null, null, snowFlake)
 
@@ -513,9 +484,6 @@ class WalTest extends Specification {
         }
         then:
         !wal.inWalKeysFormScan(5L).isEmpty()
-
-        cleanup:
-        ConfForGlobal.pureMemory = false
     }
 
     def 'test reset write position'() {
@@ -574,7 +542,6 @@ class WalTest extends Specification {
 
     def 'test delete expired big string files'() {
         given:
-        ConfForGlobal.pureMemory = false
         ConfForSlot.global = ConfForSlot.debugMode
 
         def file = new File(Consts.slotDir, 'test-raf.wal')

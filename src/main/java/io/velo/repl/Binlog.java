@@ -1,6 +1,5 @@
 package io.velo.repl;
 
-import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
 import io.velo.persist.DynConfig;
@@ -25,12 +24,12 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     private final short slot;
     private final DynConfig dynConfig;
     private File binlogDir;
-    private ActAsRaf raf;
+    private RandomAccessFile raf;
 
     /**
      * Old binlog files, key is file index
      */
-    private final TreeMap<Integer, ActAsRaf> prevRafByFileIndex = new TreeMap<>();
+    private final TreeMap<Integer, RandomAccessFile> prevRafByFileIndex = new TreeMap<>();
 
     // for cache, ignore when pure memory mode
     private final LinkedList<BytesWithFileIndexAndOffset> latestAppendForReadCacheSegmentBytesSet = new LinkedList<>();
@@ -46,7 +45,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
      * @return disk usage
      */
     public long getDiskUsage() {
-        return ConfForGlobal.pureMemory ? 0 : diskUsage;
+        return diskUsage;
     }
 
     /**
@@ -116,24 +115,20 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
      *
      * @return binlog files, sorted by file index
      */
-    private ArrayList<ActAsFile> listFiles() {
-        if (ConfForGlobal.pureMemory) {
-            return new ArrayList(prevRafByFileIndex.values());
-        } else {
-            ArrayList<ActAsFile> list = new ArrayList<>();
-            var files = binlogDir.listFiles();
-            if (files == null) {
-                return list;
-            }
-
-            for (var file : files) {
-                if (file.getName().startsWith(FILE_NAME_PREFIX)) {
-                    list.add(new ActAsFile.PersistFile(file, fileIndex(file)));
-                }
-            }
-            list.sort(Comparator.comparingInt(ActAsFile::fileIndex));
+    private ArrayList<PersistFile> listFiles() {
+        ArrayList<PersistFile> list = new ArrayList<>();
+        var files = binlogDir.listFiles();
+        if (files == null) {
             return list;
         }
+
+        for (var file : files) {
+            if (file.getName().startsWith(FILE_NAME_PREFIX)) {
+                list.add(new PersistFile(file, fileIndex(file)));
+            }
+        }
+        list.sort(Comparator.comparingInt(PersistFile::fileIndex));
+        return list;
     }
 
     /**
@@ -148,35 +143,30 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         this.slot = slot;
         this.dynConfig = dynConfig;
 
-        if (ConfForGlobal.pureMemory) {
-            this.raf = new PureMemoryRaf(0, new byte[ConfForSlot.global.confRepl.binlogOneFileMaxLength]);
-            prevRafByFileIndex.put(0, raf);
-        } else {
-            this.binlogDir = new File(slotDir, BINLOG_DIR_NAME);
-            if (!binlogDir.exists()) {
-                if (!binlogDir.mkdirs()) {
-                    throw new IOException("Repl create binlog dir error, slot=" + slot);
-                }
+        this.binlogDir = new File(slotDir, BINLOG_DIR_NAME);
+        if (!binlogDir.exists()) {
+            if (!binlogDir.mkdirs()) {
+                throw new IOException("Repl create binlog dir error, slot=" + slot);
             }
-
-            ActAsFile.PersistFile latestFile;
-            var actAsFiles = listFiles();
-            if (!actAsFiles.isEmpty()) {
-                latestFile = (ActAsFile.PersistFile) actAsFiles.getLast();
-                this.currentFileIndex = latestFile.fileIndex();
-                this.currentFileOffset = latestFile.length();
-
-                for (var file : actAsFiles) {
-                    this.diskUsage += file.length();
-                }
-            } else {
-                // begin from 0
-                File file = new File(binlogDir, fileName(currentFileIndex));
-                FileUtils.touch(file);
-                latestFile = new ActAsFile.PersistFile(file, 0);
-            }
-            this.raf = new PersistRaf(new RandomAccessFile(latestFile.file, "rw"));
         }
+
+        PersistFile latestFile;
+        var files = listFiles();
+        if (!files.isEmpty()) {
+            latestFile = files.getLast();
+            this.currentFileIndex = latestFile.fileIndex();
+            this.currentFileOffset = latestFile.length();
+
+            for (var file : files) {
+                this.diskUsage += file.length();
+            }
+        } else {
+            // begin from 0
+            File file = new File(binlogDir, fileName(currentFileIndex));
+            FileUtils.touch(file);
+            latestFile = new PersistFile(file, 0);
+        }
+        this.raf = new RandomAccessFile(latestFile.file(), "rw");
 
         this.forReadCacheSegmentMaxCount = ConfForSlot.global.confRepl.binlogForReadCacheSegmentMaxCount;
         this.tempAppendSegmentBytes = new byte[ConfForSlot.global.confRepl.binlogOneSegmentLength];
@@ -192,13 +182,9 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     @Override
     public long estimate(@NotNull StringBuilder sb) {
         long size = 0;
-        if (ConfForGlobal.pureMemory) {
-            size += (long) prevRafByFileIndex.size() * ConfForSlot.global.confRepl.binlogOneFileMaxLength;
-        } else {
-            size += tempAppendSegmentBytes.length;
-            for (var one : latestAppendForReadCacheSegmentBytesSet) {
-                size += one.bytes.length;
-            }
+        size += tempAppendSegmentBytes.length;
+        for (var one : latestAppendForReadCacheSegmentBytesSet) {
+            size += one.bytes.length;
         }
 
         sb.append("Binlog buffer: ").append(size).append("\n");
@@ -267,9 +253,9 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
      */
     public FileIndexAndOffset earliestFileIndexAndOffset() {
         // at least have one file, self created
-        var actAsFiles = listFiles();
-        var actAsFile = actAsFiles.getFirst();
-        return new FileIndexAndOffset(actAsFile.fileIndex(), 0);
+        var files = listFiles();
+        var file = files.getFirst();
+        return new FileIndexAndOffset(file.fileIndex(), 0);
     }
 
     @TestOnly
@@ -382,7 +368,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         }
 
         var prevRaf = prevRaf(resetFileIndex, true);
-        prevRaf.seekForWrite(marginOffset);
+        prevRaf.seek(marginOffset);
 
         currentFileIndex = resetFileIndex;
         currentFileOffset = marginOffset;
@@ -418,10 +404,6 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     private void addForReadCacheSegmentBytes(int fileIndex, long offset, byte[] givenBytes) {
-        if (ConfForGlobal.pureMemory) {
-            return;
-        }
-
         // copy one
         byte[] bytes;
         if (givenBytes != null) {
@@ -483,7 +465,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                 // need padding
                 var padding = new byte[(int) currentSegmentLeft];
 
-                raf.seekForWrite(currentFileOffset);
+                raf.seek(currentFileOffset);
                 raf.write(padding);
                 currentFileOffset += padding.length;
 
@@ -499,7 +481,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             }
         }
 
-        raf.seekForWrite(currentFileOffset);
+        raf.seek(currentFileOffset);
         raf.write(encoded);
         currentFileOffset += encoded.length;
 
@@ -536,7 +518,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         var oneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength;
 
         if (currentFileIndex == toFileIndex) {
-            raf.seekForWrite(toFileOffset);
+            raf.seek(toFileOffset);
             raf.write(oneSegmentBytes);
 
             diskUsage += oneSegmentBytes.length;
@@ -553,7 +535,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         } else {
             var prevRaf = prevRaf(toFileIndex, true);
 
-            prevRaf.seekForWrite(toFileOffset);
+            prevRaf.seek(toFileOffset);
             prevRaf.write(oneSegmentBytes);
 
             diskUsage += oneSegmentBytes.length;
@@ -595,30 +577,21 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             }
         }
 
-        if (ConfForGlobal.pureMemory) {
-            prevRafByFileIndex.put(currentFileIndex, raf);
-        }
-
         currentFileIndex++;
 
-        if (ConfForGlobal.pureMemory) {
-            raf = new PureMemoryRaf(currentFileIndex, new byte[ConfForSlot.global.confRepl.binlogOneFileMaxLength]);
-            prevRafByFileIndex.put(currentFileIndex, raf);
-        } else {
-            var nextFile = new File(binlogDir, fileName(currentFileIndex));
-            FileUtils.touch(nextFile);
-            log.info("Repl create new binlog file, file={}, slot={}", nextFile.getName(), slot);
-            raf = new PersistRaf(new RandomAccessFile(nextFile, "rw"));
-        }
+        var nextFile = new File(binlogDir, fileName(currentFileIndex));
+        FileUtils.touch(nextFile);
+        log.info("Repl create new binlog file, file={}, slot={}", nextFile.getName(), slot);
+        raf = new RandomAccessFile(nextFile, "rw");
 
         // reset offset beginning at 0
         currentFileOffset = 0;
 
         // check file keep max count
-        var actAsFiles = listFiles();
-        if (actAsFiles.size() > ConfForSlot.global.confRepl.binlogFileKeepMaxCount) {
+        var files = listFiles();
+        if (files.size() > ConfForSlot.global.confRepl.binlogFileKeepMaxCount) {
             // already sorted
-            var firstFile = actAsFiles.getFirst();
+            var firstFile = files.getFirst();
             var rafRemoved = prevRafByFileIndex.remove(firstFile.fileIndex());
             if (rafRemoved != null) {
                 rafRemoved.close();
@@ -636,24 +609,13 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     @VisibleForTesting
-    ActAsRaf prevRaf(int fileIndex) {
+    RandomAccessFile prevRaf(int fileIndex) {
         return prevRaf(fileIndex, false);
     }
 
-    private ActAsRaf prevRaf(int fileIndex, boolean createIfNotExists) {
+    private RandomAccessFile prevRaf(int fileIndex, boolean createIfNotExists) {
         if (fileIndex < 0) {
             throw new IllegalArgumentException("Repl read binlog prev raf, file index must be >= 0, slot=" + slot);
-        }
-
-        if (ConfForGlobal.pureMemory) {
-            var actAsRaf = prevRafByFileIndex.get(fileIndex);
-            if (actAsRaf == null) {
-                if (createIfNotExists) {
-                    actAsRaf = new PureMemoryRaf(fileIndex, new byte[ConfForSlot.global.confRepl.binlogOneFileMaxLength]);
-                    prevRafByFileIndex.put(fileIndex, actAsRaf);
-                }
-            }
-            return actAsRaf;
         }
 
         return prevRafByFileIndex.computeIfAbsent(fileIndex, k -> {
@@ -671,7 +633,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             }
 
             try {
-                return new PersistRaf(new RandomAccessFile(file, "rw"));
+                return new RandomAccessFile(file, "rw");
             } catch (FileNotFoundException e) {
                 // never happen
                 throw new RuntimeException(e);
@@ -680,10 +642,6 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     private byte[] getLatestAppendForReadCacheSegmentBytes(int fileIndex, long offset) {
-        if (ConfForGlobal.pureMemory) {
-            return null;
-        }
-
         var one = Collections.binarySearch(latestAppendForReadCacheSegmentBytesSet,
                 new BytesWithFileIndexAndOffset(null, fileIndex, offset));
         return one >= 0 ? latestAppendForReadCacheSegmentBytesSet.get(one).bytes : null;
@@ -731,7 +689,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         }
 
         var bytes = new byte[oneSegmentLength];
-        prevRaf.seekForRead(offset);
+        prevRaf.seek(offset);
         var n = prevRaf.read(bytes);
         if (n < 0) {
             throw new IOException("Repl read binlog segment bytes error, file index=" + fileIndex + ", offset=" + offset + ", slot=" + slot);
@@ -742,54 +700,6 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             return readBytes;
         }
         return bytes;
-    }
-
-    @TestOnly
-    @Deprecated
-    byte[] readCurrentRafOneSegment(long offset) throws IOException {
-        if (raf.length() <= offset) {
-            return null;
-        }
-
-        var oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
-        var modGiven = offset % oneSegmentLength;
-        if (modGiven != 0) {
-            throw new IllegalArgumentException("Repl read binlog segment bytes, offset must be multiple of one segment length, offset=" + offset + ", slot=" + slot);
-        }
-
-        // check cache
-        // current append segment
-        long currentFileOffsetMarginSegmentOffset;
-        var mod = currentFileOffset % oneSegmentLength;
-        if (mod != 0) {
-            currentFileOffsetMarginSegmentOffset = currentFileOffset - mod;
-        } else {
-            currentFileOffsetMarginSegmentOffset = currentFileOffset;
-        }
-        if (offset == currentFileOffsetMarginSegmentOffset) {
-            return tempAppendSegmentBytes;
-        }
-
-        var segmentBytes = getLatestAppendForReadCacheSegmentBytes(currentFileIndex, offset);
-        if (segmentBytes != null) {
-            return segmentBytes;
-        }
-
-        var bytes = new byte[oneSegmentLength];
-
-        raf.seekForRead(offset);
-        var n = raf.read(bytes);
-        if (n < 0) {
-            throw new RuntimeException("Repl read binlog segment bytes error, file index=" + currentFileIndex + ", offset=" + offset + ", slot=" + slot);
-        }
-
-        if (n == oneSegmentLength) {
-            return bytes;
-        } else {
-            var readBytes = new byte[n];
-            System.arraycopy(bytes, 0, readBytes, 0, n);
-            return readBytes;
-        }
     }
 
     /**
@@ -897,21 +807,20 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             var entry = it.next();
             var prevRaf = entry.getValue();
             IOUtils.closeQuietly(prevRaf);
-            // when pure memory mode, removed objects (PureMemoryRaf) will gc
             it.remove();
         }
 
-        var actAsFiles = listFiles();
-        for (var actAsFile : actAsFiles) {
-            if (actAsFile.fileIndex() == currentFileIndex) {
+        var files = listFiles();
+        for (var file : files) {
+            if (file.fileIndex() == currentFileIndex) {
                 continue;
             }
 
-            var fileLength = actAsFile.length();
-            if (!actAsFile.delete()) {
-                log.error("Repl delete binlog file error, file={}, slot={}", actAsFile.getName(), slot);
+            var fileLength = file.length();
+            if (!file.delete()) {
+                log.error("Repl delete binlog file error, file={}, slot={}", file.getName(), slot);
             } else {
-                log.info("Repl delete binlog file success, file={}, slot={}", actAsFile.getName(), slot);
+                log.info("Repl delete binlog file success, file={}, slot={}", file.getName(), slot);
                 diskUsage -= fileLength;
             }
         }

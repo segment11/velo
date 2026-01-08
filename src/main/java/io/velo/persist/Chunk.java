@@ -13,21 +13,18 @@ import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-import static io.velo.persist.FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE;
-import static io.velo.persist.FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD;
+import static io.velo.persist.FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE;
 
 /**
  * Represents a chunk, which is a collection of segments that store data.
  * Each chunk can have multiple file descriptors (FDs) to distribute data across.
  */
-public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, CanSaveAndLoad {
+public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp {
     private final int segmentNumberPerFd;
     private final byte fdPerChunk;
     final int maxSegmentIndex;
@@ -108,15 +105,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
     int[] fdLengths;
     FdReadWrite[] fdReadWriteArray;
-
-    /**
-     * Get the array of file descriptor read-write objects.
-     *
-     * @return the array of FdReadWrite objects
-     */
-    public FdReadWrite[] getFdReadWriteArray() {
-        return fdReadWriteArray;
-    }
 
     /**
      * Constructs a new chunk with the given slot, directory, and slot context.
@@ -201,113 +189,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     /**
-     * Clear the segment bytes in memory for the given target segment index.
-     *
-     * @param targetSegmentIndex the segment index whose bytes should be cleared
-     */
-    public void clearSegmentBytesWhenPureMemory(int targetSegmentIndex) {
-        var fdIndex = targetFdIndex(targetSegmentIndex);
-        var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
-
-        var fdReadWrite = fdReadWriteArray[fdIndex];
-        fdReadWrite.clearTargetSegmentIndexInMemory(segmentIndexTargetFd);
-    }
-
-    /**
-     * Truncate the chunks' file descriptors from the given segment index.
-     *
-     * @param targetSegmentIndex the segment index from which to truncate
-     */
-    public void truncateChunkFdFromSegmentIndex(int targetSegmentIndex) {
-        var fdIndex = targetFdIndex(targetSegmentIndex);
-        var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
-
-        var fdReadWrite = fdReadWriteArray[fdIndex];
-        fdReadWrite.truncateAfterTargetSegmentIndex(segmentIndexTargetFd);
-        fdLengths[fdIndex] = chunkSegmentLength * targetSegmentIndex;
-
-        log.warn("Truncate chunk fd from segment index={}, fd index={}", targetSegmentIndex, fdIndex);
-
-        for (int i = fdIndex + 1; i < fdReadWriteArray.length; i++) {
-            fdReadWriteArray[i].truncate();
-            log.warn("Truncate chunk fd={}, fd index={}", fdReadWriteArray[i].name, i);
-            fdLengths[i] = 0;
-        }
-    }
-
-    /**
-     * Load the chunk's data from the last saved file into memory, assuming the data is in pure memory mode.
-     *
-     * @param is the DataInputStream from which to read the data
-     * @throws IOException if an I/O error occurs
-     */
-    @Override
-    public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
-        segmentIndex = is.readInt();
-
-        // fd read write
-        var fdCount = is.readInt();
-        for (int i = 0; i < fdCount; i++) {
-            var fdIndex = is.readInt();
-            var segmentCount = is.readInt();
-            var fd = fdReadWriteArray[fdIndex];
-            for (int j = 0; j < segmentCount; j++) {
-                var inMemorySegmentIndex = is.readInt();
-                var readBytesLength = is.readInt();
-                var readBytes = new byte[readBytesLength];
-                is.readFully(readBytes);
-                fd.setSegmentBytesFromLastSavedFileToMemory(readBytes, inMemorySegmentIndex);
-                fdLengths[fdIndex] = chunkSegmentLength * inMemorySegmentIndex;
-            }
-        }
-    }
-
-    /**
-     * Write the chunk's data to the saved file from memory, assuming the data is in pure memory mode.
-     *
-     * @param os the DataOutputStream to which to write the data
-     * @throws IOException if an I/O error occurs
-     */
-    @Override
-    public void writeToSavedFileWhenPureMemory(@NotNull DataOutputStream os) throws IOException {
-        os.writeInt(segmentIndex);
-
-        int fdCount = 0;
-        for (var fdReadWrite : fdReadWriteArray) {
-            if (fdReadWrite != null) {
-                fdCount++;
-            }
-        }
-
-        os.writeInt(fdCount);
-        for (int fdIndex = 0; fdIndex < fdReadWriteArray.length; fdIndex++) {
-            var fdReadWrite = fdReadWriteArray[fdIndex];
-            if (fdReadWrite == null) {
-                continue;
-            }
-
-            os.writeInt(fdIndex);
-            int segmentCount = 0;
-            for (int inMemorySegmentIndex = 0; inMemorySegmentIndex < fdReadWrite.allBytesBySegmentIndexForOneChunkFd.length; inMemorySegmentIndex++) {
-                var segmentBytes = fdReadWrite.allBytesBySegmentIndexForOneChunkFd[inMemorySegmentIndex];
-                if (segmentBytes != null) {
-                    segmentCount++;
-                }
-            }
-            os.writeInt(segmentCount);
-
-            for (int inMemorySegmentIndex = 0; inMemorySegmentIndex < fdReadWrite.allBytesBySegmentIndexForOneChunkFd.length; inMemorySegmentIndex++) {
-                var segmentBytes = fdReadWrite.allBytesBySegmentIndexForOneChunkFd[inMemorySegmentIndex];
-                if (segmentBytes != null) {
-                    os.writeInt(inMemorySegmentIndex);
-                    os.writeInt(segmentBytes.length);
-                    os.write(segmentBytes);
-                }
-            }
-        }
-    }
-
-    /**
      * Read bytes from the chunk for a merge operation.
      *
      * @param beginSegmentIndex the starting segment index for the read
@@ -315,7 +196,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * @return the byte array containing the read segment data
      * @throws IllegalArgumentException if the requested segment count is too large
      */
-    byte[] preadForMerge(int beginSegmentIndex, int segmentCount) {
+    byte[] readForMerge(int beginSegmentIndex, int segmentCount) {
         if (segmentCount > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE) {
             throw new IllegalArgumentException("Merge read segment count too large=" + segmentCount);
         }
@@ -333,7 +214,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * @param beginSegmentIndex the starting segment index for the read
      * @return the byte array containing the read segment data
      */
-    byte[] preadForRepl(int beginSegmentIndex) {
+    byte[] readForRepl(int beginSegmentIndex) {
         var fdIndex = targetFdIndex(beginSegmentIndex);
         var segmentIndexTargetFd = targetSegmentIndexTargetFd(beginSegmentIndex);
 
@@ -342,29 +223,13 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     /**
-     * Get the real length of a segment in the chunk.
-     * When pure memory mode, one segment bytes may change during gc.
-     *
-     * @param targetSegmentIndex the segment index
-     * @return the real length of the segment
-     */
-    public int getSegmentRealLength(int targetSegmentIndex) {
-        var fdIndex = targetFdIndex(targetSegmentIndex);
-        var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
-
-        var fdReadWrite = fdReadWriteArray[fdIndex];
-        var segmentBytes = fdReadWrite.allBytesBySegmentIndexForOneChunkFd[segmentIndexTargetFd];
-        return segmentBytes == null ? 0 : segmentBytes.length;
-    }
-
-    /**
      * Read a single segment from the chunk.
      *
      * @param targetSegmentIndex the segment index to read
      * @return the byte array containing the read segment data
      */
-    byte[] preadOneSegment(int targetSegmentIndex) {
-        return preadOneSegment(targetSegmentIndex, true);
+    byte[] readOneSegment(int targetSegmentIndex) {
+        return readOneSegment(targetSegmentIndex, true);
     }
 
     /**
@@ -374,25 +239,12 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * @param isRefreshLRUCache  whether to refresh the LRU cache
      * @return the byte array containing the read segment data
      */
-    byte[] preadOneSegment(int targetSegmentIndex, boolean isRefreshLRUCache) {
+    byte[] readOneSegment(int targetSegmentIndex, boolean isRefreshLRUCache) {
         var fdIndex = targetFdIndex(targetSegmentIndex);
         var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
 
         var fdReadWrite = fdReadWriteArray[fdIndex];
         return fdReadWrite.readOneInner(segmentIndexTargetFd, isRefreshLRUCache);
-    }
-
-    /**
-     * Clear data for a segment in memory mode after it has been merged and persisted.
-     *
-     * @param targetSegmentIndex the segment index to clear
-     */
-    void clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(int targetSegmentIndex) {
-        var fdIndex = targetFdIndex(targetSegmentIndex);
-        var segmentIndexTargetFd = targetSegmentIndexTargetFd(targetSegmentIndex);
-
-        var fdReadWrite = fdReadWriteArray[fdIndex];
-        fdReadWrite.clearTargetSegmentIndexInMemory(segmentIndexTargetFd);
     }
 
     // Begin with 0
@@ -577,84 +429,67 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         // never cross fd files because prepare batch segments to write
         var fdReadWrite = fdReadWriteArray[fdIndex];
 
-        if (ConfForGlobal.pureMemory) {
-            var isNewAppendAfterBatch = fdReadWrite.isTargetSegmentIndexNullInMemory(segmentIndexTargetFd);
+
+        if (segmentCount < BATCH_ONCE_SEGMENT_COUNT_WRITE) {
             for (var segment : segments) {
                 int targetSegmentIndex = segment.tmpSegmentIndex() + currentSegmentIndex;
                 var bytes = segment.segmentBytes();
-                fdReadWrite.writeOneInner(targetSegmentIndexTargetFd(targetSegmentIndex), bytes, false);
+                boolean isNewAppend = writeSegments(bytes, 1);
 
-                if (ConfForGlobal.pureMemoryV2) {
-                    keyLoader.metaChunkSegmentFillRatio.set(targetSegmentIndex, segment.valueBytesLength());
+                // need set segment flag so that merge worker can merge
+                oneSlot.setSegmentMergeFlag(targetSegmentIndex,
+                        isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq(), walGroupIndex);
+
+                moveSegmentIndexNext(1);
+            }
+        } else {
+            // batch write, perf better ? need test
+            var batchCount = segmentCount / BATCH_ONCE_SEGMENT_COUNT_WRITE;
+            var remainCount = segmentCount % BATCH_ONCE_SEGMENT_COUNT_WRITE;
+
+            var tmpBatchBytes = new byte[chunkSegmentLength * BATCH_ONCE_SEGMENT_COUNT_WRITE];
+            var buffer = ByteBuffer.wrap(tmpBatchBytes);
+
+            for (int i = 0; i < batchCount; i++) {
+                buffer.clear();
+                if (i > 0) {
+                    Arrays.fill(tmpBatchBytes, (byte) 0);
                 }
+
+                List<Long> segmentSeqListSubBatch = new ArrayList<>();
+                for (int j = 0; j < BATCH_ONCE_SEGMENT_COUNT_WRITE; j++) {
+                    var segment = segments.get(i * BATCH_ONCE_SEGMENT_COUNT_WRITE + j);
+                    var bytes = segment.segmentBytes();
+                    buffer.put(bytes);
+
+                    // padding to segment length
+                    if (bytes.length < chunkSegmentLength) {
+                        buffer.position(buffer.position() + chunkSegmentLength - bytes.length);
+                    }
+
+                    segmentSeqListSubBatch.add(segment.segmentSeq());
+                }
+
+                boolean isNewAppend = writeSegments(tmpBatchBytes, BATCH_ONCE_SEGMENT_COUNT_WRITE);
+
+                // need set segment flag so that merge worker can merge
+                oneSlot.setSegmentMergeFlagBatch(segmentIndex, BATCH_ONCE_SEGMENT_COUNT_WRITE,
+                        isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segmentSeqListSubBatch, walGroupIndex);
+
+                moveSegmentIndexNext(BATCH_ONCE_SEGMENT_COUNT_WRITE);
             }
 
-            oneSlot.setSegmentMergeFlagBatch(currentSegmentIndex, segmentCount,
-                    isNewAppendAfterBatch ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segmentSeqListAll, walGroupIndex);
+            for (int i = 0; i < remainCount; i++) {
+                var leftSegment = segments.get(batchCount * BATCH_ONCE_SEGMENT_COUNT_WRITE + i);
+                var bytes = leftSegment.segmentBytes();
+                int targetSegmentIndex = leftSegment.tmpSegmentIndex() + currentSegmentIndex;
+                boolean isNewAppend = writeSegments(bytes, 1);
 
-            moveSegmentIndexNext(segmentCount);
-        } else {
-            if (segmentCount < BATCH_ONCE_SEGMENT_COUNT_PWRITE) {
-                for (var segment : segments) {
-                    int targetSegmentIndex = segment.tmpSegmentIndex() + currentSegmentIndex;
-                    var bytes = segment.segmentBytes();
-                    boolean isNewAppend = writeSegments(bytes, 1);
+                // need set segment flag so that merge worker can merge
+                oneSlot.setSegmentMergeFlag(targetSegmentIndex,
+                        isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, leftSegment.segmentSeq(), walGroupIndex);
 
-                    // need set segment flag so that merge worker can merge
-                    oneSlot.setSegmentMergeFlag(targetSegmentIndex,
-                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq(), walGroupIndex);
-
-                    moveSegmentIndexNext(1);
-                }
-            } else {
-                // batch write, perf better ? need test
-                var batchCount = segmentCount / BATCH_ONCE_SEGMENT_COUNT_PWRITE;
-                var remainCount = segmentCount % BATCH_ONCE_SEGMENT_COUNT_PWRITE;
-
-                var tmpBatchBytes = new byte[chunkSegmentLength * BATCH_ONCE_SEGMENT_COUNT_PWRITE];
-                var buffer = ByteBuffer.wrap(tmpBatchBytes);
-
-                for (int i = 0; i < batchCount; i++) {
-                    buffer.clear();
-                    if (i > 0) {
-                        Arrays.fill(tmpBatchBytes, (byte) 0);
-                    }
-
-                    List<Long> segmentSeqListSubBatch = new ArrayList<>();
-                    for (int j = 0; j < BATCH_ONCE_SEGMENT_COUNT_PWRITE; j++) {
-                        var segment = segments.get(i * BATCH_ONCE_SEGMENT_COUNT_PWRITE + j);
-                        var bytes = segment.segmentBytes();
-                        buffer.put(bytes);
-
-                        // padding to segment length
-                        if (bytes.length < chunkSegmentLength) {
-                            buffer.position(buffer.position() + chunkSegmentLength - bytes.length);
-                        }
-
-                        segmentSeqListSubBatch.add(segment.segmentSeq());
-                    }
-
-                    boolean isNewAppend = writeSegments(tmpBatchBytes, BATCH_ONCE_SEGMENT_COUNT_PWRITE);
-
-                    // need set segment flag so that merge worker can merge
-                    oneSlot.setSegmentMergeFlagBatch(segmentIndex, BATCH_ONCE_SEGMENT_COUNT_PWRITE,
-                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segmentSeqListSubBatch, walGroupIndex);
-
-                    moveSegmentIndexNext(BATCH_ONCE_SEGMENT_COUNT_PWRITE);
-                }
-
-                for (int i = 0; i < remainCount; i++) {
-                    var leftSegment = segments.get(batchCount * BATCH_ONCE_SEGMENT_COUNT_PWRITE + i);
-                    var bytes = leftSegment.segmentBytes();
-                    int targetSegmentIndex = leftSegment.tmpSegmentIndex() + currentSegmentIndex;
-                    boolean isNewAppend = writeSegments(bytes, 1);
-
-                    // need set segment flag so that merge worker can merge
-                    oneSlot.setSegmentMergeFlag(targetSegmentIndex,
-                            isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, leftSegment.segmentSeq(), walGroupIndex);
-
-                    moveSegmentIndexNext(1);
-                }
+                moveSegmentIndexNext(1);
             }
         }
 
@@ -706,7 +541,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             if (newSegmentIndex == maxSegmentIndex) {
                 newSegmentIndex = 0;
             } else if (newSegmentIndex > maxSegmentIndex) {
-                // already skip fd last segments for prepare pwrite batch, never reach here
+                // already skip fd last segments for prepare write batch, never reach here
                 throw new SegmentOverflowException("Segment index overflow, s=" + slot + ", i=" + segmentIndex +
                         ", c=" + segmentCount + ", max=" + maxSegmentIndex);
             }
@@ -751,90 +586,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     /**
-     * Checks if all bytes in the provided byte array are zero.
-     *
-     * @param bytes the byte array to check
-     * @return {@code true} if all bytes are zero, {@code false} otherwise.
-     */
-    private boolean isAllZero(byte[] bytes) {
-        boolean isAllZero = true;
-        for (byte aByte : bytes) {
-            if (aByte != 0) {
-                isAllZero = false;
-                break;
-            }
-        }
-        return isAllZero;
-    }
-
-    /**
-     * Writes segments from the master node, handling both existing and new segments.
-     * <p>
-     * This method writes the provided bytes to the specified segment index. It supports writing multiple segments at once and handles
-     * cases where the bytes are all zeros by clearing the target segment index in memory.
-     *
-     * @param bytes              the byte array containing the data to write
-     * @param segmentIndex       the starting segment index to write to
-     * @param segmentCount       the number of segments to write
-     * @param segmentRealLengths the real length of each segment
-     */
-    @SlaveReplay
-    public void writeSegmentsFromMasterExistsOrAfterSegmentSlim(byte[] bytes, int segmentIndex, int segmentCount, int[] segmentRealLengths) {
-        if (ConfForGlobal.pureMemory) {
-            var fdIndex = targetFdIndex(segmentIndex);
-            var segmentIndexTargetFd = targetSegmentIndexTargetFd(segmentIndex);
-
-            var fdReadWrite = fdReadWriteArray[fdIndex];
-            if (segmentCount == 1) {
-                if (isAllZero(bytes)) {
-                    log.warn("Repl chunk segment bytes from master all 0, segment index={}, slot={}", segmentIndex, slot);
-                    fdReadWrite.clearTargetSegmentIndexInMemory(segmentIndexTargetFd);
-                } else {
-                    fdReadWrite.writeOneInner(segmentIndexTargetFd, bytes, false);
-                }
-            } else {
-                var allZeroSegmentCount = 0;
-                for (int i = 0; i < segmentCount; i++) {
-                    var segmentRealLength = segmentRealLengths[i];
-
-                    var oneSegmentBytes = new byte[chunkSegmentLength];
-                    System.arraycopy(bytes, i * chunkSegmentLength, oneSegmentBytes, 0, chunkSegmentLength);
-
-                    if (isAllZero(oneSegmentBytes) || segmentRealLength == 0) {
-                        allZeroSegmentCount++;
-                        fdReadWrite.clearTargetSegmentIndexInMemory(segmentIndexTargetFd + i);
-                    } else {
-                        assert segmentRealLength <= chunkSegmentLength;
-                        if (segmentRealLength != chunkSegmentLength) {
-                            oneSegmentBytes = Arrays.copyOf(oneSegmentBytes, segmentRealLength);
-                        }
-                        fdReadWrite.writeOneInner(segmentIndexTargetFd + i, oneSegmentBytes, false);
-                    }
-                }
-                log.warn("Repl chunk segment bytes from master all 0, segment count={}, slot={}", allZeroSegmentCount, slot);
-            }
-        } else {
-            this.segmentIndex = segmentIndex;
-            writeSegmentsForRepl(bytes, segmentCount);
-        }
-    }
-
-    /**
-     * Writes a single segment to a specific target segment index.
-     * <p>
-     * This method sets the current segment index to the target index and writes the provided bytes to that segment.
-     *
-     * @param bytes              the byte array containing the data to write
-     * @param targetSegmentIndex the target segment index to write to
-     * @return {@code true} if the write was successful, {@code false} otherwise.
-     */
-    @SlaveReplay
-    public boolean writeSegmentToTargetSegmentIndex(byte[] bytes, int targetSegmentIndex) {
-        this.segmentIndex = targetSegmentIndex;
-        return writeSegments(bytes, 1);
-    }
-
-    /**
      * Writes segments to the chunk, handling both single and batch writes.
      * <p>
      * This method writes the provided bytes to the current segment index. It supports writing multiple segments at once and updates the
@@ -844,11 +595,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * @param segmentCount the number of segments to write
      * @return {@code true} if this is a new append operation, {@code false} otherwise.
      */
-    @SlaveNeedReplay
-    private boolean writeSegments(byte[] bytes, int segmentCount) {
-//        if (segmentCount != 1 && segmentCount != BATCH_ONCE_SEGMENT_COUNT_PWRITE) {
-//            throw new IllegalArgumentException("Write segment count not support=" + segmentCount);
-//        }
+    @VisibleForTesting
+    boolean writeSegments(byte[] bytes, int segmentCount) {
+        if (segmentCount != 1 && segmentCount != BATCH_ONCE_SEGMENT_COUNT_WRITE) {
+            throw new IllegalArgumentException("Write segment count not support=" + segmentCount);
+        }
 
         var fdIndex = targetFdIndex();
         var segmentIndexTargetFd = targetSegmentIndexTargetFd();
@@ -868,33 +619,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
 
         return isNewAppend;
-    }
-
-    /**
-     * Writes segments for replication, ensuring the segment count does not exceed the allowed limit.
-     * <p>
-     * This method writes the provided bytes to the current segment index for replication purposes. It ensures that the segment count does
-     * not exceed the predefined limit for replication operations.
-     *
-     * @param bytes        the byte array containing the data to write
-     * @param segmentCount the number of segments to write
-     */
-    @SlaveReplay
-    private void writeSegmentsForRepl(byte[] bytes, int segmentCount) {
-        if (segmentCount > REPL_ONCE_SEGMENT_COUNT_PREAD) {
-            throw new IllegalArgumentException("Write segment count not support=" + segmentCount);
-        }
-
-        var fdIndex = targetFdIndex();
-        var segmentIndexTargetFd = targetSegmentIndexTargetFd();
-
-        var fdReadWrite = fdReadWriteArray[fdIndex];
-        fdReadWrite.writeSegmentsBatchForRepl(segmentIndexTargetFd, bytes);
-
-        int afterThisBatchOffset = (segmentIndexTargetFd + segmentCount) * chunkSegmentLength;
-        if (fdLengths[fdIndex] < afterThisBatchOffset) {
-            fdLengths[fdIndex] = afterThisBatchOffset;
-        }
     }
 
     /**

@@ -2,7 +2,6 @@ package io.velo.persist;
 
 import io.netty.buffer.Unpooled;
 import io.velo.CompressedValue;
-import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.KeyHash;
 import org.jetbrains.annotations.NotNull;
@@ -37,9 +36,7 @@ public class KeyBucketsInOneWalGroup {
         this.keyCountForStatsTmp = new short[oneChargeBucketNumber];
         this.beginBucketIndex = oneChargeBucketNumber * walGroupIndex;
 
-        if (!ConfForGlobal.pureMemoryV2) {
-            this.readBeforePutBatch();
-        }
+        this.readBeforePutBatch();
     }
 
     private final short slot;
@@ -114,10 +111,6 @@ public class KeyBucketsInOneWalGroup {
      * @return the expiration time and sequence number
      */
     KeyBucket.ExpireAtAndSeq getExpireAtAndSeq(int bucketIndex, String key, long keyHash) {
-        if (ConfForGlobal.pureMemoryV2) {
-            return keyLoader.getExpireAtAndSeqByKey(bucketIndex, key, keyHash, KeyHash.hash32(key.getBytes()));
-        }
-
         int relativeBucketIndex = bucketIndex - beginBucketIndex;
         var currentSplitNumber = splitNumberTmp[relativeBucketIndex];
         var splitIndex = KeyHash.splitIndex(keyHash, currentSplitNumber, bucketIndex);
@@ -145,10 +138,6 @@ public class KeyBucketsInOneWalGroup {
      */
     @TestOnly
     KeyBucket.ValueBytesWithExpireAtAndSeq getValueX(int bucketIndex, String key, long keyHash) {
-        if (ConfForGlobal.pureMemoryV2) {
-            return keyLoader.getValueXByKey(bucketIndex, key, keyHash, KeyHash.hash32(key.getBytes()));
-        }
-
         int relativeBucketIndex = bucketIndex - beginBucketIndex;
         var currentSplitNumber = splitNumberTmp[relativeBucketIndex];
         var splitIndex = KeyHash.splitIndex(keyHash, currentSplitNumber, bucketIndex);

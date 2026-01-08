@@ -1,6 +1,5 @@
 package io.velo.persist
 
-import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
 import spock.lang.Specification
 
@@ -9,50 +8,8 @@ import static Consts.getSlotDir
 class MetaChunkSegmentFlagSeqTest extends Specification {
     final short slot = 0
 
-    def 'test for repl'() {
-        given:
-        def one = new MetaChunkSegmentFlagSeq(slot, slotDir)
-        println 'in memory size estimate: ' + one.estimate(new StringBuilder())
-
-        when:
-        def oneBatchBytes = one.getOneBatch(0, 1024)
-        then:
-        oneBatchBytes.length == one.ONE_LENGTH * 1024
-
-        when:
-        Arrays.fill(oneBatchBytes, (byte) 1)
-        one.overwriteOneBatch(oneBatchBytes, 0, 1024)
-        then:
-        one.getOneBatch(0, 1024) == oneBatchBytes
-
-        when:
-        ConfForGlobal.pureMemory = true
-        one.overwriteOneBatch(oneBatchBytes, 0, 1024)
-        then:
-        one.getOneBatch(0, 1024) == oneBatchBytes
-
-        when:
-        boolean exception = false
-        def bytes0WrongSize = new byte[oneBatchBytes.length - 1]
-        try {
-            one.overwriteOneBatch(bytes0WrongSize, 0, 1024)
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        cleanup:
-        one.clear()
-        one.cleanUp()
-        ConfForGlobal.pureMemory = false
-        slotDir.deleteDir()
-    }
-
     def 'test read write seq'() {
         given:
-        ConfForGlobal.pureMemory = false
         def one = new MetaChunkSegmentFlagSeq(slot, slotDir)
 
         when:
@@ -63,102 +20,9 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         segmentFlag.segmentSeq() == 1L
         segmentFlag.walGroupIndex() == 0
 
-        when:
-        ConfForGlobal.pureMemory = true
-        def one2 = new MetaChunkSegmentFlagSeq(slot, slotDir)
-        one2.setSegmentMergeFlag(10, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        def segmentFlag2 = one2.getSegmentMergeFlag(10)
-        then:
-        segmentFlag2.flagByte() == Chunk.Flag.new_write.flagByte()
-        segmentFlag2.segmentSeq() == 1L
-        segmentFlag2.walGroupIndex() == 0
-
-        when:
-        one2.overwriteInMemoryCachedBytes(new byte[one2.allCapacity])
-        def segmentFlag3 = one.getSegmentMergeFlag(3)
-        then:
-        segmentFlag3.segmentSeq() == 0L
-        one2.getInMemoryCachedBytes().length == one2.allCapacity
-
-        when:
-        one2.isOverHalfSegmentNumberForFirstReuseLoop = false
-        def halfSegmentNumber = (ConfForSlot.global.confChunk.maxSegmentNumber() / 2).intValue()
-        one2.setSegmentMergeFlag(halfSegmentNumber, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        one2.setSegmentMergeFlag(halfSegmentNumber, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        then:
-        one2.isOverHalfSegmentNumberForFirstReuseLoop
-
-        when:
-        one2.isOverHalfSegmentNumberForFirstReuseLoop = false
-        List<Long> seqLongList = [1L]
-        one2.setSegmentMergeFlagBatch(halfSegmentNumber, 1, Chunk.Flag.new_write.flagByte(), seqLongList, 0)
-        then:
-        one2.isOverHalfSegmentNumberForFirstReuseLoop
-
-        when:
-        boolean exception = false
-        try {
-            one2.overwriteInMemoryCachedBytes(new byte[one2.allCapacity + 1])
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        cleanup:
-        ConfForGlobal.pureMemory = false
-        one.clear()
-        one.cleanUp()
-        ConfForGlobal.pureMemory = true
-        one2.clear()
-        one2.cleanUp()
-        ConfForGlobal.pureMemory = false
-    }
-
-    def 'test read write seq pure memory'() {
-        given:
-        ConfForGlobal.pureMemory = true
-
-        def one = new MetaChunkSegmentFlagSeq(slot, slotDir)
-
-        when:
-        one.setSegmentMergeFlag(10, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        one.setSegmentMergeFlag(11, Chunk.Flag.new_write.flagByte(), 2L, 11)
-        def segmentFlag = one.getSegmentMergeFlag(10)
-        def segmentFlagList = one.getSegmentMergeFlagBatch(10, 2)
-        then:
-        segmentFlag.flagByte() == Chunk.Flag.new_write.flagByte()
-        segmentFlag.segmentSeq() == 1L
-        segmentFlag.walGroupIndex() == 0
-        segmentFlagList.size() == 2
-        segmentFlagList[0].flagByte() == Chunk.Flag.new_write.flagByte()
-        segmentFlagList[0].segmentSeq() == 1L
-        segmentFlagList[0].walGroupIndex() == 0
-        segmentFlagList[1].flagByte() == Chunk.Flag.new_write.flagByte()
-        segmentFlagList[1].segmentSeq() == 2L
-        segmentFlagList[1].walGroupIndex() == 11
-
-        when:
-        one.setSegmentMergeFlag(0, Chunk.Flag.init.flagByte(), 1L, 0)
-        one.setSegmentMergeFlag(1, Chunk.Flag.init.flagByte(), 1L, 0)
-        then:
-        one.isAllFlagsNotWrite(0, 2)
-
-        when:
-        one.setSegmentMergeFlag(1, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        then:
-        !one.isAllFlagsNotWrite(0, 2)
-
-        when:
-        one.setSegmentMergeFlag(1, Chunk.Flag.reuse_new.flagByte(), 1L, 0)
-        then:
-        !one.isAllFlagsNotWrite(0, 2)
-
         cleanup:
         one.clear()
         one.cleanUp()
-        ConfForGlobal.pureMemory = false
     }
 
     def 'test read batch for repl'() {
@@ -166,7 +30,6 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         def one = new MetaChunkSegmentFlagSeq(slot, slotDir)
 
         when:
-        ConfForGlobal.pureMemory = false
         List<Long> seqLongList = []
         10.times {
             seqLongList << (it as Long)
@@ -175,26 +38,9 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         then:
         one.getSegmentSeqListBatchForRepl(10, 10) == seqLongList
 
-        when:
-        ConfForGlobal.pureMemory = true
-        seqLongList.clear()
-        10.times {
-            seqLongList << (it as Long)
-        }
-        one.setSegmentMergeFlagBatch(10, 10, Chunk.Flag.new_write.flagByte(), seqLongList, 0)
-        then:
-        one.getSegmentSeqListBatchForRepl(10, 10) == seqLongList
-
-        when:
-        def seq0List = seqLongList.collect { 0L }
-        one.setSegmentMergeFlagBatch(10, 10, Chunk.Flag.new_write.flagByte(), null, 0)
-        then:
-        one.getSegmentSeqListBatchForRepl(10, 10) == seq0List
-
         cleanup:
         one.clear()
         one.cleanUp()
-        ConfForGlobal.pureMemory = false
     }
 
     // need shell:
@@ -213,6 +59,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         new File('chunk_segment_flag.txt').withWriter { writer ->
             one.iterateAll { segmentIndex, flagByte, seq, walGroupIndex ->
                 writer.writeLine("$segmentIndex, $flagByte, $seq, $walGroupIndex")
+                true
             }
         }
         new File('chunk_segment_flag_range.txt').withWriter { writer ->

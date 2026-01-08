@@ -1,11 +1,8 @@
 package io.velo.persist
 
-import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
-
-import java.nio.ByteBuffer
 
 class FdReadWriteTest extends Specification {
     def 'test write and read'() {
@@ -29,7 +26,6 @@ class FdReadWriteTest extends Specification {
 
         // chunk segment length same with one key bucket cost length
         ConfForSlot.global.confChunk.segmentLength = KeyLoader.KEY_BUCKET_ONE_COST_SIZE
-        ConfForGlobal.pureMemory = false
         ConfForSlot.global.confChunk.lruPerFd.maxSize = 10
         ConfForSlot.global.confBucket.lruPerFd.maxSize = 10
 
@@ -41,17 +37,14 @@ class FdReadWriteTest extends Specification {
 
         def fdKeyBucket = new FdReadWrite('test2', oneFile2)
         fdKeyBucket.initByteBuffers(false, 0)
-        def walGroupNumber = Wal.calcWalGroupNumber()
-        fdKeyBucket.resetAllBytesByOneWalGroupIndexForKeyBucketOneSplitIndex(walGroupNumber)
-        fdKeyBucket.clearAllKeyBucketsInOneWalGroupToMemory(0)
         println fdKeyBucket
         println 'in memory size estimate: ' + fdKeyBucket.estimate(new StringBuilder())
 
         fdChunk.collect()
         fdKeyBucket.collect()
-        fdChunk.afterPreadCompressCountTotal = 1
-        fdChunk.afterPreadCompressBytesTotalLength = 100
-        fdChunk.afterPreadCompressedBytesTotalLength = 50
+        fdChunk.afterReadCompressCountTotal = 1
+        fdChunk.afterReadCompressBytesTotalLength = 100
+        fdChunk.afterReadCompressedBytesTotalLength = 50
         fdChunk.readCountTotal = 1
         fdChunk.writeCountTotal = 1
         fdChunk.lruHitCounter = 1
@@ -115,14 +108,14 @@ class FdReadWriteTest extends Specification {
         fdKeyBucket.readKeyBucketsSharedBytesInOneWalGroup(1 * oneChargeBucketNumber) != null
 
         when:
-        fdChunk.writeSegmentsBatch(100, new byte[segmentLength * FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE], false)
+        fdChunk.writeSegmentsBatch(100, new byte[segmentLength * FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE], false)
         then:
-        fdChunk.readOneInner(100 + FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE - 1, false).length == segmentLength
+        fdChunk.readOneInner(100 + FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE - 1, false).length == segmentLength
 
         when:
-        fdChunk.writeSegmentsBatch(100, new byte[segmentLength * FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE], true)
+        fdChunk.writeSegmentsBatch(100, new byte[segmentLength * FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE], true)
         then:
-        fdChunk.readOneInner(100 + FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE - 1, false).length == segmentLength
+        fdChunk.readOneInner(100 + FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE - 1, false).length == segmentLength
 
         when:
         boolean exception = false
@@ -210,216 +203,19 @@ class FdReadWriteTest extends Specification {
         then:
         !exception
 
-        when:
-        fdChunk.writeSegmentsBatchForRepl(1024, new byte[segmentLength * FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD])
-        then:
-        fdChunk.readOneInner(1024 + FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD - 1, false).length == segmentLength
-
-        when:
-        fdChunk.truncate()
-        fdChunk.cleanUp()
-        fdKeyBucket.truncate()
-        fdKeyBucket.cleanUp()
-
-        ConfForGlobal.pureMemory = true
-        fdChunk = new FdReadWrite('test', oneFile1)
-        fdChunk.initByteBuffers(true, 0)
-        println 'in memory size estimate: ' + fdChunk.estimate(new StringBuilder())
-        fdKeyBucket = new FdReadWrite('test2', oneFile2)
-        fdKeyBucket.initByteBuffers(false, 0)
-        println 'in memory size estimate: ' + fdKeyBucket.estimate(new StringBuilder())
-        then:
-        fdChunk.isTargetSegmentIndexNullInMemory(0)
-        fdChunk.clearTargetSegmentIndexInMemory(0)
-
-        when:
-        loop.times { i ->
-            def bytes = new byte[segmentLength]
-            Arrays.fill(bytes, (byte) i)
-            def f1 = fdChunk.writeOneInner(i, bytes, false)
-            def f2 = fdKeyBucket.writeOneInner(i, bytes, false)
-            array[i] = f1
-            array[i + loop] = f2
-        }
-        fdKeyBucket.writeSharedBytesForKeyBucketsInOneWalGroup(1 * oneChargeBucketNumber, new byte[oneChargeBucketNumber * segmentLength])
-        println 'in memory size estimate: ' + fdChunk.estimate(new StringBuilder())
-        println 'in memory size estimate: ' + fdKeyBucket.estimate(new StringBuilder())
-        then:
-        !fdChunk.isTargetSegmentIndexNullInMemory(0)
-        array.every { it == segmentLength }
-        fdChunk.readOneInner(0, false).length == segmentLength
-        fdChunk.readSegmentsForMerge(0, loop).length == segmentLength * loop
-        fdChunk.readBatchForRepl(0).length == segmentLength * FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD
-        fdKeyBucket.readOneInner(0, false).length == segmentLength * oneChargeBucketNumber
-        fdKeyBucket.readKeyBucketsSharedBytesInOneWalGroup(1 * oneChargeBucketNumber).length == segmentLength * oneChargeBucketNumber
-        fdKeyBucket.readOneInnerBatchFromMemory(1, 1).length == segmentLength * oneChargeBucketNumber
-        fdKeyBucket.readOneInnerBatchFromMemory(1, oneChargeBucketNumber).length == segmentLength * oneChargeBucketNumber
-
-        when:
-        exception = false
-        try {
-            fdChunk.writeOneInner(0, new byte[segmentLength + 1], false)
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        try {
-            fdChunk.writeSegmentsBatch(0, new byte[segmentLength], false)
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        try {
-            fdKeyBucket.writeSharedBytesForKeyBucketsInOneWalGroup(0, new byte[10])
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        fdChunk.writeSegmentsBatch(100, new byte[segmentLength * FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE], false)
-        then:
-        fdChunk.readOneInner(100 + FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE - 1, false).length == segmentLength
-
-        when:
-        exception = false
-        try {
-            fdKeyBucket.readOneInnerBatchFromMemory(1, 2)
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        try {
-            fdKeyBucket.writeOneInnerBatchToMemory(0, new byte[10], 0)
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        try {
-            fdKeyBucket.writeOneInnerBatchToMemory(0, new byte[KeyLoader.KEY_BUCKET_ONE_COST_SIZE * 2], 0)
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        try {
-            fdChunk.writeOneInnerBatchToMemory(1, new byte[4096], 1)
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        fdChunk.writeOneInnerBatchToMemory(200, new byte[10], 0)
-        then:
-        fdChunk.readOneInner(200, false).length == 10
-
-        when:
-        fdKeyBucket.clearOneKeyBucketToMemory(oneChargeBucketNumber * 2)
-        fdKeyBucket.clearOneKeyBucketToMemory(1)
-        def keyBucket1BytesRead = new byte[segmentLength]
-        ByteBuffer.wrap(fdKeyBucket.readOneInner(1, false)).get(segmentLength, keyBucket1BytesRead)
-        then:
-        keyBucket1BytesRead == new byte[segmentLength]
-
-        when:
-        fdKeyBucket.clearKeyBucketsToMemory(oneChargeBucketNumber)
-        then:
-        fdKeyBucket.readKeyBucketsSharedBytesInOneWalGroup(oneChargeBucketNumber) == null
-
-        // warm up
-        when:
-        ConfForGlobal.pureMemory = false
-        ConfForSlot.global.confBucket.lruPerFd.maxSize = ConfForSlot.global.confBucket.bucketsPerSlot
-        fdKeyBucket = new FdReadWrite('test2', oneFile2)
-        fdKeyBucket.initByteBuffers(false, 0)
-        def n = fdKeyBucket.warmUp()
-        then:
-        n == ConfForSlot.global.confBucket.bucketsPerSlot
-
-        when:
-        ConfForGlobal.pureMemory = true
-        n = fdKeyBucket.warmUp()
-        then:
-        n == 0
-
-        when:
-        ConfForGlobal.pureMemory = false
-        exception = false
-        try {
-            fdChunk.warmUp()
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        ConfForGlobal.pureMemory = true
-        ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression = true
-        fdKeyBucket.initByteBuffers(false, 0)
-        fdKeyBucket.setSharedBytesCompressToMemory(new byte[segmentLength * oneChargeBucketNumber], 0)
-        then:
-        fdKeyBucket.keyBucketSharedBytesCompressCountTotal == 1
-        fdKeyBucket.getSharedBytesDecompressFromMemory(0).length == segmentLength * oneChargeBucketNumber
-
-        when:
-        fdChunk.setSegmentBytesFromLastSavedFileToMemory(new byte[segmentLength], 0)
-        then:
-        !fdChunk.isTargetSegmentIndexNullInMemory(0)
-
-        when:
-        ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression = false
-        fdKeyBucket.setSharedBytesFromLastSavedFileToMemory(new byte[segmentLength * oneChargeBucketNumber], 0)
-        then:
-        fdKeyBucket.getSharedBytesDecompressFromMemory(0).length == segmentLength * oneChargeBucketNumber
-
         cleanup:
         fdChunk.truncate()
         fdChunk.cleanUp()
         fdKeyBucket.truncate()
         fdKeyBucket.cleanUp()
-        fdChunk11.initPureMemoryByteArray()
         fdChunk11.truncate()
         fdChunk11.cleanUp()
-        fdKeyBucket22.initPureMemoryByteArray()
         fdKeyBucket22.truncate()
         fdKeyBucket22.cleanUp()
         oneFile1.delete()
         oneFile2.delete()
         oneFile11.delete()
         oneFile22.delete()
-        ConfForGlobal.pureMemory = false
-        ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression = false
     }
 
     def 'test truncate after target segment index'() {
@@ -435,23 +231,13 @@ class FdReadWriteTest extends Specification {
         fdChunk.initByteBuffers(true, 0)
 
         when:
-        fdChunk.writeSegmentsBatch(0, new byte[segmentLength * FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE], false)
-        fdChunk.truncateAfterTargetSegmentIndex(1)
-        then:
-        fdChunk.readOneInner(0, false) != null
-        fdChunk.readOneInner(1, false) == null
-
-        when:
-        ConfForGlobal.pureMemory = true
-        fdChunk.initPureMemoryByteArray()
-        fdChunk.writeSegmentsBatch(0, new byte[segmentLength * FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_PWRITE], false)
+        fdChunk.writeSegmentsBatch(0, new byte[segmentLength * FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE], false)
         fdChunk.truncateAfterTargetSegmentIndex(1)
         then:
         fdChunk.readOneInner(0, false) != null
         fdChunk.readOneInner(1, false) == null
 
         cleanup:
-        ConfForGlobal.pureMemory = false
         fdChunk.truncate()
         fdChunk.cleanUp()
     }
@@ -483,14 +269,7 @@ class FdReadWriteTest extends Specification {
         n0 != 0
         fdKeyBucket.oneInnerBytesByIndexLRU.size() == 2
 
-        when:
-        ConfForGlobal.pureMemory = true
-        def n1 = fdKeyBucket.warmUp()
-        then:
-        n1 == 0
-
         cleanup:
-        ConfForGlobal.pureMemory = false
         fdKeyBucket.truncate()
         fdKeyBucket.cleanUp()
     }

@@ -2,7 +2,6 @@ package io.velo.persist.index;
 
 import io.activej.config.Config;
 import io.velo.ConfForGlobal;
-import io.velo.ParamMutable;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -20,7 +19,6 @@ import static io.activej.config.converter.ConfigConverters.ofLocalTime;
 public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
     private final KeyAnalysisHandler handler;
     private final RocksDB db;
-    private final TreeMap<String, byte[]> allKeysInMemory;
 
     private final int notBusyAddCountIncreasedLastSecond;
     private final LocalTime notBusyBeginTime;
@@ -33,10 +31,8 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisTask.class);
 
-    public KeyAnalysisTask(KeyAnalysisHandler handler, @ParamMutable @Nullable TreeMap<String, byte[]> allKeysInMemory,
-                           @Nullable RocksDB db, KeyAnalysisTask oldOne) {
+    public KeyAnalysisTask(KeyAnalysisHandler handler, @Nullable RocksDB db, KeyAnalysisTask oldOne) {
         this.handler = handler;
-        this.allKeysInMemory = allKeysInMemory;
         this.db = db;
 
         this.notBusyAddCountIncreasedLastSecond = oldOne.notBusyAddCountIncreasedLastSecond;
@@ -50,10 +46,8 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
         this.groupByMaxLengthForKey = oldOne.groupByMaxLengthForKey;
     }
 
-    public KeyAnalysisTask(KeyAnalysisHandler handler, @ParamMutable @Nullable TreeMap<String, byte[]> allKeysInMemory,
-                           @Nullable RocksDB db, Config persistConfig) {
+    public KeyAnalysisTask(KeyAnalysisHandler handler, @Nullable RocksDB db, Config persistConfig) {
         this.handler = handler;
-        this.allKeysInMemory = allKeysInMemory;
         this.db = db;
 
         this.notBusyAddCountIncreasedLastSecond = persistConfig.get(ofInteger(), "keyAnalysis.notBusyAddCountIncreasedLastSecond", 1000);
@@ -123,53 +117,26 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
         String fromKey = null;
 
         int count = 0;
-        if (ConfForGlobal.pureMemory) {
-            assert iterator2 != null;
-            String key = null;
-            while (iterator2.hasNext() && count < onceIterateKeyCount) {
-                var entry = iterator2.next();
-                key = entry.getKey();
+        assert iterator != null;
+        while (iterator.isValid() && count < onceIterateKeyCount) {
+            var key = new String(iterator.key());
 
-                if (key.length() >= groupByMinLengthForKey) {
-                    for (int length = groupByMinLengthForKey; length <= groupByMaxLengthForKey; length++) {
-                        if (key.length() >= length) {
-                            var prefix = key.substring(0, length);
-                            prefixCounts.put(prefix, prefixCounts.getOrDefault(prefix, 0) + 1);
-                        }
+            if (key.length() >= groupByMinLengthForKey) {
+                for (int length = groupByMinLengthForKey; length <= groupByMaxLengthForKey; length++) {
+                    if (key.length() >= length) {
+                        var prefix = key.substring(0, length);
+                        prefixCounts.put(prefix, prefixCounts.getOrDefault(prefix, 0) + 1);
                     }
                 }
-
-                count++;
-                if (count == 1) {
-                    fromKey = key;
-                }
             }
 
-            if (key != null) {
-                lastIterateKeyBytes = key.getBytes();
+            iterator.next();
+            count++;
+            if (count == 1) {
+                fromKey = key;
             }
-        } else {
-            assert iterator != null;
-            while (iterator.isValid() && count < onceIterateKeyCount) {
-                var key = new String(iterator.key());
-
-                if (key.length() >= groupByMinLengthForKey) {
-                    for (int length = groupByMinLengthForKey; length <= groupByMaxLengthForKey; length++) {
-                        if (key.length() >= length) {
-                            var prefix = key.substring(0, length);
-                            prefixCounts.put(prefix, prefixCounts.getOrDefault(prefix, 0) + 1);
-                        }
-                    }
-                }
-
-                iterator.next();
-                count++;
-                if (count == 1) {
-                    fromKey = key;
-                }
-            }
-            lastIterateKeyBytes = iterator.key();
         }
+        lastIterateKeyBytes = iterator.key();
 
         if (prefixCounts.isEmpty()) {
             doMyTaskSkipTimes = 2;
@@ -222,33 +189,21 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
             return false;
         }
 
-        if (ConfForGlobal.pureMemory) {
-            Iterator<Map.Entry<String, byte[]>> iterator2;
-            if (lastIterateKeyBytes != null) {
-                iterator2 = allKeysInMemory.tailMap(new String(lastIterateKeyBytes)).entrySet().iterator();
-            } else {
-                iterator2 = allKeysInMemory.entrySet().iterator();
-                log.warn("Key analysis task iterator seek to first again.");
-                topKPrefixCounts.clear();
-            }
-            return iterateAndDoAnalysis(null, iterator2);
-        } else {
-            var iterator = db.newIterator();
-            if (lastIterateKeyBytes != null) {
-                iterator.seek(lastIterateKeyBytes);
-                if (!iterator.isValid()) {
-                    iterator.seekToFirst();
-                    log.warn("Key analysis task iterator seek to {} failed, seek to first again.", new String(lastIterateKeyBytes));
-                    topKPrefixCounts.clear();
-                }
-            } else {
+        var iterator = db.newIterator();
+        if (lastIterateKeyBytes != null) {
+            iterator.seek(lastIterateKeyBytes);
+            if (!iterator.isValid()) {
                 iterator.seekToFirst();
-                log.warn("Key analysis task iterator seek to first again.");
+                log.warn("Key analysis task iterator seek to {} failed, seek to first again.", new String(lastIterateKeyBytes));
                 topKPrefixCounts.clear();
             }
-
-            return iterateAndDoAnalysis(iterator, null);
+        } else {
+            iterator.seekToFirst();
+            log.warn("Key analysis task iterator seek to first again.");
+            topKPrefixCounts.clear();
         }
+
+        return iterateAndDoAnalysis(iterator, null);
     }
 
     public static <V extends Comparable<? super V>> List<Map.Entry<String, V>> sortMapByValues(Map<String, V> map) {

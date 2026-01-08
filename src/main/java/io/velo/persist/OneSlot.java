@@ -31,7 +31,9 @@ import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.nio.ByteBuffer;
@@ -44,7 +46,7 @@ import static io.velo.persist.Chunk.SegmentFlag;
 import static io.velo.persist.FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE;
 import static io.velo.persist.SegmentBatch2.SEGMENT_HEADER_LENGTH;
 
-public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, CanSaveAndLoad, HandlerWhenCvExpiredOrDeleted {
+public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, HandlerWhenCvExpiredOrDeleted {
     /**
      * Constructor for unit testing only, with specified slot, directory, key loader, and write-ahead log (WAL).
      *
@@ -80,7 +82,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         this.binlog = null;
         this.bigKeyTopK = null;
-        this.saveFileNameWhenPureMemory = "slot_" + slot + "_saved.dat";
     }
 
     /**
@@ -125,7 +126,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         this.binlog = null;
         this.bigKeyTopK = null;
-        this.saveFileNameWhenPureMemory = "slot_" + slot + "_saved.dat";
 
         this.slotWorkerEventloop = eventloop;
     }
@@ -228,8 +228,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.binlog = new Binlog(slot, slotDir, dynConfig);
         initBigKeyTopK(10);
 
-        this.saveFileNameWhenPureMemory = "slot_" + slot + "_saved.dat";
-
         this.initTasks();
     }
 
@@ -261,12 +259,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      *
      * @param doRemoveForStats whether to remove statistics for LRU preparation
      */
-    @NotPureMemoryMode
     public void initLRU(boolean doRemoveForStats) {
-        if (ConfForGlobal.pureMemory) {
-            return;
-        }
-
         int maxSizeForAllWalGroups = ConfForSlot.global.lruKeyAndCompressedValueEncoded.maxSize;
         var maxSizeForEachWalGroup = maxSizeForAllWalGroups / walGroupNumber;
         if (maxSizeForEachWalGroup < 10) {
@@ -729,7 +722,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return bigStringFiles.bigStringDir;
     }
 
-    @NotPureMemoryMode
     private final Map<Integer, LRUMap<String, byte[]>> kvByWalGroupIndexLRU = new HashMap<>();
 
     /**
@@ -768,7 +760,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param walGroupIndex the WAL group index
      * @return a random key, or null if the LRU cache is empty
      */
-    @NotPureMemoryMode
     public String randomKeyInLRU(int walGroupIndex) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         if (lru == null || lru.isEmpty()) {
@@ -793,7 +784,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param walGroupIndex the WAL group index
      * @return the count of cleared key-value entries
      */
-    @NotPureMemoryMode
     int clearKvInTargetWalGroupIndexLRU(int walGroupIndex) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         if (lru == null) {
@@ -819,7 +809,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param cvEncoded     the compressed value as a byte array
      */
     @TestOnly
-    @NotPureMemoryMode
     public void putKvInTargetWalGroupIndexLRU(int walGroupIndex, @NotNull String key, byte[] cvEncoded) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         if (lru == null) {
@@ -922,10 +911,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             try {
                 for (var wal : walArray) {
                     wal.lazyReadFromFile();
-                }
-
-                if (ConfForGlobal.pureMemory) {
-                    loadFromLastSavedFileWhenPureMemory();
                 }
 
                 waitF.complete(true);
@@ -1142,166 +1127,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (valueBytesLength >= BIG_KEY_LENGTH_CHECK) {
             bigKeyTopK.add(key, valueBytesLength);
         }
-    }
-
-    private final String saveFileNameWhenPureMemory;
-
-    /**
-     * Represents the type of components.
-     * When do save and reload if pure memory mode.
-     */
-    enum SaveBytesType {
-        wal(1), key_loader(2), chunk(3), big_strings(4), meta_chunk_segment_index(5), meta_chunk_segment_flag_seq(6);
-
-        final int i;
-
-        SaveBytesType(int i) {
-            this.i = i;
-        }
-    }
-
-    /**
-     * Loads data from a previously saved file when operating in pure memory mode.
-     *
-     * @throws IOException if an I/O error occurs
-     */
-    void loadFromLastSavedFileWhenPureMemory() throws IOException {
-        var lastSavedFile = new File(slotDir, saveFileNameWhenPureMemory);
-        if (!lastSavedFile.exists()) {
-            return;
-        }
-
-        var fileLength = lastSavedFile.length();
-        if (fileLength == 0) {
-            return;
-        }
-
-        try (var is = new DataInputStream(new FileInputStream(lastSavedFile))) {
-            var beginT = System.currentTimeMillis();
-            loadFromLastSavedFileWhenPureMemory(is);
-            var costT = System.currentTimeMillis() - beginT;
-            log.info("Load from last saved file when pure memory, slot={}, cost={} ms, file length={} KB",
-                    slot, costT, fileLength / 1024);
-        }
-    }
-
-    /**
-     * Loads data from a previously saved file when operating in pure memory mode using the specified data input stream.
-     *
-     * @param is the data input stream
-     * @throws IOException if an I/O error occurs
-     */
-    @Override
-    public void loadFromLastSavedFileWhenPureMemory(@NotNull DataInputStream is) throws IOException {
-        var bytesType = is.readInt();
-        while (bytesType != 0) {
-            if (bytesType == SaveBytesType.wal.i) {
-                // wal group index int, is short value byte, read bytes length int
-                var walGroupIndex = is.readInt();
-                var isShortValue = is.readBoolean();
-                var readBytesLength = is.readInt();
-                var readBytes = new byte[readBytesLength];
-                is.readFully(readBytes);
-                int n = walArray[walGroupIndex].readFromSavedBytes(readBytes, isShortValue);
-                if (walGroupIndex == 0) {
-                    log.info("Read wal group 0, n={}, is short value={}", n, isShortValue);
-                }
-            } else if (bytesType == SaveBytesType.key_loader.i) {
-                this.keyLoader.loadFromLastSavedFileWhenPureMemory(is);
-            } else if (bytesType == SaveBytesType.chunk.i) {
-                this.chunk.loadFromLastSavedFileWhenPureMemory(is);
-            } else if (bytesType == SaveBytesType.big_strings.i) {
-                this.bigStringFiles.loadFromLastSavedFileWhenPureMemory(is);
-            } else if (bytesType == SaveBytesType.meta_chunk_segment_index.i) {
-                var metaBytes = new byte[this.metaChunkSegmentIndex.allCapacity];
-                is.readFully(metaBytes);
-                this.metaChunkSegmentIndex.overwriteInMemoryCachedBytes(metaBytes);
-            } else if (bytesType == SaveBytesType.meta_chunk_segment_flag_seq.i) {
-                var metaBytes = new byte[this.metaChunkSegmentFlagSeq.allCapacity];
-                is.readFully(metaBytes);
-                this.metaChunkSegmentFlagSeq.overwriteInMemoryCachedBytes(metaBytes);
-            } else {
-                throw new IllegalStateException("Unexpected value: " + bytesType);
-            }
-
-            if (is.available() < 4) {
-                bytesType = 0;
-            } else {
-                bytesType = is.readInt();
-            }
-        }
-    }
-
-    /**
-     * Writes data to a file for saving when operating in pure memory mode.
-     *
-     * @throws IOException if an I/O error occurs
-     */
-    public void writeToSavedFileWhenPureMemory() throws IOException {
-        var lastSavedFile = new File(slotDir, saveFileNameWhenPureMemory);
-        if (!lastSavedFile.exists()) {
-            FileUtils.touch(lastSavedFile);
-        }
-
-        try (var os = new DataOutputStream(new FileOutputStream(lastSavedFile))) {
-            var beginT = System.currentTimeMillis();
-            writeToSavedFileWhenPureMemory(os);
-            var costT = System.currentTimeMillis() - beginT;
-            log.info("Write to saved file when pure memory, slot={}, cost={} ms", slot, costT);
-        }
-
-        var fileLength = lastSavedFile.length();
-        log.info("Saved file length={} KB", fileLength / 1024);
-    }
-
-    /**
-     * Writes data to a file for saving when operating in pure memory mode using the specified data output stream.
-     *
-     * @param os the data output stream
-     * @throws IOException if an I/O error occurs
-     */
-    @Override
-    public void writeToSavedFileWhenPureMemory(@NotNull DataOutputStream os) throws IOException {
-        for (var wal : walArray) {
-            if (wal.getKeyCount() == 0) {
-                continue;
-            }
-
-            var shortValues = wal.delayToKeyBucketShortValues;
-            if (!shortValues.isEmpty()) {
-                os.writeInt(SaveBytesType.wal.i);
-                os.writeInt(wal.groupIndex);
-                os.writeBoolean(true);
-                var writeBytes = wal.writeToSavedBytes(true, false);
-                os.writeInt(writeBytes.length);
-                os.write(writeBytes);
-            }
-
-            var values = wal.delayToKeyBucketValues;
-            if (!values.isEmpty()) {
-                os.writeInt(SaveBytesType.wal.i);
-                os.writeInt(wal.groupIndex);
-                os.writeBoolean(false);
-                var writeBytes = wal.writeToSavedBytes(false, false);
-                os.writeInt(writeBytes.length);
-                os.write(writeBytes);
-            }
-        }
-
-        os.writeInt(SaveBytesType.key_loader.i);
-        keyLoader.writeToSavedFileWhenPureMemory(os);
-
-        os.writeInt(SaveBytesType.chunk.i);
-        chunk.writeToSavedFileWhenPureMemory(os);
-
-        os.writeInt(SaveBytesType.big_strings.i);
-        bigStringFiles.writeToSavedFileWhenPureMemory(os);
-
-        os.writeInt(SaveBytesType.meta_chunk_segment_index.i);
-        os.write(metaChunkSegmentIndex.getInMemoryCachedBytes());
-
-        os.writeInt(SaveBytesType.meta_chunk_segment_flag_seq.i);
-        os.write(metaChunkSegmentFlagSeq.getInMemoryCachedBytes());
     }
 
     private final TaskChain taskChain = new TaskChain();
@@ -1556,137 +1381,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 return 100;
             }
         });
-
-        if (ConfForGlobal.pureMemory) {
-            // do every 10ms
-            if (ConfForGlobal.pureMemoryV2) {
-                taskChain.add(new CheckAndSaveMemoryTaskV2(this));
-            } else {
-                taskChain.add(new CheckAndSaveMemoryTask(this));
-            }
-        }
-    }
-
-    static class CheckAndSaveMemoryTaskV2 implements ITask {
-        @VisibleForTesting
-        int lastCheckedSegmentIndex = 0;
-
-        private final OneSlot oneSlot;
-
-        CheckAndSaveMemoryTaskV2(OneSlot oneSlot) {
-            this.oneSlot = oneSlot;
-        }
-
-        @Override
-        public String name() {
-            return "check and save memory v2";
-        }
-
-        @Override
-        public void run() {
-            assert oneSlot.keyLoader != null;
-            oneSlot.keyLoader.intervalRemoveExpiredForSaveMemory();
-
-            final var maxSegmentIndex = oneSlot.chunk.getMaxSegmentIndex();
-
-            final int onceCheckMaxSegmentCount = 64;
-
-            // only keep fill ratio 100%, 95% and 90%, gc those < 90%
-            final int keepFillRatioBuckets = 3;
-
-            var metaChunkSegmentFillRatio = oneSlot.keyLoader.metaChunkSegmentFillRatio;
-            var segmentIndexList = metaChunkSegmentFillRatio.findSegmentsFillRatioLessThan(lastCheckedSegmentIndex, onceCheckMaxSegmentCount,
-                    MetaChunkSegmentFillRatio.FILL_RATIO_BUCKETS - keepFillRatioBuckets);
-            if (segmentIndexList.isEmpty()) {
-                lastCheckedSegmentIndex += onceCheckMaxSegmentCount;
-                if (lastCheckedSegmentIndex > maxSegmentIndex) {
-                    lastCheckedSegmentIndex = 0;
-                }
-                return;
-            }
-
-            final int onceHandleMaxSegmentCount = 4;
-            int lastHandleSegmentIndex = -1;
-            for (int i = 0; i < Math.min(onceHandleMaxSegmentCount, segmentIndexList.size()); i++) {
-                lastHandleSegmentIndex = segmentIndexList.get(i);
-                oneSlot.checkAndSaveMemory(lastHandleSegmentIndex, true);
-            }
-            lastCheckedSegmentIndex = lastHandleSegmentIndex + 1;
-            if (lastCheckedSegmentIndex > maxSegmentIndex) {
-                lastCheckedSegmentIndex = 0;
-            }
-        }
-    }
-
-    static class CheckAndSaveMemoryTask implements ITask {
-        @VisibleForTesting
-        int lastCheckedSegmentIndex = 0;
-
-        private int lastLoopChunkSegmentIndex = -1;
-
-        private final OneSlot oneSlot;
-
-        CheckAndSaveMemoryTask(OneSlot oneSlot) {
-            this.oneSlot = oneSlot;
-        }
-
-        @Override
-        public String name() {
-            return "check and save memory";
-        }
-
-        @Override
-        public void run() {
-            final var maxSegmentIndex = oneSlot.chunk.getMaxSegmentIndex();
-
-            final int fastCheckSegmentFlagCount = 100;
-            if (lastCheckedSegmentIndex < maxSegmentIndex - fastCheckSegmentFlagCount) {
-                // check if all segment flag is not new_write and reuse_new, skip
-                if (oneSlot.metaChunkSegmentFlagSeq.isAllFlagsNotWrite(lastCheckedSegmentIndex, fastCheckSegmentFlagCount)) {
-                    lastCheckedSegmentIndex += fastCheckSegmentFlagCount;
-                    return;
-                }
-            }
-
-            int onceCheckSegmentCount = 1;
-            final int onceCheckMaxSegmentCount = 4;
-
-            var currentSegmentIndex = oneSlot.chunk.getSegmentIndex();
-            if (lastLoopChunkSegmentIndex == -1) {
-                lastLoopChunkSegmentIndex = currentSegmentIndex;
-            } else {
-                var increasedSegmentCount = currentSegmentIndex - lastLoopChunkSegmentIndex;
-                if (increasedSegmentCount > 0) {
-                    // < 0 means read to end, begin from 0
-                    onceCheckSegmentCount = Math.min(increasedSegmentCount, onceCheckMaxSegmentCount);
-                }
-                lastLoopChunkSegmentIndex = currentSegmentIndex;
-            }
-
-            for (int i = 0; i < onceCheckSegmentCount; i++) {
-                var targetSegmentIndex = lastCheckedSegmentIndex + i;
-                if (targetSegmentIndex > maxSegmentIndex) {
-                    targetSegmentIndex = 0;
-                }
-                oneSlot.checkAndSaveMemory(targetSegmentIndex, false);
-            }
-
-            lastCheckedSegmentIndex += onceCheckSegmentCount;
-            if (lastCheckedSegmentIndex > maxSegmentIndex) {
-                lastCheckedSegmentIndex = 0;
-            }
-        }
-    }
-
-    /**
-     * Updates the last checked segment index for the check and save memory task.
-     *
-     * @param lastCheckedSegmentIndex the last checked segment index
-     */
-    @TestOnly
-    void updateTaskCheckAndSaveMemoryLastCheckedSegmentIndex(int lastCheckedSegmentIndex) {
-        var checkAndSaveMemoryTask = (CheckAndSaveMemoryTask) this.taskChain.getList().stream().filter(task -> task.name().equals("check and save memory")).findFirst().get();
-        checkAndSaveMemoryTask.lastCheckedSegmentIndex = lastCheckedSegmentIndex;
     }
 
     /**
@@ -1761,17 +1455,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         // from lru cache
-        if (!ConfForGlobal.pureMemory) {
-            var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
-            var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
-            var cvEncodedBytesFromLRU = lru.get(key);
-            if (cvEncodedBytesFromLRU != null) {
-                kvLRUHitTotal++;
-                kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
+        var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
+        var cvEncodedBytesFromLRU = lru.get(key);
+        if (cvEncodedBytesFromLRU != null) {
+            kvLRUHitTotal++;
+            kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
 
-                var cv = CompressedValue.decode(Unpooled.wrappedBuffer(cvEncodedBytesFromLRU), key.getBytes(), keyHash);
-                return cv.getExpireAt();
-            }
+            var cv = CompressedValue.decode(Unpooled.wrappedBuffer(cvEncodedBytesFromLRU), key.getBytes(), keyHash);
+            return cv.getExpireAt();
         }
 
         kvLRUMissTotal++;
@@ -1831,14 +1523,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // from lru cache
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
-        if (!ConfForGlobal.pureMemory) {
-            var cvEncodedBytesFromLRU = lru.get(key);
-            if (cvEncodedBytesFromLRU != null) {
-                kvLRUHitTotal++;
-                kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
+        var cvEncodedBytesFromLRU = lru.get(key);
+        if (cvEncodedBytesFromLRU != null) {
+            kvLRUHitTotal++;
+            kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
 
-                return new BufOrCompressedValue(Unpooled.wrappedBuffer(cvEncodedBytesFromLRU), null);
-            }
+            return new BufOrCompressedValue(Unpooled.wrappedBuffer(cvEncodedBytesFromLRU), null);
         }
 
         kvLRUMissTotal++;
@@ -1856,9 +1546,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var valueBytes = valueBytesWithExpireAtAndSeq.valueBytes();
         if (!PersistValueMeta.isPvm(valueBytes)) {
             // short value, just return, CompressedValue can decode
-            if (!ConfForGlobal.pureMemory) {
-                lru.put(key, valueBytes);
-            }
+            lru.put(key, valueBytes);
             return new BufOrCompressedValue(Unpooled.wrappedBuffer(valueBytes), null);
         }
 
@@ -1882,9 +1570,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             // set to lru cache, just target bytes
             var buf = Unpooled.wrappedBuffer(keyBytesAndValueBytes.valueBytes());
             var cv = CompressedValue.decode(buf, key.getBytes(), keyHash);
-            if (!ConfForGlobal.pureMemory) {
-                lru.put(key, cv.encode());
-            }
+            lru.put(key, cv.encode());
 
             return new BufOrCompressedValue(null, cv);
         } else {
@@ -1917,9 +1603,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             // set to lru cache, just target bytes
             var cv = CompressedValue.decode(buf, key.getBytes(), keyHash);
-            if (!ConfForGlobal.pureMemory) {
-                lru.put(key, cv.encode());
-            }
+            lru.put(key, cv.encode());
 
             return new BufOrCompressedValue(null, cv);
         }
@@ -1989,7 +1673,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @return the segment bytes as a byte array
      */
     private byte[] getSegmentBytesBySegmentIndex(int segmentIndex) {
-        return chunk.preadOneSegment(segmentIndex);
+        return chunk.readOneSegment(segmentIndex);
     }
 
     /**
@@ -2121,9 +1805,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         boolean isValueShort;
         Wal.V v;
         // is use faster kv style, save all key and value in record log
-        if (ConfForGlobal.pureMemoryV2) {
-            isValueShort = false;
-        } else if (cv.isBigString()) {
+        if (cv.isBigString()) {
             isValueShort = true;
         } else {
             isValueShort = cv.noExpire() && (cv.isTypeNumber() || cv.isShortString());
@@ -2309,13 +1991,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     void initFds() throws IOException {
         this.keyLoader.initFds();
 
-        if (!ConfForGlobal.pureMemory) {
-            // do every 10ms
-            // for truncate file to save ssd space
-            taskChain.add(metaChunkSegmentFlagSeq);
-            // for delete expired big string files
-            taskChain.add(keyLoader);
-        }
+        // do every 10ms
+        // for truncate file to save ssd space
+        taskChain.add(metaChunkSegmentFlagSeq);
+        // for delete expired big string files
+        taskChain.add(keyLoader);
 
         // chunk
         initChunk();
@@ -2359,14 +2039,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param segmentCount      the segment count
      * @return segments bytes
      */
-    byte[] preadForMerge(int beginSegmentIndex, int segmentCount) {
+    byte[] readForMerge(int beginSegmentIndex, int segmentCount) {
         checkCurrentThreadId();
 
         if (!hasData(beginSegmentIndex, segmentCount)) {
             return null;
         }
 
-        return chunk.preadForMerge(beginSegmentIndex, segmentCount);
+        return chunk.readForMerge(beginSegmentIndex, segmentCount);
     }
 
     /**
@@ -2375,38 +2055,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param beginSegmentIndex the begin segment index
      * @return segments bytes
      */
-    public byte[] preadForRepl(int beginSegmentIndex) {
+    public byte[] readForRepl(int beginSegmentIndex) {
         checkCurrentThreadId();
 
-        if (!hasData(beginSegmentIndex, FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD)) {
+        if (!hasData(beginSegmentIndex, FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ)) {
             return null;
         }
 
-        return chunk.preadForRepl(beginSegmentIndex);
-    }
-
-    /**
-     * Write chunk segments from master exists.
-     *
-     * @param bytes              segments bytes
-     * @param beginSegmentIndex  the begin segment index
-     * @param segmentCount       the segment count
-     * @param segmentRealLengths segment real length array
-     */
-    @SlaveReplay
-    public void writeChunkSegmentsFromMasterExists(byte[] bytes, int beginSegmentIndex, int segmentCount, int[] segmentRealLengths) {
-        checkCurrentThreadId();
-
-        if (bytes.length != chunk.chunkSegmentLength * segmentCount) {
-            throw new IllegalStateException("Repl write chunk segments bytes length not match, bytes length=" + bytes.length +
-                    ", chunk segment length=" + chunk.chunkSegmentLength + ", segment count=" + segmentCount + ", slot=" + slot);
-        }
-
-        chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(bytes, beginSegmentIndex, segmentCount, segmentRealLengths);
-        if (beginSegmentIndex % 4096 == 0) {
-            log.warn("Repl write chunk segments from master exists, begin segment index={}, segment count={}, slot={}",
-                    beginSegmentIndex, segmentCount, slot);
-        }
+        return chunk.readForRepl(beginSegmentIndex);
     }
 
     /**
@@ -2490,7 +2146,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var firstSegmentIndex = firstSegmentIndexWithReadSegmentCountArray[0];
         var segmentCount = firstSegmentIndexWithReadSegmentCountArray[1];
-        var segmentBytesBatchRead = preadForMerge(firstSegmentIndex, segmentCount);
+        var segmentBytesBatchRead = readForMerge(firstSegmentIndex, segmentCount);
 
         ArrayList<Integer> segmentIndexList = new ArrayList<>();
         ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList = new ArrayList<>(BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE * 10);
@@ -2645,18 +2301,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     /**
-     * Gets the merge flag for a batch of segments.
-     *
-     * @param beginSegmentIndex the beginning segment index
-     * @param segmentCount      the number of segments to retrieve
-     * @return the list of segment flags
-     */
-    ArrayList<SegmentFlag> getSegmentMergeFlagBatch(int beginSegmentIndex, int segmentCount) {
-        checkBeginSegmentIndex(beginSegmentIndex, segmentCount);
-        return metaChunkSegmentFlagSeq.getSegmentMergeFlagBatch(beginSegmentIndex, segmentCount);
-    }
-
-    /**
      * Gets a list of segment sequence numbers for a batch of segments. For replication.
      *
      * @param beginSegmentIndex the beginning segment index
@@ -2697,16 +2341,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public void setSegmentMergeFlag(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex) {
         checkSegmentIndex(segmentIndex);
         metaChunkSegmentFlagSeq.setSegmentMergeFlag(segmentIndex, flagByte, segmentSeq, walGroupIndex);
-
-        if (ConfForGlobal.pureMemory && Flag.canReuse(flagByte)) {
-            chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
-            if (ConfForGlobal.pureMemoryV2) {
-                keyLoader.metaChunkSegmentFillRatio.set(segmentIndex, 0);
-            }
-            if (segmentIndex % 4096 == 0) {
-                log.info("Clear one segment memory bytes when reuse, segment index={}, slot={}", segmentIndex, slot);
-            }
-        }
     }
 
     /**
@@ -2726,16 +2360,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         checkBeginSegmentIndex(beginSegmentIndex, segmentCount);
         metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(beginSegmentIndex, segmentCount,
                 flagByte, segmentSeqList, walGroupIndex);
-
-        if (ConfForGlobal.pureMemory && Flag.canReuse(flagByte)) {
-            for (int i = 0; i < segmentCount; i++) {
-                var segmentIndex = beginSegmentIndex + i;
-                chunk.clearOneSegmentForPureMemoryModeAfterMergedAndPersisted(segmentIndex);
-                if (ConfForGlobal.pureMemoryV2) {
-                    keyLoader.metaChunkSegmentFillRatio.set(segmentIndex, 0);
-                }
-            }
-        }
     }
 
     /**
@@ -2802,91 +2426,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // do not write binlog as slave
         dynConfig.setBinlogOn(false);
         log.warn("Repl reset binlog on false as slave, slot={}", slot);
-    }
-
-    @VisibleForTesting
-    long saveMemoryExecuteTotal = 0;
-    @VisibleForTesting
-    long saveMemoryBytesTotal = 0;
-
-    /**
-     * Supervised merge of segments to save memory by merging expired or invalid entries.
-     *
-     * @param targetSegmentIndex the index of the target segment to check and merge
-     * @param forceTrigger       whether to force trigger the merge even if there are no many expired or invalid entries
-     */
-    @VisibleForTesting
-    void checkAndSaveMemory(int targetSegmentIndex, boolean forceTrigger) {
-        var segmentFlag = metaChunkSegmentFlagSeq.getSegmentMergeFlag(targetSegmentIndex);
-        if (segmentFlag.flagByte() != Flag.new_write.flagByte() && segmentFlag.flagByte() != Flag.reuse_new.flagByte()) {
-            return;
-        }
-
-        var segmentBytes = chunk.preadOneSegment(targetSegmentIndex, false);
-        if (segmentBytes == null) {
-            // when force trigger, means the segment bytes is not null
-            assert !forceTrigger;
-            return;
-        }
-
-        ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList = new ArrayList<>(BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE * 10);
-        int expiredCount = SegmentBatch2.readToCvList(cvList, segmentBytes, 0, chunkSegmentLength, targetSegmentIndex, slot);
-
-        ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> invalidCvList = new ArrayList<>();
-
-        for (var one : cvList) {
-            var cv = one.cv();
-            var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
-
-            var tmpWalValueBytes = getFromWal(one.key(), bucketIndex);
-            if (tmpWalValueBytes != null) {
-                invalidCvList.add(one);
-                continue;
-            }
-
-            var key = one.key();
-            var keyHash32 = KeyHash.hash32(key.getBytes());
-            var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, key, cv.getKeyHash(), keyHash32);
-            if (expireAtAndSeq == null || expireAtAndSeq.isExpired()) {
-                invalidCvList.add(one);
-                continue;
-            }
-
-            if (expireAtAndSeq.seq() != cv.getSeq()) {
-                invalidCvList.add(one);
-            }
-        }
-
-        // all is invalid
-        if (invalidCvList.size() == cvList.size()) {
-            setSegmentMergeFlag(targetSegmentIndex, Flag.merged_and_persisted.flagByte, 0L, 0);
-
-            saveMemoryExecuteTotal++;
-            saveMemoryBytesTotal += segmentBytes.length;
-
-            return;
-        }
-
-        var totalCvCount = expiredCount + cvList.size();
-        var invalidRate = (invalidCvList.size() + expiredCount) * 100 / totalCvCount;
-        final int invalidMergedTriggerRate = 50;
-        if (invalidRate > invalidMergedTriggerRate || forceTrigger) {
-            var validCvList = cvList.stream().filter(one -> !invalidCvList.contains(one)).toList();
-            // new segment with slim type may be bigger than old if segment type is tight
-            var encodedSlimX = SegmentBatch2.encodeValidCvListSlim(validCvList);
-            if (encodedSlimX != null) {
-                var segmentRealLengths = new int[1];
-                var encodedSlimBytes = encodedSlimX.bytes();
-                segmentRealLengths[0] = encodedSlimBytes.length;
-                chunk.writeSegmentsFromMasterExistsOrAfterSegmentSlim(encodedSlimBytes, targetSegmentIndex, 1, segmentRealLengths);
-                if (ConfForGlobal.pureMemoryV2) {
-                    keyLoader.metaChunkSegmentFillRatio.set(targetSegmentIndex, encodedSlimX.valueBytesLength());
-                }
-
-                saveMemoryExecuteTotal++;
-                saveMemoryBytesTotal += (segmentBytes.length - encodedSlimBytes.length);
-            }
-        }
     }
 
     private final static OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
@@ -3130,12 +2669,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             if (sum > 0) {
                 map.put("slot_ext_cv_invalid_ratio", (double) extCvInvalidCountTotal / sum);
             }
-        }
-
-        if (saveMemoryExecuteTotal > 0) {
-            map.put("slot_save_memory_execute_total", (double) saveMemoryExecuteTotal);
-            map.put("slot_save_memory_bytes_total", (double) saveMemoryBytesTotal);
-            map.put("slot_save_memory_bytes_avg", (double) saveMemoryBytesTotal / saveMemoryExecuteTotal);
         }
 
         return map;

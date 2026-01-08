@@ -309,7 +309,7 @@ class XGroupTest extends Specification {
         def contentBytes = new byte[4 + 4]
         def requestBuffer = ByteBuffer.wrap(contentBytes)
         requestBuffer.putInt(0)
-        requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD)
+        requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ)
         data4[3] = contentBytes
         x = new XGroup(null, data4, null)
         x.from(BaseCommand.mockAGroup())
@@ -318,16 +318,6 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.s_exists_chunk_segments)
         // begin segment index, segment count, segment length, no data
         r.buffer().limit() == Repl.HEADER_LENGTH + 12
-
-        when:
-        // chunk segment bytes exists
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1, 0)
-        oneSlot.chunk.writeSegmentToTargetSegmentIndex(new byte[4096], 0)
-        r = x.handleRepl()
-        then:
-        r.isReplType(ReplType.s_exists_chunk_segments)
-        // meta bytes with just one chunk segment bytes
-        r.buffer().limit() == Repl.HEADER_LENGTH + 12 + 4096
 
         // response exists wal
         when:
@@ -708,7 +698,7 @@ class XGroupTest extends Specification {
         // begin segment index
         requestBuffer.putInt(0)
         // segment count
-        requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD)
+        requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ)
         // segment length
         requestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
 
@@ -721,7 +711,7 @@ class XGroupTest extends Specification {
         when:
         // last batch
         requestBuffer.position(0)
-        requestBuffer.putInt(ConfForSlot.global.confChunk.maxSegmentNumber() - FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD)
+        requestBuffer.putInt(ConfForSlot.global.confChunk.maxSegmentNumber() - FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ)
         r = x.handleRepl()
         then:
         // next step
@@ -730,7 +720,7 @@ class XGroupTest extends Specification {
         when:
         requestBuffer.position(0)
         // next batch will delay run
-        requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_PREAD * 99)
+        requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ * 99)
         r = x.handleRepl()
         then:
         r.isEmpty()

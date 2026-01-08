@@ -196,43 +196,6 @@ class KeyLoaderTest extends Specification {
         Consts.slotDir.deleteDir()
     }
 
-    def 'test save and load'() {
-        given:
-        ConfForGlobal.pureMemory = true
-        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
-        def keyLoader = prepareKeyLoader()
-
-        when:
-        keyLoader.fdReadWriteArray[0].setSharedBytesFromLastSavedFileToMemory(new byte[1024], 1)
-        def bos = new ByteArrayOutputStream()
-        def os = new DataOutputStream(bos)
-        keyLoader.writeToSavedFileWhenPureMemory(os)
-        def bis = new ByteArrayInputStream(bos.toByteArray())
-        def is = new DataInputStream(bis)
-        keyLoader.loadFromLastSavedFileWhenPureMemory(is)
-        then:
-        keyLoader.fdReadWriteArray[0].allBytesByOneWalGroupIndexForKeyBucketOneSplitIndex[1].length == 1024
-
-        when:
-        ConfForGlobal.pureMemoryV2 = true
-        def keyLoader2 = prepareKeyLoader()
-        keyLoader2.putValueByKey(0, 'test', 1L, 1, 1L, 1L, new byte[10])
-        def bos2 = new ByteArrayOutputStream()
-        def os2 = new DataOutputStream(bos2)
-        keyLoader2.writeToSavedFileWhenPureMemory(os2)
-        def bis2 = new ByteArrayInputStream(bos2.toByteArray())
-        def is2 = new DataInputStream(bis2)
-        keyLoader2.loadFromLastSavedFileWhenPureMemory(is2)
-        then:
-        keyLoader2.getExpireAt(0, 'test', 1L, 1) == 1L
-
-        cleanup:
-        ConfForGlobal.pureMemoryV2 = false
-        keyLoader.flush()
-        keyLoader.cleanUp()
-        Consts.slotDir.deleteDir()
-    }
-
     def 'test write and read one key'() {
         given:
         ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
@@ -260,30 +223,6 @@ class KeyLoaderTest extends Specification {
         valueBytesX.valueBytes() == encodeAsShortStringA
 
         when:
-        ConfForGlobal.pureMemoryV2 = true
-        keyLoader.resetForPureMemoryV2()
-        expireAt = keyLoader.getExpireAt(0, 'a', 10L, 10)
-        expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(0, 'a', 10L, 10)
-        valueBytesX = keyLoader.getValueXByKey(0, 'a', 10L, 10)
-        then:
-        expireAt == null
-        expireAtAndSeq == null
-        valueBytesX == null
-
-        when:
-        keyLoader.putValueByKey(0, 'a', 10L, 10, 0L, 1L, encodeAsShortStringA)
-        expireAt = keyLoader.getExpireAt(0, 'a', 10L, 10)
-        expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(0, 'a', 10L, 10)
-        valueBytesX = keyLoader.getValueXByKey(0, 'a', 10L, 10)
-        then:
-        expireAt == 0L
-        expireAtAndSeq != null
-        expireAtAndSeq.seq() != 0
-        valueBytesX != null
-        valueBytesX.seq() != 0
-
-        when:
-        ConfForGlobal.pureMemoryV2 = false
         def k0 = keyLoader.readKeyBucketForSingleKey(0, splitIndex, (byte) 1, false)
         k0.splitNumber = (byte) 2
         def bytes = k0.encode(true)
@@ -377,49 +316,9 @@ class KeyLoaderTest extends Specification {
         keyLoader.fdReadWriteArray[1] != null
         keyLoader.readKeyBucketForSingleKey(0, (byte) 1, (byte) 3, false) == null
 
-        when:
-        ConfForGlobal.pureMemory = true
-        ConfForGlobal.pureMemoryV2 = true
-        keyLoader.resetForPureMemoryV2()
-        def walGroupNumber = Wal.calcWalGroupNumber()
-        def splitNumberArray = new byte[oneChargeBucketNumber]
-        splitNumberArray[0] = (byte) 3
-        keyLoader.metaKeyBucketSplitNumber.setBatch(0, splitNumberArray)
-        keyLoader.fdReadWriteArray[0].resetAllBytesByOneWalGroupIndexForKeyBucketOneSplitIndex(walGroupNumber)
-        keyLoader.fdReadWriteArray[1].resetAllBytesByOneWalGroupIndexForKeyBucketOneSplitIndex(walGroupNumber)
-        keyLoader.fdReadWriteArray[2].resetAllBytesByOneWalGroupIndexForKeyBucketOneSplitIndex(walGroupNumber)
-        keyLoader.writeSharedBytesList(sharedBytesListBySplitIndex, 0)
-        def bb = keyLoader.getRecordsBytesArrayInOneWalGroup(0)
-        def keyBucketListFromMemory = keyLoader.readKeyBuckets(0)
-        then:
-        bb.length == ConfForSlot.global.confWal.oneChargeBucketNumber
-        keyBucketListFromMemory.size() == 3
-        keyBucketListFromMemory[0] == null
-        keyBucketListFromMemory[1] == null
-        keyBucketListFromMemory[2] != null
-        keyLoader.readKeyBucketForSingleKey(0, (byte) 0, (byte) 3, false) == null
-        keyLoader.readKeyBucketForSingleKey(0, (byte) 2, (byte) 3, false) != null
-
-        when:
-        keyLoader.intervalRemoveExpiredForSaveMemory()
-        keyLoader.intervalRemoveExpiredLastBucketIndex = ConfForSlot.global.confBucket.bucketsPerSlot - 1
-        keyLoader.intervalRemoveExpiredForSaveMemory()
-        then:
-        1 == 1
-
-        when:
-        // task interface method, just for code coverage
-        keyLoader.name()
-        keyLoader.executeOnceAfterLoopCount()
-        keyLoader.run()
-        then:
-        1 == 1
-
         cleanup:
         keyLoader.flush()
         keyLoader.cleanUp()
-        ConfForGlobal.pureMemory = false
-        ConfForGlobal.pureMemoryV2 = false
     }
 
     def 'test interval delete big string files'() {
@@ -664,15 +563,7 @@ class KeyLoaderTest extends Specification {
         then:
         r.keys().isEmpty()
 
-        when:
-        ConfForGlobal.pureMemoryV2 = true
-        keyLoader.resetForPureMemoryV2()
-        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, null)
-        then:
-        1 == 1
-
         cleanup:
-        ConfForGlobal.pureMemoryV2 = false
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }

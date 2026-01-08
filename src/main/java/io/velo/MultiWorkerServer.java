@@ -1068,21 +1068,13 @@ public class MultiWorkerServer extends Launcher {
                 });
             }
 
-            var localPersist = LocalPersist.getInstance();
-            if (ConfForGlobal.pureMemory) {
-                // save slots data
-                log.warn("Save slots data to file before exit when pure memory mode.");
-                for (var oneSlot : localPersist.oneSlots()) {
-                    oneSlot.writeToSavedFileWhenPureMemory();
-                }
-            }
-
             var leaderSelector = LeaderSelector.getInstance();
             leaderSelector.cleanUp();
             var jedisPoolHolder = JedisPoolHolder.getInstance();
             jedisPoolHolder.cleanUp();
 
             // close local persist
+            var localPersist = LocalPersist.getInstance();
             localPersist.cleanUp();
 
             var dictMap = DictMap.getInstance();
@@ -1175,10 +1167,8 @@ public class MultiWorkerServer extends Launcher {
 
             ConfForGlobal.isValueSetUseCompression = config.get(ofBoolean(), "isValueSetUseCompression", true);
             ConfForGlobal.isOnDynTrainDictForCompression = config.get(ofBoolean(), "isOnDynTrainDictForCompression", false);
-            ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression = config.get(ofBoolean(), "isPureMemoryModeKeyBucketsUseCompression", false);
             log.warn("Global config, isValueSetUseCompression={}", ConfForGlobal.isValueSetUseCompression);
             log.warn("Global config, isOnDynTrainDictForCompression={}", ConfForGlobal.isOnDynTrainDictForCompression);
-            log.warn("Global config, isPureMemoryModeKeyBucketsUseCompression={}", ConfForGlobal.isPureMemoryModeKeyBucketsUseCompression);
 
             ConfForGlobal.netListenAddresses = config.get(ofString(), "net.listenAddresses", "0.0.0.0:" + PORT);
             logger.info("Net listen addresses={}", ConfForGlobal.netListenAddresses);
@@ -1189,11 +1179,6 @@ public class MultiWorkerServer extends Launcher {
             }
 
             ConfForGlobal.PASSWORD = config.get(ofString(), "password", null);
-
-            ConfForGlobal.pureMemory = config.get(ofBoolean(), "pureMemory", false);
-            ConfForGlobal.pureMemoryV2 = config.get(ofBoolean(), "pureMemoryV2", false);
-            log.warn("Global config, pureMemory={}", ConfForGlobal.pureMemory);
-            log.warn("Global config, pureMemoryV2={}", ConfForGlobal.pureMemoryV2);
 
             if (config.getChild("zookeeperConnectString").hasValue()) {
                 ConfForGlobal.zookeeperConnectString = config.get(ofString(), "zookeeperConnectString");
@@ -1307,7 +1292,7 @@ public class MultiWorkerServer extends Launcher {
             c.confChunk.checkIfValid();
 
             // override wal conf items
-            var walValueSizeTrigger = ConfForGlobal.pureMemory ? 50 : 200;
+            var walValueSizeTrigger = 200;
             c.confWal.oneChargeBucketNumber = config.get(ofInteger(), "wal.oneChargeBucketNumber", 32);
             c.confWal.valueSizeTrigger = config.get(ofInteger(), "wal.valueSizeTrigger", walValueSizeTrigger);
             c.confWal.shortValueSizeTrigger = config.get(ofInteger(), "wal.shortValueSizeTrigger", walValueSizeTrigger);
@@ -1319,17 +1304,13 @@ public class MultiWorkerServer extends Launcher {
             c.confWal.checkIfValid();
 
             // override repl conf items
-            var replBinlogOneFileMB = ConfForGlobal.pureMemory ? 32 : 512;
+            var replBinlogOneFileMB = 512;
             c.confRepl.binlogOneSegmentLength = config.get(ofInteger(), "repl.binlogOneSegmentLength", 1024 * 1024);
             c.confRepl.binlogOneFileMaxLength = config.get(ofInteger(), "repl.binlogOneFileMaxLength", replBinlogOneFileMB * 1024 * 1024);
             c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount", 10).shortValue();
             c.confRepl.binlogFileKeepMaxCount = config.get(ofInteger(), "repl.binlogFileKeepMaxCount", 10).shortValue();
             c.confRepl.catchUpOffsetMinDiff = config.get(ofInteger(), "repl.catchUpOffsetMinDiff", 1024 * 1024);
             c.confRepl.catchUpIntervalMillis = config.get(ofInteger(), "repl.catchUpIntervalMillis", 100);
-            // save memory
-            if (ConfForGlobal.pureMemory) {
-                c.confRepl.binlogFileKeepMaxCount = (short) Math.min(2, c.confRepl.binlogFileKeepMaxCount);
-            }
             c.confRepl.checkIfValid();
 
             // override other conf items
