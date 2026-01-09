@@ -626,6 +626,10 @@ public class XGroup extends BaseCommand {
             buffer.get(segmentBytes);
 
             SegmentBatch2.iterateFromSegmentBytes(segmentBytes, (key, cv, offsetInThisSegment) -> {
+                if (cv.isExpired()) {
+                    return;
+                }
+
                 var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
                 var oneSlot = localPersist.oneSlot(s.slot());
                 oneSlot.asyncRun(() -> {
