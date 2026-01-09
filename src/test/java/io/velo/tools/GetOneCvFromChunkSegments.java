@@ -62,7 +62,7 @@ public class GetOneCvFromChunkSegments {
             }
 
             int finalSubBlockIndex = subBlockIndex;
-            SegmentBatch2.iterateFromSegmentBytes(decompressedBytes, 0, decompressedBytes.length, (key, cv, offsetInThisSegment) -> {
+            SegmentBatch2.iterateFromSegmentBytes(decompressedBytes, (key, cv, offsetInThisSegment) -> {
                 cvList.add(new SegmentBatch2.CvWithKeyAndSegmentOffset(cv, key, offsetInThisSegment, segmentIndex, (byte) finalSubBlockIndex));
 
                 if (segmentOffset == offsetInThisSegment) {

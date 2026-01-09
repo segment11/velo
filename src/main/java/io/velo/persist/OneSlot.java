@@ -628,20 +628,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    @VisibleForTesting
-    int pendingSubmitIndexJobRunCount = 0;
-
-    /**
-     * Decrements the count of pending submit index job runs.
-     */
-    public void submitIndexJobDone() {
-        pendingSubmitIndexJobRunCount--;
-        if (pendingSubmitIndexJobRunCount < 0) {
-            log.warn("Pending submit index job run count less than 0, slot={}", OneSlot.this.slot);
-            pendingSubmitIndexJobRunCount = 0;
-        }
-    }
-
     private final short slot;
     private final String slotStr;
     private final short slotNumber;
@@ -1528,57 +1514,39 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             throw new IllegalStateException("Load persisted segment bytes error, pvm=" + pvm);
         }
 
-        if (SegmentBatch2.isSegmentBytesSlim(segmentBytes, 0) || SegmentBatch2.isSegmentBytesSlimAndCompressed(segmentBytes, 0)) {
-            var keyBytesAndValueBytes = SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytes, pvm.subBlockIndex, pvm.segmentOffset);
-            if (keyBytesAndValueBytes == null) {
-                throw new IllegalStateException("No key value found in segment bytes slim, pvm=" + pvm);
-            }
 
-            var keyBytesRead = keyBytesAndValueBytes.keyBytes();
-            if (!Arrays.equals(keyBytesRead, key.getBytes())) {
-                throw new IllegalStateException("Key not match, key=" + key + ", key persisted=" + new String(keyBytesRead));
-            }
-
-            // set to lru cache, just target bytes
-            var buf = Unpooled.wrappedBuffer(keyBytesAndValueBytes.valueBytes());
-            var cv = CompressedValue.decode(buf, key.getBytes(), keyHash);
-            lru.put(key, cv.encode());
-
-            return new BufOrCompressedValue(null, cv);
-        } else {
-            if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
-                segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
-            }
-            var buf = Unpooled.wrappedBuffer(segmentBytes);
-//            SegmentBatch2.iterateFromSegmentBytes(segmentBytes, 0, segmentBytes.length, new SegmentBatch2.ForDebugCvCallback());
-
-//            // crc check
-//            var segmentSeq = buf.readLong();
-//            var cvCount = buf.readInt();
-//            var segmentMaskedValue = buf.readInt();
-//            buf.skipBytes(SEGMENT_HEADER_LENGTH);
-
-            buf.readerIndex(pvm.segmentOffset);
-
-            // skip key header or check key
-            var keyLength = buf.readShort();
-            if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
-                throw new IllegalStateException("Key length error, key length=" + keyLength);
-            }
-
-            var keyBytesRead = new byte[keyLength];
-            buf.readBytes(keyBytesRead);
-
-            if (!Arrays.equals(keyBytesRead, key.getBytes())) {
-                throw new IllegalStateException("Key not match, key=" + key + ", key persisted=" + new String(keyBytesRead));
-            }
-
-            // set to lru cache, just target bytes
-            var cv = CompressedValue.decode(buf, key.getBytes(), keyHash);
-            lru.put(key, cv.encode());
-
-            return new BufOrCompressedValue(null, cv);
+        if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
+            segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
         }
+        var buf = Unpooled.wrappedBuffer(segmentBytes);
+//        SegmentBatch2.iterateFromSegmentBytes(segmentBytes, new SegmentBatch2.ForDebugCvCallback());
+
+//        // crc check
+//        var segmentSeq = buf.readLong();
+//        var cvCount = buf.readInt();
+//        var segmentMaskedValue = buf.readInt();
+//        buf.skipBytes(SEGMENT_HEADER_LENGTH);
+
+        buf.readerIndex(pvm.segmentOffset);
+
+        // skip key header or check key
+        var keyLength = buf.readShort();
+        if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
+            throw new IllegalStateException("Key length error, key length=" + keyLength);
+        }
+
+        var keyBytesRead = new byte[keyLength];
+        buf.readBytes(keyBytesRead);
+
+        if (!Arrays.equals(keyBytesRead, key.getBytes())) {
+            throw new IllegalStateException("Key not match, key=" + key + ", key persisted=" + new String(keyBytesRead));
+        }
+
+        // set to lru cache, just target bytes
+        var cv = CompressedValue.decode(buf, key.getBytes(), keyHash);
+        lru.put(key, cv.encode());
+
+        return new BufOrCompressedValue(null, cv);
     }
 
     /**
@@ -1593,34 +1561,25 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return null;
         }
 
-        if (SegmentBatch2.isSegmentBytesSlim(segmentBytes, 0) || SegmentBatch2.isSegmentBytesSlimAndCompressed(segmentBytes, 0)) {
-            var keyBytesAndValueBytes = SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytes, pvm.subBlockIndex, pvm.segmentOffset);
-            if (keyBytesAndValueBytes == null) {
-                return null;
-            }
-
-            return keyBytesAndValueBytes.keyBytes();
+        byte[] rawSegmentBytes;
+        if (SegmentBatch2.isSegmentBytesTight(segmentBytes, 0)) {
+            rawSegmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
         } else {
-            byte[] rawSegmentBytes;
-            if (SegmentBatch2.isSegmentBytesTight(segmentBytes, 0)) {
-                rawSegmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
-            } else {
-                rawSegmentBytes = segmentBytes;
-            }
-
-            var buf = Unpooled.wrappedBuffer(rawSegmentBytes);
-            buf.readerIndex(pvm.segmentOffset);
-
-            // skip key header or check key
-            var keyLength = buf.readShort();
-            if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
-                throw new IllegalStateException("Key length error, key length=" + keyLength);
-            }
-
-            var keyBytes = new byte[keyLength];
-            buf.readBytes(keyBytes);
-            return keyBytes;
+            rawSegmentBytes = segmentBytes;
         }
+
+        var buf = Unpooled.wrappedBuffer(rawSegmentBytes);
+        buf.readerIndex(pvm.segmentOffset);
+
+        // skip key header or check key
+        var keyLength = buf.readShort();
+        if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
+            throw new IllegalStateException("Key length error, key length=" + keyLength);
+        }
+
+        var keyBytes = new byte[keyLength];
+        buf.readBytes(keyBytes);
+        return keyBytes;
     }
 
     /**
@@ -1717,10 +1676,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     long threadIdProtectedForSafe = -1;
-
-    public long getThreadIdProtectedForSafe() {
-        return threadIdProtectedForSafe;
-    }
 
     @VisibleForTesting
     long ttlTotalInSecond = 0;
@@ -2597,8 +2552,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 }
             }
         }
-
-        map.put("slot_pending_submit_index_job_count", (double) pendingSubmitIndexJobRunCount);
 
         map.put("slot_avg_ttl_in_second", getAvgTtlInSecond());
 

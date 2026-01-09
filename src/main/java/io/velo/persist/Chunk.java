@@ -44,9 +44,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      */
     enum SegmentType {
         NORMAL((byte) 0),
-        TIGHT((byte) 1),
-        SLIM((byte) 2),
-        SLIM_AND_COMPRESSED((byte) 3);
+        TIGHT((byte) 1);
 
         final byte val;
 

@@ -79,52 +79,6 @@ class SegmentBatch2Test extends Specification {
         exception
     }
 
-    def 'test segment slim'() {
-        given:
-        def byteX = new byte[SegmentBatch2.SEGMENT_HEADER_LENGTH]
-
-        when:
-        byteX[8] = Chunk.SegmentType.SLIM.val
-        then:
-        SegmentBatch2.isSegmentBytesSlim(byteX, 0)
-        !SegmentBatch2.isSegmentBytesSlimAndCompressed(byteX, 0)
-        !SegmentBatch2.isSegmentBytesTight(byteX, 0)
-
-        when:
-        byteX[8] = Chunk.SegmentType.SLIM_AND_COMPRESSED.val
-        then:
-        !SegmentBatch2.isSegmentBytesSlim(byteX, 0)
-        SegmentBatch2.isSegmentBytesSlimAndCompressed(byteX, 0)
-        !SegmentBatch2.isSegmentBytesTight(byteX, 0)
-
-        when:
-        byteX[8] = Chunk.SegmentType.TIGHT.val
-        then:
-        !SegmentBatch2.isSegmentBytesSlim(byteX, 0)
-        !SegmentBatch2.isSegmentBytesSlimAndCompressed(byteX, 0)
-        SegmentBatch2.isSegmentBytesTight(byteX, 0)
-
-        when:
-        def vList = Mock.prepareValueList(2, 0)
-        List<SegmentBatch2.CvWithKeyAndSegmentOffset> invalidCvList = []
-        for (v in vList) {
-            invalidCvList << new SegmentBatch2.CvWithKeyAndSegmentOffset(Mock.fromV(v), v.key(), (int) v.seq(), 0, (byte) 0)
-        }
-        println invalidCvList[0].toString()
-        println invalidCvList[0].shortString()
-        def segmentBytesSlimX = SegmentBatch2.encodeValidCvListSlim(invalidCvList)
-        def segmentBytesSlim = segmentBytesSlimX.bytes()
-        then:
-        SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytesSlim, (byte) 0, 0).keyBytes() == vList[0].key().bytes
-        SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytesSlim, (byte) 0, 1).valueBytes() == vList[1].cvEncoded()
-        SegmentBatch2.getKeyBytesAndValueBytesInSegmentBytesSlim(segmentBytesSlim, (byte) 0, 2) == null
-
-        when:
-        SegmentBatch2.iterateFromSegmentBytes(segmentBytesSlim, new SegmentBatch2.ForDebugCvCallback())
-        then:
-        1 == 1
-    }
-
     def 'test read tight segment'() {
         given:
         def snowFlake = new SnowFlake(1, 1)
@@ -144,6 +98,8 @@ class SegmentBatch2Test extends Specification {
         cvList.size() == 268
 
         when:
+        println cvList[0].shortString()
+        println cvList[0]
         def r2 = segmentBatch2.split(list, returnPvmList)
         def first2 = r2[0]
         ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList2 = []
