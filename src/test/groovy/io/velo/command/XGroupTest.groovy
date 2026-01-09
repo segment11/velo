@@ -266,8 +266,9 @@ class XGroupTest extends Specification {
         oneSlot.dynConfig.binlogOn
 
         when:
+        data4[2][0] = ReplType.hello.code
         x.replPair = null
-        r = x.hello(slot, data[3])
+        r = x.handleRepl()
         then:
         r.isReplType(ReplType.hi)
 
@@ -441,6 +442,18 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_big_string)
+
+        // exists_short_string
+        when:
+        data4[2][0] = ReplType.exists_short_string.code
+        contentBytes = new byte[4]
+        data4[3] = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        // wal group index
+        requestBuffer.putInt(0)
+        def r2 = x.handleRepl()
+        then:
+        r2 instanceof Repl.ReplReplyFromBytes
 
         // exists_dict
         when:
@@ -798,7 +811,7 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         // next step
-        r.isReplType(ReplType.exists_chunk_segments)
+        r.isReplType(ReplType.exists_short_string)
 
         when:
         contentBytes = new byte[4 + 2 + 1]
@@ -821,7 +834,7 @@ class XGroupTest extends Specification {
         r = x.handleRepl()
         then:
         // next step
-        r.isReplType(ReplType.exists_chunk_segments)
+        r.isReplType(ReplType.exists_short_string)
 
         when:
         // mock two big string fetched
@@ -860,7 +873,7 @@ class XGroupTest extends Specification {
         requestBuffer.put(4 + 2, (byte) 1)
         r = x.handleRepl()
         then:
-        r.isReplType(ReplType.exists_chunk_segments)
+        r.isReplType(ReplType.exists_short_string)
 
         when:
         def inMemoryGetSet = new InMemoryGetSet()
@@ -871,6 +884,43 @@ class XGroupTest extends Specification {
         then:
         // empty content return
         r.isReplType(ReplType.exists_big_string)
+
+        // s_exists_short_string
+        when:
+        data4[2][0] = ReplType.s_exists_short_string.code
+        // wal group index + short value encoded
+        contentBytes = new byte[4]
+        data4[3] = contentBytes
+        r = x.handleRepl()
+        then:
+        r.isReplType(ReplType.exists_short_string)
+
+        when:
+        contentBytes = new byte[4 + 4 + 58]
+        data4[3] = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        // wal group index
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(58)
+        requestBuffer.putLong(1L)
+        requestBuffer.putLong(1L)
+        requestBuffer.putLong(0L)
+        requestBuffer.putInt(16)
+        requestBuffer.put('key:000000000001'.bytes)
+        requestBuffer.putInt(10)
+        requestBuffer.put(new byte[10])
+        r = x.handleRepl()
+        then:
+        r.isReplType(ReplType.exists_short_string)
+
+        when:
+        // last batch
+        requestBuffer.position(0)
+        requestBuffer.putInt(walGroupNumber - 1)
+        r = x.handleRepl()
+        then:
+        // next step
+        r.isReplType(ReplType.exists_chunk_segments)
 
         // s_exists_dict
         when:
