@@ -567,7 +567,6 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
      * @param segmentSeq    the segment sequence number
      * @param walGroupIndex the wal group index
      */
-    @SlaveNeedReplay
     public void setSegmentMergeFlag(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex) {
         var offset = segmentIndex * ONE_LENGTH;
 

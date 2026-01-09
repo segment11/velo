@@ -345,38 +345,24 @@ public class Wal implements InMemoryEstimate {
     private final RandomAccessFile walSharedFileShortValue;
     private final SnowFlake snowFlake;
 
-    @SlaveNeedReplay
     HashMap<String, V> delayToKeyBucketValues;
-    @SlaveNeedReplay
     HashMap<String, V> delayToKeyBucketShortValues;
 
     HashMap<String, Long> bigStringFileUuidByKey = new HashMap<>();
 
     final long fileToWriteIndex;
 
-    /**
-     * Gets the last sequence number after a put operation.
-     * For replication, means slave already fetch done of this WAL group.
-     *
-     * @return the last sequence number after a put operation
-     */
-    public long getLastSeqAfterPut() {
+    @TestOnly
+    long getLastSeqAfterPut() {
         return lastSeqAfterPut;
     }
 
-    /**
-     * Gets the last sequence number after a put operation for short values.
-     * For replication, means slave already fetch done of this WAL group.
-     *
-     * @return the last sequence number after a put operation for short values
-     */
-    public long getLastSeqShortValueAfterPut() {
+    @TestOnly
+    long getLastSeqShortValueAfterPut() {
         return lastSeqShortValueAfterPut;
     }
 
-    @SlaveNeedReplay
     private long lastSeqAfterPut;
-    @SlaveNeedReplay
     private long lastSeqShortValueAfterPut;
 
     /**
@@ -387,7 +373,6 @@ public class Wal implements InMemoryEstimate {
     public int getKeyCount() {
         return delayToKeyBucketValues.size() + delayToKeyBucketShortValues.size();
     }
-
 
     /**
      * Gets the keys in the WAL. For scan skip when scan key buckets.
@@ -641,9 +626,8 @@ public class Wal implements InMemoryEstimate {
     long clearValuesCount = 0;
 
     /**
-     * Clears all short values of this WAL group.
+     * Clears all short values of this WAL group after persist.
      */
-    @SlaveNeedReplay
     public void clearShortValues() {
         delayToKeyBucketShortValues.clear();
         bigStringFileUuidByKey.clear();
@@ -656,9 +640,8 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Clears all values of this WAL group.
+     * Clears all values of this WAL group after persist.
      */
-    @SlaveNeedReplay
     public void clearValues() {
         delayToKeyBucketValues.clear();
         resetWal(false);
@@ -670,12 +653,26 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Retrieves the encoded value for a given key.
+     * Retrieves the encoded cv bytes for a given key.
      *
      * @param key the key to retrieve
      * @return the encoded value, or null if not found
      */
     byte[] get(@NotNull String key) {
+        var v = getV(key);
+        if (v == null) {
+            return null;
+        }
+        return v.cvEncoded;
+    }
+
+    /**
+     * Retrieves the value for a given key.
+     *
+     * @param key the key to retrieve
+     * @return the value, or null if not found
+     */
+    V getV(@NotNull String key) {
         var vShort = delayToKeyBucketShortValues.get(key);
         var v = delayToKeyBucketValues.get(key);
         if (vShort == null && v == null) {
@@ -684,17 +681,17 @@ public class Wal implements InMemoryEstimate {
 
         if (vShort != null) {
             if (v == null) {
-                return vShort.cvEncoded;
+                return vShort;
             } else {
                 if (vShort.seq > v.seq) {
-                    return vShort.cvEncoded;
+                    return vShort;
                 } else {
-                    return v.cvEncoded;
+                    return v;
                 }
             }
         }
 
-        return v.cvEncoded;
+        return v;
     }
 
     /**
@@ -801,7 +798,6 @@ public class Wal implements InMemoryEstimate {
      * @param isValueShort whether the value is short
      * @return the new offset
      */
-    @SlaveNeedReplay
     private int rewriteOneGroup(boolean isValueShort) {
         try {
             var writeBytes = writeToSavedBytes(isValueShort, true);

@@ -265,30 +265,34 @@ public class CompressedValue {
     public byte[] encodeAsNumber() {
         return switch (dictSeqOrSpType) {
             case SP_TYPE_NUM_BYTE -> {
-                var buf = ByteBuffer.allocate(1 + 8 + 1);
+                var buf = ByteBuffer.allocate(1 + 8 + 8 + 1);
                 buf.put((byte) dictSeqOrSpType);
                 buf.putLong(seq);
+                buf.putLong(expireAt);
                 buf.put(compressedData[0]);
                 yield buf.array();
             }
             case SP_TYPE_NUM_SHORT -> {
-                var buf = ByteBuffer.allocate(1 + 8 + 2);
+                var buf = ByteBuffer.allocate(1 + 8 + 8 + 2);
                 buf.put((byte) dictSeqOrSpType);
                 buf.putLong(seq);
+                buf.putLong(expireAt);
                 buf.put(compressedData);
                 yield buf.array();
             }
             case SP_TYPE_NUM_INT -> {
-                var buf = ByteBuffer.allocate(1 + 8 + 4);
+                var buf = ByteBuffer.allocate(1 + 8 + 8 + 4);
                 buf.put((byte) dictSeqOrSpType);
                 buf.putLong(seq);
+                buf.putLong(expireAt);
                 buf.put(compressedData);
                 yield buf.array();
             }
             case SP_TYPE_NUM_LONG, SP_TYPE_NUM_DOUBLE -> {
-                var buf = ByteBuffer.allocate(1 + 8 + 8);
+                var buf = ByteBuffer.allocate(1 + 8 + 8 + 8);
                 buf.put((byte) dictSeqOrSpType);
                 buf.putLong(seq);
+                buf.putLong(expireAt);
                 buf.put(compressedData);
                 yield buf.array();
             }
@@ -302,20 +306,22 @@ public class CompressedValue {
      * @return the encoded byte array with type header, sequence, and data
      */
     public byte[] encodeAsShortString() {
-        return encodeAsShortString(seq, compressedData);
+        return encodeAsShortString(seq, expireAt, compressedData);
     }
 
     /**
      * Static version of encoding a short string value with header information.
      *
-     * @param seq  the sequence number for version tracking
-     * @param data the string data bytes to encode
+     * @param seq      the sequence number for version tracking
+     * @param expireAt the expiration time in milliseconds
+     * @param data     the string data bytes to encode
      * @return the encoded byte array with type header, sequence, and data
      */
-    public static byte[] encodeAsShortString(long seq, byte[] data) {
-        var buf = ByteBuffer.allocate(1 + 8 + data.length);
+    public static byte[] encodeAsShortString(long seq, long expireAt, byte[] data) {
+        var buf = ByteBuffer.allocate(1 + 8 + 8 + data.length);
         buf.put((byte) SP_TYPE_SHORT_STRING);
         buf.putLong(seq);
+        buf.putLong(expireAt);
         buf.put(data);
         return buf.array();
     }
@@ -584,6 +590,7 @@ public class CompressedValue {
      * @return {@code true} if the type is {@link #SP_TYPE_BIG_STRING} or higher (including number types).
      */
     public boolean isTypeString() {
+        // number / big string meta is type string
         return dictSeqOrSpType >= SP_TYPE_BIG_STRING;
     }
 
@@ -828,6 +835,7 @@ public class CompressedValue {
             cv.dictSeqOrSpType = firstByte;
             buf.skipBytes(1);
             cv.seq = buf.readLong();
+            cv.expireAt = buf.readLong();
             cv.compressedData = new byte[buf.readableBytes()];
             buf.readBytes(cv.compressedData);
             return cv;

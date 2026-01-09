@@ -79,7 +79,6 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
      *
      * @param segmentIndex the chunk segment index to set
      */
-    @SlaveNeedReplay
     void set(int segmentIndex) {
         try {
             raf.seek(0);

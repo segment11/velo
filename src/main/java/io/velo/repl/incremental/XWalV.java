@@ -19,8 +19,6 @@ import java.nio.ByteBuffer;
 public class XWalV implements BinlogContent {
     private final Wal.V v;
     private final boolean isValueShort;
-    private final int offset;
-    private final boolean isOnlyPut;
 
     /**
      * Retrieves the WAL value associated with this operation.
@@ -41,36 +39,14 @@ public class XWalV implements BinlogContent {
     }
 
     /**
-     * Retrieves the offset of the WAL value.
-     *
-     * @return the offset
-     */
-    public int getOffset() {
-        return offset;
-    }
-
-    /**
-     * Checks if this is a put operation, not store to the target offset.
-     *
-     * @return true if this is a put operation, false otherwise
-     */
-    public boolean isOnlyPut() {
-        return isOnlyPut;
-    }
-
-    /**
      * Constructs a new XWalV object with the specified WAL value, value short flag, and offset.
      *
      * @param v            the WAL value associated with the operation
      * @param isValueShort whether the value is short
-     * @param offset       the offset of the WAL value
-     * @param isOnlyPut    whether this is a put operation, not store to the target offset
      */
-    public XWalV(Wal.V v, boolean isValueShort, int offset, boolean isOnlyPut) {
+    public XWalV(Wal.V v, boolean isValueShort) {
         this.v = v;
         this.isValueShort = isValueShort;
-        this.offset = offset;
-        this.isOnlyPut = isOnlyPut;
     }
 
     /**
@@ -81,7 +57,7 @@ public class XWalV implements BinlogContent {
      */
     @TestOnly
     public XWalV(Wal.V v) {
-        this(v, true, 0, false);
+        this(v, true);
     }
 
     /**
@@ -102,10 +78,10 @@ public class XWalV implements BinlogContent {
     @Override
     public int encodedLength() {
         // 1 byte for type, 4 bytes for encoded length for check
-        // 1 byte for is value short, 4 bytes as int for offset, 1 byte for is only put
+        // 1 byte for is value short
         // 8 bytes for seq, 4 bytes for bucket index, 8 bytes for key hash, 8 bytes for expire at, 4 bytes for sp type
         // 2 bytes for key length, key bytes, 4 bytes for cv encoded length, cv encoded bytes
-        return 1 + 4 + 1 + 4 + 1 + 8 + 4 + 8 + 8 + 4 + 2 + v.key().length() + 4 + v.cvEncoded().length;
+        return 1 + 4 + 1 + 8 + 4 + 8 + 8 + 4 + 2 + v.key().length() + 4 + v.cvEncoded().length;
     }
 
     /**
@@ -121,8 +97,6 @@ public class XWalV implements BinlogContent {
         buffer.put(type().code());
         buffer.putInt(bytes.length);
         buffer.put(isValueShort ? (byte) 1 : (byte) 0);
-        buffer.putInt(offset);
-        buffer.put((byte) (isOnlyPut ? 1 : 0));
         buffer.putLong(v.seq());
         buffer.putInt(v.bucketIndex());
         buffer.putLong(v.keyHash());
@@ -148,8 +122,6 @@ public class XWalV implements BinlogContent {
         var encodedLength = buffer.getInt();
 
         var isValueShort = buffer.get() == 1;
-        var offset = buffer.getInt();
-        var isOnlyPut = buffer.get() == 1;
         var seq = buffer.getLong();
         var bucketIndex = buffer.getInt();
         var keyHash = buffer.getLong();
@@ -168,7 +140,7 @@ public class XWalV implements BinlogContent {
         buffer.get(cvEncoded);
 
         var v = new Wal.V(seq, bucketIndex, keyHash, expireAt, spType, new String(keyBytes), cvEncoded, false);
-        var r = new XWalV(v, isValueShort, offset, isOnlyPut);
+        var r = new XWalV(v, isValueShort);
         if (encodedLength != r.encodedLength()) {
             throw new IllegalStateException("Invalid encoded length=" + encodedLength);
         }

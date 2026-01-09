@@ -386,8 +386,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * @param list                         the data to persist, in the form of a list of WAL values
      * @param keyBucketsInOneWalGroupGiven an optional parameter for details about key buckets in the WAL group
      */
-    @SlaveNeedReplay
-    // return need merge segment index array
     public void persist(int walGroupIndex,
                         @NotNull ArrayList<Wal.V> list,
                         @Nullable KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
@@ -417,18 +415,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         for (var pvm : pvmList) {
             pvm.segmentIndex += currentSegmentIndex;
         }
-
-        List<Long> segmentSeqListAll = new ArrayList<>();
-        for (var segment : segments) {
-            segmentSeqListAll.add(segment.segmentSeq());
-        }
-
-        var fdIndex = targetFdIndex();
-        var segmentIndexTargetFd = targetSegmentIndexTargetFd();
-
-        // never cross fd files because prepare batch segments to write
-        var fdReadWrite = fdReadWriteArray[fdIndex];
-
 
         if (segmentCount < BATCH_ONCE_SEGMENT_COUNT_WRITE) {
             for (var segment : segments) {

@@ -43,7 +43,7 @@ public class KeyBucket {
 
     /**
      * The maximum length of a single cell, considering metadata and value length.
-     * key length short 2 + key length <= 32 + value length byte 1 + (pvm length 12 or short value case encoded number 17 / string 25 ) <= 60
+     * key length short 2 + key length <= 24 + value length byte 1 + (pvm length 12 or number 25 or short string 33) <= 60
      * if key length > 32, refer CompressedValue.KEY_MAX_LENGTH, one key may cost 2 cells
      * for example, big string cv is short value, encoded length = 48, if key length = 16, will cost 2 cells
      */

@@ -21,8 +21,8 @@ class XWalVTest extends Specification {
             return v2
         }
         def v0 = vList[0]
-        def xWalV = new XWalV(v0, true, 0, true)
-        def xWalV2 = new XWalV(v0, false, 0, false)
+        def xWalV = new XWalV(v0, true)
+        def xWalV2 = new XWalV(v0, false)
         def xWalV3 = new XWalV(v0)
         println xWalV3.v
 
@@ -42,13 +42,9 @@ class XWalVTest extends Specification {
         xWalV11.encodedLength() == encoded.length
         xWalV11.v.encode(false) == v0.encode(false)
         xWalV11.isValueShort() == xWalV.isValueShort()
-        xWalV11.offset == xWalV.offset
-        xWalV11.isOnlyPut() == xWalV.isOnlyPut()
         xWalV22.encodedLength() == encoded2.length
         xWalV22.v.encode(true) == v0.encode(true)
         xWalV22.isValueShort() == xWalV2.isValueShort()
-        xWalV22.offset == xWalV2.offset
-        xWalV22.isOnlyPut() == xWalV2.isOnlyPut()
 
         when:
         boolean exception = false
@@ -65,7 +61,7 @@ class XWalVTest extends Specification {
 
         when:
         exception = false
-        buffer.putShort(1 + 4 + 1 + 4 + 1 + 8 + 4 + 8 + 8, (CompressedValue.KEY_MAX_LENGTH + 1).shortValue())
+        buffer.putShort(1 + 4 + 1 + 8 + 4 + 8 + 8, (CompressedValue.KEY_MAX_LENGTH + 1).shortValue())
         buffer.position(1)
         try {
             XWalV.decodeFrom(buffer)
@@ -78,7 +74,7 @@ class XWalVTest extends Specification {
 
         when:
         exception = false
-        buffer.putShort(1 + 4 + 1 + 4 + 1 + 8 + 4 + 8 + 8, (short) 0)
+        buffer.putShort(1 + 4 + 1 + 8 + 4 + 8 + 8, (short) 0)
         buffer.position(1)
         try {
             XWalV.decodeFrom(buffer)

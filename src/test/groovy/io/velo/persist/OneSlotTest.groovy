@@ -248,18 +248,11 @@ class OneSlotTest extends Specification {
         replPairAsMaster0.sendBye = true
         then:
         oneSlot.getReplPairAsMaster(11L) == null
-        oneSlot.isAsMasterAndAllSlavesInCatchUpState()
 
         when:
         replPairAsMaster0.sendBye = false
         then:
         oneSlot.getReplPairAsMaster(11L) != null
-        !oneSlot.isAsMasterAndAllSlavesInCatchUpState()
-
-        when:
-        replPairAsMaster0.slaveLastCatchUpBinlogFileIndexAndOffset = new Binlog.FileIndexAndOffset(1, 1)
-        then:
-        oneSlot.isAsMasterAndAllSlavesInCatchUpState()
 
         when:
         oneSlot.metaChunkSegmentIndex = new MetaChunkSegmentIndex(slot, oneSlot.slotDir)
@@ -625,7 +618,7 @@ class OneSlotTest extends Specification {
         def sKey = BaseCommand.slot(key, slotNumber)
 
         def v = Mock.prepareValueList(1)[0]
-        def xWalV = new XWalV(v, true, 0, false)
+        def xWalV = new XWalV(v, true)
         oneSlot.appendBinlog(xWalV)
 
         expect:
@@ -836,7 +829,6 @@ class OneSlotTest extends Specification {
         exception
 
         when:
-        oneSlot.getSegmentSeqListBatchForRepl(0, 1)
         oneSlot.updateSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L)
         List<Long> segmentSeqList = [1L]
         oneSlot.setSegmentMergeFlagBatch(0, 1,

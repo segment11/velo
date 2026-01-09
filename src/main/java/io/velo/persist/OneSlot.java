@@ -343,29 +343,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     /**
-     * Checks if the OneSlot is operating as a master and all its slave replication pairs are in catch-up state.
-     *
-     * @return true if operating as a master and all slaves are in catch-up state, false otherwise
-     */
-    @VisibleForTesting
-    boolean isAsMasterAndAllSlavesInCatchUpState() {
-        boolean allSlavesInCatchUpState = true;
-        for (var replPair : replPairs) {
-            if (replPair.isSendBye()) {
-                continue;
-            }
-
-            if (replPair.isAsMaster()) {
-                if (replPair.getSlaveLastCatchUpBinlogAsReplOffset() == 0) {
-                    allSlavesInCatchUpState = false;
-                    break;
-                }
-            }
-        }
-        return allSlavesInCatchUpState;
-    }
-
-    /**
      * Returns the list of replication pairs where OneSlot is the master.
      *
      * @return the list of replication pairs
@@ -1044,8 +1021,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param segmentIndex            the write segment index
      * @param updateChunkSegmentIndex whether to update the chunk segment index
      */
-    @SlaveNeedReplay
-    @SlaveReplay
     public void setMetaChunkSegmentIndexInt(int segmentIndex, boolean updateChunkSegmentIndex) {
         if (segmentIndex < 0 || segmentIndex > chunk.maxSegmentIndex) {
             throw new IllegalArgumentException("Segment index out of bound, s=" + slot + ", i=" + segmentIndex);
@@ -1082,10 +1057,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      */
     public void appendBinlog(@NotNull BinlogContent content) {
         if (binlog != null) {
-            if (isAsMasterAndAllSlavesInCatchUpState() && content.isSkipWhenAllSlavesInCatchUpState()) {
-                return;
-            }
-
             try {
                 binlog.append(content);
             } catch (IOException e) {
@@ -1441,21 +1412,22 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public Long getExpireAt(String key, int bucketIndex, long keyHash, int keyHash32) {
         checkCurrentThreadId();
 
-        var cvEncodedFromWal = getFromWal(key, bucketIndex);
-        if (cvEncodedFromWal != null) {
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
+        var targetWal = walArray[walGroupIndex];
+        var v = targetWal.getV(key);
+        if (v != null) {
             kvLRUHitTotal++;
-            kvLRUCvEncodedLengthTotal += cvEncodedFromWal.length;
+            kvLRUCvEncodedLengthTotal += v.cvEncoded().length;
 
             // write batch kv is the newest
-            if (CompressedValue.isDeleted(cvEncodedFromWal)) {
+            if (CompressedValue.isDeleted(v.cvEncoded())) {
                 return null;
             }
-            var cv = CompressedValue.decode(Unpooled.wrappedBuffer(cvEncodedFromWal), key.getBytes(), keyHash);
-            return cv.getExpireAt();
+
+            return v.expireAt();
         }
 
         // from lru cache
-        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         var cvEncodedBytesFromLRU = lru.get(key);
         if (cvEncodedBytesFromLRU != null) {
@@ -1663,7 +1635,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
-        return targetWal.get(key);
+        var v = targetWal.getV(key);
+        if (v == null || v.isExpired()) {
+            return null;
+        }
+        return v.cvEncoded();
     }
 
     /**
@@ -1725,7 +1701,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param bucketIndex the bucket index
      * @param keyHash     the key hash
      */
-    @SlaveNeedReplay
     public void removeDelay(@NotNull String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
@@ -1733,12 +1708,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var targetWal = walArray[walGroupIndex];
         var putResult = targetWal.removeDelay(key, bucketIndex, keyHash, lastPersistTimeMs);
 
+        var xWalV = new XWalV(putResult.needPutV(), putResult.isValueShort());
+        appendBinlog(xWalV);
+
         if (putResult.needPersist()) {
             doPersist(walGroupIndex, key, putResult);
-        } else {
-            var isOnlyPut = isAsMasterAndAllSlavesInCatchUpState();
-            var xWalV = new XWalV(putResult.needPutV(), putResult.isValueShort(), putResult.offset(), isOnlyPut);
-            appendBinlog(xWalV);
         }
     }
 
@@ -1785,7 +1759,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param cv          the compressed value
      * @param isFromMerge is from merge
      */
-    @SlaveNeedReplay
     public void put(@NotNull String key, int bucketIndex, @NotNull CompressedValue cv, boolean isFromMerge) {
         checkCurrentThreadId();
 
@@ -1802,14 +1775,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
 
-        boolean isValueShort;
+        var isValueShort = cv.isShortString();
         Wal.V v;
-        // is use faster kv style, save all key and value in record log
-        if (cv.isBigString()) {
-            isValueShort = true;
-        } else {
-            isValueShort = cv.noExpire() && (cv.isTypeNumber() || cv.isShortString());
-        }
+        // is use faster kv style, save short string in key buckets, not short string save key and value in record log
         if (isValueShort) {
             byte[] cvEncoded;
             if (cv.isTypeNumber()) {
@@ -1874,15 +1842,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         var putResult = targetWal.put(isValueShort, key, v, lastPersistTimeMs);
-        if (!putResult.needPersist()) {
-            var isOnlyPut = isAsMasterAndAllSlavesInCatchUpState();
-            var xWalV = new XWalV(v, isValueShort, putResult.offset(), isOnlyPut);
-            appendBinlog(xWalV);
 
-            return;
+        var xWalV = new XWalV(v, isValueShort);
+        appendBinlog(xWalV);
+
+        if (putResult.needPersist()) {
+            doPersist(walGroupIndex, key, putResult);
         }
-
-        doPersist(walGroupIndex, key, putResult);
     }
 
     private long lastPersistTimeMs = 0L;
@@ -1894,7 +1860,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param key           the key
      * @param putResult     Wal put result
      */
-    @SlaveNeedReplay
     public void doPersist(int walGroupIndex, @NotNull String key, @NotNull Wal.PutResult putResult) {
         var targetWal = walArray[walGroupIndex];
         putValueToWal(putResult.isValueShort(), targetWal);
@@ -1909,10 +1874,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var needPutV = putResult.needPutV();
         if (needPutV != null) {
             targetWal.put(putResult.isValueShort(), key, needPutV, lastPersistTimeMs);
-
-            var isOnlyPut = isAsMasterAndAllSlavesInCatchUpState();
-            var xWalV = new XWalV(needPutV, putResult.isValueShort(), putResult.offset(), isOnlyPut);
-            appendBinlog(xWalV);
         }
     }
 
@@ -2188,8 +2149,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param isShortValue is short value
      * @param targetWal    target wal
      */
-    @SlaveNeedReplay
-    @VisibleForTesting
     void putValueToWal(boolean isShortValue, @NotNull Wal targetWal) {
         var walGroupIndex = targetWal.groupIndex;
         if (isShortValue) {
@@ -2295,23 +2254,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param segmentIndex the segment index
      * @return the segment flag with segment sequence number and wal group index
      */
+    @TestOnly
     SegmentFlag getSegmentMergeFlag(int segmentIndex) {
         checkSegmentIndex(segmentIndex);
         return metaChunkSegmentFlagSeq.getSegmentMergeFlag(segmentIndex);
-    }
-
-    /**
-     * Gets a list of segment sequence numbers for a batch of segments. For replication.
-     *
-     * @param beginSegmentIndex the beginning segment index
-     * @param segmentCount      the number of segments to retrieve
-     * @return the list of segment sequence numbers
-     */
-    public List<Long> getSegmentSeqListBatchForRepl(int beginSegmentIndex, int segmentCount) {
-        checkCurrentThreadId();
-
-        checkBeginSegmentIndex(beginSegmentIndex, segmentCount);
-        return metaChunkSegmentFlagSeq.getSegmentSeqListBatchForRepl(beginSegmentIndex, segmentCount);
     }
 
     /**
@@ -2321,8 +2267,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param flagByte     the flag byte
      * @param segmentSeq   the segment sequence number
      */
-    @SlaveNeedReplay
-    @SlaveReplay
+    @TestOnly
     public void updateSegmentMergeFlag(int segmentIndex, byte flagByte, long segmentSeq) {
         var segmentFlag = getSegmentMergeFlag(segmentIndex);
         setSegmentMergeFlag(segmentIndex, flagByte, segmentSeq, segmentFlag.walGroupIndex());
@@ -2336,8 +2281,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param segmentSeq    the segment sequence number
      * @param walGroupIndex the wal group index
      */
-    @SlaveNeedReplay
-    @SlaveReplay
     public void setSegmentMergeFlag(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex) {
         checkSegmentIndex(segmentIndex);
         metaChunkSegmentFlagSeq.setSegmentMergeFlag(segmentIndex, flagByte, segmentSeq, walGroupIndex);

@@ -38,7 +38,7 @@ public interface WalVDataGenerator {
 
     default Wal.V keyToV(long seq, int bucketIndex, String key, long keyHash) {
         var dataBytes = new byte[10];
-        var cvEncoded = CompressedValue.encodeAsShortString(seq, dataBytes);
+        var cvEncoded = CompressedValue.encodeAsShortString(seq, 0, dataBytes);
         return new Wal.V(nextId(), bucketIndex, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
                 key, cvEncoded, false);
     }

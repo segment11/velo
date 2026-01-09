@@ -53,8 +53,4 @@ public interface BinlogContent {
 
     @SlaveReplay
     void apply(short slot, ReplPair replPair);
-
-    default boolean isSkipWhenAllSlavesInCatchUpState() {
-        return false;
-    }
 }

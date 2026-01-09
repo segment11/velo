@@ -7,7 +7,6 @@ import io.velo.ConfForSlot;
 import io.velo.NeedCleanUp;
 import io.velo.StaticMemoryPrepareBytesStats;
 import io.velo.metric.InSlotMetricCollector;
-import io.velo.repl.SlaveNeedReplay;
 import org.apache.commons.collections4.map.LRUMap;
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.util.RamUsageEstimator;
@@ -890,7 +889,6 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @param isRefreshLRUCache whether the LRU cache should be refreshed
      * @return the number of bytes written
      */
-    @SlaveNeedReplay
     public int writeOneInner(int oneInnerIndex, byte[] bytes, boolean isRefreshLRUCache) {
         if (bytes.length > oneInnerLength) {
             throw new IllegalArgumentException("Write bytes length must be less than one inner length");
@@ -910,7 +908,6 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      * @param isRefreshLRUCache  whether the LRU cache should be refreshed
      * @return the number of bytes written
      */
-    @SlaveNeedReplay
     public int writeSegmentsBatch(int beginOneInnerIndex, byte[] bytes, boolean isRefreshLRUCache) {
         var segmentCount = bytes.length / oneInnerLength;
         if (segmentCount != BATCH_ONCE_SEGMENT_COUNT_WRITE) {

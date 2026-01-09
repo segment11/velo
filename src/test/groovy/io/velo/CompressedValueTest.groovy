@@ -233,9 +233,9 @@ class CompressedValueTest extends Specification {
         then:
         CompressedValue.onlyReadSeq(encodedNumber) == cv.seq
         CompressedValue.onlyReadSpType(encodedNumber) == cv.dictSeqOrSpType
-        encodedNumber.length == 10
+        encodedNumber.length == 18
         encodedBufferNumber.getLong(1) == cv.seq
-        encodedBufferNumber.get(9) == Byte.MAX_VALUE
+        encodedBufferNumber.get(17) == Byte.MAX_VALUE
         cvDecodeNumber.numberValue() == Byte.MAX_VALUE
 
         when:
@@ -246,7 +246,7 @@ class CompressedValueTest extends Specification {
         encodedNumber = cv.encodeAsNumber()
         cvDecodeNumber = CompressedValue.decode(Unpooled.wrappedBuffer(encodedNumber), null, 0L)
         then:
-        encodedNumber.length == 11
+        encodedNumber.length == 19
         cvDecodeNumber.numberValue() == Short.MAX_VALUE
         CompressedValue.onlyReadSpType(encodedNumber) == cv.dictSeqOrSpType
 
@@ -258,7 +258,7 @@ class CompressedValueTest extends Specification {
         encodedNumber = cv.encodeAsNumber()
         cvDecodeNumber = CompressedValue.decode(Unpooled.wrappedBuffer(encodedNumber), null, 0L)
         then:
-        encodedNumber.length == 13
+        encodedNumber.length == 21
         cvDecodeNumber.numberValue() == Integer.MAX_VALUE
         CompressedValue.onlyReadSpType(encodedNumber) == cv.dictSeqOrSpType
 
@@ -270,7 +270,7 @@ class CompressedValueTest extends Specification {
         encodedNumber = cv.encodeAsNumber()
         cvDecodeNumber = CompressedValue.decode(Unpooled.wrappedBuffer(encodedNumber), null, 0L)
         then:
-        encodedNumber.length == 17
+        encodedNumber.length == 25
         cvDecodeNumber.numberValue() == Long.MAX_VALUE
         CompressedValue.onlyReadSpType(encodedNumber) == cv.dictSeqOrSpType
 
@@ -282,7 +282,7 @@ class CompressedValueTest extends Specification {
         encodedNumber = cv.encodeAsNumber()
         cvDecodeNumber = CompressedValue.decode(Unpooled.wrappedBuffer(encodedNumber), null, 0L)
         then:
-        encodedNumber.length == 17
+        encodedNumber.length == 25
         cvDecodeNumber.numberValue() == Double.MAX_VALUE
         CompressedValue.onlyReadSpType(encodedNumber) == cv.dictSeqOrSpType
 
@@ -315,11 +315,12 @@ class CompressedValueTest extends Specification {
         def encodedShortString = cv.encodeAsShortString()
         def encodedBufferShortString = ByteBuffer.wrap(encodedShortString)
         then:
-        // 1 + 8 seq long + 10 compressed data
-        encodedShortString.length == 19
+        // 1 + 8 seq long + 8 expired at long + 10 compressed data
+        encodedShortString.length == 27
         encodedBufferShortString.getLong(1) == cv.seq
-        encodedBufferShortString.slice(9, 10) == ByteBuffer.wrap(cv.compressedData)
-        CompressedValue.encodeAsShortString(1L, new byte[10]).length == 19
+        encodedBufferShortString.getLong(9) == cv.expireAt
+        encodedBufferShortString.slice(17, 10) == ByteBuffer.wrap(cv.compressedData)
+        CompressedValue.encodeAsShortString(1L, 0L, new byte[10]).length == 27
         CompressedValue.getSeqFromNumberOrShortStringEncodedBytes(new byte[10]) == 0
 
         when:
