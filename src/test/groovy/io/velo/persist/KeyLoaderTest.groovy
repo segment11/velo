@@ -1,5 +1,6 @@
 package io.velo.persist
 
+import io.netty.buffer.Unpooled
 import io.velo.*
 import spock.lang.Specification
 
@@ -325,7 +326,11 @@ class KeyLoaderTest extends Specification {
         given:
         def keyLoader = prepareKeyLoader()
 
+        expect:
+        keyLoader.executeOnceAfterLoopCount() == 1
+
         when:
+        keyLoader.run()
         keyLoader.intervalDeleteExpiredBigStringFiles()
         keyLoader.intervalDeleteExpiredBigStringFilesLastBucketIndex = ConfForSlot.global.confBucket.bucketsPerSlot - 1
         keyLoader.intervalDeleteExpiredBigStringFiles()
@@ -400,6 +405,18 @@ class KeyLoaderTest extends Specification {
             }
             keyLoader.getValueXByKey(0, it.key(), it.keyHash(), KeyHash.hash32(it.key().bytes)).valueBytes() == it.cvEncoded()
         }
+
+        when:
+        def buf = Unpooled.buffer()
+        keyLoader.encodeShortStringListToBuf(0, buf)
+        int count = 0
+        KeyLoader.decodeShortStringListFromBuf(buf) { keyHash, expireAt, seq, key, valueBytes ->
+            println "key: $key, seq: $seq, keyHash: $keyHash, expireAt: $expireAt"
+            count++
+        }
+        then:
+        // one expired
+        count == shortValueList.size() - 1
 
         when:
         final short slot = 0

@@ -1,5 +1,6 @@
 package io.velo.persist;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
@@ -999,6 +1000,70 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             });
         }
         return list;
+    }
+
+
+    /**
+     * Encodes a list of short strings to a ByteBuf.
+     *
+     * @param bucketIndex the bucket index
+     * @param buf         the ByteBuf to which the encoded short strings will be written
+     */
+    @SlaveNeedReplay
+    public void encodeShortStringListToBuf(int bucketIndex, ByteBuf buf) {
+        final long currentTimeMillis = System.currentTimeMillis();
+
+        var keyBuckets = readKeyBuckets(bucketIndex);
+        for (var keyBucket : keyBuckets) {
+            if (keyBucket == null) {
+                continue;
+            }
+
+            keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
+                if (expireAt == CompressedValue.NO_EXPIRE || expireAt > currentTimeMillis) {
+                    if (PersistValueMeta.isPvm(valueBytes)) {
+                        return;
+                    }
+
+                    int length = 8 + 8 + 8 + 4 + key.length() + 4 + valueBytes.length;
+                    buf.writeInt(length);
+                    buf.writeLong(seq);
+                    buf.writeLong(keyHash);
+                    buf.writeLong(expireAt);
+                    buf.writeInt(key.length());
+                    buf.writeBytes(key.getBytes());
+                    buf.writeInt(valueBytes.length);
+                    buf.writeBytes(valueBytes);
+
+                }
+            });
+        }
+    }
+
+    /**
+     * Decodes a list of short strings from a ByteBuf.
+     *
+     * @param buf      the ByteBuf containing the encoded short strings
+     * @param callBack the callback to handle each decoded short string
+     */
+    @SlaveReplay
+    public static void decodeShortStringListFromBuf(ByteBuf buf, KeyBucket.IterateCallBack callBack) {
+        while (buf.isReadable(4)) {
+            var length = buf.readInt();
+            assert buf.isReadable(length);
+
+            var seq = buf.readLong();
+            var keyHash = buf.readLong();
+            var expireAt = buf.readLong();
+            var keyLength = buf.readInt();
+            var keyBytes = new byte[keyLength];
+            buf.readBytes(keyBytes);
+            var valueLength = buf.readInt();
+            var valueBytes = new byte[valueLength];
+            buf.readBytes(valueBytes);
+
+            callBack.call(keyHash, expireAt, seq, new String(keyBytes), valueBytes);
+        }
     }
 
     @VisibleForTesting

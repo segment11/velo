@@ -95,6 +95,14 @@ public enum ReplType {
     exists_big_string(false, true, (byte) 21),
 
     /**
+     * Request to master for fetching exists short strings.
+     * It's before slave all catch up.
+     * It's sent by a slave.
+     * code byte value 22.
+     */
+    exists_short_string(false, true, (byte) 22),
+
+    /**
      * Request to master for fetching incremental big strings.
      * It's after slave all catch up.
      * It's sent by a slave.
@@ -149,6 +157,14 @@ public enum ReplType {
      * code byte value 31.
      */
     s_exists_big_string(false, false, (byte) 31),
+
+    /**
+     * Request to master for fetching exists short strings.
+     * It's before slave all catch up.
+     * It's sent by a slave.
+     * code byte value 32.
+     */
+    s_exists_short_string(false, false, (byte) 32),
 
     /**
      * Response to slave for fetching incremental big strings.

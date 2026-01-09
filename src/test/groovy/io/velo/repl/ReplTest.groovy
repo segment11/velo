@@ -77,5 +77,10 @@ class ReplTest extends Specification {
         def data2 = Repl.decode(nettyBuffer2)
         then:
         data2 == null
+
+        when:
+        def xx = new Repl.ReplReplyFromBytes(1L, (short) 0, ReplType.ping, new byte[10], 5, 5)
+        then:
+        xx.buffer().limit() == Repl.HEADER_LENGTH + 5
     }
 }
