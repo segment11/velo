@@ -66,6 +66,7 @@ class RequestTest extends Specification {
         then:
         requestRepl.isRepl()
         requestRepl.singleSlot == 0
+        requestRepl.cmd() == Request.REPL_AS_CMD
 
         when:
         data3[0] = 'MGET'.bytes

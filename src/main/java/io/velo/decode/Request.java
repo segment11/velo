@@ -4,6 +4,7 @@ import io.velo.BaseCommand;
 import io.velo.RequestHandler;
 import io.velo.acl.U;
 import org.jetbrains.annotations.TestOnly;
+import org.jetbrains.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -261,12 +262,19 @@ public class Request {
         return first.slot();
     }
 
+    @VisibleForTesting
+    static final String REPL_AS_CMD = "repl";
+
     /**
      * Retrieves the command of the request as a string.
      *
      * @return the command string
      */
     public String cmd() {
+        if (isRepl) {
+            return REPL_AS_CMD;
+        }
+
         if (cmd != null) {
             return cmd;
         }
