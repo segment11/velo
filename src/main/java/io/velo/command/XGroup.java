@@ -56,6 +56,7 @@ public class XGroup extends BaseCommand {
         }
 
         var isHasSlotBytes = "slot".equals(new String(data[1]));
+        // repl request without slot
         if (!isHasSlotBytes) {
             return slotWithKeyHashList;
         }
@@ -184,18 +185,23 @@ public class XGroup extends BaseCommand {
 
     public Reply handleRepl() {
         var slaveUuid = ByteBuffer.wrap(data[0]).getLong();
-        var slot = ByteBuffer.wrap(data[1]).getShort();
+        var slotRemote = ByteBuffer.wrap(data[1]).getShort();
         var replType = fromCode(data[2][0]);
         if (replType == null) {
-            log.error("Repl handle error: unknown repl type code={}, slot={}", data[2][0], slot);
+            log.error("Repl handle error: unknown repl type code={}, slot={}", data[2][0], slotRemote);
             return null;
         }
 
+        if (slotRemote >= ConfForGlobal.slotNumber) {
+            log.warn("Repl do nothing for slot remote={}, repl type={}", slotRemote, replType);
+            return Repl.emptyReply();
+        }
+
         try {
-            return handleReplInner(slot, replType, slaveUuid);
+            return handleReplInner(slotRemote, replType, slaveUuid);
         } catch (Exception e) {
-            log.error("Repl handle error: {}, slot={}", e.getMessage(), slot);
-            return Repl.error(slot, slaveUuid, e.getMessage());
+            log.error("Repl handle error: {}, slot remote={}", e.getMessage(), slotRemote);
+            return Repl.error(slotRemote, slaveUuid, e.getMessage());
         }
     }
 

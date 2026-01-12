@@ -56,6 +56,7 @@ import io.velo.task.TaskRunnable;
 import jnr.ffi.Platform;
 import org.apache.commons.net.telnet.TelnetClient;
 import org.apache.lucene.util.NamedThreadFactory;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -419,6 +420,16 @@ public class MultiWorkerServer extends Launcher {
         return null;
     }
 
+    private Promise<ByteBuf> handleReplRequest(Request request, ITcpSocket socket) {
+        var slotRemote = ByteBuffer.wrap(request.getData()[1]).getShort();
+
+        int i = slotRemote % requestHandlerArray.length;
+        var targetHandler = requestHandlerArray[i];
+
+        var otherNetWorkerEventloop = slotWorkerEventloopArray[i];
+        return getByteBufPromiseByOtherEventloop(request, socket, targetHandler, otherNetWorkerEventloop);
+    }
+
     /**
      * Handles a single request from a client socket.
      *
@@ -427,6 +438,10 @@ public class MultiWorkerServer extends Launcher {
      * @return a promise of the response as a ByteBuf
      */
     Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
+        if (request.isRepl()) {
+            return handleReplRequest(request, socket);
+        }
+
         var r = handleFast(request, socket);
         if (r != null) {
             return r;
@@ -597,8 +612,8 @@ public class MultiWorkerServer extends Launcher {
      * @param slotNumber the slot number for the requests
      * @return a promise of the response as a ByteBuf
      */
-    Promise<ByteBuf> handlePipeline(ArrayList<Request> pipeline, ITcpSocket socket, short slotNumber) {
-        if (pipeline == null) {
+    Promise<ByteBuf> handlePipeline(@NotNull ArrayList<Request> pipeline, ITcpSocket socket, short slotNumber) {
+        if (pipeline.isEmpty()) {
             return Promise.of(null);
         }
 

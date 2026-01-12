@@ -272,6 +272,13 @@ class XGroupTest extends Specification {
         then:
         r.isReplType(ReplType.hi)
 
+        when:
+        // slot remote >= slot number
+        ByteBuffer.wrap(data[1]).putShort((short) ConfForGlobal.slotNumber)
+        r = x.handleRepl()
+        then:
+        r.isEmpty()
+
         // bye
         when:
         data = mockData(replPairAsSlave, ReplType.bye, ping)

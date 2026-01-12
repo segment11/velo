@@ -10,6 +10,7 @@ import io.velo.persist.KeyBucket
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.repl.LeaderSelector
+import io.velo.repl.ReplType
 import io.velo.repl.cluster.MultiShard
 import io.velo.repl.cluster.MultiSlotRange
 import io.velo.repl.cluster.Node
@@ -20,6 +21,7 @@ import io.velo.reply.NilReply
 import io.velo.task.TaskRunnable
 import spock.lang.Specification
 
+import java.nio.ByteBuffer
 import java.time.Duration
 
 class MultiWorkerServerTest extends Specification {
@@ -315,7 +317,8 @@ class MultiWorkerServerTest extends Specification {
         p != null
 
         when:
-        p = m.handlePipeline(null, socket, slotNumber)
+        def emptyPipeline = new ArrayList<Request>()
+        p = m.handlePipeline(emptyPipeline, socket, slotNumber)
         then:
         p != null
 
@@ -329,6 +332,21 @@ class MultiWorkerServerTest extends Specification {
 
         when:
         pipeline << getRequest
+        p = m.handlePipeline(pipeline, socket, slotNumber)
+        eventloopCurrent.run()
+        then:
+        p != null
+
+        when:
+        pipeline.clear()
+        def replData = new byte[4][]
+        replData[0] = new byte[8]
+        replData[1] = new byte[2]
+        replData[2] = new byte[1]
+        ByteBuffer.wrap(replData[0]).putLong(11L)
+        replData[2][0] = ReplType.hello.code
+        def replRequest = new Request(replData, false, true)
+        pipeline << replRequest
         p = m.handlePipeline(pipeline, socket, slotNumber)
         eventloopCurrent.run()
         then:
