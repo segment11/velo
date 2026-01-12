@@ -98,13 +98,6 @@ public class IndexHandlerPool implements NeedCleanUp {
         });
     }
 
-    public byte getChargeWorkerIdByWordKeyHash(long wordKeyHash) {
-        if (indexHandlers.length == 1) {
-            return 0;
-        }
-        return (byte) (wordKeyHash % indexHandlers.length);
-    }
-
     @Override
     public void cleanUp() {
         var i = 0;

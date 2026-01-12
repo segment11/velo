@@ -16,8 +16,6 @@ class IndexHandlerPoolTest extends Specification {
         pool.indexHandlers.length == 2
         pool.getIndexHandler((byte) 0) != null
         pool.indexHandlers[0].threadIdProtectedForSafe != 0
-        pool.getChargeWorkerIdByWordKeyHash(1234L) == (byte) 0
-        pool.getChargeWorkerIdByWordKeyHash(123L) == (byte) 1
 
         when:
         Thread.sleep(200)
@@ -27,12 +25,5 @@ class IndexHandlerPoolTest extends Specification {
         }
         then:
         1 == 1
-
-        when:
-        pool.cleanUp()
-        def pool2 = new IndexHandlerPool((byte) 1, Consts.persistDir, Config.create())
-        then:
-        pool2.getChargeWorkerIdByWordKeyHash(123L) == (byte) 0
-        // skip clean up as not started
     }
 }
