@@ -41,7 +41,7 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         def requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3 == null
+        requestList3.isEmpty()
 
         when:
         buf3 = ByteBuf.wrapForReading(
@@ -61,7 +61,7 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3 == null
+        requestList3.isEmpty()
 
         when:
         buf3 = ByteBuf.wrapForReading(
@@ -71,7 +71,7 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3 == null
+        requestList3.isEmpty()
 
         when:
         buf3 = ByteBuf.wrapForReading(
@@ -81,7 +81,7 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3 == null
+        requestList3.isEmpty()
     }
 
     def "test decode http"() {
@@ -127,7 +127,7 @@ class RequestDecoderTest extends Specification {
         bufs.add(buf)
         requestList = decoder.tryDecode(bufs)
         then:
-        requestList == null
+        requestList.isEmpty()
 
         when:
         buf = ByteBuf.wrapForReading(
@@ -137,7 +137,7 @@ class RequestDecoderTest extends Specification {
         bufs.add(buf)
         requestList = decoder.tryDecode(bufs)
         then:
-        requestList == null
+        requestList.isEmpty()
 
         when:
         // http not ok
@@ -148,7 +148,7 @@ class RequestDecoderTest extends Specification {
         bufs2.add(buf2)
         def requestList2 = decoder.tryDecode(bufs2)
         then:
-        requestList2 == null
+        requestList2.isEmpty()
 
         when:
         // no params
@@ -159,7 +159,7 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         def requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3 == null
+        requestList3.isEmpty()
 
         when:
         buf3 = ByteBuf.wrapForReading(
@@ -169,7 +169,7 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3 == null
+        requestList3.isEmpty()
 
         when:
         buf3 = ByteBuf.wrapForReading(new byte[1])
@@ -178,7 +178,7 @@ class RequestDecoderTest extends Specification {
         buf3.head(1)
         requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3 == null
+        requestList3.isEmpty()
     }
 
     def 'test decode repl'() {
@@ -211,7 +211,7 @@ class RequestDecoderTest extends Specification {
         bufs2.add(buf2)
         def requestList2 = decoder.tryDecode(bufs2)
         then:
-        requestList2 == null
+        requestList2.isEmpty()
 
         when:
         def bb = new byte[6 + 14 + 1]
@@ -224,6 +224,6 @@ class RequestDecoderTest extends Specification {
         bufs2.add(buf2)
         requestList = decoder.tryDecode(bufs2)
         then:
-        requestList == null
+        requestList.isEmpty()
     }
 }

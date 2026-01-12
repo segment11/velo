@@ -5,7 +5,7 @@ import io.activej.common.exception.MalformedDataException;
 import io.activej.csp.binary.decoder.ByteBufsDecoder;
 import io.netty.buffer.Unpooled;
 import io.velo.repl.Repl;
-import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -151,7 +151,7 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
      * @throws MalformedDataException if the data in ByteBufs is malformed and cannot be decoded
      */
     @Override
-    public @Nullable ArrayList<Request> tryDecode(ByteBufs bufs) throws MalformedDataException {
+    public @NotNull ArrayList<Request> tryDecode(ByteBufs bufs) throws MalformedDataException {
         try {
             ArrayList<Request> pipeline = new ArrayList<>();
             var one = tryDecodeOne(bufs);
@@ -159,7 +159,7 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                 pipeline.add(one);
                 one = tryDecodeOne(bufs);
             }
-            return pipeline.isEmpty() ? null : pipeline;
+            return pipeline;
         } catch (Exception e) {
             throw new MalformedDataException(e);
         }
