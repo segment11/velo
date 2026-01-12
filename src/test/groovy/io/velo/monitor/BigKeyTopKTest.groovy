@@ -7,8 +7,8 @@ class BigKeyTopKTest extends Specification {
         given:
         def topK = new BigKeyTopK(3)
 
-        def one = new BigKeyTopK.BigKey('xxx'.bytes, 1)
-        def two = new BigKeyTopK.BigKey('yyy'.bytes, 1)
+        def one = new BigKeyTopK.BigKey('xxx', 1)
+        def two = new BigKeyTopK.BigKey('yyy', 1)
         println one
         println two
 
@@ -18,19 +18,19 @@ class BigKeyTopKTest extends Specification {
 
         when:
         for (i in 0..<10) {
-            topK.add(('key:' + i).bytes, i)
+            topK.add('key:' + i, i)
         }
         println topK.queue.first()
         println topK.queue.last()
         then:
         topK.size() == 3
-        topK.queue.first().keyBytes() == 'key:7'.bytes
+        topK.queue.first().key() == 'key:7'
         topK.sizeIfBiggerThan(8) == 2
 
         when:
         // already contains
         for (i in 0..<10) {
-            topK.add(('key:' + i).bytes, i)
+            topK.add('key:' + i, i)
         }
         then:
         topK.sizeIfBiggerThan(8) == 2

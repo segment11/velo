@@ -1,6 +1,5 @@
 package io.velo.repl
 
-
 import spock.lang.Specification
 
 class ReplTypeTest extends Specification {
@@ -11,7 +10,7 @@ class ReplTypeTest extends Specification {
         def types = ReplType.values()
 
         expect:
-        types.length == 22
+        types.length == 24
 
         ReplType.fromCode(ReplType.ping.code) == ReplType.ping
         ReplType.fromCode((byte) -10) == null

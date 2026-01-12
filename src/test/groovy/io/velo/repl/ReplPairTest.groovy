@@ -56,7 +56,6 @@ class ReplPairTest extends Specification {
         replPairAsSlave.increaseStatsCountWhenSlaveSkipFetch(ReplType.error)
         replPairAsSlave.increaseStatsCountWhenSlaveSkipFetch(ReplType.s_exists_wal)
         replPairAsSlave.increaseStatsCountWhenSlaveSkipFetch(ReplType.s_exists_chunk_segments)
-        replPairAsSlave.increaseStatsCountWhenSlaveSkipFetch(ReplType.s_exists_key_buckets)
         println replPairAsSlave.statsCountForSlaveSkipFetchAsString
 
         // trigger log

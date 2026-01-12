@@ -148,7 +148,7 @@ class RedisHHTest extends Specification {
 
         when:
         key = 'a'
-        value = 'b' * 1024 * 1024
+        value = 'b' * (1024 * 1024 * 2)
         boolean exception2 = false
         try {
             rh.put(key, value.bytes)
