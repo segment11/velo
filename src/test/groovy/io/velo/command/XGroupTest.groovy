@@ -66,6 +66,14 @@ class XGroupTest extends Specification {
         sList.size() == 1
 
         when:
+        data4[2] = '10'.bytes
+        sList = _XXGroup.parseSlots('x_repl', data4, slotNumber)
+        then:
+        sList.size() == 1
+        // >= slot number, return %
+        sList.first.slot() == (short) 0
+
+        when:
         data4[2] = 'a'.bytes
         sList = _XXGroup.parseSlots('x_repl', data4, slotNumber)
         then:

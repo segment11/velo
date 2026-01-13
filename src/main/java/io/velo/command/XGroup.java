@@ -74,6 +74,10 @@ public class XGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if (slot >= slotNumber) {
+            slot = (short) (slot % slotNumber);
+        }
+
         slotWithKeyHashList.add(new SlotWithKeyHash(slot, 0, 0L, 0));
         return slotWithKeyHashList;
     }
@@ -87,10 +91,10 @@ public class XGroup extends BaseCommand {
 
         if (X_CONF_FOR_SLOT_AS_SUB_CMD.equals(subCmd)) {
             // get x_repl x_conf_for_slot
-            var map = ConfForSlot.global.slaveCanMatchCheckValues();
+            var checkValuesFromMaster = ConfForSlot.global.getSlaveCheckValues();
             var objectMapper = new ObjectMapper();
             try {
-                var jsonStr = objectMapper.writeValueAsString(map);
+                var jsonStr = objectMapper.writeValueAsString(checkValuesFromMaster);
                 return new BulkReply(jsonStr);
             } catch (JsonProcessingException e) {
                 return new ErrorReply(e.getMessage());

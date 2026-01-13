@@ -8,7 +8,7 @@ class ConfForSlotTest extends Specification {
         given:
         ConfForSlot.global = ConfForSlot.from(1_000_000L)
         def c = ConfForSlot.global
-        println c.slaveCanMatchCheckValues()
+        println c.getSlaveCheckValues()
 
         c.lruBigString.maxSize == 1000
         c.lruKeyAndCompressedValueEncoded.maxSize == 100_000
@@ -47,6 +47,37 @@ class ConfForSlotTest extends Specification {
         println c.confRepl
 
         when:
+        def slaveCanMatchResult = c.slaveCanMatch(c.getSlaveCheckValues())
+        then:
+        slaveCanMatchResult
+
+        when:
+        def mapRemote = c.getSlaveCheckValues()
+        Thread.sleep(200)
+        // time diff too long
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        !slaveCanMatchResult
+
+        when:
+        mapRemote = c.getSlaveCheckValues()
+        ConfForGlobal.datacenterId++
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        !slaveCanMatchResult
+
+        when:
+        mapRemote = c.getSlaveCheckValues()
+        ConfForGlobal.machineId++
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        !slaveCanMatchResult
+
+        when:
+        // reset back for last assert
+        ConfForGlobal.datacenterId = 0L
+        ConfForGlobal.machineId = 0L
+        // begin next assert
         boolean exception = false
         c.confBucket.bucketsPerSlot = KeyBucket.MAX_BUCKETS_PER_SLOT * 2
         try {

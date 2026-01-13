@@ -2,14 +2,12 @@ package io.velo;
 
 import io.velo.persist.FdReadWrite;
 import io.velo.persist.KeyBucket;
-import io.velo.persist.LocalPersist;
 import io.velo.persist.Wal;
 import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 
 import static io.velo.persist.LocalPersist.PAGE_SIZE;
@@ -130,30 +128,63 @@ public enum ConfForSlot {
         }
     }
 
-    /**
-     * Returns a map of values that need to be matched for a slave to be considered compatible with the master.
-     *
-     * @return the map of configuration values
-     */
-    public HashMap<String, Object> slaveCanMatchCheckValues() {
-        var map = new HashMap<String, Object>();
-        map.put("datacenterId", ConfForGlobal.datacenterId);
-        map.put("machineId", ConfForGlobal.machineId);
-        map.put("estimateKeyNumber", ConfForGlobal.estimateKeyNumber);
-        map.put("slotNumber", ConfForGlobal.slotNumber);
-        map.put("bucket.bucketsPerSlot", confBucket.bucketsPerSlot);
-        map.put("chunk.segmentNumberPerFd", confChunk.segmentNumberPerFd);
-        map.put("chunk.fdPerChunk", confChunk.fdPerChunk);
-        map.put("chunk.segmentLength", confChunk.segmentLength);
-        map.put("chunk.isSegmentUseCompression", confChunk.isSegmentUseCompression);
-        map.put("wal.oneChargeBucketNumber", confWal.oneChargeBucketNumber);
-        map.put("repl.binlogOneSegmentLength", confRepl.binlogOneSegmentLength);
-        map.put("repl.binlogOneFileMaxLength", confRepl.binlogOneFileMaxLength);
+    public static class SlaveCheckValues {
+        long datacenterId;
+        long machineId;
+        long currentTimeMillis;
 
-        // hash save mode needs to be the same as master
-        var localPersist = LocalPersist.getInstance();
-        map.put("persist.isHashSaveMemberTogether", localPersist.getIsHashSaveMemberTogether());
-        return map;
+        public long getDatacenterId() {
+            return datacenterId;
+        }
+
+        public void setDatacenterId(long datacenterId) {
+            this.datacenterId = datacenterId;
+        }
+
+        public long getMachineId() {
+            return machineId;
+        }
+
+        public void setMachineId(long machineId) {
+            this.machineId = machineId;
+        }
+
+        public long getCurrentTimeMillis() {
+            return currentTimeMillis;
+        }
+
+        public void setCurrentTimeMillis(long currentTimeMillis) {
+            this.currentTimeMillis = currentTimeMillis;
+        }
+    }
+
+    /**
+     * Returns a check values that need to be checked for a slave to be considered compatible with the master.
+     *
+     * @return the check values
+     */
+    public SlaveCheckValues getSlaveCheckValues() {
+        var r = new SlaveCheckValues();
+        r.setDatacenterId(ConfForGlobal.datacenterId);
+        r.setMachineId(ConfForGlobal.machineId);
+        r.setCurrentTimeMillis(System.currentTimeMillis());
+        return r;
+    }
+
+    /**
+     * Check if the local slave is compatible with the remote master.
+     *
+     * @param checkValuesFromMaster the check values from the remote master
+     * @return true if the local slave is compatible with the remote master, false otherwise
+     */
+    public boolean slaveCanMatch(SlaveCheckValues checkValuesFromMaster) {
+        if (ConfForGlobal.datacenterId != checkValuesFromMaster.datacenterId || ConfForGlobal.machineId != checkValuesFromMaster.machineId) {
+            return false;
+        }
+
+        var currentTimeMillis = System.currentTimeMillis();
+        var remoteCurrentTimeMillis = checkValuesFromMaster.currentTimeMillis;
+        return currentTimeMillis >= remoteCurrentTimeMillis && currentTimeMillis <= remoteCurrentTimeMillis + 100;
     }
 
     /**

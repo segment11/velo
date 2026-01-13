@@ -322,15 +322,16 @@ class LeaderSelectorTest extends Specification {
         when:
         leaderSelector.masterAddressLocalMocked = null
         boolean doThisCase = false
-        def map = ConfForSlot.global.slaveCanMatchCheckValues()
+        def slaveCheckValues = ConfForSlot.global.getSlaveCheckValues()
+        slaveCheckValues.currentTimeMillis = System.currentTimeMillis() - 1000
         def objectMapper = new ObjectMapper()
-        def jsonStr = objectMapper.writeValueAsString(map)
+        def jsonStr = objectMapper.writeValueAsString(slaveCheckValues)
         try {
             def jedisPool = JedisPoolHolder.instance.createIfNotCached('localhost', 6379)
             JedisPoolHolder.exe(jedisPool) { jedis ->
                 jedis.set(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + "," +
                         XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD,
-                        jsonStr + 'xxx')
+                        jsonStr)
                 jedis.set(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + ",slot,0," +
                         XGroup.X_GET_FIRST_SLAVE_LISTEN_ADDRESS_AS_SUB_CMD,
                         'localhost:6380')
@@ -359,6 +360,8 @@ class LeaderSelectorTest extends Specification {
         !r
 
         when:
+        slaveCheckValues.currentTimeMillis = System.currentTimeMillis()
+        jsonStr = objectMapper.writeValueAsString(slaveCheckValues)
         if (doThisCase) {
             def jedisPool = JedisPoolHolder.instance.createIfNotCached('localhost', 6379)
             JedisPoolHolder.exe(jedisPool) { jedis ->

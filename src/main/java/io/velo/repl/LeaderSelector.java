@@ -366,14 +366,13 @@ public class LeaderSelector implements NeedCleanUp {
                 return jedis.get(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + "," + XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD);
             });
 
-            var map = ConfForSlot.global.slaveCanMatchCheckValues();
             var objectMapper = new ObjectMapper();
-            var jsonStrLocal = objectMapper.writeValueAsString(map);
+            var checkValuesFromMaster = objectMapper.readValue(jsonStr, ConfForSlot.SlaveCheckValues.class);
 
-            if (!jsonStrLocal.equals(jsonStr)) {
+            if (!ConfForSlot.global.slaveCanMatch(checkValuesFromMaster)) {
                 log.warn("Repl reset self as slave begin, check new master global config fail, self={}", ConfForGlobal.netListenAddresses);
-                log.info("Repl local={}", jsonStrLocal);
-                log.info("Repl remote={}", jsonStr);
+                log.info("Repl local={}", ConfForSlot.global.getSlaveCheckValues());
+                log.info("Repl remote={}", checkValuesFromMaster);
                 callback.accept(new IllegalStateException("Repl slave can not match check values"));
                 return false;
             } else {
