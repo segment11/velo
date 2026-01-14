@@ -548,7 +548,7 @@ public enum ConfForSlot {
         /**
          * Length of one segment in the binlog.
          */
-        public int binlogOneSegmentLength = 1024 * 1024;
+        public int binlogOneSegmentLength = 4096 * 64;
 
         /**
          * Maximum length of one binlog file.
@@ -563,7 +563,7 @@ public enum ConfForSlot {
         /**
          * Maximum count of binlog files to keep.
          */
-        public short binlogFileKeepMaxCount = 10;
+        public short binlogFileKeepMaxCount = 100;
 
         /**
          * Minimum difference in catch-up offset for a slave to service reads.
