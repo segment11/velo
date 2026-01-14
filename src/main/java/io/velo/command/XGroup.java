@@ -204,7 +204,7 @@ public class XGroup extends BaseCommand {
         try {
             return handleReplInner(slotRemote, replType, slaveUuid);
         } catch (Exception e) {
-            log.error("Repl handle error: {}, slot remote={}", e.getMessage(), slotRemote);
+            log.error("Repl handle error, slot remote={}, repl type={}", slotRemote, replType, e);
             return Repl.error(slotRemote, slaveUuid, e.getMessage());
         }
     }
@@ -503,27 +503,33 @@ public class XGroup extends BaseCommand {
     private Repl.ReplReply exists_wal(short slot, byte[] contentBytes) {
         // server received from client
         var buffer = ByteBuffer.wrap(contentBytes);
-        var groupIndex = buffer.getInt();
+        var walGroupIndex = buffer.getInt();
 
         var walGroupNumber = Wal.calcWalGroupNumber();
-        if (groupIndex < 0 || groupIndex >= walGroupNumber) {
+        if (walGroupIndex < 0 || walGroupIndex >= walGroupNumber) {
             log.error("Repl master send wal exists bytes error: group index out of range, slot={}, group index={}",
-                    slot, groupIndex);
+                    slot, walGroupIndex);
             return Repl.error(slot, replPair, "Repl master send wal exists bytes error: group index out of range");
         }
 
-        if (groupIndex % 1000 == 0) {
-            log.warn("Repl master will fetch exists wal, group index={}, slot={}", groupIndex, slot);
+        if (walGroupIndex % 1024 == 0) {
+            log.warn("Repl master will fetch exists wal, group index={}, slot={}", walGroupIndex, slot);
         }
 
         var oneSlot = localPersist.oneSlot(slot);
-        var targetWal = oneSlot.getWalByGroupIndex(groupIndex);
+        var targetWal = oneSlot.getWalByGroupIndex(walGroupIndex);
 
         try {
             var toSlaveBytes = targetWal.toSlaveExistsOneWalGroupBytes();
-            return Repl.reply(slot, replPair, s_exists_wal, new RawBytesContent(toSlaveBytes));
+            if (toSlaveBytes == null) {
+                // no data
+                var content = fillBytes(4, buf -> buf.putInt(walGroupIndex));
+                return Repl.reply(slot, replPair, s_exists_wal, content);
+            } else {
+                return Repl.reply(slot, replPair, s_exists_wal, new RawBytesContent(toSlaveBytes));
+            }
         } catch (IOException e) {
-            log.error("Repl master get wal exists bytes error, group index={}, slot={}", groupIndex, slot, e);
+            log.error("Repl master get wal exists bytes error, group index={}, slot={}", walGroupIndex, slot, e);
             return Repl.error(slot, replPair, "Repl master get wal exists bytes error=" + e.getMessage());
         }
     }
@@ -536,6 +542,7 @@ public class XGroup extends BaseCommand {
 
         var firstOneSlot = localPersist.currentThreadFirstOneSlot();
         if (buffer.hasRemaining()) {
+            // use any wal is ok
             var firstWal = firstOneSlot.getWalByGroupIndex(0);
             try {
                 firstWal.fromMasterExistsOneWalGroupBytes(contentBytes, ((isShort, key, v) -> {
@@ -553,7 +560,7 @@ public class XGroup extends BaseCommand {
         } else {
             // skip
             replPair.increaseStatsCountWhenSlaveSkipFetch(s_exists_wal);
-            if (walGroupIndex % 1000 == 0) {
+            if (walGroupIndex % 1024 == 0) {
                 log.info("Repl slave skip update wal exists bytes, group index={}, slot={}", walGroupIndex, slot);
             }
         }
@@ -566,7 +573,7 @@ public class XGroup extends BaseCommand {
             return Repl.reply(slot, replPair, exists_all_done, NextStepContent.INSTANCE);
         } else {
             var nextGroupIndex = walGroupIndex + 1;
-            if (nextGroupIndex % 1000 == 0) {
+            if (nextGroupIndex % 1024 == 0) {
                 // delay
                 firstOneSlot.delayRun(1000, () -> {
                     replPair.write(exists_wal, fillBytes(4, buf -> buf.putInt(nextGroupIndex)));
@@ -582,30 +589,34 @@ public class XGroup extends BaseCommand {
         // server received from client
         var buffer = ByteBuffer.wrap(contentBytes);
         var beginSegmentIndex = buffer.getInt();
-        var segmentCount = buffer.getInt();
 
-        if (beginSegmentIndex % (segmentCount * 100) == 0) {
-            log.warn("Repl master fetch exists chunk segments, begin segment index={}, segment count={}, slot={}",
-                    beginSegmentIndex, segmentCount, slot);
+        if (beginSegmentIndex % (1024 * 100) == 0) {
+            log.warn("Repl master fetch exists chunk segments, begin segment index={}, slot={}",
+                    beginSegmentIndex, slot);
         }
 
-        var oneSlot = localPersist.oneSlot(slot);
+        var segmentLength = ConfForSlot.global.confChunk.segmentLength;
+        var segmentBatchCount = FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ;
 
+        var oneSlot = localPersist.oneSlot(slot);
         var chunkSegmentsBytes = oneSlot.readForRepl(beginSegmentIndex);
         if (chunkSegmentsBytes == null) {
-            var content = fillBytes(4 + 4 + 4, buf -> {
+            var content = fillBytes(4 + 4 + 4 + 4, buf -> {
                 buf.putInt(beginSegmentIndex);
                 buf.putInt(0);
-                buf.putInt(ConfForSlot.global.confChunk.segmentLength);
+                buf.putInt(segmentBatchCount);
+                buf.putInt(segmentLength);
             });
             return Repl.reply(slot, replPair, s_exists_chunk_segments, content);
         }
 
+        var segmentCount = chunkSegmentsBytes.length / segmentLength;
         // begin segment index, segment count, segment length, segment bytes
-        var content = fillBytes(4 + 4 + 4 + chunkSegmentsBytes.length, buf -> {
+        var content = fillBytes(4 + 4 + 4 + 4 + chunkSegmentsBytes.length, buf -> {
             buf.putInt(beginSegmentIndex);
             buf.putInt(segmentCount);
-            buf.putInt(ConfForSlot.global.confChunk.segmentLength);
+            buf.putInt(segmentBatchCount);
+            buf.putInt(segmentLength);
             buf.put(chunkSegmentsBytes);
         });
 
@@ -618,12 +629,13 @@ public class XGroup extends BaseCommand {
         var buffer = ByteBuffer.wrap(contentBytes);
         var beginSegmentIndex = buffer.getInt();
         var segmentCount = buffer.getInt();
+        var segmentBatchCount = buffer.getInt();
         var segmentLength = buffer.getInt();
 
         var remoteReplProperties = replPair.getRemoteReplProperties();
         assert segmentLength == remoteReplProperties.segmentLength();
 
-        if (beginSegmentIndex % (segmentCount * 100) == 0) {
+        if (beginSegmentIndex % (1024 * 100) == 0) {
             log.warn("Repl slave ready to fetch exists chunk segments, begin segment index={}, segment count={}, slot={}",
                     beginSegmentIndex, segmentCount, slot);
         }
@@ -633,10 +645,8 @@ public class XGroup extends BaseCommand {
                 break;
             }
 
-            var segmentBytes = new byte[segmentLength];
-            buffer.get(segmentBytes);
-
-            SegmentBatch2.iterateFromSegmentBytes(segmentBytes, (key, cv, offsetInThisSegment) -> {
+            var offset = buffer.position();
+            SegmentBatch2.iterateFromSegmentBytes(buffer.array(), offset, segmentLength, (key, cv, offsetInThisSegment) -> {
                 if (cv.isExpired()) {
                     return;
                 }
@@ -647,23 +657,23 @@ public class XGroup extends BaseCommand {
                     oneSlot.put(key, s.bucketIndex(), cv);
                 });
             });
+            buffer.position(offset + segmentLength);
         }
 
         var maxSegmentNumber = remoteReplProperties.segmentNumberPerFd() * remoteReplProperties.fdPerChunk();
-        boolean isLastBatch = maxSegmentNumber == beginSegmentIndex + segmentCount;
+        boolean isLastBatch = maxSegmentNumber == beginSegmentIndex + segmentBatchCount;
         if (isLastBatch) {
             // next step, fetch exists wal
             log.warn("Repl slave fetch data, go to step={}, slot={}", exists_wal.name(), slot);
-            return Repl.reply(slot, replPair, exists_wal, fillBytes(4, buf -> buf.putInt(0)));
+            return Repl.reply(slot, replPair, exists_wal, new RawBytesContent(new byte[4]));
         } else {
-            var nextBatchBeginSegmentIndex = beginSegmentIndex + segmentCount;
-            var content = fillBytes(4 + 4, buf -> {
+            var nextBatchBeginSegmentIndex = beginSegmentIndex + segmentBatchCount;
+            var content = fillBytes(4, buf -> {
                 buf.putInt(nextBatchBeginSegmentIndex);
-                buf.putInt(segmentCount);
             });
 
             var oneSlot = localPersist.oneSlot(slot);
-            if (nextBatchBeginSegmentIndex % (segmentCount * 100) == 0) {
+            if (nextBatchBeginSegmentIndex % (1024 * 100) == 0) {
                 oneSlot.delayRun(100, () -> {
                     replPair.write(exists_chunk_segments, content);
                 });
@@ -746,7 +756,9 @@ public class XGroup extends BaseCommand {
             var keyHash = buffer.getLong();
             sentIdList.add(new BigStringFiles.IdWithKey(uuid, bucketIndex, keyHash, ""));
         }
-        log.warn("Repl master fetch exists big string, slave sent id list={}, bucket index={}, slot={}", sentIdList, bucketIndex, slot);
+        if (bucketIndex % (1024 * 10) == 0) {
+            log.warn("Repl master fetch exists big string, slave sent id list={}, bucket index={}, slot={}", sentIdList, bucketIndex, slot);
+        }
 
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
@@ -767,51 +779,48 @@ public class XGroup extends BaseCommand {
         if (NextStepContent.isNextStep(contentBytes)) {
             // next step, fetch exists chunk segments
             log.warn("Repl slave fetch data, go to step={}, slot={}", exists_short_string.name(), slot);
-            return Repl.reply(slot, replPair, exists_short_string, NextStepContent.INSTANCE);
+            return Repl.reply(slot, replPair, exists_short_string, new RawBytesContent(new byte[4]));
         }
 
         var buffer = ByteBuffer.wrap(contentBytes);
         // remote bucket index
         var bucketIndex = buffer.getInt();
-        var bigStringCount = buffer.getShort();
+        var bigStringCount = buffer.getInt();
         var isSendAllOnce = buffer.get() == 1;
 
         var remoteReplProperties = replPair.getRemoteReplProperties();
         var bucketsPerSlotRemote = remoteReplProperties.bucketsPerSlot();
 
-        if (bigStringCount == 0 && bucketIndex == bucketsPerSlotRemote - 1) {
-            log.warn("Repl slave fetch data, go to step={}, slot={}", exists_short_string.name(), slot);
-            return Repl.reply(slot, replPair, exists_short_string, NextStepContent.INSTANCE);
-        }
-        log.warn("Repl slave fetch exists big string, master sent big string count={}, bucket index={}, slot={}", bigStringCount, bucketIndex, slot);
-
-        var firstOneSlot = localPersist.currentThreadFirstOneSlot();
-        final var sSet = findKeyMustInSlot(firstOneSlot.slot(), "exists_big_string_uuids_bucket_index_" + bucketIndex);
-        var rhk = SGroup.getRedisSet(sSet, this);
-        if (rhk == null) {
-            rhk = new RedisHashKeys();
+        if (bucketIndex % (1024 * 10) == 0) {
+            log.warn("Repl slave fetch exists big string, master sent big string count={}, bucket index={}, slot={}", bigStringCount, bucketIndex, slot);
         }
 
-        for (int i = 0; i < bigStringCount; i++) {
-            var uuid = buffer.getLong();
-            var keyHash = buffer.getLong();
-            var bigStringBytesLength = buffer.getInt();
-            var offset = buffer.position();
-
-            var slotInner = calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
-            var bucketThis = KeyHash.bucketIndex(keyHash);
-            var oneSlot = localPersist.oneSlot(slotInner);
-            var bigStringFiles = oneSlot.getBigStringFiles();
-            oneSlot.asyncRun(() -> {
-                bigStringFiles.writeBigStringBytes(uuid, bucketThis, keyHash, contentBytes, offset, bigStringBytesLength);
-            });
-            buffer.position(offset + bigStringBytesLength);
-
-            rhk.add(uuid + "_" + keyHash);
-        }
-
-        // update exists big string local
         if (bigStringCount > 0) {
+            var firstOneSlot = localPersist.currentThreadFirstOneSlot();
+            final var sSet = findKeyMustInSlot(firstOneSlot.slot(), "exists_big_string_uuids_bucket_index_" + bucketIndex);
+            var rhk = SGroup.getRedisSet(sSet, this);
+            if (rhk == null) {
+                rhk = new RedisHashKeys();
+            }
+
+            for (int i = 0; i < bigStringCount; i++) {
+                var uuid = buffer.getLong();
+                var keyHash = buffer.getLong();
+                var bigStringBytesLength = buffer.getInt();
+                var offset = buffer.position();
+
+                var slotInner = calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+                var bucketThis = KeyHash.bucketIndex(keyHash);
+                var oneSlot = localPersist.oneSlot(slotInner);
+                var bigStringFiles = oneSlot.getBigStringFiles();
+                oneSlot.asyncRun(() -> {
+                    bigStringFiles.writeBigStringBytes(uuid, bucketThis, keyHash, contentBytes, offset, bigStringBytesLength);
+                });
+                buffer.position(offset + bigStringBytesLength);
+
+                rhk.add(uuid + "_" + keyHash);
+            }
+
             RedisHashKeys finalRhk = rhk;
             firstOneSlot.asyncRun(() -> {
                 SGroup.saveRedisSet(finalRhk, sSet, this, dictMap);
@@ -821,7 +830,7 @@ public class XGroup extends BaseCommand {
         if (isSendAllOnce) {
             if (bucketIndex == bucketsPerSlotRemote - 1) {
                 log.warn("Repl slave fetch data, go to step={}, slot={}", exists_short_string.name(), slot);
-                return Repl.reply(slot, replPair, exists_short_string, NextStepContent.INSTANCE);
+                return Repl.reply(slot, replPair, exists_short_string, new RawBytesContent(new byte[4]));
             } else {
                 return fetchExistsBigString(slot, bucketIndex + 1);
             }
@@ -850,7 +859,8 @@ public class XGroup extends BaseCommand {
         var rhk = SGroup.getRedisSet(s, this);
         var set = rhk != null ? rhk.getSet() : new HashSet<String>();
         if (set.isEmpty()) {
-            return Repl.reply(slot, replPair, exists_big_string, NextStepContent.INSTANCE);
+            var content = fillBytes(4, buf -> buf.putInt(bucketIndex));
+            return Repl.reply(slot, replPair, exists_big_string, content);
         }
 
         var content = fillBytes(4 + 16 * set.size(), buf -> {
@@ -906,18 +916,12 @@ public class XGroup extends BaseCommand {
 
         if (walGroupIndex == walGroupNumberRemote - 1) {
             log.warn("Repl slave fetch data, go to step={}, slot={}", exists_chunk_segments.name(), slot);
-            var content = fillBytes(4 + 4, buf -> {
-                // begin segment index
-                buf.putInt(0);
-                // segment count
-                buf.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ);
-            });
-            return Repl.reply(slot, replPair, exists_chunk_segments, content);
+            return Repl.reply(slot, replPair, exists_chunk_segments, new RawBytesContent(new byte[4]));
         } else {
             var firstOneSlot = localPersist.currentThreadFirstOneSlot();
 
             var nextGroupIndex = walGroupIndex + 1;
-            if (nextGroupIndex % 1000 == 0) {
+            if (nextGroupIndex % 1024 == 0) {
                 // delay
                 firstOneSlot.delayRun(1000, () -> {
                     replPair.write(exists_short_string, fillBytes(4, buf -> buf.putInt(nextGroupIndex)));
@@ -1226,17 +1230,20 @@ public class XGroup extends BaseCommand {
 
         // set can read if catch up to current file, and offset not too far
         var isCatchUpToCurrentFile = fetchedFileIndex == masterCurrentFileIndex;
+        boolean canRead;
         if (isCatchUpToCurrentFile) {
             var diffOffset = masterCurrentOffset - fetchedOffset - skipBytesN;
-            if (diffOffset < ConfForSlot.global.confRepl.catchUpOffsetMinDiff) {
-                try {
-                    if (!oneSlot.isCanRead()) {
-                        oneSlot.setCanRead(true);
-                        log.warn("Repl slave can read now as already catch up nearly to master latest, slot={}", slot);
-                    }
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+            canRead = diffOffset < ConfForSlot.global.confRepl.catchUpOffsetMinDiff;
+        } else {
+            canRead = false;
+        }
+
+        if ((canRead && !oneSlot.isCanRead()) || (!canRead && oneSlot.isCanRead())) {
+            try {
+                oneSlot.setCanRead(canRead);
+                log.warn("Repl slave can read={}, as already catch up nearly to master latest, slot={}", canRead, slot);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }
 

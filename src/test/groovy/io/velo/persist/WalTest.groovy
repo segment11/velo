@@ -81,6 +81,7 @@ class WalTest extends Specification {
         wal.lastSeqShortValueAfterPut == 0
         wal.writePosition == 0
         wal.writePositionShortValue == 0
+        wal.toSlaveExistsOneWalGroupBytes() == null
 
         when:
         wal.lazyReadFromFile()

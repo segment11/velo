@@ -319,21 +319,20 @@ class XGroupTest extends Specification {
         // response exists chunk segments
         data4[2][0] = ReplType.exists_chunk_segments.code
 
-        // begin segment index, segment count
+        // begin segment index
         // chunk segment bytes exists
         oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlag(0, Chunk.Flag.init.flagByte(), 1, 0)
-        def contentBytes = new byte[4 + 4]
+        def contentBytes = new byte[4]
         def requestBuffer = ByteBuffer.wrap(contentBytes)
         requestBuffer.putInt(0)
-        requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ)
         data4[3] = contentBytes
         x = new XGroup(null, data4, null)
         x.from(BaseCommand.mockAGroup())
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_chunk_segments)
-        // begin segment index, segment count, segment length, no data
-        r.buffer().limit() == Repl.HEADER_LENGTH + 12
+        // begin segment index, segment count, segment batch count, segment length, no data
+        r.buffer().limit() == Repl.HEADER_LENGTH + 16
 
         // response exists wal
         when:
@@ -355,7 +354,7 @@ class XGroupTest extends Specification {
         when:
         requestBuffer.position(0)
         // no log, skip
-        requestBuffer.putInt(999)
+        requestBuffer.putInt(1023)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_wal)
@@ -389,7 +388,7 @@ class XGroupTest extends Specification {
         when:
         requestBuffer.position(0)
         // no log, no skip
-        requestBuffer.putInt(999)
+        requestBuffer.putInt(1024)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_wal)
@@ -397,7 +396,7 @@ class XGroupTest extends Specification {
         when:
         requestBuffer.position(0)
         // trigger log, no skip
-        requestBuffer.putInt(1000)
+        requestBuffer.putInt(1024)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.s_exists_wal)
@@ -721,11 +720,13 @@ class XGroupTest extends Specification {
         // fetch exists chunk segments
         data4[2][0] = ReplType.s_exists_chunk_segments.code
 
-        def contentBytes = new byte[12 + 4096]
+        def contentBytes = new byte[16 + 4096]
         def requestBuffer = ByteBuffer.wrap(contentBytes)
         // begin segment index
         requestBuffer.putInt(0)
         // segment count
+        requestBuffer.putInt(1)
+        // segment batch count
         requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ)
         // segment length
         requestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
@@ -771,7 +772,7 @@ class XGroupTest extends Specification {
         // skip, no log
         contentBytes = new byte[4]
         requestBuffer = ByteBuffer.wrap(contentBytes)
-        requestBuffer.putInt(999)
+        requestBuffer.putInt(1023)
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
@@ -782,7 +783,7 @@ class XGroupTest extends Specification {
         // skip, trigger log
         contentBytes = new byte[4]
         requestBuffer = ByteBuffer.wrap(contentBytes)
-        requestBuffer.putInt(1000)
+        requestBuffer.putInt(1024)
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
@@ -817,24 +818,15 @@ class XGroupTest extends Specification {
         then:
         r.isEmpty()
 
-        // s_exists_big_string
         when:
         data4[2][0] = ReplType.s_exists_big_string.code
-        // next step
-        contentBytes = new byte[1]
+        contentBytes = new byte[4 + 4 + 1]
         data4[3] = contentBytes
-        r = x.handleRepl()
-        then:
-        // next step
-        r.isReplType(ReplType.exists_short_string)
-
-        when:
-        contentBytes = new byte[4 + 2 + 1]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         // bucket index
         requestBuffer.putInt(0)
-        // big string count short
-        requestBuffer.putShort((short) 0)
+        // big string count
+        requestBuffer.putInt(0)
         // is sent all once flag
         requestBuffer.put((byte) 1)
         data4[3] = contentBytes
@@ -844,8 +836,22 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.exists_big_string)
 
         when:
+        requestBuffer.position(0)
+        requestBuffer.putInt(1)
+        requestBuffer.putInt(1)
+        // is sent all once flag
+        requestBuffer.put((byte) 0)
+        then:
+        // continue current bucket index
+        r.isReplType(ReplType.exists_big_string)
+
+        when:
         // last bucket index
-        requestBuffer.position(0).putInt(ConfForSlot.global.confBucket.bucketsPerSlot - 1)
+        requestBuffer.position(0)
+        requestBuffer.putInt(ConfForSlot.global.confBucket.bucketsPerSlot - 1)
+        requestBuffer.putInt(0)
+        // is sent all once flag
+        requestBuffer.put((byte) 1)
         r = x.handleRepl()
         then:
         // next step
@@ -853,10 +859,10 @@ class XGroupTest extends Specification {
 
         when:
         // mock two big string fetched
-        contentBytes = new byte[4 + 2 + 1 + (8 + 8 + 4 + 1024) * 2]
+        contentBytes = new byte[4 + 4 + 1 + (8 + 8 + 4 + 1024) * 2]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         requestBuffer.putInt(0)
-        requestBuffer.putShort((short) 2)
+        requestBuffer.putInt(2)
         requestBuffer.put((byte) 1)
         // big string uuid
         requestBuffer.putLong(1L)
@@ -875,7 +881,7 @@ class XGroupTest extends Specification {
 
         when:
         // is sent all false
-        requestBuffer.put(4 + 2, (byte) 0)
+        requestBuffer.put(4 + 4, (byte) 0)
         r = x.handleRepl()
         then:
         // next batch
@@ -883,9 +889,10 @@ class XGroupTest extends Specification {
 
         when:
         // last bucket index
-        requestBuffer.position(0).putInt(ConfForSlot.global.confBucket.bucketsPerSlot - 1)
+        requestBuffer.position(0)
+        requestBuffer.putInt(ConfForSlot.global.confBucket.bucketsPerSlot - 1)
         // is sent all true
-        requestBuffer.put(4 + 2, (byte) 1)
+        requestBuffer.put(4 + 4, (byte) 1)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.exists_short_string)

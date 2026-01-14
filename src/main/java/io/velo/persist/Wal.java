@@ -1011,6 +1011,10 @@ public class Wal implements InMemoryEstimate {
      */
     @SlaveReplay
     public byte[] toSlaveExistsOneWalGroupBytes() throws IOException {
+        if (delayToKeyBucketValues.isEmpty() && delayToKeyBucketShortValues.isEmpty()) {
+            return null;
+        }
+
         // encoded length
         // 4 bytes for group index
         // 4 bytes for one group buffer size

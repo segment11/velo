@@ -55,7 +55,7 @@ public class Repl {
      * Represents a reply message from bytes in the REPL protocol.
      * Implements the {@link Reply} interface.
      */
-    public record ReplReplyFromBytes(long slaveUuid, short slot, ReplType type, byte[] bytes,
+    public record ReplReplyFromBytes(long slaveUuid, short slot, ReplType type, byte[] data,
                                      int offset, int length) implements Reply {
         @Override
         public io.activej.bytebuf.ByteBuf buffer() {
@@ -67,7 +67,7 @@ public class Repl {
             buf.writeShort(slot);
             buf.writeShort(type.code);
             buf.writeInt(length);
-            buf.write(bytes, offset, length);
+            buf.write(data, offset, length);
             return buf;
         }
     }

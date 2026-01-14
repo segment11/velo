@@ -53,7 +53,7 @@ public class ToSlaveExistsBigString implements ReplContent {
             }
         }
 
-        this.isSendAllOnce = toSendIdList.size() <= ONCE_SEND_BIG_STRING_COUNT;
+        this.isSendAllOnce = toSendIdList.isEmpty() || toSendIdList.size() <= ONCE_SEND_BIG_STRING_COUNT;
         if (!isSendAllOnce) {
             toSendIdList = new ArrayList<>(toSendIdList.subList(0, ONCE_SEND_BIG_STRING_COUNT));
         }

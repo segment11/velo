@@ -641,7 +641,9 @@ public class ReplPair {
     TcpSocket slaveConnectSocketInMaster;
 
     public void setSlaveConnectSocketInMaster(TcpSocket slaveConnectSocketInMaster) {
-        this.slaveConnectSocketInMaster = slaveConnectSocketInMaster;
+        if (this.slaveConnectSocketInMaster != slaveConnectSocketInMaster) {
+            this.slaveConnectSocketInMaster = slaveConnectSocketInMaster;
+        }
     }
 
     public void closeSlaveConnectSocket() {
