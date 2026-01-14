@@ -46,15 +46,15 @@ public interface WalVDataGenerator {
     default Map<Integer, List<Wal.V>> generateVListByWalGroupIndex(int oneChargeBucketNumber, int keyLength, String keyPrefix) {
         var n = n();
         ArrayList<Wal.V> list = new ArrayList<>();
-        var beginTime = System.currentTimeMillis();
+        var beginT = System.currentTimeMillis();
         for (long i = 0; i < n; i++) {
             var key = key(i, keyLength, keyPrefix);
             var keyHash = KeyHash.hash(key.getBytes());
             var bucketIndex = KeyHash.bucketIndex(keyHash);
             list.add(keyToV(nextId(), bucketIndex, key, keyHash));
         }
-        var costTime = System.currentTimeMillis() - beginTime;
-        System.out.println("Generate key list cost time=" + costTime + " ms");
+        var costT = System.currentTimeMillis() - beginT;
+        System.out.println("Generate key list cost time=" + costT + " ms");
 
         // group by bucket index
         var beginTime2 = System.currentTimeMillis();
