@@ -512,7 +512,7 @@ public class XGroup extends BaseCommand {
             return Repl.error(slot, replPair, "Repl master send wal exists bytes error: group index out of range");
         }
 
-        if (walGroupIndex % 1024 == 0) {
+        if (slot == 0 && walGroupIndex % 1024 == 0) {
             log.warn("Repl master will fetch exists wal, group index={}, slot={}", walGroupIndex, slot);
         }
 
@@ -560,7 +560,7 @@ public class XGroup extends BaseCommand {
         } else {
             // skip
             replPair.increaseStatsCountWhenSlaveSkipFetch(s_exists_wal);
-            if (walGroupIndex % 1024 == 0) {
+            if (slot == 0 && walGroupIndex % 1024 == 0) {
                 log.info("Repl slave skip update wal exists bytes, group index={}, slot={}", walGroupIndex, slot);
             }
         }
@@ -590,7 +590,7 @@ public class XGroup extends BaseCommand {
         var buffer = ByteBuffer.wrap(contentBytes);
         var beginSegmentIndex = buffer.getInt();
 
-        if (beginSegmentIndex % (1024 * 100) == 0) {
+        if (slot == 0 && beginSegmentIndex % (1024 * 100) == 0) {
             log.warn("Repl master fetch exists chunk segments, begin segment index={}, slot={}",
                     beginSegmentIndex, slot);
         }
@@ -635,7 +635,7 @@ public class XGroup extends BaseCommand {
         var remoteReplProperties = replPair.getRemoteReplProperties();
         assert segmentLength == remoteReplProperties.segmentLength();
 
-        if (beginSegmentIndex % (1024 * 100) == 0) {
+        if (slot == 0 && beginSegmentIndex % (1024 * 100) == 0) {
             log.warn("Repl slave ready to fetch exists chunk segments, begin segment index={}, segment count={}, slot={}",
                     beginSegmentIndex, segmentCount, slot);
         }
@@ -756,7 +756,7 @@ public class XGroup extends BaseCommand {
             var keyHash = buffer.getLong();
             sentIdList.add(new BigStringFiles.IdWithKey(uuid, bucketIndex, keyHash, ""));
         }
-        if (bucketIndex % (1024 * 10) == 0) {
+        if (slot == 0 && bucketIndex % (1024 * 10) == 0) {
             log.warn("Repl master fetch exists big string, slave sent id list={}, bucket index={}, slot={}", sentIdList, bucketIndex, slot);
         }
 
@@ -791,7 +791,7 @@ public class XGroup extends BaseCommand {
         var remoteReplProperties = replPair.getRemoteReplProperties();
         var bucketsPerSlotRemote = remoteReplProperties.bucketsPerSlot();
 
-        if (bucketIndex % (1024 * 10) == 0) {
+        if (slot == 0 && bucketIndex % (1024 * 10) == 0) {
             log.warn("Repl slave fetch exists big string, master sent big string count={}, bucket index={}, slot={}", bigStringCount, bucketIndex, slot);
         }
 
