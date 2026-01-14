@@ -292,7 +292,7 @@ public class SocketInspector implements TcpSocket.Inspector {
         this.slotWorkerEventloopArray = slotWorkerEventloopArray;
 
         this.connectedClientCountArray = new int[netWorkerEventloopArray.length];
-        this.netInBytesLengthArray = new long[netWorkerEventloopArray.length];
+        this.netInBytesLengthArray = new long[netWorkerEventloopArray.length + slotWorkerEventloopArray.length];
         this.netOutBytesLengthArray = new long[netWorkerEventloopArray.length + slotWorkerEventloopArray.length];
     }
 
@@ -631,7 +631,14 @@ public class SocketInspector implements TcpSocket.Inspector {
         veloUserData.netInBytesLength += bytes;
 
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
-        netInBytesLengthArray[threadIndex] += bytes;
+        if (threadIndex != -1) {
+            netInBytesLengthArray[threadIndex] += bytes;
+        } else {
+            // when do repl, slot eventloop trigger read
+            threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
+            assert threadIndex != -1;
+            netInBytesLengthArray[ConfForGlobal.netWorkers + threadIndex] += bytes;
+        }
     }
 
     @Override
