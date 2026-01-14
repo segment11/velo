@@ -673,7 +673,7 @@ public class XGroup extends BaseCommand {
             });
 
             var oneSlot = localPersist.oneSlot(slot);
-            if (nextBatchBeginSegmentIndex % (1024 * 100) == 0) {
+            if (nextBatchBeginSegmentIndex % (64 * 1024) == 0) {
                 oneSlot.delayRun(100, () -> {
                     replPair.write(exists_chunk_segments, content);
                 });

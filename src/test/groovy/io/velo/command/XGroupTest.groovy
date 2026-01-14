@@ -749,7 +749,7 @@ class XGroupTest extends Specification {
         when:
         requestBuffer.position(0)
         // next batch will delay run
-        requestBuffer.putInt(ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl * 99)
+        requestBuffer.putInt(ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl * 1023)
         r = x.handleRepl()
         then:
         r.isEmpty()
