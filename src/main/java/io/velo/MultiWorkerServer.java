@@ -1302,6 +1302,9 @@ public class MultiWorkerServer extends Launcher {
             if (config.getChild("chunk.segmentLength").hasValue()) {
                 c.confChunk.segmentLength = config.get(ofInteger(), "chunk.segmentLength");
             }
+            if (config.getChild("chunk.onceReadSegmentCountWhenRepl").hasValue()) {
+                c.confChunk.onceReadSegmentCountWhenRepl = config.get(ofInteger(), "chunk.onceReadSegmentCountWhenRepl");
+            }
             c.confChunk.isSegmentUseCompression = config.get(ofBoolean(), "chunk.isSegmentUseCompression", false);
             c.confChunk.lruPerFd.maxSize = config.get(ofInteger(), "chunk.lruPerFd.maxSize", 0);
             c.confChunk.checkIfValid();

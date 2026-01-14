@@ -727,7 +727,7 @@ class XGroupTest extends Specification {
         // segment count
         requestBuffer.putInt(1)
         // segment batch count
-        requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ)
+        requestBuffer.putInt(ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl)
         // segment length
         requestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
 
@@ -740,7 +740,7 @@ class XGroupTest extends Specification {
         when:
         // last batch
         requestBuffer.position(0)
-        requestBuffer.putInt(ConfForSlot.global.confChunk.maxSegmentNumber() - FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ)
+        requestBuffer.putInt(ConfForSlot.global.confChunk.maxSegmentNumber() - ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl)
         r = x.handleRepl()
         then:
         // next step
@@ -749,7 +749,7 @@ class XGroupTest extends Specification {
         when:
         requestBuffer.position(0)
         // next batch will delay run
-        requestBuffer.putInt(FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ * 99)
+        requestBuffer.putInt(ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl * 99)
         r = x.handleRepl()
         then:
         r.isEmpty()

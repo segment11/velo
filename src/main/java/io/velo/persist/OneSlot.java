@@ -1974,7 +1974,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public byte[] readForRepl(int beginSegmentIndex) {
         checkCurrentThreadId();
 
-        if (!hasData(beginSegmentIndex, FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ)) {
+        if (!hasData(beginSegmentIndex, ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl)) {
             return null;
         }
 

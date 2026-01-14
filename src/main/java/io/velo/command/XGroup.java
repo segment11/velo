@@ -596,7 +596,7 @@ public class XGroup extends BaseCommand {
         }
 
         var segmentLength = ConfForSlot.global.confChunk.segmentLength;
-        var segmentBatchCount = FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ;
+        var segmentBatchCount = ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl;
 
         var oneSlot = localPersist.oneSlot(slot);
         var chunkSegmentsBytes = oneSlot.readForRepl(beginSegmentIndex);

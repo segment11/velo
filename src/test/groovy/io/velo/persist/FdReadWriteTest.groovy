@@ -120,6 +120,28 @@ class FdReadWriteTest extends Specification {
         when:
         boolean exception = false
         try {
+            fdChunk.writeSegmentsBatch(0, new byte[segmentLength * 2], true)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        try {
+            fdChunk.writeOneInner(0, new byte[segmentLength * 2], true)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        try {
             fdChunk.readOneInner(-1, false)
         } catch (IllegalArgumentException e) {
             println e.message

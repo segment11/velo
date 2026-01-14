@@ -47,36 +47,6 @@ class ConfForSlotTest extends Specification {
         println c.confRepl
 
         when:
-        def slaveCanMatchResult = c.slaveCanMatch(c.getSlaveCheckValues())
-        then:
-        slaveCanMatchResult
-
-        when:
-        def mapRemote = c.getSlaveCheckValues()
-        Thread.sleep(200)
-        // time diff too long
-        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
-        then:
-        !slaveCanMatchResult
-
-        when:
-        mapRemote = c.getSlaveCheckValues()
-        ConfForGlobal.datacenterId++
-        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
-        then:
-        !slaveCanMatchResult
-
-        when:
-        mapRemote = c.getSlaveCheckValues()
-        ConfForGlobal.machineId++
-        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
-        then:
-        !slaveCanMatchResult
-
-        when:
-        // reset back for last assert
-        ConfForGlobal.datacenterId = 0L
-        ConfForGlobal.machineId = 0L
         // begin next assert
         boolean exception = false
         c.confBucket.bucketsPerSlot = KeyBucket.MAX_BUCKETS_PER_SLOT * 2
@@ -116,6 +86,7 @@ class ConfForSlotTest extends Specification {
 
         when:
         exception = false
+        c.confBucket.initialSplitNumber = (byte) 1
         c.confBucket.onceScanMaxLoopCount = 0
         try {
             c.confBucket.checkIfValid()
@@ -192,7 +163,33 @@ class ConfForSlotTest extends Specification {
         when:
         exception = false
         c.confChunk.segmentNumberPerFd = 256 * 1024
+        c.confChunk.onceReadSegmentCountWhenRepl = 1024
+        try {
+            c.confChunk.checkIfValid()
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        c.confChunk.segmentNumberPerFd = 256 * 1024
         c.confWal.oneChargeBucketNumber = 8
+        try {
+            c.confWal.checkIfValid()
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        c.confWal.oneChargeBucketNumber = 32
+        c.confWal.onceScanMaxLoopCount = 1024 * 2
         try {
             c.confWal.checkIfValid()
         } catch (IllegalArgumentException e) {
@@ -264,5 +261,63 @@ class ConfForSlotTest extends Specification {
         c1.confWal.oneChargeBucketNumber = c.confWal.oneChargeBucketNumber * 2
         then:
         !c.isReplRedoSet(c1)
+    }
+
+    def 'test slave check values'() {
+        given:
+        def c = ConfForSlot.from(100_000)
+
+        when:
+        def slaveCanMatchResult = c.slaveCanMatch(c.getSlaveCheckValues())
+        then:
+        slaveCanMatchResult
+
+        when:
+        def mapRemote = c.getSlaveCheckValues()
+        println mapRemote.datacenterId
+        println mapRemote.machineId
+        println mapRemote.currentTimeMillis
+        println mapRemote.slotNumber
+        Thread.sleep(200)
+        // time diff too long
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        !slaveCanMatchResult
+
+        when:
+        mapRemote = c.getSlaveCheckValues()
+        ConfForGlobal.datacenterId++
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        !slaveCanMatchResult
+
+        when:
+        mapRemote = c.getSlaveCheckValues()
+        ConfForGlobal.machineId++
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        !slaveCanMatchResult
+
+        when:
+        mapRemote = c.getSlaveCheckValues()
+        ConfForGlobal.slotNumber++
+        // slot number slave can > master
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        slaveCanMatchResult
+
+        when:
+        mapRemote = c.getSlaveCheckValues()
+        ConfForGlobal.slotNumber--
+        // slot number slave can not < master
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        !slaveCanMatchResult
+
+        cleanup:
+        // reset back for last assert
+        ConfForGlobal.datacenterId = 0L
+        ConfForGlobal.machineId = 0L
+        ConfForGlobal.slotNumber = 1
     }
 }

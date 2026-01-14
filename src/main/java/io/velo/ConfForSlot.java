@@ -1,6 +1,5 @@
 package io.velo;
 
-import io.velo.persist.FdReadWrite;
 import io.velo.persist.KeyBucket;
 import io.velo.persist.Wal;
 import org.jetbrains.annotations.TestOnly;
@@ -132,7 +131,9 @@ public enum ConfForSlot {
         long datacenterId;
         long machineId;
         long currentTimeMillis;
+        int slotNumber;
 
+        // getter setter for json
         public long getDatacenterId() {
             return datacenterId;
         }
@@ -156,6 +157,14 @@ public enum ConfForSlot {
         public void setCurrentTimeMillis(long currentTimeMillis) {
             this.currentTimeMillis = currentTimeMillis;
         }
+
+        public int getSlotNumber() {
+            return slotNumber;
+        }
+
+        public void setSlotNumber(int slotNumber) {
+            this.slotNumber = slotNumber;
+        }
     }
 
     /**
@@ -168,6 +177,7 @@ public enum ConfForSlot {
         r.setDatacenterId(ConfForGlobal.datacenterId);
         r.setMachineId(ConfForGlobal.machineId);
         r.setCurrentTimeMillis(System.currentTimeMillis());
+        r.setSlotNumber(ConfForGlobal.slotNumber);
         return r;
     }
 
@@ -179,6 +189,10 @@ public enum ConfForSlot {
      */
     public boolean slaveCanMatch(SlaveCheckValues checkValuesFromMaster) {
         if (ConfForGlobal.datacenterId != checkValuesFromMaster.datacenterId || ConfForGlobal.machineId != checkValuesFromMaster.machineId) {
+            return false;
+        }
+
+        if (ConfForGlobal.slotNumber < checkValuesFromMaster.slotNumber) {
             return false;
         }
 
@@ -363,9 +377,19 @@ public enum ConfForSlot {
         public int segmentLength = 4096;
 
         /**
+         * Number of segments to read when do repl.
+         */
+        public int onceReadSegmentCountWhenRepl = 64;
+
+        /**
+         * 4K * 256 = 1M, read file will cost too much time
+         */
+        public static final int MAX_ONCE_READ_SEGMENT_COUNT_WHEN_REPL = 256;
+
+        /**
          * List of valid segment lengths.
          */
-        public static final List<Integer> VALID_SEGMENT_LENGTH_LIST = Arrays.asList(
+        private static final List<Integer> VALID_SEGMENT_LENGTH_LIST = Arrays.asList(
                 4096,
                 8192,
                 16384,
@@ -401,12 +425,13 @@ public enum ConfForSlot {
             }
 
             if (!ConfForSlot.ConfChunk.VALID_SEGMENT_LENGTH_LIST.contains(segmentLength)) {
-                throw new IllegalArgumentException("Chunk segment length invalid, chunk segment length should be one of " + ConfForSlot.ConfChunk.VALID_SEGMENT_LENGTH_LIST);
+                throw new IllegalArgumentException("Chunk segment length invalid, chunk segment length should be one of "
+                        + ConfForSlot.ConfChunk.VALID_SEGMENT_LENGTH_LIST);
             }
-            ConfForSlot.ConfChunk.REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ * segmentLength];
 
             if (ConfForGlobal.estimateOneValueLength > segmentLength / 10) {
-                throw new IllegalArgumentException("Chunk segment length too small, chunk segment length should be larger than " + ConfForGlobal.estimateOneValueLength * 10);
+                throw new IllegalArgumentException("Chunk segment length too small, chunk segment length should be larger than "
+                        + ConfForGlobal.estimateOneValueLength * 10);
             }
 
             // check if chunk file number is enough for all key values encoded, considering invalid need merge values
@@ -414,15 +439,16 @@ public enum ConfForSlot {
             long estimateChunkCanStoreValueNumber = (long) maxSegmentNumber() * segmentLength / estimateOneValueEncodedLength;
             // keep 2 times space for the chunk file, so pre-read merged segments invalid number is high, for performance
             if (estimateChunkCanStoreValueNumber < ConfForGlobal.estimateKeyNumber) {
-                throw new IllegalArgumentException("Chunk segment number too small, chunk segments can store key value number should be larger than " + ConfForGlobal.estimateKeyNumber +
+                throw new IllegalArgumentException("Chunk segment number too small, chunk segments can store key value number should be larger than "
+                        + ConfForGlobal.estimateKeyNumber +
                         ", configured chunk segment number is " + maxSegmentNumber());
             }
-        }
 
-        /**
-         * Empty bytes for once write.
-         */
-        public static byte[] REPL_EMPTY_BYTES_FOR_ONCE_WRITE = new byte[FdReadWrite.REPL_ONCE_SEGMENT_COUNT_READ * 4096];
+            if (onceReadSegmentCountWhenRepl > ConfForSlot.ConfChunk.MAX_ONCE_READ_SEGMENT_COUNT_WHEN_REPL) {
+                throw new IllegalArgumentException("Chunk once read segment count when repl too large, chunk once read segment count when repl should be less than "
+                        + ConfForSlot.ConfChunk.MAX_ONCE_READ_SEGMENT_COUNT_WHEN_REPL);
+            }
+        }
 
         @Override
         public String toString() {
@@ -430,10 +456,10 @@ public enum ConfForSlot {
                     "segmentNumberPerFd=" + segmentNumberPerFd +
                     ", fdPerChunk=" + fdPerChunk +
                     ", segmentLength=" + segmentLength +
+                    ", onceReadSegmentCountWhenRepl=" + onceReadSegmentCountWhenRepl +
                     ", isSegmentUseCompression=" + isSegmentUseCompression +
                     ", lruPerFd=" + lruPerFd +
                     ", maxSegmentNumber=" + maxSegmentNumber() +
-                    ", REPL_EMPTY_BYTES_FOR_ONCE_WRITE.length=" + REPL_EMPTY_BYTES_FOR_ONCE_WRITE.length +
                     '}';
         }
     }

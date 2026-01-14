@@ -281,11 +281,6 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      */
     public static final int BATCH_ONCE_SEGMENT_COUNT_WRITE = 4;
 
-    /**
-     * The number of segments to batch read at once during repl operations.
-     */
-    public static final int REPL_ONCE_SEGMENT_COUNT_READ = 1024;
-
     // read / write reuse memory buffers
     /**
      * A buffer for holding a single inner segment.
@@ -401,7 +396,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             this.writeSegmentBatchBuffer = m.newDirectByteBuffer(writeSegmentBatchAddress, npagesWriteSegmentBatch * LocalPersist.PAGE_SIZE);
 
             // chunk repl
-            var npagesRepl = npagesOneInner * REPL_ONCE_SEGMENT_COUNT_READ;
+            var npagesRepl = npagesOneInner * ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl;
             this.forReplAddress = pageManager.allocatePages(npagesRepl, LocalPersist.PROTECTION);
             this.forReplBuffer = m.newDirectByteBuffer(forReplAddress, npagesRepl * LocalPersist.PAGE_SIZE);
 
@@ -512,7 +507,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         }
 
         if (forReplAddress != 0) {
-            var npagesRepl = npagesOneInner * REPL_ONCE_SEGMENT_COUNT_READ;
+            var npagesRepl = npagesOneInner * ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl;
             pageManager.freePages(forReplAddress, npagesRepl);
             System.out.println("Clean up fd read, name=" + name + ", for repl address=" + forReplAddress);
 
