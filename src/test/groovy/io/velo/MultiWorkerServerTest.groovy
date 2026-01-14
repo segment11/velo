@@ -388,9 +388,9 @@ class MultiWorkerServerTest extends Specification {
                 .with("wal.valueSizeTrigger", cc.confWal.valueSizeTrigger.toString())
                 .with("wal.shortValueSizeTrigger", cc.confWal.shortValueSizeTrigger.toString())
                 .with("repl.binlogForReadCacheSegmentMaxCount", cc.confRepl.binlogForReadCacheSegmentMaxCount.toString())
-                .with("big.string.lru.maxSize", cc.lruBigString.maxSize.toString())
+                .with("bigString.lru.maxSize", cc.lruBigString.maxSize.toString())
                 .with("kv.lru.maxSize", cc.lruKeyAndCompressedValueEncoded.maxSize.toString())
-                .with("dyn-config", Config.create().with("a", "b"))
+                .with("dynConfig", Config.create().with("a", "b"))
         m1.skipZookeeperConnectCheck = true
         m1.confForSlot(configX)
         m1.beforeCreateHandler(c, snowFlakes, configX)

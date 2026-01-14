@@ -1237,7 +1237,7 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.bigStringNoCompressMinSize = config.get(ofInteger(), "bigStringNoCompressMinSize", 1024 * 256);
             log.warn("Global config, bigStringNoCompressMinSize={}", ConfForGlobal.bigStringNoCompressMinSize);
 
-            var dynConfig = config.getChild("dyn-config");
+            var dynConfig = config.getChild("dynConfig");
             if (dynConfig != null) {
                 dynConfig.getChildren().forEach((k, v) -> {
                     ConfForGlobal.initDynConfigItems.put(k, v.getValue());
@@ -1329,7 +1329,7 @@ public class MultiWorkerServer extends Launcher {
             c.confRepl.checkIfValid();
 
             // override other conf items
-            c.lruBigString.maxSize = config.get(ofInteger(), "big.string.lru.maxSize", 1000);
+            c.lruBigString.maxSize = config.get(ofInteger(), "bigString.lru.maxSize", 1000);
             c.lruKeyAndCompressedValueEncoded.maxSize = config.get(ofInteger(), "kv.lru.maxSize", 100_000);
             if (c.lruKeyAndCompressedValueEncoded.maxSize <= 0) {
                 throw new IllegalArgumentException("KV get lru max size can not be 0");
@@ -1477,7 +1477,7 @@ public class MultiWorkerServer extends Launcher {
          */
         @Provides
         SocketInspector socketInspector(Config config) {
-            int maxConnections = config.get(ofInteger(), "maxConnections", 1000);
+            int maxConnections = config.get(ofInteger(), "net.maxConnections", 1000);
 
             var r = new SocketInspector();
             r.setMaxConnections(maxConnections);

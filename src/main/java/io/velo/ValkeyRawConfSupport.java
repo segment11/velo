@@ -76,12 +76,10 @@ public class ValkeyRawConfSupport {
 
             var key = kv[0].trim();
             var value = kv[1].trim();
-            if ("acl-filename".equals(key)) {
-                aclFilename = value;
-            } else if ("acl-pubsub-default".equals(key)) {
-                aclPubsubDefault = Boolean.parseBoolean(value);
-            } else if ("replica-priority".equals(key)) {
-                replicaPriority = Integer.parseInt(value);
+            switch (key) {
+                case "acl-filename" -> aclFilename = value;
+                case "acl-pubsub-default" -> aclPubsubDefault = Boolean.parseBoolean(value);
+                case "replica-priority" -> replicaPriority = Integer.parseInt(value);
             }
 
             // other key-value pairs, todo
