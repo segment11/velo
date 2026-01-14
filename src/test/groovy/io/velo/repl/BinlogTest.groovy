@@ -49,6 +49,7 @@ class BinlogTest extends Specification {
         println binlog.currentReplOffset()
         println binlog.diskUsage
         println 'in memory size estimate: ' + binlog.estimate(new StringBuilder())
+        println binlog.readTimeAvgUs
 
         final File slotDir2 = new File('/tmp/velo-data/test-persist/test-slot2')
         if (!slotDir2.exists()) {
@@ -114,6 +115,7 @@ class BinlogTest extends Specification {
         binlog.prevRaf(0) != null
         binlog.readPrevRafOneSegment(0, 0).length == oneSegmentLength
         binlog.readPrevRafOneSegment(1, 0).length < oneSegmentLength
+        binlog.readTimeAvgUs > 0
 
         when:
         binlog.resetCurrentFileOffset oneSegmentLength - 1

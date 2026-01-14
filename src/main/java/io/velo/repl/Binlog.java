@@ -648,6 +648,28 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
+     * The total time spent reading (in microseconds).
+     */
+    private long readTimeTotalUs;
+
+    /**
+     * The total count of read operations.
+     */
+    private long readCountTotal;
+
+    /**
+     * Get the average time spent reading (in microseconds).
+     *
+     * @return the average time spent reading (in microseconds)
+     */
+    public double getReadTimeAvgUs() {
+        if (readCountTotal == 0) {
+            return 0;
+        }
+        return (double) readTimeTotalUs / readCountTotal;
+    }
+
+    /**
      * Read one segment bytes from previous binlog file
      *
      * @param fileIndex the file index
@@ -689,8 +711,16 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         }
 
         var bytes = new byte[oneSegmentLength];
+
+        var beginT = System.nanoTime();
         prevRaf.seek(offset);
         var n = prevRaf.read(bytes);
+        var costT = (System.nanoTime() - beginT) / 1000;
+
+        // stats
+        readTimeTotalUs += costT;
+        readCountTotal++;
+
         if (n < 0) {
             throw new IOException("Repl read binlog segment bytes error, file index=" + fileIndex + ", offset=" + offset + ", slot=" + slot);
         }

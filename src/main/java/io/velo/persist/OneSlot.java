@@ -2492,6 +2492,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (binlog != null) {
             map.put("binlog_current_offset_from_the_beginning", (double) binlog.currentReplOffset());
             map.put("binlog_disk_usage", (double) binlog.getDiskUsage());
+            map.put("binlog_segment_read_time_avg_us", binlog.getReadTimeAvgUs());
         }
 
         if (bigKeyTopK != null) {
