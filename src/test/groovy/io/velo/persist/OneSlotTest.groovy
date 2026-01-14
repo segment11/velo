@@ -383,6 +383,7 @@ class OneSlotTest extends Specification {
         ConfForSlot.global.confWal.shortValueSizeTrigger = 100
         def bucketIndex0KeyList = Mock.prepareTargetBucketIndexKeyList(n, bucketIndex)
         def random = new Random()
+        int i = 0
         for (key in bucketIndex0KeyList) {
             def s = BaseCommand.slot(key, slotNumber)
             def cv = new CompressedValue()
@@ -397,9 +398,13 @@ class OneSlotTest extends Specification {
                 cv.compressedData = bytes
             }
 
-            // 10% expired
-            cv.expireAt = random.nextInt(10) == 1 ? CompressedValue.EXPIRE_NOW : CompressedValue.NO_EXPIRE
+            // 10% expired except the first one
+            if (i > 0) {
+                cv.expireAt = random.nextInt(10) == 1 ? CompressedValue.EXPIRE_NOW : CompressedValue.NO_EXPIRE
+            }
             oneSlot.put(key, s.bucketIndex(), cv)
+
+            i++
         }
         bucketIndex0KeyList
     }
@@ -644,7 +649,7 @@ class OneSlotTest extends Specification {
         def cv = new CompressedValue()
         cv.keyHash = sKey.keyHash()
         cv.compressedData = new byte[10]
-        cv.expireAt = System.currentTimeMillis()
+        cv.expireAt = System.currentTimeMillis() + 1000
         oneSlot.put(key, sKey.bucketIndex(), cv)
         then:
         oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) == cv.expireAt
