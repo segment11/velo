@@ -259,36 +259,6 @@ public class ReplPair {
         this.lastPongGetTimestamp = lastPongGetTimestamp;
     }
 
-    @ForSlaveField
-    private final long[] statsCountWhenSlaveSkipFetch = new long[3];
-
-    /**
-     * Increases the count of a specific type of fetch skip for the slave.
-     *
-     * @param type the type of the fetch to skip
-     */
-    public void increaseStatsCountWhenSlaveSkipFetch(ReplType type) {
-        int i;
-        if (type == ReplType.s_exists_wal) {
-            i = 0;
-        } else if (type == ReplType.s_exists_chunk_segments) {
-            i = 1;
-        } else {
-            return;
-        }
-        statsCountWhenSlaveSkipFetch[i]++;
-    }
-
-    /**
-     * Gets the string representation of the statistics for fetch skips by the slave.
-     *
-     * @return the string representation of the statistics
-     */
-    public String getStatsCountForSlaveSkipFetchAsString() {
-        return "exists_wal skip fetch count=" + statsCountWhenSlaveSkipFetch[0] +
-                ", exists_chunk_segments skip fetch count=" + statsCountWhenSlaveSkipFetch[1] +
-                ", exists_key_buckets skip fetch count=" + statsCountWhenSlaveSkipFetch[2];
-    }
 
     private final long[] statsCountForReplType = new long[ReplType.values().length];
 
