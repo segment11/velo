@@ -197,11 +197,11 @@ class RequestDecoderTest extends Specification {
         then:
         requestList.size() == 1
         requestList[0].isRepl()
-        requestList[0].data.length == 4
-        ByteBuffer.wrap(requestList[0].data[0]).getLong() == 0L
-        requestList[0].data[1][0] == 0
-        requestList[0].data[2][0] == ReplType.ping.code
-        requestList[0].data[3].length == ping.encodeLength()
+        requestList[0].replRequest != null
+        requestList[0].replRequest.slaveUuid == 0L
+        requestList[0].replRequest.slot == 0
+        requestList[0].replRequest.type == ReplType.ping
+        requestList[0].replRequest.data.length == ping.encodeLength()
 
         when:
         def buf2 = ByteBuf.wrapForReading(

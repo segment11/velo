@@ -11,6 +11,7 @@ import io.activej.reactor.net.SocketSettings;
 import io.velo.*;
 import io.velo.command.XGroup;
 import io.velo.decode.ReplDecoder;
+import io.velo.decode.Request;
 import io.velo.repl.content.Ping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -136,19 +137,19 @@ public class TcpClient implements NeedCleanUp {
                             .mapAsync(pipeline -> {
                                 if (pipeline.isEmpty()) {
                                     log.warn("Repl slave request decode fail: pipeline is empty, slot={}", slot);
-                                    return Promise.of(null);
+                                    return Promise.of(ByteBuf.empty());
                                 }
 
                                 Promise<ByteBuf>[] promiseN = new Promise[pipeline.size()];
                                 for (int i = 0; i < pipeline.size(); i++) {
-                                    var data = pipeline.get(i);
+                                    var replRequest = pipeline.get(i);
 
-                                    var xGroup = new XGroup(null, data, socket);
+                                    var xGroup = new XGroup(Request.REPL_AS_CMD, null, socket);
                                     xGroup.setReplPair(replPair);
                                     xGroup.init(requestHandler);
 
                                     try {
-                                        var reply = xGroup.handleRepl();
+                                        var reply = xGroup.handleRepl(replRequest);
                                         if (reply == null) {
                                             promiseN[i] = Promise.of(null);
                                         } else {

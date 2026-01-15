@@ -1,6 +1,7 @@
 package io.velo.repl
 
 import io.netty.buffer.Unpooled
+import io.velo.repl.content.Hello
 import io.velo.repl.content.Ping
 import spock.lang.Specification
 
@@ -35,13 +36,26 @@ class ReplTest extends Specification {
         when:
         def pingBytes = reply.buffer().array()
         def nettyBuf = Unpooled.wrappedBuffer(pingBytes)
-        def data = Repl.decode(nettyBuf)
+        def request = Repl.decode(nettyBuf)
         then:
-        data.length == 4
-        data[1][0] == slot
-        data[2][0] == ReplType.ping.code
-        ByteBuffer.wrap(data[0]).getLong() == replPair.slaveUuid
-        new String(data[3]) == 'localhost:6380'
+        request.isFullyRead()
+        request.slaveUuid == replPair.slaveUuid
+        request.slot == slot
+        request.type == ReplType.ping
+        new String(request.data) == 'localhost:6380'
+
+        when:
+        def hello = new Hello(replPair.slaveUuid, 'localhost:6380')
+        def reply2 = Repl.reply(slot, replPair, ReplType.hello, hello)
+        def helloBytes = reply2.buffer().array()
+        def nettyBuf2 = Unpooled.wrappedBuffer(helloBytes)
+        def request2 = Repl.decode(nettyBuf2)
+        then:
+        request2.isFullyRead()
+        request2.slaveUuid == replPair.slaveUuid
+        request2.slot == slot
+        request2.type == ReplType.hello
+        request2.data.length == hello.encodeLength()
 
         when:
         pingBytes[Repl.PROTOCOL_KEYWORD_BYTES.length + 8] = -1
@@ -60,17 +74,17 @@ class ReplTest extends Specification {
         ByteBuffer.wrap(pingBytes).putShort(Repl.PROTOCOL_KEYWORD_BYTES.length + 8, (short) 0)
         ByteBuffer.wrap(pingBytes).putShort(Repl.PROTOCOL_KEYWORD_BYTES.length + 8 + 2, (short) -10)
         nettyBuf.readerIndex(0)
-        data = Repl.decode(nettyBuf)
+        request = Repl.decode(nettyBuf)
         then:
-        data == null
+        request == null
 
         when:
         pingBytes[Repl.PROTOCOL_KEYWORD_BYTES.length + 8 + 1] = ReplType.ping.code
         def lessBytes = new byte[pingBytes.length - 1]
         System.arraycopy(pingBytes, 0, lessBytes, 0, lessBytes.length)
-        data = Repl.decode(Unpooled.wrappedBuffer(lessBytes))
+        request = Repl.decode(Unpooled.wrappedBuffer(lessBytes))
         then:
-        data == null
+        request == null
 
         when:
         def nettyBuffer2 = Unpooled.wrappedBuffer(new byte[1])

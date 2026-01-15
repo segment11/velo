@@ -5,8 +5,6 @@ import io.velo.repl.content.RawBytesContent;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.TestOnly;
 
-import java.nio.ByteBuffer;
-
 /**
  * Represents a REPL (slave-master-replication) protocol for communication.
  * This class provides methods to encode and decode messages according to the custom REPL protocol.
@@ -185,9 +183,9 @@ public class Repl {
      * Decodes a byte buffer into a REPL message data array.
      *
      * @param buf the buffer containing the encoded REPL message
-     * @return the array of byte arrays containing the decoded message data (slave UUID, slot, type, content), or null if decoding fails
+     * @return a decoded {@link ReplRequest} or null if there aren't enough bytes to form a complete request
      */
-    public static byte[][] decode(ByteBuf buf) {
+    public static ReplRequest decode(ByteBuf buf) {
         if (buf.readableBytes() <= HEADER_LENGTH) {
             return null;
         }
@@ -206,25 +204,18 @@ public class Repl {
         }
 
         var dataLength = buf.readInt();
-        if (buf.readableBytes() < dataLength) {
-            return null;
+
+        var readLength = Math.min(buf.readableBytes(), dataLength);
+        if (readLength != 0) {
+            var bytes = new byte[readLength];
+            buf.readBytes(bytes);
+            var r = new ReplRequest(slaveUuid, slot, replType, bytes);
+            r.dataLength = readLength;
+            return r;
+        } else {
+            var r = new ReplRequest(slaveUuid, slot, replType, new byte[0]);
+            r.dataLength = dataLength;
+            return r;
         }
-
-        // 4 bytes arrays, first is slaveUuid, second is slot, third is replType, fourth is content data
-        var data = new byte[4][];
-        data[0] = new byte[8];
-        ByteBuffer.wrap(data[0]).putLong(slaveUuid);
-
-        data[1] = new byte[2];
-        ByteBuffer.wrap(data[1]).putShort(slot);
-
-        data[2] = new byte[1];
-        data[2][0] = replType.code;
-
-        var bytes = new byte[dataLength];
-        buf.readBytes(bytes);
-        data[3] = bytes;
-
-        return data;
     }
 }

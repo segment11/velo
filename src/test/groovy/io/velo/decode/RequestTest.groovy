@@ -4,6 +4,8 @@ import io.velo.BaseCommand
 import io.velo.acl.AclUsers
 import io.velo.acl.RCmd
 import io.velo.acl.U
+import io.velo.repl.ReplRequest
+import io.velo.repl.ReplType
 import spock.lang.Specification
 
 class RequestTest extends Specification {
@@ -58,13 +60,11 @@ class RequestTest extends Specification {
         request.isAclCheckOk()
 
         when:
-        def dataRepl = new byte[3][]
-        dataRepl[0] = new byte[8]
-        dataRepl[1] = new byte[2]
-        dataRepl[1][0] = (byte) 0
-        def requestRepl = new Request(dataRepl, false, true)
+        def requestRepl = new Request(null, false, true)
+        requestRepl.replRequest = new ReplRequest(1L, (short) 0, ReplType.test, new byte[0])
         then:
         requestRepl.isRepl()
+        requestRepl.replRequest != null
         requestRepl.singleSlot == 0
         requestRepl.cmd() == Request.REPL_AS_CMD
 

@@ -491,14 +491,12 @@ public class MultiWorkerServer extends Launcher {
 
         var firstSlot = request.getSingleSlot();
         if (isReuseNetWorkerEventloop) {
-            var targetHandler = requestHandlerArray[0];
-            var reply = targetHandler.handle(request, socket);
-            if (reply == null) {
-                return Promise.of(null);
-            }
             if (veloUserData.replyMode != VeloUserDataInSocket.ReplyMode.on) {
                 return Promise.of(ByteBuf.empty());
             }
+
+            var targetHandler = requestHandlerArray[0];
+            var reply = targetHandler.handle(request, socket);
 
             if (reply instanceof AsyncReply) {
                 return transferAsyncReply(request, (AsyncReply) reply, veloUserData.isResp3);
@@ -614,8 +612,7 @@ public class MultiWorkerServer extends Launcher {
      */
     Promise<ByteBuf> handlePipeline(@NotNull ArrayList<Request> pipeline, ITcpSocket socket, short slotNumber) {
         if (pipeline.isEmpty()) {
-            return Promise.of(null);
-//            return Promise.of(ByteBuf.empty());
+            return Promise.of(ByteBuf.empty());
         }
 
         SocketInspector.updateLastSendCommand(socket, pipeline.getLast().cmd(), pipeline.size());

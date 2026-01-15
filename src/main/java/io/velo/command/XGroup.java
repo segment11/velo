@@ -8,10 +8,7 @@ import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.decode.Request;
 import io.velo.persist.*;
-import io.velo.repl.Binlog;
-import io.velo.repl.Repl;
-import io.velo.repl.ReplPair;
-import io.velo.repl.ReplType;
+import io.velo.repl.*;
 import io.velo.repl.content.*;
 import io.velo.repl.incremental.XSkipApply;
 import io.velo.repl.support.JedisPoolHolder;
@@ -20,6 +17,7 @@ import io.velo.reply.ErrorReply;
 import io.velo.reply.NilReply;
 import io.velo.reply.Reply;
 import io.velo.type.RedisHashKeys;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.LoggerFactory;
@@ -153,16 +151,17 @@ public class XGroup extends BaseCommand {
             try {
                 var reply = catch_up(slot, contentBytes);
                 var nettyByteBuf = Unpooled.wrappedBuffer(reply.buffer().array());
-                var data4 = Repl.decode(nettyByteBuf);
-                if (data4 == null) {
+                var replRequest1 = Repl.decode(nettyByteBuf);
+                if (replRequest1 == null) {
                     return NilReply.INSTANCE;
                 }
 
+                assert replRequest1.isFullyRead();
                 if (reply.isReplType(error)) {
-                    return new ErrorReply(new String(data4[3]));
+                    return new ErrorReply(new String(replRequest1.getData()));
                 }
 
-                return new BulkReply(data4[3]);
+                return new BulkReply(replRequest1.getData());
             } catch (Exception e) {
                 log.error("Repl master handle x_repl x_catch_up error, slot={}", slot, e);
                 return new ErrorReply(e.getMessage());
@@ -188,14 +187,10 @@ public class XGroup extends BaseCommand {
 
     private ReplPair replPair;
 
-    public Reply handleRepl() {
-        var slaveUuid = ByteBuffer.wrap(data[0]).getLong();
-        var slotRemote = ByteBuffer.wrap(data[1]).getShort();
-        var replType = fromCode(data[2][0]);
-        if (replType == null) {
-            log.error("Repl handle error: unknown repl type code={}, slot={}", data[2][0], slotRemote);
-            return null;
-        }
+    public Reply handleRepl(@NotNull ReplRequest replRequest) {
+        var slaveUuid = replRequest.getSlaveUuid();
+        var slotRemote = replRequest.getSlot();
+        var replType = replRequest.getType();
 
         if (slotRemote >= ConfForGlobal.slotNumber) {
             log.warn("Repl do nothing for slot remote={}, repl type={}", slotRemote, replType);
@@ -203,16 +198,14 @@ public class XGroup extends BaseCommand {
         }
 
         try {
-            return handleReplInner(slotRemote, replType, slaveUuid);
+            return handleReplInner(slotRemote, replType, slaveUuid, replRequest.getData());
         } catch (Exception e) {
             log.error("Repl handle error, slot remote={}, repl type={}", slotRemote, replType, e);
             return Repl.error(slotRemote, slaveUuid, e.getMessage());
         }
     }
 
-    private Reply handleReplInner(short slot, ReplType replType, long slaveUuid) {
-        var contentBytes = data[3];
-
+    private Reply handleReplInner(short slot, ReplType replType, long slaveUuid, byte[] contentBytes) {
         var oneSlot = localPersist.oneSlot(slot);
         if (this.replPair == null) {
             if (replType.isSlaveSend) {

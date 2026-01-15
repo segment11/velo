@@ -6,6 +6,7 @@ import io.activej.csp.binary.decoder.ByteBufsDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.velo.repl.Repl;
+import io.velo.repl.ReplRequest;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -57,6 +58,7 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
         byte[][] data;
         boolean isHttp = false;
         boolean isRepl = false;
+        ReplRequest replRequest = null;
         Map<String, String> httpHeaders = null;
         if (buf.capacity() < 6) {
             data = resp.decode(buf);
@@ -117,10 +119,12 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                     }
                 }
             } else if (isRepl) {
-                data = Repl.decode(buf);
-                if (data == null) {
+                replRequest = Repl.decode(buf);
+                if (replRequest == null) {
                     return null;
                 }
+                assert replRequest.isFullyRead();
+                data = null;
             } else {
                 // Fallback to RESP decoding
                 data = resp.decode(buf);
@@ -140,6 +144,12 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
         // Skip the bytes those were consumed during decoding
         int consumedN = buf.readerIndex();
         bufs.skip(consumedN);
+
+        if (isRepl) {
+            var r = new Request(null, false, true);
+            r.setReplRequest(replRequest);
+            return r;
+        }
 
         var r = new Request(data, isHttp, isRepl);
         r.setHttpHeaders(httpHeaders);

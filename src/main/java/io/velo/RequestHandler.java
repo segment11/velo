@@ -217,6 +217,14 @@ public class RequestHandler {
      * @param request the request
      */
     public void parseSlots(@NotNull Request request) {
+        if (request.isRepl()) {
+            var slot = request.getSingleSlot();
+            var slotWithKeyHashList = new ArrayList<BaseCommand.SlotWithKeyHash>();
+            slotWithKeyHashList.add(new BaseCommand.SlotWithKeyHash(slot, 0, 0L, 0));
+            request.setSlotWithKeyHashList(slotWithKeyHashList);
+            return;
+        }
+
         var cmd = request.cmd();
         if (cmd.equals(ECHO_COMMAND)
                 || cmd.equals(PING_COMMAND)
@@ -228,7 +236,7 @@ public class RequestHandler {
         }
 
         var data = request.getData();
-        var firstByte = data[0][0];
+        var firstByte = request.isRepl() ? 'x' : data[0][0];
         if (firstByte >= 'A' && firstByte <= 'Z') {
             firstByte += 32;
         }
@@ -301,7 +309,7 @@ public class RequestHandler {
      * @param socket  the socket
      * @return the reply
      */
-    public Reply handle(@NotNull Request request, ITcpSocket socket) {
+    public @NotNull Reply handle(@NotNull Request request, ITcpSocket socket) {
         if (isStopped) {
             return ErrorReply.SERVER_STOPPED;
         }
@@ -309,9 +317,9 @@ public class RequestHandler {
         var data = request.getData();
 
         if (request.isRepl()) {
-            var xGroup = new XGroup(null, data, socket, this, request);
+            var xGroup = new XGroup(Request.REPL_AS_CMD, null, socket, this, request);
             // try to catch in handle repl method
-            return xGroup.handleRepl();
+            return xGroup.handleRepl(request.getReplRequest());
         }
 
         // http special handle

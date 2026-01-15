@@ -3,10 +3,10 @@ package io.velo.decode;
 import io.velo.BaseCommand;
 import io.velo.RequestHandler;
 import io.velo.acl.U;
+import io.velo.repl.ReplRequest;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Map;
 
@@ -29,6 +29,16 @@ public class Request {
      * Indicates whether the request is a REPL (slave-master-replication) request.
      */
     private final boolean isRepl;
+
+    private ReplRequest replRequest;
+
+    public ReplRequest getReplRequest() {
+        return replRequest;
+    }
+
+    public void setReplRequest(ReplRequest replRequest) {
+        this.replRequest = replRequest;
+    }
 
     /**
      * Retrieves the command data as an array of byte arrays.
@@ -250,8 +260,7 @@ public class Request {
      */
     public short getSingleSlot() {
         if (isRepl) {
-            // refer to Repl.decode, byte[1] == two length bytes
-            return ByteBuffer.wrap(data[1]).getShort();
+            return replRequest.getSlot();
         }
 
         if (slotWithKeyHashList == null || slotWithKeyHashList.isEmpty()) {
@@ -263,7 +272,7 @@ public class Request {
     }
 
     @VisibleForTesting
-    static final String REPL_AS_CMD = "repl";
+    public static final String REPL_AS_CMD = "x-repl";
 
     /**
      * Retrieves the command of the request as a string.
