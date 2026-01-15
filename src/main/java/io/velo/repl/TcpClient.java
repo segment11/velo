@@ -9,7 +9,7 @@ import io.activej.net.socket.tcp.TcpSocket;
 import io.activej.promise.Promise;
 import io.velo.*;
 import io.velo.command.XGroup;
-import io.velo.decode.RequestDecoder;
+import io.velo.decode.ReplDecoder;
 import io.velo.repl.content.Ping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -130,7 +130,7 @@ public class TcpClient implements NeedCleanUp {
                     sock = socket;
 
                     BinaryChannelSupplier.of(ChannelSuppliers.ofSocket(socket))
-                            .decodeStream(new RequestDecoder())
+                            .decodeStream(new ReplDecoder())
                             .mapAsync(pipeline -> {
                                 if (pipeline == null) {
                                     log.error("Repl slave request decode fail: pipeline is null, slot={}", slot);
@@ -139,10 +139,11 @@ public class TcpClient implements NeedCleanUp {
 
                                 Promise<ByteBuf>[] promiseN = new Promise[pipeline.size()];
                                 for (int i = 0; i < pipeline.size(); i++) {
-                                    var request = pipeline.get(i);
+                                    var data = pipeline.get(i);
 
-                                    var xGroup = new XGroup(null, request.getData(), socket, requestHandler, request);
+                                    var xGroup = new XGroup(null, data, socket);
                                     xGroup.setReplPair(replPair);
+                                    xGroup.init(requestHandler);
 
                                     try {
                                         var reply = xGroup.handleRepl();
