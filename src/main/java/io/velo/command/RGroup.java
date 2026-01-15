@@ -493,7 +493,7 @@ public class RGroup extends BaseCommand {
 
         var dstSlot = dstSlotWithKeyHash.slot();
         var dstOneSlot = localPersist.oneSlot(dstSlot);
-        dstOneSlot.asyncRun(() -> moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
+        dstOneSlot.asyncExecute(() -> moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
 
         return asyncReply;
     }
@@ -563,7 +563,7 @@ public class RGroup extends BaseCommand {
 
         var dstSlot = dstSlotWithKeyHash.slot();
         var dstOneSlot = localPersist.oneSlot(dstSlot);
-        dstOneSlot.asyncRun(() -> moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
+        dstOneSlot.asyncExecute(() -> moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
 
         return asyncReply;
     }

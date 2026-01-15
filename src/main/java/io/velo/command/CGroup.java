@@ -217,7 +217,7 @@ public class CGroup extends BaseCommand {
             var asyncReply = new AsyncReply(finalPromise);
 
             boolean finalReplace = replace;
-            dstOneSlot.asyncRun(() -> {
+            dstOneSlot.asyncExecute(() -> {
                 var dstCv = getCv(dstSlotWithKeyHash);
                 if (dstCv != null && !finalReplace) {
                     finalPromise.set(IntegerReply.REPLY_0);

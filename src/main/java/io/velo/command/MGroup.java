@@ -301,7 +301,7 @@ public class MGroup extends BaseCommand {
                 var subList = entry.getValue();
 
                 var oneSlot = localPersist.oneSlot(slot);
-                oneSlot.asyncRun(() -> {
+                oneSlot.asyncExecute(() -> {
                     for (var one : subList) {
                         set(one.valueBytes, one.slotWithKeyHash);
                     }
@@ -486,7 +486,7 @@ public class MGroup extends BaseCommand {
                             if (isReplaceFinal) {
                                 var slotWithKeyHash = one.slotWithKeyHash;
                                 var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
-                                oneSlot.asyncRun(() -> {
+                                oneSlot.asyncExecute(() -> {
                                     removeDelay(slotWithKeyHash);
                                 });
                             }

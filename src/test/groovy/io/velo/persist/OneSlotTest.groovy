@@ -360,6 +360,16 @@ class OneSlotTest extends Specification {
         p11 != null
 
         when:
+        def n = 0
+        oneSlot.asyncExecute {
+            println 'async submit'
+            n = 1
+        }
+        eventloopCurrent.run()
+        then:
+        n == 1
+
+        when:
         def p22 = oneSlot.asyncCall {
             println 'async call'
             1

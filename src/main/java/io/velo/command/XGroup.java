@@ -29,6 +29,7 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 
 import static io.velo.repl.ReplType.*;
@@ -522,10 +523,18 @@ public class XGroup extends BaseCommand {
         try {
             var toSlaveBytes = targetWal.toSlaveExistsOneWalGroupBytes();
             if (toSlaveBytes == null) {
+                if (slot == 0 && walGroupIndex % 1024 == 0) {
+                    log.warn("Repl master will skip exists wal, group index={}, slot={}", walGroupIndex, slot);
+                }
+
                 // no data
                 var content = fillBytes(4, buf -> buf.putInt(walGroupIndex));
                 return Repl.reply(slot, replPair, s_exists_wal, content);
             } else {
+                if (slot == 0 && walGroupIndex % 1024 == 0) {
+                    log.warn("Repl master fetch exists wal, group index={}, slot={}, length={}", walGroupIndex, slot, toSlaveBytes.length);
+                }
+
                 return Repl.reply(slot, replPair, s_exists_wal, new RawBytesContent(toSlaveBytes));
             }
         } catch (IOException e) {
@@ -540,28 +549,32 @@ public class XGroup extends BaseCommand {
         // remote group index, ignore
         var walGroupIndex = buffer.getInt();
 
+        if (slot == 0 && walGroupIndex % 1024 == 0) {
+            log.info("Repl slave update wal exists bytes, group index={}, slot={}, length={}", walGroupIndex, slot, contentBytes.length);
+        }
+
         var firstOneSlot = localPersist.currentThreadFirstOneSlot();
         if (buffer.hasRemaining()) {
             // use any wal is ok
             var firstWal = firstOneSlot.getWalByGroupIndex(0);
             try {
-                firstWal.fromMasterExistsOneWalGroupBytes(contentBytes, ((isShort, key, v) -> {
-                    var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
-                    var oneSlot = localPersist.oneSlot(s.slot());
-                    var targetWal = oneSlot.getWalByBucketIndex(s.bucketIndex());
-                    oneSlot.asyncRun(() -> {
-                        targetWal.put(isShort, key, v);
-                    });
+                HashMap<Short, HashMap<String, Wal.V>> groupedBySlot = new HashMap<>();
+                HashMap<Short, HashMap<String, Wal.V>> groupedShortValueBySlot = new HashMap<>();
+                firstWal.fromMasterExistsOneWalGroupBytes(contentBytes, ((isShortValue, key, v) -> {
+                    var keyHash = KeyHash.hash(key.getBytes());
+                    var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+                    if (isShortValue) {
+                        groupedShortValueBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, v);
+                    } else {
+                        groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, v);
+                    }
                 }));
+
+                putToTargetWal(false, groupedBySlot);
+                putToTargetWal(true, groupedShortValueBySlot);
             } catch (IOException e) {
                 log.error("Repl slave update wal exists bytes error, group index={}, slot={}", walGroupIndex, slot, e);
                 throw new RuntimeException("Repl slave update wal exists bytes error, group index=" + walGroupIndex + ", slot=" + slot + ", e=" + e.getMessage());
-            }
-        } else {
-            // skip
-            replPair.increaseStatsCountWhenSlaveSkipFetch(s_exists_wal);
-            if (slot == 0 && walGroupIndex % 1024 == 0) {
-                log.info("Repl slave skip update wal exists bytes, group index={}, slot={}", walGroupIndex, slot);
             }
         }
 
@@ -582,6 +595,27 @@ public class XGroup extends BaseCommand {
             } else {
                 return Repl.reply(slot, replPair, exists_wal, fillBytes(4, buf -> buf.putInt(nextGroupIndex)));
             }
+        }
+    }
+
+    private void putToTargetWal(boolean isShortValue, HashMap<Short, HashMap<String, Wal.V>> groupedBySlot) {
+        if (groupedBySlot.isEmpty()) {
+            return;
+        }
+
+        for (var entry : groupedBySlot.entrySet()) {
+            var slotInner = entry.getKey();
+            var oneSlot = localPersist.oneSlot(slotInner);
+            oneSlot.asyncExecute(() -> {
+                for (var entry2 : entry.getValue().entrySet()) {
+                    var key = entry2.getKey();
+                    var v = entry2.getValue();
+
+                    var bucketIndex = KeyHash.bucketIndex(v.keyHash());
+                    var targetWal = oneSlot.getWalByBucketIndex(bucketIndex);
+                    targetWal.put(isShortValue, key, v);
+                }
+            });
         }
     }
 
@@ -640,6 +674,7 @@ public class XGroup extends BaseCommand {
                     beginSegmentIndex, segmentCount, slot);
         }
 
+        HashMap<Short, HashMap<String, CompressedValue>> groupedBySlot = new HashMap<>();
         for (int i = 0; i < segmentCount; i++) {
             if (!buffer.hasRemaining()) {
                 break;
@@ -651,13 +686,24 @@ public class XGroup extends BaseCommand {
                     return;
                 }
 
-                var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
-                var oneSlot = localPersist.oneSlot(s.slot());
-                oneSlot.asyncRun(() -> {
-                    oneSlot.put(key, s.bucketIndex(), cv);
-                });
+                var keyHash = KeyHash.hash(key.getBytes());
+                var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+                groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
             });
             buffer.position(offset + segmentLength);
+        }
+
+        for (var entry : groupedBySlot.entrySet()) {
+            var slotInner = entry.getKey();
+            var oneSlot = localPersist.oneSlot(slotInner);
+            oneSlot.asyncExecute(() -> {
+                for (var entry2 : entry.getValue().entrySet()) {
+                    var key = entry2.getKey();
+                    var cv = entry2.getValue();
+                    var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
+                    oneSlot.put(key, bucketIndex, cv);
+                }
+            });
         }
 
         var maxSegmentNumber = remoteReplProperties.segmentNumberPerFd() * remoteReplProperties.fdPerChunk();
@@ -733,7 +779,7 @@ public class XGroup extends BaseCommand {
             buffer.get(bigStringBytes);
             var s = slot(key);
             var oneSlot = localPersist.oneSlot(s.slot());
-            oneSlot.asyncRun(() -> {
+            oneSlot.asyncExecute(() -> {
                 var bigStringFiles = oneSlot.getBigStringFiles();
                 bigStringFiles.writeBigStringBytes(uuid, s.bucketIndex(), s.keyHash(), bigStringBytes);
                 log.warn("Repl slave fetch incremental big string done, uuid={}, key={}, slot={}", uuid, key, s.slot());
@@ -809,12 +855,11 @@ public class XGroup extends BaseCommand {
                 var bigStringBytesLength = buffer.getInt();
                 var offset = buffer.position();
 
-                var slotInner = calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
-                var bucketThis = KeyHash.bucketIndex(keyHash);
+                var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+                var bucketIndexInner = KeyHash.bucketIndex(keyHash);
                 var oneSlot = localPersist.oneSlot(slotInner);
-                var bigStringFiles = oneSlot.getBigStringFiles();
-                oneSlot.asyncRun(() -> {
-                    bigStringFiles.writeBigStringBytes(uuid, bucketThis, keyHash, contentBytes, offset, bigStringBytesLength);
+                oneSlot.asyncExecute(() -> {
+                    oneSlot.getBigStringFiles().writeBigStringBytes(uuid, bucketIndexInner, keyHash, contentBytes, offset, bigStringBytesLength);
                 });
                 buffer.position(offset + bigStringBytesLength);
 
@@ -822,7 +867,7 @@ public class XGroup extends BaseCommand {
             }
 
             RedisHashKeys finalRhk = rhk;
-            firstOneSlot.asyncRun(() -> {
+            firstOneSlot.asyncExecute(() -> {
                 SGroup.saveRedisSet(finalRhk, sSet, this, dictMap);
             });
         }
@@ -902,14 +947,25 @@ public class XGroup extends BaseCommand {
         // remote
         var walGroupIndex = bb.readInt();
 
+        HashMap<Short, HashMap<String, CompressedValue>> groupedBySlot = new HashMap<>();
         KeyLoader.decodeShortStringListFromBuf(bb, (keyHash, expireAt, seq, key, valueBytes) -> {
-            var s = slot(key);
-            var oneSlot = localPersist.oneSlot(s.slot());
-            oneSlot.asyncRun(() -> {
-                var cv = CompressedValue.decode(Unpooled.wrappedBuffer(valueBytes), key.getBytes(), keyHash);
-                oneSlot.put(key, s.bucketIndex(), cv);
-            });
+            var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+            var cv = CompressedValue.decode(Unpooled.wrappedBuffer(valueBytes), key.getBytes(), keyHash);
+            groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
         });
+
+        for (var entry : groupedBySlot.entrySet()) {
+            var slotInner = entry.getKey();
+            var oneSlot = localPersist.oneSlot(slotInner);
+            oneSlot.asyncExecute(() -> {
+                for (var entry2 : entry.getValue().entrySet()) {
+                    var key = entry2.getKey();
+                    var cv = entry2.getValue();
+                    var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
+                    oneSlot.put(key, bucketIndex, cv);
+                }
+            });
+        }
 
         var remoteReplProperties = replPair.getRemoteReplProperties();
         var walGroupNumberRemote = remoteReplProperties.bucketsPerSlot() / remoteReplProperties.oneChargeBucketNumber();
@@ -1007,7 +1063,6 @@ public class XGroup extends BaseCommand {
         // client received from server
         log.warn("Repl master reply exists/meta fetch all done, slave uuid={}, {}, slot={}",
                 replPair.getSlaveUuid(), replPair.getHostAndPort(), slot);
-        log.warn("Repl slave stats count for slave skip fetch={}, slot={}", replPair.getStatsCountForSlaveSkipFetchAsString(), slot);
 
         var oneSlot = localPersist.oneSlot(slot);
         var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();
@@ -1315,7 +1370,7 @@ public class XGroup extends BaseCommand {
 
         final var targetSlot = replPairAsSlave.getSlot();
         var oneSlot = localPersist.oneSlot(targetSlot);
-        oneSlot.asyncRun(() -> {
+        oneSlot.asyncExecute(() -> {
             var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();
 
             var isExistsDataAllFetched = metaChunkSegmentIndex.isExistsDataAllFetched();

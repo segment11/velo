@@ -182,7 +182,7 @@ public class XBigStrings implements BinlogContent {
 
         var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
         var oneSlot = localPersist.oneSlot(s.slot());
-        oneSlot.asyncRun(() -> {
+        oneSlot.asyncExecute(() -> {
             oneSlot.put(key, s.bucketIndex(), cv);
         });
 

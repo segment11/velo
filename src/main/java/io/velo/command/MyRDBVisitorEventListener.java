@@ -45,7 +45,7 @@ public class MyRDBVisitorEventListener implements EventListener {
 
             var isSkip = false;
             if (event instanceof BatchedKeyStringValueString s) {
-                oneSlot.asyncRun(() -> {
+                oneSlot.asyncExecute(() -> {
                     lGroup.set(s.getValue(), slotWithKeyHash, 0, ttl);
                 });
             } else if (event instanceof BatchedKeyStringValueList l) {
@@ -62,7 +62,7 @@ public class MyRDBVisitorEventListener implements EventListener {
                         rhh.put(new String(entry.getKey()), entry.getValue());
                     }
 
-                    oneSlot.asyncRun(() -> {
+                    oneSlot.asyncExecute(() -> {
                         hGroup.saveRedisHH(rhh, slotWithKeyHash);
                     });
                 } else {
@@ -72,11 +72,11 @@ public class MyRDBVisitorEventListener implements EventListener {
                         var fieldKey = RedisHashKeys.fieldKey(key, field);
 
                         var slotWithKeyHashThisField = lGroup.slot(fieldKey);
-                        oneSlot.asyncRun(() -> {
+                        oneSlot.asyncExecute(() -> {
                             hGroup.set(entry.getValue(), slotWithKeyHashThisField, 0, 0);
                         });
                     }
-                    oneSlot.asyncRun(() -> {
+                    oneSlot.asyncExecute(() -> {
                         hGroup.saveRedisHashKeys(rhk, key);
                     });
                 }
@@ -88,7 +88,7 @@ public class MyRDBVisitorEventListener implements EventListener {
                         rhh.put(new String(entry.getKey()), ttlValue.getValue(), ttlValue.getExpires());
                     }
 
-                    oneSlot.asyncRun(() -> {
+                    oneSlot.asyncExecute(() -> {
                         hGroup.saveRedisHH(rhh, slotWithKeyHash);
                     });
                 } else {
@@ -98,7 +98,7 @@ public class MyRDBVisitorEventListener implements EventListener {
                         var fieldKey = RedisHashKeys.fieldKey(key, field);
 
                         var slotWithKeyHashThisField = lGroup.slot(fieldKey);
-                        oneSlot.asyncRun(() -> {
+                        oneSlot.asyncExecute(() -> {
                             var ttlValue = entry.getValue();
                             hGroup.set(ttlValue.getValue(), slotWithKeyHashThisField, 0, ttlValue.getExpires());
                         });
@@ -112,7 +112,7 @@ public class MyRDBVisitorEventListener implements EventListener {
                 for (var memberBytes : s.getValue()) {
                     rhk.add(new String(memberBytes));
                 }
-                oneSlot.asyncRun(() -> {
+                oneSlot.asyncExecute(() -> {
                     SGroup.saveRedisSet(rhk, slotWithKeyHash, lGroup, dictMap);
                 });
             } else if (event instanceof BatchedKeyStringValueZSet z) {

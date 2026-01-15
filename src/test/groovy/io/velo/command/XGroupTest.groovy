@@ -757,11 +757,14 @@ class XGroupTest extends Specification {
         // exists wal
         when:
         data4[2][0] = ReplType.s_exists_wal.code
-        contentBytes = new byte[32 + 2 * Wal.ONE_GROUP_BUFFER_SIZE]
+        contentBytes = new byte[8 + 2 * Wal.ONE_GROUP_BUFFER_SIZE]
         requestBuffer = ByteBuffer.wrap(contentBytes)
         // wal group index
         requestBuffer.putInt(0)
         requestBuffer.putInt(Wal.ONE_GROUP_BUFFER_SIZE)
+        def vList2 = Mock.prepareValueList(20, 0)
+        var vEncodedBytes = vList2[-1].encode(true)
+        requestBuffer.put(vEncodedBytes)
         data4[3] = contentBytes
         r = x.handleRepl()
         then:
@@ -918,19 +921,25 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.exists_short_string)
 
         when:
-        contentBytes = new byte[4 + 4 + 58]
+        var keyTest = 'key:000000000001'
+        def cv = new CompressedValue()
+        cv.seq = 1L
+        cv.keyHash = KeyHash.hash(keyTest.bytes)
+        cv.compressedData = new byte[10]
+        def cvEncoded = cv.encode()
+        contentBytes = new byte[4 + 4 + 48 + cvEncoded.length]
         data4[3] = contentBytes
         requestBuffer = ByteBuffer.wrap(contentBytes)
         // wal group index
         requestBuffer.putInt(0)
-        requestBuffer.putInt(58)
-        requestBuffer.putLong(1L)
-        requestBuffer.putLong(1L)
+        requestBuffer.putInt(48 + cvEncoded.length)
+        requestBuffer.putLong(cv.seq)
+        requestBuffer.putLong(cv.keyHash)
         requestBuffer.putLong(0L)
         requestBuffer.putInt(16)
-        requestBuffer.put('key:000000000001'.bytes)
-        requestBuffer.putInt(10)
-        requestBuffer.put(new byte[10])
+        requestBuffer.put(keyTest.bytes)
+        requestBuffer.putInt(cvEncoded.length)
+        requestBuffer.put(cvEncoded)
         r = x.handleRepl()
         then:
         r.isReplType(ReplType.exists_short_string)

@@ -981,7 +981,7 @@ public class ZGroup extends BaseCommand {
 
             if (doStore) {
                 var dstOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
-                dstOneSlot.asyncRun(() -> saveRedisZSet(finalRz, dstSlotWithKeyHash));
+                dstOneSlot.asyncExecute(() -> saveRedisZSet(finalRz, dstSlotWithKeyHash));
                 finalPromise.set(new IntegerReply(finalRz.size()));
             } else {
                 var replies = new Reply[finalRz.size() * (finalWithScores ? 2 : 1)];
@@ -1611,7 +1611,7 @@ public class ZGroup extends BaseCommand {
                     saveRedisZSet(dstRz, dstSlotWithKeyHash);
                 } else {
                     var dstOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
-                    dstOneSlot.asyncRun(() -> saveRedisZSet(dstRz, dstSlotWithKeyHash));
+                    dstOneSlot.asyncExecute(() -> saveRedisZSet(dstRz, dstSlotWithKeyHash));
                 }
 
                 return dstRz.isEmpty() ? IntegerReply.REPLY_0 : new IntegerReply(dstRz.size());
@@ -1660,7 +1660,7 @@ public class ZGroup extends BaseCommand {
                     saveRedisZSet(dstRz, dstSlotWithKeyHash);
                 } else {
                     var dstOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
-                    dstOneSlot.asyncRun(() -> saveRedisZSet(dstRz, dstSlotWithKeyHash));
+                    dstOneSlot.asyncExecute(() -> saveRedisZSet(dstRz, dstSlotWithKeyHash));
                 }
 
                 return dstRz.isEmpty() ? IntegerReply.REPLY_0 : new IntegerReply(dstRz.size());

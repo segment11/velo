@@ -578,6 +578,25 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     /**
+     * Asynchronously executes a given task.
+     *
+     * @param runnable the task to run
+     */
+    public void asyncExecute(@NotNull Runnable runnable) {
+        var threadId = Thread.currentThread().threadId();
+        if (threadId == threadIdProtectedForSafe) {
+            try {
+                runnable.run();
+                return;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        slotWorkerEventloop.execute(runnable);
+    }
+
+    /**
      * Asynchronously calls a supplier and returns the result.
      *
      * @param supplierEx the supplier to call

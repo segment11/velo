@@ -239,7 +239,7 @@ public class BlockingList {
 
                     var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
                     rGroup.from(baseCommand);
-                    dstOneSlot.asyncRun(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, leftValueBytes, promise.settablePromise::set));
+                    dstOneSlot.asyncExecute(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, leftValueBytes, promise.settablePromise::set));
                 } else {
                     var replies = new Reply[2];
                     replies[0] = new BulkReply(key);
@@ -270,7 +270,7 @@ public class BlockingList {
 
                     var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
                     rGroup.from(baseCommand);
-                    dstOneSlot.asyncRun(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, rightValueBytes, promise.settablePromise::set));
+                    dstOneSlot.asyncExecute(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, rightValueBytes, promise.settablePromise::set));
                 } else {
                     var replies = new Reply[2];
                     replies[0] = new BulkReply(key);

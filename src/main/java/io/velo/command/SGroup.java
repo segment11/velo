@@ -1645,7 +1645,7 @@ public class SGroup extends BaseCommand {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        dstOneSlot.asyncRun(() -> {
+        dstOneSlot.asyncExecute(() -> {
             var dstRhk = getRedisSet(dstSlotWithKeyHash);
             if (dstRhk == null) {
                 dstRhk = new RedisHashKeys();

@@ -166,7 +166,7 @@ public class XWalV implements BinlogContent {
         var oneSlot = localPersist.oneSlot(s.slot());
         var walGroupIndex = Wal.calcWalGroupIndex(s.bucketIndex());
         var targetWal = oneSlot.getWalByGroupIndex(walGroupIndex);
-        oneSlot.asyncRun(() -> {
+        oneSlot.asyncExecute(() -> {
             var putResult = targetWal.put(isValueShort, key, v2);
             if (putResult.needPersist()) {
                 oneSlot.doPersist(walGroupIndex, key, putResult);
