@@ -147,16 +147,22 @@ class ReplPairTest extends Specification {
         1 == 1
 
         when:
-        def socket = SocketInspectorTest.mockTcpSocket()
-        replPairAsMaster.closeSlaveConnectSocket()
-        replPairAsMaster.slaveConnectSocketInMaster = socket
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
         def eventloopCurrent = Eventloop.builder()
                 .withCurrentThread()
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
-        eventloopCurrent.execute {
-            replPairAsMaster.closeSlaveConnectSocket()
-        }
+
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        replPairAsMaster.slaveConnectSocketInMaster = socket
+        replPairAsMaster.slaveConnectSocketInMaster = socket
+        replPairAsMaster.closeSlaveConnectSocket()
+        eventloopCurrent.run()
+        Thread.sleep(1000)
+        replPairAsMaster.closeSlaveConnectSocket()
         eventloopCurrent.run()
         Thread.sleep(1000)
         then:
@@ -186,6 +192,10 @@ class ReplPairTest extends Specification {
         replPairAsSlave.initAsSlave(null, null)
         then:
         !replPairAsSlave.isLinkUp()
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test connect'() {

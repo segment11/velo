@@ -6,6 +6,7 @@ import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.RequestHandler;
 import io.velo.persist.BigStringFiles;
+import io.velo.persist.LocalPersist;
 import io.velo.repl.content.Hello;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -288,7 +289,7 @@ public class ReplPair {
     public String getStatsCountForReplTypeAsString() {
         var sb = new StringBuilder();
         for (var type : ReplType.values()) {
-            sb.append(type.name()).append("=").append(statsCountForReplType[type.ordinal()]).append(", ");
+            sb.append(type.name()).append("=").append(statsCountForReplType[type.ordinal()]).append("\n");
         }
         return sb.toString();
     }
@@ -617,15 +618,18 @@ public class ReplPair {
     }
 
     public void closeSlaveConnectSocket() {
-        if (slaveConnectSocketInMaster != null) {
-            try {
-                slaveConnectSocketInMaster.close();
-                log.warn("Repl pair master close slave socket, {}:{}, slot={}", host, port, slot);
-            } catch (Exception e) {
-                log.error("Repl pair master close slave socket error={}, {}:{}, slot={}", e.getMessage(), host, port, slot);
-            } finally {
-                slaveConnectSocketInMaster = null;
-            }
+        if (slaveConnectSocketInMaster != null && !slaveConnectSocketInMaster.isClosed()) {
+            var oneSlot = LocalPersist.getInstance().oneSlot(slot);
+            oneSlot.asyncExecute(() -> {
+                try {
+                    slaveConnectSocketInMaster.close();
+                    log.warn("Repl pair master close slave socket, {}:{}, slot={}", host, port, slot);
+                } catch (Exception e) {
+                    log.error("Repl pair master close slave socket error={}, {}:{}, slot={}", e.getMessage(), host, port, slot);
+                } finally {
+                    slaveConnectSocketInMaster = null;
+                }
+            });
         }
     }
 
@@ -701,6 +705,7 @@ public class ReplPair {
 
     /**
      * Closes the connection to the server.
+     * Run in task runner
      */
     public void close() {
         if (tcpClient != null) {
