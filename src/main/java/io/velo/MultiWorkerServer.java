@@ -421,7 +421,7 @@ public class MultiWorkerServer extends Launcher {
     }
 
     private Promise<ByteBuf> handleReplRequest(Request request, ITcpSocket socket) {
-        var slotRemote = ByteBuffer.wrap(request.getData()[1]).getShort();
+        var slotRemote = request.getSingleSlot();
 
         int i = slotRemote % requestHandlerArray.length;
         var targetHandler = requestHandlerArray[i];
