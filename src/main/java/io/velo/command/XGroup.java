@@ -802,7 +802,7 @@ public class XGroup extends BaseCommand {
             var keyHash = buffer.getLong();
             sentIdList.add(new BigStringFiles.IdWithKey(uuid, bucketIndex, keyHash, ""));
         }
-        if (slot == 0 && bucketIndex % (1024 * 10) == 0) {
+        if (slot == 0 && bucketIndex % (1024 * 100) == 0) {
             log.warn("Repl master fetch exists big string, slave sent id list={}, bucket index={}, slot={}", sentIdList, bucketIndex, slot);
         }
 

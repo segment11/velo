@@ -273,7 +273,7 @@ public class ReplPair {
 
         // only log for catch up
         if (type == ReplType.catch_up || type == ReplType.s_catch_up) {
-            if (statsCountForReplType[i] % 1000 == 0) {
+            if (slot == 0 && statsCountForReplType[i] % 1000 == 0) {
                 log.info("Repl pair stats count for repl type, alive, target host={}, port={}, stats={}, slot={}",
                         host, port, getStatsCountForReplTypeAsString(), slot);
             }
