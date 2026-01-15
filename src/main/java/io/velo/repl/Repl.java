@@ -4,12 +4,18 @@ import io.netty.buffer.ByteBuf;
 import io.velo.repl.content.RawBytesContent;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.TestOnly;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
 
 /**
  * Represents a REPL (slave-master-replication) protocol for communication.
  * This class provides methods to encode and decode messages according to the custom REPL protocol.
  */
 public class Repl {
+    private static final Logger log = LoggerFactory.getLogger(Repl.class);
+
     private Repl() {
         // Private constructor to prevent instantiation
     }
@@ -189,7 +195,13 @@ public class Repl {
         if (buf.readableBytes() <= HEADER_LENGTH) {
             return null;
         }
-        buf.skipBytes(PROTOCOL_KEYWORD_BYTES.length);
+
+        var protocolBytes = new byte[PROTOCOL_KEYWORD_BYTES.length];
+        buf.readBytes(protocolBytes);
+        if (!Arrays.equals(protocolBytes, PROTOCOL_KEYWORD_BYTES)) {
+            log.warn("Invalid protocol keyword");
+            return null;
+        }
 
         var slaveUuid = buf.readLong();
         var slot = buf.readShort();
@@ -204,6 +216,7 @@ public class Repl {
         }
 
         var dataLength = buf.readInt();
+        assert dataLength > 0;
 
         var readLength = Math.min(buf.readableBytes(), dataLength);
         if (readLength != 0) {
