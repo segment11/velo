@@ -837,7 +837,7 @@ public class XGroup extends BaseCommand {
         var remoteReplProperties = replPair.getRemoteReplProperties();
         var bucketsPerSlotRemote = remoteReplProperties.bucketsPerSlot();
 
-        if (slot == 0 && bucketIndex % (1024 * 10) == 0) {
+        if (slot == 0 && bucketIndex % (1024 * 100) == 0) {
             log.warn("Repl slave fetch exists big string, master sent big string count={}, bucket index={}, slot={}", bigStringCount, bucketIndex, slot);
         }
 
