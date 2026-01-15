@@ -615,6 +615,7 @@ public class MultiWorkerServer extends Launcher {
     Promise<ByteBuf> handlePipeline(@NotNull ArrayList<Request> pipeline, ITcpSocket socket, short slotNumber) {
         if (pipeline.isEmpty()) {
             return Promise.of(null);
+//            return Promise.of(ByteBuf.empty());
         }
 
         SocketInspector.updateLastSendCommand(socket, pipeline.getLast().cmd(), pipeline.size());
@@ -710,6 +711,47 @@ public class MultiWorkerServer extends Launcher {
 
     static String[] MAIN_ARGS;
 
+    private static void prepareConfig() {
+        var configFilePath = configFilePath();
+        var config = Config.create()
+                .overrideWith(ofProperties(configFilePath, true));
+
+        var applicationSettings = config.getChild("ApplicationSettings");
+        var socketSettings = applicationSettings.getChild("SocketSettings");
+        var map = socketSettings.toMap();
+        log.warn("Reset socket settings={}", map);
+        map.forEach((k, v) -> System.setProperty("io.activej.reactor.net.SocketSettings." + k, v));
+
+        var serverSocketSettings = applicationSettings.getChild("ServerSocketSettings");
+        var map1 = serverSocketSettings.toMap();
+        log.warn("Reset server socket settings={}", map1);
+        map1.forEach((k, v) -> System.setProperty("io.activej.reactor.net.ServerSocketSettings." + k, v));
+    }
+
+    static {
+        prepareConfig();
+    }
+
+    private static String configFilePath() {
+        String filePath;
+        if (MAIN_ARGS != null && MAIN_ARGS.length > 0) {
+            filePath = MAIN_ARGS[0];
+        } else {
+            var currentDirConfigFile = new File(Utils.projectPath("/" + PROPERTIES_FILE));
+            if (currentDirConfigFile.exists()) {
+                filePath = currentDirConfigFile.getAbsolutePath();
+            } else {
+                var x = new File(Utils.projectPath("/src/main/resources/" + PROPERTIES_FILE));
+                if (x.exists()) {
+                    filePath = x.getAbsolutePath();
+                } else {
+                    filePath = "/etc/" + PROPERTIES_FILE;
+                }
+            }
+        }
+        return filePath;
+    }
+
     /**
      * Provides the configuration for the server.
      *
@@ -717,29 +759,14 @@ public class MultiWorkerServer extends Launcher {
      */
     @Provides
     Config config() {
-        String givenConfigFilePath;
-        if (MAIN_ARGS != null && MAIN_ARGS.length > 0) {
-            givenConfigFilePath = MAIN_ARGS[0];
-        } else {
-            var currentDirConfigFile = new File(Utils.projectPath("/" + PROPERTIES_FILE));
-            if (currentDirConfigFile.exists()) {
-                givenConfigFilePath = currentDirConfigFile.getAbsolutePath();
-            } else {
-                givenConfigFilePath = "/etc/" + PROPERTIES_FILE;
-            }
-        }
-        log.warn("Config will be loaded from={}", givenConfigFilePath);
+        var configFilePath = configFilePath();
+        log.warn("Config will be loaded from={}", configFilePath);
 
-        var c = Config.create()
+        return Config.create()
                 .with("net.listenAddresses", Config.ofValue(ofInetSocketAddress(), new InetSocketAddress(PORT)))
                 .overrideWith(ofClassPathProperties(PROPERTIES_FILE, true))
-                .overrideWith(ofProperties(givenConfigFilePath, true))
+                .overrideWith(ofProperties(configFilePath, true))
                 .overrideWith(ofSystemProperties("velo-config"));
-
-        var applicationSettingsConfig = c.getChild("applicationSettings");
-        applicationSettingsConfig.getChildren().forEach((k, v) -> v.getChildren().forEach((k1, v1) -> System.setProperty(k + "." + k1, v1.getValue())));
-
-        return c;
     }
 
     /**

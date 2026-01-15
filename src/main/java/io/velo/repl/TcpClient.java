@@ -7,6 +7,7 @@ import io.activej.csp.supplier.ChannelSuppliers;
 import io.activej.eventloop.Eventloop;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.activej.promise.Promise;
+import io.activej.reactor.net.SocketSettings;
 import io.velo.*;
 import io.velo.command.XGroup;
 import io.velo.decode.ReplDecoder;
@@ -119,7 +120,8 @@ public class TcpClient implements NeedCleanUp {
      * @param connectedCallback the callback to be called when the connection is established
      */
     public void connect(String host, int port, Callable<ByteBuf> connectedCallback) {
-        TcpSocket.connect(slotWorkerEventloop, new InetSocketAddress(host, port))
+        var socketSettings = SocketSettings.create();
+        TcpSocket.connect(slotWorkerEventloop, new InetSocketAddress(host, port), 0, socketSettings)
                 .whenResult(socket -> {
                     log.info("Connected to server at {}:{}, slot={}", host, port, slot);
 
@@ -132,9 +134,9 @@ public class TcpClient implements NeedCleanUp {
                     BinaryChannelSupplier.of(ChannelSuppliers.ofSocket(socket))
                             .decodeStream(new ReplDecoder())
                             .mapAsync(pipeline -> {
-                                if (pipeline == null) {
-                                    log.error("Repl slave request decode fail: pipeline is null, slot={}", slot);
-                                    return null;
+                                if (pipeline.isEmpty()) {
+                                    log.warn("Repl slave request decode fail: pipeline is empty, slot={}", slot);
+                                    return Promise.of(null);
                                 }
 
                                 Promise<ByteBuf>[] promiseN = new Promise[pipeline.size()];
