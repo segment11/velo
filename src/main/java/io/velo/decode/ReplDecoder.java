@@ -26,6 +26,10 @@ public class ReplDecoder implements ByteBufsDecoder<ArrayList<byte[][]>> {
         }
 
         var data = Repl.decode(buf);
+        // data not all ready
+        if (data == null) {
+            return null;
+        }
 
         // Skip the bytes those were consumed during decoding
         int consumedN = buf.readerIndex();
