@@ -12,7 +12,7 @@ public enum ReplType {
      * It's sent by a master.
      * code byte value -1.
      */
-    error(true, false, (byte) -1),
+    error(true, false, (byte) -100),
 
     /**
      * Represents a ping message.
@@ -20,7 +20,7 @@ public enum ReplType {
      * It's sent by a slave.
      * code byte value 0.
      */
-    ping(true, true, (byte) 0),
+    ping(true, true, (byte) -1),
 
     /**
      * Represents a pong message.
