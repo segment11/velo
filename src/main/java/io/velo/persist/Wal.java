@@ -1039,7 +1039,7 @@ public class Wal implements InMemoryEstimate {
     }
 
     public interface FromMasterVCallback {
-        void handle(boolean isShort, String key, V v);
+        void handle(boolean isShortValue, String key, V v);
     }
 
     /**
