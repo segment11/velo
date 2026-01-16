@@ -77,6 +77,7 @@ class WalTest extends Specification {
         Wal.calcWalGroupIndex(0) == 0
         Wal.calcWalGroupIndex(ConfForSlot.global.confWal.oneChargeBucketNumber) == 1
         Wal.calcWalGroupNumber() == 4096 / 32
+        wal.groupIndex == 0
         wal.lastSeqAfterPut == 0
         wal.lastSeqShortValueAfterPut == 0
         wal.writePosition == 0

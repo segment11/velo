@@ -322,6 +322,15 @@ public class Wal implements InMemoryEstimate {
     final int groupIndex;
 
     /**
+     * Get the WAL group index.
+     *
+     * @return the WAL group index
+     */
+    public int getGroupIndex() {
+        return groupIndex;
+    }
+
+    /**
      * Calculates the WAL group index for a given bucket index.
      *
      * @param bucketIndex the bucket index
