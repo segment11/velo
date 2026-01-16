@@ -222,13 +222,9 @@ public class Repl {
         if (readLength != 0) {
             var bytes = new byte[readLength];
             buf.readBytes(bytes);
-            var r = new ReplRequest(slaveUuid, slot, replType, bytes);
-            r.dataLength = readLength;
-            return r;
+            return new ReplRequest(slaveUuid, slot, replType, bytes, dataLength);
         } else {
-            var r = new ReplRequest(slaveUuid, slot, replType, new byte[0]);
-            r.dataLength = dataLength;
-            return r;
+            return new ReplRequest(slaveUuid, slot, replType, new byte[0], dataLength);
         }
     }
 }

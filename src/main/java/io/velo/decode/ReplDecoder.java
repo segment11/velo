@@ -6,16 +6,18 @@ import io.activej.csp.binary.decoder.ByteBufsDecoder;
 import io.velo.repl.Repl;
 import io.velo.repl.ReplRequest;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 
 /**
  * A decoder for incoming requests that can handle velo replication protocols.
  * The decoder reads from a {@link ByteBufs} input and attempts to parse as many complete requests as possible.
  */
 public class ReplDecoder implements ByteBufsDecoder<ArrayList<ReplRequest>> {
-    private final HashMap<ByteBufs, ReplRequest> toFullyReadRequests = new HashMap<>();
+    // slave tcp client is only one in one slot, one repl pair
+    @VisibleForTesting
+    ReplRequest toFullyReadRequest;
 
     /**
      * Attempts to decode a single request from the provided ByteBufs.
@@ -29,41 +31,40 @@ public class ReplDecoder implements ByteBufsDecoder<ArrayList<ReplRequest>> {
             return null;
         }
 
-        var toFullyReadOne = toFullyReadRequests.get(bufs);
-        if (toFullyReadOne != null) {
-            var leftN = toFullyReadOne.leftToRead();
+        if (toFullyReadRequest != null) {
+            var leftN = toFullyReadRequest.leftToRead();
             var canReadN = buf.readableBytes();
             if (canReadN >= leftN) {
-                toFullyReadOne.nextRead(buf, leftN);
+                toFullyReadRequest.nextRead(buf, leftN);
             } else {
-                toFullyReadOne.nextRead(buf, canReadN);
+                toFullyReadRequest.nextRead(buf, canReadN);
             }
 
             int consumedN = buf.readerIndex();
             bufs.skip(consumedN);
 
-            if (toFullyReadOne.isFullyRead()) {
-                toFullyReadRequests.remove(bufs);
-                return toFullyReadOne;
+            if (toFullyReadRequest.isFullyRead()) {
+                var one = toFullyReadRequest.copyShadow();
+                toFullyReadRequest = null;
+                return one;
             } else {
-                return null;
+                return toFullyReadRequest;
             }
         }
 
         var replRequest = Repl.decode(buf);
-        // data not all ready
+        // invalid repl request, or not ready
         if (replRequest == null) {
             return null;
         }
 
-        // Skip the bytes those were consumed during decoding
+        // skip the bytes those were consumed during decoding
         int consumedN = buf.readerIndex();
         bufs.skip(consumedN);
 
-        if (replRequest.isFullyRead()) {
-            toFullyReadRequests.remove(bufs);
-        } else {
-            toFullyReadRequests.put(bufs, replRequest);
+        if (!replRequest.isFullyRead()) {
+            assert toFullyReadRequest == null;
+            toFullyReadRequest = replRequest;
         }
 
         return replRequest;
@@ -81,8 +82,10 @@ public class ReplDecoder implements ByteBufsDecoder<ArrayList<ReplRequest>> {
         try {
             ArrayList<ReplRequest> pipeline = new ArrayList<>();
             var one = tryDecodeOne(bufs);
-            while (one != null && one.isFullyRead()) {
-                pipeline.add(one);
+            while (one != null) {
+                if (one.isFullyRead()) {
+                    pipeline.add(one);
+                }
                 one = tryDecodeOne(bufs);
             }
             return pipeline;
