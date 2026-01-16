@@ -1,6 +1,5 @@
 package io.velo.decode
 
-
 import spock.lang.Specification
 
 class HttpHeaderBodyTest extends Specification {
@@ -14,8 +13,8 @@ class HttpHeaderBodyTest extends Specification {
         def getHeader = "GET / HTTP/1.1\r\nAccept: text/html\r\n\r\n".bytes
         h.feed(getHeader)
         then:
-        h.isOk
-        h.isOk()
+        h.fullyRead
+        h.isFullyRead()
         h.action == "GET / HTTP/1.1"
         h.action() == "GET / HTTP/1.1"
         h.httpVersion == "HTTP/1.1"
@@ -25,7 +24,7 @@ class HttpHeaderBodyTest extends Specification {
         h.url == "/"
         h.url() == "/"
         h.contentLength() == 0
-        h.headers.size() == 1
+        h.headers().size() == 1
         h.header('Accept')
 
         when:
@@ -33,63 +32,63 @@ class HttpHeaderBodyTest extends Specification {
         def h1 = new HttpHeaderBody()
         h1.feed(b1)
         then:
-        !h1.isOk
+        !h1.fullyRead
 
         when:
         b1 = "GET /?1=1 HTTP/1.1\r\nAccept: text:/html\r\n\r\n".bytes
         h1 = new HttpHeaderBody()
         h1.feed(b1)
         then:
-        h1.isOk
+        h1.fullyRead
 
         when:
         b1 = "POST /?1=1 HTTP/1.1\r\nAccept: text/html\r\nX-key: X-value\r\nContent-Length: 4\r\n\r\n1234".bytes
         h1 = new HttpHeaderBody()
         h1.feed(b1)
         then:
-        h1.isOk
+        h1.fullyRead
 
         when:
         b1 = "GET /?1=1 HTTP/1.1\r\nAccept: text/html\r\n".bytes
         h1 = new HttpHeaderBody()
         h1.feed(b1)
         then:
-        !h1.isOk
+        !h1.fullyRead
 
         when:
         b1 = "GET /?1=1\r".bytes
         h1 = new HttpHeaderBody()
         h1.feed(b1)
         then:
-        !h1.isOk
+        !h1.fullyRead
 
         when:
         b1 = "GET /?1=1\n\n".bytes
         h1 = new HttpHeaderBody()
         h1.feed(b1)
         then:
-        !h1.isOk
+        !h1.fullyRead
 
         when:
         b1 = "GET /?1=1\r\nAccept: text/htm\r\n".bytes
         h1 = new HttpHeaderBody()
         h1.feed(b1)
         then:
-        !h1.isOk
+        !h1.fullyRead
 
         when:
         b1 = "GET /?1=1 HTTP/1.1\r\nAccept: text/html\r\r\r\n".bytes
         h1 = new HttpHeaderBody()
         h1.feed(b1)
         then:
-        !h1.isOk
+        !h1.fullyRead
 
         when:
         b1 = "GET /?1=1 HTTP/1.1\r\nAccept: text/html\n\n\r\n".bytes
         h1 = new HttpHeaderBody()
         h1.feed(b1)
         then:
-        !h1.isOk
+        !h1.fullyRead
 
 
         when:
@@ -97,31 +96,31 @@ class HttpHeaderBodyTest extends Specification {
         h1 = new HttpHeaderBody()
         h1.feed(b1)
         then:
-        !h1.isOk
+        !h1.fullyRead
 
         when:
         def postHeader = "POST / HTTP/1.1\r\nAccept: text/html\r\nX-key: X-value\r\nContent-Length: 4\r\n\r\n".bytes
         h2.feed(postHeader)
         then:
-        !h2.isOk
+        !h2.fullyRead
         h2.action == "POST / HTTP/1.1"
         h2.httpVersion == "HTTP/1.1"
         h2.requestType == "POST"
         h2.url == "/"
         h2.contentLength() == 4
-        h2.headers.size() == 3
+        h2.headers().size() == 3
 
         when:
         def fullHttpHeaderWithBody = "POST / HTTP/1.1\r\nContent-Length: 4\r\n\r\n1234".bytes
         h3.feed(fullHttpHeaderWithBody)
         then:
-        h3.isOk
+        h3.fullyRead
         h3.action == "POST / HTTP/1.1"
         h3.httpVersion == "HTTP/1.1"
         h3.requestType == "POST"
         h3.url == "/"
         h3.contentLength() == 4
-        h3.headers.size() == 1
+        h3.headers().size() == 1
         '1234' == new String(h3.body())
 
         when:

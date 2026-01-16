@@ -69,15 +69,13 @@ public class HttpHeaderBody {
     @VisibleForTesting
     String url;
 
-    @VisibleForTesting
-    boolean isOk = false;
+    private boolean isFullyRead = false;
 
     private String lastHeaderName;
 
-    private Map<String, String> headers = new HashMap<>();
+    private final Map<String, String> headers = new HashMap<>();
 
-    @VisibleForTesting
-    int contentLengthCache = -1;
+    private int contentLengthCache = -1;
 
     private byte[] body;
 
@@ -122,8 +120,8 @@ public class HttpHeaderBody {
      *
      * @return true if the request is correctly parsed, false otherwise
      */
-    public boolean isOk() {
-        return isOk;
+    public boolean isFullyRead() {
+        return isFullyRead;
     }
 
     /**
@@ -131,7 +129,7 @@ public class HttpHeaderBody {
      *
      * @return the map of headers and their values
      */
-    public Map<String, String> getHeaders() {
+    public Map<String, String> headers() {
         return headers;
     }
 
@@ -213,7 +211,7 @@ public class HttpHeaderBody {
                     // parse action
                     var arr = action.split(" ");
                     if (arr.length != 3) {
-                        isOk = false;
+                        isFullyRead = false;
                         return;
                     }
 
@@ -226,7 +224,7 @@ public class HttpHeaderBody {
                         var contentLength = contentLength();
                         var totalLength = headerLength + contentLength;
                         if (totalLength <= buf.readableBytes()) {
-                            isOk = true;
+                            isFullyRead = true;
                             buf.readerIndex(buf.readerIndex() + headerLength);
 
                             if (contentLength > 0) {
@@ -249,6 +247,6 @@ public class HttpHeaderBody {
             }
         }
 
-        isOk = false;
+        isFullyRead = false;
     }
 }
