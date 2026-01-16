@@ -606,7 +606,10 @@ public class XGroup extends BaseCommand {
 
                     var bucketIndex = KeyHash.bucketIndex(v.keyHash());
                     var targetWal = oneSlot.getWalByBucketIndex(bucketIndex);
-                    targetWal.put(isShortValue, key, v);
+                    var putResult = targetWal.put(isShortValue, key, v);
+                    if (putResult.needPersist()) {
+                        oneSlot.doPersist(targetWal.getGroupIndex(), key, putResult);
+                    }
                 }
             });
         }
