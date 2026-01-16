@@ -1844,7 +1844,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var needPutV = putResult.needPutV();
         if (needPutV != null) {
-            targetWal.put(putResult.isValueShort(), key, needPutV, lastPersistTimeMs);
+            var putResultAfterPersist = targetWal.put(putResult.isValueShort(), key, needPutV, lastPersistTimeMs);
+            // only one Wal.V encode length should less than one wal group file buffer size
+            assert !putResultAfterPersist.needPersist();
         }
     }
 
