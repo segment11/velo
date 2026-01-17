@@ -89,10 +89,10 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
             if (isHttp) {
                 var h = new HttpHeaderBody();
                 h.feed(buf, buf.readableBytes(), 0);
-                if (!h.isOk) {
+                if (!h.isFullyRead()) {
                     return null;
                 }
-                httpHeaders = h.getHeaders();
+                httpHeaders = h.headers();
 
                 if (isGet || isDelete) {
                     // Parse query parameters from the URL
@@ -123,6 +123,7 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                 if (replRequest == null) {
                     return null;
                 }
+                // slave send repl request is always small
                 assert replRequest.isFullyRead();
                 data = null;
             } else {
