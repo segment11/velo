@@ -80,8 +80,8 @@ public class SegmentBatch2 implements InSlotMetricCollector {
     /**
      * Represents a segment with its byte data, an index, and a sequence number.
      */
-    @VisibleForTesting
-    record SegmentBytesWithIndex(byte[] segmentBytes, int tmpSegmentIndex, long segmentSeq, int valueBytesLength) {
+    public record SegmentBytesWithIndex(byte[] segmentBytes, int tmpSegmentIndex, long segmentSeq,
+                                        int valueBytesLength) {
         @Override
         public @NotNull String toString() {
             return "SegmentCompressedBytesWithIndex{" +
@@ -100,7 +100,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
      * @param returnPvmList the list to store metadata about the persisted values
      * @return the list of segments with their byte data, indices, and sequence numbers
      */
-    ArrayList<SegmentBytesWithIndex> split(@NotNull ArrayList<Wal.V> list, @NotNull ArrayList<PersistValueMeta> returnPvmList) {
+    public ArrayList<SegmentBytesWithIndex> split(@NotNull ArrayList<Wal.V> list, @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         ArrayList<SegmentBytesWithIndex> result = new ArrayList<>(100);
         ArrayList<Wal.V> onceList = new ArrayList<>(100);
 
@@ -306,7 +306,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
      * @param offset       the starting offset within the segment data
      * @return true if the segment type is TIGHT, false otherwise
      */
-    static boolean isSegmentBytesTight(byte[] segmentBytes, int offset) {
+    public static boolean isSegmentBytesTight(byte[] segmentBytes, int offset) {
         // seq long + segment type byte
         return segmentBytes[offset + 8] == Chunk.SegmentType.TIGHT.val;
     }

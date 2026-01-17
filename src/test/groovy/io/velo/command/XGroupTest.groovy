@@ -689,6 +689,22 @@ class XGroupTest extends Specification {
         requestBuffer.putInt(ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl)
         // segment length
         requestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
+
+        def list = Mock.prepareValueList(800)
+        ArrayList<PersistValueMeta> returnPvmList = []
+        def snowFlake = new SnowFlake(1, 1)
+        def segmentBatch2 = new SegmentBatch2(snowFlake)
+        def splitResult = segmentBatch2.split(list, returnPvmList)
+        requestBuffer.put(splitResult.getFirst().segmentBytes())
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.exists_chunk_segments)
+
+        when:
+        // segment compression
+        var segmentBatch = new SegmentBatch(snowFlake)
+        def splitAndTightResult = segmentBatch.split(list, returnPvmList)
+        requestBuffer.position(16).put(splitAndTightResult.getFirst().segmentBytes())
         r = x.handleRepl(replRequest)
         then:
         r.isReplType(ReplType.exists_chunk_segments)
@@ -697,6 +713,9 @@ class XGroupTest extends Specification {
         // last batch
         requestBuffer.position(0)
         requestBuffer.putInt(ConfForSlot.global.confChunk.maxSegmentNumber() - ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl)
+        requestBuffer.position(16)
+        // segment no data
+        requestBuffer.put(new byte[4096])
         r = x.handleRepl(replRequest)
         then:
         // next step

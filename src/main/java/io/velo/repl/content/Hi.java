@@ -90,6 +90,6 @@ public class Hi implements ReplContent {
      */
     @Override
     public int encodeLength() {
-        return 8 + 8 + 4 + 8 + 4 + 8 + 4 + 2 + 17;
+        return 8 + 8 + 4 + 8 + 4 + 8 + 4 + 2 + 18;
     }
 }

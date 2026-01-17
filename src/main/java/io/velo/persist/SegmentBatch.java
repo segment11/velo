@@ -274,8 +274,8 @@ public class SegmentBatch implements InSlotMetricCollector {
      * @param returnPvmList the list to store metadata about the persisted values
      * @return the list of tight-packed segments with their byte data, indices, and sequence numbers
      */
-    ArrayList<SegmentBatch2.SegmentBytesWithIndex> split(@NotNull ArrayList<Wal.V> list,
-                                                         @NotNull ArrayList<PersistValueMeta> returnPvmList) {
+    public ArrayList<SegmentBatch2.SegmentBytesWithIndex> split(@NotNull ArrayList<Wal.V> list,
+                                                                @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         var r = splitAndTight(list, returnPvmList);
         ArrayList<SegmentBatch2.SegmentBytesWithIndex> returnList = new ArrayList<>(r.size());
         for (var one : r) {
@@ -291,9 +291,8 @@ public class SegmentBatch implements InSlotMetricCollector {
      * @param returnPvmList the list to store metadata about the persisted values
      * @return the list of tight-packed segments
      */
-    @VisibleForTesting
-    ArrayList<SegmentTightBytesWithLengthAndSegmentIndex> splitAndTight(@NotNull ArrayList<Wal.V> list,
-                                                                        @NotNull ArrayList<PersistValueMeta> returnPvmList) {
+    public ArrayList<SegmentTightBytesWithLengthAndSegmentIndex> splitAndTight(@NotNull ArrayList<Wal.V> list,
+                                                                               @NotNull ArrayList<PersistValueMeta> returnPvmList) {
         ArrayList<SegmentCompressedBytesWithIndex> result = new ArrayList<>(100);
         ArrayList<Wal.V> onceList = new ArrayList<>(100);
 

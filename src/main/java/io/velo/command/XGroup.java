@@ -2,6 +2,7 @@ package io.velo.command;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.luben.zstd.Zstd;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.netty.buffer.Unpooled;
@@ -317,8 +318,7 @@ public class XGroup extends BaseCommand {
         };
     }
 
-    @VisibleForTesting
-    Repl.ReplReply hello(short slot, byte[] contentBytes) {
+    private Repl.ReplReply hello(short slot, byte[] contentBytes) {
         // server received hello from client
         var buffer = ByteBuffer.wrap(contentBytes);
         var slaveUuid = buffer.getLong();
@@ -330,7 +330,8 @@ public class XGroup extends BaseCommand {
 
         // ignore remote slot number
         var slaveSlotNumber = buffer.getShort();
-        var replProperties = new ConfForSlot.ReplProperties(buffer.getInt(), buffer.getInt(), buffer.get(), buffer.getInt(), buffer.getInt());
+        var replProperties = new ConfForSlot.ReplProperties(buffer.getInt(), buffer.getInt(),
+                buffer.getInt(), buffer.get(), buffer.getInt(), buffer.get() == 1);
 
         var array = netListenAddresses.split(":");
         var host = array[0];
@@ -408,7 +409,8 @@ public class XGroup extends BaseCommand {
         var currentSegmentIndex = buffer.getInt();
 
         var masterSlotNumber = buffer.getShort();
-        var replProperties = new ConfForSlot.ReplProperties(buffer.getInt(), buffer.getInt(), buffer.get(), buffer.getInt(), buffer.getInt());
+        var replProperties = new ConfForSlot.ReplProperties(buffer.getInt(), buffer.getInt(),
+                buffer.getInt(), buffer.get(), buffer.getInt(), buffer.get() == 1);
 
         // should not happen
         if (slaveUuid != replPair.getSlaveUuid()) {
@@ -653,8 +655,7 @@ public class XGroup extends BaseCommand {
         return Repl.reply(slot, replPair, s_exists_chunk_segments, content);
     }
 
-    @VisibleForTesting
-    Repl.ReplReply s_exists_chunk_segments(short slot, byte[] contentBytes) {
+    private Repl.ReplReply s_exists_chunk_segments(short slot, byte[] contentBytes) {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
         var beginSegmentIndex = buffer.getInt();
@@ -677,15 +678,52 @@ public class XGroup extends BaseCommand {
             }
 
             var offset = buffer.position();
-            SegmentBatch2.iterateFromSegmentBytes(buffer.array(), offset, segmentLength, (key, cv, offsetInThisSegment) -> {
-                if (cv.isExpired()) {
-                    return;
-                }
 
-                var keyHash = KeyHash.hash(key.getBytes());
-                var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
-                groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
-            });
+            if (SegmentBatch2.isSegmentBytesTight(buffer.array(), offset)) {
+//                assert remoteReplProperties.isSegmentUseCompression();
+
+                var buffer2 = ByteBuffer.wrap(buffer.array(), offset, segmentLength).slice();
+                // iterate sub blocks, refer to SegmentBatch.tight
+                for (int subBlockIndex = 0; subBlockIndex < SegmentBatch.MAX_BLOCK_NUMBER; subBlockIndex++) {
+                    buffer2.position(SegmentBatch.subBlockMetaPosition(subBlockIndex));
+                    var subBlockOffset = buffer2.getShort();
+                    if (subBlockOffset == 0) {
+                        // skip
+                        break;
+                    }
+                    var subBlockLength = buffer2.getShort();
+
+                    var decompressedBytes = new byte[segmentLength];
+                    var d = Zstd.decompressByteArray(decompressedBytes, 0, segmentLength,
+                            buffer.array(), offset + subBlockOffset, subBlockLength);
+                    if (d != segmentLength) {
+                        var segmentIndex = beginSegmentIndex + i;
+                        throw new IllegalStateException("Decompress error, s=" + slot
+                                + ", i=" + segmentIndex + ", sbi=" + subBlockIndex + ", d=" + d + ", chunkSegmentLength=" + segmentLength);
+                    }
+
+                    SegmentBatch2.iterateFromSegmentBytes(decompressedBytes, (key, cv, offsetInThisSegment) -> {
+                        if (cv.isExpired()) {
+                            return;
+                        }
+
+                        var keyHash = KeyHash.hash(key.getBytes());
+                        var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+                        groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
+                    });
+                }
+            } else {
+                SegmentBatch2.iterateFromSegmentBytes(buffer.array(), offset, segmentLength, (key, cv, offsetInThisSegment) -> {
+                    if (cv.isExpired()) {
+                        return;
+                    }
+
+                    var keyHash = KeyHash.hash(key.getBytes());
+                    var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+                    groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
+                });
+            }
+
             buffer.position(offset + segmentLength);
         }
 

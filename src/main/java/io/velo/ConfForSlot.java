@@ -2,7 +2,6 @@ package io.velo;
 
 import io.velo.persist.KeyBucket;
 import io.velo.persist.Wal;
-import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,38 +65,16 @@ public enum ConfForSlot {
     /**
      * Replication properties for slave.
      *
-     * @param bucketsPerSlot        the number of buckets per slot
-     * @param segmentNumberPerFd    the number of segments per file
-     * @param fdPerChunk            the number of file descriptors per chunk
-     * @param segmentLength         the length of each segment
-     * @param oneChargeBucketNumber the number of buckets charged in one wal group
+     * @param bucketsPerSlot          the number of buckets per slot
+     * @param oneChargeBucketNumber   the number of buckets charged in one wal group
+     * @param segmentNumberPerFd      the number of segments per file
+     * @param fdPerChunk              the number of file descriptors per chunk
+     * @param segmentLength           the length of each segment
+     * @param isSegmentUseCompression whether to use compression for each segment
      */
-    public record ReplProperties(int bucketsPerSlot, int segmentNumberPerFd, byte fdPerChunk, int segmentLength,
-                                 int oneChargeBucketNumber) {
-        /**
-         * Check if the slave is redo set, or can copy key buckets / chunk / wal bytes directly.
-         *
-         * @param local configuration for the slave
-         * @return true if the slave is redo set, false otherwise
-         */
-        public boolean isReplRedoSet(ReplProperties local) {
-            if (bucketsPerSlot != local.bucketsPerSlot) {
-                return false;
-            }
-
-            if (segmentNumberPerFd != local.segmentNumberPerFd ||
-                    fdPerChunk != local.fdPerChunk ||
-                    segmentLength != local.segmentLength) {
-                return false;
-            }
-
-            return oneChargeBucketNumber == local.oneChargeBucketNumber;
-        }
-    }
-
-    @TestOnly
-    public boolean isReplRedoSet(ConfForSlot local) {
-        return generateReplProperties().isReplRedoSet(local.generateReplProperties());
+    public record ReplProperties(int bucketsPerSlot, int oneChargeBucketNumber,
+                                 int segmentNumberPerFd, byte fdPerChunk, int segmentLength,
+                                 boolean isSegmentUseCompression) {
     }
 
     /**
@@ -106,9 +83,9 @@ public enum ConfForSlot {
      * @return the replication properties
      */
     public ReplProperties generateReplProperties() {
-        return new ReplProperties(confBucket.bucketsPerSlot,
+        return new ReplProperties(confBucket.bucketsPerSlot, confWal.oneChargeBucketNumber,
                 confChunk.segmentNumberPerFd, confChunk.fdPerChunk, confChunk.segmentLength,
-                confWal.oneChargeBucketNumber);
+                confChunk.isSegmentUseCompression);
     }
 
     /**

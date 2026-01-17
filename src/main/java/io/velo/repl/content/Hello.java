@@ -38,7 +38,7 @@ public class Hello implements ReplContent {
      * - 8 bytes for the slave UUID (written as a long)
      * - 4 bytes for net listen addresses length
      * - 2 bytes for slot number
-     * - 4 + 4 + 1 + 4 + 4 for ReplProperties
+     * - 4 + 4 + 4 + 1 + 4 + 1 for ReplProperties
      * - The byte array representation of {@code netListenAddresses}
      *
      * @param toBuf the buffer to which the message content will be written
@@ -56,10 +56,11 @@ public class Hello implements ReplContent {
         toBuf.writeShort(ConfForGlobal.slotNumber);
         var replProperties = ConfForSlot.global.generateReplProperties();
         toBuf.writeInt(replProperties.bucketsPerSlot());
+        toBuf.writeInt(replProperties.oneChargeBucketNumber());
         toBuf.writeInt(replProperties.segmentNumberPerFd());
         toBuf.writeByte(replProperties.fdPerChunk());
         toBuf.writeInt(replProperties.segmentLength());
-        toBuf.writeInt(replProperties.oneChargeBucketNumber());
+        toBuf.writeByte(replProperties.isSegmentUseCompression() ? (byte) 1 : (byte) 0);
     }
 
     /**
@@ -72,6 +73,6 @@ public class Hello implements ReplContent {
      */
     @Override
     public int encodeLength() {
-        return 8 + 4 + netListenAddresses.length() + 2 + 17;
+        return 8 + 4 + netListenAddresses.length() + 2 + 18;
     }
 }
