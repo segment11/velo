@@ -8,6 +8,8 @@ import io.netty.buffer.Unpooled;
 import io.velo.repl.Repl;
 import io.velo.repl.ReplRequest;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,6 +41,8 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
         compositeByteBuf.writerIndex(capacity).capacity(capacity);
         return compositeByteBuf;
     }
+
+    private final Logger log = LoggerFactory.getLogger(RequestDecoder.class);
 
     /**
      * Attempts to decode a single request from the provided ByteBufs.
@@ -124,7 +128,12 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                     return null;
                 }
                 // slave send repl request is always small
-                assert replRequest.isFullyRead();
+//                assert replRequest.isFullyRead();
+                // wait for next time
+                if (!replRequest.isFullyRead()) {
+                    log.warn("Repl request not fully read, left to read={}, repl type={}", replRequest.leftToRead(), replRequest.getType());
+                    return null;
+                }
                 data = null;
             } else {
                 // Fallback to RESP decoding
