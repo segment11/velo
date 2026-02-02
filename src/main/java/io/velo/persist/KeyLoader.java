@@ -872,7 +872,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         updateKeyCountBatch(walGroupIndex, inner.beginBucketIndex, inner.keyCountForStatsTmp);
 
         var sharedBytesList = inner.encodeAfterPutBatch();
-        var seqArray = writeSharedBytesList(sharedBytesList, inner.beginBucketIndex);
+        writeSharedBytesList(sharedBytesList, inner.beginBucketIndex);
 
         updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp);
 
@@ -917,10 +917,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      *
      * @param sharedBytesListBySplitIndex the shared bytes list indexed by split index
      * @param beginBucketIndex            the starting bucket index
-     * @return the array of sequence numbers corresponding to each split index
      */
-    public long[] writeSharedBytesList(byte[][] sharedBytesListBySplitIndex, int beginBucketIndex) {
-        var seqArray = new long[sharedBytesListBySplitIndex.length];
+    public void writeSharedBytesList(byte[][] sharedBytesListBySplitIndex, int beginBucketIndex) {
         for (int splitIndex = 0; splitIndex < sharedBytesListBySplitIndex.length; splitIndex++) {
             var sharedBytes = sharedBytesListBySplitIndex[splitIndex];
             if (sharedBytes == null) {
@@ -940,9 +938,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             }
 
             fdReadWrite.writeSharedBytesForKeyBucketsInOneWalGroup(beginBucketIndex, sharedBytes);
-            seqArray[splitIndex] = snowFlake.nextId();
         }
-        return seqArray;
     }
 
     /**
