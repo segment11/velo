@@ -114,13 +114,14 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                 } else {
                     var body = h.body();
                     if (body == null) {
-                        return null;
-                    }
-
-                    var arr = new String(body).split(" ");
-                    data = new byte[arr.length][];
-                    for (int i = 0; i < arr.length; i++) {
-                        data[i] = arr[i].getBytes();
+                        data = new byte[1][];
+                        data[0] = "zzz".getBytes();
+                    } else {
+                        var arr = new String(body).split(" ");
+                        data = new byte[arr.length][];
+                        for (int i = 0; i < arr.length; i++) {
+                            data[i] = arr[i].getBytes();
+                        }
                     }
                 }
             } else if (isRepl) {
