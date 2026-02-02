@@ -102,13 +102,14 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                     // Parse query parameters from the URL
                     var pos = h.url.indexOf("?");
                     if (pos == -1) {
-                        return null;
-                    }
-
-                    var arr = h.url.substring(pos + 1).split("&");
-                    data = new byte[arr.length][];
-                    for (int i = 0; i < arr.length; i++) {
-                        data[i] = arr[i].getBytes();
+                        data = new byte[1][];
+                        data[0] = "zzz".getBytes();
+                    } else {
+                        var arr = h.url.substring(pos + 1).split("&");
+                        data = new byte[arr.length][];
+                        for (int i = 0; i < arr.length; i++) {
+                            data[i] = arr[i].getBytes();
+                        }
                     }
                 } else {
                     var body = h.body();
