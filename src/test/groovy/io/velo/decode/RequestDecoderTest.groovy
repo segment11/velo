@@ -127,7 +127,8 @@ class RequestDecoderTest extends Specification {
         bufs.add(buf)
         requestList = decoder.tryDecode(bufs)
         then:
-        requestList.isEmpty()
+        requestList.size() == 1
+        requestList[0].data[0] == 'zzz'.bytes
 
         when:
         buf = ByteBuf.wrapForReading(
@@ -137,7 +138,8 @@ class RequestDecoderTest extends Specification {
         bufs.add(buf)
         requestList = decoder.tryDecode(bufs)
         then:
-        requestList.isEmpty()
+        requestList.size() == 1
+        requestList[0].data[0] == 'zzz'.bytes
 
         when:
         // http not ok
@@ -159,7 +161,8 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         def requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3.isEmpty()
+        requestList.size() == 1
+        requestList[0].data[0] == 'zzz'.bytes
 
         when:
         buf3 = ByteBuf.wrapForReading(
@@ -169,7 +172,8 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3.isEmpty()
+        requestList.size() == 1
+        requestList[0].data[0] == 'zzz'.bytes
 
         when:
         buf3 = ByteBuf.wrapForReading(new byte[1])
