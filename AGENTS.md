@@ -4,7 +4,8 @@ This file contains guidelines for agentic coding agents working on the Velo code
 
 ## Project Overview
 
-Velo is a Redis protocol compatible, low-latency, hash index based, slot sharding, multi-threading key-value storage
+Velo is a Redis protocol compatible, http protocol supported, low-latency, hash index based, slot sharding,
+multi-threading key-value storage
 system written in Java with Groovy components.
 
 ## Preparation
@@ -150,6 +151,14 @@ TIPS: Main packet io.velo features are:
 - Server Launcher
 - Request Handler
 - Hash calculation
+
+src/main/groovy:
+
+This is a separate module, for Velo cluster management, like migration, failover, etc.
+
+Some manage commands are implemented in groovy in dir /dyn/src/io/velo/command, now it has
+'cluster', 'config', 'command', 'info', 'manage' etc.
+User can add new commands besides redis existing commands. Take ManageCommand as example.
 
 ### Key Patterns
 
