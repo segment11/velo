@@ -42,7 +42,7 @@ Prepare the environment:
 ```shell
 git clone https://github.com/segment11/velo.git
 cd velo
-git submodule update --remote
+git submodule update --init
 gradle jar
 ```
 
@@ -52,6 +52,7 @@ Change build/libs/velo.properties:
 
 ```properties
 slotNumber=1
+slotWorkers=1
 netWorkers=1
 dir=/tmp/velo-data
 net.listenAddresses=127.0.0.1:7379
