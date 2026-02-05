@@ -1022,6 +1022,11 @@ sequenceDiagram
         WAL->>D: Flush V record to file
         WAL->>D: Create batch of V records
 
+        WAL->>CHUNK: Pre-read chunk segments in same WAL group
+        CHUNK->>CHUNK: Find segments marked new_write for this group
+        CHUNK->>D: Read segment batch from chunk file
+        CHUNK->>CHUNK: Decompress CVs for validation
+
         WAL->>KB: Read key buckets
         KB->>KB: Iterate bucket cells
         KB->>KB: Find update location
