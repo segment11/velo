@@ -170,8 +170,8 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
      * @return a Promise containing the combined response buffer
      */
     private Promise<ByteBuf> handlePipeline(ArrayList<Request> pipeline, ITcpSocket socket) {
-        if (pipeline == null) {
-            return Promise.of(null);
+        if (pipeline.isEmpty()) {
+            return Promise.of(ByteBuf.empty());
         }
 
         if (pipeline.size() == 1) {
