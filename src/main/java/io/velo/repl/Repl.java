@@ -10,8 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 
 /**
- * Represents a REPL (slave-master-replication) protocol for communication.
- * This class provides methods to encode and decode messages according to the custom REPL protocol.
+ * REPL protocol for master-slave replication communication.
  */
 public class Repl {
     private static final Logger log = LoggerFactory.getLogger(Repl.class);
@@ -56,11 +55,10 @@ public class Repl {
     }
 
     /**
-     * Represents a reply message from bytes in the REPL protocol.
-     * Implements the {@link Reply} interface.
+     * Reply message from bytes in the REPL protocol.
      */
     public record ReplReplyFromBytes(long slaveUuid, short slot, ReplType type, byte[] data,
-                                     int offset, int length) implements Reply {
+                                      int offset, int length) implements Reply {
         @Override
         public io.activej.bytebuf.ByteBuf buffer() {
             var bytes = new byte[HEADER_LENGTH + length];
@@ -77,8 +75,7 @@ public class Repl {
     }
 
     /**
-     * Represents a reply message in the REPL protocol.
-     * Implements the {@link Reply} interface.
+     * Reply message in the REPL protocol.
      */
     public record ReplReply(long slaveUuid, short slot, ReplType type, ReplContent content) implements Reply {
         @Override
@@ -189,7 +186,7 @@ public class Repl {
      * Decodes a byte buffer into a REPL message data array.
      *
      * @param buf the buffer containing the encoded REPL message
-     * @return a decoded {@link ReplRequest} or null if there aren't enough bytes to form a complete request
+     * @return a decoded ReplRequest or null if there aren't enough bytes to form a complete request
      */
     public static ReplRequest decode(ByteBuf buf) {
         if (buf.readableBytes() <= HEADER_LENGTH) {

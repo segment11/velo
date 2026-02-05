@@ -5,47 +5,15 @@ import io.velo.repl.Binlog;
 import io.velo.repl.ReplContent;
 
 /**
- * Represents a content type for sending an initialization or handshake message from a master to a slave.
- * This message includes the master's and slave's unique identifiers, as well as information about the current
- * and earliest file offsets and segment indices in the write-ahead log (WAL).
- * It corresponds to the {@link io.velo.repl.ReplType#hi} message type, which is sent by a master to a slave.
+ * Initialization handshake message from master to slave, includes master/slave UUIDs and binlog position info.
  */
 public class Hi implements ReplContent {
-    /**
-     * The unique identifier for the master.
-     */
     private final long masterUuid;
-
-    /**
-     * The unique identifier for the slave.
-     */
     private final long slaveUuid;
-
-    /**
-     * The current file index and offset in the binlog file for the master.
-     */
     private final Binlog.FileIndexAndOffset currentFo;
-
-    /**
-     * The earliest file index and offset in the binlog file for the master.
-     */
     private final Binlog.FileIndexAndOffset earliestFo;
-
-    /**
-     * The current segment index in the binlog file for the master.
-     */
     private final int currentSegmentIndex;
 
-    /**
-     * Constructs a new {@code Hi} message with the specified master UUID, slave UUID,
-     * current file index and offset, earliest file index and offset, and current segment index.
-     *
-     * @param masterUuid          the unique identifier for the master
-     * @param slaveUuid           the unique identifier for the slave
-     * @param currentFo           the current file index and offset in the binlog file for the master
-     * @param earliestFo          the earliest file index and offset in the binlog file for the master
-     * @param currentSegmentIndex the current segment index in the binlog file for the master
-     */
     public Hi(long masterUuid, long slaveUuid, Binlog.FileIndexAndOffset currentFo,
               Binlog.FileIndexAndOffset earliestFo, int currentSegmentIndex) {
         this.masterUuid = masterUuid;
@@ -57,6 +25,7 @@ public class Hi implements ReplContent {
 
     /**
      * Encodes the content of this message into the provided {@link ByteBuf}.
+     * Encoding format: 8 (master UUID) + 8 (slave UUID) + 4/8 (current file index/offset) + 4/8 (earliest file index/offset) + 4 (current segment index) + 2 + 18 (ReplProperties)
      *
      * @param toBuf the buffer to which the message content will be written
      */
