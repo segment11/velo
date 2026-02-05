@@ -23,7 +23,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
     private final short slot;
     private final DynConfig dynConfig;
-    private File binlogDir;
+    private final File binlogDir;
     private RandomAccessFile raf;
 
     /**
