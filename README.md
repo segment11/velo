@@ -79,9 +79,13 @@ set key value
 redis-benchmark -p 7379 -c 1 -t set -d 200 -n 10000000 -r 10000000
 ```
 
-### Performance
+## Performance
 
 Details refer to https://github.com/segment11/velo/blob/main/doc/performance
+
+## Design
+
+Details refer to https://github.com/segment11/velo/blob/main/doc/design
 
 ## Contributing
 
