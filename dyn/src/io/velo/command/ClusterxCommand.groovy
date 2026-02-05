@@ -47,7 +47,7 @@ class ClusterxCommand extends BaseCommand {
                 }
 
                 def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
-                list << new SlotWithKeyHash(innerSlot, 0, 0L, 0, null)
+                list << new SlotWithKeyHash(innerSlot, 0, 0L, null)
                 return list
             }
         }

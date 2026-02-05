@@ -197,8 +197,6 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             var pvm = new PersistValueMeta();
             pvm.key = key;
             pvm.keyHash = v.keyHash();
-            // calc again, for perf, can reuse from slot with key hash, todo
-            pvm.keyHash32 = KeyHash.hash32(key.getBytes());
             pvm.bucketIndex = v.bucketIndex();
             pvm.isFromMerge = v.isFromMerge();
 

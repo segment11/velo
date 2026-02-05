@@ -254,7 +254,6 @@ public record SlotWithKeyHash(
     short toClientSlot,      // Redis cluster slot number (0-16383)
     int bucketIndex,         // Bucket within slot
     long keyHash,            // 64-bit hash
-    int keyHash32,           // 32-bit hash (special use)
     String rawKey            // Original key string
 ) {
     // Special constant for commands needing slot resolution
@@ -379,7 +378,6 @@ public ArrayList<SlotWithKeyHash> parseSlots(
 protected SlotWithKeyHash slot(byte[] key, int slotNumber) {
     // 1. Hash the key
     long keyHash = KeyHash.hash(key);
-    long keyHash32 = KeyHash.hash32(key);
 
     // 2. Calculate bucket index (power-of-2)
     int bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
@@ -419,7 +417,6 @@ protected SlotWithKeyHash slot(byte[] key, int slotNumber) {
         toClientSlot,
         bucketIndex,
         keyHash,
-        keyHash32,
         new String(key, StandardCharsets.UTF_8)
     );
 }

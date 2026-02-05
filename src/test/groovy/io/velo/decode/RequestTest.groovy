@@ -61,7 +61,7 @@ class RequestTest extends Specification {
 
         when:
         def requestRepl = new Request(null, false, true)
-        requestRepl.replRequest = new ReplRequest(1L, (short) 0, ReplType.test, new byte[0])
+        requestRepl.replRequest = new ReplRequest(1L, (short) 0, ReplType.test, new byte[0], 10)
         then:
         requestRepl.isRepl()
         requestRepl.replRequest != null

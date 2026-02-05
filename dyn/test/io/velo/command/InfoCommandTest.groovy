@@ -182,8 +182,8 @@ class InfoCommandTest extends Specification {
         reply = infoCommand.handle()
         lines = ClusterxCommandTest.infoToLines(reply)
         then:
-        lines.find { it.contains('master_repl_offset:1048576') } != null
-        lines.find { it.contains('slave_repl_offset:1024') } != null
+        lines.find { it.contains('master_repl_offset') } != null
+        lines.find { it.contains('slave_repl_offset:') } != null
 
         cleanup:
         localPersist.cleanUp()

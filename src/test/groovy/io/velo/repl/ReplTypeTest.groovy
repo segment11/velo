@@ -17,6 +17,6 @@ class ReplTypeTest extends Specification {
 
         ReplType.ping.newly
         ReplType.ping.isSlaveSend
-        ReplType.ping.code == (byte) 0
+        ReplType.ping.code == (byte) -1
     }
 }

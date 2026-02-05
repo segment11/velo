@@ -97,7 +97,7 @@ public class OneSlotRead {
         var oneSlot = localPersist.oneSlot((short) 0);
 
         var s = BaseCommand.slot(key, slotNumber);
-        var result = oneSlot.get(s.rawKey(), s.bucketIndex(), s.keyHash(), s.keyHash32());
+        var result = oneSlot.get(s.rawKey(), s.bucketIndex(), s.keyHash());
         assert result != null;
     }
 

@@ -92,9 +92,8 @@ class XWalVTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def replPair = ReplPairTest.mockAsSlave()
         xWalV.apply(slot, replPair)
-        def keyHash32 = KeyHash.hash32(v0.key().bytes)
         then:
-        localPersist.oneSlot(slot).get(v0.key(), v0.bucketIndex(), v0.keyHash(), keyHash32) != null
+        localPersist.oneSlot(slot).get(v0.key(), v0.bucketIndex(), v0.keyHash()) != null
 
         cleanup:
         localPersist.cleanUp()

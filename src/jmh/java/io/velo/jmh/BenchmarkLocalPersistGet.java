@@ -236,7 +236,7 @@ TIPS: 512MB write buffer for each slot, so the real write qps is in logs. (100w 
                 return;
             }
 
-            oneSlot.get(key, s.bucketIndex(), s.keyHash(), s.keyHash32());
+            oneSlot.get(key, s.bucketIndex(), s.keyHash());
 
             var c = getCount.incrementAndGet();
             if (c % 1_000_000 == 0) {

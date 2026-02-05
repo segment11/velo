@@ -10,6 +10,7 @@ import io.velo.persist.KeyBucket
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.repl.LeaderSelector
+import io.velo.repl.ReplRequest
 import io.velo.repl.ReplType
 import io.velo.repl.cluster.MultiShard
 import io.velo.repl.cluster.MultiSlotRange
@@ -346,6 +347,7 @@ class MultiWorkerServerTest extends Specification {
         ByteBuffer.wrap(replData[0]).putLong(11L)
         replData[2][0] = ReplType.hello.code
         def replRequest = new Request(replData, false, true)
+        replRequest.replRequest = new ReplRequest(0L, (short) 0, ReplType.hi, new byte[10], 10)
         pipeline << replRequest
         p = m.handlePipeline(pipeline, socket, slotNumber)
         eventloopCurrent.run()

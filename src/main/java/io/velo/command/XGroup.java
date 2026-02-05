@@ -78,7 +78,7 @@ public class XGroup extends BaseCommand {
             slot = (short) (slot % slotNumber);
         }
 
-        slotWithKeyHashList.add(new SlotWithKeyHash(slot, 0, 0L, 0));
+        slotWithKeyHashList.add(new SlotWithKeyHash(slot, 0, 0L));
         return slotWithKeyHashList;
     }
 

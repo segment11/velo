@@ -475,7 +475,7 @@ class OneSlotTest extends Specification {
         oneSlot.getWalByBucketIndex(1).clear()
         for (key in bucketIndex0KeyList) {
             def s = BaseCommand.slot(key, slotNumber)
-            oneSlot.get(key, s.bucketIndex(), s.keyHash(), s.keyHash32())
+            oneSlot.get(key, s.bucketIndex(), s.keyHash())
         }
         then:
         oneSlot.kvByWalGroupIndexLRUCountTotal() > 0
@@ -486,13 +486,13 @@ class OneSlotTest extends Specification {
         def sBigString = BaseCommand.slot(bigStringKey, slotNumber)
         def cvBigString = Mock.prepareCompressedValueList(1)[0]
         cvBigString.keyHash = sBigString.keyHash()
-        def rBigString = oneSlot.get(bigStringKey, sBigString.bucketIndex(), sBigString.keyHash(), sBigString.keyHash32())
+        def rBigString = oneSlot.get(bigStringKey, sBigString.bucketIndex(), sBigString.keyHash())
         then:
         rBigString == null
 
         when:
         oneSlot.put(bigStringKey, sBigString.bucketIndex(), cvBigString)
-        rBigString = oneSlot.get(bigStringKey, sBigString.bucketIndex(), sBigString.keyHash(), sBigString.keyHash32())
+        rBigString = oneSlot.get(bigStringKey, sBigString.bucketIndex(), sBigString.keyHash())
         then:
         rBigString != null
 
@@ -501,7 +501,7 @@ class OneSlotTest extends Specification {
         cvBigString2.keyHash = sBigString.keyHash()
         cvBigString2.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
         oneSlot.put(bigStringKey, sBigString.bucketIndex(), cvBigString2)
-        rBigString = oneSlot.get(bigStringKey, sBigString.bucketIndex(), sBigString.keyHash(), sBigString.keyHash32())
+        rBigString = oneSlot.get(bigStringKey, sBigString.bucketIndex(), sBigString.keyHash())
         then:
         rBigString != null
 
@@ -513,7 +513,7 @@ class OneSlotTest extends Specification {
         cvBigString3.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
         cvBigString3.setCompressedDataAsBigString(cvBigString3.seq, Dict.SELF_ZSTD_DICT_SEQ)
         oneSlot.put(bigStringKey, sBigString.bucketIndex(), cvBigString3)
-        rBigString = oneSlot.get(bigStringKey, sBigString.bucketIndex(), sBigString.keyHash(), sBigString.keyHash32())
+        rBigString = oneSlot.get(bigStringKey, sBigString.bucketIndex(), sBigString.keyHash())
         then:
         rBigString != null
         CompressedValue.decode(rBigString.buf(), bigStringKey.bytes, sBigString.keyHash()).seq == cvBigString3.seq
@@ -642,7 +642,7 @@ class OneSlotTest extends Specification {
         when:
         boolean exception = false
         try {
-            oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
+            oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash())
         } catch (IllegalStateException e) {
             println e.message
             exception = true
@@ -653,7 +653,7 @@ class OneSlotTest extends Specification {
         when:
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         then:
-        oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) == null
+        oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash()) == null
 
         when:
         def cv = new CompressedValue()
@@ -662,14 +662,14 @@ class OneSlotTest extends Specification {
         cv.expireAt = System.currentTimeMillis() + 1000
         oneSlot.put(key, sKey.bucketIndex(), cv)
         then:
-        oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) == cv.expireAt
-        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) != null
+        oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash()) == cv.expireAt
+        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash()) != null
 
         when:
         oneSlot.removeDelay(key, sKey.bucketIndex(), sKey.keyHash())
         then:
-        oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) == null
-        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) == null
+        oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash()) == null
+        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash()) == null
 
         when:
         def bucketIndex0KeyList = batchPut(oneSlot)
@@ -678,22 +678,22 @@ class OneSlotTest extends Specification {
         def firstKey = bucketIndex0KeyList[0]
         def sFirstKey = BaseCommand.slot(firstKey, slotNumber)
         2.times {
-            oneSlot.get(firstKey, sFirstKey.bucketIndex(), sFirstKey.keyHash(), sFirstKey.keyHash32())
+            oneSlot.get(firstKey, sFirstKey.bucketIndex(), sFirstKey.keyHash())
         }
         println 'in memory size estimate: ' + oneSlot.estimate(new StringBuilder())
         then:
-        oneSlot.getExpireAt(firstKey, sFirstKey.bucketIndex(), sFirstKey.keyHash(), sFirstKey.keyHash32()) != null
+        oneSlot.getExpireAt(firstKey, sFirstKey.bucketIndex(), sFirstKey.keyHash()) != null
 
         when:
         oneSlot.clearKvInTargetWalGroupIndexLRU(0)
         then:
-        oneSlot.getExpireAt(firstKey, sFirstKey.bucketIndex(), sFirstKey.keyHash(), sFirstKey.keyHash32()) != null
+        oneSlot.getExpireAt(firstKey, sFirstKey.bucketIndex(), sFirstKey.keyHash()) != null
 
         when:
         def notExistKey = 'not-exist-key'
         def sNotExistKey = BaseCommand.slot(notExistKey, slotNumber)
         then:
-        oneSlot.get(notExistKey, sNotExistKey.bucketIndex(), sNotExistKey.keyHash(), sNotExistKey.keyHash32()) == null
+        oneSlot.get(notExistKey, sNotExistKey.bucketIndex(), sNotExistKey.keyHash()) == null
 
         when:
         def testPvm = new PersistValueMeta()
@@ -711,7 +711,7 @@ class OneSlotTest extends Specification {
         }
         oneSlot.getWalByBucketIndex(sKey.bucketIndex()).clear()
         then:
-        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) == null
+        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash()) == null
 
         when:
         oneSlot.getWalByBucketIndex(sKey.bucketIndex()).isOnRewrite = false
@@ -721,11 +721,11 @@ class OneSlotTest extends Specification {
         }
         oneSlot.getWalByBucketIndex(sKey.bucketIndex()).clear()
         then:
-        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) != null
+        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash()) != null
 
         when:
         def keyLoader = oneSlot.keyLoader
-        def valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(sKey.bucketIndex(), key, sKey.keyHash(), sKey.keyHash32())
+        def valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(sKey.bucketIndex(), key, sKey.keyHash())
         then:
         valueBytesWithExpireAtAndSeq != null
         PersistValueMeta.isPvm(valueBytesWithExpireAtAndSeq.valueBytes())
@@ -753,7 +753,7 @@ class OneSlotTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_INT
         cv.compressedData = new byte[4]
         oneSlot.put(key, sKey.bucketIndex(), cv)
-        def buf = oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
+        def buf = oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash())
         then:
         buf != null
         CompressedValue.decode(buf.buf(), key.bytes, sKey.keyHash()).compressedData.length == 4
@@ -763,16 +763,16 @@ class OneSlotTest extends Specification {
             oneSlot.removeDelay(key, sKey.bucketIndex(), sKey.keyHash())
         }
         then:
-        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) == null
-        !oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
-        !oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
+        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash()) == null
+        !oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash())
+        !oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash())
 
         when:
         // cv is int -> short string
         oneSlot.put(key, sKey.bucketIndex(), cv)
         then:
-        oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
-        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
+        oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash())
+        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash())
 
         when:
         cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
@@ -780,8 +780,8 @@ class OneSlotTest extends Specification {
         cv.expireAt = CompressedValue.NO_EXPIRE
         oneSlot.put(key, sKey.bucketIndex(), cv)
         then:
-        oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
-        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
+        oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash())
+        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash())
 
         when:
         cv.expireAt = System.currentTimeMillis() + 1000
@@ -792,11 +792,11 @@ class OneSlotTest extends Specification {
         Thread.sleep(1000 + 1)
         then:
         // remove from key loader, already expired
-        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32()) == null
-        !oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
-        !oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
-        !oneSlot.exists(key + 'not-exist', sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
-        !oneSlot.remove(key + 'not-exist', sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
+        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash()) == null
+        !oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash())
+        !oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash())
+        !oneSlot.exists(key + 'not-exist', sKey.bucketIndex(), sKey.keyHash())
+        !oneSlot.remove(key + 'not-exist', sKey.bucketIndex(), sKey.keyHash())
 
         when:
         cv.expireAt = CompressedValue.NO_EXPIRE
@@ -805,8 +805,8 @@ class OneSlotTest extends Specification {
         }
         oneSlot.getWalByBucketIndex(sKey.bucketIndex()).clear()
         then:
-        oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
-        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
+        oneSlot.exists(key, sKey.bucketIndex(), sKey.keyHash())
+        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash())
 
         cleanup:
         oneSlot.resetWritePositionAfterBulkLoad()
@@ -970,7 +970,7 @@ class OneSlotTest extends Specification {
         cv.keyHash = sKey.keyHash()
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
         cv.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
-        oneSlot.keyLoader.putValueByKey(0, '1234', sKey.keyHash(), sKey.keyHash32(), 0L, 1234L, cv.encode())
+        oneSlot.keyLoader.putValueByKey(0, '1234', sKey.keyHash(), 0L, 1234L, cv.encode())
         oneSlot.deleteOverwriteBigStringFilesLastBucketIndex = 0
         oneSlot.intervalDeleteOverwriteBigStringFiles()
         then:

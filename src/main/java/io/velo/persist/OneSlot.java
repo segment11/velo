@@ -1408,10 +1408,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param key         the key
      * @param bucketIndex the bucket index
      * @param keyHash     the key hash
-     * @param keyHash32   the 32-bit key hash
      * @return the expiration time, or null if the key does not exist or is expired
      */
-    public Long getExpireAt(String key, int bucketIndex, long keyHash, int keyHash32) {
+    public Long getExpireAt(String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
@@ -1441,7 +1440,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         kvLRUMissTotal++;
-        return keyLoader.getExpireAt(bucketIndex, key, keyHash, keyHash32);
+        return keyLoader.getExpireAt(bucketIndex, key, keyHash);
     }
 
     /**
@@ -1476,10 +1475,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param key         the key
      * @param bucketIndex the bucket index
      * @param keyHash     the key hash
-     * @param keyHash32   the 32-bit key hash
      * @return the BufOrCompressedValue record containing the key-value entry
      */
-    public BufOrCompressedValue get(String key, int bucketIndex, long keyHash, int keyHash32) {
+    public BufOrCompressedValue get(String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
         var cvEncodedFromWal = getFromWal(key, bucketIndex);
@@ -1507,7 +1505,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         kvLRUMissTotal++;
 
-        var valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(bucketIndex, key, keyHash, keyHash32);
+        var valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(bucketIndex, key, keyHash);
         if (valueBytesWithExpireAtAndSeq == null) {
             return null;
         }
@@ -1633,10 +1631,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param key         the key
      * @param bucketIndex the bucket index
      * @param keyHash     the key hash
-     * @param keyHash32   the 32-bit key hash
      * @return true if the key exists and is not expired, false otherwise
      */
-    public boolean exists(@NotNull String key, int bucketIndex, long keyHash, int keyHash32) {
+    public boolean exists(@NotNull String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
         var cvEncodedFromWal = getFromWal(key, bucketIndex);
@@ -1645,7 +1642,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return !CompressedValue.isDeleted(cvEncodedFromWal);
         }
 
-        var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, key, keyHash, keyHash32);
+        var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, key, keyHash);
         return expireAtAndSeq != null && !expireAtAndSeq.isExpired();
     }
 
@@ -1655,13 +1652,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param key         the key
      * @param bucketIndex the bucket index
      * @param keyHash     the key hash
-     * @param keyHash32   the 32-bit key hash
      * @return true if the key was removed, false otherwise
      */
-    public boolean remove(@NotNull String key, int bucketIndex, long keyHash, int keyHash32) {
+    public boolean remove(@NotNull String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
-        if (exists(key, bucketIndex, keyHash, keyHash32)) {
+        if (exists(key, bucketIndex, keyHash)) {
             removeDelay(key, bucketIndex, keyHash);
             return true;
         } else {

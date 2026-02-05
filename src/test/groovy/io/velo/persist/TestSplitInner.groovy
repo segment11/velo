@@ -28,7 +28,6 @@ for (key in keysAdd) {
     pvm.seq = 0L
     pvm.key = key
     pvm.keyHash = 0L
-    pvm.keyHash32 = 0L
     pvm.bucketIndex = 0
     pvm.extendBytes = key.bytes
     pvmList << pvm

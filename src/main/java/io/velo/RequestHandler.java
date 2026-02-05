@@ -220,7 +220,7 @@ public class RequestHandler {
         if (request.isRepl()) {
             var slot = request.getSingleSlot();
             var slotWithKeyHashList = new ArrayList<BaseCommand.SlotWithKeyHash>();
-            slotWithKeyHashList.add(new BaseCommand.SlotWithKeyHash(slot, 0, 0L, 0));
+            slotWithKeyHashList.add(new BaseCommand.SlotWithKeyHash(slot, 0, 0L));
             request.setSlotWithKeyHashList(slotWithKeyHashList);
             return;
         }

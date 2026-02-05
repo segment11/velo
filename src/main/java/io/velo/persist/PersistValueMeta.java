@@ -88,11 +88,6 @@ public class PersistValueMeta {
     long keyHash;
 
     /**
-     * A 32-bit hash of the key, used for additional indexing and collision resolution.
-     */
-    int keyHash32;
-
-    /**
      * The index of the bucket within the key's associated data structure.
      * Buckets are used to group keys that hash to similar values.
      */

@@ -12,6 +12,7 @@ import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.repl.LeaderSelector
 import io.velo.repl.Repl
+import io.velo.repl.ReplRequest
 import io.velo.repl.ReplType
 import io.velo.repl.cluster.MultiShard
 import io.velo.reply.BulkReply
@@ -254,7 +255,7 @@ class RequestHandlerTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def key = 'key'
         def sKey = BaseCommand.slot(key, slotNumber)
-        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
+        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash())
         def getData2 = new byte[2][]
         getData2[0] = 'get'.bytes
         getData2[1] = key.bytes
@@ -303,7 +304,7 @@ class RequestHandlerTest extends Specification {
         setData3[0] = 'set'.bytes
         setData3[1] = key.bytes
         setData3[2] = 'value'.bytes
-        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash(), sKey.keyHash32())
+        oneSlot.remove(key, sKey.bucketIndex(), sKey.keyHash())
         def setRequest = new Request(setData3, false, false)
         setRequest.slotNumber = slotNumber
         requestHandler.parseSlots(setRequest)
@@ -353,6 +354,7 @@ class RequestHandlerTest extends Specification {
         oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, 'localhost', 6380)
         def replRequest = new Request(replData, false, true)
         replRequest.slotNumber = slotNumber
+        replRequest.replRequest = new ReplRequest(0L, (short) 0, ReplType.hi, new byte[10], 10)
         reply = requestHandler.handle(replRequest, socket)
         then:
         reply instanceof Repl.ReplReply

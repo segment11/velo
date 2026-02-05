@@ -688,11 +688,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param bucketIndex the bucket index
      * @param key         the key
      * @param keyHash     the hash of the key
-     * @param keyHash32   the 32-bit hash of the key
      * @return the expiration time, or null if not found
      */
-    Long getExpireAt(int bucketIndex, String key, long keyHash, int keyHash32) {
-        var r = getExpireAtAndSeqByKey(bucketIndex, key, keyHash, keyHash32);
+    Long getExpireAt(int bucketIndex, String key, long keyHash) {
+        var r = getExpireAtAndSeqByKey(bucketIndex, key, keyHash);
         return r == null ? null : r.expireAt();
     }
 
@@ -702,10 +701,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param bucketIndex the bucket index
      * @param key         the key
      * @param keyHash     the hash of the key
-     * @param keyHash32   the 32-bit hash of the key
      * @return the ExpireAtAndSeq object containing the expiration time and sequence number, or null if not found
      */
-    KeyBucket.ExpireAtAndSeq getExpireAtAndSeqByKey(int bucketIndex, String key, long keyHash, int keyHash32) {
+    KeyBucket.ExpireAtAndSeq getExpireAtAndSeqByKey(int bucketIndex, String key, long keyHash) {
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
         var splitIndex = KeyHash.splitIndex(keyHash, splitNumber, bucketIndex);
 
@@ -723,10 +721,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param bucketIndex the bucket index
      * @param key         the key
      * @param keyHash     the hash of the key
-     * @param keyHash32   the 32-bit hash of the key
      * @return the ValueBytesWithExpireAtAndSeq object containing the value, expiration time, and sequence number, or null if not found
      */
-    KeyBucket.ValueBytesWithExpireAtAndSeq getValueXByKey(int bucketIndex, String key, long keyHash, int keyHash32) {
+    KeyBucket.ValueBytesWithExpireAtAndSeq getValueXByKey(int bucketIndex, String key, long keyHash) {
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
         var splitIndex = KeyHash.splitIndex(keyHash, splitNumber, bucketIndex);
 
@@ -761,13 +758,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param bucketIndex the bucket index
      * @param key         the key
      * @param keyHash     the hash of the key
-     * @param keyHash32   the 32-bit hash of the key
      * @param expireAt    the expiration time
      * @param seq         the sequence number
      * @param valueBytes  the value bytes
      */
     @TestOnly
-    void putValueByKey(int bucketIndex, String key, long keyHash, int keyHash32, long expireAt, long seq, byte[] valueBytes) {
+    void putValueByKey(int bucketIndex, String key, long keyHash, long expireAt, long seq, byte[] valueBytes) {
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
         var splitIndex = KeyHash.splitIndex(keyHash, splitNumber, bucketIndex);
 
@@ -948,11 +944,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param bucketIndex the bucket index
      * @param key         the key
      * @param keyHash     the hash of the key
-     * @param keyHash32   the 32-bit hash of the key
      * @return true if the key was successfully removed, false otherwise
      */
     @TestOnly
-    boolean removeSingleKey(int bucketIndex, String key, long keyHash, int keyHash32) {
+    boolean removeSingleKey(int bucketIndex, String key, long keyHash) {
         var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
         var splitIndex = KeyHash.splitIndex(keyHash, splitNumber, bucketIndex);
 
