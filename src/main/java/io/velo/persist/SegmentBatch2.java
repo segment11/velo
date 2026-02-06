@@ -266,16 +266,16 @@ public class SegmentBatch2 implements InSlotMetricCollector {
      * @param cvCallback   the callback to be applied to each key-value pair
      */
     public static void iterateFromSegmentBytes(byte[] segmentBytes, int offset, int length, @NotNull CvCallback cvCallback) {
-        var buf = Unpooled.wrappedBuffer(segmentBytes, offset, length);
-        buf.readerIndex(SEGMENT_HEADER_LENGTH);
+        var nettyBuf = Unpooled.wrappedBuffer(segmentBytes, offset, length);
+        nettyBuf.readerIndex(SEGMENT_HEADER_LENGTH);
         int offsetInThisSegment = SEGMENT_HEADER_LENGTH;
         while (true) {
             // refer to comment: write 0 short, so merge loop can break, because reuse old bytes
-            if (buf.readableBytes() < 2) {
+            if (nettyBuf.readableBytes() < 2) {
                 break;
             }
 
-            var keyLength = buf.readShort();
+            var keyLength = nettyBuf.readShort();
             if (keyLength == 0) {
                 break;
             }
@@ -285,10 +285,10 @@ public class SegmentBatch2 implements InSlotMetricCollector {
             }
 
             var keyBytes = new byte[keyLength];
-            buf.readBytes(keyBytes);
+            nettyBuf.readBytes(keyBytes);
             var key = new String(keyBytes);
 
-            var cv = CompressedValue.decode(buf, keyBytes, 0);
+            var cv = CompressedValue.decode(nettyBuf, keyBytes, 0);
             var persistLength = Wal.V.persistLength(keyLength, cv.encodedLength());
 
             cvCallback.callback(key, cv, offsetInThisSegment);

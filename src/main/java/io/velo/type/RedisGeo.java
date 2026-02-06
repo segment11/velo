@@ -324,7 +324,7 @@ public class RedisGeo {
     public static byte[] hash(P p) {
         var l = geohashEncode(-180, 180, -90, 90, p.lon, p.lat, (byte) 26);
 
-        var buf = new byte[11];
+        var bytes = new byte[11];
         int i;
         for (i = 0; i < 11; i++) {
             int idx;
@@ -333,9 +333,9 @@ public class RedisGeo {
             } else {
                 idx = (int) ((l >> (52 - ((i + 1) * 5))) & 0x1f);
             }
-            buf[i] = geoalphabet[idx];
+            bytes[i] = geoalphabet[idx];
         }
-        return buf;
+        return bytes;
     }
 
     /**

@@ -134,35 +134,35 @@ public class MultiBulkReply implements Reply {
     @Override
     public ByteBuf buffer() {
         // 256 bytes
-        var buf = Unpooled.buffer();
-        buf.writeByte(MARKER);
+        var nettyBuf = Unpooled.buffer();
+        nettyBuf.writeByte(MARKER);
         if (replies == null) {
-            buf.writeBytes(BulkReply.NEG_ONE_WITH_CRLF);
+            nettyBuf.writeBytes(BulkReply.NEG_ONE_WITH_CRLF);
         } else {
-            buf.writeBytes(BulkReply.numToBytes(replies.length, true));
+            nettyBuf.writeBytes(BulkReply.numToBytes(replies.length, true));
             for (var reply : replies) {
                 var subBuffer = reply.buffer();
-                buf.writeBytes(subBuffer.array(), subBuffer.head(), subBuffer.tail() - subBuffer.head());
+                nettyBuf.writeBytes(subBuffer.array(), subBuffer.head(), subBuffer.tail() - subBuffer.head());
             }
         }
-        return ByteBuf.wrap(buf.array(), 0, buf.writerIndex());
+        return ByteBuf.wrap(nettyBuf.array(), 0, nettyBuf.writerIndex());
     }
 
     @Override
     public ByteBuf bufferAsResp3() {
         // 256 bytes
-        var buf = Unpooled.buffer();
-        buf.writeByte(isMap ? MARKER_MAP : (isSet ? MARKER_SET : MARKER));
+        var nettyBuf = Unpooled.buffer();
+        nettyBuf.writeByte(isMap ? MARKER_MAP : (isSet ? MARKER_SET : MARKER));
         if (replies == null) {
-            buf.writeBytes(BulkReply.NEG_ONE_WITH_CRLF);
+            nettyBuf.writeBytes(BulkReply.NEG_ONE_WITH_CRLF);
         } else {
-            buf.writeBytes(BulkReply.numToBytes(isMap ? replies.length / 2 : replies.length, true));
+            nettyBuf.writeBytes(BulkReply.numToBytes(isMap ? replies.length / 2 : replies.length, true));
             for (var reply : replies) {
                 var subBuffer = reply.bufferAsResp3();
-                buf.writeBytes(subBuffer.array(), subBuffer.head(), subBuffer.tail() - subBuffer.head());
+                nettyBuf.writeBytes(subBuffer.array(), subBuffer.head(), subBuffer.tail() - subBuffer.head());
             }
         }
-        return ByteBuf.wrap(buf.array(), 0, buf.writerIndex());
+        return ByteBuf.wrap(nettyBuf.array(), 0, nettyBuf.writerIndex());
     }
 
     /**

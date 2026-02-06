@@ -109,14 +109,14 @@ public class ReplRequest {
     /**
      * Updates the request with the next bytes to read.
      *
-     * @param buf the source of bytes to read
-     * @param n   the number of bytes to read
+     * @param nettyBuf the source of bytes to read
+     * @param n        the number of bytes to read
      */
-    public void nextRead(ByteBuf buf, int n) {
+    public void nextRead(ByteBuf nettyBuf, int n) {
         assert n > 0;
         var dataExtend = new byte[data.length + n];
         System.arraycopy(data, 0, dataExtend, 0, data.length);
-        buf.readBytes(dataExtend, data.length, n);
+        nettyBuf.readBytes(dataExtend, data.length, n);
         data = dataExtend;
     }
 

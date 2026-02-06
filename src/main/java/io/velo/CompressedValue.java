@@ -829,45 +829,45 @@ public class CompressedValue {
      * @return the decoded compressed value
      */
     public static CompressedValue decode(byte[] valueBytes, byte[] keyBytes, long keyHash) {
-        var buf = Unpooled.wrappedBuffer(valueBytes);
-        return decode(buf, keyBytes, keyHash);
+        var nettyBuf = Unpooled.wrappedBuffer(valueBytes);
+        return decode(nettyBuf, keyBytes, keyHash);
     }
 
     /**
      * Decodes from the buffer.
      * No memory copy when iterating over many compressed values.
      *
-     * @param buf      the buffer
+     * @param nettyBuf the buffer
      * @param keyBytes the key bytes
      * @param keyHash  the 64-bit key hash
      * @return the decoded compressed value
      */
-    public static CompressedValue decode(io.netty.buffer.ByteBuf buf, byte[] keyBytes, long keyHash) {
+    public static CompressedValue decode(io.netty.buffer.ByteBuf nettyBuf, byte[] keyBytes, long keyHash) {
         var cv = new CompressedValue();
-        var firstByte = buf.getByte(0);
+        var firstByte = nettyBuf.getByte(0);
         if (firstByte < 0) {
             cv.dictSeqOrSpType = firstByte;
-            buf.skipBytes(1);
-            cv.seq = buf.readLong();
-            cv.expireAt = buf.readLong();
-            cv.compressedData = new byte[buf.readableBytes()];
-            buf.readBytes(cv.compressedData);
+            nettyBuf.skipBytes(1);
+            cv.seq = nettyBuf.readLong();
+            cv.expireAt = nettyBuf.readLong();
+            cv.compressedData = new byte[nettyBuf.readableBytes()];
+            nettyBuf.readBytes(cv.compressedData);
             return cv;
         }
 
-        cv.seq = buf.readLong();
-        cv.expireAt = buf.readLong();
-        cv.keyHash = buf.readLong();
-        cv.dictSeqOrSpType = buf.readInt();
+        cv.seq = nettyBuf.readLong();
+        cv.expireAt = nettyBuf.readLong();
+        cv.keyHash = nettyBuf.readLong();
+        cv.dictSeqOrSpType = nettyBuf.readInt();
 
         if (keyHash == 0 && keyBytes != null) {
             keyHash = KeyHash.hash(keyBytes);
         }
 
         if (keyHash != 0 && cv.keyHash != keyHash) {
-            var compressedLength = buf.readInt();
+            var compressedLength = nettyBuf.readInt();
             if (compressedLength > 0) {
-                buf.skipBytes(compressedLength);
+                nettyBuf.skipBytes(compressedLength);
             }
 
             // why ? todo: check
@@ -880,10 +880,10 @@ public class CompressedValue {
                     ", persisted keyHash=" + cv.keyHash);
         }
 
-        var compressedLength = buf.readInt();
+        var compressedLength = nettyBuf.readInt();
         if (compressedLength > 0) {
             cv.compressedData = new byte[compressedLength];
-            buf.readBytes(cv.compressedData);
+            nettyBuf.readBytes(cv.compressedData);
         }
         return cv;
     }

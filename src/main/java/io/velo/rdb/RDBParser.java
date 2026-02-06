@@ -45,27 +45,27 @@ public class RDBParser {
     /**
      * Read an entry from the RDB format bytes buffer.
      *
-     * @param buf      the RDB format bytes buffer
+     * @param nettyBuf the RDB format bytes buffer
      * @param callback the callback to handle the entry
      */
-    public void readEntry(ByteBuf buf, RDBCallback callback) {
-        int type = buf.readUnsignedByte();
+    public void readEntry(ByteBuf nettyBuf, RDBCallback callback) {
+        int type = nettyBuf.readUnsignedByte();
         switch (type) {
             case RDB_TYPE_STRING:
-                var decoded = decodeRdbString(buf);
+                var decoded = decodeRdbString(nettyBuf);
                 callback.onString(decoded);
                 break;
             case RDB_TYPE_LIST:
                 var list = new RedisList();
-                var listSize = decodeLength(buf, new int[1]);
+                var listSize = decodeLength(nettyBuf, new int[1]);
                 for (int i = 0; i < (int) listSize; i++) {
-                    list.addLast(decodeRdbString(buf));
+                    list.addLast(decodeRdbString(nettyBuf));
                 }
                 callback.onList(list);
                 break;
             case RDB_TYPE_LIST_ZIP_LIST:
                 var listZipList = new RedisList();
-                var listBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+                var listBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
                 var listZipListSize = listBuf.readShortLE();
                 for (int i = 0; i < listZipListSize; i++) {
                     listZipList.addLast(decodeRdbString(listBuf));
@@ -73,60 +73,60 @@ public class RDBParser {
                 break;
             case RDB_TYPE_LIST_QUICK_LIST, RDB_TYPE_LIST_QUICK_LIST2:
                 var listQuickList = new RedisList();
-                decodeListQuickList(buf, type, listQuickList);
+                decodeListQuickList(nettyBuf, type, listQuickList);
                 callback.onList(listQuickList);
                 break;
             case RDB_TYPE_SET:
                 var set = new RedisHashKeys();
-                var setSize = decodeLength(buf, new int[1]);
+                var setSize = decodeLength(nettyBuf, new int[1]);
                 for (int i = 0; i < (int) setSize; i++) {
-                    set.add(new String(decodeRdbString(buf)));
+                    set.add(new String(decodeRdbString(nettyBuf)));
                 }
                 callback.onSet(set);
                 break;
             case RDB_TYPE_SET_INT_SET:
                 var setIntSet = new RedisHashKeys();
-                decodeIntSet(buf, setIntSet);
+                decodeIntSet(nettyBuf, setIntSet);
                 callback.onSet(setIntSet);
                 break;
             case RDB_TYPE_SET_LIST_PACK:
                 var setListPack = new RedisHashKeys();
-                decodeSetListPack(buf, setListPack);
+                decodeSetListPack(nettyBuf, setListPack);
                 callback.onSet(setListPack);
                 break;
             case RDB_TYPE_ZSET, RDB_TYPE_ZSET2:
                 var zset = new RedisZSet();
-                decodeZSet(buf, type, zset);
+                decodeZSet(nettyBuf, type, zset);
                 callback.onZSet(zset);
                 break;
             case RDB_TYPE_ZSET_ZIP_LIST:
                 var zsetZipList = new RedisZSet();
-                decodeZSetZipList(buf, zsetZipList);
+                decodeZSetZipList(nettyBuf, zsetZipList);
                 callback.onZSet(zsetZipList);
                 break;
             case RDB_TYPE_ZSET_LIST_PACK:
                 var zsetListPack = new RedisZSet();
-                decodeZSetListPack(buf, zsetListPack);
+                decodeZSetListPack(nettyBuf, zsetListPack);
                 callback.onZSet(zsetListPack);
                 break;
             case RDB_TYPE_HASH:
                 var hash = new RedisHH();
-                var hashSize = decodeLength(buf, new int[1]);
+                var hashSize = decodeLength(nettyBuf, new int[1]);
                 for (int i = 0; i < (int) hashSize; i++) {
-                    var field = new String(decodeRdbString(buf));
-                    var value = decodeRdbString(buf);
+                    var field = new String(decodeRdbString(nettyBuf));
+                    var value = decodeRdbString(nettyBuf);
                     hash.put(field, value);
                 }
                 callback.onHash(hash);
                 break;
             case RDB_TYPE_HASH_ZIP_MAP:
                 var hashZipMap = new RedisHH();
-                decodeHashZipMap(buf, hashZipMap);
+                decodeHashZipMap(nettyBuf, hashZipMap);
                 callback.onHash(hashZipMap);
                 break;
             case RDB_TYPE_HASH_ZIP_LIST:
                 var hashZipList = new RedisHH();
-                var hashBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+                var hashBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
                 short hashZipListSize = hashBuf.readShortLE();
                 for (int i = 0; i < (int) hashZipListSize; i += 2) {
                     var field = new String(decodeRdbString(hashBuf));
@@ -137,7 +137,7 @@ public class RDBParser {
                 break;
             case RDB_TYPE_HASH_LIST_PACK:
                 var hashListPack = new RedisHH();
-                decodeHashListPack(buf, hashListPack);
+                decodeHashListPack(nettyBuf, hashListPack);
                 callback.onHash(hashListPack);
                 break;
             case RDB_TYPE_STREAM_LIST_PACK, RDB_TYPE_STREAM_LIST_PACK2, RDB_TYPE_STREAM_LIST_PACK3:
@@ -148,30 +148,30 @@ public class RDBParser {
     }
 
     // Utility: decode RDB string (length-prefixed, integer, or LZF-compressed)
-    private byte[] decodeRdbString(ByteBuf buf) {
+    private byte[] decodeRdbString(ByteBuf nettyBuf) {
         int[] lenType = new int[1];
-        long len = decodeLength(buf, lenType);
+        long len = decodeLength(nettyBuf, lenType);
         if (lenType[0] == 0) { // plain string
             var out = new byte[(int) len];
-            buf.readBytes(out);
+            nettyBuf.readBytes(out);
             return out;
         } else if (lenType[0] == 1) { // integer
             // Integer encoding: 8, 16, 32 bit
             int encType = (int) len;
             if (encType == 0) { // 8 bit
-                return Integer.toString(buf.readByte()).getBytes();
+                return Integer.toString(nettyBuf.readByte()).getBytes();
             } else if (encType == 1) { // 16 bit
-                return Integer.toString(buf.readShortLE()).getBytes();
+                return Integer.toString(nettyBuf.readShortLE()).getBytes();
             } else if (encType == 2) { // 32 bit
-                return Integer.toString(buf.readIntLE()).getBytes();
+                return Integer.toString(nettyBuf.readIntLE()).getBytes();
             } else {
                 throw new IllegalArgumentException("Unknown integer encoding: " + encType);
             }
         } else if (lenType[0] == 2) { // LZF compressed
-            long clen = decodeLength(buf, new int[1]);
-            long ulen = decodeLength(buf, new int[1]);
+            long clen = decodeLength(nettyBuf, new int[1]);
+            long ulen = decodeLength(nettyBuf, new int[1]);
             var cdata = new byte[(int) clen];
-            buf.readBytes(cdata);
+            nettyBuf.readBytes(cdata);
             var outByteArray = Lzf.decode(new ByteArray(cdata), ulen);
             var it = outByteArray.iterator();
             byte[] out = null;
@@ -196,19 +196,19 @@ public class RDBParser {
     }
 
     // Utility: decode RDB length (returns value, sets lenType[0]: 0=plain, 1=integer, 2=LZF)
-    private long decodeLength(ByteBuf buf, int[] lenType) {
-        int first = buf.readUnsignedByte();
+    private long decodeLength(ByteBuf nettyBuf, int[] lenType) {
+        int first = nettyBuf.readUnsignedByte();
         int type = (first & 0xC0) >> 6;
         if (type == 0) { // 6 bit
             lenType[0] = 0;
             return first & 0x3F;
         } else if (type == 1) { // 14 bit
             lenType[0] = 0;
-            int second = buf.readUnsignedByte();
+            int second = nettyBuf.readUnsignedByte();
             return ((first & 0x3F) << 8) | second;
         } else if (type == 2) { // 32 bit
             lenType[0] = 0;
-            return buf.readInt();
+            return nettyBuf.readInt();
         } else { // special encoding
             int enc = first & 0x3F;
             if (enc == 0) { // 8 bit int
@@ -234,25 +234,25 @@ public class RDBParser {
     private static final int QuickListNodeContainerPlain = 1;
     private static final int QuickListNodeContainerPacked = 2;
 
-    private void decodeListQuickList(ByteBuf buf, int type, RedisList list) {
-        long len = decodeLength(buf, new int[1]);
+    private void decodeListQuickList(ByteBuf nettyBuf, int type, RedisList list) {
+        long len = decodeLength(nettyBuf, new int[1]);
 
         long container = QuickListNodeContainerPacked;
         for (int i = 0; i < (int) len; i++) {
             if (type == RDB_TYPE_LIST_QUICK_LIST2) {
-                container = decodeLength(buf, new int[1]);
+                container = decodeLength(nettyBuf, new int[1]);
                 if (container != QuickListNodeContainerPlain && container != QuickListNodeContainerPacked) {
                     throw new IllegalArgumentException("Unknown quick list node container type: " + container);
                 }
             }
 
             if (container == QuickListNodeContainerPlain) {
-                var element = decodeRdbString(buf);
+                var element = decodeRdbString(nettyBuf);
                 list.addLast(element);
                 continue;
             }
 
-            var encodedBytes = decodeRdbString(buf);
+            var encodedBytes = decodeRdbString(nettyBuf);
             if (type == RDB_TYPE_LIST_QUICK_LIST2) {
                 // list pack
                 var listPackBuf = Unpooled.wrappedBuffer(encodedBytes);
@@ -269,8 +269,8 @@ public class RDBParser {
         }
     }
 
-    private void decodeIntSet(ByteBuf buf, RedisHashKeys set) {
-        var setBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+    private void decodeIntSet(ByteBuf nettyBuf, RedisHashKeys set) {
+        var setBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
         int size = setBuf.readableBytes();
         int memberSize = setBuf.readIntLE();
         int len = setBuf.readIntLE();
@@ -294,20 +294,20 @@ public class RDBParser {
         }
     }
 
-    private void decodeSetListPack(ByteBuf buf, RedisHashKeys set) {
-        var setBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+    private void decodeSetListPack(ByteBuf nettyBuf, RedisHashKeys set) {
+        var setBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
         ListPack.decode(setBuf, (valueBytes, index) -> {
             set.add(new String(valueBytes));
         });
     }
 
-    private void decodeZSet(ByteBuf buf, int type, RedisZSet zset) {
-        var zsetLen = decodeLength(buf, new int[1]);
+    private void decodeZSet(ByteBuf nettyBuf, int type, RedisZSet zset) {
+        var zsetLen = decodeLength(nettyBuf, new int[1]);
         for (int i = 0; i < (int) zsetLen; i++) {
-            var member = new String(decodeRdbString(buf));
+            var member = new String(decodeRdbString(nettyBuf));
             double score;
             if (type == RDB_TYPE_ZSET) {
-                var lenForDouble = buf.readChar();
+                var lenForDouble = nettyBuf.readChar();
                 if (lenForDouble == 255) {
                     score = Double.NEGATIVE_INFINITY;
                 } else if (lenForDouble == 254) {
@@ -316,18 +316,18 @@ public class RDBParser {
                     score = Double.NaN;
                 } else {
                     var x = new byte[lenForDouble];
-                    buf.readBytes(x);
+                    nettyBuf.readBytes(x);
                     score = Double.parseDouble(new String(x));
                 }
             } else {
-                score = buf.readDouble();
+                score = nettyBuf.readDouble();
             }
             zset.add(score, member);
         }
     }
 
-    private void decodeZSetZipList(ByteBuf buf, RedisZSet zset) {
-        var zsetBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+    private void decodeZSetZipList(ByteBuf nettyBuf, RedisZSet zset) {
+        var zsetBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
 
         int size = zsetBuf.readShortLE();
         for (int i = 0; i < size; i += 2) {
@@ -338,8 +338,8 @@ public class RDBParser {
         }
     }
 
-    private void decodeZSetListPack(ByteBuf buf, RedisZSet zset) {
-        var zsetBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+    private void decodeZSetListPack(ByteBuf nettyBuf, RedisZSet zset) {
+        var zsetBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
 
         final String[] memberArray = new String[1];
         ListPack.decode(zsetBuf, (valueBytes, index) -> {
@@ -358,8 +358,8 @@ public class RDBParser {
         });
     }
 
-    private void decodeHashZipMap(ByteBuf buf, RedisHH hash) {
-        var hashBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+    private void decodeHashZipMap(ByteBuf nettyBuf, RedisHH hash) {
+        var hashBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
 
         int size = hashBuf.readUnsignedByte();
         if (size == 0xFF) {
@@ -385,8 +385,8 @@ public class RDBParser {
         }
     }
 
-    private void decodeHashListPack(ByteBuf buf, RedisHH hash) {
-        var hashBuf = Unpooled.wrappedBuffer(decodeRdbString(buf));
+    private void decodeHashListPack(ByteBuf nettyBuf, RedisHH hash) {
+        var hashBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
         final String[] fieldArray = new String[1];
         ListPack.decode(hashBuf, (valueBytes, index) -> {
             if (index % 2 == 0) {
@@ -415,12 +415,12 @@ public class RDBParser {
      * @return the RDB format bytes
      */
     public static byte[] dumpString(byte[] valueBytes) {
-        var buf = Unpooled.buffer();
+        var nettyBuf = Unpooled.buffer();
 
-        buf.writeByte(RDB_TYPE_STRING);
-        writeRdbString(buf, valueBytes);
+        nettyBuf.writeByte(RDB_TYPE_STRING);
+        writeRdbString(nettyBuf, valueBytes);
 
-        return writeVersionAndCrc(buf);
+        return writeVersionAndCrc(nettyBuf);
     }
 
     /**
@@ -432,16 +432,16 @@ public class RDBParser {
     public static byte[] dumpSet(RedisHashKeys rhk) {
         assert rhk != null && rhk.size() > 0;
 
-        var buf = Unpooled.buffer();
-        buf.writeByte(RDB_TYPE_SET);
+        var nettyBuf = Unpooled.buffer();
+        nettyBuf.writeByte(RDB_TYPE_SET);
         // Write set size
-        writeRdbLength(buf, rhk.size());
+        writeRdbLength(nettyBuf, rhk.size());
         // Write each member
         for (var member : rhk.getSet()) {
-            writeRdbString(buf, member.getBytes());
+            writeRdbString(nettyBuf, member.getBytes());
         }
 
-        return writeVersionAndCrc(buf);
+        return writeVersionAndCrc(nettyBuf);
     }
 
     /**
@@ -453,17 +453,17 @@ public class RDBParser {
     public static byte[] dumpHash(RedisHH rhh) {
         assert rhh != null && rhh.size() > 0;
 
-        var buf = Unpooled.buffer();
-        buf.writeByte(RDB_TYPE_HASH);
+        var nettyBuf = Unpooled.buffer();
+        nettyBuf.writeByte(RDB_TYPE_HASH);
         // Write hash size
-        writeRdbLength(buf, rhh.size());
+        writeRdbLength(nettyBuf, rhh.size());
         // Write each field-value pair
         for (var entry : rhh.getMap().entrySet()) {
-            writeRdbString(buf, entry.getKey().getBytes());
-            writeRdbString(buf, entry.getValue());
+            writeRdbString(nettyBuf, entry.getKey().getBytes());
+            writeRdbString(nettyBuf, entry.getValue());
         }
 
-        return writeVersionAndCrc(buf);
+        return writeVersionAndCrc(nettyBuf);
     }
 
     /**
@@ -475,14 +475,14 @@ public class RDBParser {
     public static byte[] dumpList(RedisList rl) {
         assert rl != null && rl.size() > 0;
 
-        var buf = Unpooled.buffer();
-        buf.writeByte(RDB_TYPE_LIST);
-        writeRdbLength(buf, rl.size());
+        var nettyBuf = Unpooled.buffer();
+        nettyBuf.writeByte(RDB_TYPE_LIST);
+        writeRdbLength(nettyBuf, rl.size());
         for (var element : rl.getList()) {
-            writeRdbString(buf, element);
+            writeRdbString(nettyBuf, element);
         }
 
-        return writeVersionAndCrc(buf);
+        return writeVersionAndCrc(nettyBuf);
     }
 
     /**
@@ -494,19 +494,19 @@ public class RDBParser {
     public static byte[] dumpZSet(RedisZSet rz) {
         assert rz != null && !rz.isEmpty();
 
-        var buf = Unpooled.buffer();
-        buf.writeByte(RDB_TYPE_ZSET2);
-        writeRdbLength(buf, rz.size());
+        var nettyBuf = Unpooled.buffer();
+        nettyBuf.writeByte(RDB_TYPE_ZSET2);
+        writeRdbLength(nettyBuf, rz.size());
         for (var entry : rz.getSet()) {
-            writeRdbString(buf, entry.member().getBytes());
-            buf.writeDouble(entry.score());
+            writeRdbString(nettyBuf, entry.member().getBytes());
+            nettyBuf.writeDouble(entry.score());
         }
 
-        return writeVersionAndCrc(buf);
+        return writeVersionAndCrc(nettyBuf);
     }
 
     // Helper method to write RDB string encoding
-    private static void writeRdbString(ByteBuf buf, byte[] data) {
+    private static void writeRdbString(ByteBuf nettyBuf, byte[] data) {
         // Try to encode as integer if possible
         if (data.length <= 11) {
             try {
@@ -514,18 +514,18 @@ public class RDBParser {
                 var value = Long.parseLong(str);
                 if (value >= -(1 << 7) && value <= (1 << 7) - 1) {
                     // 8-bit integer
-                    buf.writeByte((byte) (0xC0));
-                    buf.writeByte((byte) value);
+                    nettyBuf.writeByte((byte) (0xC0));
+                    nettyBuf.writeByte((byte) value);
                     return;
                 } else if (value >= -(1 << 15) && value <= (1 << 15) - 1) {
                     // 16-bit integer
-                    buf.writeByte((byte) (0xC0 | 1));
-                    buf.writeShortLE((short) value);
+                    nettyBuf.writeByte((byte) (0xC0 | 1));
+                    nettyBuf.writeShortLE((short) value);
                     return;
                 } else if (value >= -((long) 1 << 31) && value <= ((long) 1 << 31) - 1) {
                     // 32-bit integer
-                    buf.writeByte((byte) (0xC0 | 2));
-                    buf.writeIntLE((int) value);
+                    nettyBuf.writeByte((byte) (0xC0 | 2));
+                    nettyBuf.writeIntLE((int) value);
                     return;
                 }
             } catch (NumberFormatException e) {
@@ -538,12 +538,12 @@ public class RDBParser {
                 var compressed = Lzf.encode(new ByteArray(data));
                 if (compressed.length() < data.length) {
                     // Only use compression if it actually reduces size
-                    buf.writeByte((byte) (0xC0 | 3)); // Special encoding flag with LZF indicator
-                    writeRdbLength(buf, compressed.length()); // Compressed length
-                    writeRdbLength(buf, data.length); // Uncompressed length
+                    nettyBuf.writeByte((byte) (0xC0 | 3)); // Special encoding flag with LZF indicator
+                    writeRdbLength(nettyBuf, compressed.length()); // Compressed length
+                    writeRdbLength(nettyBuf, data.length); // Uncompressed length
                     // Write compressed data
                     for (var bytes : compressed) {
-                        buf.writeBytes(bytes);
+                        nettyBuf.writeBytes(bytes);
                     }
                     return;
                 }
@@ -555,32 +555,32 @@ public class RDBParser {
         // Normal string encoding
         if (data.length < (1 << 6)) {
             // 6-bit length
-            buf.writeByte((byte) (data.length & 0x3F));
+            nettyBuf.writeByte((byte) (data.length & 0x3F));
         } else if (data.length < (1 << 14)) {
             // 14-bit length
-            buf.writeByte((byte) (((data.length >> 8) & 0x3F) | 0x40));
-            buf.writeByte((byte) (data.length & 0xFF));
+            nettyBuf.writeByte((byte) (((data.length >> 8) & 0x3F) | 0x40));
+            nettyBuf.writeByte((byte) (data.length & 0xFF));
         } else {
             // 32-bit length
-            buf.writeByte((byte) 0x80);
-            buf.writeInt(data.length);
+            nettyBuf.writeByte((byte) 0x80);
+            nettyBuf.writeInt(data.length);
         }
-        buf.writeBytes(data);
+        nettyBuf.writeBytes(data);
     }
 
     // Helper method to write RDB length encoding
-    private static void writeRdbLength(ByteBuf buf, long length) {
+    private static void writeRdbLength(ByteBuf nettyBuf, long length) {
         if (length < (1 << 6)) {
             // 6-bit length
-            buf.writeByte((byte) (length & 0x3F));
+            nettyBuf.writeByte((byte) (length & 0x3F));
         } else if (length < (1 << 14)) {
             // 14-bit length
-            buf.writeByte((byte) (((length >> 8) & 0x3F) | 0x40));
-            buf.writeByte((byte) (length & 0xFF));
+            nettyBuf.writeByte((byte) (((length >> 8) & 0x3F) | 0x40));
+            nettyBuf.writeByte((byte) (length & 0xFF));
         } else {
             // 32-bit length
-            buf.writeByte((byte) 0x80);
-            buf.writeInt((int) length);
+            nettyBuf.writeByte((byte) 0x80);
+            nettyBuf.writeInt((int) length);
         }
     }
 }

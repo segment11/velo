@@ -996,10 +996,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Encodes a list of short strings to a ByteBuf.
      *
      * @param bucketIndex the bucket index
-     * @param buf         the ByteBuf to which the encoded short strings will be written
+     * @param nettyBuf    the ByteBuf to which the encoded short strings will be written
      */
     @SlaveNeedReplay
-    public void encodeShortStringListToBuf(int bucketIndex, ByteBuf buf) {
+    public void encodeShortStringListToBuf(int bucketIndex, ByteBuf nettyBuf) {
         final long currentTimeMillis = System.currentTimeMillis();
 
         var keyBuckets = readKeyBuckets(bucketIndex);
@@ -1015,14 +1015,14 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                     }
 
                     int length = 8 + 8 + 8 + 4 + key.length() + 4 + valueBytes.length;
-                    buf.writeInt(length);
-                    buf.writeLong(seq);
-                    buf.writeLong(keyHash);
-                    buf.writeLong(expireAt);
-                    buf.writeInt(key.length());
-                    buf.writeBytes(key.getBytes());
-                    buf.writeInt(valueBytes.length);
-                    buf.writeBytes(valueBytes);
+                    nettyBuf.writeInt(length);
+                    nettyBuf.writeLong(seq);
+                    nettyBuf.writeLong(keyHash);
+                    nettyBuf.writeLong(expireAt);
+                    nettyBuf.writeInt(key.length());
+                    nettyBuf.writeBytes(key.getBytes());
+                    nettyBuf.writeInt(valueBytes.length);
+                    nettyBuf.writeBytes(valueBytes);
 
                 }
             });
@@ -1032,24 +1032,24 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * Decodes a list of short strings from a ByteBuf.
      *
-     * @param buf      the ByteBuf containing the encoded short strings
+     * @param nettyBuf the ByteBuf containing the encoded short strings
      * @param callBack the callback to handle each decoded short string
      */
     @SlaveReplay
-    public static void decodeShortStringListFromBuf(ByteBuf buf, KeyBucket.IterateCallBack callBack) {
-        while (buf.isReadable(4)) {
-            var length = buf.readInt();
-            assert buf.isReadable(length);
+    public static void decodeShortStringListFromBuf(ByteBuf nettyBuf, KeyBucket.IterateCallBack callBack) {
+        while (nettyBuf.isReadable(4)) {
+            var length = nettyBuf.readInt();
+            assert nettyBuf.isReadable(length);
 
-            var seq = buf.readLong();
-            var keyHash = buf.readLong();
-            var expireAt = buf.readLong();
-            var keyLength = buf.readInt();
+            var seq = nettyBuf.readLong();
+            var keyHash = nettyBuf.readLong();
+            var expireAt = nettyBuf.readLong();
+            var keyLength = nettyBuf.readInt();
             var keyBytes = new byte[keyLength];
-            buf.readBytes(keyBytes);
-            var valueLength = buf.readInt();
+            nettyBuf.readBytes(keyBytes);
+            var valueLength = nettyBuf.readInt();
             var valueBytes = new byte[valueLength];
-            buf.readBytes(valueBytes);
+            nettyBuf.readBytes(valueBytes);
 
             callBack.call(keyHash, expireAt, seq, new String(keyBytes), valueBytes);
         }

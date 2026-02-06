@@ -190,14 +190,14 @@ public class BulkReply implements Reply {
 
         int len = 1 + sizeBytes.length + (size >= 0 ? size + 2 : 0);
         var bytes = new byte[len];
-        var bb = ByteBuf.wrapForWriting(bytes);
-        bb.writeByte(MARKER);
-        bb.write(sizeBytes);
+        var buf = ByteBuf.wrapForWriting(bytes);
+        buf.writeByte(MARKER);
+        buf.write(sizeBytes);
         if (size >= 0) {
-            bb.write(raw);
-            bb.write(CRLF);
+            buf.write(raw);
+            buf.write(CRLF);
         }
-        return bb;
+        return buf;
     }
 
     @Override
@@ -225,13 +225,13 @@ public class BulkReply implements Reply {
 
         int len = 1 + size + 2;
         var bytes = new byte[len];
-        var bb = ByteBuf.wrapForWriting(bytes);
-        bb.writeByte(MARKER_RESP3);
+        var buf = ByteBuf.wrapForWriting(bytes);
+        buf.writeByte(MARKER_RESP3);
         if (size != 0) {
-            bb.write(raw);
+            buf.write(raw);
         }
-        bb.write(CRLF);
-        return bb;
+        buf.write(CRLF);
+        return buf;
     }
 
     /**

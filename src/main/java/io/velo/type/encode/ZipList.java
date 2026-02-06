@@ -19,51 +19,51 @@ public class ZipList {
     private static final int ZIP_INT_IMM_MAX = 0xFD;
     private static final int ZIP_LIST_HEADER_SIZE = 10; // 4bytes total + 4bytes tail + 2bytes length
 
-    public static void decode(ByteBuf buf, BiConsumer<byte[], Integer> consumer) {
+    public static void decode(ByteBuf nettyBuf, BiConsumer<byte[], Integer> consumer) {
         // Skip total bytes (4) and tail offset (4)
-        buf.skipBytes(8);
+        nettyBuf.skipBytes(8);
 
         // Read number of entries (2 bytes, little endian)
-        int numEntries = buf.readUnsignedShortLE();
+        int numEntries = nettyBuf.readUnsignedShortLE();
         // Read entries
         for (int i = 0; i < numEntries; i++) {
             // Skip previous entry length
-            int prevLen = buf.readUnsignedByte();
+            int prevLen = nettyBuf.readUnsignedByte();
             if (prevLen >= 254) {
-                buf.skipBytes(4); // Skip the 4-byte length
+                nettyBuf.skipBytes(4); // Skip the 4-byte length
             }
 
             // Read encoding
-            int encoding = buf.readUnsignedByte();
+            int encoding = nettyBuf.readUnsignedByte();
             if ((encoding & ZIP_STR_MASK) < ZIP_STR_MASK) {
                 // String encoding
                 int len;
                 if ((encoding & ZIP_STR_MASK) == ZIP_STR_06B) {
                     len = encoding & 0x3F;
                 } else if ((encoding & ZIP_STR_MASK) == ZIP_STR_14B) {
-                    len = ((encoding & 0x3F) << 8) | buf.readUnsignedByte();
+                    len = ((encoding & 0x3F) << 8) | nettyBuf.readUnsignedByte();
                 } else if ((encoding & ZIP_STR_MASK) == ZIP_STR_32B) {
-                    len = buf.readIntLE();
+                    len = nettyBuf.readIntLE();
                 } else {
                     throw new IllegalStateException("Invalid string encoding");
                 }
 
                 var bytes = new byte[len];
-                buf.readBytes(bytes);
+                nettyBuf.readBytes(bytes);
                 consumer.accept(bytes, i);
             } else {
                 // Integer encoding
                 String value;
                 if (encoding == ZIP_INT_8B) {
-                    value = String.valueOf(buf.readByte());
+                    value = String.valueOf(nettyBuf.readByte());
                 } else if (encoding == ZIP_INT_16B) {
-                    value = String.valueOf(buf.readShortLE());
+                    value = String.valueOf(nettyBuf.readShortLE());
                 } else if (encoding == ZIP_INT_32B) {
-                    value = String.valueOf(buf.readIntLE());
+                    value = String.valueOf(nettyBuf.readIntLE());
                 } else if (encoding == ZIP_INT_64B) {
-                    value = String.valueOf(buf.readLongLE());
+                    value = String.valueOf(nettyBuf.readLongLE());
                 } else if (encoding == ZIP_INT_24B) {
-                    int val = buf.readUnsignedMediumLE();
+                    int val = nettyBuf.readUnsignedMediumLE();
                     // Sign extend if negative
                     if ((val & 0x800000) != 0) {
                         val |= 0xFF000000;

@@ -74,10 +74,10 @@ public class DoubleReply implements Reply {
         int len = 1 + str.length() + 2; // 1 byte for the marker, length of the string, 2 bytes for CRLF
 
         var bytes = new byte[len];
-        var bb = ByteBuf.wrapForWriting(bytes);
-        bb.writeByte(DOUBLE_MARKER);
-        bb.put(str.getBytes());
-        bb.put(BulkReply.CRLF);
-        return bb;
+        var buf = ByteBuf.wrapForWriting(bytes);
+        buf.writeByte(DOUBLE_MARKER);
+        buf.put(str.getBytes());
+        buf.put(BulkReply.CRLF);
+        return buf;
     }
 }

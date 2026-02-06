@@ -962,27 +962,27 @@ public class XGroup extends BaseCommand {
         var walGroupIndex = buffer.getInt();
 
         var oneSlot = localPersist.oneSlot(slot);
-        var bb = Unpooled.buffer();
-        bb.writeInt(walGroupIndex);
+        var nettyBuf = Unpooled.buffer();
+        nettyBuf.writeInt(walGroupIndex);
 
         var oneChargeBucketNumber = ConfForSlot.global.confWal.oneChargeBucketNumber;
         var beginBucketIndex = walGroupIndex * oneChargeBucketNumber;
         for (int bucketIndex = beginBucketIndex; bucketIndex < beginBucketIndex + oneChargeBucketNumber; bucketIndex++) {
-            oneSlot.getKeyLoader().encodeShortStringListToBuf(bucketIndex, bb);
+            oneSlot.getKeyLoader().encodeShortStringListToBuf(bucketIndex, nettyBuf);
         }
 
-        return new Repl.ReplReplyFromBytes(replPair.getSlaveUuid(), slot, s_exists_short_string, bb.array(), 0, bb.writerIndex());
+        return new Repl.ReplReplyFromBytes(replPair.getSlaveUuid(), slot, s_exists_short_string, nettyBuf.array(), 0, nettyBuf.writerIndex());
     }
 
     private Repl.ReplReply s_exists_short_string(short slot, byte[] contentBytes) {
         // client received from server
-        var bb = Unpooled.wrappedBuffer(contentBytes);
-        assert bb.readableBytes() >= 4;
+        var nettyBuf = Unpooled.wrappedBuffer(contentBytes);
+        assert nettyBuf.readableBytes() >= 4;
         // remote
-        var walGroupIndex = bb.readInt();
+        var walGroupIndex = nettyBuf.readInt();
 
         HashMap<Short, HashMap<String, CompressedValue>> groupedBySlot = new HashMap<>();
-        KeyLoader.decodeShortStringListFromBuf(bb, (keyHash, expireAt, seq, key, valueBytes) -> {
+        KeyLoader.decodeShortStringListFromBuf(nettyBuf, (keyHash, expireAt, seq, key, valueBytes) -> {
             var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
             var cv = CompressedValue.decode(valueBytes, key.getBytes(), keyHash);
             groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);

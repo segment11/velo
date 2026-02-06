@@ -319,13 +319,13 @@ public class RGroup extends BaseCommand {
             }
         }
 
-        var buf = Unpooled.wrappedBuffer(serializedValue);
+        var nettyBuf = Unpooled.wrappedBuffer(serializedValue);
         var rdbImporter = new VeloRDBImporter();
         try {
             final long finalExpireAt = expireAt;
             final RGroup _rGroup = this;
 
-            rdbImporter.restore(buf, new RDBCallback() {
+            rdbImporter.restore(nettyBuf, new RDBCallback() {
                 @Override
                 public void onString(byte[] valueBytes) {
                     set(valueBytes, slotWithKeyHash, CompressedValue.NULL_DICT_SEQ, finalExpireAt);

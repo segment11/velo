@@ -57,10 +57,10 @@ public enum BoolReply implements Reply {
         int len = 1 + 1 + 2;
 
         var bytes = new byte[len];
-        var bb = ByteBuf.wrapForWriting(bytes);
-        bb.writeByte(BOOL_MARKER);
-        bb.put(value ? TRUE_BYTE : FALSE_BYTE);
-        bb.put(BulkReply.CRLF);
-        return bb;
+        var buf = ByteBuf.wrapForWriting(bytes);
+        buf.writeByte(BOOL_MARKER);
+        buf.put(value ? TRUE_BYTE : FALSE_BYTE);
+        buf.put(BulkReply.CRLF);
+        return buf;
     }
 }

@@ -1532,7 +1532,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
             segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
         }
-        var buf = Unpooled.wrappedBuffer(segmentBytes);
+        var nettyBuf = Unpooled.wrappedBuffer(segmentBytes);
 //        SegmentBatch2.iterateFromSegmentBytes(segmentBytes, new SegmentBatch2.ForDebugCvCallback());
 
 //        // crc check
@@ -1541,23 +1541,23 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 //        var segmentMaskedValue = buf.readInt();
 //        buf.skipBytes(SEGMENT_HEADER_LENGTH);
 
-        buf.readerIndex(pvm.segmentOffset);
+        nettyBuf.readerIndex(pvm.segmentOffset);
 
         // skip key header or check key
-        var keyLength = buf.readShort();
+        var keyLength = nettyBuf.readShort();
         if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
             throw new IllegalStateException("Key length error, key length=" + keyLength);
         }
 
         var keyBytesRead = new byte[keyLength];
-        buf.readBytes(keyBytesRead);
+        nettyBuf.readBytes(keyBytesRead);
 
         if (!Arrays.equals(keyBytesRead, key.getBytes())) {
             throw new IllegalStateException("Key not match, key=" + key + ", key persisted=" + new String(keyBytesRead));
         }
 
         // set to lru cache, just target bytes
-        var cv = CompressedValue.decode(buf, key.getBytes(), keyHash);
+        var cv = CompressedValue.decode(nettyBuf, key.getBytes(), keyHash);
         lru.put(key, cv.encode());
 
         return new BufOrCompressedValue(null, cv);
@@ -1582,17 +1582,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             rawSegmentBytes = segmentBytes;
         }
 
-        var buf = Unpooled.wrappedBuffer(rawSegmentBytes);
-        buf.readerIndex(pvm.segmentOffset);
+        var nettyBuf = Unpooled.wrappedBuffer(rawSegmentBytes);
+        nettyBuf.readerIndex(pvm.segmentOffset);
 
         // skip key header or check key
-        var keyLength = buf.readShort();
+        var keyLength = nettyBuf.readShort();
         if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
             throw new IllegalStateException("Key length error, key length=" + keyLength);
         }
 
         var keyBytes = new byte[keyLength];
-        buf.readBytes(keyBytes);
+        nettyBuf.readBytes(keyBytes);
         return keyBytes;
     }
 

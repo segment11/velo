@@ -188,18 +188,18 @@ public class HttpHeaderBody {
     /**
      * Feeds a portion of byte data from a ByteBuf into the parser.
      *
-     * @param buf    the ByteBuf containing the byte data
-     * @param count  the number of bytes to feed
-     * @param offset the offset in the ByteBuf to start feeding from
+     * @param nettyBuf the ByteBuf containing the byte data
+     * @param count    the number of bytes to feed
+     * @param offset   the offset in the ByteBuf to start feeding from
      */
-    public void feed(ByteBuf buf, int count, int offset) {
+    public void feed(ByteBuf nettyBuf, int count, int offset) {
         if (count > HEADER_BUFFER_LENGTH) {
             throw new IllegalArgumentException("Http header too long");
         }
 
         var bf = headerBuffer;
         while (count > 0) {
-            bf[headerLength] = buf.getByte(offset);
+            bf[headerLength] = nettyBuf.getByte(offset);
 
             headerLength++;
             offset++;
@@ -223,13 +223,13 @@ public class HttpHeaderBody {
                     if (bf[headerLength - 3] == n && bf[headerLength - 4] == r) {
                         var contentLength = contentLength();
                         var totalLength = headerLength + contentLength;
-                        if (totalLength <= buf.readableBytes()) {
+                        if (totalLength <= nettyBuf.readableBytes()) {
                             isFullyRead = true;
-                            buf.readerIndex(buf.readerIndex() + headerLength);
+                            nettyBuf.readerIndex(nettyBuf.readerIndex() + headerLength);
 
                             if (contentLength > 0) {
                                 body = new byte[contentLength];
-                                buf.readBytes(body);
+                                nettyBuf.readBytes(body);
                             }
                         }
                         return;
