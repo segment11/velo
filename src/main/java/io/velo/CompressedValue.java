@@ -2,6 +2,7 @@ package io.velo;
 
 import com.github.luben.zstd.Zstd;
 import io.activej.bytebuf.ByteBuf;
+import io.netty.buffer.Unpooled;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -818,6 +819,19 @@ public class CompressedValue {
     }
 
     private static final Logger log = LoggerFactory.getLogger(CompressedValue.class);
+
+    /**
+     * Decodes from the value bytes.
+     *
+     * @param valueBytes the value bytes
+     * @param keyBytes   the key bytes
+     * @param keyHash    the 64-bit key hash
+     * @return the decoded compressed value
+     */
+    public static CompressedValue decode(byte[] valueBytes, byte[] keyBytes, long keyHash) {
+        var buf = Unpooled.wrappedBuffer(valueBytes);
+        return decode(buf, keyBytes, keyHash);
+    }
 
     /**
      * Decodes from the buffer.

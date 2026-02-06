@@ -1,6 +1,5 @@
 package io.velo.persist;
 
-import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
@@ -1000,8 +999,7 @@ public class Wal implements InMemoryEstimate {
                 // check if is big string
                 var spType = CompressedValue.onlyReadSpType(v.cvEncoded);
                 if (spType == CompressedValue.SP_TYPE_BIG_STRING) {
-                    var buf = Unpooled.wrappedBuffer(v.cvEncoded);
-                    var cv = CompressedValue.decode(buf, v.key.getBytes(), v.keyHash);
+                    var cv = CompressedValue.decode(v.cvEncoded, v.key.getBytes(), v.keyHash);
                     oneSlot.handleWhenCvExpiredOrDeleted(entry.getKey(), cv, null);
 
                     count++;

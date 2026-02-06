@@ -1,6 +1,5 @@
 package io.velo.repl.incremental;
 
-import io.netty.buffer.Unpooled;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
@@ -178,7 +177,7 @@ public class XBigStrings implements BinlogContent {
     @Override
     public void apply(short slot, ReplPair replPair) {
         var keyHash = KeyHash.hash(key.getBytes());
-        var cv = CompressedValue.decode(Unpooled.wrappedBuffer(cvEncoded), key.getBytes(), keyHash);
+        var cv = CompressedValue.decode(cvEncoded, key.getBytes(), keyHash);
 
         var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
         var oneSlot = localPersist.oneSlot(s.slot());

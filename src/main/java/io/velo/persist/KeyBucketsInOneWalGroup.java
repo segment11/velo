@@ -1,6 +1,5 @@
 package io.velo.persist;
 
-import io.netty.buffer.Unpooled;
 import io.velo.CompressedValue;
 import io.velo.ConfForSlot;
 import io.velo.KeyHash;
@@ -339,7 +338,7 @@ public class KeyBucketsInOneWalGroup {
 
     private void cvExpiredOrDeleted(String key, byte[] valueBytes) {
         if (!PersistValueMeta.isPvm(valueBytes)) {
-            var shortStringCv = CompressedValue.decode(Unpooled.wrappedBuffer(valueBytes), key.getBytes(), 0L);
+            var shortStringCv = CompressedValue.decode(valueBytes, key.getBytes(), 0L);
             keyLoader.cvExpiredOrDeletedCallBack.handle(key, shortStringCv);
         } else {
             var pvm = PersistValueMeta.decode(valueBytes);

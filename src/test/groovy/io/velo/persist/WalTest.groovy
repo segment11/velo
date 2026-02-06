@@ -1,6 +1,5 @@
 package io.velo.persist
 
-import io.netty.buffer.Unpooled
 import io.velo.*
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
@@ -92,7 +91,7 @@ class WalTest extends Specification {
         when:
         def vList = Mock.prepareValueList(10, 0) { v ->
             if (v.seq() == 9) {
-                def cv = CompressedValue.decode(Unpooled.wrappedBuffer(v.cvEncoded()), v.key().bytes, v.keyHash())
+                def cv = CompressedValue.decode(v.cvEncoded(), v.key().bytes, v.keyHash())
                 cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
                 cv.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
                 def bigStringEncoded = cv.encode()
@@ -108,7 +107,7 @@ class WalTest extends Specification {
             wal.put(true, key, v)
 
             def bytes = wal.get(key)
-            def cv2 = CompressedValue.decode(Unpooled.wrappedBuffer(bytes), key.bytes, v.keyHash())
+            def cv2 = CompressedValue.decode(bytes, key.bytes, v.keyHash())
             def value2 = new String(cv2.compressedData)
             println "key: $key, cv2: $cv2, value2: $value2"
         }

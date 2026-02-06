@@ -984,7 +984,7 @@ public class XGroup extends BaseCommand {
         HashMap<Short, HashMap<String, CompressedValue>> groupedBySlot = new HashMap<>();
         KeyLoader.decodeShortStringListFromBuf(bb, (keyHash, expireAt, seq, key, valueBytes) -> {
             var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
-            var cv = CompressedValue.decode(Unpooled.wrappedBuffer(valueBytes), key.getBytes(), keyHash);
+            var cv = CompressedValue.decode(valueBytes, key.getBytes(), keyHash);
             groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
         });
 

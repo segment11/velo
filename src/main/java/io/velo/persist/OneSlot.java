@@ -1435,7 +1435,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             kvLRUHitTotal++;
             kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
 
-            var cv = CompressedValue.decode(Unpooled.wrappedBuffer(cvEncodedBytesFromLRU), key.getBytes(), keyHash);
+            var cv = CompressedValue.decode(cvEncodedBytesFromLRU, key.getBytes(), keyHash);
             return cv.getExpireAt();
         }
 

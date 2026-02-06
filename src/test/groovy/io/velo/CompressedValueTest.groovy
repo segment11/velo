@@ -1,7 +1,6 @@
 package io.velo
 
 import io.activej.bytebuf.ByteBuf
-import io.netty.buffer.Unpooled
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -197,7 +196,7 @@ class CompressedValueTest extends Specification {
         when:
         def encoded = cv.encode()
         def encoded2 = cv2.encode()
-        def cvDecode = CompressedValue.decode(Unpooled.wrappedBuffer(encoded), null, 0L)
+        def cvDecode = CompressedValue.decode(encoded, null, 0L)
         def buf = ByteBuf.wrapForWriting(new byte[cv.encodedLength()])
         def buf2 = ByteBuf.wrapForWriting(new byte[cv2.encodedLength()])
         cv.encodeTo(buf)
@@ -229,7 +228,7 @@ class CompressedValueTest extends Specification {
         cv.compressedData[0] = Byte.MAX_VALUE
         def encodedNumber = cv.encodeAsNumber()
         def encodedBufferNumber = ByteBuffer.wrap(encodedNumber)
-        def cvDecodeNumber = CompressedValue.decode(Unpooled.wrappedBuffer(encodedNumber), null, 0L)
+        def cvDecodeNumber = CompressedValue.decode(encodedNumber, null, 0L)
         then:
         CompressedValue.onlyReadSeq(encodedNumber) == cv.seq
         CompressedValue.onlyReadSpType(encodedNumber) == cv.dictSeqOrSpType
@@ -244,7 +243,7 @@ class CompressedValueTest extends Specification {
         ByteBuffer.wrap(shortBytes).putShort(Short.MAX_VALUE)
         cv.compressedData = shortBytes
         encodedNumber = cv.encodeAsNumber()
-        cvDecodeNumber = CompressedValue.decode(Unpooled.wrappedBuffer(encodedNumber), null, 0L)
+        cvDecodeNumber = CompressedValue.decode(encodedNumber, null, 0L)
         then:
         encodedNumber.length == 19
         cvDecodeNumber.numberValue() == Short.MAX_VALUE
@@ -256,7 +255,7 @@ class CompressedValueTest extends Specification {
         ByteBuffer.wrap(intBytes).putInt(Integer.MAX_VALUE)
         cv.compressedData = intBytes
         encodedNumber = cv.encodeAsNumber()
-        cvDecodeNumber = CompressedValue.decode(Unpooled.wrappedBuffer(encodedNumber), null, 0L)
+        cvDecodeNumber = CompressedValue.decode(encodedNumber, null, 0L)
         then:
         encodedNumber.length == 21
         cvDecodeNumber.numberValue() == Integer.MAX_VALUE
@@ -268,7 +267,7 @@ class CompressedValueTest extends Specification {
         ByteBuffer.wrap(longBytes).putLong(Long.MAX_VALUE)
         cv.compressedData = longBytes
         encodedNumber = cv.encodeAsNumber()
-        cvDecodeNumber = CompressedValue.decode(Unpooled.wrappedBuffer(encodedNumber), null, 0L)
+        cvDecodeNumber = CompressedValue.decode(encodedNumber, null, 0L)
         then:
         encodedNumber.length == 25
         cvDecodeNumber.numberValue() == Long.MAX_VALUE
@@ -280,7 +279,7 @@ class CompressedValueTest extends Specification {
         ByteBuffer.wrap(doubleBytes).putDouble(Double.MAX_VALUE)
         cv.compressedData = doubleBytes
         encodedNumber = cv.encodeAsNumber()
-        cvDecodeNumber = CompressedValue.decode(Unpooled.wrappedBuffer(encodedNumber), null, 0L)
+        cvDecodeNumber = CompressedValue.decode(encodedNumber, null, 0L)
         then:
         encodedNumber.length == 25
         cvDecodeNumber.numberValue() == Double.MAX_VALUE
@@ -327,7 +326,7 @@ class CompressedValueTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
         cv.setCompressedDataAsBigString(890L, Dict.SELF_ZSTD_DICT_SEQ)
         def encodedBigString = cv.encode()
-        def cvDecoded = CompressedValue.decode(Unpooled.wrappedBuffer(encodedBigString), null, 0L)
+        def cvDecoded = CompressedValue.decode(encodedBigString, null, 0L)
         def bufferBigStringMeta = ByteBuffer.wrap(cvDecoded.compressedData)
         then:
         cv.getBigStringMetaUuid() == 890L
@@ -351,7 +350,7 @@ class CompressedValueTest extends Specification {
 
         when:
         def encoded = cv.encode()
-        def cvDecode = CompressedValue.decode(Unpooled.wrappedBuffer(encoded), keyBytes, cv.keyHash)
+        def cvDecode = CompressedValue.decode(encoded, keyBytes, cv.keyHash)
         then:
         cvDecode.seq == cv.seq
 
@@ -359,7 +358,7 @@ class CompressedValueTest extends Specification {
         boolean exception = false
         def keyBytesNotMatch = 'abcd'.bytes
         try {
-            CompressedValue.decode(Unpooled.wrappedBuffer(encoded), keyBytesNotMatch, 0L)
+            CompressedValue.decode(encoded, keyBytesNotMatch, 0L)
         } catch (IllegalStateException e) {
             println e.message
             exception = true
@@ -370,14 +369,14 @@ class CompressedValueTest extends Specification {
         when:
         cv.compressedData = null
         encoded = cv.encode()
-        cvDecode = CompressedValue.decode(Unpooled.wrappedBuffer(encoded), keyBytes, cv.keyHash)
+        cvDecode = CompressedValue.decode(encoded, keyBytes, cv.keyHash)
         then:
         cvDecode.seq == cv.seq
 
         when:
         exception = false
         try {
-            CompressedValue.decode(Unpooled.wrappedBuffer(encoded), keyBytesNotMatch, 0L)
+            CompressedValue.decode(encoded, keyBytesNotMatch, 0L)
         } catch (IllegalStateException e) {
             println e.message
             exception = true

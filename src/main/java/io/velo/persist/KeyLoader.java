@@ -1,7 +1,6 @@
 package io.velo.persist;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
@@ -982,8 +981,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
             keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (expireAt == CompressedValue.NO_EXPIRE || expireAt > currentTimeMillis) {
-                    var buf = Unpooled.wrappedBuffer(valueBytes);
-                    var cv = CompressedValue.decode(buf, key.getBytes(), keyHash);
+                    var cv = CompressedValue.decode(valueBytes, key.getBytes(), keyHash);
                     if (cv.isBigString()) {
                         list.add(new BigStringFiles.IdWithKey(cv.getBigStringMetaUuid(), bucketIndex, keyHash, key));
                     }
@@ -1082,8 +1080,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
             keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
-                    var buf = Unpooled.wrappedBuffer(valueBytes);
-                    var cv = CompressedValue.decode(buf, key.getBytes(), keyHash);
+                    var cv = CompressedValue.decode(valueBytes, key.getBytes(), keyHash);
                     if (cv.isBigString()) {
                         KeyLoader.this.cvExpiredOrDeletedCallBack.handle(key, cv);
                         countArray[0]++;

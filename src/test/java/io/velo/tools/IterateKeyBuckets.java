@@ -64,7 +64,7 @@ public class IterateKeyBuckets {
 //                        System.out.println("key=" + key + ", pvm=" + pvm.shortString());
 //                    }
                 } else {
-                    var cv = CompressedValue.decode(Unpooled.wrappedBuffer(valueBytes), null, 0);
+                    var cv = CompressedValue.decode(valueBytes, null, 0);
                     System.out.println("key=" + key + ", value=" + cv);
                 }
             });

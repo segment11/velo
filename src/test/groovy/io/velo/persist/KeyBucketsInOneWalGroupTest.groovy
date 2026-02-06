@@ -2,7 +2,6 @@ package io.velo.persist
 
 import io.velo.CompressedValue
 import io.velo.ConfForSlot
-import io.velo.KeyHash
 import spock.lang.Specification
 
 class KeyBucketsInOneWalGroupTest extends Specification {
