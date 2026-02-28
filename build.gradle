@@ -51,9 +51,9 @@ def activejVersion = '6.0-beta2'
 
 dependencies {
     implementation group: 'org.slf4j', name: 'slf4j-api', version: '2.0.9'
-    implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.20.0'
-    implementation group: 'org.apache.logging.log4j', name: 'log4j-api', version: '2.20.0'
-    implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j2-impl', version: '2.20.0'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.25.3'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-api', version: '2.25.3'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j2-impl', version: '2.25.3'
 
     implementation group: 'org.apache.groovy', name: 'groovy', version: '4.0.12'
     implementation group: 'org.apache.groovy', name: 'groovy-dateutil', version: '4.0.12'
@@ -77,8 +77,8 @@ dependencies {
     implementation group: 'commons-net', name: 'commons-net', version: '3.9.0'
     implementation group: 'commons-codec', name: 'commons-codec', version: '1.17.1'
     implementation group: 'org.apache.commons', name: 'commons-collections4', version: '4.4'
-    implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.26.0'
-    implementation group: 'io.netty', name: 'netty-buffer', version: '4.1.100.Final'
+    implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.28.0'
+    implementation group: 'io.netty', name: 'netty-buffer', version: '4.2.10.Final'
 
     implementation group: 'com.google.guava', name: 'guava', version: '32.1.3-jre'
 
@@ -95,15 +95,15 @@ dependencies {
     implementation group: 'net.openhft', name: 'posix', version: '2.25ea0'
 
     implementation group: 'com.github.luben', name: 'zstd-jni', version: '1.5.5-10'
-    implementation group: 'org.lz4', name: 'lz4-java', version: '1.8.0'
+    implementation group: 'at.yawk.lz4', name: 'lz4-java', version: '1.10.3'
 
     implementation group: 'com.moilioncircle', name: 'redis-replicator', version: '3.10.0'
 
     implementation group: 'redis.clients', name: 'jedis', version: '4.4.7'
 
-    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.14.3'
-    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.14.3'
-    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.14.3'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.15.0'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.15.0'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.15.0'
 
     implementation group: 'io.prometheus', name: 'simpleclient', version: '0.16.0'
     implementation group: 'io.prometheus', name: 'simpleclient_httpserver', version: '0.16.0'
@@ -117,7 +117,7 @@ dependencies {
     implementation group: 'org.apache.parquet', name: 'parquet-common', version: '1.15.0'
     implementation group: 'org.apache.parquet', name: 'parquet-column', version: '1.15.0'
     implementation group: 'org.apache.parquet', name: 'parquet-hadoop', version: '1.15.0'
-    implementation group: 'org.apache.hadoop', name: 'hadoop-client', version: '3.4.1'
+    implementation group: 'org.apache.hadoop', name: 'hadoop-client', version: '3.4.3'
 
     implementation group: 'org.apache.curator', name: 'curator-framework', version: '5.7.0'
     implementation group: 'org.apache.curator', name: 'curator-recipes', version: '5.7.0'
@@ -240,7 +240,8 @@ task copyLog4j2(type: Copy) {
 }
 
 task copyConfigFile(type: Copy) {
-    from 'src/main/resources/velo.properties', 'src/main/resources/velo_extend.properties', 'src/main/resources/conf.properties'
+    from 'src/main/resources/velo.properties', 'src/main/resources/velo7380.properties',
+            'src/main/resources/velo_extend.properties', 'src/main/resources/conf.properties'
     into "$buildDir/libs/"
 }
 
