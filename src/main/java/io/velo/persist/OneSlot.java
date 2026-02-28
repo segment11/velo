@@ -2488,17 +2488,23 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             map.putAll(bigStringFiles.collect());
             map.put("big_string_files_disk_usage", (double) bigStringFiles.diskUsage);
 
-            map.put("big_string_files_read_file_count", (double) bigStringFiles.readFileCountTotal);
-            map.put("big_string_files_read_file_cost_us_avg", (double) bigStringFiles.readFileCostTotalUs / bigStringFiles.readFileCountTotal);
-            map.put("big_string_files_read_byte_length_avg", (double) bigStringFiles.readByteLengthTotal / bigStringFiles.readFileCountTotal);
+            if (bigStringFiles.readFileCountTotal > 0) {
+                map.put("big_string_files_read_file_count", (double) bigStringFiles.readFileCountTotal);
+                map.put("big_string_files_read_file_cost_us_avg", (double) bigStringFiles.readFileCostTotalUs / bigStringFiles.readFileCountTotal);
+                map.put("big_string_files_read_byte_length_avg", (double) bigStringFiles.readByteLengthTotal / bigStringFiles.readFileCountTotal);
+            }
 
-            map.put("big_string_files_write_file_count", (double) bigStringFiles.writeFileCountTotal);
-            map.put("big_string_files_write_file_cost_us_avg", (double) bigStringFiles.writeFileCostTotalUs / bigStringFiles.writeFileCountTotal);
-            map.put("big_string_files_write_byte_length_avg", (double) bigStringFiles.writeByteLengthTotal / bigStringFiles.writeFileCountTotal);
+            if (bigStringFiles.writeFileCountTotal > 0) {
+                map.put("big_string_files_write_file_count", (double) bigStringFiles.writeFileCountTotal);
+                map.put("big_string_files_write_file_cost_us_avg", (double) bigStringFiles.writeFileCostTotalUs / bigStringFiles.writeFileCountTotal);
+                map.put("big_string_files_write_byte_length_avg", (double) bigStringFiles.writeByteLengthTotal / bigStringFiles.writeFileCountTotal);
+            }
 
-            map.put("big_string_files_delete_file_count", (double) bigStringFiles.deleteFileCountTotal);
-            map.put("big_string_files_delete_file_cost_us_avg", (double) bigStringFiles.deleteFileCostTotalUs / bigStringFiles.deleteFileCountTotal);
-            map.put("big_string_files_delete_byte_length_avg", (double) bigStringFiles.deleteByteLengthTotal / bigStringFiles.deleteFileCountTotal);
+            if (bigStringFiles.deleteFileCountTotal > 0) {
+                map.put("big_string_files_delete_file_count", (double) bigStringFiles.deleteFileCountTotal);
+                map.put("big_string_files_delete_file_cost_us_avg", (double) bigStringFiles.deleteFileCostTotalUs / bigStringFiles.deleteFileCountTotal);
+                map.put("big_string_files_delete_byte_length_avg", (double) bigStringFiles.deleteByteLengthTotal / bigStringFiles.deleteFileCountTotal);
+            }
 
             map.put("big_string_files_delay_to_delete_count", (double) delayToDeleteBigStringFileIds.size());
         }
