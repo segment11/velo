@@ -61,7 +61,7 @@ public class ConfForGlobal {
     /**
      * Flag to indicate if dynamic training dictionary should be used for compression.
      */
-    public static boolean isOnDynTrainDictForCompression = false;
+    public static boolean isOnDynTrainDictForCompression = true;
 
     /**
      * Network listen addresses.
