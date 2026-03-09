@@ -363,7 +363,7 @@ public class RGroup extends BaseCommand {
                             var fieldKey = RedisHashKeys.fieldKey(key, field);
                             var fieldValueBytes = entry.getValue();
                             var slotWithKeyHashThisField = slot(fieldKey);
-                            set(fieldKey.getBytes(), slotWithKeyHashThisField);
+                            set(fieldValueBytes, slotWithKeyHashThisField);
 
                             rhk.add(field);
                         }
