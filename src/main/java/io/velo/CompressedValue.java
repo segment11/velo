@@ -667,8 +667,16 @@ public class CompressedValue {
             throw new IllegalStateException("Compress error");
         }
 
-        if (compressedSize > data.length) {
-            return new CompressResult(data, false);
+        // fix: compare against input slice length, not full array length.
+        // also return only the input slice when compression is not beneficial,
+        // previously returned the entire data array which corrupted stored values when offset > 0 or length < data.length.
+        if (compressedSize > length) {
+            if (offset == 0 && length == data.length) {
+                return new CompressResult(data, false);
+            }
+            var slice = new byte[length];
+            System.arraycopy(data, offset, slice, 0, length);
+            return new CompressResult(slice, false);
         }
 
         // If wasting too much space, copy to another array.
