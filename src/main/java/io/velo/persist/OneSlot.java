@@ -2007,11 +2007,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             try {
                 raf.close();
                 System.out.println("Close wal raf success, slot=" + slot);
+            } catch (IOException e) {
+                System.err.println("Close wal raf error, slot=" + slot);
+            }
+        }
 
+        if (rafShortValue != null) {
+            try {
                 rafShortValue.close();
                 System.out.println("Close wal short value raf success, slot=" + slot);
             } catch (IOException e) {
-                System.err.println("Close wal raf / wal short raf error, slot=" + slot);
+                System.err.println("Close wal short raf error, slot=" + slot);
             }
         }
 
