@@ -175,7 +175,7 @@ public class LeaderSelector implements NeedCleanUp {
             children.sort((o1, o2) -> {
                 var lastIndex1 = o1.lastIndexOf("-");
                 var lastIndex2 = o2.lastIndexOf("-");
-                return o1.substring(lastIndex2).compareTo(o2.substring(lastIndex1));
+                return o1.substring(lastIndex1).compareTo(o2.substring(lastIndex2));
             });
 
             var dataBytes = client.getData().forPath(latchPath + "/" + children.getFirst());
