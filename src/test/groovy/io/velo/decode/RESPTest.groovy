@@ -56,6 +56,18 @@ class RESPTest extends Specification {
         exception
 
         when:
+        cmdStr = '*-1\r\n'
+        exception = false
+        try {
+            resp.decode(Unpooled.wrappedBuffer(cmdStr.bytes))
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
         cmdStr = '*12345678901234567890\r\n'
         exception = false
         try {
@@ -120,7 +132,7 @@ class RESPTest extends Specification {
         exception = false
         try {
             resp.decode(Unpooled.wrappedBuffer(cmdStr.bytes))
-        } catch (NegativeArraySizeException e) {
+        } catch (IllegalArgumentException e) {
             println e.message
             exception = true
         }

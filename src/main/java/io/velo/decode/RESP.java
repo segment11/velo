@@ -142,6 +142,9 @@ public class RESP {
                         break;
                     }
                     int number = parseRedisNumber(lineBuf);
+                    if (number < 0) {
+                        throw new IllegalArgumentException("Invalid array size: " + number);
+                    }
                     bytes = new byte[number][];
                 } else {
                     throw new IllegalArgumentException("Unexpected character=" + b);
