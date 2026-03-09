@@ -153,8 +153,15 @@ public class LocalPersist implements NeedCleanUp {
         var oneSlot = new OneSlot(slot, eventloop);
         assert eventloop.getEventloopThread() != null;
         oneSlot.threadIdProtectedForSafe = eventloop.getEventloopThread().threadId();
-        this.oneSlots = new OneSlot[slot + 1];
-        this.oneSlots[slot] = oneSlot;
+
+        if (oneSlots == null || slot >= oneSlots.length) {
+            var newSlots = new OneSlot[slot + 1];
+            if (oneSlots != null) {
+                System.arraycopy(oneSlots, 0, newSlots, 0, oneSlots.length);
+            }
+            oneSlots = newSlots;
+        }
+        oneSlots[slot] = oneSlot;
     }
 
     /**
@@ -166,8 +173,15 @@ public class LocalPersist implements NeedCleanUp {
     @TestOnly
     public void addOneSlotForTest2(short slot) {
         var oneSlot = new OneSlot(slot);
-        this.oneSlots = new OneSlot[slot + 1];
-        this.oneSlots[slot] = oneSlot;
+
+        if (oneSlots == null || slot >= oneSlots.length) {
+            var newSlots = new OneSlot[slot + 1];
+            if (oneSlots != null) {
+                System.arraycopy(oneSlots, 0, newSlots, 0, oneSlots.length);
+            }
+            oneSlots = newSlots;
+        }
+        oneSlots[slot] = oneSlot;
     }
 
     private File persistDir;
@@ -412,7 +426,9 @@ public class LocalPersist implements NeedCleanUp {
 
     public @Nullable OneSlot nextOneSlot(short slot) {
         if (!ConfForGlobal.clusterEnabled) {
-            assert slot < oneSlots.length;
+            if (slot < 0 || slot + 1 >= oneSlots.length) {
+                return null;
+            }
             return oneSlots[slot + 1];
         }
 
