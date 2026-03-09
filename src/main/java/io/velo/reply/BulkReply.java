@@ -1,6 +1,7 @@
 package io.velo.reply;
 
 import io.activej.bytebuf.ByteBuf;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 
 import java.util.Arrays;
@@ -28,6 +29,7 @@ public class BulkReply implements Reply {
      */
     @TestOnly
     public String asString() {
+        assert raw != null;
         return new String(raw);
     }
 
@@ -42,7 +44,7 @@ public class BulkReply implements Reply {
      *
      * @param content the string to be converted to bytes
      */
-    public BulkReply(String content) {
+    public BulkReply(@NotNull String content) {
         this(content.getBytes());
     }
 
@@ -242,6 +244,7 @@ public class BulkReply implements Reply {
      */
     @Override
     public ByteBuf bufferAsHttp() {
+        assert raw != null;
         return ByteBuf.wrapForReading(raw);
     }
 
@@ -255,6 +258,7 @@ public class BulkReply implements Reply {
     @TestOnly
     @Override
     public boolean dumpForTest(StringBuilder sb, int nestCount) {
+        assert raw != null;
         sb.append("\"").append(new String(raw)).append("\"");
         return true;
     }
