@@ -258,22 +258,25 @@ public class DictMap implements NeedCleanUp {
 
         int n = 0;
         ArrayList<Integer> loadedSeqList = new ArrayList<>();
+        // fix: wrap in try-with-resources so the DataInputStream (and underlying FileInputStream) is always closed.
+        // previously the stream was never closed, leaking a file descriptor on every call.
         if (file.length() > 0) {
-            var is = new DataInputStream(new FileInputStream(file));
-            while (true) {
-                var dictWithKey = Dict.decode(is);
-                if (dictWithKey == null) {
-                    break;
+            try (var is = new DataInputStream(new FileInputStream(file))) {
+                while (true) {
+                    var dictWithKey = Dict.decode(is);
+                    if (dictWithKey == null) {
+                        break;
+                    }
+
+                    var dict = dictWithKey.dict();
+                    dict.initCtx();
+
+                    cacheDictBySeq.put(dict.getSeq(), dict);
+                    cacheDict.put(dictWithKey.keyPrefixOrSuffix(), dict);
+
+                    loadedSeqList.add(dict.getSeq());
+                    n++;
                 }
-
-                var dict = dictWithKey.dict();
-                dict.initCtx();
-
-                cacheDictBySeq.put(dict.getSeq(), dict);
-                cacheDict.put(dictWithKey.keyPrefixOrSuffix(), dict);
-
-                loadedSeqList.add(dict.getSeq());
-                n++;
             }
         }
 
