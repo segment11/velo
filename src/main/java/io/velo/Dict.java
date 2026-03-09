@@ -76,15 +76,46 @@ public class Dict implements Serializable {
      * @param dictBytes the new dictionary bytes
      * @throws IllegalStateException if the dictionary bytes are too long or empty
      */
+    // fix: create new contexts before closing old ones so worker threads never see null arrays.
+    // previously closeCtx() set arrays to null then initCtx() created new ones, leaving a window
+    // where concurrent compress/decompress calls would NPE or use already-closed native contexts.
     public static void resetGlobalDictBytes(byte[] dictBytes) {
         if (dictBytes.length == 0 || dictBytes.length > GLOBAL_DICT_BYTES_MAX_LENGTH) {
             throw new IllegalStateException("Dict global dict bytes too long=" + dictBytes.length);
         }
 
+        var oldDecompressCtxArray = GLOBAL_ZSTD_DICT.decompressCtxArray;
+        var oldCtxCompressArray = GLOBAL_ZSTD_DICT.ctxCompressArray;
+
+        // create new contexts with new dict bytes before swapping
+        var newDecompressCtxArray = new ZstdDecompressCtx[ConfForGlobal.slotWorkers];
+        for (int i = 0; i < newDecompressCtxArray.length; i++) {
+            newDecompressCtxArray[i] = new ZstdDecompressCtx();
+            newDecompressCtxArray[i].loadDict(dictBytes);
+        }
+        var newCtxCompressArray = new ZstdCompressCtx[ConfForGlobal.slotWorkers];
+        for (int i = 0; i < newCtxCompressArray.length; i++) {
+            newCtxCompressArray[i] = new ZstdCompressCtx();
+            newCtxCompressArray[i].loadDict(dictBytes);
+        }
+
+        // swap to new contexts atomically (single field write per array)
         GLOBAL_ZSTD_DICT.dictBytes = dictBytes;
+        GLOBAL_ZSTD_DICT.decompressCtxArray = newDecompressCtxArray;
+        GLOBAL_ZSTD_DICT.ctxCompressArray = newCtxCompressArray;
         log.warn("Dict global dict bytes overwritten, dict bytes length={}", dictBytes.length);
-        GLOBAL_ZSTD_DICT.closeCtx();
-        GLOBAL_ZSTD_DICT.initCtx();
+
+        // close old contexts after new ones are in place
+        if (oldDecompressCtxArray != null) {
+            for (var ctx : oldDecompressCtxArray) {
+                ctx.close();
+            }
+        }
+        if (oldCtxCompressArray != null) {
+            for (var ctx : oldCtxCompressArray) {
+                ctx.close();
+            }
+        }
     }
 
     /**
