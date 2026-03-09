@@ -13,6 +13,7 @@ import io.velo.type.RedisBitSet;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Handles Redis commands starting with letter 'B'.
@@ -78,7 +79,7 @@ public class BGroup extends BaseCommand {
         return slotWithKeyHashList;
     }
 
-    public static long lastBgSaveMillis = 0;
+    public static final AtomicLong lastBgSaveMillis = new AtomicLong(0);
 
     public Reply handle() {
         if ("bitcount".equals(cmd)) {
@@ -94,7 +95,7 @@ public class BGroup extends BaseCommand {
         }
 
         if ("bgsave".equals(cmd)) {
-            lastBgSaveMillis = System.currentTimeMillis();
+            lastBgSaveMillis.set(System.currentTimeMillis());
             return OKReply.INSTANCE;
         }
 

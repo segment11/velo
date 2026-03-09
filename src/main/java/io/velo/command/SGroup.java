@@ -79,7 +79,7 @@ public class SGroup extends BaseCommand {
 
     public Reply handle() {
         if ("save".equals(cmd)) {
-            BGroup.lastBgSaveMillis = System.currentTimeMillis();
+            BGroup.lastBgSaveMillis.set(System.currentTimeMillis());
             return save();
         }
 

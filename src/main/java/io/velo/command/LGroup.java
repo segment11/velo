@@ -56,7 +56,7 @@ public class LGroup extends BaseCommand {
 
     public Reply handle() {
         if ("lastsave".equals(cmd)) {
-            return new IntegerReply(BGroup.lastBgSaveMillis);
+            return new IntegerReply(BGroup.lastBgSaveMillis.get());
         }
 
         if ("lindex".equals(cmd)) {
