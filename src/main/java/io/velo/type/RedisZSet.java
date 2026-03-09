@@ -505,6 +505,9 @@ public class RedisZSet {
         int rank = 0;
         for (int i = 0; i < size; i++) {
             int len = buffer.getShort();
+            if (len < 8) {
+                throw new IllegalStateException("Invalid zset entry length: " + len + ", expected >= 8");
+            }
             double score = buffer.getDouble();
             var bytes = new byte[len - 8];
             buffer.get(bytes);
@@ -564,6 +567,7 @@ public class RedisZSet {
 
         for (int i = 0; i < size; i++) {
             int len = buffer.getShort();
+            assert len > 8;
             double score = buffer.getDouble();
             var bytes = new byte[len - 8];
             buffer.get(bytes);

@@ -250,6 +250,7 @@ public class RedisList {
         var r = new RedisList();
         for (int i = 0; i < size; i++) {
             int len = buffer.getShort();
+            assert len > 0;
             var bytes = new byte[len];
             buffer.get(bytes);
             r.list.add(bytes);

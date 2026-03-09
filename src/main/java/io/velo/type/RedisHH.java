@@ -2,6 +2,8 @@ package io.velo.type;
 
 import com.github.luben.zstd.Zstd;
 import io.velo.*;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -73,7 +75,7 @@ public class RedisHH {
      * @param expireAt the expiration time in milliseconds of the pair
      * @throws IllegalArgumentException if the key or value length exceeds the maximum allowed length
      */
-    public void put(String key, byte[] value, Long expireAt) {
+    public void put(@NotNull String key, byte[] value, @Nullable Long expireAt) {
         if (key.length() > CompressedValue.KEY_MAX_LENGTH) {
             throw new IllegalArgumentException("Key length too long, key length=" + key.length());
         }

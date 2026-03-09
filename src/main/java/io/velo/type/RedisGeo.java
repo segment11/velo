@@ -1,6 +1,7 @@
 package io.velo.type;
 
 import io.velo.KeyHash;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
@@ -48,7 +49,7 @@ public class RedisGeo {
          * @param unitString string representing the unit
          * @return the corresponding Unit enum, or UNKNOWN if the string does not match any known unit
          */
-        public static Unit fromString(String unitString) {
+        public static Unit fromString(@NotNull String unitString) {
             return switch (unitString.toLowerCase()) {
                 case "m" -> Unit.M;
                 case "km" -> Unit.KM;

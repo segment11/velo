@@ -1,6 +1,5 @@
 package io.velo.type
 
-
 import spock.lang.Specification
 
 class RedisListTest extends Specification {
