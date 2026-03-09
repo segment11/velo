@@ -351,7 +351,7 @@ public class MGroup extends BaseCommand {
             } else if (arg.equalsIgnoreCase("replace")) {
                 isReplace = true;
             } else if (arg.equalsIgnoreCase("auth")) {
-                if (i + 2 < data.length) {
+                if (i + 2 >= data.length) {
                     return ErrorReply.SYNTAX;
                 }
                 if (new String(data[i + 2]).equalsIgnoreCase("keys")) {
