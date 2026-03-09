@@ -3,6 +3,7 @@ package io.velo.command
 import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.CompressedValue
+import io.velo.ConfForGlobal
 import io.velo.SocketInspector
 import io.velo.SocketInspectorTest
 import io.velo.mock.InMemoryGetSet
@@ -1056,6 +1057,8 @@ class LGroupTest extends Specification {
     }
 
     def 'test load rdb'() {
+        ConfForGlobal.isOnDynTrainDictForCompression = false
+
         // check redis-server bin file and generate rdb file
         final String redisServerBin = '/usr/local/bin/redis-server'
         final String rdbFilePath = '/tmp/dump.rdb'
@@ -1063,14 +1066,24 @@ class LGroupTest extends Specification {
         Process process
 
         int mockDataNum = 100
-        int tmpPort = 16379
+        int tmpPort = 16999
         if (!new File(rdbFilePath).exists()) {
             if (!new File(redisServerBin).exists()) {
                 println 'skip test load rdb as redis-server bin file not exists: ' + redisServerBin
                 return
             }
 
-            process = new ProcessBuilder(redisServerBin, '--dir', '/tmp', '--port', tmpPort.toString()).start()
+            new File('/tmp/redis_tmp.conf').text = """
+cluster-enabled no
+dir /tmp
+daemonize no
+save ""
+appendonly no
+port ${tmpPort}
+"""
+
+            process = (redisServerBin + ' /tmp/redis_tmp.conf').execute()
+            process.consumeProcessOutput(System.out, System.err)
             Thread.sleep(5000)
             Thread.start {
                 def jedis = new Jedis('localhost', tmpPort)
@@ -1107,8 +1120,8 @@ class LGroupTest extends Specification {
                 }
                 println "generate ${mockDataNum} zset keys / values"
 
-//                jedis.save()
-//                println 'save rdb done'
+                jedis.save()
+                println 'save rdb done'
                 jedis.close()
                 process.destroy()
                 println 'destroy redis-server process after mock data'

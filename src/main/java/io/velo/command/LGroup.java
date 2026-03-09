@@ -650,7 +650,10 @@ public class LGroup extends BaseCommand {
             }
 
             if (i >= startEnd.start()) {
-                replies[i - start] = new BulkReply(bytes);
+                // fix: use normalized startEnd.start() instead of raw start which can be negative.
+                // e.g. LRANGE key -3 -1 with 5 elements: start=-3, startEnd.start()=2,
+                // so at i=2 the index should be 0, not 2-(-3)=5 which is out of bounds.
+                replies[i - startEnd.start()] = new BulkReply(bytes);
             }
             return false;
         });
