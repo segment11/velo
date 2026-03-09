@@ -111,6 +111,20 @@ class HttpHeaderBodyTest extends Specification {
         h2.headers().size() == 3
 
         when:
+        def postHeader22 = "POST / HTTP/1.1\r\nAccept: text/html\r\nX-key: X-value\r\nContent-Length: -1\r\n\r\n".bytes
+        def h22 = new HttpHeaderBody()
+        h22.feed(postHeader22)
+        then:
+        h22.contentLength() == 0
+
+        when:
+        postHeader22 = "POST / HTTP/1.1\r\nAccept: text/html\r\nX-key: X-value\r\nContent-Length: a\r\n\r\n".bytes
+        h22 = new HttpHeaderBody()
+        h22.feed(postHeader22)
+        then:
+        h22.contentLength() == 0
+
+        when:
         def fullHttpHeaderWithBody = "POST / HTTP/1.1\r\nContent-Length: 4\r\n\r\n1234".bytes
         h3.feed(fullHttpHeaderWithBody)
         then:

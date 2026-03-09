@@ -151,7 +151,18 @@ public class HttpHeaderBody {
     public int contentLength() {
         if (contentLengthCache == -1) {
             var s = headers.get(HEADER_CONTENT_LENGTH);
-            contentLengthCache = s != null ? Integer.parseInt(s.trim()) : 0;
+            if (s != null && !s.trim().isEmpty()) {
+                try {
+                    contentLengthCache = Integer.parseInt(s.trim());
+                    if (contentLengthCache < 0) {
+                        contentLengthCache = 0;
+                    }
+                } catch (NumberFormatException e) {
+                    contentLengthCache = 0;
+                }
+            } else {
+                contentLengthCache = 0;
+            }
         }
         return contentLengthCache;
     }
@@ -220,7 +231,7 @@ public class HttpHeaderBody {
                     httpVersion = arr[2];
                     startIndex = headerLength;
                 } else {
-                    if (bf[headerLength - 3] == n && bf[headerLength - 4] == r) {
+                    if (headerLength >= 4 && bf[headerLength - 3] == n && bf[headerLength - 4] == r) {
                         var contentLength = contentLength();
                         var totalLength = headerLength + contentLength;
                         if (totalLength <= nettyBuf.readableBytes()) {
