@@ -782,34 +782,35 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         Map<BinlogContent.Type, Long> countByType = new HashMap<>();
         Map<BinlogContent.Type, Long> encodedLengthByType = new HashMap<>();
 
-        var is = new BufferedInputStream(new FileInputStream(binlogFile));
-        while (true) {
-            var n = is.read(oneSegmentBytes);
-            if (n < 0) {
-                break;
-            }
-            byteBuffer.position(0);
-
+        try (var is = new BufferedInputStream(new FileInputStream(binlogFile))) {
             while (true) {
-                if (byteBuffer.remaining() == 0) {
+                var n = is.read(oneSegmentBytes);
+                if (n < 0) {
                     break;
                 }
+                byteBuffer.position(0);
 
-                var code = byteBuffer.get();
-                if (code == 0) {
-                    break;
+                while (true) {
+                    if (byteBuffer.remaining() == 0) {
+                        break;
+                    }
+
+                    var code = byteBuffer.get();
+                    if (code == 0) {
+                        break;
+                    }
+
+                    var type = BinlogContent.Type.fromCode(code);
+                    var content = type.decodeFrom(byteBuffer);
+
+                    // add count
+                    countByType.put(type, countByType.getOrDefault(type, 0L) + 1);
+                    encodedLengthByType.put(type, encodedLengthByType.getOrDefault(type, 0L) + content.encodedLength());
                 }
 
-                var type = BinlogContent.Type.fromCode(code);
-                var content = type.decodeFrom(byteBuffer);
-
-                // add count
-                countByType.put(type, countByType.getOrDefault(type, 0L) + 1);
-                encodedLengthByType.put(type, encodedLengthByType.getOrDefault(type, 0L) + content.encodedLength());
-            }
-
-            if (n < binlogOneSegmentLength) {
-                break;
+                if (n < binlogOneSegmentLength) {
+                    break;
+                }
             }
         }
 
