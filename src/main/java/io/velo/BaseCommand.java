@@ -445,20 +445,32 @@ public abstract class BaseCommand {
         public static final SlotWithKeyHash TO_FIX_FIRST_SLOT = new SlotWithKeyHash((short) 0, 0, 0L, null);
     }
 
+    // fix: use the first '{' and the first '}' after it, per Redis spec.
+    // previously this loop kept overwriting both indices, effectively using the last '{' and last '}',
+    // which produced wrong slot assignments for keys like {foo}bar{baz} (hashed on 'baz' instead of 'foo').
     @VisibleForTesting
     static long tagHash(byte[] keyBytes) {
         int hashTagBeginIndex = -1;
-        int hashTagEndIndex = -1;
         for (int i = 0; i < keyBytes.length; i++) {
             if (keyBytes[i] == '{') {
                 hashTagBeginIndex = i;
-            } else if (keyBytes[i] == '}') {
-                hashTagEndIndex = i;
+                break;
             }
         }
 
-        if (hashTagBeginIndex >= 0 && hashTagEndIndex > hashTagBeginIndex) {
-            // hash tag
+        if (hashTagBeginIndex < 0) {
+            return 0L;
+        }
+
+        int hashTagEndIndex = -1;
+        for (int i = hashTagBeginIndex + 1; i < keyBytes.length; i++) {
+            if (keyBytes[i] == '}') {
+                hashTagEndIndex = i;
+                break;
+            }
+        }
+
+        if (hashTagEndIndex > hashTagBeginIndex) {
             return KeyHash.hashOffset(keyBytes, hashTagBeginIndex + 1, hashTagEndIndex - hashTagBeginIndex - 1);
         }
 
