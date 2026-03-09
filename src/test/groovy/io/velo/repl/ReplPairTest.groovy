@@ -48,6 +48,11 @@ class ReplPairTest extends Specification {
         replPairAsSlave.remoteReplProperties = ConfForSlot.global.generateReplProperties()
         ReplPair.parseHostAndPort(null)
         println ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
+        try {
+            ReplPair.parseHostAndPort('127.0.0.1')
+        } catch (Exception ignore) {
+        }
+
         for (replType in ReplType.values()) {
             replPairAsMaster.increaseStatsCountForReplType(replType)
             replPairAsSlave.increaseStatsCountForReplType(replType)

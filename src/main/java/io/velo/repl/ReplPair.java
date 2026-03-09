@@ -96,6 +96,9 @@ public class ReplPair {
         }
 
         var parts = hostAndPort.split(":");
+        if (parts.length != 2) {
+            throw new IllegalArgumentException("Invalid host:port format: " + hostAndPort);
+        }
         return new HostAndPort(parts[0], Integer.parseInt(parts[1]));
     }
 
