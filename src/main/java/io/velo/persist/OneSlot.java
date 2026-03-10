@@ -1869,16 +1869,22 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             wal.clear(false);
         }
 
+        // truncate all wal raf file
         if (raf != null) {
-            // truncate all wal raf file
             try {
                 raf.setLength(0);
-                rafShortValue.setLength(0);
-
                 walWriteIndex = 0L;
-                walShortValueWriteIndex = 0L;
             } catch (IOException e) {
                 throw new RuntimeException("Flush wal raf error", e);
+            }
+        }
+
+        if (this.rafShortValue != null) {
+            try {
+                rafShortValue.setLength(0);
+                walShortValueWriteIndex = 0L;
+            } catch (IOException e) {
+                throw new RuntimeException("Flush wal short value raf error", e);
             }
         }
 
