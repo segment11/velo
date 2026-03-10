@@ -5,6 +5,7 @@ import com.moilioncircle.redis.replicator.util.CRC64;
 import com.moilioncircle.redis.replicator.util.Lzf;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.velo.Slice;
 import io.velo.command.RDBCallback;
 import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
@@ -398,13 +399,13 @@ public class RDBParser {
     }
 
     // dump
-    private static byte[] writeVersionAndCrc(ByteBuf buf) {
-        buf.writeShortLE(RDB_VERSION);
-        var crc = CRC64.crc64(buf.array(), 0, buf.readableBytes());
-        buf.writeLongLE(crc);
+    private static byte[] writeVersionAndCrc(Slice slice) {
+        slice.writeShortLE(RDB_VERSION);
+        var crc = CRC64.crc64(slice.getArray(), 0, slice.getWriteIndex());
+        slice.writeLongLE(crc);
 
-        var result = new byte[buf.readableBytes()];
-        buf.getBytes(0, result);
+        var result = new byte[slice.getWriteIndex()];
+        System.arraycopy(slice.getArray(), 0, result, 0, result.length);
         return result;
     }
 
@@ -415,12 +416,12 @@ public class RDBParser {
      * @return the RDB format bytes
      */
     public static byte[] dumpString(byte[] valueBytes) {
-        var nettyBuf = Unpooled.buffer();
+        var slice = new Slice();
 
-        nettyBuf.writeByte(RDB_TYPE_STRING);
-        writeRdbString(nettyBuf, valueBytes);
+        slice.writeByte(RDB_TYPE_STRING);
+        writeRdbString(slice, valueBytes);
 
-        return writeVersionAndCrc(nettyBuf);
+        return writeVersionAndCrc(slice);
     }
 
     /**
@@ -432,16 +433,14 @@ public class RDBParser {
     public static byte[] dumpSet(RedisHashKeys rhk) {
         assert rhk != null && rhk.size() > 0;
 
-        var nettyBuf = Unpooled.buffer();
-        nettyBuf.writeByte(RDB_TYPE_SET);
-        // Write set size
-        writeRdbLength(nettyBuf, rhk.size());
-        // Write each member
+        var slice = new Slice();
+        slice.writeByte(RDB_TYPE_SET);
+        writeRdbLength(slice, rhk.size());
         for (var member : rhk.getSet()) {
-            writeRdbString(nettyBuf, member.getBytes());
+            writeRdbString(slice, member.getBytes());
         }
 
-        return writeVersionAndCrc(nettyBuf);
+        return writeVersionAndCrc(slice);
     }
 
     /**
@@ -453,17 +452,15 @@ public class RDBParser {
     public static byte[] dumpHash(RedisHH rhh) {
         assert rhh != null && rhh.size() > 0;
 
-        var nettyBuf = Unpooled.buffer();
-        nettyBuf.writeByte(RDB_TYPE_HASH);
-        // Write hash size
-        writeRdbLength(nettyBuf, rhh.size());
-        // Write each field-value pair
+        var slice = new Slice();
+        slice.writeByte(RDB_TYPE_HASH);
+        writeRdbLength(slice, rhh.size());
         for (var entry : rhh.getMap().entrySet()) {
-            writeRdbString(nettyBuf, entry.getKey().getBytes());
-            writeRdbString(nettyBuf, entry.getValue());
+            writeRdbString(slice, entry.getKey().getBytes());
+            writeRdbString(slice, entry.getValue());
         }
 
-        return writeVersionAndCrc(nettyBuf);
+        return writeVersionAndCrc(slice);
     }
 
     /**
@@ -475,14 +472,14 @@ public class RDBParser {
     public static byte[] dumpList(RedisList rl) {
         assert rl != null && rl.size() > 0;
 
-        var nettyBuf = Unpooled.buffer();
-        nettyBuf.writeByte(RDB_TYPE_LIST);
-        writeRdbLength(nettyBuf, rl.size());
+        var slice = new Slice();
+        slice.writeByte(RDB_TYPE_LIST);
+        writeRdbLength(slice, rl.size());
         for (var element : rl.getList()) {
-            writeRdbString(nettyBuf, element);
+            writeRdbString(slice, element);
         }
 
-        return writeVersionAndCrc(nettyBuf);
+        return writeVersionAndCrc(slice);
     }
 
     /**
@@ -494,38 +491,33 @@ public class RDBParser {
     public static byte[] dumpZSet(RedisZSet rz) {
         assert rz != null && !rz.isEmpty();
 
-        var nettyBuf = Unpooled.buffer();
-        nettyBuf.writeByte(RDB_TYPE_ZSET2);
-        writeRdbLength(nettyBuf, rz.size());
+        var slice = new Slice();
+        slice.writeByte(RDB_TYPE_ZSET2);
+        writeRdbLength(slice, rz.size());
         for (var entry : rz.getSet()) {
-            writeRdbString(nettyBuf, entry.member().getBytes());
-            nettyBuf.writeDouble(entry.score());
+            writeRdbString(slice, entry.member().getBytes());
+            slice.writeDouble(entry.score());
         }
 
-        return writeVersionAndCrc(nettyBuf);
+        return writeVersionAndCrc(slice);
     }
 
-    // Helper method to write RDB string encoding
-    private static void writeRdbString(ByteBuf nettyBuf, byte[] data) {
-        // Try to encode as integer if possible
+    private static void writeRdbString(Slice slice, byte[] data) {
         if (data.length <= 11) {
             try {
                 var str = new String(data);
                 var value = Long.parseLong(str);
                 if (value >= -(1 << 7) && value <= (1 << 7) - 1) {
-                    // 8-bit integer
-                    nettyBuf.writeByte((byte) (0xC0));
-                    nettyBuf.writeByte((byte) value);
+                    slice.writeByte((byte) (0xC0));
+                    slice.writeByte((byte) value);
                     return;
                 } else if (value >= -(1 << 15) && value <= (1 << 15) - 1) {
-                    // 16-bit integer
-                    nettyBuf.writeByte((byte) (0xC0 | 1));
-                    nettyBuf.writeShortLE((short) value);
+                    slice.writeByte((byte) (0xC0 | 1));
+                    slice.writeShortLE((short) value);
                     return;
                 } else if (value >= -((long) 1 << 31) && value <= ((long) 1 << 31) - 1) {
-                    // 32-bit integer
-                    nettyBuf.writeByte((byte) (0xC0 | 2));
-                    nettyBuf.writeIntLE((int) value);
+                    slice.writeByte((byte) (0xC0 | 2));
+                    slice.writeIntLE((int) value);
                     return;
                 }
             } catch (NumberFormatException e) {
@@ -537,13 +529,11 @@ public class RDBParser {
             try {
                 var compressed = Lzf.encode(new ByteArray(data));
                 if (compressed.length() < data.length) {
-                    // Only use compression if it actually reduces size
-                    nettyBuf.writeByte((byte) (0xC0 | 3)); // Special encoding flag with LZF indicator
-                    writeRdbLength(nettyBuf, compressed.length()); // Compressed length
-                    writeRdbLength(nettyBuf, data.length); // Uncompressed length
-                    // Write compressed data
+                    slice.writeByte((byte) (0xC0 | 3));
+                    writeRdbLength(slice, compressed.length());
+                    writeRdbLength(slice, data.length);
                     for (var bytes : compressed) {
-                        nettyBuf.writeBytes(bytes);
+                        slice.writeBytes(bytes);
                     }
                     return;
                 }
@@ -552,35 +542,27 @@ public class RDBParser {
             }
         }
 
-        // Normal string encoding
         if (data.length < (1 << 6)) {
-            // 6-bit length
-            nettyBuf.writeByte((byte) (data.length & 0x3F));
+            slice.writeByte((byte) (data.length & 0x3F));
         } else if (data.length < (1 << 14)) {
-            // 14-bit length
-            nettyBuf.writeByte((byte) (((data.length >> 8) & 0x3F) | 0x40));
-            nettyBuf.writeByte((byte) (data.length & 0xFF));
+            slice.writeByte((byte) (((data.length >> 8) & 0x3F) | 0x40));
+            slice.writeByte((byte) (data.length & 0xFF));
         } else {
-            // 32-bit length
-            nettyBuf.writeByte((byte) 0x80);
-            nettyBuf.writeInt(data.length);
+            slice.writeByte((byte) 0x80);
+            slice.writeInt(data.length);
         }
-        nettyBuf.writeBytes(data);
+        slice.writeBytes(data);
     }
 
-    // Helper method to write RDB length encoding
-    private static void writeRdbLength(ByteBuf nettyBuf, long length) {
+    private static void writeRdbLength(Slice slice, long length) {
         if (length < (1 << 6)) {
-            // 6-bit length
-            nettyBuf.writeByte((byte) (length & 0x3F));
+            slice.writeByte((byte) (length & 0x3F));
         } else if (length < (1 << 14)) {
-            // 14-bit length
-            nettyBuf.writeByte((byte) (((length >> 8) & 0x3F) | 0x40));
-            nettyBuf.writeByte((byte) (length & 0xFF));
+            slice.writeByte((byte) (((length >> 8) & 0x3F) | 0x40));
+            slice.writeByte((byte) (length & 0xFF));
         } else {
-            // 32-bit length
-            nettyBuf.writeByte((byte) 0x80);
-            nettyBuf.writeInt((int) length);
+            slice.writeByte((byte) 0x80);
+            slice.writeInt((int) length);
         }
     }
 }

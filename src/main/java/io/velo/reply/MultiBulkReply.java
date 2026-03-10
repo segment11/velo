@@ -1,7 +1,7 @@
 package io.velo.reply;
 
 import io.activej.bytebuf.ByteBuf;
-import io.netty.buffer.Unpooled;
+import io.velo.Slice;
 import org.jetbrains.annotations.TestOnly;
 
 /**
@@ -133,36 +133,34 @@ public class MultiBulkReply implements Reply {
      */
     @Override
     public ByteBuf buffer() {
-        // 256 bytes
-        var nettyBuf = Unpooled.buffer();
-        nettyBuf.writeByte(MARKER);
+        var slice = new Slice();
+        slice.writeByte(MARKER);
         if (replies == null) {
-            nettyBuf.writeBytes(BulkReply.NEG_ONE_WITH_CRLF);
+            slice.writeBytes(BulkReply.NEG_ONE_WITH_CRLF);
         } else {
-            nettyBuf.writeBytes(BulkReply.numToBytes(replies.length, true));
+            slice.writeBytes(BulkReply.numToBytes(replies.length, true));
             for (var reply : replies) {
                 var subBuffer = reply.buffer();
-                nettyBuf.writeBytes(subBuffer.array(), subBuffer.head(), subBuffer.tail() - subBuffer.head());
+                slice.writeBytes(subBuffer.array(), subBuffer.head(), subBuffer.tail() - subBuffer.head());
             }
         }
-        return ByteBuf.wrap(nettyBuf.array(), 0, nettyBuf.writerIndex());
+        return ByteBuf.wrap(slice.getArray(), 0, slice.getWriteIndex());
     }
 
     @Override
     public ByteBuf bufferAsResp3() {
-        // 256 bytes
-        var nettyBuf = Unpooled.buffer();
-        nettyBuf.writeByte(isMap ? MARKER_MAP : (isSet ? MARKER_SET : MARKER));
+        var slice = new Slice();
+        slice.writeByte(isMap ? MARKER_MAP : (isSet ? MARKER_SET : MARKER));
         if (replies == null) {
-            nettyBuf.writeBytes(BulkReply.NEG_ONE_WITH_CRLF);
+            slice.writeBytes(BulkReply.NEG_ONE_WITH_CRLF);
         } else {
-            nettyBuf.writeBytes(BulkReply.numToBytes(isMap ? replies.length / 2 : replies.length, true));
+            slice.writeBytes(BulkReply.numToBytes(isMap ? replies.length / 2 : replies.length, true));
             for (var reply : replies) {
                 var subBuffer = reply.bufferAsResp3();
-                nettyBuf.writeBytes(subBuffer.array(), subBuffer.head(), subBuffer.tail() - subBuffer.head());
+                slice.writeBytes(subBuffer.array(), subBuffer.head(), subBuffer.tail() - subBuffer.head());
             }
         }
-        return ByteBuf.wrap(nettyBuf.array(), 0, nettyBuf.writerIndex());
+        return ByteBuf.wrap(slice.getArray(), 0, slice.getWriteIndex());
     }
 
     /**

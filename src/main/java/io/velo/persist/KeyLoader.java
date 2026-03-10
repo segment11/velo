@@ -1,6 +1,5 @@
 package io.velo.persist;
 
-import io.netty.buffer.ByteBuf;
 import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
@@ -993,13 +992,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
 
     /**
-     * Encodes a list of short strings to a ByteBuf.
+     * Encodes a list of short strings to a Slice.
      *
      * @param bucketIndex the bucket index
-     * @param nettyBuf    the ByteBuf to which the encoded short strings will be written
+     * @param slice       the Slice to which the encoded short strings will be written
      */
     @SlaveNeedReplay
-    public void encodeShortStringListToBuf(int bucketIndex, ByteBuf nettyBuf) {
+    public void encodeShortStringListToBuf(int bucketIndex, Slice slice) {
         final long currentTimeMillis = System.currentTimeMillis();
 
         var keyBuckets = readKeyBuckets(bucketIndex);
@@ -1015,41 +1014,40 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                     }
 
                     int length = 8 + 8 + 8 + 4 + key.length() + 4 + valueBytes.length;
-                    nettyBuf.writeInt(length);
-                    nettyBuf.writeLong(seq);
-                    nettyBuf.writeLong(keyHash);
-                    nettyBuf.writeLong(expireAt);
-                    nettyBuf.writeInt(key.length());
-                    nettyBuf.writeBytes(key.getBytes());
-                    nettyBuf.writeInt(valueBytes.length);
-                    nettyBuf.writeBytes(valueBytes);
-
+                    slice.writeInt(length);
+                    slice.writeLong(seq);
+                    slice.writeLong(keyHash);
+                    slice.writeLong(expireAt);
+                    slice.writeInt(key.length());
+                    slice.writeBytes(key.getBytes());
+                    slice.writeInt(valueBytes.length);
+                    slice.writeBytes(valueBytes);
                 }
             });
         }
     }
 
     /**
-     * Decodes a list of short strings from a ByteBuf.
+     * Decodes a list of short strings from a Slice.
      *
-     * @param nettyBuf the ByteBuf containing the encoded short strings
+     * @param slice    the Slice containing the encoded short strings
      * @param callBack the callback to handle each decoded short string
      */
     @SlaveReplay
-    public static void decodeShortStringListFromBuf(ByteBuf nettyBuf, KeyBucket.IterateCallBack callBack) {
-        while (nettyBuf.isReadable(4)) {
-            var length = nettyBuf.readInt();
-            assert nettyBuf.isReadable(length);
+    public static void decodeShortStringListFromBuf(Slice slice, KeyBucket.IterateCallBack callBack) {
+        while (slice.isReadable(4)) {
+            var length = slice.readInt();
+            assert slice.isReadable(length);
 
-            var seq = nettyBuf.readLong();
-            var keyHash = nettyBuf.readLong();
-            var expireAt = nettyBuf.readLong();
-            var keyLength = nettyBuf.readInt();
+            var seq = slice.readLong();
+            var keyHash = slice.readLong();
+            var expireAt = slice.readLong();
+            var keyLength = slice.readInt();
             var keyBytes = new byte[keyLength];
-            nettyBuf.readBytes(keyBytes);
-            var valueLength = nettyBuf.readInt();
+            slice.readBytes(keyBytes);
+            var valueLength = slice.readInt();
             var valueBytes = new byte[valueLength];
-            nettyBuf.readBytes(valueBytes);
+            slice.readBytes(valueBytes);
 
             callBack.call(keyHash, expireAt, seq, new String(keyBytes), valueBytes);
         }

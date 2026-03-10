@@ -1,6 +1,5 @@
 package io.velo.persist
 
-import io.netty.buffer.Unpooled
 import io.velo.*
 import spock.lang.Specification
 
@@ -407,10 +406,11 @@ class KeyLoaderTest extends Specification {
         }
 
         when:
-        def buf = Unpooled.buffer()
-        keyLoader.encodeShortStringListToBuf(0, buf)
+        def slice = new Slice()
+        keyLoader.encodeShortStringListToBuf(0, slice)
+        def sliceForRead = new Slice(slice.array, 0, slice.writeIndex)
         int count = 0
-        KeyLoader.decodeShortStringListFromBuf(buf) { keyHash, expireAt, seq, key, valueBytes ->
+        KeyLoader.decodeShortStringListFromBuf(sliceForRead) { keyHash, expireAt, seq, key, valueBytes ->
             println "key: $key, seq: $seq, keyHash: $keyHash, expireAt: $expireAt"
             count++
         }
