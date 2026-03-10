@@ -77,6 +77,8 @@ class DynConfigTest extends Specification {
         config.readonly
         !config.canRead
         !config.canWrite
+        config.getLongValue('xxx', 2) == 1
+        config.getLongValue('yyy', 2) == 2
 
         when:
         config.readonly = false

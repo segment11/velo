@@ -118,11 +118,12 @@ public class TcpClient implements NeedCleanUp {
      *
      * @param host              the hostname or IP address of the server
      * @param port              the port number on which the server is listening
+     * @param timeout           the timeout for the connection
      * @param connectedCallback the callback to be called when the connection is established
      */
-    public void connect(String host, int port, Callable<ByteBuf> connectedCallback) {
+    public void connect(String host, int port, long timeout, Callable<ByteBuf> connectedCallback) {
         var socketSettings = SocketSettings.create();
-        TcpSocket.connect(slotWorkerEventloop, new InetSocketAddress(host, port), 0, socketSettings)
+        TcpSocket.connect(slotWorkerEventloop, new InetSocketAddress(host, port), timeout, socketSettings)
                 .whenResult(socket -> {
                     log.info("Connected to server at {}:{}, slot={}", host, port, slot);
 

@@ -295,4 +295,16 @@ public class DynConfig {
 
         afterUpdateCallback.afterUpdate(key, value);
     }
+
+    /**
+     * Retrieves a configuration value as a long.
+     *
+     * @param key          the key to retrieve
+     * @param defaultValue the default value to return if the key is not found
+     * @return the value associated with the key, or the default value if the key is not found
+     */
+    public long getLongValue(@NotNull String key, long defaultValue) {
+        var val = get(key);
+        return val == null ? defaultValue : Long.parseLong(val.toString());
+    }
 }

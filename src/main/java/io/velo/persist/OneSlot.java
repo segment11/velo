@@ -399,6 +399,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var replPair = new ReplPair(slot, false, host, port);
         replPair.setSlaveUuid(masterUuid);
 
+        if (dynConfig != null) {
+            replPair.setConnectTimeoutMillis(dynConfig.getLongValue("repl_connect_timeout_millis", 5000));
+        }
+
         if (doMockWhenCreateReplPairAsSlave) {
             log.info("Repl create repl pair as slave, mock, host={}, port={}, slot={}", host, port, slot);
         } else {
@@ -522,6 +526,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var replPair = new ReplPair(slot, true, host, port);
         replPair.setSlaveUuid(slaveUuid);
         replPair.setMasterUuid(masterUuid);
+
+        if (dynConfig != null) {
+            replPair.setConnectTimeoutMillis(dynConfig.getLongValue("repl_connect_timeout_millis", 5000));
+        }
 
         for (var replPair1 : replPairs) {
             if (replPair1.equals(replPair)) {

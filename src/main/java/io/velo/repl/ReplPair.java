@@ -40,6 +40,17 @@ public class ReplPair {
     private final String host;
     private final int port;
 
+    private long connectTimeoutMillis = 5000;
+
+    /**
+     * Sets the connect timeout milliseconds.
+     *
+     * @param connectTimeoutMillis the connect timeout milliseconds
+     */
+    public void setConnectTimeoutMillis(long connectTimeoutMillis) {
+        this.connectTimeoutMillis = connectTimeoutMillis;
+    }
+
     /**
      * Gets the slot identifier for this pair.
      *
@@ -517,7 +528,7 @@ public class ReplPair {
             var replContent = new Hello(slaveUuid, ConfForGlobal.netListenAddresses);
 
             tcpClient = new TcpClient(slot, eventloop, requestHandler, this);
-            tcpClient.connect(host, port, () -> Repl.buffer(slaveUuid, slot, ReplType.hello, replContent));
+            tcpClient.connect(host, port, connectTimeoutMillis, () -> Repl.buffer(slaveUuid, slot, ReplType.hello, replContent));
         }
     }
 

@@ -76,6 +76,7 @@ class ReplPairTest extends Specification {
         replPairAsSlave.allCaughtUp = false
         replPairAsSlave.disconnectTimeMillis = System.currentTimeMillis()
         replPairAsSlave.putToDelayListToRemoveTimeMillis = System.currentTimeMillis()
+        replPairAsSlave.connectTimeoutMillis = 1000L
 
         expect:
         replPairAsMaster.slot == slot
