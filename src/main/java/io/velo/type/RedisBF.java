@@ -300,6 +300,9 @@ public class RedisBF {
         var listSize = buffer.getInt();
         for (int i = 0; i < listSize; i++) {
             var filterBytesLength = buffer.getInt();
+            if (filterBytesLength <= 0) {
+                throw new IllegalStateException("Invalid filter bytes length: " + filterBytesLength + ", expected > 0");
+            }
             var filterBytes = new byte[filterBytesLength];
             buffer.get(filterBytes);
             var filter = BFSerializer.fromBytes(filterBytes, 0, filterBytes.length);

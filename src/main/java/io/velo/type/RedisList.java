@@ -250,7 +250,9 @@ public class RedisList {
         var r = new RedisList();
         for (int i = 0; i < size; i++) {
             int len = buffer.getShort();
-            assert len > 0;
+            if (len <= 0) {
+                throw new IllegalStateException("Invalid list entry length: " + len + ", expected > 0");
+            }
             var bytes = new byte[len];
             buffer.get(bytes);
             r.list.add(bytes);

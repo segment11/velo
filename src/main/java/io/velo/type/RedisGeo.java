@@ -422,6 +422,9 @@ public class RedisGeo {
 
         for (int i = 0; i < size; i++) {
             int memberLength = buffer.getShort();
+            if (memberLength <= 0) {
+                throw new IllegalStateException("Invalid member length: " + memberLength + ", expected > 0");
+            }
             var memberBytes = new byte[memberLength];
             buffer.get(memberBytes);
             var lon = buffer.getDouble();
