@@ -315,6 +315,19 @@ class PGroupTest extends Specification {
         then:
         exception
         errorMessage == ErrorReply.WRONG_TYPE.message
+
+        when:
+        inMemoryGetSet.remove(slot, 'ttl_hll')
+        def ttlReply = pGroup.execute('pfadd ttl_hll first')
+        def sTtlHll = pGroup.slot('ttl_hll'.bytes, pGroup.slotNumber)
+        def ttlCv = inMemoryGetSet.getBuf(slot, 'ttl_hll', sTtlHll.bucketIndex(), sTtlHll.keyHash()).cv()
+        def expireAt = System.currentTimeMillis() + 60_000
+        ttlCv.expireAt = expireAt
+        ttlReply = pGroup.execute('pfadd ttl_hll second')
+        def ttlCvAfterRewrite = inMemoryGetSet.getBuf(slot, 'ttl_hll', sTtlHll.bucketIndex(), sTtlHll.keyHash()).cv()
+        then:
+        ttlReply == IntegerReply.REPLY_1
+        ttlCvAfterRewrite.expireAt == expireAt
     }
 
     def 'test pfcount and pfmerge'() {
@@ -341,9 +354,29 @@ class PGroupTest extends Specification {
         (reply as IntegerReply).integer == 1
 
         when:
+        pGroup.execute('pfadd a shared')
+        pGroup.execute('pfadd b shared')
+        reply = pGroup.execute('pfcount a b')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 3
+
+        when:
         reply = pGroup.execute('pfmerge dst a b')
         then:
         reply == OKReply.INSTANCE
+
+        when:
+        inMemoryGetSet.remove(slot, 'dst')
+        reply = pGroup.execute('pfmerge dst a missing')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = pGroup.execute('pfcount dst')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 2
 
         when:
         def eventloop = Eventloop.builder()
@@ -364,11 +397,11 @@ class PGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && (result as IntegerReply).integer == 2
+            result instanceof IntegerReply && (result as IntegerReply).integer == 3
         }.result
 
         when:
-        reply = pGroup.execute('pfmerge dst a b')
+        reply = pGroup.execute('pfmerge dst a missing')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply

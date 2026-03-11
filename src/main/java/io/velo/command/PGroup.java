@@ -24,6 +24,12 @@ import java.util.stream.Collectors;
  * This includes commands like PERSIST, PEXPIRE, PFADD, PFMERGE.
  */
 public class PGroup extends BaseCommand {
+    private static HyperLogLog emptyHll() {
+        return HyperLogLog.builder()
+                .setEncoding(HyperLogLog.EncodingType.DENSE)
+                .build();
+    }
+
     public PGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }
@@ -177,7 +183,7 @@ public class PGroup extends BaseCommand {
         return IntegerReply.REPLY_1;
     }
 
-    private void saveHll(SlotWithKeyHash s, HyperLogLog hll) throws IOException {
+    private void saveHll(SlotWithKeyHash s, HyperLogLog hll, long expireAt) throws IOException {
         var os = new ByteArrayOutputStream();
         HyperLogLogUtils.serializeHLL(os, hll);
         var encoded = os.toByteArray();
@@ -190,6 +196,7 @@ public class PGroup extends BaseCommand {
         cv.setSeq(snowFlake.nextId());
         cv.setDictSeqOrSpType(CompressedValue.SP_TYPE_HLL);
         cv.setKeyHash(s.keyHash());
+        cv.setExpireAt(expireAt);
         cv.setCompressedData(compressed);
         putToOneSlot(s.slot(), s, cv);
 
@@ -226,6 +233,14 @@ public class PGroup extends BaseCommand {
         }
     }
 
+    private long getHllExpireAt(SlotWithKeyHash s) {
+        var cv = getCv(s);
+        if (cv == null) {
+            return CompressedValue.NO_EXPIRE;
+        }
+        return cv.isHll() ? cv.getExpireAt() : CompressedValue.NO_EXPIRE;
+    }
+
     private Reply pfadd() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
@@ -235,9 +250,7 @@ public class PGroup extends BaseCommand {
 
         var hll = getHll(slotWithKeyHash);
         if (hll == null) {
-            hll = HyperLogLog.builder()
-                    .setEncoding(HyperLogLog.EncodingType.DENSE)
-                    .build();
+            hll = emptyHll();
         }
 
         var oldCount = hll.count();
@@ -250,7 +263,7 @@ public class PGroup extends BaseCommand {
 
         if (isChanged) {
             try {
-                saveHll(slotWithKeyHash, hll);
+                saveHll(slotWithKeyHash, hll, getHllExpireAt(slotWithKeyHash));
             } catch (IOException e) {
                 return new ErrorReply(e.getMessage());
             }
@@ -259,12 +272,10 @@ public class PGroup extends BaseCommand {
         return isChanged ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
     }
 
-    private long getHllCount(SlotWithKeyHash s) {
-        var hll = getHll(s);
-        if (hll == null) {
-            return 0;
+    private void mergeHllInto(HyperLogLog dstHll, HyperLogLog srcHll) {
+        if (srcHll != null) {
+            dstHll.merge(srcHll);
         }
-        return hll.count();
     }
 
     private Reply pfcount() {
@@ -272,14 +283,14 @@ public class PGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
+        assert data.length - 1 == slotWithKeyHashListParsed.size();
         if (!isCrossRequestWorker) {
-            long sum = 0L;
+            var merged = emptyHll();
             for (var i = 1; i < data.length; i++) {
                 var slotWithKeyHash = slotWithKeyHashListParsed.get(i - 1);
-                var count = getHllCount(slotWithKeyHash);
-                sum += count;
+                mergeHllInto(merged, getHll(slotWithKeyHash));
             }
-            return new IntegerReply(sum);
+            return new IntegerReply(merged.count());
         }
 
         ArrayList<MGroup.IndexAndSlotWithKeyHash> list = new ArrayList<>();
@@ -288,7 +299,7 @@ public class PGroup extends BaseCommand {
             list.add(new MGroup.IndexAndSlotWithKeyHash(j, slotWithKeyHash));
         }
 
-        ArrayList<Promise<Long>> promises = new ArrayList<>();
+        ArrayList<Promise<ArrayList<HyperLogLog>>> promises = new ArrayList<>();
         var groupBySlot = list.stream().collect(Collectors.groupingBy(one -> one.slotWithKeyHash().slot()));
         for (var entry : groupBySlot.entrySet()) {
             var slot = entry.getKey();
@@ -296,12 +307,11 @@ public class PGroup extends BaseCommand {
 
             var oneSlot = localPersist.oneSlot(slot);
             var p = oneSlot.asyncCall(() -> {
-                long sum = 0L;
+                ArrayList<HyperLogLog> hllList = new ArrayList<>();
                 for (var one : subList) {
-                    var count = getHllCount(one.slotWithKeyHash());
-                    sum += count;
+                    hllList.add(getHll(one.slotWithKeyHash()));
                 }
-                return sum;
+                return hllList;
             });
             promises.add(p);
         }
@@ -316,11 +326,13 @@ public class PGroup extends BaseCommand {
                 return;
             }
 
-            long sum = 0L;
+            var merged = emptyHll();
             for (var p : promises) {
-                sum += p.getResult();
+                for (var hll : p.getResult()) {
+                    mergeHllInto(merged, hll);
+                }
             }
-            finalPromise.set(new IntegerReply(sum));
+            finalPromise.set(new IntegerReply(merged.count()));
         });
 
         return asyncReply;
@@ -334,17 +346,14 @@ public class PGroup extends BaseCommand {
         var dstS = slotWithKeyHashListParsed.getFirst();
 
         if (!isCrossRequestWorker) {
-            var dstHll = HyperLogLog.builder()
-                    .setEncoding(HyperLogLog.EncodingType.DENSE)
-                    .build();
+            var dstHll = emptyHll();
             for (var i = 2; i < data.length; i++) {
                 var srcS = slotWithKeyHashListParsed.get(i - 1);
-                var hll = getHll(srcS);
-                dstHll.merge(hll);
+                mergeHllInto(dstHll, getHll(srcS));
             }
 
             try {
-                saveHll(dstS, dstHll);
+                saveHll(dstS, dstHll, getHllExpireAt(dstS));
                 return OKReply.INSTANCE;
             } catch (IOException e) {
                 return new ErrorReply(e.getMessage());
@@ -385,19 +394,15 @@ public class PGroup extends BaseCommand {
                 return;
             }
 
-            var dstHll = HyperLogLog.builder()
-                    .setEncoding(HyperLogLog.EncodingType.DENSE)
-                    .build();
+            var dstHll = emptyHll();
             for (var p : promises) {
                 var hllList = p.getResult();
                 for (var hll : hllList) {
-                    if (hll != null) {
-                        dstHll.merge(hll);
-                    }
+                    mergeHllInto(dstHll, hll);
                 }
             }
             try {
-                saveHll(dstS, dstHll);
+                saveHll(dstS, dstHll, getHllExpireAt(dstS));
                 finalPromise.set(OKReply.INSTANCE);
             } catch (IOException e1) {
                 finalPromise.setException(e1);
