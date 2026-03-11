@@ -447,10 +447,10 @@ public class MultiWorkerServer extends Launcher {
             return r;
         }
 
-        var isAclCheckOk = request.isAclCheckOk();
-        if (!isAclCheckOk.asBoolean()) {
+        var aclCheckResult = request.isAclCheckOk();
+        if (!aclCheckResult.asBoolean()) {
             return Promise.of(
-                    isAclCheckOk.isKeyFail() ?
+                    aclCheckResult.isKeyFail() ?
                             ErrorReply.ACL_PERMIT_KEY_LIMIT.buffer()
                             : ErrorReply.ACL_PERMIT_LIMIT.buffer()
             );
