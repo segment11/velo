@@ -140,7 +140,17 @@ public class HttpHeaderBody {
      * @return the value of the header, or null if the header is not found
      */
     public String header(String name) {
-        return headers.get(name);
+        var exact = headers.get(name);
+        if (exact != null) {
+            return exact;
+        }
+
+        for (var entry : headers.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(name)) {
+                return entry.getValue();
+            }
+        }
+        return null;
     }
 
     /**
@@ -150,7 +160,7 @@ public class HttpHeaderBody {
      */
     public int contentLength() {
         if (contentLengthCache == -1) {
-            var s = headers.get(HEADER_CONTENT_LENGTH);
+            var s = header(HEADER_CONTENT_LENGTH);
             if (s != null && !s.trim().isEmpty()) {
                 try {
                     contentLengthCache = Integer.parseInt(s.trim());

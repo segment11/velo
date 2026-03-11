@@ -138,6 +138,17 @@ class HttpHeaderBodyTest extends Specification {
         '1234' == new String(h3.body())
 
         when:
+        def fullHttpHeaderWithLowercaseContentLength = "POST / HTTP/1.1\r\ncontent-length: 4\r\n\r\n1234".bytes
+        def h4 = new HttpHeaderBody()
+        h4.feed(fullHttpHeaderWithLowercaseContentLength)
+        then:
+        h4.fullyRead
+        h4.contentLength() == 4
+        h4.header('Content-Length') == '4'
+        h4.header('content-length') == '4'
+        '1234' == new String(h4.body())
+
+        when:
         def getHeader2 = new byte[4097]
         def execption = false
         try {
