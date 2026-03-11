@@ -160,13 +160,13 @@ public class AGroup extends BaseCommand {
 
             var redirectRequest = new Request(dd, false, false);
             redirectRequest.setU(u);
+            redirectRequest.setSlotWithKeyHashList(slotWithKeyHashListParsed);
 
-            var isAclCheckOk = redirectRequest.isAclCheckOk();
-            if (!isAclCheckOk.asBoolean()) {
-                return isAclCheckOk.isKeyFail() ? ErrorReply.ACL_PERMIT_KEY_LIMIT : ErrorReply.ACL_PERMIT_LIMIT;
+            var aclCheckResult = redirectRequest.isAclCheckOk();
+            if (!aclCheckResult.asBoolean()) {
+                return aclCheckResult.isKeyFail() ? ErrorReply.ACL_PERMIT_KEY_LIMIT : ErrorReply.ACL_PERMIT_LIMIT;
             }
 
-            redirectRequest.setSlotWithKeyHashList(slotWithKeyHashListParsed);
             return requestHandler.handle(redirectRequest, socket);
         } else if ("genpass".equals(subCmd)) {
             if (data.length != 2 && data.length != 3) {

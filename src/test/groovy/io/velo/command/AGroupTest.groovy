@@ -4,6 +4,7 @@ import io.activej.config.Config
 import io.velo.*
 import io.velo.acl.AclUsers
 import io.velo.acl.RCmd
+import io.velo.acl.RKey
 import io.velo.acl.U
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Consts
@@ -220,6 +221,7 @@ class AGroupTest extends Specification {
         when:
         aclUsers.upInsert('a') { u ->
             u.addRCmd(true, RCmd.fromLiteral('+get'))
+            u.addRKey(true, RKey.fromLiteral("~*"))
         }
         reply = aGroup.execute('acl dryrun a get a')
         then:
