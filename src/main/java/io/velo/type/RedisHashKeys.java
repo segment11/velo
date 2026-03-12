@@ -2,6 +2,7 @@ package io.velo.type;
 
 import io.velo.Dict;
 import io.velo.KeyHash;
+import io.velo.persist.Wal;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
@@ -154,8 +155,9 @@ public class RedisHashKeys {
         // tmp crc
         buffer.putInt(0);
         for (var e : set) {
-            buffer.putShort((short) e.length());
-            buffer.put(e.getBytes());
+            var fieldBytes = Wal.keyBytes(e);
+            buffer.putShort((short) fieldBytes.length);
+            buffer.put(fieldBytes);
         }
 
         // crc

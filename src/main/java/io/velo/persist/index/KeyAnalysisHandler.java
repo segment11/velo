@@ -142,7 +142,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         var bytes = new byte[4];
         ByteBuffer.wrap(bytes).putInt(valueLengthHigh24WithShortTypeLow8);
         eventloop.submit(() -> {
-            db.put(key.getBytes(), bytes);
+            db.put(Wal.keyBytes(key), bytes);
 
             addCount++;
             addValueLengthTotal += (valueLengthHigh24WithShortTypeLow8 >> 8);
@@ -185,7 +185,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     @TestOnly
     void removeKey(String key) {
         eventloop.submit(() -> {
-            db.delete(key.getBytes());
+            db.delete(Wal.keyBytes(key));
         });
     }
 
@@ -295,7 +295,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         return eventloop.submit(AsyncComputation.of(() -> {
             var result = new ArrayList<String>();
             var iterator = db.newIterator();
-            iterator.seek(prefix.getBytes());
+            iterator.seek(Wal.keyBytes(prefix));
 
             while (iterator.isValid() && result.size() < maxCount) {
                 var keyBytes = iterator.key();

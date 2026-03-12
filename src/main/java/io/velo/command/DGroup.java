@@ -324,7 +324,7 @@ public class DGroup extends BaseCommand {
 
     boolean isUseHH(String key) {
         int checkPrefixLength = RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX.length;
-        if (key.length() > checkPrefixLength) {
+        if (Wal.keyBytes(key).length > checkPrefixLength) {
             // check prefix match
             if (Arrays.equals(Wal.keyBytes(key), 0, checkPrefixLength,
                     RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX, 0, checkPrefixLength)) {

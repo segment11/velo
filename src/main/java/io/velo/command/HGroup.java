@@ -3,6 +3,7 @@ package io.velo.command;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.*;
 import io.velo.persist.KeyLoader;
+import io.velo.persist.Wal;
 import io.velo.reply.*;
 import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
@@ -926,7 +927,7 @@ public class HGroup extends BaseCommand {
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
 
-        byte[][] dd = {null, fieldKey.getBytes()};
+        byte[][] dd = {null, Wal.keyBytes(fieldKey)};
         var dGroup = new DGroup(cmd, dd, socket);
         dGroup.from(this);
         dGroup.setSlotWithKeyHashListParsed(dGroup.parseSlots("decr", dd, slotNumber));

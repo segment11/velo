@@ -773,7 +773,7 @@ public class BGroup extends BaseCommand {
                 boolean isSet = false;
                 for (int i = 1; i < keys.size(); i++) {
                     var otherKey = keys.get(i);
-                    var otherKeyBytes = otherKey.getBytes();
+                    var otherKeyBytes = Wal.keyBytes(otherKey);
                     var otherSlotWithKeyHash = slotWithKeyHashListParsed.get(i);
 
                     var oneSlot = localPersist.oneSlot(otherSlotWithKeyHash.slot());
