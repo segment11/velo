@@ -1,6 +1,7 @@
 package io.velo.type;
 
 import io.velo.KeyHash;
+import io.velo.persist.Wal;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -356,7 +357,7 @@ public class RedisGeo {
         for (var entry : map.entrySet()) {
             var member = entry.getKey();
             // longitude and latitude use 8 bytes
-            bodyBytesLength += 2 + member.getBytes().length + 16;
+            bodyBytesLength += 2 + Wal.keyBytes(member).length + 16;
         }
 
         short size = (short) map.size();
@@ -368,9 +369,10 @@ public class RedisGeo {
         buffer.putInt(0);
         for (var entry : map.entrySet()) {
             var member = entry.getKey();
+            var memberBytes = Wal.keyBytes(member);
             var p = entry.getValue();
-            buffer.putShort((short) member.getBytes().length);
-            buffer.put(member.getBytes());
+            buffer.putShort((short) memberBytes.length);
+            buffer.put(memberBytes);
             buffer.putDouble(p.lon);
             buffer.putDouble(p.lat);
         }

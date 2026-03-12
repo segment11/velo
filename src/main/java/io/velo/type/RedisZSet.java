@@ -3,6 +3,7 @@ package io.velo.type;
 import io.velo.Dict;
 import io.velo.DictMap;
 import io.velo.KeyHash;
+import io.velo.persist.Wal;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -155,7 +156,7 @@ public class RedisZSet {
          */
         public int length() {
             // score double + value length short
-            return 8 + member.length();
+            return 8 + Wal.keyBytes(member).length;
         }
     }
 
@@ -430,9 +431,10 @@ public class RedisZSet {
         // tmp crc
         buffer.putInt(0);
         for (var e : set) {
-            buffer.putShort((short) e.length());
+            var memberBytes = Wal.keyBytes(e.member());
+            buffer.putShort((short) memberBytes.length);
             buffer.putDouble(e.score());
-            buffer.put(e.member().getBytes());
+            buffer.put(memberBytes);
         }
 
         // crc
