@@ -6,6 +6,7 @@ import io.activej.promise.SettablePromise;
 import io.activej.reactor.Reactor;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
+import io.velo.persist.Wal;
 import io.velo.reply.*;
 import io.velo.type.RedisBF;
 import io.velo.type.RedisBitSet;
@@ -742,7 +743,7 @@ public class BGroup extends BaseCommand {
             if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
                 return ErrorReply.KEY_TOO_LONG;
             }
-            keys.add(new String(keyBytes));
+            keys.add(Wal.keyString(keyBytes));
         }
 
         var timeoutBytes = data[data.length - 1];

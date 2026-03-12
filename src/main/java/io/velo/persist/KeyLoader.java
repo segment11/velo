@@ -980,7 +980,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
             keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (expireAt == CompressedValue.NO_EXPIRE || expireAt > currentTimeMillis) {
-                    var cv = CompressedValue.decode(valueBytes, key.getBytes(), keyHash);
+                    var cv = CompressedValue.decode(valueBytes, Wal.keyBytes(key), keyHash);
                     if (cv.isBigString()) {
                         list.add(new BigStringFiles.IdWithKey(cv.getBigStringMetaUuid(), bucketIndex, keyHash, key));
                     }
@@ -1013,13 +1013,14 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                         return;
                     }
 
-                    int length = 8 + 8 + 8 + 4 + key.length() + 4 + valueBytes.length;
+                    var keyBytes = Wal.keyBytes(key);
+                    int length = 8 + 8 + 8 + 4 + keyBytes.length + 4 + valueBytes.length;
                     slice.writeInt(length);
                     slice.writeLong(seq);
                     slice.writeLong(keyHash);
                     slice.writeLong(expireAt);
-                    slice.writeInt(key.length());
-                    slice.writeBytes(key.getBytes());
+                    slice.writeInt(keyBytes.length);
+                    slice.writeBytes(keyBytes);
                     slice.writeInt(valueBytes.length);
                     slice.writeBytes(valueBytes);
                 }
@@ -1049,7 +1050,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             var valueBytes = new byte[valueLength];
             slice.readBytes(valueBytes);
 
-            callBack.call(keyHash, expireAt, seq, new String(keyBytes), valueBytes);
+            callBack.call(keyHash, expireAt, seq, Wal.keyString(keyBytes), valueBytes);
         }
     }
 
@@ -1078,7 +1079,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
             keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
-                    var cv = CompressedValue.decode(valueBytes, key.getBytes(), keyHash);
+                    var cv = CompressedValue.decode(valueBytes, Wal.keyBytes(key), keyHash);
                     if (cv.isBigString()) {
                         KeyLoader.this.cvExpiredOrDeletedCallBack.handle(key, cv);
                         countArray[0]++;

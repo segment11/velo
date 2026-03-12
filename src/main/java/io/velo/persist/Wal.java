@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -27,6 +28,14 @@ import static io.velo.CompressedValue.NO_EXPIRE;
  * WAL supports separate storage for short and long values and can operate in pure memory mode.
  */
 public class Wal implements InMemoryEstimate {
+    public static byte[] keyBytes(String key) {
+        return key.getBytes(StandardCharsets.UTF_8);
+    }
+
+    public static String keyString(byte[] keyBytes) {
+        return new String(keyBytes, StandardCharsets.UTF_8);
+    }
+
     /**
      * Represents a single log entry in the WAL.
      * Each entry contains metadata about the key-value pair being logged, including sequence number,
@@ -34,6 +43,10 @@ public class Wal implements InMemoryEstimate {
      */
     public record V(long seq, int bucketIndex, long keyHash, long expireAt, int spType,
                     String key, byte[] cvEncoded, boolean isFromMerge) implements Comparable<V> {
+        public byte[] keyBytes() {
+            return Wal.keyBytes(key);
+        }
+
         /**
          * Checks if this log entry represents a deletion.
          *
@@ -75,7 +88,7 @@ public class Wal implements InMemoryEstimate {
          */
         public int persistLength() {
             // include key
-            return CompressedValue.KEY_HEADER_LENGTH + key.length() + cvEncoded.length;
+            return CompressedValue.KEY_HEADER_LENGTH + keyBytes().length + cvEncoded.length;
         }
 
         /**
@@ -102,7 +115,7 @@ public class Wal implements InMemoryEstimate {
          * @return the total encoded length of this log entry
          */
         public int encodeLength() {
-            int vLength = ENCODED_HEADER_LENGTH + key.length() + cvEncoded.length;
+            int vLength = ENCODED_HEADER_LENGTH + keyBytes().length + cvEncoded.length;
             return 4 + vLength;
         }
 
@@ -113,7 +126,8 @@ public class Wal implements InMemoryEstimate {
          * @return the byte array representation of this log entry
          */
         public byte[] encode(boolean isEndAppend0ForBreak) {
-            int vLength = ENCODED_HEADER_LENGTH + key.length() + cvEncoded.length;
+            var keyBytes = keyBytes();
+            int vLength = ENCODED_HEADER_LENGTH + keyBytes.length + cvEncoded.length;
             // 4 -> vLength
             var bytes = new byte[4 + vLength + (isEndAppend0ForBreak ? 4 : 0)];
             var buffer = ByteBuffer.wrap(bytes);
@@ -124,8 +138,8 @@ public class Wal implements InMemoryEstimate {
             buffer.putLong(keyHash);
             buffer.putLong(expireAt);
             buffer.putInt(spType);
-            buffer.putShort((short) key.length());
-            buffer.put(key.getBytes());
+            buffer.putShort((short) keyBytes.length);
+            buffer.put(keyBytes);
             buffer.putInt(cvEncoded.length);
             buffer.put(cvEncoded);
             if (isEndAppend0ForBreak) {
@@ -178,7 +192,7 @@ public class Wal implements InMemoryEstimate {
                 throw new IllegalStateException("Invalid length=" + vLength);
             }
 
-            return new V(seq, bucketIndex, keyHash, expireAt, spType, new String(keyBytes), cvEncoded, false);
+            return new V(seq, bucketIndex, keyHash, expireAt, spType, keyString(keyBytes), cvEncoded, false);
         }
 
         /**
@@ -999,7 +1013,7 @@ public class Wal implements InMemoryEstimate {
                 // check if is big string
                 var spType = CompressedValue.onlyReadSpType(v.cvEncoded);
                 if (spType == CompressedValue.SP_TYPE_BIG_STRING) {
-                    var cv = CompressedValue.decode(v.cvEncoded, v.key.getBytes(), v.keyHash);
+                    var cv = CompressedValue.decode(v.cvEncoded, v.keyBytes(), v.keyHash);
                     oneSlot.handleWhenCvExpiredOrDeleted(entry.getKey(), cv, null);
 
                     count++;

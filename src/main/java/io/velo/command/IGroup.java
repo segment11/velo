@@ -7,6 +7,7 @@ import io.velo.Debug;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.ingest.ParquetGroupToValue;
+import io.velo.persist.Wal;
 import io.velo.reply.*;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.example.data.Group;
@@ -401,7 +402,7 @@ public class IGroup extends BaseCommand {
             count++;
 
             if (count % 100 == 0) {
-                log.info("key={}, value bytes size={}", new String(keyBytes), valueBytes.length);
+                log.info("key={}, value bytes size={}", Wal.keyString(keyBytes), valueBytes.length);
             }
         }
 

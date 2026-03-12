@@ -186,16 +186,16 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         for (var v : list) {
             crcCalBuffer.putLong(v.keyHash());
 
-            var key = v.key();
-            assert key.length() <= Short.MAX_VALUE;
-            buffer.putShort((short) key.length());
-            buffer.put(key.getBytes());
+            var keyBytes = v.keyBytes();
+            assert keyBytes.length <= Short.MAX_VALUE;
+            buffer.putShort((short) keyBytes.length);
+            buffer.put(keyBytes);
             buffer.put(v.cvEncoded());
 
             int length = v.persistLength();
 
             var pvm = new PersistValueMeta();
-            pvm.key = key;
+            pvm.key = v.key();
             pvm.keyHash = v.keyHash();
             pvm.bucketIndex = v.bucketIndex();
             pvm.isFromMerge = v.isFromMerge();
@@ -286,7 +286,7 @@ public class SegmentBatch2 implements InSlotMetricCollector {
 
             var keyBytes = new byte[keyLength];
             nettyBuf.readBytes(keyBytes);
-            var key = new String(keyBytes);
+            var key = Wal.keyString(keyBytes);
 
             var cv = CompressedValue.decode(nettyBuf, keyBytes, 0);
             var persistLength = Wal.V.persistLength(keyLength, cv.encodedLength());

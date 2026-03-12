@@ -11,6 +11,7 @@ import io.velo.mock.ByPassGetSet;
 import io.velo.persist.KeyLoader;
 import io.velo.persist.LocalPersist;
 import io.velo.persist.OneSlot;
+import io.velo.persist.Wal;
 import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.incremental.XBigStrings;
 import io.velo.reply.Reply;
@@ -485,7 +486,31 @@ public abstract class BaseCommand {
      * @return the SlotWithKeyHash containing full positioning information
      */
     public static SlotWithKeyHash slot(byte[] keyBytes, int slotNumber) {
-        return slot(new String(keyBytes), slotNumber);
+        var rawKey = Wal.keyString(keyBytes);
+        var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
+
+        var keyHash = KeyHash.hash(keyBytes);
+        var bucketIndex = Math.abs(keyHash & (bucketsPerSlot - 1));
+
+        if (ConfForGlobal.clusterEnabled) {
+            var toClientSlot = JedisClusterCRC16.getSlot(keyBytes);
+            var innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot);
+            return new SlotWithKeyHash(innerSlot, (short) toClientSlot, (int) bucketIndex, keyHash, rawKey);
+        }
+
+        final int halfSlotNumber = slotNumber / 2;
+        final int x = halfSlotNumber * bucketsPerSlot;
+
+        var tagHash = tagHash(keyBytes);
+        if (tagHash != 0L) {
+            var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) & (halfSlotNumber - 1));
+            var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
+            return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, rawKey);
+        }
+
+        var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) & (halfSlotNumber - 1));
+        var slot = keyHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
+        return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, rawKey);
     }
 
     /**
@@ -496,33 +521,9 @@ public abstract class BaseCommand {
      * @return the SlotWithKeyHash containing full positioning information
      */
     public static SlotWithKeyHash slot(String key, int slotNumber) {
-        var keyBytes = key.getBytes();
-        var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
-
-        var keyHash = KeyHash.hash(keyBytes);
-        // bucket index always use xxhash 64
-        var bucketIndex = Math.abs(keyHash & (bucketsPerSlot - 1));
-
-        if (ConfForGlobal.clusterEnabled) {
-            // use crc16
-            var toClientSlot = JedisClusterCRC16.getSlot(keyBytes);
-            var innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot);
-            return new SlotWithKeyHash(innerSlot, (short) toClientSlot, (int) bucketIndex, keyHash, key);
-        }
-
-        final int halfSlotNumber = slotNumber / 2;
-        final int x = halfSlotNumber * bucketsPerSlot;
-
-        var tagHash = tagHash(keyBytes);
-        if (tagHash != 0L) {
-            var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) & (halfSlotNumber - 1));
-            var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-            return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, key);
-        }
-
-        var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) & (halfSlotNumber - 1));
-        var slot = keyHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-        return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, key);
+        // Keep the slot/hash logic single-sourced in the byte-based path.
+        // rawKey here is the UTF-8 reconstruction from that path, not the original String object.
+        return slot(Wal.keyBytes(key), slotNumber);
     }
 
     /**
@@ -605,7 +606,7 @@ public abstract class BaseCommand {
         }
 
         var cv = bufOrCompressedValue.cv() != null ? bufOrCompressedValue.cv() :
-                CompressedValue.decode(bufOrCompressedValue.buf(), key.getBytes(), s.keyHash());
+                CompressedValue.decode(bufOrCompressedValue.buf(), Wal.keyBytes(key), s.keyHash());
         if (cv.isExpired()) {
             return null;
         }

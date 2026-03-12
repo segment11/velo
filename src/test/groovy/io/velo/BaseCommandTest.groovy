@@ -110,6 +110,18 @@ class BaseCommandTest extends Specification {
         ConfForGlobal.slotNumber = 1
     }
 
+    def 'test slot from raw key bytes keeps original bytes for hash'() {
+        given:
+        ConfForSlot.global = ConfForSlot.from(1_000_000)
+        byte[] keyBytes = [(byte) 0xe4, (byte) 0xb8, (byte) 0xad, (byte) 0x00, (byte) 0xff] as byte[]
+
+        when:
+        def slotWithKeyHash = BaseCommand.slot(keyBytes, 16)
+
+        then:
+        slotWithKeyHash.keyHash() == KeyHash.hash(keyBytes)
+    }
+
     def 'test key index'() {
         expect:
         BaseCommand.KeyIndexBegin1.isKeyBytes(1)

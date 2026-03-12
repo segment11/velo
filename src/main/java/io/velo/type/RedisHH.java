@@ -2,6 +2,7 @@ package io.velo.type;
 
 import com.github.luben.zstd.Zstd;
 import io.velo.*;
+import io.velo.persist.Wal;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -76,8 +77,9 @@ public class RedisHH {
      * @throws IllegalArgumentException if the key or value length exceeds the maximum allowed length
      */
     public void put(@NotNull String key, byte[] value, @Nullable Long expireAt) {
-        if (key.length() > CompressedValue.KEY_MAX_LENGTH) {
-            throw new IllegalArgumentException("Key length too long, key length=" + key.length());
+        var keyBytes = Wal.keyBytes(key);
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            throw new IllegalArgumentException("Key length too long, key length=" + keyBytes.length);
         }
         if (value.length > CompressedValue.VALUE_MAX_LENGTH) {
             throw new IllegalArgumentException("Value length too long, value length=" + value.length);
@@ -170,7 +172,7 @@ public class RedisHH {
             // key / value length use 2 bytes, expire at milliseconds use 8 bytes
             var key = entry.getKey();
             var value = entry.getValue();
-            bodyBytesLength += 8 + 2 + key.getBytes().length + 4 + value.length;
+            bodyBytesLength += 8 + 2 + Wal.keyBytes(key).length + 4 + value.length;
         }
 
         short size = (short) map.size();
@@ -187,8 +189,9 @@ public class RedisHH {
             var value = entry.getValue();
             var expireAt = mapExpireAt.get(key);
             buffer.putLong(expireAt == null ? CompressedValue.NO_EXPIRE : expireAt);
-            buffer.putShort((short) key.getBytes().length);
-            buffer.put(key.getBytes());
+            var keyBytes = Wal.keyBytes(key);
+            buffer.putShort((short) keyBytes.length);
+            buffer.put(keyBytes);
             buffer.putInt(value.length);
             buffer.put(value);
         }
@@ -364,7 +367,7 @@ public class RedisHH {
 
             var valueBytes = new byte[valueLength];
             buffer.get(valueBytes);
-            if (callback.onField(new String(keyBytes), valueBytes, expireAt)) {
+            if (callback.onField(Wal.keyString(keyBytes), valueBytes, expireAt)) {
                 break;
             }
         }

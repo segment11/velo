@@ -7,6 +7,7 @@ import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
+import io.velo.persist.Wal;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 import redis.clients.jedis.DefaultJedisClientConfig;
@@ -409,7 +410,7 @@ public class MGroup extends BaseCommand {
                     continue;
                 }
                 long expireAt = cv.getExpireAt();
-                var result = jedisTo.restore(key.getBytes(), expireAt, dumpBytes, restoreParams);
+                var result = jedisTo.restore(Wal.keyBytes(key), expireAt, dumpBytes, restoreParams);
                 if (!result.equals("OK")) {
                     log.warn("Migrate error={}, key={}", result, key);
                     continue;
@@ -476,7 +477,7 @@ public class MGroup extends BaseCommand {
                         for (var d : p.getResult()) {
                             var one = list.get(d.index);
                             var key = one.slotWithKeyHash.rawKey();
-                            var result = jedisTo.restore(key.getBytes(), d.expireAt, d.dumpBytes, restoreParams);
+                            var result = jedisTo.restore(Wal.keyBytes(key), d.expireAt, d.dumpBytes, restoreParams);
                             if (!result.equals("OK")) {
                                 log.warn("Migrate error={}, key={}", result, key);
                                 continue;

@@ -1311,11 +1311,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
                         var toFetchBigStringId = replPair.doingFetchBigStringId();
                         if (toFetchBigStringId != null) {
-                            var bytes = new byte[8 + 4 + toFetchBigStringId.key().length()];
+                            var keyBytes = Wal.keyBytes(toFetchBigStringId.key());
+                            var bytes = new byte[8 + 4 + keyBytes.length];
                             var buffer = ByteBuffer.wrap(bytes);
                             buffer.putLong(toFetchBigStringId.uuid());
-                            buffer.putInt(toFetchBigStringId.key().length());
-                            buffer.put(toFetchBigStringId.key().getBytes());
+                            buffer.putInt(keyBytes.length);
+                            buffer.put(keyBytes);
                             replPair.write(ReplType.incremental_big_string, new RawBytesContent(bytes));
                             log.info("Repl do fetch incremental big string, to server={}, uuid={}, key={}, slot={}",
                                     replPair.getHostAndPort(), toFetchBigStringId.uuid(), toFetchBigStringId.key(), slot);
@@ -1443,7 +1444,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             kvLRUHitTotal++;
             kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
 
-            var cv = CompressedValue.decode(cvEncodedBytesFromLRU, key.getBytes(), keyHash);
+            var cv = CompressedValue.decode(cvEncodedBytesFromLRU, Wal.keyBytes(key), keyHash);
             return cv.getExpireAt();
         }
 
@@ -1560,12 +1561,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var keyBytesRead = new byte[keyLength];
         nettyBuf.readBytes(keyBytesRead);
 
-        if (!Arrays.equals(keyBytesRead, key.getBytes())) {
-            throw new IllegalStateException("Key not match, key=" + key + ", key persisted=" + new String(keyBytesRead));
+        var keyBytes = Wal.keyBytes(key);
+        if (!Arrays.equals(keyBytesRead, keyBytes)) {
+            throw new IllegalStateException("Key not match, key=" + key + ", key persisted=" + Wal.keyString(keyBytesRead));
         }
 
         // set to lru cache, just target bytes
-        var cv = CompressedValue.decode(nettyBuf, key.getBytes(), keyHash);
+        var cv = CompressedValue.decode(nettyBuf, keyBytes, keyHash);
         lru.put(key, cv.encode());
 
         return new BufOrCompressedValue(null, cv);
@@ -1772,7 +1774,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         } else {
             var cvEncodedLength = cv.encodedLength();
-            var persistLength = Wal.V.persistLength(key.length(), cvEncodedLength);
+            var persistLength = Wal.V.persistLength(Wal.keyBytes(key).length, cvEncodedLength);
             boolean isPersistLengthOverSegmentLength = persistLength + SEGMENT_HEADER_LENGTH > chunkSegmentLength;
 
             // for big string, use single file

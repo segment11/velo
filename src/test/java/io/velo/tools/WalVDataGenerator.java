@@ -49,7 +49,7 @@ public interface WalVDataGenerator {
         var beginT = System.currentTimeMillis();
         for (long i = 0; i < n; i++) {
             var key = key(i, keyLength, keyPrefix);
-            var keyHash = KeyHash.hash(key.getBytes());
+            var keyHash = KeyHash.hash(Wal.keyBytes(key));
             var bucketIndex = KeyHash.bucketIndex(keyHash);
             list.add(keyToV(nextId(), bucketIndex, key, keyHash));
         }

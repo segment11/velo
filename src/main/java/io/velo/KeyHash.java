@@ -1,9 +1,12 @@
 package io.velo;
 
+import io.velo.persist.Wal;
 import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHash64;
 import net.jpountz.xxhash.XXHashFactory;
 import org.jetbrains.annotations.TestOnly;
+
+import java.nio.charset.StandardCharsets;
 
 /**
  * Provides utility methods for hashing keys using XXHash algorithms.
@@ -59,10 +62,11 @@ public class KeyHash {
                 var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
                 // xh!123_key1, xh!123_key2, xh!123_key3 means different key hash but in bucket index 123
-                var key = new String(keyBytes);
+                var key = Wal.keyString(keyBytes);
                 var index_ = key.indexOf("_");
                 var rawKey = key.substring(index_ + 1);
-                var rawKeyHash = xxHash64Java.hash(rawKey.getBytes(), 0, rawKey.length(), seed);
+                var rawKeyBytes = rawKey.getBytes(StandardCharsets.UTF_8);
+                var rawKeyHash = xxHash64Java.hash(rawKeyBytes, 0, rawKeyBytes.length, seed);
 
                 var expectedBucketIndex = Integer.parseInt(key.substring(fixedPrefixKeyBytesForTest.length, index_));
                 var mod = rawKeyHash & (bucketsPerSlot - 1);

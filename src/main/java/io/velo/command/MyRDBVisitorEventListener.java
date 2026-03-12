@@ -7,6 +7,7 @@ import com.moilioncircle.redis.replicator.rdb.datatype.ExpiredType;
 import com.moilioncircle.redis.replicator.rdb.iterable.datatype.*;
 import io.velo.DictMap;
 import io.velo.persist.LocalPersist;
+import io.velo.persist.Wal;
 import io.velo.type.RedisHH;
 import io.velo.type.RedisHashKeys;
 import io.velo.type.RedisList;
@@ -39,7 +40,7 @@ public class MyRDBVisitorEventListener implements EventListener {
             }
 
             var keyBytes = (byte[]) kv.getKey();
-            var key = new String(keyBytes);
+            var key = Wal.keyString(keyBytes);
             var slotWithKeyHash = lGroup.slot(key);
             var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
 
@@ -59,7 +60,7 @@ public class MyRDBVisitorEventListener implements EventListener {
                 if (hGroup.isUseHH(keyBytes)) {
                     var rhh = new RedisHH();
                     for (var entry : h.getValue().entrySet()) {
-                        rhh.put(new String(entry.getKey()), entry.getValue());
+                        rhh.put(Wal.keyString(entry.getKey()), entry.getValue());
                     }
 
                     oneSlot.asyncExecute(() -> {
@@ -68,7 +69,7 @@ public class MyRDBVisitorEventListener implements EventListener {
                 } else {
                     var rhk = new RedisHashKeys();
                     for (var entry : h.getValue().entrySet()) {
-                        var field = new String(entry.getKey());
+                        var field = Wal.keyString(entry.getKey());
                         var fieldKey = RedisHashKeys.fieldKey(key, field);
 
                         var slotWithKeyHashThisField = lGroup.slot(fieldKey);
@@ -85,7 +86,7 @@ public class MyRDBVisitorEventListener implements EventListener {
                     var rhh = new RedisHH();
                     for (var entry : h.getValue().entrySet()) {
                         var ttlValue = entry.getValue();
-                        rhh.put(new String(entry.getKey()), ttlValue.getValue(), ttlValue.getExpires());
+                        rhh.put(Wal.keyString(entry.getKey()), ttlValue.getValue(), ttlValue.getExpires());
                     }
 
                     oneSlot.asyncExecute(() -> {
@@ -94,7 +95,7 @@ public class MyRDBVisitorEventListener implements EventListener {
                 } else {
                     var rhk = new RedisHashKeys();
                     for (var entry : h.getValue().entrySet()) {
-                        var field = new String(entry.getKey());
+                        var field = Wal.keyString(entry.getKey());
                         var fieldKey = RedisHashKeys.fieldKey(key, field);
 
                         var slotWithKeyHashThisField = lGroup.slot(fieldKey);

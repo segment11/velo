@@ -8,6 +8,7 @@ import io.velo.*;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.persist.KeyLoader;
 import io.velo.persist.ScanCursor;
+import io.velo.persist.Wal;
 import io.velo.repl.LeaderSelector;
 import io.velo.reply.*;
 import io.velo.type.RedisBitSet;
@@ -583,7 +584,7 @@ public class SGroup extends BaseCommand {
             // check if not string type
             if (isOldExist && isReturnExist) {
                 if (!cv.isTypeString()) {
-                    log.debug("Key {} is not string type", new String(keyBytes));
+                    log.debug("Key {} is not string type", Wal.keyString(keyBytes));
                     return ErrorReply.NOT_STRING;
                 }
             }

@@ -5,6 +5,7 @@ import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
 import io.velo.KeyHash;
 import io.velo.persist.LocalPersist;
+import io.velo.persist.Wal;
 import io.velo.repl.BinlogContent;
 import io.velo.repl.ReplPair;
 
@@ -104,7 +105,7 @@ public class XBigStrings implements BinlogContent {
         // 1 byte for type, 4 bytes for encoded length for check
         // 8 bytes for uuid, 4 bytes for bucket index, 8 bytes for key hash, 2 bytes for key length, key bytes
         // 4 bytes for cvEncoded length, cvEncoded bytes
-        return 1 + 4 + 8 + 4 + 8 + 2 + key.length() + 4 + cvEncoded.length;
+        return 1 + 4 + 8 + 4 + 8 + 2 + Wal.keyBytes(key).length + 4 + cvEncoded.length;
     }
 
     /**
@@ -114,6 +115,7 @@ public class XBigStrings implements BinlogContent {
      */
     @Override
     public byte[] encodeWithType() {
+        var keyBytes = Wal.keyBytes(key);
         var bytes = new byte[encodedLength()];
         var buffer = ByteBuffer.wrap(bytes);
 
@@ -122,8 +124,8 @@ public class XBigStrings implements BinlogContent {
         buffer.putLong(uuid);
         buffer.putInt(bucketIndex);
         buffer.putLong(keyHash);
-        buffer.putShort((short) key.length());
-        buffer.put(key.getBytes());
+        buffer.putShort((short) keyBytes.length);
+        buffer.put(keyBytes);
         buffer.putInt(cvEncoded.length);
         buffer.put(cvEncoded);
 
@@ -152,7 +154,7 @@ public class XBigStrings implements BinlogContent {
 
         var keyBytes = new byte[keyLength];
         buffer.get(keyBytes);
-        var key = new String(keyBytes);
+        var key = Wal.keyString(keyBytes);
 
         var cvEncodedLength = buffer.getInt();
         var cvEncoded = new byte[cvEncodedLength];
@@ -176,8 +178,9 @@ public class XBigStrings implements BinlogContent {
      */
     @Override
     public void apply(short slot, ReplPair replPair) {
-        var keyHash = KeyHash.hash(key.getBytes());
-        var cv = CompressedValue.decode(cvEncoded, key.getBytes(), keyHash);
+        var keyBytes = Wal.keyBytes(key);
+        var keyHash = KeyHash.hash(keyBytes);
+        var cv = CompressedValue.decode(cvEncoded, keyBytes, keyHash);
 
         var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
         var oneSlot = localPersist.oneSlot(s.slot());

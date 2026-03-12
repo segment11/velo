@@ -19,6 +19,8 @@ class WalTest extends Specification {
         a < b
         b == bb
         b > a
+        Wal.keyBytes('aaa') == 'aaa'.bytes
+        Wal.keyString('aaa'.bytes) == 'aaa'
 
         when:
         byte[] encoded = [CompressedValue.SP_FLAG_DELETE_TMP]
@@ -37,6 +39,24 @@ class WalTest extends Specification {
         def vNotExpired = new Wal.V(1, 0, 0, System.currentTimeMillis() + 1000, 0, 'a', 'a'.bytes, true)
         then:
         !vNotExpired.isExpired()
+    }
+
+    def 'test wal v encode decode with multibyte key'() {
+        given:
+        def key = '中'
+        def keyBytes = key.getBytes('UTF-8')
+        def cv = new CompressedValue()
+        cv.seq = 1L
+        cv.keyHash = KeyHash.hash(keyBytes)
+        cv.compressedData = 'value'.bytes
+        def v = new Wal.V(1L, 0, cv.keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, cv.encode(), false)
+
+        when:
+        def decoded = Wal.V.decode(new DataInputStream(new ByteArrayInputStream(v.encode(false))))
+
+        then:
+        decoded.key() == key
     }
 
     def 'put and get'() {

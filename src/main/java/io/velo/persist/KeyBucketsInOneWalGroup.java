@@ -338,7 +338,7 @@ public class KeyBucketsInOneWalGroup {
 
     private void cvExpiredOrDeleted(String key, byte[] valueBytes) {
         if (!PersistValueMeta.isPvm(valueBytes)) {
-            var shortStringCv = CompressedValue.decode(valueBytes, key.getBytes(), 0L);
+            var shortStringCv = CompressedValue.decode(valueBytes, Wal.keyBytes(key), 0L);
             keyLoader.cvExpiredOrDeletedCallBack.handle(key, shortStringCv);
         } else {
             var pvm = PersistValueMeta.decode(valueBytes);

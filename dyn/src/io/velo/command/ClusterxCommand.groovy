@@ -6,6 +6,7 @@ import io.activej.common.function.SupplierEx
 import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.ConfForGlobal
+import io.velo.persist.Wal
 import io.velo.repl.LeaderSelector
 import io.velo.repl.ReplPair
 import io.velo.repl.cluster.MultiShard
@@ -405,7 +406,7 @@ migrating_state:ok
 
         def f = localPersist.indexHandlerPool.keyAnalysisHandler.filterKeys(null, count,
                 key -> {
-                    JedisClusterCRC16.getSlot(key.bytes) == toClientSlot
+                    JedisClusterCRC16.getSlot(Wal.keyBytes(key)) == toClientSlot
                 },
                 valueBytesAsInt -> {
                     true

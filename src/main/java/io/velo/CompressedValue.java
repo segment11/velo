@@ -3,6 +3,7 @@ package io.velo;
 import com.github.luben.zstd.Zstd;
 import io.activej.bytebuf.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.velo.persist.Wal;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -880,8 +881,8 @@ public class CompressedValue {
 
             // why ? todo: check
             log.warn("Key hash not match, key={}, seq={}, compressedLength={}, keyHash={}, persisted keyHash={}",
-                    new String(keyBytes), cv.seq, compressedLength, keyHash, cv.keyHash);
-            throw new IllegalStateException("Key hash not match, key=" + new String(keyBytes) +
+                    Wal.keyString(keyBytes), cv.seq, compressedLength, keyHash, cv.keyHash);
+            throw new IllegalStateException("Key hash not match, key=" + Wal.keyString(keyBytes) +
                     ", seq=" + cv.seq +
                     ", compressedLength=" + compressedLength +
                     ", keyHash=" + keyHash +

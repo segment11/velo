@@ -6,6 +6,7 @@ import com.moilioncircle.redis.replicator.rdb.iterable.ValueIterableEventListene
 import com.moilioncircle.redis.replicator.rdb.iterable.ValueIterableRdbVisitor;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.*;
+import io.velo.persist.Wal;
 import io.velo.reply.*;
 import io.velo.type.RedisList;
 
@@ -583,7 +584,7 @@ public class LGroup extends BaseCommand {
             }
         }
 
-        var key = new String(keyBytes);
+        var key = Wal.keyString(keyBytes);
         var afterPopValueBytesArray = BlockingList.setReplyIfBlockingListExist(key, addFirst, valueBytesArr, this);
         // no blocking for this key
         if (afterPopValueBytesArray == null) {

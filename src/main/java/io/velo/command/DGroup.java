@@ -8,6 +8,7 @@ import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
 import io.velo.persist.OneSlot;
+import io.velo.persist.Wal;
 import io.velo.rdb.RDBParser;
 import io.velo.reply.*;
 import io.velo.type.RedisHH;
@@ -325,7 +326,7 @@ public class DGroup extends BaseCommand {
         int checkPrefixLength = RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX.length;
         if (key.length() > checkPrefixLength) {
             // check prefix match
-            if (Arrays.equals(key.getBytes(), 0, checkPrefixLength,
+            if (Arrays.equals(Wal.keyBytes(key), 0, checkPrefixLength,
                     RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX, 0, checkPrefixLength)) {
                 return false;
             }

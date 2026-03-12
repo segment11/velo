@@ -1,6 +1,7 @@
 package io.velo.persist
 
 import io.velo.CompressedValue
+import io.velo.ConfForSlot
 import io.velo.SnowFlake
 import spock.lang.Specification
 
@@ -106,5 +107,33 @@ class SegmentBatch2Test extends Specification {
         SegmentBatch2.readToCvList(cvList2, first2.segmentBytes(), 0, 4096, 0, (short) 0)
         then:
         cvList2.size() == 67
+    }
+
+    def 'test segment encode and decode with multibyte key'() {
+        given:
+        ConfForSlot.global = ConfForSlot.debugMode
+        def snowFlake = new SnowFlake(1, 1)
+        def segmentBatch2 = new SegmentBatch2(snowFlake)
+        def key = '中'
+        def keyBytes = key.getBytes('UTF-8')
+        def keyHash = io.velo.KeyHash.hash(keyBytes)
+        def cv = new CompressedValue()
+        cv.seq = 1L
+        cv.keyHash = keyHash
+        cv.dictSeqOrSpType = 1
+        cv.compressedData = new byte[10]
+        def list = [new Wal.V(1L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, cv.encode(), false)] as ArrayList<Wal.V>
+        ArrayList<PersistValueMeta> returnPvmList = []
+
+        when:
+        def r = segmentBatch2.split(list, returnPvmList)
+        def loadedKeys = []
+        SegmentBatch2.iterateFromSegmentBytes(r[0].segmentBytes(), { loadedKey, loadedCv, offsetInThisSegment ->
+            loadedKeys << loadedKey
+        })
+
+        then:
+        loadedKeys == [key]
     }
 }

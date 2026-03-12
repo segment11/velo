@@ -556,7 +556,7 @@ public class XGroup extends BaseCommand {
                 HashMap<Short, HashMap<String, Wal.V>> groupedBySlot = new HashMap<>();
                 HashMap<Short, HashMap<String, Wal.V>> groupedShortValueBySlot = new HashMap<>();
                 firstWal.fromMasterExistsOneWalGroupBytes(contentBytes, ((isShortValue, key, v) -> {
-                    var keyHash = KeyHash.hash(key.getBytes());
+                    var keyHash = KeyHash.hash(Wal.keyBytes(key));
                     var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
                     if (isShortValue) {
                         groupedShortValueBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, v);
@@ -707,7 +707,7 @@ public class XGroup extends BaseCommand {
                             return;
                         }
 
-                        var keyHash = KeyHash.hash(key.getBytes());
+                        var keyHash = KeyHash.hash(Wal.keyBytes(key));
                         var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
                         groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
                     });
@@ -718,7 +718,7 @@ public class XGroup extends BaseCommand {
                         return;
                     }
 
-                    var keyHash = KeyHash.hash(key.getBytes());
+                    var keyHash = KeyHash.hash(Wal.keyBytes(key));
                     var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
                     groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
                 });
@@ -771,7 +771,7 @@ public class XGroup extends BaseCommand {
         var kenLength = buffer.getInt();
         var keyBytes = new byte[kenLength];
         buffer.get(keyBytes);
-        var key = new String(keyBytes);
+        var key = Wal.keyString(keyBytes);
 
         log.warn("Repl master fetch incremental big string, uuid={}, key={}, slot={}", uuid, key, slot);
 
@@ -805,7 +805,7 @@ public class XGroup extends BaseCommand {
         var kenLength = buffer.getInt();
         var keyBytes = new byte[kenLength];
         buffer.get(keyBytes);
-        var key = new String(keyBytes);
+        var key = Wal.keyString(keyBytes);
 
         // master big string file already deleted, skip
         if (buffer.hasRemaining()) {
@@ -984,7 +984,7 @@ public class XGroup extends BaseCommand {
         HashMap<Short, HashMap<String, CompressedValue>> groupedBySlot = new HashMap<>();
         KeyLoader.decodeShortStringListFromBuf(slice, (keyHash, expireAt, seq, key, valueBytes) -> {
             var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
-            var cv = CompressedValue.decode(valueBytes, key.getBytes(), keyHash);
+            var cv = CompressedValue.decode(valueBytes, Wal.keyBytes(key), keyHash);
             groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
         });
 

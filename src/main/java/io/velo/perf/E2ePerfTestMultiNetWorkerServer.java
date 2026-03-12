@@ -29,6 +29,7 @@ import io.activej.worker.annotation.WorkerId;
 import io.velo.BaseCommand;
 import io.velo.decode.Request;
 import io.velo.decode.RequestDecoder;
+import io.velo.persist.Wal;
 import io.velo.reply.BulkReply;
 import io.velo.reply.NilReply;
 import io.velo.reply.OKReply;
@@ -321,7 +322,7 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
 
                     if (isUseThreadLocalMap) {
                         var map0 = threadLocalMap();
-                        map0.put(new String(keyBytes), request.getData()[2]);
+                        map0.put(Wal.keyString(keyBytes), request.getData()[2]);
                         return Promise.of(OKReply.INSTANCE.buffer());
                     }
 
@@ -330,11 +331,11 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
                     var targetEventloop = netWorkerEventloopArray[s.slot()];
                     var currentThreadId = Thread.currentThread().threadId();
                     if (targetEventloop.getEventloopThread().threadId() == currentThreadId) {
-                        map.put(new String(keyBytes), request.getData()[2]);
+                        map.put(Wal.keyString(keyBytes), request.getData()[2]);
                         return Promise.of(OKReply.INSTANCE.buffer());
                     } else {
                         return Promise.ofFuture(targetEventloop.submit(AsyncComputation.of(() -> {
-                            map.put(new String(keyBytes), request.getData()[2]);
+                            map.put(Wal.keyString(keyBytes), request.getData()[2]);
                             return OKReply.INSTANCE.buffer();
                         })));
                     }
@@ -346,7 +347,7 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
 
                     if (isUseThreadLocalMap) {
                         var map0 = threadLocalMap();
-                        var value = map0.get(new String(keyBytes));
+                        var value = map0.get(Wal.keyString(keyBytes));
                         return Promise.of(value == null ? NilReply.INSTANCE.buffer() : new BulkReply(value).buffer());
                     }
 
@@ -355,11 +356,11 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
                     var targetEventloop = netWorkerEventloopArray[s.slot()];
                     var currentThreadId = Thread.currentThread().threadId();
                     if (targetEventloop.getEventloopThread().threadId() == currentThreadId) {
-                        var value = map.get(new String(keyBytes));
+                        var value = map.get(Wal.keyString(keyBytes));
                         return Promise.of(value == null ? NilReply.INSTANCE.buffer() : new BulkReply(value).buffer());
                     } else {
                         return Promise.ofFuture(targetEventloop.submit(AsyncComputation.of(() -> {
-                            var value = map.get(new String(keyBytes));
+                            var value = map.get(Wal.keyString(keyBytes));
                             return value == null ? NilReply.INSTANCE.buffer() : new BulkReply(value).buffer();
                         })));
                     }

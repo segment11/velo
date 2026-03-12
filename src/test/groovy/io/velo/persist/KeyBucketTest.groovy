@@ -207,6 +207,23 @@ class KeyBucketTest extends Specification {
         keyBucket.getValueXByKey(longKey, 9797L) == null
     }
 
+    def 'key bucket put and get with multibyte key'() {
+        given:
+        def snowFlake = new SnowFlake(1, 1)
+        def keyBucket = new KeyBucket(slot, 0, (byte) 0, (byte) 1, null, snowFlake)
+        def key = '中'
+        def keyBytes = key.getBytes('UTF-8')
+        def keyHash = KeyHash.hash(keyBytes)
+
+        when:
+        def result = keyBucket.put(key, keyHash, 0L, 1L, 'value'.bytes)
+        def value = keyBucket.getValueXByKey(key, keyHash)
+
+        then:
+        result.isPut()
+        value.valueBytes() == 'value'.bytes
+    }
+
     def 'test last update seq'() {
         given:
         def snowFlake = new SnowFlake(1, 1)

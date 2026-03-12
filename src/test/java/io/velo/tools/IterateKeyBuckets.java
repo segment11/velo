@@ -103,7 +103,7 @@ public class IterateKeyBuckets {
                 int finalI = i;
                 HashMap<String, byte[]> finalMap = map;
                 keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
-//                    System.out.println("key=" + new String(keyBytes) + ", key hash=" + keyHash);
+//                    System.out.println("key=" + key + ", key hash=" + keyHash);
                     var bucketIndexExpect = KeyHash.bucketIndex(keyHash);
                     if (bucketIndexExpect != finalI) {
                         System.out.println("bucket index expect=" + bucketIndexExpect + ", bucket index=" + finalI);

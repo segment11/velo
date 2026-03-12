@@ -256,7 +256,7 @@ public class RGroup extends BaseCommand {
         var ttlBytes = data[2];
         var serializedValue = data[3];
 
-        var key = new String(keyBytes);
+        var key = Wal.keyString(keyBytes);
         var ttl = new String(ttlBytes);
 
         // for debug
@@ -368,7 +368,7 @@ public class RGroup extends BaseCommand {
                             rhk.add(field);
                         }
 
-                        hGroup.saveRedisHashKeys(rhk, new String(keyBytes));
+                        hGroup.saveRedisHashKeys(rhk, Wal.keyString(keyBytes));
                     }
                 }
             });

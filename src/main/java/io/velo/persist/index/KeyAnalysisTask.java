@@ -1,7 +1,7 @@
 package io.velo.persist.index;
 
 import io.activej.config.Config;
-import io.velo.ConfForGlobal;
+import io.velo.persist.Wal;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -119,7 +119,7 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
         int count = 0;
         assert iterator != null;
         while (iterator.isValid() && count < onceIterateKeyCount) {
-            var key = new String(iterator.key());
+            var key = Wal.keyString(iterator.key());
 
             if (key.length() >= groupByMinLengthForKey) {
                 for (int length = groupByMinLengthForKey; length <= groupByMaxLengthForKey; length++) {

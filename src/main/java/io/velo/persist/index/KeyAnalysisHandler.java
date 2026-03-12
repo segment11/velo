@@ -5,6 +5,7 @@ import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.velo.ConfForGlobal;
 import io.velo.NeedCleanUp;
+import io.velo.persist.Wal;
 import io.velo.metric.SimpleGauge;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
@@ -265,7 +266,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                 boolean isValueMatch = true;
 
                 var keyBytes = iterator.key();
-                var key = new String(keyBytes);
+                var key = Wal.keyString(keyBytes);
 
                 if (keyFilter != null) {
                     isKeyMatch = keyFilter.test(key);
@@ -298,7 +299,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
             while (iterator.isValid() && result.size() < maxCount) {
                 var keyBytes = iterator.key();
-                var key = new String(keyBytes);
+                var key = Wal.keyString(keyBytes);
                 if (key.startsWith(prefix)) {
                     if (pattern.matcher(key).matches()) {
                         result.add(key);

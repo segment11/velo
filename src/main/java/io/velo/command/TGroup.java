@@ -3,6 +3,7 @@ package io.velo.command;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
+import io.velo.persist.Wal;
 import io.velo.reply.*;
 import io.velo.type.RedisHashKeys;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -82,7 +83,7 @@ public class TGroup extends BaseCommand {
         var cv = getCv(slotWithKeyHash);
         if (cv == null) {
             // hash keys changed
-            var keysKey = RedisHashKeys.keysKey(new String(keyBytes));
+            var keysKey = RedisHashKeys.keysKey(Wal.keyString(keyBytes));
             cv = getCv(slot(keysKey));
 
             if (cv == null) {

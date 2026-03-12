@@ -287,7 +287,7 @@ public class KeyBucket {
         }
     }
 
-    private record KeyAndValueBytes(String key, byte[] valueBytes) {
+    private record KeyAndValueBytes(byte[] keyBytes, String key, byte[] valueBytes) {
     }
 
     /**
@@ -315,7 +315,7 @@ public class KeyBucket {
         var valueBytes = new byte[valueLength];
         buffer.get(valueBytes);
 
-        return new KeyAndValueBytes(new String(keyBytes), valueBytes);
+        return new KeyAndValueBytes(keyBytes, Wal.keyString(keyBytes), valueBytes);
     }
 
     /**
@@ -449,7 +449,7 @@ public class KeyBucket {
         if (cvExpiredOrDeletedCallBack != null) {
             var kvBytes = kvBytesAlreadyGet == null ? getFromOneCell(i) : kvBytesAlreadyGet;
             if (!PersistValueMeta.isPvm(kvBytes.valueBytes)) {
-                var shortStringCv = CompressedValue.decode(kvBytes.valueBytes, kvBytes.key.getBytes(), 0L);
+                var shortStringCv = CompressedValue.decode(kvBytes.valueBytes, kvBytes.keyBytes, 0L);
                 cvExpiredOrDeletedCallBack.handle(kvBytes.key, shortStringCv);
             } else {
                 var pvm = PersistValueMeta.decode(kvBytes.valueBytes);
@@ -573,9 +573,10 @@ public class KeyBucket {
             throw new IllegalArgumentException("Value bytes too large, value length=" + valueBytes.length);
         }
 
-        int cellCount = KVMeta.calcCellCount((short) key.length(), (byte) valueBytes.length);
+        var keyBytes = Wal.keyBytes(key);
+        int cellCount = KVMeta.calcCellCount((short) keyBytes.length, (byte) valueBytes.length);
         if (cellCount >= INIT_CAPACITY) {
-            throw new IllegalArgumentException("Key with value bytes too large, key length=" + key.length()
+            throw new IllegalArgumentException("Key with value bytes too large, key length=" + keyBytes.length
                     + ", value length=" + valueBytes.length);
         }
 
@@ -585,7 +586,7 @@ public class KeyBucket {
         boolean isUpdate = false;
         int putToCellIndex = -1;
         for (int i = 0; i < capacity; i++) {
-            var canPutResult = canPut(key, keyHash, i, cellCount);
+            var canPutResult = canPut(keyBytes, keyHash, i, cellCount);
             if (canPutResult.flag) {
                 putToCellIndex = i;
                 isUpdate = isExists;
@@ -604,7 +605,7 @@ public class KeyBucket {
             return new DoPutResult(false, false);
         }
 
-        putTo(putToCellIndex, cellCount, keyHash, expireAt, seq, key, valueBytes);
+        putTo(putToCellIndex, cellCount, keyHash, expireAt, seq, key, keyBytes, valueBytes);
         size++;
         cellCost += (short) cellCount;
 
@@ -636,8 +637,9 @@ public class KeyBucket {
 
         int putToCellIndex = 0;
         for (var pvm : tmpList) {
-            var cellCount = KVMeta.calcCellCount((short) pvm.key.length(), (byte) pvm.extendBytes.length);
-            putTo(putToCellIndex, cellCount, pvm.keyHash, pvm.expireAt, pvm.seq, pvm.key, pvm.extendBytes);
+            var keyBytes = Wal.keyBytes(pvm.key);
+            var cellCount = KVMeta.calcCellCount((short) keyBytes.length, (byte) pvm.extendBytes.length);
+            putTo(putToCellIndex, cellCount, pvm.keyHash, pvm.expireAt, pvm.seq, pvm.key, keyBytes, pvm.extendBytes);
             putToCellIndex += cellCount;
         }
     }
@@ -653,7 +655,7 @@ public class KeyBucket {
      * @param key            the key.
      * @param valueBytes     the byte array of the value.
      */
-    private void putTo(int putToCellIndex, int cellCount, long keyHash, long expireAt, long seq, String key, byte[] valueBytes) {
+    private void putTo(int putToCellIndex, int cellCount, long keyHash, long expireAt, long seq, String key, byte[] keyBytes, byte[] valueBytes) {
         int metaIndex = metaIndex(putToCellIndex);
         buffer.putLong(metaIndex, keyHash);
         buffer.putLong(metaIndex + HASH_VALUE_LENGTH, expireAt);
@@ -685,8 +687,8 @@ public class KeyBucket {
 
         var cellOffset = oneCellOffset(putToCellIndex);
         buffer.position(cellOffset);
-        buffer.putShort((short) key.length());
-        buffer.put(key.getBytes());
+        buffer.putShort((short) keyBytes.length);
+        buffer.put(keyBytes);
         // number or short value or pvm, 1 byte is enough
         buffer.put((byte) valueBytes.length);
         buffer.put(valueBytes);
@@ -701,7 +703,7 @@ public class KeyBucket {
      * @param cellCount the number of cells required for storing the key-value pair.
      * @return a CanPutResult object indicating whether the key-value pair can be put and if it's an update.
      */
-    private CanPutResult canPut(String key, long keyHash, int cellIndex, int cellCount) {
+    private CanPutResult canPut(byte[] keyBytes, long keyHash, int cellIndex, int cellCount) {
         int metaIndex = metaIndex(cellIndex);
         var cellHashValue = buffer.getLong(metaIndex);
         var expireAt = buffer.getLong(metaIndex + HASH_VALUE_LENGTH);
@@ -715,14 +717,14 @@ public class KeyBucket {
             if (expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis()) {
                 clearOneExpiredOrDeleted(cellIndex);
                 // check again
-                return canPut(key, keyHash, cellIndex, cellCount);
+                return canPut(keyBytes, keyHash, cellIndex, cellCount);
             }
 
             if (cellHashValue != keyHash) {
                 return new CanPutResult(false, false);
             }
 
-            var matchMeta = keyMatch(key.getBytes(), oneCellOffset(cellIndex));
+            var matchMeta = keyMatch(keyBytes, oneCellOffset(cellIndex));
             if (matchMeta != null) {
                 // update
                 // never happen here, because before put, always delete target key first
@@ -822,7 +824,7 @@ public class KeyBucket {
         var expireAt = buffer.getLong(metaIndex + HASH_VALUE_LENGTH);
         var seq = buffer.getLong(metaIndex + HASH_VALUE_LENGTH + EXPIRE_AT_VALUE_LENGTH);
 
-        var matchMeta = keyMatch(key.getBytes(), oneCellOffset(cellIndex));
+        var matchMeta = keyMatch(Wal.keyBytes(key), oneCellOffset(cellIndex));
         if (matchMeta == null) {
             // hash conflict
             return null;
@@ -889,7 +891,7 @@ public class KeyBucket {
         var expireAt = buffer.getLong(metaIndex + HASH_VALUE_LENGTH);
         var seq = buffer.getLong(metaIndex + HASH_VALUE_LENGTH + EXPIRE_AT_VALUE_LENGTH);
 
-        var matchMeta = keyMatch(key.getBytes(), oneCellOffset(cellIndex));
+        var matchMeta = keyMatch(Wal.keyBytes(key), oneCellOffset(cellIndex));
         if (matchMeta == null) {
             // hash conflict
             return null;
@@ -947,12 +949,13 @@ public class KeyBucket {
             }
 
             var cellOffset = oneCellOffset(cellIndex);
-            var matchMeta = keyMatch(key.getBytes(), cellOffset);
+            var keyBytes = Wal.keyBytes(key);
+            var matchMeta = keyMatch(keyBytes, cellOffset);
             if (matchMeta != null) {
                 var valueBytes = new byte[matchMeta.valueLength];
                 buffer.position(matchMeta.valueOffset()).get(valueBytes);
 
-                clearOneExpiredOrDeleted(cellIndex, new KeyAndValueBytes(key, valueBytes));
+                clearOneExpiredOrDeleted(cellIndex, new KeyAndValueBytes(keyBytes, key, valueBytes));
 
                 if (doUpdateSeq) {
                     updateSeq();

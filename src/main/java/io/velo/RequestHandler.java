@@ -11,6 +11,7 @@ import io.velo.command.*;
 import io.velo.decode.Request;
 import io.velo.metric.SimpleGauge;
 import io.velo.persist.ReadonlyException;
+import io.velo.persist.Wal;
 import io.velo.repl.LeaderSelector;
 import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.cluster.MultiShardShadow;
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -248,7 +250,7 @@ public class RequestHandler {
         if (commandGroup instanceof GGroup) {
             if (data.length >= 2) {
                 var keyBytes = data[1];
-                var key = new String(keyBytes);
+                var key = Wal.keyString(keyBytes);
                 if (key.startsWith(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH)) {
                     var dataTransfer = transferDataForXGroup(key);
                     // x index position is 23
@@ -344,7 +346,7 @@ public class RequestHandler {
             }
 
             var leaderSelector = LeaderSelector.getInstance();
-            var firstDataString = new String(firstDataBytes);
+            var firstDataString = new String(firstDataBytes, StandardCharsets.UTF_8);
             switch (firstDataString) {
                 case URL_QUERY_FOR_HAPROXY_FILTER_MASTER -> {
                     var isMaster = leaderSelector.hasLeadership();
@@ -407,7 +409,7 @@ public class RequestHandler {
 
                     // base64 decode
                     // trim "Basic " prefix
-                    var auth = new String(Base64.getDecoder().decode(headerValue.substring(6)));
+                    var auth = new String(Base64.getDecoder().decode(headerValue.substring(6)), StandardCharsets.UTF_8);
                     var user = auth.substring(0, auth.indexOf(':'));
                     var passwordRaw = auth.substring(auth.indexOf(':') + 1);
 
@@ -433,8 +435,8 @@ public class RequestHandler {
                         return ErrorReply.FORMAT;
                     }
 
-                    var user = data.length == 3 ? new String(data[1]).toLowerCase() : U.DEFAULT_USER;
-                    var passwordRaw = new String(data[data.length - 1]);
+                    var user = data.length == 3 ? new String(data[1], StandardCharsets.UTF_8).toLowerCase() : U.DEFAULT_USER;
+                    var passwordRaw = new String(data[data.length - 1], StandardCharsets.UTF_8);
 
                     // acl check
                     var u = aclUsers.get(user);
@@ -473,7 +475,7 @@ public class RequestHandler {
                     return ErrorReply.KEY_TOO_LONG;
                 }
 
-                var key = new String(keyBytes);
+                var key = Wal.keyString(keyBytes);
                 if (key.startsWith(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH)) {
                     // dispatch to XGroup
                     // eg. get x_repl,sub_cmd,sub_sub_cmd,***
@@ -498,7 +500,7 @@ public class RequestHandler {
                 } catch (DictMissingException e) {
                     return ErrorReply.DICT_MISSING;
                 } catch (Exception e) {
-                    log.error("Get error, key={}", new String(keyBytes), e);
+                    log.error("Get error, key={}", Wal.keyString(keyBytes), e);
                     return new ErrorReply(e.getMessage());
                 }
             }
@@ -522,10 +524,10 @@ public class RequestHandler {
                 try {
                     reuseSGroup.set(valueBytes, slotWithKeyHashList.getFirst());
                 } catch (ReadonlyException e) {
-                    log.warn("Set but server is readonly, key={}", new String(keyBytes));
+                    log.warn("Set but server is readonly, key={}", Wal.keyString(keyBytes));
                     return ErrorReply.READONLY;
                 } catch (Exception e) {
-                    log.error("Set error, key={}", new String(keyBytes), e);
+                    log.error("Set error, key={}", Wal.keyString(keyBytes), e);
                     return new ErrorReply(e.getMessage());
                 }
 
