@@ -44,6 +44,10 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
 
     private final Logger log = LoggerFactory.getLogger(RequestDecoder.class);
 
+    private static boolean isRespLeadByte(byte firstByte) {
+        return firstByte == '*' || firstByte == '+';
+    }
+
     /**
      * Attempts to decode a single request from the provided ByteBufs.
      * The method checks for HTTP keywords at the beginning of the buffer, and if not found, treats the input as RESP.
@@ -65,6 +69,9 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
         ReplRequest replRequest = null;
         Map<String, String> httpHeaders = null;
         if (buf.capacity() < 6) {
+            if (!isRespLeadByte(buf.getByte(buf.readerIndex()))) {
+                return null;
+            }
             data = resp.decode(buf);
             if (data == null) {
                 return null;

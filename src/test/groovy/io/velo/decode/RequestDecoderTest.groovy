@@ -230,4 +230,56 @@ class RequestDecoderTest extends Specification {
         then:
         requestList.isEmpty()
     }
+
+    def 'test decode fragmented http prefix shorter than 6 bytes'() {
+        given:
+        def decoder = new RequestDecoder()
+        def bufs = new ByteBufs(2)
+
+        when:
+        bufs.add(ByteBuf.wrapForReading('GE'.bytes))
+        def requestList = decoder.tryDecode(bufs)
+
+        then:
+        requestList.isEmpty()
+
+        when:
+        bufs.add(ByteBuf.wrapForReading('T /?get&mykey HTTP/1.1\r\nHost: localhost:8080\r\n\r\n'.bytes))
+        requestList = decoder.tryDecode(bufs)
+
+        then:
+        requestList.size() == 1
+        requestList[0].isHttp()
+        requestList[0].data.length == 2
+        requestList[0].data[0] == 'get'.bytes
+        requestList[0].data[1] == 'mykey'.bytes
+    }
+
+    def 'test decode fragmented repl prefix shorter than 6 bytes'() {
+        given:
+        def decoder = new RequestDecoder()
+        def ping = new Ping('127.0.0.1:7379')
+        def replBuf = Repl.buffer(0L, (byte) 0, ReplType.ping, ping)
+        def replBytes = replBuf.array()
+        def firstPart = Arrays.copyOfRange(replBytes, 0, 4)
+        def secondPart = Arrays.copyOfRange(replBytes, 4, replBuf.tail())
+        def bufs = new ByteBufs(2)
+
+        when:
+        bufs.add(ByteBuf.wrapForReading(firstPart))
+        def requestList = decoder.tryDecode(bufs)
+
+        then:
+        requestList.isEmpty()
+
+        when:
+        bufs.add(ByteBuf.wrapForReading(secondPart))
+        requestList = decoder.tryDecode(bufs)
+
+        then:
+        requestList.size() == 1
+        requestList[0].isRepl()
+        requestList[0].replRequest != null
+        requestList[0].replRequest.type == ReplType.ping
+    }
 }
