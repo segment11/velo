@@ -13,6 +13,7 @@ import io.velo.command.XGroup;
 import io.velo.decode.ReplDecoder;
 import io.velo.decode.Request;
 import io.velo.repl.content.Ping;
+import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,8 +59,10 @@ public class TcpClient implements NeedCleanUp {
         return sock != null && !sock.isClosed();
     }
 
-    private long writeErrorCount = 0;
-    private long notConnectedErrorCount = 0;
+    @VisibleForTesting
+    long writeErrorCount = 0;
+    @VisibleForTesting
+    long notConnectedErrorCount = 0;
 
     /**
      * Writes a message to the server if the socket is connected.
