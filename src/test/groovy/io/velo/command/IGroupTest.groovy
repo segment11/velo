@@ -2,6 +2,8 @@ package io.velo.command
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.velo.BaseCommand
+import io.velo.DictMap
+import io.velo.MultiWorkerServer
 import io.velo.Utils
 import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
@@ -251,6 +253,9 @@ class IGroupTest extends Specification {
         (reply as AsyncReply).settablePromise.getException() != null
 
         when:
+        def dictMap = DictMap.instance
+        dictMap.initDictMap(Consts.testDir)
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
         // parquet format
         new File(dir, 'test.parquet').bytes = new File('src/test/groovy/sample.parquet').bytes
         new File(dir, 'test.schema').bytes = new File('src/test/groovy/sample.schema').bytes
