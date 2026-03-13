@@ -95,7 +95,7 @@ class TcpClientTest extends Specification {
         Thread.sleep(100)
         server.listen()
         eventloop.execute {
-            tcpClient.connect('localhost', 7379) {
+            tcpClient.connect('localhost', 7379, 5000) {
                 tcpClient.write(ReplType.ok, new RawBytesContent('test'.bytes))
                 println 'Send ok to server after client connected'
                 Repl.error(slot, replPair2, 'ok').buffer()
