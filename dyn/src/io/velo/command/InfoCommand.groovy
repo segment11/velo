@@ -154,7 +154,7 @@ total_blocking_keys:${BlockingList.blockingKeyCount()}
         List<Tuple2<String, Object>> list = []
 
         def state = "ip=${replPairAsSlave.host},port=${replPairAsSlave.port}," +
-                "state=${replPairAsSlave.isLinkUp() ? 'online' : 'offline'},offset=${replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset},lag=1"
+                "state=${replPairAsSlave.isLinkUpAnyOk() ? 'online' : 'offline'},offset=${replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset},lag=1"
         list << new Tuple2("slave${slaveIndex}", state)
 
         list
@@ -218,7 +218,7 @@ maxmemory_human:${totalMaxHumanReadable}
             list << new Tuple2('master_replid', replPairAsSlave.slaveUuid.toString().padLeft(40, '0'))
             list << new Tuple2('master_replid2', '0' * 40)
 
-            list << new Tuple2('master_link_status', replPairAsSlave.isLinkUp() ? 'up' : 'down')
+            list << new Tuple2('master_link_status', replPairAsSlave.isLinkUpAnyOk() ? 'up' : 'down')
 
             def masterFo = replPairAsSlave.masterBinlogCurrentFileIndexAndOffset
             list << new Tuple2('master_repl_offset', masterFo ? masterFo.asReplOffset() : 0)
@@ -249,7 +249,7 @@ maxmemory_human:${totalMaxHumanReadable}
                 list << new Tuple2('master_repl_offset', firstOneSlot.binlog.currentReplOffset())
 
                 // for redis 6.x compat
-                list << new Tuple2('master_link_status', firstReplPair.isLinkUp() ? 'up' : 'down')
+                list << new Tuple2('master_link_status', firstReplPair.isLinkUpAnyOk() ? 'up' : 'down')
                 list << new Tuple2('slave_repl_offset', firstReplPair.slaveLastCatchUpBinlogAsReplOffset)
 
                 if (replPairAsMasterList.size() > 1) {

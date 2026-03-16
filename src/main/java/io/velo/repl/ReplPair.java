@@ -145,7 +145,7 @@ public class ReplPair {
                     ", masterUuid=" + masterUuid +
                     ", slaveUuid=" + slaveUuid +
                     ", lastPingGetTimestamp=" + lastPingGetTimestamp +
-                    ", isLinkUp=" + isLinkUp() +
+                    ", isLinkUp=" + isLinkUpAnyOk() +
                     '}';
         } else {
             return "ReplPair{" +
@@ -160,7 +160,7 @@ public class ReplPair {
                     ", fetchedBytesLengthTotal=" + fetchedBytesLengthTotal +
                     ", isMasterReadonly=" + isMasterReadonly +
                     ", isAllCaughtUp=" + isAllCaughtUp +
-                    ", isLinkUp=" + isLinkUp() +
+                    ", isLinkUp=" + isLinkUpAnyOk() +
                     ", isMasterCanNotConnect=" + isMasterCanNotConnect +
                     ", lastGetCatchUpResponseMillis=" + lastGetCatchUpResponseMillis +
                     '}';
@@ -604,7 +604,7 @@ public class ReplPair {
      *
      * @return true if any flag is true, false otherwise.
      */
-    private boolean isLinkUpAnyOk() {
+    public boolean isLinkUpAnyOk() {
         for (var flag : linkUpFlagArray) {
             if (flag) {
                 return true;

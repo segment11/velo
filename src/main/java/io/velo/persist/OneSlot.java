@@ -1305,6 +1305,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                         continue;
                     }
 
+                    // update link-up sliding window
+                    replPair.isLinkUp();
+
                     if (!replPair.isAsMaster()) {
                         // only slave needs to send ping
                         replPair.ping();
@@ -2560,7 +2563,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             map.put("repl_as_slave_catch_up_last_seq", (double) replPairAsSlave.getSlaveCatchUpLastSeq());
             map.put("repl_as_slave_catch_up_last_time_millis_in_master", (double) replPairAsSlave.getSlaveCatchUpLastTimeMillisInMaster());
             map.put("repl_as_slave_catch_up_last_time_millis_diff", (double) replPairAsSlave.getSlaveCatchUpLastTimeMillisDiff());
-            map.put("repl_as_slave_is_link_up", (double) (replPairAsSlave.isLinkUp() ? 1 : 0));
+            map.put("repl_as_slave_is_link_up", (double) (replPairAsSlave.isLinkUpAnyOk() ? 1 : 0));
             map.put("repl_as_slave_fetched_bytes_total", (double) replPairAsSlave.getFetchedBytesLengthTotal());
             map.put("repl_as_slave_is_master_readonly", (double) (replPairAsSlave.isMasterReadonly() ? 1 : 0));
             map.put("repl_as_slave_is_master_can_not_connect", (double) (replPairAsSlave.isMasterCanNotConnect() ? 1 : 0));
@@ -2585,7 +2588,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             for (int i = 0; i < replPairAsMasterList.size(); i++) {
                 var replPairAsMaster = replPairAsMasterList.get(i);
                 map.put("repl_as_master_repl_pair_" + i + "_is_all_caught_up", (double) (replPairAsMaster.isAllCaughtUp() ? 1 : 0));
-                map.put("repl_as_master_repl_pair_" + i + "_is_link_up", (double) (replPairAsMaster.isLinkUp() ? 1 : 0));
+                map.put("repl_as_master_repl_pair_" + i + "_is_link_up", (double) (replPairAsMaster.isLinkUpAnyOk() ? 1 : 0));
                 map.put("repl_as_master_repl_pair_" + i + "_fetched_bytes_total", (double) replPairAsMaster.getFetchedBytesLengthTotal());
 
                 var slaveFo = replPairAsMaster.getSlaveLastCatchUpBinlogFileIndexAndOffset();
