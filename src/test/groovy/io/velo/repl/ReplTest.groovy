@@ -72,19 +72,21 @@ class ReplTest extends Specification {
 
         when:
         ByteBuffer.wrap(pingBytes).putShort(Repl.PROTOCOL_KEYWORD_BYTES.length + 8, (short) 0)
-        ByteBuffer.wrap(pingBytes).putShort(Repl.PROTOCOL_KEYWORD_BYTES.length + 8 + 2, (short) -10)
+        pingBytes[Repl.PROTOCOL_KEYWORD_BYTES.length + 8 + 2] = (byte) -10
         nettyBuf.readerIndex(0)
         request = Repl.decode(nettyBuf)
         then:
         request == null
 
         when:
-        pingBytes[Repl.PROTOCOL_KEYWORD_BYTES.length + 8 + 1] = ReplType.ping.code
+        pingBytes[Repl.PROTOCOL_KEYWORD_BYTES.length + 8 + 2] = ReplType.ping.code
         def lessBytes = new byte[pingBytes.length - 1]
         System.arraycopy(pingBytes, 0, lessBytes, 0, lessBytes.length)
         request = Repl.decode(Unpooled.wrappedBuffer(lessBytes))
         then:
-        request == null
+        // 1 byte less than full data, so partial read
+        request != null
+        !request.fullyRead
 
         when:
         def nettyBuffer2 = Unpooled.wrappedBuffer(new byte[1])

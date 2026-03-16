@@ -26,9 +26,9 @@ public class Repl {
 
     /**
      * Length of the header in the REPL protocol.
-     * Includes protocol keyword, slave uuid long + slot short + type short + content length int.
+     * Includes protocol keyword, slave uuid long + slot short + type byte + content length int.
      */
-    public static final int HEADER_LENGTH = PROTOCOL_KEYWORD_BYTES.length + 8 + 2 + 2 + 4;
+    public static final int HEADER_LENGTH = PROTOCOL_KEYWORD_BYTES.length + 8 + 2 + 1 + 4;
 
     /**
      * Creates a buffer containing the encoded REPL message.
@@ -48,7 +48,7 @@ public class Repl {
         buf.write(PROTOCOL_KEYWORD_BYTES);
         buf.writeLong(slaveUuid);
         buf.writeShort(slot);
-        buf.writeShort(type.code);
+        buf.writeByte(type.code);
         buf.writeInt(encodeLength);
         content.encodeTo(buf);
         return buf;
@@ -67,7 +67,7 @@ public class Repl {
             buf.write(PROTOCOL_KEYWORD_BYTES);
             buf.writeLong(slaveUuid);
             buf.writeShort(slot);
-            buf.writeShort(type.code);
+            buf.writeByte(type.code);
             buf.writeInt(length);
             buf.write(data, offset, length);
             return buf;
@@ -207,7 +207,7 @@ public class Repl {
             throw new IllegalArgumentException("Repl slot should be positive");
         }
 
-        var replType = ReplType.fromCode((byte) buf.readShort());
+        var replType = ReplType.fromCode(buf.readByte());
         if (replType == null) {
             return null;
         }

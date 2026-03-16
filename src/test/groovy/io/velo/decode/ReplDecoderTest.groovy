@@ -41,13 +41,13 @@ class ReplDecoderTest extends Specification {
         requestList2.isEmpty()
 
         when:
-        // 22 is header
-        def bb = new byte[22 + 10]
+        // 21 is header
+        def bb = new byte[21 + 10]
         def buffer = ByteBuffer.wrap(bb)
         buffer.put('X-REPL'.bytes)
         buffer.putLong(0L)
         buffer.putShort((short) 0)
-        buffer.putShort((short) ReplType.test.code)
+        buffer.put(ReplType.test.code)
         // expect data length 20
         buffer.putInt(20)
         buf2 = ByteBuf.wrapForReading(bb)
