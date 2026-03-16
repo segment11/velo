@@ -91,18 +91,6 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                     '}';
         }
 
-        @Override
-        public boolean equals(Object obj) {
-            if (obj == null) {
-                return false;
-            }
-            if (getClass() != obj.getClass()) {
-                return false;
-            }
-            FileIndexAndOffset that = (FileIndexAndOffset) obj;
-            return fileIndex == that.fileIndex && offset == that.offset;
-        }
-
         public long asReplOffset() {
             return (long) fileIndex * ConfForSlot.global.confRepl.binlogOneFileMaxLength + offset;
         }
