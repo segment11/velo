@@ -125,6 +125,10 @@ class ReplPairTest extends Specification {
         replPairAsMaster != replPairMaster1
         replPairAsMaster != replPairAsMaster11
         replPairAsMaster.equals(replPairAsMaster)
+        replPairAsMaster.hashCode() == mockOne(slot, true, 'localhost', 6379).hashCode()
+        replPairAsMaster.hashCode() != replPairAsSlave.hashCode()
+        // different slot, same host:port
+        mockOne((short) 0, true, 'localhost', 6379) != mockOne((short) 1, true, 'localhost', 6379)
         !replPairAsMaster.linkUp
 
         when:

@@ -122,7 +122,16 @@ public class ReplPair {
             return false;
         }
         var replPair = (ReplPair) obj;
-        return asMaster == replPair.asMaster && port == replPair.port && host.equals(replPair.host);
+        return asMaster == replPair.asMaster && slot == replPair.slot && port == replPair.port && host.equals(replPair.host);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = host.hashCode();
+        result = 31 * result + port;
+        result = 31 * result + Short.hashCode(slot);
+        result = 31 * result + Boolean.hashCode(asMaster);
+        return result;
     }
 
     @Override
