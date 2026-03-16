@@ -4,10 +4,7 @@ import io.velo.CompressedValue
 import io.velo.Dict
 import io.velo.KeyHash
 import io.velo.persist.Mock
-import io.velo.repl.incremental.XBigStrings
-import io.velo.repl.incremental.XDict
-import io.velo.repl.incremental.XFlush
-import io.velo.repl.incremental.XWalV
+import io.velo.repl.incremental.*
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -72,5 +69,38 @@ class BinlogContentTest extends Specification {
         def xFlush2 = BinlogContent.Type.fromCode(buffer.get()).decodeFrom(buffer) as XFlush
         then:
         xFlush2.encodedLength() == encoded.length
+
+        when:
+        def xAclUpdate = new XAclUpdate('user default on ~* &* +@all')
+        encoded = xAclUpdate.encodeWithType()
+        buffer = ByteBuffer.wrap(encoded)
+        def xAclUpdate2 = BinlogContent.Type.fromCode(buffer.get()).decodeFrom(buffer) as XAclUpdate
+        then:
+        xAclUpdate2.encodedLength() == encoded.length
+
+        when:
+        def xSkipApply = new XSkipApply(100L)
+        encoded = xSkipApply.encodeWithType()
+        buffer = ByteBuffer.wrap(encoded)
+        def xSkipApply2 = BinlogContent.Type.fromCode(buffer.get()).decodeFrom(buffer) as XSkipApply
+        then:
+        xSkipApply2.encodedLength() == encoded.length
+        xSkipApply2.seq == 100L
+
+        when:
+        def xUpdateSeq = new XUpdateSeq(200L, System.currentTimeMillis())
+        encoded = xUpdateSeq.encodeWithType()
+        buffer = ByteBuffer.wrap(encoded)
+        def xUpdateSeq2 = BinlogContent.Type.fromCode(buffer.get()).decodeFrom(buffer) as XUpdateSeq
+        then:
+        xUpdateSeq2.encodedLength() == encoded.length
+        xUpdateSeq2.seq == 200L
+
+        when:
+        def xDynConfig = new XDynConfig()
+        def xDynConfig2 = BinlogContent.Type.dyn_config.decodeFrom(ByteBuffer.wrap(new byte[0]))
+        then:
+        xDynConfig.encodedLength() == 0
+        xDynConfig2 == null
     }
 }
