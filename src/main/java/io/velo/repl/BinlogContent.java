@@ -10,7 +10,7 @@ public interface BinlogContent {
         wal((byte) 1),
         big_strings((byte) 10), acl_update((byte) 20),
         dict((byte) 100), skip_apply((byte) 110), update_seq((byte) 120),
-        dyn_config(Byte.MAX_VALUE), flush(Byte.MIN_VALUE);
+        dyn_config((byte) 121), flush(Byte.MAX_VALUE);
 
         private final byte code;
 
