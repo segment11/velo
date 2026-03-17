@@ -51,7 +51,7 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3.size() == 1
+        requestList3.isEmpty()
 
         when:
         buf3 = ByteBuf.wrapForReading(

@@ -12,7 +12,7 @@ class RESPTest extends Specification {
         when:
         def getCmdStr = '*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n'
         def setCmdStr = '*3\r\n$3\r\nSET\r\n$5\r\nmykey\r\n$7\r\nmyvalue\r\n'
-        def cmdStr = '+0\r\n'
+        def cmdStr = '*0\r\n'
         def getCmdData = resp.decode(Unpooled.wrappedBuffer(getCmdStr.bytes))
         def setCmdData = resp.decode(Unpooled.wrappedBuffer(setCmdStr.bytes))
         def cmdData = resp.decode(Unpooled.wrappedBuffer(cmdStr.bytes))
@@ -25,6 +25,18 @@ class RESPTest extends Specification {
         setCmdData[1] == 'mykey'.bytes
         setCmdData[2] == 'myvalue'.bytes
         cmdData.length == 0
+
+        when:
+        cmdStr = '+0\r\n'
+        boolean exception = false
+        try {
+            resp.decode(Unpooled.wrappedBuffer(cmdStr.bytes))
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
     }
 
     def 'test decode not normal'() {

@@ -13,8 +13,6 @@ import org.slf4j.LoggerFactory;
  * This implementation is adapted from Camellia Redis Proxy, specifically from the CommandDecoder class.
  */
 public class RESP {
-    // MARKERS for different types of RESP messages
-    private static final byte STRING_MARKER = '+';
     private static final byte BYTES_MARKER = '$';
     private static final byte ARRAY_MARKER = '*';
 
@@ -135,7 +133,7 @@ public class RESP {
                 }
                 int readerIndex = bb.readerIndex();
                 byte b = bb.readByte();
-                if (b == STRING_MARKER || b == ARRAY_MARKER) {
+                if (b == ARRAY_MARKER) {
                     var lineBuf = readLine(bb);
                     if (lineBuf == null) {
                         bb.readerIndex(readerIndex);
