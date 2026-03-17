@@ -9,11 +9,7 @@ import io.velo.command.AGroup
 import io.velo.decode.BigStringNoMemoryCopy
 import io.velo.decode.Request
 import io.velo.mock.InMemoryGetSet
-import io.velo.persist.Consts
-import io.velo.persist.LocalPersist
-import io.velo.persist.LocalPersistTest
-import io.velo.persist.Mock
-import io.velo.persist.ReadonlyException
+import io.velo.persist.*
 import io.velo.repl.cluster.MultiShard
 import io.velo.reply.Reply
 import io.velo.type.RedisList
@@ -273,13 +269,13 @@ class BaseCommandTest extends Specification {
         c.getExpireAt(sKey) == CompressedValue.NO_EXPIRE
 
         when:
-        oneSlot.setCanRead(false)
+        oneSlot.canRead = false
         c.getCv(sKey)
         then:
-        thrown(ReadonlyException)
+        thrown(CannotReadException)
 
         when:
-        oneSlot.setCanRead(true)
+        oneSlot.canRead = true
         cv.expireAt = System.currentTimeMillis() - 1000
         oneSlot.put(key, sKey.bucketIndex(), cv)
         then:
@@ -665,12 +661,36 @@ class BaseCommandTest extends Specification {
         c.exists(sKey)
 
         when:
+        oneSlot.canRead = false
+        c.exists(sKey)
+        then:
+        thrown(CannotReadException)
+
+        when:
+        oneSlot.canRead = true
         c.removeDelay(sKey)
         then:
         c.getCv(sKey) == null
         !c.exists(sKey)
 
         when:
+        oneSlot.readonly = true
+        c.remove(sKey)
+        then:
+        thrown(ReadonlyException)
+
+        when:
+        c.removeDelay(sKey)
+        then:
+        thrown(ReadonlyException)
+
+        when:
+        c.putToOneSlot(slot, sKey, cv)
+        then:
+        thrown(ReadonlyException)
+
+        when:
+        oneSlot.setReadonly(false)
         // big string
         c.bigStringNoMemoryCopy = new BigStringNoMemoryCopy()
         c.bigStringNoMemoryCopy.offset = 1000

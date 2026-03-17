@@ -165,6 +165,11 @@ public class ErrorReply implements Reply {
     public static final ErrorReply READONLY = new ErrorReply("readonly");
 
     /**
+     * Error reply indicating that the server cannot read.
+     */
+    public static final ErrorReply CANNOT_READ = new ErrorReply("cannot read");
+
+    /**
      * Error reply indicating that a feature or operation is not supported.
      */
     public static final ErrorReply NOT_SUPPORT = new ErrorReply("not support");

@@ -8,11 +8,7 @@ import io.velo.command.AGroup;
 import io.velo.decode.BigStringNoMemoryCopy;
 import io.velo.decode.Request;
 import io.velo.mock.ByPassGetSet;
-import io.velo.persist.KeyLoader;
-import io.velo.persist.LocalPersist;
-import io.velo.persist.OneSlot;
-import io.velo.persist.ReadonlyException;
-import io.velo.persist.Wal;
+import io.velo.persist.*;
 import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.incremental.XBigStrings;
 import io.velo.reply.Reply;
@@ -600,7 +596,7 @@ public abstract class BaseCommand {
         } else {
             var oneSlot = localPersist.oneSlot(slot);
             if (!oneSlot.isCanRead()) {
-                throw new ReadonlyException();
+                throw new CannotReadException();
             }
             bufOrCompressedValue = oneSlot.get(key, s.bucketIndex, s.keyHash);
         }
@@ -1064,6 +1060,9 @@ public abstract class BaseCommand {
             byPassGetSet.put(slot, slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, cv);
         } else {
             var oneSlot = localPersist.oneSlot(slot);
+            if (oneSlot.isReadonly()) {
+                throw new ReadonlyException();
+            }
             oneSlot.put(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, cv);
         }
     }
@@ -1080,6 +1079,9 @@ public abstract class BaseCommand {
         }
 
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
+        if (oneSlot.isReadonly()) {
+            throw new ReadonlyException();
+        }
         return oneSlot.remove(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
     }
 
@@ -1095,6 +1097,9 @@ public abstract class BaseCommand {
         }
 
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
+        if (oneSlot.isReadonly()) {
+            throw new ReadonlyException();
+        }
         oneSlot.removeDelay(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
     }
 
@@ -1112,6 +1117,9 @@ public abstract class BaseCommand {
         }
 
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
+        if (!oneSlot.isCanRead()) {
+            throw new CannotReadException();
+        }
         return oneSlot.exists(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
     }
 

@@ -298,7 +298,7 @@ class RequestHandlerTest extends Specification {
         oneSlot.setCanRead(false)
         reply = requestHandler.handle(getRequest2, socket)
         then:
-        reply == ErrorReply.READONLY
+        reply == ErrorReply.CANNOT_READ
 
         when:
         oneSlot.setCanRead(true)

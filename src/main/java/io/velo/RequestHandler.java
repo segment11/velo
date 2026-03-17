@@ -10,6 +10,7 @@ import io.velo.acl.U;
 import io.velo.command.*;
 import io.velo.decode.Request;
 import io.velo.metric.SimpleGauge;
+import io.velo.persist.CannotReadException;
 import io.velo.persist.ReadonlyException;
 import io.velo.persist.Wal;
 import io.velo.repl.LeaderSelector;
@@ -495,6 +496,8 @@ public class RequestHandler {
                 try {
                     var bytes = reuseGGroup.get(slotWithKeyHashList.getFirst(), true);
                     return bytes != null ? new BulkReply(bytes) : NilReply.INSTANCE;
+                } catch (CannotReadException e) {
+                    return ErrorReply.CANNOT_READ;
                 } catch (ReadonlyException e) {
                     return ErrorReply.READONLY;
                 } catch (TypeMismatchException e) {
