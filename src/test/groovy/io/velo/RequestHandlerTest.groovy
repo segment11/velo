@@ -317,6 +317,19 @@ class RequestHandlerTest extends Specification {
         reply instanceof BulkReply
 
         when:
+        def existsData2 = new byte[2][]
+        existsData2[0] = 'exists'.bytes
+        existsData2[1] = key.bytes
+        def existsRequest = new Request(existsData2, false, false)
+        existsRequest.slotNumber = slotNumber
+        requestHandler.parseSlots(existsRequest)
+        oneSlot.setCanRead(false)
+        reply = requestHandler.handle(existsRequest, socket)
+        then:
+        reply == ErrorReply.CANNOT_READ
+
+        when:
+        oneSlot.setCanRead(true)
         def setData3 = new byte[3][]
         setData3[0] = 'set'.bytes
         setData3[1] = key.bytes
@@ -358,6 +371,19 @@ class RequestHandlerTest extends Specification {
         reply == ErrorReply.FORMAT
 
         when:
+        def delData2 = new byte[2][]
+        delData2[0] = 'del'.bytes
+        delData2[1] = key.bytes
+        def delRequest = new Request(delData2, false, false)
+        delRequest.slotNumber = slotNumber
+        requestHandler.parseSlots(delRequest)
+        oneSlot.readonly = true
+        reply = requestHandler.handle(delRequest, socket)
+        then:
+        reply == ErrorReply.READONLY
+
+        when:
+        oneSlot.readonly = false
         // repl
         def slaveUuid = 11L
         def replData = new byte[4][]

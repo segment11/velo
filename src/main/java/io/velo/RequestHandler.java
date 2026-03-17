@@ -497,9 +497,8 @@ public class RequestHandler {
                     var bytes = reuseGGroup.get(slotWithKeyHashList.getFirst(), true);
                     return bytes != null ? new BulkReply(bytes) : NilReply.INSTANCE;
                 } catch (CannotReadException e) {
+                    log.warn("Get but server can not read, key={}", Wal.keyString(keyBytes));
                     return ErrorReply.CANNOT_READ;
-                } catch (ReadonlyException e) {
-                    return ErrorReply.READONLY;
                 } catch (TypeMismatchException e) {
                     return new ErrorReply(e.getMessage());
                 } catch (DictMissingException e) {
@@ -552,6 +551,9 @@ public class RequestHandler {
             commandGroup.resetContext(cmd, data, socket, request);
             try {
                 return commandGroup.handle();
+            } catch (CannotReadException e) {
+                log.warn("Request handle but server can not read");
+                return ErrorReply.CANNOT_READ;
             } catch (ReadonlyException e) {
                 log.warn("Request handle but server is readonly");
                 return ErrorReply.READONLY;
