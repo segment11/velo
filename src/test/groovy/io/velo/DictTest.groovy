@@ -21,12 +21,8 @@ class DictTest extends Specification {
         dict2.createdTime = System.currentTimeMillis()
         println dict2.createdTime
 
-        Dict.GLOBAL_ZSTD_DICT.dictBytes = new byte[1]
-
         expect:
         Dict.SELF_ZSTD_DICT.seq == Dict.SELF_ZSTD_DICT_SEQ
-        Dict.GLOBAL_ZSTD_DICT.seq == Dict.GLOBAL_ZSTD_DICT_SEQ
-        !Dict.GLOBAL_ZSTD_DICT.hasDictBytes()
         dict.equals(dict)
         dict == Dict.SELF_ZSTD_DICT
         !dict.equals(null)
@@ -41,68 +37,6 @@ class DictTest extends Specification {
         then:
         // random may conflict
         seqSet.size() == 10000 || seqSet.size() == 9999
-    }
-
-    def 'test global dict'() {
-        given:
-        Dict.GLOBAL_ZSTD_DICT.dictBytes = new byte[1]
-
-        def file = new File('dict-global-test.dat')
-        file.bytes = 'test'.bytes
-
-        Dict.initGlobalDictBytesByFile(file)
-        file.delete()
-        Dict.initGlobalDictBytesByFile(file)
-
-        expect:
-        Dict.GLOBAL_ZSTD_DICT.hasDictBytes()
-        Dict.GLOBAL_ZSTD_DICT.dictBytes == 'test'.bytes
-
-        when:
-        file.bytes = ('test' * 5000).bytes
-        boolean exception = false
-        try {
-            Dict.initGlobalDictBytesByFile(file)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        Dict.resetGlobalDictBytes('test'.bytes)
-        then:
-        Dict.GLOBAL_ZSTD_DICT.dictBytes == 'test'.bytes
-
-        when:
-        exception = false
-        try {
-            Dict.resetGlobalDictBytes(new byte[0])
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        exception = false
-        try {
-            Dict.resetGlobalDictBytes(('test' * 5000).bytes)
-        } catch (IllegalStateException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
-
-        when:
-        // not change
-        Dict.resetGlobalDictBytes('test'.bytes)
-        Dict.saveGlobalDictBytesToFile(file)
-        then:
-        Dict.GLOBAL_ZSTD_DICT.dictBytes == 'test'.bytes
     }
 
     def 'test decode'() {

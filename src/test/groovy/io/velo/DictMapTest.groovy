@@ -58,15 +58,10 @@ class DictMapTest extends Specification {
         dictMap.getDictBySeq(0).dictBytes == 'test2'.bytes
 
         when:
-        dictMap.updateGlobalDictBytes(new byte[10])
-        then:
-        Dict.GLOBAL_ZSTD_DICT.hasDictBytes()
-
-        when:
         def mfsList = dictMap.dictCompressedGauge.collect()
         then:
-        // 2 custom dict + 1 global + 1 self
-        mfsList[0].samples.size() == 8
+        // 2 custom dict + 1 extra seq-conflict dict + 1 self
+        mfsList[0].samples.size() == 6
 
         when:
         // reload again

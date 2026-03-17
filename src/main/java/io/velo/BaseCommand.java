@@ -654,11 +654,6 @@ public abstract class BaseCommand {
                 var dictSeqOrSpType = cv.getDictSeqOrSpType();
                 if (dictSeqOrSpType == Dict.SELF_ZSTD_DICT_SEQ) {
                     dict = Dict.SELF_ZSTD_DICT;
-                } else if (dictSeqOrSpType == Dict.GLOBAL_ZSTD_DICT_SEQ) {
-                    if (!Dict.GLOBAL_ZSTD_DICT.hasDictBytes()) {
-                        throw new DictMissingException("Global dict bytes not set");
-                    }
-                    dict = Dict.GLOBAL_ZSTD_DICT;
                 } else {
                     dict = dictMap.getDictBySeq(dictSeqOrSpType);
                     if (dict == null) {
@@ -959,18 +954,13 @@ public abstract class BaseCommand {
         Dict dict = null;
         boolean isTypeString = CompressedValue.isTypeString(spType);
         if (isTypeString && ConfForGlobal.isValueSetUseCompression && preferDoCompress) {
-            // use global dict first
-            if (Dict.GLOBAL_ZSTD_DICT.hasDictBytes()) {
-                dict = Dict.GLOBAL_ZSTD_DICT;
-            } else {
-                // use trained dict if key prefix or suffix match
-                var keyPrefixOrSuffix = TrainSampleJob.keyPrefixOrSuffixGroup(key);
-                dict = dictMap.getDict(keyPrefixOrSuffix);
+            // use trained dict if key prefix or suffix match
+            var keyPrefixOrSuffix = TrainSampleJob.keyPrefixOrSuffixGroup(key);
+            dict = dictMap.getDict(keyPrefixOrSuffix);
 
-                if (dict == null && preferDoCompressUseSelfDict) {
-                    // use self dict
-                    dict = Dict.SELF_ZSTD_DICT;
-                }
+            if (dict == null && preferDoCompressUseSelfDict) {
+                // use self dict
+                dict = Dict.SELF_ZSTD_DICT;
             }
         }
 

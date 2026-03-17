@@ -148,7 +148,7 @@ class CompressedValueTest extends Specification {
         !cv.isHash()
 
         when:
-        cv.dictSeqOrSpType = Dict.GLOBAL_ZSTD_DICT_SEQ
+        cv.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
         then:
         cv.isCompressed()
     }

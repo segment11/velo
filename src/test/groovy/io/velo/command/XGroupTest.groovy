@@ -942,7 +942,7 @@ class XGroupTest extends Specification {
         def dict1 = new Dict(new byte[10])
         def dict2 = new Dict(new byte[20])
         def encoded1 = dict1.encode('k1')
-        def encoded2 = dict2.encode(Dict.GLOBAL_ZSTD_DICT_KEY)
+        def encoded2 = dict2.encode('k2')
         contentBytes = new byte[4 + 4 + encoded1.length + 4 + encoded2.length]
         replRequest.data = contentBytes;
         requestBuffer = ByteBuffer.wrap(contentBytes)
@@ -956,7 +956,7 @@ class XGroupTest extends Specification {
         // next step
         r.isReplType(ReplType.exists_big_string)
         dictMap.getDict('k1') != null
-        Dict.GLOBAL_ZSTD_DICT.hasDictBytes()
+        dictMap.getDict('k2') != null
 
         // s_exists_all_done
         when:

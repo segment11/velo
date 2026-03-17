@@ -1037,11 +1037,8 @@ public class XGroup extends BaseCommand {
         }
         log.warn("Repl master fetch exists dict, slave sent dict seq list={}, slot={}", sentDictSeqList, slot);
 
-        var cacheDictCopy = dictMap.getCacheDictCopy();
         var cacheDictBySeqCopy = dictMap.getCacheDictBySeqCopy();
-        // master always sends global zstd dict to slave
-        cacheDictCopy.put(Dict.GLOBAL_ZSTD_DICT_KEY, Dict.GLOBAL_ZSTD_DICT);
-        cacheDictBySeqCopy.put(Dict.GLOBAL_ZSTD_DICT_SEQ, Dict.GLOBAL_ZSTD_DICT);
+        var cacheDictCopy = dictMap.getCacheDictCopy();
 
         var content = new ToSlaveExistsDict(cacheDictCopy, cacheDictBySeqCopy, sentDictSeqList);
         return Repl.reply(slot, replPair, s_exists_dict, content);
@@ -1070,11 +1067,7 @@ public class XGroup extends BaseCommand {
 
                 var dict = dictWithKeyPrefixOrSuffix.dict();
                 var keyPrefixOrSuffix = dictWithKeyPrefixOrSuffix.keyPrefixOrSuffix();
-                if (keyPrefixOrSuffix.equals(Dict.GLOBAL_ZSTD_DICT_KEY)) {
-                    dictMap.updateGlobalDictBytes(dict.getDictBytes());
-                } else {
-                    dictMap.putDict(keyPrefixOrSuffix, dict);
-                }
+                dictMap.putDict(keyPrefixOrSuffix, dict);
                 log.warn("Repl slave save master exists dict: dict with key={}, slot={}", dictWithKeyPrefixOrSuffix, slot);
             }
         } catch (IOException e) {

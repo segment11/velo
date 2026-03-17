@@ -782,24 +782,11 @@ class BaseCommandTest extends Specification {
         exception
 
         when:
-        Dict.resetGlobalDictBytes(trainedDict.dictBytes)
         c.set(firstKey, longValueBytes)
         cvGet = inMemoryGetSet.getBuf(slot, firstKey, sFirstKey.bucketIndex(), sFirstKey.keyHash()).cv()
         then:
-        cvGet.dictSeqOrSpType == Dict.GLOBAL_ZSTD_DICT_SEQ
+        cvGet.dictSeqOrSpType == CompressedValue.NULL_DICT_SEQ
         c.getValueBytesByCv(cvGet).length == longValueBytes.length
-
-        when:
-        Dict.resetGlobalDictBytes(new byte[1])
-        exception = false
-        try {
-            c.getValueBytesByCv(cvGet)
-        } catch (DictMissingException e) {
-            println e.message
-            exception = true
-        }
-        then:
-        exception
 
         cleanup:
         dictMap.cleanUp()

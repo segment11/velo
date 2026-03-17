@@ -8,11 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.DataInputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
 import java.util.Date;
 import java.util.Objects;
 import java.util.Random;
@@ -30,35 +28,9 @@ public class Dict implements Serializable {
     public static final int SELF_ZSTD_DICT_SEQ = 1;
 
     /**
-     * Sequence number for the global Zstd dictionary.
-     */
-    public static final int GLOBAL_ZSTD_DICT_SEQ = 10;
-
-    /**
      * Singleton instance of the self-Zstd dictionary.
      */
     public static final Dict SELF_ZSTD_DICT = new Dict();
-
-    /**
-     * Singleton instance of the global Zstd dictionary.
-     */
-    public static final Dict GLOBAL_ZSTD_DICT = new Dict();
-
-    /**
-     * Key for the global Zstd dictionary.
-     * Note: This key should not be a prefix of any other dictionary key.
-     */
-    public static final String GLOBAL_ZSTD_DICT_KEY = "dict-x-global";
-
-    /**
-     * File name for the global dictionary file.
-     */
-    static final String GLOBAL_DICT_FILE_NAME = "dict-global-raw.dat";
-
-    /**
-     * Maximum length of the global dictionary bytes for latency considerations.
-     */
-    private static final int GLOBAL_DICT_BYTES_MAX_LENGTH = 1024 * 16;
 
     /**
      * Logger for logging information and warnings.
@@ -67,88 +39,6 @@ public class Dict implements Serializable {
 
     static {
         SELF_ZSTD_DICT.seq = SELF_ZSTD_DICT_SEQ;
-        GLOBAL_ZSTD_DICT.seq = GLOBAL_ZSTD_DICT_SEQ;
-    }
-
-    /**
-     * Resets the global dictionary bytes.
-     *
-     * @param dictBytes the new dictionary bytes
-     * @throws IllegalStateException if the dictionary bytes are too long or empty
-     */
-    // fix: create new contexts before closing old ones so worker threads never see null arrays.
-    // previously closeCtx() set arrays to null then initCtx() created new ones, leaving a window
-    // where concurrent compress/decompress calls would NPE or use already-closed native contexts.
-    public static void resetGlobalDictBytes(byte[] dictBytes) {
-        if (dictBytes.length == 0 || dictBytes.length > GLOBAL_DICT_BYTES_MAX_LENGTH) {
-            throw new IllegalStateException("Dict global dict bytes too long=" + dictBytes.length);
-        }
-
-        var oldDecompressCtxArray = GLOBAL_ZSTD_DICT.decompressCtxArray;
-        var oldCtxCompressArray = GLOBAL_ZSTD_DICT.ctxCompressArray;
-
-        // create new contexts with new dict bytes before swapping
-        var newDecompressCtxArray = new ZstdDecompressCtx[ConfForGlobal.slotWorkers];
-        for (int i = 0; i < newDecompressCtxArray.length; i++) {
-            newDecompressCtxArray[i] = new ZstdDecompressCtx();
-            newDecompressCtxArray[i].loadDict(dictBytes);
-        }
-        var newCtxCompressArray = new ZstdCompressCtx[ConfForGlobal.slotWorkers];
-        for (int i = 0; i < newCtxCompressArray.length; i++) {
-            newCtxCompressArray[i] = new ZstdCompressCtx();
-            newCtxCompressArray[i].loadDict(dictBytes);
-        }
-
-        // swap to new contexts atomically (single field write per array)
-        GLOBAL_ZSTD_DICT.dictBytes = dictBytes;
-        GLOBAL_ZSTD_DICT.decompressCtxArray = newDecompressCtxArray;
-        GLOBAL_ZSTD_DICT.ctxCompressArray = newCtxCompressArray;
-        log.warn("Dict global dict bytes overwritten, dict bytes length={}", dictBytes.length);
-
-        // close old contexts after new ones are in place
-        if (oldDecompressCtxArray != null) {
-            for (var ctx : oldDecompressCtxArray) {
-                ctx.close();
-            }
-        }
-        if (oldCtxCompressArray != null) {
-            for (var ctx : oldCtxCompressArray) {
-                ctx.close();
-            }
-        }
-    }
-
-    /**
-     * Initializes the global dictionary bytes from a file.
-     *
-     * @param targetFile the file containing the dictionary bytes
-     */
-    public static void initGlobalDictBytesByFile(File targetFile) {
-        if (!targetFile.exists()) {
-            log.warn("Dict global dict file not exists={}", targetFile.getAbsolutePath());
-            return;
-        }
-
-        byte[] dictBytes;
-        try {
-            dictBytes = Files.readAllBytes(targetFile.toPath());
-            resetGlobalDictBytes(dictBytes);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * Saves the global dictionary bytes to a file.
-     *
-     * @param targetFile the file to save the dictionary bytes to
-     */
-    public static void saveGlobalDictBytesToFile(File targetFile) {
-        try {
-            Files.write(targetFile.toPath(), GLOBAL_ZSTD_DICT.dictBytes);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     /**
@@ -209,15 +99,6 @@ public class Dict implements Serializable {
      */
     public byte[] getDictBytes() {
         return dictBytes;
-    }
-
-    /**
-     * Checks if the dictionary has valid dictionary bytes.
-     *
-     * @return true if the dictionary has valid dictionary bytes, false otherwise
-     */
-    public boolean hasDictBytes() {
-        return dictBytes != null && dictBytes.length > 1;
     }
 
     /**
@@ -559,7 +440,7 @@ public class Dict implements Serializable {
         return random.nextInt(1000) * 1000 * 1000 +
                 random.nextInt(1000) * 1000 +
                 random.nextInt(1000) +
-                GLOBAL_ZSTD_DICT_SEQ;
+                SELF_ZSTD_DICT_SEQ;
     }
 
     /**

@@ -208,7 +208,6 @@ public class DictMap implements NeedCleanUp {
         for (var entry : cacheDictBySeq.entrySet()) {
             entry.getValue().closeCtx();
         }
-        Dict.GLOBAL_ZSTD_DICT.closeCtx();
     }
 
     /**
@@ -288,24 +287,7 @@ public class DictMap implements NeedCleanUp {
             var keyPrefixOrSuffix = entry.getKey();
             TrainSampleJob.addKeyPrefixGroupIfNotExist(keyPrefixOrSuffix);
         }
-
-        Dict.initGlobalDictBytesByFile(new File(dirFile, Dict.GLOBAL_DICT_FILE_NAME));
     }
-
-    /**
-     * Updates the global dictionary bytes and saves them to a file.
-     *
-     * @param dictBytes the new global dictionary bytes
-     */
-    public synchronized void updateGlobalDictBytes(byte[] dictBytes) {
-        Dict.resetGlobalDictBytes(dictBytes);
-        Dict.saveGlobalDictBytesToFile(new File(dirFile, Dict.GLOBAL_DICT_FILE_NAME));
-    }
-
-    /**
-     * Label values for global dictionary metrics.
-     */
-    private final List<String> labelValuesGlobal = List.of("global_");
 
     /**
      * Label values for self dictionary metrics.
@@ -332,14 +314,6 @@ public class DictMap implements NeedCleanUp {
                 map.put("dict_compressed_ratio_" + dict.getSeq(), new SimpleGauge.ValueWithLabelValues(compressedRatio, labelValues));
             }
 
-            if (Dict.GLOBAL_ZSTD_DICT.hasDictBytes()) {
-                var compressedCount = Dict.GLOBAL_ZSTD_DICT.compressedCountTotal.sum();
-                var compressedRatio = Dict.GLOBAL_ZSTD_DICT.compressedRatio();
-
-                map.put("dict_compressed_count_" + Dict.GLOBAL_ZSTD_DICT_SEQ, new SimpleGauge.ValueWithLabelValues((double) compressedCount, labelValuesGlobal));
-                map.put("dict_compressed_ratio_" + Dict.GLOBAL_ZSTD_DICT_SEQ, new SimpleGauge.ValueWithLabelValues(compressedRatio, labelValuesGlobal));
-            }
-
             // self dict
             var compressedCount = Dict.SELF_ZSTD_DICT.compressedCountTotal.sum();
             var compressedRatio = Dict.SELF_ZSTD_DICT.compressedRatio();
@@ -351,4 +325,3 @@ public class DictMap implements NeedCleanUp {
         });
     }
 }
-
