@@ -11,6 +11,7 @@ import io.velo.mock.ByPassGetSet;
 import io.velo.persist.KeyLoader;
 import io.velo.persist.LocalPersist;
 import io.velo.persist.OneSlot;
+import io.velo.persist.ReadonlyException;
 import io.velo.persist.Wal;
 import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.incremental.XBigStrings;
@@ -598,6 +599,9 @@ public abstract class BaseCommand {
             bufOrCompressedValue = byPassGetSet.getBuf(slot, key, s.bucketIndex, s.keyHash);
         } else {
             var oneSlot = localPersist.oneSlot(slot);
+            if (!oneSlot.isCanRead()) {
+                throw new ReadonlyException();
+            }
             bufOrCompressedValue = oneSlot.get(key, s.bucketIndex, s.keyHash);
         }
 

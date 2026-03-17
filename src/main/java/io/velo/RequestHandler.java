@@ -495,6 +495,8 @@ public class RequestHandler {
                 try {
                     var bytes = reuseGGroup.get(slotWithKeyHashList.getFirst(), true);
                     return bytes != null ? new BulkReply(bytes) : NilReply.INSTANCE;
+                } catch (ReadonlyException e) {
+                    return ErrorReply.READONLY;
                 } catch (TypeMismatchException e) {
                     return new ErrorReply(e.getMessage());
                 } catch (DictMissingException e) {

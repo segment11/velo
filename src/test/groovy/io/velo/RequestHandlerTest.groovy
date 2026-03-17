@@ -103,6 +103,16 @@ class RequestHandlerTest extends Specification {
             it.slotWithKeyHashList.size() == 0
         }
 
+        when:
+        def replParseData = new byte[1][]
+        replParseData[0] = 'ignored'.bytes
+        def replParseRequest = new Request(replParseData, false, true)
+        replParseRequest.replRequest = new ReplRequest(0L, slot, ReplType.ping, new byte[0], 0)
+        requestHandler.parseSlots(replParseRequest)
+        then:
+        replParseRequest.slotWithKeyHashList.size() == 1
+        replParseRequest.slotWithKeyHashList.first().slot() == slot
+
         // test handle
         when:
         requestHandler.stop()
@@ -285,6 +295,13 @@ class RequestHandlerTest extends Specification {
         (reply as BulkReply).raw.length == 10
 
         when:
+        oneSlot.setCanRead(false)
+        reply = requestHandler.handle(getRequest2, socket)
+        then:
+        reply == ErrorReply.READONLY
+
+        when:
+        oneSlot.setCanRead(true)
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         cv.keyHash = sKey.keyHash()
         oneSlot.put(key, sKey.bucketIndex(), cv)

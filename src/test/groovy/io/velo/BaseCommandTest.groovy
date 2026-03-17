@@ -13,6 +13,7 @@ import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
+import io.velo.persist.ReadonlyException
 import io.velo.repl.cluster.MultiShard
 import io.velo.reply.Reply
 import io.velo.type.RedisList
@@ -272,6 +273,13 @@ class BaseCommandTest extends Specification {
         c.getExpireAt(sKey) == CompressedValue.NO_EXPIRE
 
         when:
+        oneSlot.setCanRead(false)
+        c.getCv(sKey)
+        then:
+        thrown(ReadonlyException)
+
+        when:
+        oneSlot.setCanRead(true)
         cv.expireAt = System.currentTimeMillis() - 1000
         oneSlot.put(key, sKey.bucketIndex(), cv)
         then:
