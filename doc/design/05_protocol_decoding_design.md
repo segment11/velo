@@ -156,16 +156,12 @@ Detection Rules (sequential):
    - "DELETE " (0x44 0x45 0x4C 0x45 0x54 0x45 0x20)
    - → HTTP protocol
 
-3. Check RESP patterns
+3. Check RESP command request pattern
    - Array marker: '*' (0x2A)
-   - Simple string: '+' (0x2B)
-   - Error: '-' (0x2D)
-   - Integer: ':' (0x3A)
-   - Bulk string: '$' (0x24)
    - → RESP protocol
 
-4. Default: RESP (fallback)
-   - Assume RESP if no pattern matches
+4. Default: UNKNOWN
+   - Wait for more bytes or reject unsupported top-level framing
 ```
 
 ### Implementation
@@ -193,9 +189,8 @@ private String detectProtocol(ByteBufs bufs) {
         return "HTTP";
     }
 
-    // Check RESP (default for Redis clients)
-    if (first6[0] == '*' || first6[0] == '+' || first6[0] == '-' ||
-        first6[0] == ':' || first6[0] == '$') {
+    // Check RESP command request framing
+    if (first6[0] == '*') {
         return "RESP";
     }
 
@@ -218,18 +213,16 @@ private boolean isXReplKeyword(byte[] bytes) {
 
 ### RESP Format Overview
 
-RESP (Redis Serialization Protocol) is the **primary protocol** for Redis:
+RESP (Redis Serialization Protocol) is the **primary protocol** for Redis.
+On the request path, Velo only accepts RESP array-form command frames, matching the normal Redis command ingress path:
 
 ```
-Data Types:
+Supported top-level request frame:
 
-1. Simple Strings: "+OK\r\n"
-2. Errors: "-Error message\r\n"
-3. Integers: ":1000\r\n"
-4. Bulk Strings: "$6\r\nfoobar\r\n"
-5. Arrays: "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"
-6. Nulls: "$-1\r\n" (bulk string null)
-        "*-1\r\n" (array null)
+1. Arrays: "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n"
+
+RESP bulk strings (`$...`) are still used for array elements, but Velo does not accept
+top-level request frames starting with `+`, `-`, `:`, or `$`.
 ```
 
 ### RESP Decoder Architecture
@@ -251,13 +244,10 @@ RESP class
     │       └─> Return long or throw
     │
     └─> decode() method
-            ├─> Read first byte (type marker)
-            ├─> Switch on type:
-            │   ├─> '+' → Simple string
-            │   ├─> '-' → Error message
-            │   ├─> ':' → Integer
-            │   ├─> '$' → Bulk string
-            │   └─> '*' → Array (or nested arrays)
+            ├─> Read first byte
+            ├─> Require '*' top-level array marker
+            ├─> Parse array length
+            ├─> Parse '$' bulk-string arguments
             └─> Return byte[][]
 ```
 
@@ -268,40 +258,21 @@ flowchart TB
     Start[Decode bytes] --> ReadFirst[Read first byte]
     ReadFirst --> CheckType{Type marker}
 
-    CheckType -->|''| Simple[Simple string]
-    CheckType -->|'-'| Error[Error]
-    CheckType -->|':'| Integer[Integer]
-    CheckType -->|'$'| Bulk[Bulk string]
     CheckType -->|'*'| Array[Array]
-
-    Simple --> ReadLine[Read line until CRLF]
-    Simple --> Return[Return parsed value]
-
-    Error --> ReadLine
-    Error --> Return
-
-    Integer --> ReadLine
-    Integer --> ParseInt[Parse long integer]
-    ParseInt --> Return
-
-    Bulk --> ReadLength[Read length from line]
-    Bulk --> CheckNull{Length == -1?}
-    CheckNull -->|Yes| ReturnNull[Return null/null byte[]]
-    CheckNull -->|No| ReadBytes[Read length + 2 bytes]
-    ReadBytes --> VerifyCRLF{Ends with CRLF?}
-    VerifyCRLF -->|No| ErrorMalformed[Throw malformed exception]
-    VerifyCRLF -->|Yes| ReturnBytes[Return bytes without CRLF]
+    CheckType -->|other| ErrorMalformed[Throw malformed exception]
 
     Array --> ReadCount[Read count from line]
     Array --> Loop{For i=0 to count}
-    Loop --> Nested[Recursive decode]
-    Nested --> Loop
+    Loop --> Bulk[Read '$' bulk string]
+    Bulk --> ReadLength[Read length from line]
+    ReadLength --> ReadBytes[Read length + 2 bytes]
+    ReadBytes --> VerifyCRLF{Ends with CRLF?}
+    VerifyCRLF -->|No| ErrorMalformed
+    VerifyCRLF -->|Yes| Loop
     Loop --> ReturnArray[Return byte[][]]
 
     ErrorMalformed --> End[End]
-    ReturnNull --> ReturnArray
-    ReturnBytes --> ReturnArray
-    Return --> End
+    ReturnArray --> End
 ```
 
 ### Implementation Details
@@ -318,15 +289,10 @@ public class RESP {
 
         byte firstByte = bufs.peek(1)[0];
 
-        switch (firstByte) {
-            case '*': return parseArray(bufs);
-            case '$': return parseBulkString(bufs);
-            case '+': return parseSimpleString(bufs);
-            case '-': return parseError(bufs);
-            case ':': return parseInteger(bufs);
-            default:
-                throw new MalformedDataException("Unknown RESP type: " + firstByte);
+        if (firstByte != '*') {
+            throw new MalformedDataException("Unsupported top-level RESP request type: " + firstByte);
         }
+        return parseArray(bufs);
     }
 
     private byte[][] parseArray(ByteBufs bufs) throws IncompleteDataException {
