@@ -16,11 +16,10 @@
 
 ## Overview
 
-Velo uses **Zstd compression with trainable dictionaries** to achieve high compression ratios for key-value storage. The compression system adapts to data patterns through three dictionary strategies:
+Velo uses **Zstd compression with trainable dictionaries** to achieve high compression ratios for key-value storage. The compression system adapts to data patterns through two dictionary strategies:
 
 1. **Self-dictionary** (default) - Generic compression without training
-2. **Global dictionary** - Single dictionary for entire dataset
-3. **Trained prefix dictionaries** - Multiple dictionaries for key prefix patterns
+2. **Trained prefix dictionaries** - Multiple dictionaries for key prefix patterns
 
 ### Compression Statistics
 
@@ -89,8 +88,7 @@ public class CompressedValue {
     // Dictionary sequences
     public static final int NULL_DICT_SEQ = 0;        // No compression
     public static final int SELF_ZSTD_DICT = 1;      // Self-dict (default)
-    public static final int GLOBAL_ZSTD_DICT = 10;    // Global dict
-    public static final int FIRST_TRAINED_DICT = 11;  // First trained dict
+    public static final int FIRST_TRAINED_DICT = 10;  // First trained dict
 
     /**
      * Encode value bytes to compressed format
@@ -316,8 +314,7 @@ Zstd Dictionary (binary):
 | Dictionary | Sequence | Size | Training | Usage |
 |-----------|---------|------|----------|-------|
 | Self-dict | 1 | 0 bytes (built-in) | N/A | Default compression |
-| Global dict | 10 | 16KB | Full dataset | Fallback when no trained dict |
-| Prefix dicts | 11+ | Varies | Per prefix | Best compression (primary) |
+| Prefix dicts | 10+ | Varies | Per prefix | Best compression (primary) |
 
 ### Compression with Dictionary
 
@@ -554,9 +551,6 @@ public class DictMap {
     // Next available sequence number
     private int nextSeq = FIRST_TRAINED_DICT;
 
-    // Global dictionary
-    private Dict globalDict;
-
     public static DictMap getInstance() {
         return instance;
     }
@@ -573,12 +567,7 @@ public class DictMap {
             return prefixDict;
         }
 
-        // Fallback: Global dictionary
-        if (globalDict != null) {
-            return globalDict;
-        }
-
-        // No dictionary available
+        // No trained dictionary available
         return null; // Will use SELF_ZSTD_DICT
     }
 
@@ -765,9 +754,6 @@ VALUE ENCODING
     └─> Get Best Dictionary
         ├─> Trained dict for prefix?
         │   ├─> YES → Use trained dict
-        │   └─> NO
-        ├─> Global dict available?
-        │   ├─> YES → Use global dict
         │   └─> NO
         └─> Use self-dict
 

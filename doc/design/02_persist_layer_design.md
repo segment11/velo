@@ -1635,7 +1635,7 @@ Slot Worker Thread 0          Slot Worker Thread 1
         │  Shared Resources    │
         │                      │
         │  DictMap             │
-        │  - Global dictionaries│
+        │  - Trained dictionaries│
         │  - Thread-local ctx   │
         │                      │
         │  LocalPersist        │

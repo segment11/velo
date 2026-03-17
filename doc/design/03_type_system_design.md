@@ -262,7 +262,7 @@ int originalSize = valueBytes.length;
 int compressedSize = Zstd.compress(valueBytes, dict);
 
 // Only compress if it helps
-if (dictSeq == 0 || compressedSize >= originalSize * 0.9) {
+if (compressedSize >= originalSize * 0.9) {
     return encodeUncompressed(valueBytes);
 } else {
     return encodeCompressed(compressedBytes, dictSeq);
