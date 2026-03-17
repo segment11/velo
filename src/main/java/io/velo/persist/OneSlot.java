@@ -1492,7 +1492,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public BufOrCompressedValue get(String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
-        var cvEncodedFromWal = getFromWal(key, bucketIndex);
+        var isExpiredFlagArray = new boolean[1];
+        var cvEncodedFromWal = getFromWal(key, bucketIndex, isExpiredFlagArray);
         if (cvEncodedFromWal != null) {
             kvLRUHitTotal++;
             kvLRUCvEncodedLengthTotal += cvEncodedFromWal.length;
@@ -1502,6 +1503,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 return null;
             }
             return new BufOrCompressedValue(Unpooled.wrappedBuffer(cvEncodedFromWal), null);
+        }
+
+        if (isExpiredFlagArray[0]) {
+            return null;
         }
 
         // from lru cache
@@ -1612,17 +1617,22 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     /**
      * Retrieves the value for a key from the write-ahead log (WAL).
      *
-     * @param key         the key
-     * @param bucketIndex the bucket index
+     * @param key                the key
+     * @param bucketIndex        the bucket index
+     * @param isExpiredFlagArray an array to store whether the key is expired or deleted
      * @return the value as a byte array
      */
-    byte[] getFromWal(@NotNull String key, int bucketIndex) {
+    byte[] getFromWal(@NotNull String key, int bucketIndex, boolean[] isExpiredFlagArray) {
         checkCurrentThreadId();
 
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
         var v = targetWal.getV(key);
-        if (v == null || v.isExpired()) {
+        if (v == null) {
+            return null;
+        }
+        if (v.isExpired()) {
+            isExpiredFlagArray[0] = true;
             return null;
         }
         return v.cvEncoded();
@@ -1649,10 +1659,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public boolean exists(@NotNull String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
-        var cvEncodedFromWal = getFromWal(key, bucketIndex);
+        var isExpiredFlagArray = new boolean[1];
+        var cvEncodedFromWal = getFromWal(key, bucketIndex, isExpiredFlagArray);
         if (cvEncodedFromWal != null) {
             // write batch kv is the newest
             return !CompressedValue.isDeleted(cvEncodedFromWal);
+        }
+
+        if (isExpiredFlagArray[0]) {
+            return false;
         }
 
         var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, key, keyHash);
