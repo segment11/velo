@@ -1,4 +1,4 @@
-package io.velo.tools
+package io.velo.test.tools
 
 import org.apache.commons.net.telnet.TelnetClient
 import org.slf4j.LoggerFactory
@@ -88,14 +88,17 @@ class RedisServer {
     void stop() {
         if (process != null && process.isAlive()) {
             process.destroy()
+            println "stop redis server, port=$port"
+        } else {
+            println "redis server not running, port=$port"
         }
     }
 
-    Jedis initJedis() {
+    static Jedis initJedis(String host = '127.0.0.1', int port) {
         def log = LoggerFactory.getLogger(RedisServer)
         for (int i = 0; i < 10; i++) {
             try {
-                def jedis = new Jedis('127.0.0.1', port)
+                def jedis = new Jedis(host, port)
                 jedis.ping()
                 log.info 'connected to server, port={}', port
                 return jedis
@@ -105,5 +108,24 @@ class RedisServer {
             }
         }
         throw new RuntimeException('server not ready after waiting 50 seconds')
+    }
+
+    Jedis jedis() {
+        initJedis('127.0.0.1', port)
+    }
+
+    static void main(String[] args) {
+        if (!isBinExists()) {
+            println 'bin file not exists, please copy redis-server to /usr/local/bin'
+            return
+        }
+
+        def server = new RedisServer().randomPort().args('--daemonize', 'no')
+        Thread.start {
+            server.run()
+        }
+        def jedis = server.jedis()
+        jedis.close()
+        server.stop()
     }
 }

@@ -1,6 +1,8 @@
 package io.velo.repl.cluster;
 
 import io.velo.Utils;
+import io.velo.repl.support.JedisCallback;
+import io.velo.repl.support.JedisPoolHolder;
 
 public class Node {
     // for json
@@ -105,5 +107,17 @@ public class Node {
                 ", followNodeId='" + followNodeId + '\'' +
                 ", nodeId='" + nodeId() + '\'' +
                 '}';
+    }
+
+    /**
+     * Execute redis command to this node
+     *
+     * @param callback the Jedis callback
+     * @param <R>      the result
+     * @return the result
+     */
+    public <R> R exe(JedisCallback<R> callback) {
+        var jedisPool = JedisPoolHolder.getInstance().createIfNotCached(host, port);
+        return JedisPoolHolder.exe(jedisPool, callback);
     }
 }

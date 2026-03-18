@@ -534,8 +534,18 @@ class FailoverManager {
             return
         }
 
-        // choose repl offset nearest slave, todo
-        def targetSlaveNode = targetSlaveNodeList.getFirst()
+        // choose repl offset nearest slave
+        def sortedSlaveNodeList = targetSlaveNodeList.sort { a ->
+            long offset = a.exe { jedis ->
+                def text = jedis.info('replication')
+                def infoLines = text.readLines()
+                def targetLine = infoLines.find { line -> line.contains('slave_repl_offset:') }
+                def arr = targetLine.split(':')
+                return arr[1] as long
+            }
+            offset
+        }
+        def targetSlaveNode = sortedSlaveNodeList.getLast()
 
         // change slave to master
         targetSlaveNode.master = true

@@ -9,7 +9,7 @@ import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
 import io.velo.reply.*
-import io.velo.tools.RedisServer
+import io.velo.test.tools.RedisServer
 import spock.lang.Specification
 
 import java.time.Duration

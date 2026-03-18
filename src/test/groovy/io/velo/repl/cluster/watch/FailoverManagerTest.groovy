@@ -9,6 +9,14 @@ import io.velo.repl.support.JedisPoolHolder
 import spock.lang.Specification
 
 class FailoverManagerTest extends Specification {
+    def setupSpec() {
+        Consts.downloadAndStartZookeeper()
+    }
+
+    def cleanupSpec() {
+        Consts.stopZookeeper()
+    }
+
     def 'test base'() {
         given:
         def fm = FailoverManager.instance

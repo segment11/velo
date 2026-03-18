@@ -5,6 +5,7 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.acl.AclUsers;
 import io.velo.acl.U;
 import io.velo.command.AGroup;
+import io.velo.command.XGroup;
 import io.velo.decode.BigStringNoMemoryCopy;
 import io.velo.decode.Request;
 import io.velo.mock.ByPassGetSet;
@@ -111,6 +112,8 @@ public abstract class BaseCommand {
     protected byte[][] data;
     protected ITcpSocket socket;
 
+    protected final boolean isXGroup;
+
     @TestOnly
     public void setCmd(String cmd) {
         this.cmd = cmd;
@@ -154,6 +157,8 @@ public abstract class BaseCommand {
         this.cmd = cmd;
         this.data = data;
         this.socket = socket;
+
+        this.isXGroup = this instanceof XGroup;
     }
 
     /**
@@ -595,7 +600,7 @@ public abstract class BaseCommand {
             bufOrCompressedValue = byPassGetSet.getBuf(slot, key, s.bucketIndex, s.keyHash);
         } else {
             var oneSlot = localPersist.oneSlot(slot);
-            if (!oneSlot.isCanRead()) {
+            if (!oneSlot.isCanRead() && !isXGroup) {
                 throw new CannotReadException();
             }
             bufOrCompressedValue = oneSlot.get(key, s.bucketIndex, s.keyHash);
@@ -1107,7 +1112,7 @@ public abstract class BaseCommand {
         }
 
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
-        if (!oneSlot.isCanRead()) {
+        if (!oneSlot.isCanRead() && !isXGroup) {
             throw new CannotReadException();
         }
         return oneSlot.exists(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
