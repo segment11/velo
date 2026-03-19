@@ -192,8 +192,9 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 1. Run relevant tests: `./gradlew test --tests "*YourTest*"`
 2. Run full test suite if changes are significant
 3. Check code coverage with JaCoCo report, if coverage is below 80%, show warnings and consider adding more tests
-4. Test Redis protocol compatibility if applicable
-5. Verify performance with JMH benchmarks if relevant
+4. After running relevant tests, inspect the JaCoCo HTML report and confirm the changed code lines or branches were actually executed; a passing test alone is not enough
+5. Test Redis protocol compatibility if applicable
+6. Verify performance with JMH benchmarks if relevant
 
 ### Testing Guidelines
 
@@ -203,6 +204,7 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 - Mock external dependencies appropriately
 - Use as much as existing test codes
 - Test thread-safety for concurrent operations
+- After running tests for a change, check the JaCoCo report for the touched classes and make sure the changed code path was executed
 
 ## Configuration
 
@@ -327,10 +329,11 @@ def 'test your functionality'() {
 ## Notes for Agents
 
 1. **Always run tests** before and after changes, do not run all tests, run only relevant tests
-2. **Follow existing patterns** rather than introducing new ones
-3. **Consider performance implications** of all changes
-4. **Maintain Redis compatibility** in all protocol implementations
-5. **Test multi-threading scenarios** for concurrent operations
-6. **Use proper logging** for debugging and monitoring
-7. **Document complex logic** with clear comments
-8. **Handle errors gracefully** and provide meaningful messages
+2. **Always check JaCoCo after relevant tests** and confirm the changed lines or branches were executed
+3. **Follow existing patterns** rather than introducing new ones
+4. **Consider performance implications** of all changes
+5. **Maintain Redis compatibility** in all protocol implementations
+6. **Test multi-threading scenarios** for concurrent operations
+7. **Use proper logging** for debugging and monitoring
+8. **Document complex logic** with clear comments
+9. **Handle errors gracefully** and provide meaningful messages
