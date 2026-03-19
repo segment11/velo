@@ -120,6 +120,11 @@ class FailoverManager {
 
     private final LeaderSelector leaderSelector = LeaderSelector.instance
 
+    @TestOnly
+    Closure<Long> slaveReplOffsetProviderForTest
+    @TestOnly
+    Closure<Void> delayRestartCheckHandlerForTest
+
     /**
      * Adds a new cluster metadata to the map of cluster endpoint statuses and updates the metadata in Zookeeper.
      * @param oneClusterName The name of the cluster.
@@ -195,6 +200,11 @@ class FailoverManager {
      */
     @VisibleForTesting
     void addDelayRestartCheckForFailedHostAndPortNode(HostAndPort failHostAndPort, String clusterxNodesArgs) {
+        if (delayRestartCheckHandlerForTest != null) {
+            delayRestartCheckHandlerForTest.call(failHostAndPort, clusterxNodesArgs)
+            return
+        }
+
         log.warn 'failover manager add delay restart check for failed host and port node, host and port={}:{}', failHostAndPort.host, failHostAndPort.port
         def path = zookeeperVeloMetaBasePath + '/' + DELAY_RESTART_CHECK_FOR_FAILED_HOST_AND_PORT_NODE_NAME_PREFIX + failHostAndPort.toString()
 
@@ -208,6 +218,20 @@ class FailoverManager {
     }
 
     private final JedisPoolHolder jedisPoolHolder = JedisPoolHolder.instance
+
+    long getSlaveReplOffset(Node node) {
+        if (slaveReplOffsetProviderForTest != null) {
+            return slaveReplOffsetProviderForTest.call(node)
+        }
+
+        node.exe { jedis ->
+            def text = jedis.info('replication')
+            def infoLines = text.readLines()
+            def targetLine = infoLines.find { line -> line.contains('slave_repl_offset:') }
+            def arr = targetLine.split(':')
+            return arr[1] as long
+        }
+    }
 
     /**
      * Checks if a server has restarted and performs the necessary set nodes operation.
@@ -536,14 +560,7 @@ class FailoverManager {
 
         // choose repl offset nearest slave
         def sortedSlaveNodeList = targetSlaveNodeList.sort { a ->
-            long offset = a.exe { jedis ->
-                def text = jedis.info('replication')
-                def infoLines = text.readLines()
-                def targetLine = infoLines.find { line -> line.contains('slave_repl_offset:') }
-                def arr = targetLine.split(':')
-                return arr[1] as long
-            }
-            offset
+            getSlaveReplOffset(a)
         }
         def targetSlaveNode = sortedSlaveNodeList.getLast()
 

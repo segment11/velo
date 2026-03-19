@@ -253,4 +253,40 @@ yyy localhost 17380 slave bbb
         then:
         true
     }
+
+    def 'do failover one shard picks slave with highest replication offset'() {
+        given:
+        def fm = FailoverManager.instance
+        fm.mockSetNodes = true
+        fm.clearOneEndpointStatusMapByClusterName()
+        def failHostAndPort = new HostAndPort('localhost', 7379)
+        def lines = '''
+aaa localhost 7379 master - 0-8191
+xxx localhost 17379 slave aaa
+zzz localhost 17381 slave aaa
+'''.trim().readLines().collect { it.trim() }.findAll { it }
+
+        fm.delayRestartCheckHandlerForTest = { HostAndPort ignored, String clusterxNodesArgs -> null }
+        fm.slaveReplOffsetProviderForTest = { Node node ->
+            if (node.port == 17379) {
+                return 100L
+            }
+            if (node.port == 17381) {
+                return 200L
+            }
+            throw new IllegalStateException("unexpected node port=${node.port}")
+        }
+
+        when:
+        fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
+
+        then:
+        fm.oneEndpointStatusMapByClusterName['cluster1'].keySet() == [new HostAndPort('localhost', 17381)] as Set
+
+        cleanup:
+        fm.mockSetNodes = false
+        fm.slaveReplOffsetProviderForTest = null
+        fm.delayRestartCheckHandlerForTest = null
+        fm.clearOneEndpointStatusMapByClusterName()
+    }
 }
