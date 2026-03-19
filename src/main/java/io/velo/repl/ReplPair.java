@@ -642,7 +642,8 @@ public class ReplPair {
 
     public void closeSlaveConnectSocket() {
         if (slaveConnectSocketInMaster != null && !slaveConnectSocketInMaster.isClosed()) {
-            var oneSlot = LocalPersist.getInstance().oneSlot(slot);
+            var localPersist = LocalPersist.getInstance();
+            var oneSlot = localPersist.oneSlot(slot);
             oneSlot.asyncExecute(() -> {
                 try {
                     slaveConnectSocketInMaster.close();

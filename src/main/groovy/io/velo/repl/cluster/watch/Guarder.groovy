@@ -69,7 +69,8 @@ def schedulePeriodSeconds = c.getInt('schedulePeriodSeconds', 5)
 
 def singleThreadScheduledExecutor = Executors.newSingleThreadScheduledExecutor()
 singleThreadScheduledExecutor.scheduleAtFixedRate(() -> {
-    LeaderSelector.instance.tryConnectAndGetMasterListenAddress(true)
+    def leaderSelector = LeaderSelector.instance
+    leaderSelector.tryConnectAndGetMasterListenAddress(true)
     try {
         FailoverManager.instance.checkFailover()
     } catch (Exception e) {

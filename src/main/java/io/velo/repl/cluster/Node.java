@@ -117,7 +117,8 @@ public class Node {
      * @return the result
      */
     public <R> R exe(JedisCallback<R> callback) {
-        var jedisPool = JedisPoolHolder.getInstance().createIfNotCached(host, port);
+        var jedisPoolHolder = JedisPoolHolder.getInstance();
+        var jedisPool = jedisPoolHolder.createIfNotCached(host, port);
         return JedisPoolHolder.exe(jedisPool, callback);
     }
 }
