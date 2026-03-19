@@ -289,4 +289,41 @@ zzz localhost 17381 slave aaa
         fm.delayRestartCheckHandlerForTest = null
         fm.clearOneEndpointStatusMapByClusterName()
     }
+
+    def 'do failover if need skips failover when slave reports failed host ping ok'() {
+        given:
+        def fm = FailoverManager.instance
+        fm.clearOneEndpointStatusMapByClusterName()
+        fm.clearOneEndpointStatusMapByClusterNamePostBySlave()
+
+        def failedHostAndPort = new HostAndPort('localhost', 7379)
+        def peerHostAndPort = new HostAndPort('localhost', 7380)
+        def failedStatus = new OneEndpointStatus()
+        10.times {
+            failedStatus.addStatus(OneEndpointStatus.Status.PING_FAIL)
+        }
+        def failedStatusBySlave = new OneEndpointStatus()
+        failedStatusBySlave.addStatus(OneEndpointStatus.Status.PING_OK)
+        def peerStatus = new OneEndpointStatus()
+        peerStatus.addStatus(OneEndpointStatus.Status.PING_OK)
+        fm.addOneMeta('cluster1', [failedHostAndPort, peerHostAndPort])
+        fm.setOneEndpointStatus('cluster1', failedHostAndPort, failedStatus)
+        fm.setOneEndpointStatus('cluster1', peerHostAndPort, peerStatus)
+        fm.addOneEndpointStatusMapByClusterNamePostBySlave('localhost:17379', [
+                cluster1: [
+                        (failedHostAndPort): failedStatusBySlave,
+                ]
+        ])
+
+        when:
+        fm.doFailoverIfNeed()
+
+        then:
+        noExceptionThrown()
+        fm.oneEndpointStatusMapByClusterName['cluster1'].keySet() == [failedHostAndPort, peerHostAndPort] as Set
+
+        cleanup:
+        fm.clearOneEndpointStatusMapByClusterName()
+        fm.clearOneEndpointStatusMapByClusterNamePostBySlave()
+    }
 }

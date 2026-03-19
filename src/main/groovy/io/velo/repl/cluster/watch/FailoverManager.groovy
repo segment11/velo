@@ -118,6 +118,16 @@ class FailoverManager {
         oneEndpointStatusMapByClusterName[oneClusterName] = newOneEndpointStatusMap
     }
 
+    @TestOnly
+    synchronized void setOneEndpointStatus(String oneClusterName, HostAndPort hostAndPort, OneEndpointStatus oneEndpointStatus) {
+        def oneEndpointStatusMap = oneEndpointStatusMapByClusterName[oneClusterName]
+        if (oneEndpointStatusMap == null) {
+            oneEndpointStatusMap = new HashMap<HostAndPort, OneEndpointStatus>()
+            oneEndpointStatusMapByClusterName[oneClusterName] = oneEndpointStatusMap
+        }
+        oneEndpointStatusMap[hostAndPort] = oneEndpointStatus
+    }
+
     private final LeaderSelector leaderSelector = LeaderSelector.instance
 
     @TestOnly
@@ -416,7 +426,7 @@ class FailoverManager {
                     }
 
                     def oneEndpointStatusBySlave = oneEndpointStatusMapByClusterName[hostAndPort]
-                    if (oneEndpointStatus == null) {
+                    if (oneEndpointStatusBySlave == null) {
                         continue
                     }
 
