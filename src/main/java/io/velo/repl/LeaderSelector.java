@@ -300,12 +300,8 @@ public class LeaderSelector implements NeedCleanUp {
 
                 var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
                 if (replPairAsSlave != null) {
-                    if (replPairAsSlave.isMasterCanNotConnect()) {
+                    if (replPairAsSlave.isMasterReadonly() && replPairAsSlave.isAllCaughtUp()) {
                         canResetSelfAsMasterNow = true;
-                    } else {
-                        if (replPairAsSlave.isMasterReadonly() && replPairAsSlave.isAllCaughtUp()) {
-                            canResetSelfAsMasterNow = true;
-                        }
                     }
                 } else {
                     canResetSelfAsMasterNow = true;

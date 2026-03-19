@@ -70,6 +70,20 @@ class RedisServer {
         this
     }
 
+    RedisServer dir(String dir) {
+        args << '--dir'
+        args << dir
+        args << '--logfile'
+        args << "${dir}/redis.log".toString()
+        this
+    }
+
+    RedisServer daemonize() {
+        args << '--daemonize'
+        args << 'yes'
+        this
+    }
+
     RedisServer args(String... args) {
         this.args.addAll args
         this

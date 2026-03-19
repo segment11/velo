@@ -1,6 +1,7 @@
 package io.velo.repl
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.segment.common.Utils
 import io.activej.eventloop.Eventloop
 import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
@@ -10,6 +11,7 @@ import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.repl.support.JedisPoolHolder
+import io.velo.test.tools.RedisServer
 import spock.lang.Specification
 
 import java.time.Duration
@@ -37,7 +39,7 @@ class LeaderSelectorTest extends Specification {
         leaderSelector.lastGetMasterListenAddressAsSlave == null
         leaderSelector.masterAddressLocalMocked == testListenAddress
         leaderSelector.tryConnectAndGetMasterListenAddress() == testListenAddress
-        leaderSelector.getFirstSlaveListenAddressByMasterHostAndPort('localhost', 6379, slot) == testListenAddress
+        leaderSelector.getFirstSlaveListenAddressByMasterHostAndPort('localhost', 16379, slot) == testListenAddress
         leaderSelector.resetAsMaster(e -> { })
         leaderSelector.resetAsSlave('', 0, e -> { })
 
@@ -187,7 +189,7 @@ class LeaderSelectorTest extends Specification {
         }
         r = future.get()
         then:
-        r
+        !r
 
         when:
         oneSlot.createReplPairAsSlave('localhost', 7379)
@@ -240,6 +242,25 @@ class LeaderSelectorTest extends Specification {
         r
 
         when:
+        replPairAsSlave.masterReadonly = true
+        replPairAsSlave.allCaughtUp = true
+        future = new CompletableFuture()
+        leaderSelector.resetAsMaster { e ->
+            if (e != null) {
+                println e.message
+                future.complete(false)
+            } else {
+                future.complete(true)
+            }
+        }
+        r = future.get()
+        then:
+        r
+
+        when:
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
+        replPairAsSlave.masterCanNotConnect = true
         replPairAsSlave.masterReadonly = true
         replPairAsSlave.allCaughtUp = true
         future = new CompletableFuture()
@@ -326,24 +347,46 @@ class LeaderSelectorTest extends Specification {
         slaveCheckValues.currentTimeMillis = System.currentTimeMillis() - 1000
         def objectMapper = new ObjectMapper()
         def jsonStr = objectMapper.writeValueAsString(slaveCheckValues)
-        try {
-            def jedisPool = JedisPoolHolder.instance.createIfNotCached('localhost', 6379)
-            JedisPoolHolder.exe(jedisPool) { jedis ->
-                jedis.set(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + "," +
-                        XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD,
-                        jsonStr)
-                jedis.set(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + ",slot,0," +
-                        XGroup.X_GET_FIRST_SLAVE_LISTEN_ADDRESS_AS_SUB_CMD,
-                        'localhost:6380')
+
+        RedisServer redisServer
+        if (RedisServer.isBinExists()) {
+            def redisServerDir = '/tmp/redis_server_for_leader_selector_test'
+            new File(redisServerDir).mkdir()
+            redisServer = new RedisServer().port(16379).dir(redisServerDir).daemonize().noSave()
+
+            boolean isRunOk = false
+            if (Utils.isPortListenAvailable(16379)) {
+                def exitCode = redisServer.run()
+                isRunOk = exitCode == 0
+                Thread.sleep(1000 * 5)
+            } else {
+                redisServer = null
+                println 'port 16379 is already listening'
+                isRunOk = true
             }
-            doThisCase = true
-        } catch (Exception e) {
-            println e.message
+
+            if (isRunOk) {
+                try {
+                    def jedisPool = JedisPoolHolder.instance.createIfNotCached('localhost', 16379)
+                    JedisPoolHolder.exe(jedisPool) { jedis ->
+                        jedis.set(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + "," +
+                                XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD,
+                                jsonStr)
+                        jedis.set(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + ",slot,0," +
+                                XGroup.X_GET_FIRST_SLAVE_LISTEN_ADDRESS_AS_SUB_CMD,
+                                'localhost:6380')
+                    }
+                    doThisCase = true
+                } catch (Exception e) {
+                    println e.message
+                }
+            }
         }
+
         if (doThisCase) {
             // change master port, need close old as slave
             future = new CompletableFuture()
-            leaderSelector.resetAsSlave('localhost', 6379) { e ->
+            leaderSelector.resetAsSlave('localhost', 16379) { e ->
                 if (e != null) {
                     println e.message
                     future.complete(false)
@@ -363,14 +406,14 @@ class LeaderSelectorTest extends Specification {
         slaveCheckValues.currentTimeMillis = System.currentTimeMillis()
         jsonStr = objectMapper.writeValueAsString(slaveCheckValues)
         if (doThisCase) {
-            def jedisPool = JedisPoolHolder.instance.createIfNotCached('localhost', 6379)
+            def jedisPool = JedisPoolHolder.instance.createIfNotCached('localhost', 16379)
             JedisPoolHolder.exe(jedisPool) { jedis ->
                 jedis.set(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + "," +
                         XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD,
                         jsonStr)
             }
             future = new CompletableFuture()
-            leaderSelector.resetAsSlave('localhost', 6379) { e ->
+            leaderSelector.resetAsSlave('localhost', 16379) { e ->
                 if (e != null) {
                     println e.message
                     future.complete(false)
@@ -390,7 +433,7 @@ class LeaderSelectorTest extends Specification {
         when:
         if (doThisCase) {
             future = new CompletableFuture()
-            leaderSelector.resetAsSlave('localhost', 6379) { e ->
+            leaderSelector.resetAsSlave('localhost', 16379) { e ->
                 if (e != null) {
                     println e.message
                     future.complete(false)
@@ -410,7 +453,7 @@ class LeaderSelectorTest extends Specification {
         if (doThisCase) {
             oneSlot.removeReplPairAsSlave()
             future = new CompletableFuture()
-            leaderSelector.resetAsSlave('localhost', 6379) { e ->
+            leaderSelector.resetAsSlave('localhost', 16379) { e ->
                 if (e != null) {
                     println e.message
                     future.complete(false)
@@ -426,14 +469,14 @@ class LeaderSelectorTest extends Specification {
 
         when:
         def firstSlaveListenAddress = doThisCase ?
-                leaderSelector.getFirstSlaveListenAddressByMasterHostAndPort('localhost', 6379, slot) :
+                leaderSelector.getFirstSlaveListenAddressByMasterHostAndPort('localhost', 16379, slot) :
                 'localhost:6380'
         then:
         firstSlaveListenAddress == 'localhost:6380'
 
         when:
         leaderSelector.masterAddressLocalMocked = 'localhost:6379'
-        firstSlaveListenAddress = leaderSelector.getFirstSlaveListenAddressByMasterHostAndPort('localhost', 6379, slot)
+        firstSlaveListenAddress = leaderSelector.getFirstSlaveListenAddressByMasterHostAndPort('localhost', 16379, slot)
         then:
         firstSlaveListenAddress == 'localhost:6379'
 
@@ -441,5 +484,8 @@ class LeaderSelectorTest extends Specification {
         JedisPoolHolder.instance.cleanUp()
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+        if (redisServer) {
+            redisServer.stop()
+        }
     }
 }
