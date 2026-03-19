@@ -1004,6 +1004,30 @@ class XGroupTest extends Specification {
         r.isEmpty()
 
         when:
+        def oldCatchUpOffsetMinDiff = ConfForSlot.global.confRepl.catchUpOffsetMinDiff
+        ConfForSlot.global.confRepl.catchUpOffsetMinDiff = n
+        oneSlot.setCanRead(false)
+        contentBytes = new byte[1 + 4 + 8 + 4 + 8 + 4 + n]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.put((byte) 0)
+        requestBuffer.putInt(0)
+        requestBuffer.putLong(0)
+        requestBuffer.putInt(0)
+        requestBuffer.putLong(n + 1L)
+        requestBuffer.putInt(n)
+        for (v in vList) {
+            def encoded = new XWalV(v).encodeWithType()
+            requestBuffer.put(encoded)
+        }
+        metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isEmpty()
+        oneSlot.isCanRead()
+
+        when:
+        ConfForSlot.global.confRepl.catchUpOffsetMinDiff = oldCatchUpOffsetMinDiff
         contentBytes = new byte[1 + 4 + 8 + 4 + 8 + 4 + binlogOneSegmentLength]
         replRequest.data = contentBytes
         requestBuffer = ByteBuffer.wrap(contentBytes)
@@ -1161,6 +1185,7 @@ class XGroupTest extends Specification {
         r.isEmpty()
 
         cleanup:
+        ConfForSlot.global.confRepl.catchUpOffsetMinDiff = 1024 * 1024
         localPersist.cleanUp()
         dictMap.cleanUp()
         Consts.persistDir.deleteDir()

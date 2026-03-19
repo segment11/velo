@@ -1314,7 +1314,8 @@ public class XGroup extends BaseCommand {
         var isCatchUpToCurrentFile = fetchedFileIndex == masterCurrentFileIndex;
         boolean canRead;
         if (isCatchUpToCurrentFile) {
-            var diffOffset = masterCurrentOffset - fetchedOffset - skipBytesN;
+            var slaveCurrentOffset = fetchedOffset + readSegmentLength;
+            var diffOffset = masterCurrentOffset - slaveCurrentOffset;
             canRead = diffOffset < ConfForSlot.global.confRepl.catchUpOffsetMinDiff;
         } else {
             canRead = false;
@@ -1465,7 +1466,7 @@ public class XGroup extends BaseCommand {
                     System.out.println("Repl slave try catch up again, is all caught up!!!, slot=" + targetSlot);
                 } else {
                     System.out.println("Repl slave try catch up again, is not!!! all caught up!!!, slot=" + targetSlot);
-                    // todo, try to loop if not all caught up
+                    // try to loop if not all caught up, but usually can not connect to master, goto exception catch block, ignore
                 }
             } catch (Exception e) {
                 log.error("Repl slave try catch up again after slave tcp client close error", e);
