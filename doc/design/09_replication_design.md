@@ -194,15 +194,37 @@ Master                                       Slave
 
 ```
 binlog-{slot}/
-├── binlog-0   (Segment 0)
-├── binlog-1   (Segment 1)
-├── binlog-2   (Segment 2)
+├── binlog-0   (File 0)
+├── binlog-1   (File 1)
+├── binlog-2   (File 2)
 ├── ...
-└── binlog-N   (Segment N)
+└── binlog-N   (File N)
 
 Each file: ≤ binlogOneFileMaxLength (default: 32MB)
-Segment size: binlogOneSegmentLength (default: 262,144 bytes)
-Total segments: binlogOneFileMaxLength / binlogOneSegmentLength ≈ 128
+Segment size: binlogOneSegmentLength (default: 262,144 bytes = 256KB)
+Segments per file: binlogOneFileMaxLength / binlogOneSegmentLength = 128
+```
+
+### File and Segment Relationship
+
+Each binlog file contains multiple fixed-size segments:
+
+```
+File binlog-0 (32MB):
+  ┌────────────────────────────────────────────────────────┐
+  │ Segment 0     │ Segment 1     │ ... │ Segment 127      │
+  │ (256KB)       │ (256KB)       │     │ (256KB)          │
+  └────────────────────────────────────────────────────────┘
+  Offset: 0         262144         ...   33292288
+
+File binlog-1 (32MB):
+  ┌────────────────────────────────────────────────────────┐
+  │ Segment 128   │ Segment 129   │ ... │ Segment 255      │
+  │ (256KB)       │ (256KB)       │     │ (256KB)          │
+  └────────────────────────────────────────────────────────┘
+
+Segment is the unit for replication catch-up, not the file.
+Master reads one segment at a time and sends to slave.
 ```
 
 ### Binlog Entry Types
