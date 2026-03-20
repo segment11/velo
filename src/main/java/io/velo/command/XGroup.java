@@ -1195,6 +1195,9 @@ public class XGroup extends BaseCommand {
             buf.put(readSegmentBytes);
         });
 
+        // may be no aligned, only for response when 'info replication'
+        // when do next catch up, slave will send margined offset
+        // refer to s_catch_up method, 'var marginLastUpdatedOffset = Binlog.marginFileOffset(lastUpdatedOffset);'
         replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(new Binlog.FileIndexAndOffset(needFetchFileIndex,
                 needFetchOffset + readSegmentBytes.length));
         return Repl.reply(slot, replPair, s_catch_up, content);
