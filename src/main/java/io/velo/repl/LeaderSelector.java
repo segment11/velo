@@ -145,7 +145,7 @@ public class LeaderSelector implements NeedCleanUp {
         this.hasLeadershipLocalMocked = hasLeadershipLocalMocked;
     }
 
-    public boolean hasLeadership() {
+    public synchronized boolean hasLeadership() {
         if (hasLeadershipLocalMocked != null) {
             return hasLeadershipLocalMocked;
         }
