@@ -442,30 +442,42 @@ if (isAllCaughtUp) {
 
 | Type | Code | Direction | Purpose |
 |------|------|-----------|---------|
-| hello | 0 | Slave→Master | Handshake, identify slave |
-| hi | 1 | Master→Slave | Handshake response, identify master |
-| exists_* | 100-103 | Slave→Master | Pre-catchup requests |
-| s_exists_* | 200-203 | Master→Slave | Pre-catchup data |
-| exists_all_done | 199 | Slave→Master | End pre-catchup |
-| catch_up | 300 | Slave→Master | Incremental binlog request |
-| s_catch_up | 301 | Master→Slave | Binlog segment response |
-| ping | 400 | Either | Keepalive |
-| pong | 401 | Either | Keepalive response |
-| bye | 500 | Either | Start teardown |
-| byeBye | 501 | Either | Teardown complete |
+| ping | -1 | Slave→Master | Keepalive |
+| pong | 1 | Master→Slave | Keepalive response |
+| hello | 2 | Slave→Master | Handshake, identify slave |
+| hi | 3 | Master→Slave | Handshake response, identify master |
+| bye | 4 | Slave→Master | Start teardown |
+| byeBye | 5 | Master→Slave | Teardown complete |
+| exists_wal | 19 | Slave→Master | Fetch existing WAL entries |
+| exists_chunk_segments | 20 | Slave→Master | Fetch chunk segments |
+| exists_big_string | 21 | Slave→Master | Fetch big strings |
+| exists_short_string | 22 | Slave→Master | Fetch short strings |
+| exists_dict | 25 | Slave→Master | Fetch dictionaries |
+| exists_all_done | 26 | Slave→Master | End pre-catchup |
+| catch_up | 27 | Slave→Master | Incremental binlog request |
+| s_exists_wal | 29 | Master→Slave | WAL entries response |
+| s_exists_chunk_segments | 30 | Master→Slave | Chunk segments response |
+| s_exists_big_string | 31 | Master→Slave | Big strings response |
+| s_exists_short_string | 32 | Master→Slave | Short strings response |
+| s_exists_dict | 35 | Master→Slave | Dictionaries response |
+| s_exists_all_done | 36 | Master→Slave | Pre-catchup done response |
+| s_catch_up | 37 | Master→Slave | Binlog segment response |
+| incremental_big_string | 41 | Slave→Master | Fetch incremental big strings |
+| s_incremental_big_string | 51 | Master→Slave | Incremental big strings response |
+| error | -100 | Master→Slave | Error message |
 
 ### Protocol Encoding
 
 ```java
 public class Repl {
     public static byte[] encode(ReplType type, byte[] content) {
-        // Header: X-REPL (6B) + slave_uuid (8B) + slot (2B) + type (2B) + length (4B)
-        ByteBuf buf = Unpooled.buffer(22);
+        // Header: X-REPL (6B) + slave_uuid (8B) + slot (2B) + type (1B) + length (4B)
+        ByteBuf buf = Unpooled.buffer(21);
 
         buf.writeBytes("X-REPL".getBytes());
         buf.writeLong(slaveUuid);
         buf.writeShort(slot);
-        buf.writeShort(type.code);
+        buf.writeByte(type.code);
         buf.writeInt(content.length);
         buf.writeBytes(content);
 
@@ -475,8 +487,8 @@ public class Repl {
     }
 
     public static ReplRequest decode(byte[] header) {
-        // Parse header (22 bytes)
-        if (header.length < 22) {
+        // Parse header (21 bytes)
+        if (header.length < 21) {
             throw new MalformedDataException("Header too short");
         }
 
@@ -486,8 +498,8 @@ public class Repl {
 
         long slaveUuid = Utils.readLong(header, 6);
         short slot = Utils.readShort(header, 14);
-        short typeCode = Utils.readShort(header, 16);
-        int contentLength = Utils.readInt(header, 18);
+        byte typeCode = header[16];
+        int contentLength = Utils.readInt(header, 17);
 
         ReplType type = ReplType.fromCode(typeCode);
         if (type == null) {
