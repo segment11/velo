@@ -371,35 +371,102 @@ Master Response:
 
 ### Phase 3: Incremental Sync
 
-**Pull Loop:**
+**Catch-Up Message Format (Slave → Master):**
+
+```
+ReplType: catch_up (27)
+Content:
+  ┌──────────────────────────────────────────────────────┐
+  │ binlogMasterUuid (long 8B)                           │
+  │ needFetchFileIndex (int 4B)                          │
+  │ needFetchOffset (long 8B) - aligned to segment       │
+  │ lastUpdatedOffset (long 8B) - exact position         │
+  └──────────────────────────────────────────────────────┘
+```
+
+**Catch-Up Response Format (Master → Slave):**
+
+```
+ReplType: s_catch_up (37)
+Content (with segment data):
+  ┌──────────────────────────────────────────────────────┐
+  │ isMasterReadonly (byte 1B)                           │
+  │ needFetchFileIndex (int 4B)                          │
+  │ needFetchOffset (long 8B)                            │
+  │ masterCurrentFileIndex (int 4B)                      │
+  │ masterCurrentOffset (long 8B)                        │
+  │ readSegmentLength (int 4B)                           │
+  │ readSegmentBytes (var)                               │
+  └──────────────────────────────────────────────────────┘
+
+Content (all caught up, no segment data):
+  ┌──────────────────────────────────────────────────────┐
+  │ isMasterReadonly (byte 1B)                           │
+  │ masterCurrentFileIndex (int 4B)                      │
+  │ masterCurrentOffset (long 8B)                        │
+  └──────────────────────────────────────────────────────┘
+```
+
+**Pull Loop with Offset Alignment:**
 
 ```
 while (!isAllCaughtUp) {
-    // 1. Request next binlog segment
-    MasterSlave s_catch_up(fileIndex, fileOffset, segmentLength)
+    // 1. Calculate aligned offset for request
+    // marginFileOffset aligns down to segment boundary
+    marginOffset = Binlog.marginFileOffset(lastUpdatedOffset)
+    
+    // 2. Request next binlog segment
+    // Send: (marginOffset, lastUpdatedOffset)
+    MasterSlave catch_up(fileIndex, marginOffset, lastUpdatedOffset)
 
-    // 2. Receive binlog segment
-    ReplType: s_catch_up (301)
-    Content:
-      ┌─────────────────────────────────────────┐
-      │ segmentIndex (int 4B)                 │
-      │ segmentBytes (var)                     │
-      └─────────────────────────────────────────┘
-
-    // 3. Decode and apply
-    Binlog.decodeAndApply(segmentBytes, replPair)
-
-    // 4. Update offset
-    slaveLastCatchUpBinlogFileIndexAndOffset = newOffset
-
-    // 5. Wait interval
+    // 3. Master reads segment at aligned offset
+    // Returns segment bytes (may be partial if last segment)
+    
+    // 4. Calculate skip bytes for already-processed data
+    skipBytesN = lastUpdatedOffset - marginOffset
+    
+    // 5. Decode and apply (skip already-processed bytes)
+    Binlog.decodeAndApply(segmentBytes, skipBytesN, replPair)
+    
+    // 6. Update offset
+    lastUpdatedOffset = fetchedOffset + readSegmentLength
+    
+    // 7. Wait interval
     Thread.sleep(catchUpIntervalMillis)
 }
 
-// 4. Check if caught up
 if (isAllCaughtUp) {
     state = ReplState.UP_TO_DATE;
 }
+```
+
+**Offset Alignment Mechanism:**
+
+The catch-up protocol uses a two-offset system to handle segment alignment:
+
+```
+Slave State:
+  lastUpdatedOffset = exact byte position processed (e.g., 100 bytes into segment)
+  
+Request to Master:
+  needFetchOffset = marginFileOffset(lastUpdatedOffset)  // Aligns DOWN to segment boundary
+  lastUpdatedOffset = exact position for skip calculation
+
+Example Flow:
+  1. Segment size = 256KB, slave processed 100 bytes
+  2. lastUpdatedOffset = X + 100
+  3. Request: needFetchOffset = X (aligned), lastUpdatedOffset = X + 100
+  4. Master reads segment starting at X
+  5. Slave calculates: skipBytesN = (X + 100) - X = 100
+  6. Slave skips first 100 bytes, applies remaining content
+  7. Updates: lastUpdatedOffset = X + readSegmentLength
+
+Partial Segment Handling:
+  - Last segment may be < full segment size (e.g., 100 bytes vs 256KB)
+  - readSegmentBytes.length reflects actual bytes
+  - Next request: marginOffset aligns to segment start
+  - skipBytesN prevents re-processing
+  - One extra round-trip occurs but data remains consistent
 ```
 
 ### State Machine
