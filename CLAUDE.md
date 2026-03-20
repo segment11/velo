@@ -65,6 +65,7 @@ cd build/libs && java -Xmx1g -Xms1g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirect
 
 ## Code Conventions
 
+- Commit messages: Keep short and simple, follow history style (e.g., "fix: use slot parse short when repl.")
 - Java: 4-space indent, 120-char lines, PascalCase classes, camelCase methods, UPPER_SNAKE_CASE constants
 - Groovy tests: Spock `Specification` with descriptive string method names (e.g., `def 'test static methods'()`)
 - Groovy is compiled with `@CompileStatic` by default (`config.groovy`)

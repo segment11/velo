@@ -337,3 +337,4 @@ def 'test your functionality'() {
 7. **Use proper logging** for debugging and monitoring
 8. **Document complex logic** with clear comments
 9. **Handle errors gracefully** and provide meaningful messages
+10. **Keep commit messages short and simple**, follow history style (e.g., "fix: use slot parse short when repl.")
