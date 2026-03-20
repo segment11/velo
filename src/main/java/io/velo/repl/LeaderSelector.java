@@ -172,6 +172,8 @@ public class LeaderSelector implements NeedCleanUp {
             }
 
             // sort by suffix, smaller is master
+            // ZooKeeper uses 10-digit zero-padded sequence numbers (e.g., "0000000001", "0000000010")
+            // so string comparison correctly orders by numeric value
             children.sort((o1, o2) -> {
                 var lastIndex1 = o1.lastIndexOf("-");
                 var lastIndex2 = o2.lastIndexOf("-");
