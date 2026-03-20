@@ -69,7 +69,7 @@ public class XGroup extends BaseCommand {
         var slotBytes = data[2];
         short slot;
         try {
-            slot = Byte.parseByte(new String(slotBytes));
+            slot = Short.parseShort(new String(slotBytes));
         } catch (NumberFormatException ignored) {
             return slotWithKeyHashList;
         }
