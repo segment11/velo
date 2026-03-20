@@ -237,8 +237,8 @@ public enum BinlogEntryType {
     DICT(100, "XDict - Dictionary update"),
     SKIP_APPLY(110, "XSkipApply - Skip operation"),
     UPDATE_SEQ(120, "XUpdateSeq - Sequence update"),
-    DYN_CONFIG(Byte.MAX_VALUE, "XDynConfig - Configuration change"),
-    FLUSH(Byte.MIN_VALUE, "XFlush - Flush to persist");
+    DYN_CONFIG(121, "XDynConfig - Configuration change"),
+    FLUSH(-128, "XFlush - Flush to persist");
 
     private final int code;
     private final String description;
@@ -252,12 +252,15 @@ Type code: 1 (XWalV)
 
 Format:
 ┌──────────────────────────────────────────────────────────┐
-│ type (byte)                                                │
-│ seq (long 8B)                                            │
-│ bucketIndex (short 2B)                                   │
-│ keyHash (long 8B)                                         │
-│ spType (int 4B)   - dict seq or special type              │
-│ keyLength (short 2B)                                     │
+│ type (byte)                                              │
+│ encodedLength (int 4B)                                   │
+│ isValueShort (byte 1B)                                   │
+│ seq (long 8B)                                           │
+│ bucketIndex (int 4B)                                     │
+│ keyHash (long 8B)                                        │
+│ expireAt (long 8B)                                       │
+│ spType (int 4B)   - dict seq or special type           │
+│ keyLength (short 2B)                                      │
 │ keyBytes (variable)                                      │
 │ cvEncodedLength (int 4B)                                 │
 │ cvEncoded (variable)                                     │
@@ -265,9 +268,12 @@ Format:
 
 Example: SET key "value"
   type: 1
+  encodedLength: 62 (total bytes after this field)
+  isValueShort: 1
   seq: 123456789
   bucketIndex: 1024
   keyHash: 9876543210123456789
+  expireAt: 0 (no expiry)
   spType: 15 (trained dict seq)
   keyLength: 3
   keyBytes: "key"
@@ -812,6 +818,11 @@ public class ReplPair {
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** 2025-02-05
+**Document Version:** 1.1
+**Last Updated:** 2026-03-20
 **Author:** Velo Architecture Team
+**Changelog (2026-03-20):**
+- Fixed DYN_CONFIG code from Byte.MAX_VALUE to 121
+- Fixed FLUSH code from Byte.MAX_VALUE to -128
+- Updated XWalV Entry Format to include encodedLength, isValueShort, and expireAt fields
+- Fixed bucketIndex type from short to int
