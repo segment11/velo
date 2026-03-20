@@ -1349,6 +1349,10 @@ public class MultiWorkerServer extends Launcher {
             var replBinlogOneFileMB = 512;
             c.confRepl.binlogOneSegmentLength = config.get(ofInteger(), "repl.binlogOneSegmentLength", 1024 * 1024);
             c.confRepl.binlogOneFileMaxLength = config.get(ofInteger(), "repl.binlogOneFileMaxLength", replBinlogOneFileMB * 1024 * 1024);
+            if (c.confRepl.binlogOneFileMaxLength <= 0) {
+                throw new IllegalArgumentException("repl.binlogOneFileMaxLength must be > 0, value=" + c.confRepl.binlogOneFileMaxLength +
+                        " (max allowed is 2GB-1 due to int type, check for overflow)");
+            }
             c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount", 10).shortValue();
             c.confRepl.binlogFileKeepMaxCount = config.get(ofInteger(), "repl.binlogFileKeepMaxCount", 10).shortValue();
             c.confRepl.catchUpOffsetMinDiff = config.get(ofInteger(), "repl.catchUpOffsetMinDiff", 1024 * 1024);
