@@ -40,5 +40,6 @@ This directory documents the design that is present in the checked-in code, not 
 ## Related Non-Design Docs
 
 - [AGENTS.md](/home/kerry/ws/velo/AGENTS.md)
-- [doc/hash_buckets/README.md](/home/kerry/ws/velo/doc/hash_buckets/README.md)
-- [doc/repl/README.md](/home/kerry/ws/velo/doc/repl/README.md)
+- [doc/haproxy/README.md](/home/kerry/ws/velo/doc/haproxy/README.md)
+- [doc/performance/README.md](/home/kerry/ws/velo/doc/performance/README.md)
+- [doc/redis_command_support.md](/home/kerry/ws/velo/doc/redis_command_support.md)

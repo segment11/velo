@@ -18,6 +18,17 @@ Each `OneSlot` composes several storage structures:
 - [`DynConfig`](/home/kerry/ws/velo/src/main/java/io/velo/persist/DynConfig.java) for slot-local mutable settings
 - [`Binlog`](/home/kerry/ws/velo/src/main/java/io/velo/repl/Binlog.java) when replication/binlog is enabled
 
+## Additional Slot-Storage Details
+
+The legacy `hash_buckets` notes captured a few implementation-oriented details that are still worth keeping:
+
+- key-bucket layout is sized from slot configuration rather than resized dynamically at runtime in a generic hash-table style
+- bucket entries track key bytes, key hash, expiration, and value location metadata
+- some short values can stay close to bucket-oriented storage instead of always going through chunk-segment persistence
+- bucket splitting exists, but it is a bounded mechanism and is treated as something to minimize rather than a primary growth strategy
+
+These details match the current code structure in `KeyBucket`, `KeyLoader`, and `OneSlot`, even though exact capacities are configuration-dependent.
+
 ## Slot Initialization
 
 `LocalPersist.initSlots(...)` creates one `OneSlot` per configured slot and calls `initFds()` on each one.
@@ -37,6 +48,13 @@ The code distinguishes several storage cases:
 - short values can stay in key-bucket-oriented storage
 - larger values are written through WAL and then persisted into chunk segments
 - very large values can be spilled into big-string files
+
+`OneSlot` also groups temporary write state by WAL group. Older docs described this as "16 or 32 key buckets in one wal group";
+the current code should be treated as configuration-driven, but the important architectural point remains:
+
+- writes are accumulated in WAL-group-local structures
+- persistence and merge work is often scheduled around WAL-group boundaries
+- LRU caches are also maintained per WAL-group path
 
 The current implementation is therefore more nuanced than "everything goes straight to chunks".
 
@@ -61,6 +79,19 @@ This explains why the persistence design mixes WAL, key metadata, chunk data, an
 - expired/deleted value cleanup
 - overwrite cleanup for big-string files
 - binlog reset/reopen helpers for replication role changes
+
+Before flushing new data, `OneSlot` can pre-read related persisted segments in the same WAL-group region and merge valid values
+forward. That is still the right high-level explanation for the segment-merge behavior.
+
+## LRU Layers
+
+The persistence layer uses more than one cache/LRU surface:
+
+- latest key-to-compressed-value reads, including big-string cases
+- cached key-bucket bytes
+- optional chunk-segment related cached reads
+
+The exact limits are configuration-driven, but the layered-cache design remains part of the storage architecture.
 
 These behaviors are implementation reality and should be documented as part of the storage design.
 

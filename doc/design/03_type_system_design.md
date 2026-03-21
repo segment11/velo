@@ -30,6 +30,9 @@ Examples include:
 
 This means "type" is encoded in storage metadata, not only in the Java class hierarchy.
 
+The legacy `compress_value` notes are still directionally useful here: the stored envelope carries sequence/LSN-style identity,
+expiration, key hash, compressed-size information, and the type-or-dictionary selector in one binary header.
+
 ## Core Container Types
 
 The main explicit type implementations under `io.velo.type` are:
@@ -52,6 +55,8 @@ The implementation optimizes for:
 - numeric special encodings
 - optional compression for larger strings
 - big-string spill files when values exceed thresholds
+
+Maximum key length is still constrained by `CompressedValue.KEY_MAX_LENGTH`, and value size limits are enforced in the storage layer.
 
 ## HyperLogLog
 

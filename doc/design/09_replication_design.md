@@ -98,6 +98,12 @@ The current code supports:
 
 This is related to replication topology selection, not a full Redis Sentinel clone.
 
+Historically the repo also carried separate overview diagrams for "slave sync and catch up" and "auto failover". Those diagrams
+reflected the same two major ideas that still apply:
+
+- replication has a staged bootstrap followed by incremental catch-up
+- failover decisions are tied to leader/master discovery rather than simple local role toggles
+
 ## Corrections To Older Versions
 
 - Replication is not primarily a Groovy feature.

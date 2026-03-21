@@ -19,6 +19,9 @@ Zstd is the primary compression engine in the current code.
 
 It is used by command handlers and persistence code as the common transport/storage format for values.
 
+The legacy low-level notes also remain accurate at a high level: a `CompressedValue` header combines sequence, expiration,
+key-hash, compressed-length, and type-or-dictionary metadata before the payload bytes.
+
 ## Dictionary Management
 
 The dictionary registry lives in [`DictMap`](/home/kerry/ws/velo/src/main/java/io/velo/DictMap.java).
@@ -56,6 +59,9 @@ Large values are special-cased:
 - `bigStringNoMemoryCopySize` controls a decoding optimization
 - `bigStringNoCompressMinSize` avoids expensive compression for very large values
 - the persistence layer can spill oversized values into `BigStringFiles`
+
+Older docs described big strings as single-file values named from a unique identifier. That is still the right mental model
+for the current spill-file path even though the exact identifier and write path are implemented in Java code now.
 
 Compression design therefore interacts with both decode-time and persistence-time logic.
 

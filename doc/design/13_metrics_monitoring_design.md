@@ -19,6 +19,9 @@ Current code paths document two important HTTP usages:
 
 These are management-style endpoints implemented through normal request handling, not a separate admin server.
 
+The old metrics README also included real sample output. That remains useful context: the exposed metrics are a mix of
+custom Velo gauges, request summaries, and JVM metrics registered into the default Prometheus registry.
+
 ## Collector Model
 
 `SimpleGauge` is a custom Prometheus collector that supports:
@@ -57,6 +60,8 @@ The metrics surface is broader than request counters alone. It includes:
 - LRU hit/miss statistics
 - compression and dictionary metrics
 - replication state
+
+This breadth is the main reason the metrics surface should be documented separately from the pure architecture docs.
 
 ## Related Documents
 
