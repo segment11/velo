@@ -2,265 +2,65 @@
 
 ## Overview
 
-Velo server initialization follows a **phased approach** for reliable startup and graceful shutdown.
+Server bootstrap is implemented by
+[`MultiWorkerServer`](/home/kerry/ws/velo/src/main/java/io/velo/MultiWorkerServer.java),
+an ActiveJ `Launcher`.
 
-## Architecture
+This class is responsible for validating configuration, creating worker pools, initializing persistence,
+and starting the network listeners.
 
-```
-┌──────────────────────────────────────────────────────┐
-│                    Main Thread                         │
-├──────────────────────────────────────────────────────┤
-│  1. Load configuration                                │
-│  2. Validate configuration                             │
-│  3. Create data directory & lock                      │
-│  4. Initialize DictMap                               │
-│  5. Create worker pools                               │
-│  6. Initialize slots                                 │
-│  7. Start network listeners                           │
-│  8. Start primary tasks (groovy reload, repl)          │
-└───────────┬──────────────────────────────────────────┘
-            │
-            ▼
-┌──────────────────────────────────────────────────────┐
-│              Worker Threads Created                   │
-├──────────────────────────────────────────────────────┤
-│  Network Workers (N):                               │
-│    - Accept TCP connections                          │
-│    - Decode requests                                │
-│    - Send replies                                   │
-│                                                      │
-│  Slot Workers (M):                                  │
-│    - Command groups (A-Z)                           │
-│    - RequestHandler per thread                       │
-│    - Persistence operations                          │
-│                                                      │
-│  Index Workers (K):                                  │
-│    - Background tasks                               │
-│    - LRU, merge, statistics                          │
-└──────────────────────────────────────────────────────┘
-```
+## Bootstrap Sequence
 
-## Initialization Sequence
+The current startup path includes these major steps:
 
-### Phase 1: Configuration Loading
+1. load ActiveJ config from `velo.properties`
+2. validate worker counts, slot count, and directory settings
+3. create and lock the pid/data directory
+4. initialize dictionary management and persistence
+5. create request handlers and task runnables
+6. start slot-worker event loops
+7. initialize ACL users from file
+8. register JVM Prometheus collectors
+9. start ActiveJ network servers
+10. start replication/leadership helpers as needed
 
-```java
-public static void main(String[] args) {
-    // 1. Read config path from arguments
-    String configPath = args.length > 0 ? args[0] : "velo.properties";
+## Persistence Initialization
 
-    // 2. Load ActiveJ configuration
-    Config config = loadActiveJConfig(configPath);
+Bootstrap calls into:
 
-    // 3. Populate ConfForGlobal static fields
-    populateConfForGlobal(config);
+- [`DictMap`](/home/kerry/ws/velo/src/main/java/io/velo/DictMap.java)
+- [`LocalPersist.initSlots(...)`](/home/kerry/ws/velo/src/main/java/io/velo/persist/LocalPersist.java)
+- `RequestHandler.initMultiShardShadows(...)`
 
-    // 4. Validate configuration
-    if (!ConfForGlobal.checkIfValid()) {
-        System.err.println("Invalid configuration");
-        System.exit(1);
-    }
-}
-```
+This means storage, dictionary state, and cluster-shadow state are ready before normal request traffic.
 
-### Phase 2: Directory Setup
+## Worker Initialization
 
-```java
-private void setupDirectories() {
-    String dirPath = ConfForGlobal.dirPath;
+`onStart()` creates and starts slot-worker event loops and records their thread IDs.
+Net workers are provided through ActiveJ worker-pool bindings.
 
-    // Create data directory
-    Files.createDirectories(Paths.get(dirPath));
+ACL initialization also depends on the slot-worker event-loop array, which is why ACL setup happens after
+those loops exist.
 
-    // Create file lock
-    String pidFile = dirPath + "/velo.pid";
-    if (!createFileLock(pidFile)) {
-        System.err.println("Another instance is running");
-        System.exit(1);
-    }
-}
-```
+## Dynamic Groovy Wiring
 
-### Phase 3: Initialize Global Components
+Bootstrap creates a `RefreshLoader` around the cached Groovy class loader and points it at `dyn` source paths.
+This is infrastructure wiring, not evidence of a large Groovy application module in this checkout.
 
-```java
-private void initializeGlobalComponents() {
-    // 1. Initialize DictMap
-    DictMap.getInstance().initContexts(ConfForGlobal.slotWorkers);
-    DictMap.getInstance().load();
+## Shutdown
 
-    // 2. Initialize AclUsers (if PASSWORD set)
-    if (!ConfForGlobal.PASSWORD.isEmpty()) {
-        AclUsers.getInstance().setupDefaultPassword();
-    }
+The server owns cleanup for:
 
-    // 3. Initialize LocalPersist
-    LocalPersist localPersist = LocalPersist.getInstance();
-    localPersist.init(
-        ConfForGlobal.slotNumber,
-        ConfForGlobal.slotWorkers,
-        ConfForGlobal.indexWorkers
-    );
-}
-```
+- leader selector
+- Jedis pool holder
+- local persistence
+- dictionary map
+- pid-file lock resources
 
-### Phase 4: Create Worker Pools
+The cleanup path is centralized in `run()`/lifecycle handling rather than scattered across commands.
 
-```java
-private void createWorkers(Injector injector) {
-    int netWorkers = ConfForGlobal.netWorkers;
-    int slotWorkers = ConfForGlobal.slotWorkers;
-    int indexWorkers = ConfForGlobal.indexWorkers;
+## Related Documents
 
-    // Create network workers
-    for (int i = 0; i < netWorkers; i++) {
-        Eventloop eventloop = createEventLoop(i);
-        netWorkersList.add(eventloop);
-    }
-
-    // Create slot workers
-    for (int i = 0; i < slotWorkers; i++) {
-        Eventloop eventloop = createEventLoop(netWorkers + i);
-        RequestHandler rh = injector.getInstance(RequestHandler.class);
-        rh.initWorker(i);
-        slotWorkersList.add(eventloop);
-    }
-
-    // Create index workers
-    for (int i = 0; i < indexWorkers; i++) {
-        Eventloop eventloop = createEventLoop(netWorkers + slotWorkers + i);
-        indexWorkersList.add(eventloop);
-    }
-}
-```
-
-### Phase 5: Initialize Slots
-
-```java
-private void initializeSlots() {
-    int slotNumber = ConfForGlobal.slotNumber;
-    long estimateKeyNumber = ConfForGlobal.estimateKeyNumber;
-
-    // Select appropriate preset
-    ConfForSlot preset = ConfForSlot.from(estimateKeyNumber);
-
-    // Create slots
-    for (short i = 0; i < slotNumber; i++) {
-        OneSlot slot = LocalPersist.getInstance().oneSlot(i);
-        slot.init(preset, i);
-    }
-}
-```
-
-### Phase 6: Start Network Listeners
-
-```java
-private void startNetworkListeners(Injector injector) {
-    String listenAddresses = ConfForGlobal.netListenAddresses;
-    String[] addresses = listenAddresses.split(",");
-
-    for (String addr : addresses) {
-        String[] parts = addr.trim().split(":");
-        String host = parts[0];
-        int port = Integer.parseInt(parts[1]);
-
-        // Create server socket
-        ServerSocket serverSocket = createServerSocket(host, port);
-
-        // Submit to network workers
-        for (Eventloop netWorker : netWorkersList) {
-            netWorker.submit(() -> {
-                while (!shutdown) {
-                    Socket socket = serverSocket.accept();
-                    processConnection(socket);
-                }
-            });
-        }
-    }
-}
-```
-
-## Graceful Shutdown
-
-### Shutdown Hook
-
-```java
-Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-    log.info("Shutdown initiated");
-
-    // 1. Stop accepting new connections
-    shutdown = true;
-
-    // 2. Complete inflight requests
-    waitForRequestsComplete();
-
-    // 3. Persist WAL
-    for (OneSlot slot : LocalPersist.getInstance().oneSlots) {
-       .slot.persistAllWal();
-    }
-
-    // 4. Stop workers
-    stopWorkers();
-
-    // 5. Release file lock
-    releaseFileLock();
-
-    log.info("Shutdown complete");
-}));
-```
-
-## Startup Order
-
-```mermaid
-gantt
-    title Velo Server Startup Sequence
-    dateFormat  HH:mm:ss
-    axisFormat  %s
-
-    section Configuration
-    Load config          :a1, 0, 100
-    Validate config      :after a1, 0, 50
-
-    section Setup
-    Create directories    :after a1, 0, 200
-    Create file lock      :after a1, 0, 50
-
-    section Initialization
-    Init DictMap         :after a1, 0, 300
-    Init LocalPersist    :after a1, 0, 200
-    Create workers       :after a1, 0, 500
-    Init slots           :after a1, 0, 1000
-
-    section Network
-    Start listeners      :after a1, 0, 300
-    Start primary tasks   :after a1, 0, 200
-```
-
-## Error Handling
-
-### Critical Failures
-
-```
-Configuration invalid → Exit with error
-File lock conflict → Exit with error
-Port already in use → Exit with error
-Directory permission → Exit with error
-Memory insufficient → Exit with error
-```
-
-## Related Documentation
-
-- [Configuration Design](./08_configuration_design.md) - Configuration loading
-- [Multithreading Design](./11_multithreading_design.md) - Worker creation
-- [Persistence Layer](./02_persist_layer_design.md) - Slot initialization
-
-## Key Source Files
-
-- `src/main/java/io/velo/MultiWorkerServer.java` - Main entry point
-- `src/main/java/io/velo/LocalPersist.java` - Singleton initialization
-- `src/main/java/io/velo/RequestHandler.java` - Per-worker setup
-
----
-
-**Version:** 1.0  
-**Last Updated:** 2025-02-05  
+- [Configuration](/home/kerry/ws/velo/doc/design/08_configuration_design.md)
+- [Multithreading](/home/kerry/ws/velo/doc/design/11_multithreading_design.md)
+- [Dynamic Groovy](/home/kerry/ws/velo/doc/design/15_dynamic_groovy_design.md)

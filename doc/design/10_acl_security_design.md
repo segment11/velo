@@ -2,363 +2,55 @@
 
 ## Overview
 
-Velo implements **Redis 7+ compatible ACL** (Access Control List) for fine-grained user and permission management.
+ACL support is implemented under
+[`src/main/java/io/velo/acl`](/home/kerry/ws/velo/src/main/java/io/velo/acl)
+and integrated into command handling through
+[`BaseCommand.getAuthU(...)`](/home/kerry/ws/velo/src/main/java/io/velo/BaseCommand.java).
 
-## User Model
+## User Registry
 
-### AclUsers Structure
+[`AclUsers`](/home/kerry/ws/velo/src/main/java/io/velo/acl/AclUsers.java) is a singleton with per-thread
+`Inner` registries. This mirrors the server's worker-thread model:
 
-```java
-public class AclUsers {
-    public static AclUsers getInstance() {
-        return instance;
-    }
+- each slot worker gets an `Inner`
+- reads can use the thread-local copy
+- mutations are coordinated through the owning event loop
 
-    private final Map<String, AclUser> users;  // username -> User
+## ACL Source Of Truth
 
-    public static class AclUser {
-        String user;
-        boolean isOn;
-        List<Password> passwords;
-        List<RCmd> rCmdList;           // Allowed commands
-        List<RCmd> rCmdDisallowList;   // Disallowed commands
-        List<RKey> rKeyList;           // Key permissions
-        List<RPubSub> rPubSubList;     // Pub/Sub channels
-    }
+ACLs are loaded from the file referenced by `ValkeyRawConfSupport.aclFilename`.
+`AclUsers.loadAclFile()` parses the file, ignores comment lines, and requires that the default user exists.
 
-    @ThreadNeedLocal("net")
-    private static AclUsers[] perWorkerAclUsers;
-}
-```
+`ConfForGlobal.checkIfValid()` can also seed the default user password from configuration.
 
-### User Structure
+## Rule Model
 
-```
-User Configuration Example:
-user default on nopass +@all ~* &*
+The main rule/domain classes are:
 
-Fields:
-  user: "default"
-  isOn: true (enabled)
-  passwords: [Password(type=nopass, value=null)]
-  rCmdList: [+@all]         (Allow all commands)
-  rCmdDisallowList: []
-  rKeyList: [~*]            (Access all keys)
-  rPubSubList: [&*]          (Access all channels)
-```
+- [`U`](/home/kerry/ws/velo/src/main/java/io/velo/acl/U.java)
+- [`RCmd`](/home/kerry/ws/velo/src/main/java/io/velo/acl/RCmd.java)
+- [`RKey`](/home/kerry/ws/velo/src/main/java/io/velo/acl/RKey.java)
+- [`RPubSub`](/home/kerry/ws/velo/src/main/java/io/velo/acl/RPubSub.java)
+- [`Category`](/home/kerry/ws/velo/src/main/java/io/velo/acl/Category.java)
 
-### Password Management
-
-```java
-class Password {
-    String type;  // "nopass" | "plain" | "sha256"
-    String value; // null for nopass, hash for sha256
-
-    static Password nopass() {
-        return new Password("nopass", null);
-    }
-
-    static Password plain(String password) {
-        return new Password("plain", password);
-    }
-
-    static Password sha256(String password) {
-        String hash = DigestUtils.sha256Hex(password);
-        return new Password("sha256", hash);
-    }
-
-    boolean matches(String inputPassword) {
-        if ("nopass".equals(type)) {
-            return inputPassword == null || inputPassword.isEmpty();
-        }
-        if ("plain".equals(type)) {
-            return value.equals(inputPassword);
-        }
-        if ("sha256".equals(type)) {
-            return value.equals(DigestUtils.sha256Hex(inputPassword));
-        }
-        return false;
-    }
-}
-```
-
-## Command Permissions
-
-### RCmd Types
-
-```java
-public class RCmd {
-    enum Type {
-        CMD,           // Specific command: +get
-        CMD_WITH_ARG,  // Command with subcommand: +config|get
-        CATEGORY,      // Command category: +@read
-        ALL            // All commands: +*
-    }
-
-    Type type;
-    boolean isAllow;  // + for allow, - for deny
-    String cmdName;   // Command name or category
-}
-```
-
-### Permission Patterns
-
-```
-Allow Rules:
-  +@read           - Allow all read commands
-  +@write          - Allow all write commands
-  +@admin          - Allow administrative commands
-  +get             - Allow GET command
-  +config|get      - Allow CONFIG GET subcommand  
-  +*               - Allow all commands
-
-Deny Rules:
-  -@dangerous      - Deny dangerous commands
-  -flushall        - Deny FLUSHALL
-  -@all            - Deny all commands
-```
-
-### Command Categories
-
-| Category | Commands |
-|----------|----------|
-| all | All commands |
-| admin | CONFIG, FLUSHALL, SAVE, BGSAVE |
-| bitmap | BITCOUNT, BITOP, BITPOS, etc. |
-| connection | AUTH, PING, QUIT, CLIENT commands |
-| geo | GEOADD, GEODIST, GEOSEARCH, etc. |
-| hash | HGET, HSET, HMGET, etc. |
-| hyperloglog | PFADD, PFCOUNT, PFMERGE |
-| key | DEL, EXISTS, KEYS, SCAN, etc. |
-| list | LPOP, RPUSH, LRANGE, etc. |
-| pubsub | PUBLISH, SUBSCRIBE, PSUBSCRIBE |
-| read | Commands that only read |
-| scripting | EVAL, SCRIPT LOAD |
-| set | SADD, SMEMBERS, SINTER, etc. |
-| sortedset | ZADD, ZRANGE, ZSCORE, etc. |
-| stream | XADD, XRANGE, etc. |
-| string | GET, SET, MGET, MSET, etc. |
-| transaction | MULTI, EXEC, DISCARD |
-| write | Commands that modify data |
-
-### Permission Check Logic
-
-```java
-boolean checkCmdAndKey(
-    AclUser user, 
-    String command, 
-    String[] keys
-) {
-    // 1. Check if user enabled
-    if (!user.isOn) {
-        return FALSE_WHEN_CHECK_CMD;
-    }
-
-    // 2. Check command permissions
-    boolean isAllowed = false;
-    boolean explicitlyDenied = false;
-
-    for (RCmd rCmd : user.rCmdList) {
-        if (rCmd.matches(command)) {
-            isAllowed = true;
-            break;
-        }
-    }
-
-    for (RCmd rCmd : user.rCmdDisallowList) {
-        if (rCmd.matches(command)) {
-            explicitlyDenied = true;
-            break;
-        }
-    }
-
-    if (explicitDenied || !isAllowed) {
-        return FALSE_WHEN_CHECK_CMD;
-    }
-
-    // 3. Check key permissions
-    for (String key : keys) {
-        boolean keyAllowed = false;
-
-        for (RKey rKey : user.rKeyList) {
-            if (rKey.matches(key)) {
-                // Check read/write permissions
-                if (rKey.canRead() || rKey.canWrite() || rKey.isReadWrite()) {
-                    keyAllowed = true;
-                    break;
-                }
-            }
-        }
-
-        if (!keyAllowed) {
-            return FALSE_WHEN_CHECK_KEY;
-        }
-    }
-
-    return TRUE;
-}
-```
-
-## Key Permissions
-
-### RKey Types
-
-```java
-public class RKey {
-    enum Type {
-        READ,           // Read-only access: %R~pattern*
-        WRITE,          // Write-only access: %W~pattern*
-        READ_WRITE,     // Access: %RW~pattern*
-        ALL             // Access all keys: ~*
-    }
-
-    Type type;
-    String pattern;   // Glob pattern (supports * and ?)
-}
-```
-
-### Permission Patterns
-
-```
-Examples:
-  ~*                     - All keys (read and write)
-  %R~user:*              - User keys (read-only)
-  %W~cache:*             - Cache keys (write-only)
-  %RW~data:*             - Data keys (read and write)
-
-  user:12345:profile     - Exact key (read and write)
-  user:12345:session:*   - Wildcard pattern
-
-  ~allkeys               - Same as ~*
-```
-
-### Glob Matching
-
-```java
-boolean matches(String key) {
-    if ("%R~".equals(pattern.substring(0, 3))) {
-        // Read-only: no write access
-    }
-    if ("%W~".equals(pattern.substring(0, 3))) {
-        // Write-only: no read access  
-    }
-
-    // Extract pattern after ~
-    String globPattern = pattern.replaceFirst("^.*~", "");
-
-    // Use glob matching (supports * and ?)
-    return matchesGlob(key, globPattern);
-}
-```
-
-## PubSub Permissions
-
-### RPubSub Type
-
-```java
-public class RPubSub {
-    String pattern;   // Channel pattern: &channel*
-}
-```
-
-### Channel Patterns
-
-```
-Examples:
-  &*                      - All channels
-  &user:*                  - Channels starting with "user:"
-  &pub:*                   - Public channels
-  allchannels              - Same as &*
-```
+These model command permissions, key-pattern permissions, and pub/sub permissions.
 
 ## Authentication Flow
 
-```
-Client Connection
-    │
-    ├─> Send command
-    │
-    ├─> Is authenticated?
-    │   └─> No → Require AUTH
-    │
-    ├─> AUTH username password
-    │   ├─> User exists?
-    │   │   └─> No → Return error
-    │   ├─> Password matches?
-    │   │   └─> No → Return error
-    │   └─> OK → Set authenticated user
-    │
-    └─> Proceed with command
-        ├─> Check user permissions
-        ├─> Check command allow/deny lists
-        └─> Check key permissions (if any)
-```
+At runtime:
 
-## Error Replies
+1. a client authenticates through command handling, mainly in [`AGroup`](/home/kerry/ws/velo/src/main/java/io/velo/command/AGroup.java)
+2. the authenticated username is stored on the socket through socket-inspector helpers
+3. command execution resolves the current `U` from the socket
+4. command handlers can enforce ACL checks against that user
 
-| Error Code | Reply | Meaning |
-|-----------|-------|---------|
-| AUTH_FAILED | NOAUTH | Wrong password |
-| NO_AUTH | NOAUTH | Authentication required |
-| ACL_PERMIT_LIMIT | NOPERM | Command permission denied |
-| ACL_PERMIT_KEY_LIMIT | NOPERM | Key permission denied |
-| SETUSER_RULE_INVALID | ERR | Invalid ACL rule syntax |
+## Replication Of ACL Changes
 
-## Default User
+ACL updates are also represented in replication/binlog code through
+[`XAclUpdate`](/home/kerry/ws/velo/src/main/java/io/velo/repl/incremental/XAclUpdate.java),
+which is why ACL is not only a local configuration concern.
 
-```
-user default on nopass +@all ~* &*
+## Related Documents
 
-- Enabled by default
-- No password required
-- Access to all commands
-- Access to all keys and channels
-```
-
-Note: For production, disable or set a password.
-
-## Thread Safety
-
-```java
-@ThreadNeedLocal("net")
-private static AclUsers[] perWorkerAclUsers;
-
-// Each network worker has its own AclUsers instance
-// Updates broadcast to all workers via socket messaging
-```
-
-## ACL Commands
-
-```
-ACL CAT [category]              - List commands in category
-ACL DELUSER username           - Delete user
-ACL DRYRUN username command ...  - Check permission
-ACL GETUSER username           - Get user details
-ACL LIST                       - List all users
-ACL LOAD                       - Reload ACL from file
-ACL LOG [count]                - Show ACL log
-ACL SAVE                       - Save ACL to file
-ACL SETUSER username [rules]   - Create/modify user
-ACL USERS                      - List usernames
-ACL WHOAMI                     - Show current user
-```
-
-## Related Documentation
-
-- [Overall Architecture](./01_overall_architecture.md) - System overview
-- [Command Processing Design](./04_command_processing_design.md) - Command permissions
-
-## Key Source Files
-
-- `src/main/java/io/velo/acl/AclUsers.java` - User management
-- `src/main/java/io/velo/acl/U.java` - User model
-- `src/main/java/io/velo/acl/RCmd.java` - Command permissions
-- `src/main/java/io/velo/acl/RKey.java` - Key permissions
-- `src/main/java/io/velo/acl/RPubSub.java` - Pub/Sub permissions
-- `src/main/java/io/velo/acl/Category.java` - Command categories
-
----
-
-**Version:** 1.0  
-**Last Updated:** 2025-02-05  
-**Author:** Velo Architecture Team
+- [Command Processing](/home/kerry/ws/velo/doc/design/04_command_processing_design.md)
+- [Replication](/home/kerry/ws/velo/doc/design/09_replication_design.md)

@@ -2,180 +2,65 @@
 
 ## Overview
 
-Velo cluster management通过**Groovy脚本**实现，支持slot迁移、failover等集群操作。
+Cluster-related logic in the current codebase is split between:
 
-## Cluster架构
+- Java cluster metadata classes under [`io/velo/repl/cluster`](/home/kerry/ws/velo/src/main/java/io/velo/repl/cluster)
+- replication leadership under [`LeaderSelector`](/home/kerry/ws/velo/src/main/java/io/velo/repl/LeaderSelector.java)
+- migration-oriented command code such as parts of [`MGroup`](/home/kerry/ws/velo/src/main/java/io/velo/command/MGroup.java)
+- a small amount of operational Groovy scripting under `dyn/`
 
-```
-┌─────────────────────────────────────────────┐
-│                    Cluster                │
-│  ├─> Node A: Slot 0-31                        │
-│  ├─> Node B: Slot 32-63                      │
-│  ├─> Node C: Slot 64-95                      │
-│  └─> Node D: Slot 96-127                     │
-└─────────────────────────────────────────────┘
+The older description of a Groovy-first `ClusterxCommand` implementation does not match this checkout.
 
-Each Node:
-  - 独立的Redis兼容实例
-  - 自有的slot集合
-  - 与ZooKeeper协调
-```
+## Cluster Metadata Model
 
-## Slot迁移
+The current Java model includes:
 
-### 迁移流程
+- [`MultiShard`](/home/kerry/ws/velo/src/main/java/io/velo/repl/cluster/MultiShard.java)
+- [`Shard`](/home/kerry/ws/velo/src/main/java/io/velo/repl/cluster/Shard.java)
+- [`Node`](/home/kerry/ws/velo/src/main/java/io/velo/repl/cluster/Node.java)
+- [`SlotRange`](/home/kerry/ws/velo/src/main/java/io/velo/repl/cluster/SlotRange.java)
+- [`MultiShardShadow`](/home/kerry/ws/velo/src/main/java/io/velo/repl/cluster/MultiShardShadow.java)
 
-```
-Slot迁移状态机:
+`RequestHandler` keeps thread-local `MultiShardShadow` snapshots so command execution can read cluster
+topology without sharing mutable state directly between workers.
 
-┌──────┐
-│FREE │
-└──┬───┘
-   │
-   ▼ START迁移
-┌──────┐
-│IMPORT│ ← 从源节点导入数据
-└──┬───┘
-   │
-   ▼ 数据导入完成
-┌──────┐
-│SERVING│ ← 接受读写
-└──────┘
-```
+## Leadership
 
-### 迁移实现
+The active leadership mechanism is ZooKeeper-based and implemented by
+[`LeaderSelector`](/home/kerry/ws/velo/src/main/java/io/velo/repl/LeaderSelector.java).
 
-```groovy
-@CompileStatic
-class ClusterxCommandHandle {
-    static Reply handleMigration(OneSlot slot, ExtArgs args) {
-        // 1. 检查当前状态
-        String state = slot.getState();
+It provides:
 
-        // 2. 开始迁移
-        if ("START".equals(args.get("action"))) {
-            startMigration(slot);
-        }
+- ZooKeeper connection management
+- leader latch lifecycle
+- self-leader detection
+- lookup of the current master listen address when running as a follower
 
-        // 3. 迁移数据
-        if ("SYNC".equals(args.get("action"))) {
-            syncDataFromSource(slot, sourceNode);
-        }
+This is the concrete implementation behind current failover decisions.
 
-        // 4. 完成迁移
-        if ("COMPLETE".equals(args.get("action"))) {
-            completeMigration(slot);
-        }
+## Data Movement
 
-        return OKReply.INSTANCE;
-    }
-}
-```
+The codebase contains migration-style logic in command handlers, especially in
+[`MGroup`](/home/kerry/ws/velo/src/main/java/io/velo/command/MGroup.java),
+which connects to remote Redis-compatible nodes through Jedis and iterates keys by slot.
 
-### 数据同步
+That is the currently visible implementation path for moving data between nodes in this repository.
 
-```java
-class ClusterNode {
-    private final String nodeId;
-    private final Map<Short, OneSlot> slots;
+## Groovy Control Scripts
 
-    public void syncSlot(short slotIndex, String sourceNodeId) {
-        OneSlot targetSlot = slots.get(slotIndex);
-        OneSlot sourceSlot = connectToNode(sourceNodeId, slotIndex);
+There is a checked-in control script:
 
-        // 1. Fetch existing data
-        List<byte[]> keys = sourceSlot.scan();
+- `dyn/ctrl/FailoverManagerCtrl.groovy`
 
-        // 2. Write to target
-        for (byte[] keyBytes : keys) {
-            CompressedValue cv = sourceSlot.getCV(keyBytes);
-            if (cv != null) {
-                targetSlot.setCV(keyBytes, cv);
-            }
-        }
+This supports the idea of operational scripting, but it is not the same as a large scripted cluster-command framework.
 
-        // 3. Update slot state
-        targetSlot.setState("SERVING");
-    }
-}
-```
+## Corrections To Older Versions
 
-## Failover机制
+- There is no checked-in `src/main/groovy/io/velo/repl/cluster/` tree.
+- There is no checked-in `dyn/src/io/velo/command/ClusterxCommand.groovy`.
+- Cluster topology and leadership are primarily Java code today.
 
-### 自动Failover
+## Related Documents
 
-```
-ZooKeeper协调:
-
-┌─────────────────────────────────────────┐
-│          ZooKeeper Cluster              │
-└─────────────────────────────────────────┘
-         │
-         ├─> Watch Leader Node Latch
-         │
-         ├──> 当Leader失败:
-         ├─>     1. Latch释放
-         ├─>     2. 剩余节点竞争Latch
-         ├─>     3. 新Leader当选
-         └─>     4. 更新客户端配置
-```
-
-### Failover状态
-
-```groovy
-class ClusterxCommandHandle {
-    static Reply handleFailOver(ExtArgs args) {
-        String nodeId = args.get("nodeId");
-
-        // 1. 检查节点状态
-        boolean isAlive = checkNodeAlive(nodeId);
-
-        // 2. 如果down,触发failover
-        if (!isAlive) {
-            triggerFailover(nodeId);
-        }
-
-        return OKReply.INSTANCE;
-    }
-
-    private static void triggerFailover(String failedNodeId) {
-        // 通过ZooKeeper重新选举
-        String newLeader = electNewLeader();
-
-        // 更新所有节点的路由表
-        updateRoutingTable(failedNodeId, newLeader);
-
-        // 通知客户端重新连接
-        notifyClientsClusterChange();
-    }
-}
-```
-
-## Cluster命令
-
-```
-CLUSTERX <action> <params>
-
-Actions:
-  - list → 列出所有节点和slot分布
-  - info <node> → 查看节点信息
-  - migrate <slot> <from> <to> → 迁移slot
-  - failover <node> → 触发failover
-  - addnode <node> → 添加节点
-  - delnode <node> → 移除节点
-```
-
-## 相关文档
-
-- [Replication Design](./09_replication_design.md) - 复制协议
-- Existing: [doc/cluster/](../doc/cluster/)
-
-## 关键源文件
-
-- `src/main/groovy/io/velo/repl/cluster/` - 集群管理
-- `dyn/src/io/velo/command/ClusterxCommand.groovy` - 集群命令
-
----
-
-**Version:** 1.0
-**Last Updated:** 2025-02-05
+- [Replication](/home/kerry/ws/velo/doc/design/09_replication_design.md)
+- [Dynamic Groovy](/home/kerry/ws/velo/doc/design/15_dynamic_groovy_design.md)

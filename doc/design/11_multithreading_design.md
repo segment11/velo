@@ -2,276 +2,73 @@
 
 ## Overview
 
-Velo uses a **multi-threaded, run-to-complete** architecture for high throughput and low latency.
+The runtime uses several worker domains:
 
-## Worker Pools
+- a primary ActiveJ reactor
+- net workers for socket ownership and protocol decoding
+- slot workers for command execution
+- index workers inside the persistence layer
 
-### Network Workers (1-32 threads)
+This split is visible in [`MultiWorkerServer`](/home/kerry/ws/velo/src/main/java/io/velo/MultiWorkerServer.java)
+and [`LocalPersist`](/home/kerry/ws/velo/src/main/java/io/velo/persist/LocalPersist.java).
 
-**Purpose:** Handle TCP connections and request parsing
+## Net Workers
 
-```
-NetWorker Thread (1-32):
-  ├─> Accept TCP connections
-  ├─> Decode requests (RESP/HTTP/X-REPL)
-  ├─> Route to slot workers
-  └─> Serialize and send replies
-```
+Net workers are ActiveJ worker reactors. They:
 
-**Thread-Local Data:**
-- Request decoder instances
-- Output buffers
-- Socket connections
+- own client sockets
+- decode requests
+- forward work toward slot-execution paths
+- encode and write replies
 
-**Configuration:**
-```properties
-netWorkers=2  # Default: 2
-Max: 32
-```
+The configured count is validated during bootstrap and published into `ConfForGlobal.netWorkers`.
 
-### Slot Workers (1-32 threads)
+## Slot Workers
 
-**Purpose:** Execute commands and manage data
+Slot workers execute command logic. `RequestHandler` instances are created per slot worker and are marked
+with `@ThreadNeedLocal` because they reuse mutable command-group instances.
 
-```
-SlotWorker Thread (1-32):
-  ├─> Command groups (A-Z)
-  ├─> RequestHandler per worker
-  ├─> Slot-owning (modulo)
-  └─> Persistence operations
-```
+This is the main execution domain for:
 
-**Thread-Local Data:**
-- RequestHandler (with command groups)
-- Compression contexts (ZstdCompressCtx)
-- Decompression contexts (ZstdDecompressCtx)
+- slot parsing
+- command dispatch
+- persistence access
+- request-local compression sample collection
 
-**Configuration:**
-```properties
-slotWorkers=4  # Default: 4
-Max: 32
-```
+## Index Workers
 
-### Index Workers (1-16 threads)
+Index workers are separate from the net/slot ActiveJ worker pools.
+They are created inside the persistence subsystem through `IndexHandlerPool` and are used for index-oriented
+or background work.
 
-**Purpose:** Background tasks
+## Thread-Local Design
 
-```
-IndexWorker Thread (1-16):
-  ├─> LRU eviction
-  ├─> Segment merge
-  ├─> Statistics collection
-  └─> Key analysis
-```
+Several key classes use `@ThreadNeedLocal`, including:
 
-**Configuration:**
-```properties
-indexWorkers=1  # Default: 1
-Max: 16
-```
+- `RequestHandler`
+- `BaseCommand`
+- `AclUsers`
 
-## Slot Assignment
+The intended design is to keep mutable state thread-affine instead of protecting it with coarse locks.
 
-### Distribution Formula
+## Cross-Thread Coordination
 
-```
-slotWorker = slotIndex % slotWorkers
+Cross-slot or cross-worker operations are handled with asynchronous dispatch and reply aggregation rather than
+by sharing slot internals directly between threads. This pattern appears in command groups such as `MGroup`,
+`PGroup`, and `SGroup`.
 
-Example:
-  slotNumber = 4
-  slotWorkers = 2
-  
-  Slot 0 → Worker 0
-  Slot 1 → Worker 1
-  Slot 2 → Worker 0
-  Slot 3 → Worker 1
-```
+## Bootstrap Constraints
 
-### Thread-Local Pattern
+`MultiWorkerServer` validates worker counts against:
 
-```java
-@ThreadNeedLocal("slot")
-RequestHandler[] requestHandlerArray;
+- configured slot count
+- CPU count
+- max supported worker constants
 
-// Access pattern
-int workerId = Thread.currentThread().getId();
-RequestHandler rh = requestHandlerArray[workerId];
-rh.handle(request);
-```
+It also requires slot counts to divide cleanly by worker counts for the relevant pools.
 
-## Run-to-Complete Model
+## Related Documents
 
-Each request processed by a single thread from start to finish:
-
-```
-┌─────────────────────────────────────────┐
-│         Network Worker Thread           │
-│  1. Accept TCP connection              │
-│  2. Decode request                     │
-│  3. Route to slot worker               │
-└─────────────┬───────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────────────────┐
-│          Slot Worker Thread              │
-│  4. Parse slots                        │
-│  5. Select command group               │
-│  6. Execute command                     │
-│  7. Read/write persistence              │
-│  8. Build reply                         │
-└─────────────┬───────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────────────────┐
-│         Network Worker Thread           │
-│  9. Serialize reply                     │
-│  10. Send to client                     │
-└──────────────────────────────────────────┘
-```
-
-## Cross-Slot Operations
-
-Commands touching multiple slots:
-
-```
-Strategy: Async with promises
-
-MGET key1 key2 key3 (different slots)
-  ├─> Promise 1: GET key1 (slot 0, worker A)
-  ├─> Promise 2: GET key2 (slot 1, worker B)
-  ├─> Promise 3: GET key3 (slot 0, worker A)
-  └─> Promises.all() → Combine results
-```
-
-Implementation:
-```java
-if (!isCrossRequestWorker) {
-    // Single thread path
-    operateSet(set, otherRhkList, isInter, isUnion);
-} else {
-    // Async path
-    ArrayList<Promise<RedisHashKeys>> promises = new ArrayList<>();
-    for (int i = 1; i < list.size(); i++) {
-        Promise<RedisHashKeys> p = slot.asyncCall(() -> getRedisSet(other));
-        promises.add(p);
-    }
-    Promises.all(promises).whenComplete(replies -> {
-        // Combine replies
-    });
-}
-```
-
-## Synchronization Avoidance
-
-### No-Lock Design
-
-```
-Slot-Local Data:
-├─> OneSlot instances (owned by worker)
-├─> KeyBuckets (worker-local file handles)
-├─> Chunk segments (worker-local I/O)
-└─> WAL HashMaps (worker-local)
-
-Result: No synchronization needed for slot operations
-```
-
-### Shared-State Synchronization
-
-```java
-// Minimal synchronization for global resources
-class DictMap {
-    private final ConcurrentHashMap<Integer, Dict> dictBySeq;
-    // Concurrent map for thread-safe access
-}
-
-// Thread-local for performance
-class Dict {
-    @ThreadNeedLocal("slot")
-    private static ZstdCompressCtx[] ctxCompressArray;
-}
-```
-
-## ActiveJ Event Loops
-
-Each slot worker has an **Eventloop** for async operations:
-
-```java
-// OneSlot initialization
-Eventloop eventloop = Eventloop.create()
-    .withIdlePing(true)
-    .withThreadPriority(Thread.NORM_PRIORITY);
-
-// Task submission
-Promise<Reply> p = eventloop.execute(() -> {
-    return command.handle();
-});
-
-// Task with delay
-eventloop.delay(taskIntervalMillis, eventloop::execute);
-```
-
-## Worker Lifecycle
-
-```
-┌────────────┐
-│  Startup   │
-└─────┬──────┘
-      │
-      ├─> Create worker threads
-      ├─> Initialize thread-local data
-      ├─> Create RequestHandlers
-      ├─> Start event loops
-      └─> Begin accepting connections
-           │
-           ▼
-┌────────────┐
-│    Ready    │
-│  (Running)  │
-└─────┬──────┘
-      │
-      ├─> Accept connections
-      ├─> Process requests
-      └─> Handle commands
-           │
-           ▼
-┌────────────┐
-│  Shutdown  │
-└────────────┘
-```
-
-## Performance Considerations
-
-### Thread Count Recommendations
-
-| Node Type | Net Workers | Slot Workers | Index Workers |
-|-----------|-------------|---------------|----------------|
-| Small (4 cores) | 1-2 | 2-4 | 1 |
-| Medium (8 cores) | 2-4 | 4-8 | 2 |
-| Large (16 cores) | 4-8 | 8-16 | 4 |
-
-Formula:
-```
-Total threads ≈ CPU cores * 1.5
-
-Recommended:
-  slotWorkers = (CPU cores * 0.6).toInt()
-  netWorkers = (CPU cores * 0.25).toInt()
-  indexWorkers = (CPU cores * 0.15).toInt()
-```
-
-## Related Documentation
-
-- [Overall Architecture](./01_overall_architecture.md) - System overview
-- [Command Processing](./04_command_processing_design.md) - Cross-slot coordination
-- [Persistence Layer](./02_persist_layer_design.md) - Thread-safe storage
-
-## Key Source Files
-
-- `src/main/java/io/velo/ThreadNeedLocal.java` - Thread-local annotation
-- `src/main/java/io/velo/RequestHandler.java` - Per-worker handler
-- `src/main/java/io/velo/MultiWorkerServer.java` - Server startup
-
----
-
-**Version:** 1.0  
-**Last Updated:** 2025-02-05  
+- [Command Processing](/home/kerry/ws/velo/doc/design/04_command_processing_design.md)
+- [Server Bootstrap](/home/kerry/ws/velo/doc/design/12_server_bootstrap_design.md)
+- [Persistence](/home/kerry/ws/velo/doc/design/02_persist_layer_design.md)
