@@ -58,7 +58,7 @@ public class Repl {
      * Reply message from bytes in the REPL protocol.
      */
     public record ReplReplyFromBytes(long slaveUuid, short slot, ReplType type, byte[] data,
-                                      int offset, int length) implements Reply {
+                                     int offset, int length) implements Reply {
         @Override
         public io.activej.bytebuf.ByteBuf buffer() {
             var bytes = new byte[HEADER_LENGTH + length];
@@ -171,7 +171,7 @@ public class Repl {
         }
     };
 
-    private static final ReplReply EMPTY_REPLY = new ReplReply(0L, (byte) 0, null, BYTE_0_CONTENT);
+    private static final ReplReply EMPTY_REPLY = new ReplReply(0L, (short) 0, null, BYTE_0_CONTENT);
 
     /**
      * Returns an empty REPL reply message.
