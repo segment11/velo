@@ -41,5 +41,4 @@ This directory documents the design that is present in the checked-in code, not 
 
 - [AGENTS.md](/home/kerry/ws/velo/AGENTS.md)
 - [doc/hash_buckets/README.md](/home/kerry/ws/velo/doc/hash_buckets/README.md)
-- [doc/compress/README.md](/home/kerry/ws/velo/doc/compress/README.md)
 - [doc/repl/README.md](/home/kerry/ws/velo/doc/repl/README.md)
