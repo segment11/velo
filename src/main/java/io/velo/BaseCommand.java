@@ -14,6 +14,7 @@ import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.incremental.XBigStrings;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -484,11 +485,16 @@ public abstract class BaseCommand {
      * Calculates slot assignment and hash information for a key.
      *
      * @param keyBytes   the key bytes
+     * @param key        the original key string
      * @param slotNumber the total number of slots in the velo running instance
      * @return the SlotWithKeyHash containing full positioning information
      */
-    public static SlotWithKeyHash slot(byte[] keyBytes, int slotNumber) {
-        var rawKey = Wal.keyString(keyBytes);
+    private static SlotWithKeyHash slot(byte[] keyBytes, @Nullable String key, int slotNumber) {
+        assert key != null || keyBytes != null;
+        var rawKey = key != null ? key : Wal.keyString(keyBytes);
+        if (key != null) {
+            keyBytes = Wal.keyBytes(key);
+        }
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
         var keyHash = KeyHash.hash(keyBytes);
@@ -525,7 +531,20 @@ public abstract class BaseCommand {
     public static SlotWithKeyHash slot(String key, int slotNumber) {
         // Keep the slot/hash logic single-sourced in the byte-based path.
         // rawKey here is the UTF-8 reconstruction from that path, not the original String object.
-        return slot(Wal.keyBytes(key), slotNumber);
+        return slot(null, key, slotNumber);
+    }
+
+    /**
+     * Calculates slot assignment and hash information for a key.
+     *
+     * @param keyBytes   the key bytes
+     * @param slotNumber the total number of slots in the velo running instance
+     * @return the SlotWithKeyHash containing full positioning information
+     */
+    public static SlotWithKeyHash slot(byte[] keyBytes, int slotNumber) {
+        // Keep the slot/hash logic single-sourced in the byte-based path.
+        // rawKey here is the UTF-8 reconstruction from that path, not the original String object.
+        return slot(keyBytes, null, slotNumber);
     }
 
     /**
