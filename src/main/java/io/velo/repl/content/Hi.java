@@ -53,7 +53,7 @@ public class Hi implements ReplContent {
      * - 8 bytes for the earliest offset
      * - 4 bytes for the current segment index
      * - 2 bytes for slot number
-     * - 4 + 4 + 1 + 4 + 4 for ReplProperties
+     * - 18 bytes for ReplProperties
      *
      * @return the length in bytes required to encode this message
      */
