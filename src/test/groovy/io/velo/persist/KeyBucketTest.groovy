@@ -66,6 +66,14 @@ class KeyBucketTest extends Specification {
         valueX.expireAt() == 0L
         valueX.seq() == 1L
         valueX.valueBytes() == 'a'.bytes
+
+        when:
+        keyBucket.put('expired', 99L, System.currentTimeMillis() - 1000, 3L, 'expired'.bytes)
+        expireAtAndSeq = keyBucket.getExpireAtAndSeqByKey('expired', 99L)
+        valueX = keyBucket.getValueXByKey('expired', 99L)
+        then:
+        expireAtAndSeq == null
+        valueX.isExpired()
     }
 
     def 'del then put corner case'() {

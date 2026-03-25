@@ -795,7 +795,7 @@ public class KeyBucket {
         for (int i = 0; i < capacity; i++) {
             var r = getExpireAtAndSeqByKeyWithCellIndex(key, keyHash, i);
             if (r != null) {
-                return r;
+                return r.isExpired() ? null : r;
             }
         }
 

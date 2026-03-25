@@ -223,6 +223,16 @@ class KeyLoaderTest extends Specification {
         valueBytesX.valueBytes() == encodeAsShortStringA
 
         when:
+        keyLoader.putValueByKey(0, 'expired', 12L, System.currentTimeMillis() - 1000, 2L, 'expired'.bytes)
+        expireAt = keyLoader.getExpireAt(0, 'expired', 12L)
+        expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(0, 'expired', 12L)
+        valueBytesX = keyLoader.getValueXByKey(0, 'expired', 12L)
+        then:
+        expireAt == null
+        expireAtAndSeq == null
+        valueBytesX.isExpired()
+
+        when:
         def k0 = keyLoader.readKeyBucketForSingleKey(0, splitIndex, (byte) 1, false)
         k0.splitNumber = (byte) 2
         def bytes = k0.encode(true)
