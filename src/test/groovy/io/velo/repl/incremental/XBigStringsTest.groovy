@@ -95,4 +95,37 @@ class XBigStringsTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test apply should work when slot is readonly during slave replay'() {
+        given:
+        final short slot = 0
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.readonly = true
+
+        def key = 'test-big-string-readonly-replay'
+        def uuid = 1L
+        def cv = new CompressedValue()
+        cv.seq = 1234L
+        cv.keyHash = KeyHash.hash(key.bytes)
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv.setCompressedDataAsBigString(uuid, CompressedValue.NULL_DICT_SEQ)
+        def xBigStrings = new XBigStrings(uuid, 0, cv.keyHash, key, cv.encode())
+        def replPair = ReplPairTest.mockAsSlave()
+
+        when:
+        xBigStrings.apply(slot, replPair)
+
+        then:
+        noExceptionThrown()
+        replPair.toFetchBigStringIdList.size() == 1
+
+        cleanup:
+        localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

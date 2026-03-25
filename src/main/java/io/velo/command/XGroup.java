@@ -736,7 +736,7 @@ public class XGroup extends BaseCommand {
                     var key = entry2.getKey();
                     var cv = entry2.getValue();
                     var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
-                    oneSlot.put(key, bucketIndex, cv);
+                    oneSlot.put(key, bucketIndex, cv, true);
                 }
             });
         }
@@ -997,7 +997,7 @@ public class XGroup extends BaseCommand {
                     var key = entry2.getKey();
                     var cv = entry2.getValue();
                     var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
-                    oneSlot.put(key, bucketIndex, cv);
+                    oneSlot.put(key, bucketIndex, cv, true);
                 }
             });
         }

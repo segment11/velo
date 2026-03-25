@@ -1743,22 +1743,35 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * @param cv          the compressed value
      */
     public void put(@NotNull String key, int bucketIndex, @NotNull CompressedValue cv) {
-        put(key, bucketIndex, cv, false);
+        put(key, bucketIndex, cv, false, false);
     }
 
     /**
      * Inserts a key-value entry into OneSlot.
      *
-     * @param key         the key
-     * @param bucketIndex the bucket index
-     * @param cv          the compressed value
-     * @param isFromMerge is from merge
+     * @param key            the key
+     * @param bucketIndex    the bucket index
+     * @param cv             the compressed value
+     * @param ignoreReadonly whether to ignore readonly
      */
-    public void put(@NotNull String key, int bucketIndex, @NotNull CompressedValue cv, boolean isFromMerge) {
+    public void put(@NotNull String key, int bucketIndex, @NotNull CompressedValue cv, boolean ignoreReadonly) {
+        put(key, bucketIndex, cv, false, ignoreReadonly);
+    }
+
+    /**
+     * Inserts a key-value entry into OneSlot.
+     *
+     * @param key            the key
+     * @param bucketIndex    the bucket index
+     * @param cv             the compressed value
+     * @param isFromMerge    is from merge
+     * @param ignoreReadonly whether to ignore readonly
+     */
+    public void put(@NotNull String key, int bucketIndex, @NotNull CompressedValue cv, boolean isFromMerge, boolean ignoreReadonly) {
         checkCurrentThreadId();
 
         // before put check for better performance, todo
-        if (isReadonly()) {
+        if (isReadonly() && !ignoreReadonly) {
             throw new ReadonlyException();
         }
 
