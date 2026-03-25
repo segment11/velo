@@ -1436,6 +1436,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             if (CompressedValue.isDeleted(v.cvEncoded())) {
                 return null;
             }
+            if (v.isExpired()) {
+                return null;
+            }
 
             return v.expireAt();
         }
@@ -1448,7 +1451,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
 
             var cv = CompressedValue.decode(cvEncodedBytesFromLRU, Wal.keyBytes(key), keyHash);
-            return cv.getExpireAt();
+            return cv.isExpired() ? null : cv.getExpireAt();
         }
 
         kvLRUMissTotal++;

@@ -666,6 +666,29 @@ class OneSlotTest extends Specification {
         oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash()) != null
 
         when:
+        def expiredWalKey = 'expired-wal-key'
+        def sExpiredWalKey = BaseCommand.slot(expiredWalKey, slotNumber)
+        def expiredWalCv = new CompressedValue()
+        expiredWalCv.keyHash = sExpiredWalKey.keyHash()
+        expiredWalCv.compressedData = new byte[10]
+        expiredWalCv.expireAt = System.currentTimeMillis() - 1
+        oneSlot.put(expiredWalKey, sExpiredWalKey.bucketIndex(), expiredWalCv)
+        then:
+        oneSlot.getExpireAt(expiredWalKey, sExpiredWalKey.bucketIndex(), sExpiredWalKey.keyHash()) == null
+
+        when:
+        def expiredLruKey = 'expired-lru-key'
+        def sExpiredLruKey = BaseCommand.slot(expiredLruKey, slotNumber)
+        def expiredLruCv = new CompressedValue()
+        expiredLruCv.keyHash = sExpiredLruKey.keyHash()
+        expiredLruCv.compressedData = new byte[10]
+        expiredLruCv.expireAt = System.currentTimeMillis() - 1
+        oneSlot.putKvInTargetWalGroupIndexLRU(Wal.calcWalGroupIndex(sExpiredLruKey.bucketIndex()),
+                expiredLruKey, expiredLruCv.encode())
+        then:
+        oneSlot.getExpireAt(expiredLruKey, sExpiredLruKey.bucketIndex(), sExpiredLruKey.keyHash()) == null
+
+        when:
         oneSlot.removeDelay(key, sKey.bucketIndex(), sKey.keyHash())
         then:
         oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash()) == null
