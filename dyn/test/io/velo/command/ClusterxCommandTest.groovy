@@ -629,7 +629,10 @@ slots
         println sb.toString()
         def reply5 = clusterx.reset()
         then:
-        reply5 == ClusterxCommand.OK
+        reply5 instanceof AsyncReply
+        (reply5 as AsyncReply).settablePromise.whenResult { result ->
+            result == ClusterxCommand.OK
+        }.result
 
         when:
         def data3 = new byte[3][]

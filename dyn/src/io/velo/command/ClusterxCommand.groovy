@@ -827,7 +827,23 @@ migrating_state:ok
         def isHard = data.length == 3 && 'hard' == new String(data[2]).toLowerCase()
 
         def multiShard = localPersist.multiShard
-        multiShard.reset(isHard)
+
+        // do not be slave again
+        def mySelfShard = multiShard.mySelfShard()
+        def mySelfNode = mySelfShard?.mySelfNode()
+        if (!mySelfNode?.master) {
+            multiShard.reset(isHard)
+
+            return localPersist.doSthInSlots(oneSlot -> {
+                oneSlot.resetAsMaster()
+                oneSlot.flush()
+                return true
+            }, resultList -> {
+                OK
+            })
+        } else {
+            multiShard.reset(isHard)
+        }
 
         OK
     }
