@@ -355,6 +355,7 @@ public class MultiWorkerServer extends Launcher {
             if (expectRequestShard != mySelfShard) {
                 if (movedToShard == null) {
                     movedToShard = expectRequestShard;
+                    movedToClientSlot = toClientSlot;
                 } else {
                     if (expectRequestShard != movedToShard) {
                         return ErrorReply.CLUSTER_SLOT_CROSS_SHARDS;

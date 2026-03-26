@@ -762,7 +762,7 @@ class MultiWorkerServerTest extends Specification {
         def checkResult = m.checkClusterSlot(getRequest.slotWithKeyHashList)
         then:
         checkResult instanceof ErrorReply
-        (checkResult as ErrorReply).message.startsWith('MOVED')
+        (checkResult as ErrorReply).message == "MOVED ${getRequest.slotWithKeyHashList.first().toClientSlot()} localhost:7380"
 
         when:
         ArrayList<BaseCommand.SlotWithKeyHash> ignoreSlotWithKeyHashList = [BaseCommand.SlotWithKeyHash.TO_FIX_FIRST_SLOT]
