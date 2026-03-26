@@ -5,11 +5,9 @@ import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
 import io.velo.repl.cluster.TmpForJson
 import io.velo.test.tools.VeloServer
+import redis.clients.jedis.exceptions.JedisException
 import redis.clients.jedis.util.JedisClusterCRC16
 import spock.lang.Specification
-
-import java.net.Socket
-import java.nio.charset.StandardCharsets
 
 class ClusterMovedSlotTest extends Specification {
     def 'test moved reply uses redis client slot instead of inner velo slot'() {
@@ -39,7 +37,7 @@ class ClusterMovedSlotTest extends Specification {
         }
 
         and:
-        assert waitUntil(30, 1_000L) {
+        assert TestUtil.waitUntil(30, 1_000L) {
             try {
                 def jedis = server.jedis()
                 try {
@@ -53,10 +51,19 @@ class ClusterMovedSlotTest extends Specification {
         }
 
         when:
-        def reply = sendRawGet(server.port, movedKey)
+        def jedisForGet = server.jedis()
+        String errorMessage = null
+        try {
+            jedisForGet.get(movedKey)
+        } catch (JedisException e) {
+            errorMessage = e.message
+        } finally {
+            jedisForGet.close()
+        }
 
         then:
-        reply.contains("MOVED ${movedSlot} 127.0.0.1:${remotePort}")
+        errorMessage != null
+        errorMessage.contains("MOVED ${movedSlot} 127.0.0.1:${remotePort}")
 
         cleanup:
         server?.stop()
@@ -90,46 +97,5 @@ class ClusterMovedSlotTest extends Specification {
             }
         }
         throw new IllegalStateException("Could not find key for slot range ${begin}-${end}")
-    }
-
-    private static String sendRawGet(int port, String key) {
-        def socket = new Socket('127.0.0.1', port)
-        socket.soTimeout = 5_000
-        try {
-            def output = socket.getOutputStream()
-            output.write(respGet(key))
-            output.flush()
-
-            def input = socket.getInputStream()
-            def bytes = new ByteArrayOutputStream()
-            while (true) {
-                def b = input.read()
-                if (b == -1) {
-                    break
-                }
-                bytes.write(b)
-                def raw = bytes.toString(StandardCharsets.UTF_8)
-                if (raw.endsWith("\r\n")) {
-                    return raw
-                }
-            }
-            return bytes.toString(StandardCharsets.UTF_8)
-        } finally {
-            socket.close()
-        }
-    }
-
-    private static byte[] respGet(String key) {
-        return "*2\r\n\$3\r\nGET\r\n\$${key.bytes.length}\r\n${key}\r\n".getBytes(StandardCharsets.UTF_8)
-    }
-
-    private static boolean waitUntil(int retryCount = 20, long sleepMillis = 1_000L, Closure<Boolean> condition) {
-        for (int i = 0; i < retryCount; i++) {
-            if (condition.call()) {
-                return true
-            }
-            Thread.sleep(sleepMillis)
-        }
-        return false
     }
 }
