@@ -30,9 +30,8 @@ Bootstrap calls into:
 
 - [`DictMap`](/home/kerry/ws/velo/src/main/java/io/velo/DictMap.java)
 - [`LocalPersist.initSlots(...)`](/home/kerry/ws/velo/src/main/java/io/velo/persist/LocalPersist.java)
-- `RequestHandler.initMultiShardShadows(...)`
 
-This means storage, dictionary state, and cluster-shadow state are ready before normal request traffic.
+This means storage and dictionary state are ready before normal request traffic.
 
 ## Worker Initialization
 

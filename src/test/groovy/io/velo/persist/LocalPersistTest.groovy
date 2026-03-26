@@ -3,7 +3,6 @@ package io.velo.persist
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.velo.ConfForGlobal
-import io.velo.RequestHandler
 import io.velo.SnowFlake
 import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
@@ -18,14 +17,12 @@ class LocalPersistTest extends Specification {
             ConfForGlobal.netListenAddresses = 'localhost:7379'
         }
 
-        def localPersist = LocalPersist.instance
-
-        RequestHandler.initMultiShardShadows(netWorkers)
 
         def snowFlakes = new SnowFlake[netWorkers]
         for (int i = 0; i < netWorkers; i++) {
             snowFlakes[i] = new SnowFlake(i + 1, 1)
         }
+        def localPersist = LocalPersist.instance
         localPersist.initSlots(netWorkers, slotNumber, snowFlakes, Consts.persistDir, Config.create())
         localPersist.debugMode()
     }
@@ -163,8 +160,6 @@ class LocalPersistTest extends Specification {
 
         ConfForGlobal.netListenAddresses = 'localhost:7379'
         ConfForGlobal.initDynConfigItems.a = '97'
-        RequestHandler.initMultiShardShadows(netWorkers)
-
         def snowFlakes = new SnowFlake[netWorkers]
         for (int i = 0; i < netWorkers; i++) {
             snowFlakes[i] = new SnowFlake(i + 1, 1)

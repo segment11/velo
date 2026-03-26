@@ -19,10 +19,9 @@ The current Java model includes:
 - [`Shard`](/home/kerry/ws/velo/src/main/java/io/velo/repl/cluster/Shard.java)
 - [`Node`](/home/kerry/ws/velo/src/main/java/io/velo/repl/cluster/Node.java)
 - [`SlotRange`](/home/kerry/ws/velo/src/main/java/io/velo/repl/cluster/SlotRange.java)
-- [`MultiShardShadow`](/home/kerry/ws/velo/src/main/java/io/velo/repl/cluster/MultiShardShadow.java)
 
-`RequestHandler` keeps thread-local `MultiShardShadow` snapshots so command execution can read cluster
-topology without sharing mutable state directly between workers.
+Cluster topology is read from the shared [`MultiShard`](/home/kerry/ws/velo/src/main/java/io/velo/repl/cluster/MultiShard.java)
+model owned by the persistence layer.
 
 ## Leadership
 

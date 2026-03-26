@@ -509,21 +509,4 @@ class RequestHandlerTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
-
-    def 'test cluster multi shard shadows'() {
-        given:
-        Consts.persistDir.mkdirs()
-        ConfForGlobal.netListenAddresses = 'localhost:7379'
-        RequestHandler.initMultiShardShadows((byte) 2)
-        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
-
-        when:
-        def multiShard = new MultiShard(Consts.persistDir)
-        RequestHandler.updateMultiShardShadows(multiShard)
-        then:
-        RequestHandler.getMultiShardShadow().mySelfShard == multiShard.mySelfShard()
-
-        cleanup:
-        Consts.persistDir.deleteDir()
-    }
 }

@@ -2,7 +2,6 @@ package io.velo.repl.cluster;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.velo.ConfForGlobal;
-import io.velo.RequestHandler;
 import io.velo.persist.LocalPersist;
 import io.velo.repl.ReplPair;
 import org.apache.commons.io.FileUtils;
@@ -39,6 +38,16 @@ vars currentEpoch 0 lastVoteEpoch 0
 
     public ArrayList<Shard> getShards() {
         return shards;
+    }
+
+    public Shard getShardBySlot(int toClientSlot) {
+        for (var shard : shards) {
+            if (shard.contains(toClientSlot)) {
+                return shard;
+            }
+        }
+
+        return null;
     }
 
     private static final Logger log = LoggerFactory.getLogger(MultiShard.class);
@@ -110,7 +119,6 @@ vars currentEpoch 0 lastVoteEpoch 0
         clusterCurrentEpoch = tmp.getClusterCurrentEpoch();
         log.warn("Repl clusterx meta loaded, shards size={}", shards.size());
 
-        RequestHandler.updateMultiShardShadows(this);
     }
 
     public synchronized void refreshAllShards(ArrayList<Shard> shardsNew, int clusterVersion) throws IOException {
@@ -155,8 +163,6 @@ vars currentEpoch 0 lastVoteEpoch 0
         var metaFile = new File(persistDir, metaFileName);
         FileUtils.writeStringToFile(metaFile, metaJson, StandardCharsets.UTF_8);
         log.warn("Repl clusterx meta saved, shards size={}", shards.size());
-
-        RequestHandler.updateMultiShardShadows(this);
 
         var localPersist = LocalPersist.getInstance();
         localPersist.initSlotsAgainAfterMultiShardLoadedOrChanged();

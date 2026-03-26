@@ -24,6 +24,7 @@ import spock.lang.Specification
 
 import java.nio.ByteBuffer
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicReference
 
 class MultiWorkerServerTest extends Specification {
     final short slot0 = 0
@@ -725,7 +726,6 @@ class MultiWorkerServerTest extends Specification {
         and:
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
-        RequestHandler.initMultiShardShadows((byte) 1)
         MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
         def snowFlake = new SnowFlake(1, 1)
         def requestHandler = new RequestHandler(workerId0, netWorkers, slotNumber, snowFlake, Config.create())
@@ -734,9 +734,8 @@ class MultiWorkerServerTest extends Specification {
         m.slotWorkerThreadIds = MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds
 
         and:
-        Consts.persistDir.mkdirs()
         ConfForGlobal.netListenAddresses = 'localhost:7379'
-        def multiShard = new MultiShard(Consts.persistDir)
+        def multiShard = localPersist.getMultiShard()
         multiShard.mySelfShard().multiSlotRange.addSingle(0, 8191)
         def shard1 = new Shard()
         shard1.nodes << new Node(master: true, host: 'localhost', port: 7380)
@@ -745,7 +744,6 @@ class MultiWorkerServerTest extends Specification {
         multiShard.shards << shard1
 
         when:
-        RequestHandler.updateMultiShardShadows(multiShard)
         // handle request
         def getData2 = new byte[2][]
         getData2[0] = 'get'.bytes
@@ -774,7 +772,6 @@ class MultiWorkerServerTest extends Specification {
         def socket = SocketInspectorTest.mockTcpSocket()
         multiShard.shards[0].nodes[0].mySelf = false
         multiShard.shards[1].nodes[0].mySelf = true
-        RequestHandler.updateMultiShardShadows(multiShard)
         m.handleRequest(getRequest, socket)
         then:
         1 == 1
@@ -799,10 +796,76 @@ class MultiWorkerServerTest extends Specification {
         shard2.multiSlotRange = new MultiSlotRange(list: [])
         shard2.multiSlotRange.addSingle(4096, 8191)
         multiShard.shards << shard2
-        RequestHandler.updateMultiShardShadows(multiShard)
         m.handleRequest(getRequest2, socket)
         then:
         1 == 1
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.clusterEnabled = false
+    }
+
+    def 'test cluster slot cross shards from non slot thread'() {
+        given:
+        ConfForGlobal.clusterEnabled = true
+        def eventloop0 = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop0.keepAlive(true)
+        Thread.start {
+            eventloop0.run()
+        }
+        Thread.sleep(100)
+
+        def m = new MultiWorkerServer()
+        m.isMockHandle = true
+        m.slotWorkerEventloopArray = new Eventloop[1]
+        m.slotWorkerEventloopArray[0] = eventloop0
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
+        def snowFlake = new SnowFlake(1, 1)
+        def requestHandler = new RequestHandler(workerId0, netWorkers, slotNumber, snowFlake, Config.create())
+        m.requestHandlerArray = new RequestHandler[1]
+        m.requestHandlerArray[0] = requestHandler
+        m.slotWorkerThreadIds = MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds
+
+        and:
+        ConfForGlobal.netListenAddresses = 'localhost:7379'
+        def multiShard = localPersist.getMultiShard()
+        multiShard.mySelfShard().multiSlotRange.addSingle(0, 8191)
+        def shard1 = new Shard()
+        shard1.nodes << new Node(master: true, host: 'localhost', port: 7380)
+        shard1.multiSlotRange = new MultiSlotRange(list: [])
+        shard1.multiSlotRange.addSingle(8192, 16383)
+        multiShard.shards << shard1
+        and:
+        def getData2 = new byte[2][]
+        getData2[0] = 'get'.bytes
+        getData2[1] = 'key'.bytes
+        def getRequest = new Request(getData2, false, false)
+        getRequest.slotNumber = slotNumber
+        requestHandler.parseSlots(getRequest)
+
+        when:
+        def resultRef = new AtomicReference<ErrorReply>()
+        def errorRef = new AtomicReference<Throwable>()
+        def worker = Thread.start {
+            try {
+                resultRef.set(m.checkClusterSlot(getRequest.slotWithKeyHashList))
+            } catch (Throwable t) {
+                errorRef.set(t)
+            }
+        }
+        worker.join()
+
+        then:
+        errorRef.get() == null
+        resultRef.get() != null
+        resultRef.get().message == "MOVED ${getRequest.slotWithKeyHashList.first().toClientSlot()} localhost:7380"
 
         cleanup:
         localPersist.cleanUp()

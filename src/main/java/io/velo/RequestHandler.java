@@ -14,8 +14,6 @@ import io.velo.persist.CannotReadException;
 import io.velo.persist.ReadonlyException;
 import io.velo.persist.Wal;
 import io.velo.repl.LeaderSelector;
-import io.velo.repl.cluster.MultiShard;
-import io.velo.repl.cluster.MultiShardShadow;
 import io.velo.reply.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -112,47 +110,6 @@ public class RequestHandler {
 
         this.initCommandGroups();
         this.initMetricsCollect();
-    }
-
-    @ThreadNeedLocal
-    private static MultiShardShadow[] multiShardShadows;
-
-    /**
-     * Initializes the multi-shard shadows.
-     *
-     * @param slotWorkers the number of slot workers
-     */
-    public static void initMultiShardShadows(byte slotWorkers) {
-        multiShardShadows = new MultiShardShadow[slotWorkers];
-        for (int i = 0; i < slotWorkers; i++) {
-            multiShardShadows[i] = new MultiShardShadow();
-        }
-    }
-
-    /**
-     * Updates the multi-shard shadows.
-     * This method is not thread safe.
-     *
-     * @param multiShard the multi-shard instance
-     */
-    public static synchronized void updateMultiShardShadows(MultiShard multiShard) {
-        var mySelfShard = multiShard.mySelfShard();
-        var shards = multiShard.getShards();
-
-        for (var shardShadow : multiShardShadows) {
-            shardShadow.setMySelfShard(mySelfShard);
-            shardShadow.setShards(shards);
-        }
-    }
-
-    /**
-     * Gets the multi-shard shadow for the current thread.
-     *
-     * @return the multi-shard shadow
-     */
-    static MultiShardShadow getMultiShardShadow() {
-        var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
-        return multiShardShadows[threadIndex];
     }
 
     private final BaseCommand[] commandGroups = new BaseCommand[26];

@@ -335,8 +335,15 @@ public class MultiWorkerServer extends Launcher {
     @VisibleForTesting
     ErrorReply checkClusterSlot(ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList) {
         // check if cross-shards or not my shard
-        var multiShardShadow = RequestHandler.getMultiShardShadow();
-        var mySelfShard = multiShardShadow.getMySelfShard();
+        var multiShard = LocalPersist.getInstance().getMultiShard();
+        if (multiShard == null) {
+            return ErrorReply.CLUSTER_SLOT_NOT_SET;
+        }
+
+        var mySelfShard = multiShard.mySelfShard();
+        if (mySelfShard == null) {
+            return ErrorReply.CLUSTER_SLOT_NOT_SET;
+        }
 
         boolean isIncludeMySelfShard = false;
         Shard movedToShard = null;
@@ -347,7 +354,7 @@ public class MultiWorkerServer extends Launcher {
                 continue;
             }
 
-            var expectRequestShard = multiShardShadow.getShardBySlot(toClientSlot);
+            var expectRequestShard = multiShard.getShardBySlot(toClientSlot);
             if (expectRequestShard == null) {
                 return ErrorReply.CLUSTER_SLOT_NOT_SET;
             }
@@ -837,6 +844,8 @@ public class MultiWorkerServer extends Launcher {
 
     PrimaryTaskRunnable primaryScheduleRunnable;
 
+    private final LocalPersist localPersist = LocalPersist.getInstance();
+
     /**
      * Configures the event loop as a scheduler.
      *
@@ -847,8 +856,6 @@ public class MultiWorkerServer extends Launcher {
         var taskRunnable = scheduleRunnableArray[index];
         taskRunnable.setSlotWorkerEventloop(slotWorkerEventloop);
         taskRunnable.setRequestHandler(requestHandlerArray[index]);
-
-        var localPersist = LocalPersist.getInstance();
         taskRunnable.chargeOneSlots(localPersist.oneSlots());
 
         // interval 1s
@@ -953,7 +960,6 @@ public class MultiWorkerServer extends Launcher {
         // interval 1s
         primaryEventloop.delay(1000L, primaryScheduleRunnable);
 
-        var localPersist = LocalPersist.getInstance();
         // fix slot thread id
         int slotNumber = configInject.get(ofInteger(), "slotNumber", (int) LocalPersist.DEFAULT_SLOT_NUMBER);
         for (short slot = 0; slot < slotNumber; slot++) {
@@ -1114,7 +1120,6 @@ public class MultiWorkerServer extends Launcher {
             jedisPoolHolder.cleanUp();
 
             // close local persist
-            var localPersist = LocalPersist.getInstance();
             localPersist.cleanUp();
 
             var dictMap = DictMap.getInstance();
@@ -1446,8 +1451,6 @@ public class MultiWorkerServer extends Launcher {
             dictMap.initDictMap(dirFile);
 
             TrainSampleJob.setDictKeyPrefixEndIndex(config.get(ofInteger(), "toTrainDictWhenKeyPrefixEndIndex", 5));
-
-            RequestHandler.initMultiShardShadows((byte) netWorkers);
 
             // init local persist
             // already created when inject

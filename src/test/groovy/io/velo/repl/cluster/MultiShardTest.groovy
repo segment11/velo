@@ -1,13 +1,31 @@
 package io.velo.repl.cluster
 
 import io.velo.ConfForGlobal
-import io.velo.RequestHandler
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import spock.lang.Specification
 
 class MultiShardTest extends Specification {
+    def 'test shard lookup by slot'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        def multiShard = localPersist.getMultiShard()
+
+        when:
+        multiShard.mySelfShard().multiSlotRange.addSingle(0, 8191)
+        then:
+        multiShard.mySelfShard() == multiShard.shards[0]
+        multiShard.getShardBySlot(0) == multiShard.shards[0]
+        multiShard.getShardBySlot(8191) == multiShard.shards[0]
+        multiShard.getShardBySlot(8192) == null
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test all'() {
         given:
         LocalPersistTest.prepareLocalPersist()
@@ -15,7 +33,6 @@ class MultiShardTest extends Specification {
 
         and:
         ConfForGlobal.netListenAddresses = 'localhost:7379'
-        RequestHandler.initMultiShardShadows((byte) 1)
         def multiShard = new MultiShard(Consts.persistDir)
 
         expect:
