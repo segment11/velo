@@ -450,11 +450,7 @@ public class MultiWorkerServer extends Launcher {
             return handleReplRequest(request, socket);
         }
 
-        var r = handleFast(request, socket);
-        if (r != null) {
-            return r;
-        }
-
+        request.setU(BaseCommand.getAuthU(socket));
         var aclCheckResult = request.isAclCheckOk();
         if (!aclCheckResult.asBoolean()) {
             return Promise.of(
@@ -462,6 +458,11 @@ public class MultiWorkerServer extends Launcher {
                             ErrorReply.ACL_PERMIT_KEY_LIMIT.buffer()
                             : ErrorReply.ACL_PERMIT_LIMIT.buffer()
             );
+        }
+
+        var r = handleFast(request, socket);
+        if (r != null) {
+            return r;
         }
 
         if (SocketInspector.isConnectionReadonly(socket) && Category.isWriteCmd(request.cmd())) {
@@ -625,12 +626,9 @@ public class MultiWorkerServer extends Launcher {
 
         SocketInspector.updateLastSendCommand(socket, pipeline.getLast().cmd(), pipeline.size());
 
-        var u = BaseCommand.getAuthU(socket);
-
         for (var request : pipeline) {
             request.setSlotNumber(slotNumber);
             requestHandlerArray[0].parseSlots(request);
-            request.setU(u);
         }
 
         if (pipeline.size() == 1) {

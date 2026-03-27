@@ -3,6 +3,7 @@ package io.velo
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.activej.inject.binding.OptionalDependency
+import io.velo.acl.AclUsers
 import io.velo.acl.U
 import io.velo.decode.Request
 import io.velo.persist.Consts
@@ -24,6 +25,7 @@ import spock.lang.Specification
 
 import java.nio.ByteBuffer
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
 
 class MultiWorkerServerTest extends Specification {
@@ -34,6 +36,83 @@ class MultiWorkerServerTest extends Specification {
     final short slotNumber = 2
     final byte slotWorkers = 2
     final byte netWorkers = 2
+
+    def 'test pipeline auth refresh acl state'() {
+        given:
+        def oldPassword = ConfForGlobal.PASSWORD
+        def oldSocketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector
+        def config = Config.create()
+                .with('doFileLock', "false")
+                .with('slotNumber', '1')
+                .with('slotWorkers', '1')
+                .with('netWorkers', '1')
+                .with("net.listenAddresses", "localhost:7379")
+        def eventloopCurrent = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloopCurrent.keepAlive(true)
+        def waitLatch = new CountDownLatch(1)
+        Thread.start {
+            waitLatch.countDown()
+            eventloopCurrent.run()
+        }
+        waitLatch.await()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        LocalPersist.instance.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+
+        def m = new MultiWorkerServer()
+        m.configInject = config
+        m.primaryReactor(config)
+        m.netWorkerEventloopArray = eventloopArray
+        m.requestHandlerArray = new RequestHandler[1]
+        m.requestHandlerArray[0] = new RequestHandler((byte) 0, (byte) 1, (short) 1, new SnowFlake(1, 1), config)
+        m.scheduleRunnableArray = new TaskRunnable[1]
+        m.scheduleRunnableArray[0] = new TaskRunnable((byte) 0, (byte) 1)
+        m.socketInspector = inspector
+        m.onStart()
+
+        AclUsers.instance.initForTest()
+        AclUsers.instance.upInsert('limited-user') { u ->
+            u.on = true
+            u.password = U.Password.plain('password')
+        }
+        ConfForGlobal.PASSWORD = null
+
+        def authData = new byte[3][]
+        authData[0] = 'auth'.bytes
+        authData[1] = 'limited-user'.bytes
+        authData[2] = 'password'.bytes
+        def authRequest = new Request(authData, false, false)
+
+        def pingData = new byte[1][]
+        pingData[0] = 'ping'.bytes
+        def pingRequest = new Request(pingData, false, false)
+
+        ArrayList<Request> pipeline = [authRequest, pingRequest]
+        String responseText = null
+
+        when:
+        def p = m.handlePipeline(pipeline, socket, (short) 1)
+        p.whenResult { reply ->
+            responseText = new String(reply.array())
+        }.result
+
+        then:
+        responseText == '+OK\r\n-ERR user acl permit limit !NOPERM!\r\n'
+
+        cleanup:
+        ConfForGlobal.PASSWORD = oldPassword
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = oldSocketInspector
+        if (m?.primaryScheduleRunnable != null) {
+            m.onStop()
+        }
+    }
 
     def 'test mock inject and handle'() {
         // only for coverage
