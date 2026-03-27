@@ -37,6 +37,92 @@ class MultiWorkerServerTest extends Specification {
     final byte slotWorkers = 2
     final byte netWorkers = 2
 
+    def 'test fast auth gate keeps quit available'() {
+        given:
+        def oldPassword = ConfForGlobal.PASSWORD
+        def oldSocketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector
+        def config = Config.create()
+                .with('doFileLock', "false")
+                .with('slotNumber', '1')
+                .with('slotWorkers', '1')
+                .with('netWorkers', '1')
+                .with("net.listenAddresses", "localhost:7379")
+        def eventloopCurrent = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloopCurrent.keepAlive(true)
+        def waitLatch = new CountDownLatch(1)
+        Thread.start {
+            waitLatch.countDown()
+            eventloopCurrent.run()
+        }
+        waitLatch.await()
+        def pingSocket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        def echoSocket = SocketInspectorTest.mockTcpSocket(eventloopCurrent, 46380)
+        def quitSocket = SocketInspectorTest.mockTcpSocket(eventloopCurrent, 46381)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        LocalPersist.instance.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+
+        def m = new MultiWorkerServer()
+        m.configInject = config
+        m.primaryReactor(config)
+        m.netWorkerEventloopArray = eventloopArray
+        m.requestHandlerArray = new RequestHandler[1]
+        m.requestHandlerArray[0] = new RequestHandler((byte) 0, (byte) 1, (short) 1, new SnowFlake(1, 1), config)
+        m.scheduleRunnableArray = new TaskRunnable[1]
+        m.scheduleRunnableArray[0] = new TaskRunnable((byte) 0, (byte) 1)
+        m.socketInspector = inspector
+        m.onStart()
+
+        ConfForGlobal.PASSWORD = 'password'
+
+        def pingData = new byte[1][]
+        pingData[0] = 'ping'.bytes
+        def pingRequest = new Request(pingData, false, false)
+        def echoData = new byte[2][]
+        echoData[0] = 'echo'.bytes
+        echoData[1] = 'hello'.bytes
+        def echoRequest = new Request(echoData, false, false)
+        def quitData = new byte[1][]
+        quitData[0] = 'quit'.bytes
+        def quitRequest = new Request(quitData, false, false)
+        String pingResponseText = null
+        String echoResponseText = null
+        String quitResponseText = null
+
+        when:
+        def pingPromise = m.handleRequest(pingRequest, pingSocket)
+        pingPromise.whenResult { reply ->
+            pingResponseText = new String(reply.array())
+        }.result
+        def echoPromise = m.handleRequest(echoRequest, echoSocket)
+        echoPromise.whenResult { reply ->
+            echoResponseText = new String(reply.array())
+        }.result
+        def quitPromise = m.handleRequest(quitRequest, quitSocket)
+        quitPromise.whenResult { reply ->
+            quitResponseText = new String(reply.array())
+        }.result
+
+        then:
+        pingResponseText == '-ERR no auth\r\n'
+        echoResponseText == '-ERR no auth\r\n'
+        quitResponseText == '+OK\r\n'
+        quitSocket.isClosed()
+
+        cleanup:
+        ConfForGlobal.PASSWORD = oldPassword
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = oldSocketInspector
+        if (m?.primaryScheduleRunnable != null) {
+            m.onStop()
+        }
+    }
+
     def 'test pipeline auth refresh acl state'() {
         given:
         def oldPassword = ConfForGlobal.PASSWORD

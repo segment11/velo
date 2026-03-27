@@ -21,6 +21,7 @@ import io.activej.launchers.initializers.Initializers;
 import io.activej.net.PrimaryServer;
 import io.activej.net.SimpleServer;
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.net.socket.tcp.TcpSocket;
 import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.reactor.nio.NioReactor;
@@ -406,10 +407,6 @@ public class MultiWorkerServer extends Launcher {
                     return Promise.of(new BulkReply(messageBytes).buffer());
                 }
             }
-            case QUIT_COMMAND -> {
-                socket.close();
-                return Promise.of(OKReply.INSTANCE.buffer());
-            }
         }
 
         if (debug.logCmd) {
@@ -426,6 +423,11 @@ public class MultiWorkerServer extends Launcher {
         }
 
         return null;
+    }
+
+    private Promise<ByteBuf> handleQuit(ITcpSocket socket) {
+        ((TcpSocket) socket).getReactor().submit(socket::close);
+        return Promise.of(OKReply.INSTANCE.buffer());
     }
 
     private Promise<ByteBuf> handleReplRequest(Request request, ITcpSocket socket) {
@@ -450,6 +452,17 @@ public class MultiWorkerServer extends Launcher {
             return handleReplRequest(request, socket);
         }
 
+        var cmd = request.cmd();
+        if (cmd.equals(QUIT_COMMAND)) {
+            return handleQuit(socket);
+        }
+
+        if (SocketInspector.getAuthUser(socket) == null && ConfForGlobal.PASSWORD != null) {
+            if (!cmd.equals(AUTH_COMMAND) && !cmd.equals("hello")) {
+                return Promise.of(ErrorReply.NO_AUTH.buffer());
+            }
+        }
+
         request.setU(BaseCommand.getAuthU(socket));
         var aclCheckResult = request.isAclCheckOk();
         if (!aclCheckResult.asBoolean()) {
@@ -465,7 +478,7 @@ public class MultiWorkerServer extends Launcher {
             return r;
         }
 
-        if (SocketInspector.isConnectionReadonly(socket) && Category.isWriteCmd(request.cmd())) {
+        if (SocketInspector.isConnectionReadonly(socket) && Category.isWriteCmd(cmd)) {
             return Promise.of(ErrorReply.READONLY.buffer());
         }
 
@@ -511,7 +524,7 @@ public class MultiWorkerServer extends Launcher {
                 return transferAsyncReply(request, (AsyncReply) reply, veloUserData.isResp3);
             } else {
                 if (reply == ErrorReply.FORMAT) {
-                    reply = ErrorReply.WRONG_NUMBER(request.cmd());
+                    reply = ErrorReply.WRONG_NUMBER(cmd);
                 }
 
                 return request.isHttp() ?
