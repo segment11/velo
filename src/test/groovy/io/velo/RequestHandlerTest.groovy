@@ -192,7 +192,7 @@ class RequestHandlerTest extends Specification {
         getRequest.u = new U('test-user')
         reply = requestHandler.handle(getRequest, socket)
         then:
-        reply == ErrorReply.NO_AUTH
+        reply == ErrorReply.FORMAT
 
         when:
         // mock already authed

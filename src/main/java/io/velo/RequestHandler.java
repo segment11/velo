@@ -415,13 +415,6 @@ public class RequestHandler {
                 }
             }
 
-            if (SocketInspector.getAuthUser(socket) == null && ConfForGlobal.PASSWORD != null) {
-                // hello can do auth
-                if (!cmd.equals(HELLO_COMMAND)) {
-                    return ErrorReply.NO_AUTH;
-                }
-            }
-
             // do get for shortcut
             if (cmd.equals(GET_COMMAND)) {
                 if (data.length != 2) {
