@@ -20,6 +20,7 @@ class RESPReplyTest extends Specification {
         MultiBulkReply.EMPTY.dumpForTest(new StringBuilder(), 0)
         MultiBulkReply.SCAN_EMPTY.dumpForTest(new StringBuilder(), 1)
         ErrorReply.clusterMoved(100, 'localhost', 6380).message == 'MOVED 100 localhost:6380'
+        ErrorReply.clusterMoved(100, 'localhost', 6380).buffer().asArray() == "-MOVED 100 localhost:6380\r\n".bytes
         Reply.DUMP_REPLY.buffer() == null
         Reply.DUMP_REPLY.bufferAsResp3() == null
         Reply.DUMP_REPLY.bufferAsHttp() == null

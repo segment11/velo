@@ -208,10 +208,11 @@ public class ErrorReply implements Reply {
      * @return a new ErrorReply with the MOVED message
      */
     public static ErrorReply clusterMoved(int toClientSlot, String host, int port) {
-        return new ErrorReply("MOVED " + toClientSlot + " " + host + ":" + port);
+        return new ErrorReply("MOVED " + toClientSlot + " " + host + ":" + port, true);
     }
 
     private final String message;
+    private final boolean rawErrorPrefix;
 
     /**
      * Constructs a new ErrorReply with the specified error message.
@@ -219,7 +220,12 @@ public class ErrorReply implements Reply {
      * @param message the error message to be returned
      */
     public ErrorReply(String message) {
+        this(message, false);
+    }
+
+    private ErrorReply(String message, boolean rawErrorPrefix) {
         this.message = message;
+        this.rawErrorPrefix = rawErrorPrefix;
     }
 
     /**
@@ -245,7 +251,7 @@ public class ErrorReply implements Reply {
      */
     @Override
     public ByteBuf buffer() {
-        var bytes = ("-ERR " + message + "\r\n").getBytes();
+        var bytes = ((rawErrorPrefix ? "-" : "-ERR ") + message + "\r\n").getBytes();
         return ByteBuf.wrapForReading(bytes);
     }
 
