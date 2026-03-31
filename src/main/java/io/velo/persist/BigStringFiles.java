@@ -259,10 +259,10 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             if (len == 0) {
                 bigStringFilesCount++;
             }
-            diskUsage += bytes.length - len;
+            diskUsage += length - len;
 
             // stats
-            writeByteLengthTotal += bytes.length;
+            writeByteLengthTotal += length;
             writeFileCountTotal++;
             writeFileCostTotalUs += costT;
 
@@ -291,18 +291,20 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             return true;
         }
 
-        bigStringFilesCount--;
         var len = file.length();
-        diskUsage -= len;
-
         var beginT = System.nanoTime();
         var r = file.delete();
         var costT = (System.nanoTime() - beginT) / 1000;
 
-        // stats
-        deleteByteLengthTotal += len;
-        deleteFileCountTotal++;
-        deleteFileCostTotalUs += costT;
+        if (r) {
+            bigStringFilesCount--;
+            diskUsage -= len;
+
+            // stats
+            deleteByteLengthTotal += len;
+            deleteFileCountTotal++;
+            deleteFileCostTotalUs += costT;
+        }
 
         return r;
     }

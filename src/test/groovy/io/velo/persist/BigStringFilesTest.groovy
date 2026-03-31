@@ -126,4 +126,58 @@ class BigStringFilesTest extends Specification {
                 'posix:permissions', PosixFilePermissions.fromString('rwxrwxrwx'))
         bigStringDir.deleteDir()
     }
+
+    def 'test sliced write accounting uses actual length'() {
+        given:
+        def tmpSlotDir = new File('/tmp/tmp-slot-dir-slice')
+        if (tmpSlotDir.exists()) {
+            tmpSlotDir.deleteDir()
+        }
+        def bigStringFiles = new BigStringFiles(slot, tmpSlotDir)
+        def bytes = '0123456789'.bytes
+
+        when:
+        def isWriteOk = bigStringFiles.writeBigStringBytes(2L, 0, 2L, bytes, 2, 4)
+
+        then:
+        isWriteOk
+        bigStringFiles.getBigStringBytes(2L, 0, 2L) == '2345'.bytes
+        bigStringFiles.diskUsage == 4
+        bigStringFiles.writeByteLengthTotal == 4
+
+        cleanup:
+        tmpSlotDir.deleteDir()
+    }
+
+    def 'test failed delete keeps accounting unchanged'() {
+        given:
+        def tmpSlotDir = new File('/tmp/tmp-slot-dir-delete-fail')
+        if (tmpSlotDir.exists()) {
+            tmpSlotDir.deleteDir()
+        }
+        def bigStringFiles = new BigStringFiles(slot, tmpSlotDir)
+        def file = new File(bigStringFiles.bigStringDir, '0/3_3')
+        file.parentFile.mkdirs()
+        file.bytes = 'abcd'.bytes
+        bigStringFiles.bigStringFilesCount = 1
+        bigStringFiles.diskUsage = 4
+        def dir = file.parentFile
+
+        when:
+        Files.setAttribute(dir.toPath(),
+                'posix:permissions', PosixFilePermissions.fromString('r-xr-xr-x'))
+        def isDeleted = bigStringFiles.deleteBigStringFileIfExist(3L, 0, 3L)
+
+        then:
+        !isDeleted
+        bigStringFiles.bigStringFilesCount == 1
+        bigStringFiles.diskUsage == 4
+        bigStringFiles.deleteFileCountTotal == 0
+        bigStringFiles.deleteByteLengthTotal == 0
+
+        cleanup:
+        Files.setAttribute(dir.toPath(),
+                'posix:permissions', PosixFilePermissions.fromString('rwxrwxrwx'))
+        tmpSlotDir.deleteDir()
+    }
 }
