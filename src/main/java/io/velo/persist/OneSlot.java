@@ -1785,6 +1785,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
+        Long overwrittenBigStringUuid = null;
 
         var isValueShort = cv.isShortString();
         Wal.V v;
@@ -1794,6 +1795,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             if (cv.isTypeNumber()) {
                 cvEncoded = cv.encodeAsNumber();
             } else if (cv.isBigString()) {
+                overwrittenBigStringUuid = getCurrentBigStringUuid(targetWal, key, bucketIndex, cv.getKeyHash());
                 cvEncoded = cv.encode();
             } else {
                 cvEncoded = cv.encodeAsShortString();
@@ -1813,11 +1815,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             // for big string, use single file
             if (isPersistLengthOverSegmentLength || key.contains("kerry-test-big-string-")) {
-                var keyHashAsUuid = cv.getKeyHash();
+                overwrittenBigStringUuid = getCurrentBigStringUuid(targetWal, key, bucketIndex, cv.getKeyHash());
+                var bigStringUuid = snowFlake.nextId();
                 var bytes = cv.getCompressedData();
-                var isWriteOk = bigStringFiles.writeBigStringBytes(keyHashAsUuid, bucketIndex, keyHashAsUuid, bytes);
+                var isWriteOk = bigStringFiles.writeBigStringBytes(bigStringUuid, bucketIndex, cv.getKeyHash(), bytes);
                 if (!isWriteOk) {
-                    throw new RuntimeException("Write big string file error, uuid=" + keyHashAsUuid + ", key=" + key);
+                    throw new RuntimeException("Write big string file error, uuid=" + bigStringUuid + ", key=" + key);
                 }
 
                 var cvAsBigString = new CompressedValue();
@@ -1825,10 +1828,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 cvAsBigString.setKeyHash(cv.getKeyHash());
                 cvAsBigString.setExpireAt(cv.getExpireAt());
                 cvAsBigString.setDictSeqOrSpType(CompressedValue.SP_TYPE_BIG_STRING);
-                cvAsBigString.setCompressedDataAsBigString(keyHashAsUuid, cv.getDictSeqOrSpType());
+                cvAsBigString.setCompressedDataAsBigString(bigStringUuid, cv.getDictSeqOrSpType());
 
                 var cvBigStringEncoded = cvAsBigString.encode();
-                var xBigStrings = new XBigStrings(keyHashAsUuid, bucketIndex, cv.getKeyHash(), key, cvBigStringEncoded);
+                var xBigStrings = new XBigStrings(bigStringUuid, bucketIndex, cv.getKeyHash(), key, cvBigStringEncoded);
                 appendBinlog(xBigStrings);
 
                 v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), CompressedValue.SP_TYPE_BIG_STRING,
@@ -1853,6 +1856,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         var putResult = targetWal.put(isValueShort, key, v, lastPersistTimeMs);
+        if (overwrittenBigStringUuid != null) {
+            var currentBigStringUuid = targetWal.bigStringFileUuidByKey.get(key);
+            if (!overwrittenBigStringUuid.equals(currentBigStringUuid)) {
+                delayToDeleteBigStringFileIds.add(new BigStringFiles.IdWithKey(overwrittenBigStringUuid, bucketIndex, cv.getKeyHash(), key));
+            }
+        }
 
         var xWalV = new XWalV(v, isValueShort);
         appendBinlog(xWalV);
@@ -1860,6 +1869,36 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (putResult.needPersist()) {
             doPersist(walGroupIndex, key, putResult);
         }
+    }
+
+    private Long getCurrentBigStringUuid(@NotNull Wal targetWal, @NotNull String key, int bucketIndex, long keyHash) {
+        var walV = targetWal.getV(key);
+        if (walV != null) {
+            if (walV.isRemove() || walV.isExpired()) {
+                return null;
+            }
+            return getBigStringUuidIfStored(walV.cvEncoded());
+        }
+
+        if (keyLoader == null) {
+            return null;
+        }
+
+        var valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(bucketIndex, key, keyHash);
+        if (valueBytesWithExpireAtAndSeq == null || valueBytesWithExpireAtAndSeq.isExpired()) {
+            return null;
+        }
+        return getBigStringUuidIfStored(valueBytesWithExpireAtAndSeq.valueBytes());
+    }
+
+    private Long getBigStringUuidIfStored(byte[] valueBytes) {
+        if (valueBytes.length < 28 || PersistValueMeta.isPvm(valueBytes)) {
+            return null;
+        }
+        if (CompressedValue.onlyReadSpType(valueBytes) != CompressedValue.SP_TYPE_BIG_STRING) {
+            return null;
+        }
+        return CompressedValue.getBigStringMetaUuid(valueBytes);
     }
 
     private long lastPersistTimeMs = 0L;

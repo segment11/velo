@@ -558,6 +558,127 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test big string uuid is not key hash'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def bucketIndex = 0
+        def forcedKeyHash = 123456789L
+        def key1 = 'big-string-key-1'
+        def key2 = 'big-string-key-2'
+
+        and:
+        def cv1 = new CompressedValue()
+        cv1.seq = oneSlot.snowFlake.nextId()
+        cv1.keyHash = forcedKeyHash
+        cv1.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
+
+        def cv2 = new CompressedValue()
+        cv2.seq = oneSlot.snowFlake.nextId()
+        cv2.keyHash = forcedKeyHash
+        cv2.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
+
+        when:
+        oneSlot.put(key1, bucketIndex, cv1)
+        oneSlot.put(key2, bucketIndex, cv2)
+
+        then:
+        def uuid1 = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key1)
+        def uuid2 = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key2)
+        uuid1 != null
+        uuid2 != null
+        uuid1 != forcedKeyHash
+        uuid2 != forcedKeyHash
+        uuid1 != uuid2
+        oneSlot.bigStringFiles.getBigStringFileIdList(bucketIndex).size() == 2
+        new File(oneSlot.bigStringFiles.bigStringDir, bucketIndex + '/' + uuid1 + '_' + forcedKeyHash).exists()
+        new File(oneSlot.bigStringFiles.bigStringDir, bucketIndex + '/' + uuid2 + '_' + forcedKeyHash).exists()
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test overwrite same big string key deletes stale uuid on first cleanup tick'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def bucketIndex = 0
+        def key = 'kerry-test-big-string-overwrite-key'
+
+        and:
+        def cv1 = new CompressedValue()
+        cv1.seq = oneSlot.snowFlake.nextId()
+        cv1.keyHash = 222222222L
+        cv1.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
+        oneSlot.put(key, bucketIndex, cv1)
+        def firstUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+
+        def cv2 = new CompressedValue()
+        cv2.seq = oneSlot.snowFlake.nextId()
+        cv2.keyHash = 222222222L
+        cv2.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
+        oneSlot.put(key, bucketIndex, cv2)
+        def currentUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+
+        when:
+        def count = oneSlot.intervalDeleteOverwriteBigStringFiles(bucketIndex)
+
+        then:
+        firstUuid != currentUuid
+        count == 0
+        oneSlot.bigStringFiles.getBigStringFileIdList(bucketIndex)*.uuid() == [currentUuid]
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test overwrite short big string meta deletes stale uuid on first cleanup tick'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def bucketIndex = 0
+        def key = 'short-big-string-overwrite-key'
+        def keyHash = 333333333L
+
+        and:
+        def firstUuid = 9001L
+        oneSlot.bigStringFiles.writeBigStringBytes(firstUuid, bucketIndex, keyHash, 'first'.bytes)
+        def cv1 = new CompressedValue()
+        cv1.seq = oneSlot.snowFlake.nextId()
+        cv1.keyHash = keyHash
+        cv1.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv1.setCompressedDataAsBigString(firstUuid, CompressedValue.NULL_DICT_SEQ)
+        oneSlot.put(key, bucketIndex, cv1)
+
+        def secondUuid = 9002L
+        oneSlot.bigStringFiles.writeBigStringBytes(secondUuid, bucketIndex, keyHash, 'second'.bytes)
+        def cv2 = new CompressedValue()
+        cv2.seq = oneSlot.snowFlake.nextId()
+        cv2.keyHash = keyHash
+        cv2.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv2.setCompressedDataAsBigString(secondUuid, CompressedValue.NULL_DICT_SEQ)
+        oneSlot.put(key, bucketIndex, cv2)
+
+        when:
+        def count = oneSlot.intervalDeleteOverwriteBigStringFiles(bucketIndex)
+
+        then:
+        count == 0
+        oneSlot.bigStringFiles.getBigStringFileIdList(bucketIndex)*.uuid() == [secondUuid]
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test meta and key loader and task'() {
         given:
         LocalPersistTest.prepareLocalPersist()

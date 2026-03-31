@@ -698,7 +698,9 @@ class BaseCommandTest extends Specification {
         def bigValueBytes = ('x' * 10000).bytes
         c.set(bigValueBytes, sKey, 0, System.currentTimeMillis() + 1000)
         then:
-        oneSlot.bigStringFiles.getBigStringFileIdList(sKey.bucketIndex()).size() > 0
+        def fileIdList = oneSlot.bigStringFiles.getBigStringFileIdList(sKey.bucketIndex())
+        fileIdList.size() > 0
+        fileIdList.first().uuid() != sKey.keyHash()
 
         when:
         ConfForGlobal.bigStringNoCompressMinSize = 500
