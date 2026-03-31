@@ -980,6 +980,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
             keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (expireAt == CompressedValue.NO_EXPIRE || expireAt > currentTimeMillis) {
+                    if (PersistValueMeta.isPvm(valueBytes)) {
+                        return;
+                    }
+
                     var cv = CompressedValue.decode(valueBytes, Wal.keyBytes(key), keyHash);
                     if (cv.isBigString()) {
                         list.add(new BigStringFiles.IdWithKey(cv.getBigStringMetaUuid(), bucketIndex, keyHash, key));
