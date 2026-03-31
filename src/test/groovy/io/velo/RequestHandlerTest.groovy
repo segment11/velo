@@ -14,7 +14,6 @@ import io.velo.repl.LeaderSelector
 import io.velo.repl.Repl
 import io.velo.repl.ReplRequest
 import io.velo.repl.ReplType
-import io.velo.repl.cluster.MultiShard
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.NilReply
@@ -29,6 +28,51 @@ class RequestHandlerTest extends Specification {
     final byte workerId = 0
     final byte netWorkers = 1
     final short slotNumber = 1
+
+    def 'test malformed http basic auth returns auth failed'() {
+        given:
+        def oldPassword = ConfForGlobal.PASSWORD
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+        def requestHandler = new RequestHandler(workerId, netWorkers, slotNumber, new SnowFlake(1, 1), Config.create())
+        ConfForGlobal.PASSWORD = 'password'
+
+        def getData = new byte[2][]
+        getData[0] = 'get'.bytes
+        getData[1] = 'key'.bytes
+        def httpRequest = new Request(getData, true, false)
+
+        when:
+        httpRequest.httpHeaders = ['Authorization': 'Basic']
+        def reply = requestHandler.handle(httpRequest, socket)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        when:
+        SocketInspector.clearUserData(socket)
+        httpRequest.httpHeaders = ['Authorization': 'Basic !!!']
+        reply = requestHandler.handle(httpRequest, socket)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        when:
+        SocketInspector.clearUserData(socket)
+        def withoutColon = new String(Base64.encoder.encode('nocolon'.bytes))
+        httpRequest.httpHeaders = ['Authorization': 'Basic ' + withoutColon]
+        reply = requestHandler.handle(httpRequest, socket)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        cleanup:
+        ConfForGlobal.PASSWORD = oldPassword
+    }
 
     def 'test handle'() {
         given:
@@ -225,6 +269,13 @@ class RequestHandlerTest extends Specification {
         AclUsers.instance.upInsert('default') { u ->
             u.password = U.Password.plain('123456')
         }
+        reply = requestHandler.handle(authRequestAsHttp, socket2)
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        SocketInspector.clearUserData(socket2)
+        authRequestAsHttp.httpHeaders = ['authorization': 'Basic ' + base64Encoded]
         reply = requestHandler.handle(authRequestAsHttp, socket2)
         then:
         reply == NilReply.INSTANCE

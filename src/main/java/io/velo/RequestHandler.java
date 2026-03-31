@@ -365,11 +365,25 @@ public class RequestHandler {
                         return ErrorReply.NO_AUTH;
                     }
 
-                    // base64 decode
-                    // trim "Basic " prefix
-                    var auth = new String(Base64.getDecoder().decode(headerValue.substring(6)), StandardCharsets.UTF_8);
-                    var user = auth.substring(0, auth.indexOf(':'));
-                    var passwordRaw = auth.substring(auth.indexOf(':') + 1);
+                    if (!headerValue.regionMatches(true, 0, "Basic ", 0, 6)) {
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    final byte[] authDecodedBytes;
+                    try {
+                        authDecodedBytes = Base64.getDecoder().decode(headerValue.substring(6));
+                    } catch (IllegalArgumentException e) {
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    var auth = new String(authDecodedBytes, StandardCharsets.UTF_8);
+                    var splitIndex = auth.indexOf(':');
+                    if (splitIndex < 0) {
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    var user = auth.substring(0, splitIndex);
+                    var passwordRaw = auth.substring(splitIndex + 1);
 
                     var u = aclUsers.get(user);
                     if (u == null) {

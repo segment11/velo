@@ -201,7 +201,21 @@ public class Request {
      * @return the header value, or null if the header does not exist
      */
     public String getHttpHeader(String header) {
-        return httpHeaders == null ? null : httpHeaders.get(header);
+        if (httpHeaders == null) {
+            return null;
+        }
+
+        var headerValue = httpHeaders.get(header);
+        if (headerValue != null) {
+            return headerValue;
+        }
+
+        for (var entry : httpHeaders.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(header)) {
+                return entry.getValue();
+            }
+        }
+        return null;
     }
 
     /**
