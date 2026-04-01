@@ -142,7 +142,7 @@ public class RedisHashKeys {
         int bodyBytesLength = 0;
         for (var e : set) {
             // key length use 2 bytes short
-            bodyBytesLength += 2 + e.length();
+            bodyBytesLength += 2 + Wal.keyBytes(e).length;
         }
 
         short size = (short) set.size();
@@ -235,7 +235,7 @@ public class RedisHashKeys {
 
             var bytes = new byte[len];
             buffer.get(bytes);
-            r.set.add(new String(bytes));
+            r.set.add(Wal.keyString(bytes));
         }
         return r;
     }

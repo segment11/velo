@@ -5,7 +5,7 @@ import com.google.common.hash.Funnels;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 import static com.google.common.hash.BloomFilter.readFrom;
 
@@ -28,7 +28,7 @@ public class BFSerializer {
         try {
             filter = readFrom(
                     new ByteArrayInputStream(bytes, offset, length),
-                    Funnels.stringFunnel(Charset.defaultCharset())
+                    Funnels.stringFunnel(StandardCharsets.UTF_8)
             );
             return filter;
         } catch (IOException e) {

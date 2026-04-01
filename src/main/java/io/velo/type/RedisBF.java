@@ -5,7 +5,7 @@ import com.google.common.hash.Funnel;
 import com.google.common.hash.Funnels;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 /**
@@ -65,7 +65,7 @@ public class RedisBF {
     /**
      * The funnel used to convert strings into a format suitable for the Bloom Filter.
      */
-    private static final Funnel<CharSequence> STRING_FUNNEL = Funnels.stringFunnel(Charset.defaultCharset());
+    private static final Funnel<CharSequence> STRING_FUNNEL = Funnels.stringFunnel(StandardCharsets.UTF_8);
 
     /**
      * The false positive probability for the Bloom Filters.

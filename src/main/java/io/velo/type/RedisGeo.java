@@ -431,7 +431,7 @@ public class RedisGeo {
             buffer.get(memberBytes);
             var lon = buffer.getDouble();
             var lat = buffer.getDouble();
-            r.map.put(new String(memberBytes), new P(lon, lat));
+            r.map.put(Wal.keyString(memberBytes), new P(lon, lat));
         }
         return r;
     }

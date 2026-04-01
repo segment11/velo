@@ -510,7 +510,7 @@ public class RedisZSet {
             double score = buffer.getDouble();
             var bytes = new byte[len];
             buffer.get(bytes);
-            var member = new String(bytes);
+            var member = Wal.keyString(bytes);
             var sv = new ScoreValue(score, member);
 
             sv.setInitRank(rank);
