@@ -325,14 +325,15 @@ public class SGroup extends BaseCommand {
         // string
         byte typeAsByte = KeyLoader.typeAsByteIgnore;
         if (type != null) {
-            // only support string / hash / list / set / zset
+            // only support string / hash / list / set / zset / stream
             var isString = "string".equals(type);
             var isHash = "hash".equals(type);
             var isList = "list".equals(type);
             var isSet = "set".equals(type);
             var isZset = "zset".equals(type);
+            var isStream = "stream".equals(type);
             var isAny = "*".equals(type);
-            if (!isString && !isHash && !isList && !isSet && !isZset && !isAny) {
+            if (!isString && !isHash && !isList && !isSet && !isZset && !isStream && !isAny) {
                 return new ErrorReply("type not support");
             }
 
@@ -344,6 +345,8 @@ public class SGroup extends BaseCommand {
                 typeAsByte = KeyLoader.typeAsByteSet;
             } else if (isZset) {
                 typeAsByte = KeyLoader.typeAsByteZSet;
+            } else if (isStream) {
+                typeAsByte = KeyLoader.typeAsByteStream;
             } else if (isString) {
                 typeAsByte = KeyLoader.typeAsByteString;
             }

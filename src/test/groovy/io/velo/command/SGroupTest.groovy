@@ -243,6 +243,13 @@ sunionstore
         reply instanceof MultiBulkReply
 
         when:
+        reply = sGroup.execute('scan . match key:* count 10 type stream') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
         reply = sGroup.execute('scan . match key:* count 10 type xxx') { data ->
             data[1] = scanCursor.toLong().toString().bytes
         }
