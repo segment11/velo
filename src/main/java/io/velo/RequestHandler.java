@@ -464,7 +464,7 @@ public class RequestHandler {
                     log.warn("Get but server can not read, key={}", Wal.keyString(keyBytes));
                     return ErrorReply.CANNOT_READ;
                 } catch (TypeMismatchException e) {
-                    return new ErrorReply(e.getMessage());
+                    return ErrorReply.WRONG_TYPE;
                 } catch (DictMissingException e) {
                     return ErrorReply.DICT_MISSING;
                 } catch (Exception e) {
@@ -523,7 +523,7 @@ public class RequestHandler {
                 return ErrorReply.READONLY;
             } catch (TypeMismatchException e) {
                 log.warn(e.getMessage());
-                return new ErrorReply(e.getMessage());
+                return ErrorReply.WRONG_TYPE;
             } catch (Exception e) {
                 log.error("Request handle error.", e);
                 return new ErrorReply(e.getMessage());

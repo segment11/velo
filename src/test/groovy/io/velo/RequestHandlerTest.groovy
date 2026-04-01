@@ -358,7 +358,23 @@ class RequestHandlerTest extends Specification {
         oneSlot.put(key, sKey.bucketIndex(), cv)
         reply = requestHandler.handle(getRequest2, socket)
         then:
-        reply instanceof ErrorReply
+        reply == ErrorReply.WRONG_TYPE
+
+        when:
+        def cvString = new CompressedValue()
+        cvString.compressedData = 'value'.bytes
+        cvString.keyHash = sKey.keyHash()
+        oneSlot.put(key, sKey.bucketIndex(), cvString)
+        def lindexData = new byte[3][]
+        lindexData[0] = 'lindex'.bytes
+        lindexData[1] = key.bytes
+        lindexData[2] = '0'.bytes
+        def lindexRequest = new Request(lindexData, false, false)
+        lindexRequest.slotNumber = slotNumber
+        requestHandler.parseSlots(lindexRequest)
+        reply = requestHandler.handle(lindexRequest, socket)
+        then:
+        reply == ErrorReply.WRONG_TYPE
 
         when:
         getData2[1] = (XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + ',' + XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD).bytes
