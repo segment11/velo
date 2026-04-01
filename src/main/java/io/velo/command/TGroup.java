@@ -8,6 +8,7 @@ import io.velo.reply.*;
 import io.velo.type.RedisHashKeys;
 import org.jetbrains.annotations.VisibleForTesting;
 
+import java.time.Instant;
 import java.util.ArrayList;
 
 /**
@@ -50,9 +51,9 @@ public class TGroup extends BaseCommand {
 
     public Reply handle() {
         if ("time".equals(cmd)) {
-            var nanoTime = System.nanoTime();
-            var seconds = nanoTime / 1_000_000_000;
-            var microseconds = (nanoTime % 1_000_000_000) / 1_000;
+            var now = Instant.now();
+            var seconds = now.getEpochSecond();
+            var microseconds = now.getNano() / 1_000;
             return new MultiBulkReply(new Reply[]{
                     new BulkReply(seconds),
                     new BulkReply(microseconds)

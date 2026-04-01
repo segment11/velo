@@ -4,6 +4,7 @@ import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Mock
+import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.IntegerReply
 import io.velo.reply.MultiBulkReply
@@ -70,6 +71,23 @@ class TGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
+    }
+
+    def 'test time uses epoch seconds'() {
+        given:
+        def tGroup = new TGroup('time', new byte[1][], null)
+        tGroup.from(BaseCommand.mockAGroup())
+        def nowSeconds = System.currentTimeMillis() / 1000
+
+        when:
+        def reply = tGroup.handle() as MultiBulkReply
+        def seconds = ((BulkReply) reply.replies[0]).asString().toLong()
+        def microseconds = ((BulkReply) reply.replies[1]).asString().toLong()
+
+        then:
+        Math.abs(seconds - nowSeconds) <= 1
+        microseconds >= 0
+        microseconds < 1_000_000
     }
 
     def 'test ttl'() {
