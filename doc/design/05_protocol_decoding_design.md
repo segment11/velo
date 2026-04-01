@@ -41,7 +41,15 @@ Current behavior is intentionally small:
 - `POST` and `PUT` read a space-separated command body
 - parsed headers are attached to the `Request`
 
-This is sufficient for metrics and management-style endpoints, not a general REST framework.
+This is sufficient for metrics, error-fallback handling, and small debug or management-style reads,
+not a general REST framework.
+
+Practical scope constraints:
+
+- HTTP is not intended to replace RESP for normal Redis command traffic.
+- The write path should use RESP rather than HTTP `set`-style requests.
+- Expected HTTP bodies are very small.
+- In practice the most important HTTP usage is `GET`, especially for metrics and inspection endpoints.
 
 ## Replication Path
 
