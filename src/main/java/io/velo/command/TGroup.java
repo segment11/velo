@@ -16,6 +16,8 @@ import java.util.ArrayList;
  */
 public class TGroup extends BaseCommand {
     @VisibleForTesting
+    static final BulkReply TYPE_NONE = new BulkReply("none");
+    @VisibleForTesting
     static final BulkReply TYPE_STRING = new BulkReply("string");
     @VisibleForTesting
     static final BulkReply TYPE_HASH = new BulkReply("hash");
@@ -87,7 +89,7 @@ public class TGroup extends BaseCommand {
             cv = getCv(slot(keysKey));
 
             if (cv == null) {
-                return NilReply.INSTANCE;
+                return TYPE_NONE;
             }
         }
 

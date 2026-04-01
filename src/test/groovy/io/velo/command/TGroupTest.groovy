@@ -137,7 +137,7 @@ class TGroupTest extends Specification {
         inMemoryGetSet.remove(slot, 'a')
         def reply = tGroup.execute('type a')
         then:
-        reply == NilReply.INSTANCE
+        reply == TGroup.TYPE_NONE
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -145,56 +145,56 @@ class TGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.execute('type a')
         then:
-        reply == _TGroup.TYPE_HASH
+        reply == TGroup.TYPE_HASH
 
         when:
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cv)
         reply = tGroup.execute('type a')
         then:
-        reply == _TGroup.TYPE_HASH
+        reply == TGroup.TYPE_HASH
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.execute('type a')
         then:
-        reply == _TGroup.TYPE_LIST
+        reply == TGroup.TYPE_LIST
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.execute('type a')
         then:
-        reply == _TGroup.TYPE_SET
+        reply == TGroup.TYPE_SET
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.execute('type a')
         then:
-        reply == _TGroup.TYPE_ZSET
+        reply == TGroup.TYPE_ZSET
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_GEO
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.execute('type a')
         then:
-        reply == _TGroup.TYPE_ZSET
+        reply == TGroup.TYPE_ZSET
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_STREAM
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.execute('type a')
         then:
-        reply == _TGroup.TYPE_STREAM
+        reply == TGroup.TYPE_STREAM
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.execute('type a')
         then:
-        reply == _TGroup.TYPE_STRING
+        reply == TGroup.TYPE_STRING
 
         when:
         reply = tGroup.execute('type >key')
