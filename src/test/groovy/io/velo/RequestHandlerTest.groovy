@@ -166,11 +166,11 @@ class RequestHandlerTest extends Specification {
         when:
         requestHandler.isStopped = false
         then:
-        requestList.every {
-            requestHandler.handle(it, socket) == NilReply.INSTANCE
-        }
-        requestList2.every {
-            requestHandler.handle(it, socket) == NilReply.INSTANCE
+        ['jzzz', 'nzzz', 'ozzz', 'qzzz', 'vzzz', 'yzzz', 'Jzzz', 'Nzzz', 'Ozzz', 'Qzzz', 'Vzzz', 'Yzzz'].every { cmd ->
+            def data = new byte[1][]
+            data[0] = cmd.bytes
+            def commandReply = requestHandler.handle(new Request(data, false, false), socket)
+            commandReply instanceof ErrorReply && commandReply.message == "unknown command '${cmd.toLowerCase()}'"
         }
 
         when:

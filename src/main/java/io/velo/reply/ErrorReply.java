@@ -25,6 +25,16 @@ public class ErrorReply implements Reply {
     }
 
     /**
+     * Generates an unknown command error reply for a given command.
+     *
+     * @param cmd the unknown command
+     * @return the error reply
+     */
+    public static ErrorReply UNKNOWN_COMMAND(String cmd) {
+        return new ErrorReply("unknown command '" + cmd + "'");
+    }
+
+    /**
      * Error reply indicating that a dictionary is missing.
      */
     public static final ErrorReply DICT_MISSING = new ErrorReply("dict missing");

@@ -1,7 +1,7 @@
 package io.velo.command
 
 import io.velo.BaseCommand
-import io.velo.reply.NilReply
+import io.velo.reply.ErrorReply
 import spock.lang.Specification
 
 class NGroupTest extends Specification {
@@ -31,6 +31,7 @@ class NGroupTest extends Specification {
         when:
         def reply = nGroup.handle()
         then:
-        reply == NilReply.INSTANCE
+        reply instanceof ErrorReply
+        reply.message == "unknown command 'incr'"
     }
 }

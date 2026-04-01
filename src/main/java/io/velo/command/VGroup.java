@@ -2,7 +2,7 @@ package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.BaseCommand;
-import io.velo.reply.NilReply;
+import io.velo.reply.ErrorReply;
 import io.velo.reply.Reply;
 
 import java.util.ArrayList;
@@ -24,6 +24,6 @@ public class VGroup extends BaseCommand {
     private static final int limit = 10;
 
     public Reply handle() {
-        return NilReply.INSTANCE;
+        return ErrorReply.UNKNOWN_COMMAND(cmd);
     }
 }

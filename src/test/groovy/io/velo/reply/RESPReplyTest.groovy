@@ -56,6 +56,8 @@ class RESPReplyTest extends Specification {
         BoolReply.T.bufferAsResp3().asArray() == "#t\r\n".bytes
         BoolReply.F.bufferAsResp3().asArray() == "#f\r\n".bytes
         ErrorReply.WRONG_NUMBER('test').message == "*wrong number of arguments for 'test' command"
+        ErrorReply.UNKNOWN_COMMAND('test').message == "unknown command 'test'"
+        ErrorReply.UNKNOWN_COMMAND('test').buffer().asArray() == "-ERR unknown command 'test'\r\n".bytes
         new ErrorReply('error').message == 'error'
         new ErrorReply('error').buffer().asArray() == "-ERR error\r\n".bytes
         new ErrorReply('error').bufferAsHttp().asArray() == "error".bytes
