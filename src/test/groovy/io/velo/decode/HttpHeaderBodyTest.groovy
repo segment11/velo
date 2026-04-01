@@ -74,7 +74,7 @@ class HttpHeaderBodyTest extends Specification {
         h1 = new HttpHeaderBody()
         h1.feed(b1)
         then:
-        !h1.fullyRead
+        thrown(IllegalArgumentException)
 
         when:
         b1 = "GET /?1=1 HTTP/1.1\r\nAccept: text/html\r\r\r\n".bytes

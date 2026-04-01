@@ -2,6 +2,7 @@ package io.velo.decode
 
 import io.activej.bytebuf.ByteBuf
 import io.activej.bytebuf.ByteBufs
+import io.activej.common.exception.MalformedDataException
 import io.velo.repl.Repl
 import io.velo.repl.ReplType
 import io.velo.repl.content.Ping
@@ -183,6 +184,22 @@ class RequestDecoderTest extends Specification {
         requestList3 = decoder.tryDecode(bufs3)
         then:
         requestList3.isEmpty()
+    }
+
+    def 'test decode malformed complete http request line throws'() {
+        given:
+        def decoder = new RequestDecoder()
+        def buf = ByteBuf.wrapForReading(
+                "GET /bad\r\nHost: localhost:8080\r\n\r\n".bytes
+        )
+        def bufs = new ByteBufs(1)
+        bufs.add(buf)
+
+        when:
+        decoder.tryDecode(bufs)
+
+        then:
+        thrown(MalformedDataException)
     }
 
     def 'test decode repl'() {

@@ -232,8 +232,7 @@ public class HttpHeaderBody {
                     // parse action
                     var arr = action.split(" ");
                     if (arr.length != 3) {
-                        isFullyRead = false;
-                        return;
+                        throw new IllegalArgumentException("Malformed http request line: " + action);
                     }
 
                     requestType = arr[0];
