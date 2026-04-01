@@ -74,6 +74,42 @@ class RequestHandlerTest extends Specification {
         ConfForGlobal.PASSWORD = oldPassword
     }
 
+    def 'test auth keeps username case'() {
+        given:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+        def requestHandler = new RequestHandler(workerId, netWorkers, slotNumber, new SnowFlake(1, 1), Config.create())
+        AclUsers.instance.initForTest()
+
+        def authData = new byte[3][]
+        authData[0] = 'auth'.bytes
+        authData[1] = 'CaseUser'.bytes
+        authData[2] = 'password'.bytes
+        def authRequest = new Request(authData, false, false)
+
+        when:
+        def reply = requestHandler.handle(authRequest, socket)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        when:
+        AclUsers.instance.upInsert('CaseUser') { u ->
+            u.on = true
+            u.password = U.Password.plain('password')
+        }
+        reply = requestHandler.handle(authRequest, socket)
+        then:
+        reply == OKReply.INSTANCE
+        SocketInspector.getAuthUser(socket) == 'CaseUser'
+    }
+
     def 'test handle'() {
         given:
         def eventloopCurrent = Eventloop.builder()

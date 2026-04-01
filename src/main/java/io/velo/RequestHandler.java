@@ -407,7 +407,7 @@ public class RequestHandler {
                         return ErrorReply.FORMAT;
                     }
 
-                    var user = data.length == 3 ? new String(data[1], StandardCharsets.UTF_8).toLowerCase() : U.DEFAULT_USER;
+                    var user = data.length == 3 ? new String(data[1], StandardCharsets.UTF_8) : U.DEFAULT_USER;
                     var passwordRaw = new String(data[data.length - 1], StandardCharsets.UTF_8);
 
                     // acl check
