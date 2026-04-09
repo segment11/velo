@@ -108,6 +108,9 @@ public class RESP {
         if (lfIndex < 0) {
             return null;
         }
+        if (lfIndex == in.readerIndex() || in.getByte(lfIndex - 1) != CR) {
+            throw new IllegalArgumentException("RESP line not terminated by CRLF");
+        }
         var data = in.readSlice(lfIndex - in.readerIndex() - 1); // `-1` is for CR
         in.skipBytes(2);
         return data;

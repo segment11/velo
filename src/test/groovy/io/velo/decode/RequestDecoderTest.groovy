@@ -250,6 +250,22 @@ class RequestDecoderTest extends Specification {
         thrown(MalformedDataException)
     }
 
+    def 'test decode malformed resp line ending throws'() {
+        given:
+        def decoder = new RequestDecoder()
+        def buf = ByteBuf.wrapForReading(
+                '*1x\n$4\r\nPING\r\n'.bytes
+        )
+        def bufs = new ByteBufs(1)
+        bufs.add(buf)
+
+        when:
+        decoder.tryDecode(bufs)
+
+        then:
+        thrown(MalformedDataException)
+    }
+
     def 'test decode repl'() {
         given:
         def decoder = new RequestDecoder()

@@ -273,4 +273,15 @@ class RESPTest extends Specification {
         then:
         thrown(IllegalArgumentException)
     }
+
+    def 'test decode malformed line ending throws'() {
+        given:
+        def resp = new RESP()
+
+        when:
+        resp.decode(Unpooled.wrappedBuffer('*1x\n$4\r\nPING\r\n'.bytes))
+
+        then:
+        thrown(IllegalArgumentException)
+    }
 }
