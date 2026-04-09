@@ -4,8 +4,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.jetbrains.annotations.VisibleForTesting;
 
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -226,7 +224,10 @@ public class HttpHeaderBody {
             offset++;
             count--;
 
-            if (bf[headerLength - 1] == n && bf[headerLength - 2] == r) {
+            if (bf[headerLength - 1] == n) {
+                if (headerLength < 2 || bf[headerLength - 2] != r) {
+                    throw new IllegalArgumentException("Malformed http line ending");
+                }
                 if (action == null) {
                     action = new String(bf, startIndex, headerLength - startIndex - 2);
                     // parse action
