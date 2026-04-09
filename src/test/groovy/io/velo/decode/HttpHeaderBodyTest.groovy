@@ -112,6 +112,13 @@ class HttpHeaderBodyTest extends Specification {
         thrown(IllegalArgumentException)
 
         when:
+        b1 = "GET / HTTP/1.1\r\nHo st: value\r\n\r\n".bytes
+        h1 = new HttpHeaderBody()
+        h1.feed(b1)
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
         b1 = "GET /?1=1 HTTP/1.1\r\nAccept: text/html\r\r\r\n".bytes
         h1 = new HttpHeaderBody()
         h1.feed(b1)
