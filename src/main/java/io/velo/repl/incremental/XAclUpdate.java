@@ -1,6 +1,7 @@
 package io.velo.repl.incremental;
 
 import io.velo.command.AGroup;
+import io.velo.persist.Wal;
 import io.velo.repl.BinlogContent;
 import io.velo.repl.ReplPair;
 import io.velo.reply.ErrorReply;
@@ -41,9 +42,8 @@ public class XAclUpdate implements BinlogContent {
      */
     @Override
     public int encodedLength() {
-        assert line != null;
         // 1 byte for type, 4 bytes for encoded length for check
-        return 1 + 4 + 4 + line.length();
+        return 1 + 4 + 4 + Wal.keyBytes(line).length;
     }
 
     /**
@@ -53,13 +53,14 @@ public class XAclUpdate implements BinlogContent {
      */
     @Override
     public byte[] encodeWithType() {
+        var lineBytes = Wal.keyBytes(line);
         var bytes = new byte[encodedLength()];
         var buffer = ByteBuffer.wrap(bytes);
 
         buffer.put(type().code());
         buffer.putInt(bytes.length);
-        buffer.putInt(line.length());
-        buffer.put(line.getBytes());
+        buffer.putInt(lineBytes.length);
+        buffer.put(lineBytes);
 
         return bytes;
     }
@@ -77,7 +78,7 @@ public class XAclUpdate implements BinlogContent {
         var lineLength = buffer.getInt();
         var lineBytes = new byte[lineLength];
         buffer.get(lineBytes);
-        var line = new String(lineBytes);
+        var line = Wal.keyString(lineBytes);
 
         var r = new XAclUpdate(line);
         if (encodedLength != r.encodedLength()) {

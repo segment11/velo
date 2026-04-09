@@ -4,6 +4,7 @@ import io.velo.acl.AclUsers
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
+import io.velo.persist.Wal
 import io.velo.repl.BinlogContent
 import io.velo.repl.ReplPairTest
 import spock.lang.Specification
@@ -53,5 +54,25 @@ class XAclUpdateTest extends Specification {
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+    }
+
+    def 'test encode and decode non ascii line uses utf8 bytes'() {
+        given:
+        def line = 'user 你好 on >密码'
+        def lineBytes = Wal.keyBytes(line)
+        def xAclUpdate = new XAclUpdate(line)
+
+        expect:
+        xAclUpdate.encodedLength() == 1 + 4 + 4 + lineBytes.length
+
+        when:
+        def encoded = xAclUpdate.encodeWithType()
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.get()
+        def xAclUpdate1 = xAclUpdate.decodeFrom(buffer)
+
+        then:
+        xAclUpdate1.encodedLength() == encoded.length
+        xAclUpdate1.line == line
     }
 }
