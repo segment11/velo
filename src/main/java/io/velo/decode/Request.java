@@ -8,7 +8,9 @@ import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Represents a request in the Velo framework, containing command data, HTTP status, REPL status,
@@ -301,7 +303,7 @@ public class Request {
         if (cmd != null) {
             return cmd;
         }
-        cmd = new String(data[0]).toLowerCase();
+        cmd = new String(data[0], StandardCharsets.US_ASCII).toLowerCase(Locale.ROOT);
         return cmd;
     }
 

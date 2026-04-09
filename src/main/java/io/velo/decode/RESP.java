@@ -8,6 +8,9 @@ import io.velo.ConfForGlobal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+
 /**
  * A class to decode RESP (Redis Serialization Protocol) messages using Netty's ByteBuf.
  * This implementation is adapted from Camellia Redis Proxy, specifically from the CommandDecoder class.
@@ -225,7 +228,7 @@ public class RESP {
                             bb.skipBytes(2);
 
                             if (i == 0) {
-                                cmd = new String(bytes[0]).toLowerCase();
+                                cmd = new String(bytes[0], StandardCharsets.US_ASCII).toLowerCase(Locale.ROOT);
                             }
                         }
                     } else {

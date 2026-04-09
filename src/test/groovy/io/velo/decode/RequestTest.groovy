@@ -101,4 +101,22 @@ class RequestTest extends Specification {
         then:
         httpRequest.getHttpHeader('key') == 'value'
     }
+
+    def 'test cmd uses locale root'() {
+        given:
+        def previous = Locale.getDefault()
+        Locale.setDefault(Locale.forLanguageTag('tr-TR'))
+        def data = new byte[1][]
+        data[0] = 'INFO'.bytes
+        def request = new Request(data, false, false)
+
+        when:
+        def cmd = request.cmd()
+
+        then:
+        cmd == 'info'
+
+        cleanup:
+        Locale.setDefault(previous)
+    }
 }
