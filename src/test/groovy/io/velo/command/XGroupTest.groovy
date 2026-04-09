@@ -244,12 +244,14 @@ class XGroupTest extends Specification {
 
         // hello
         when:
-        def hello = new Hello(slaveUuid, 'localhost:6380')
+        def hello = new Hello(slaveUuid, '测试:6380')
         replRequest = mockReplRequest(replPairAsSlave, ReplType.hello, hello)
         r = x.handleRepl(replRequest)
         then:
         r.isReplType(ReplType.hi)
         oneSlot.getReplPairAsMaster(slaveUuid) != null
+        oneSlot.getReplPairAsMaster(slaveUuid).host == '测试'
+        oneSlot.getReplPairAsMaster(slaveUuid).port == 6380
         oneSlot.dynConfig.binlogOn
 
         when:

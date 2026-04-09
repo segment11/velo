@@ -1,6 +1,7 @@
 package io.velo.repl.content;
 
 import io.activej.bytebuf.ByteBuf;
+import io.velo.persist.Wal;
 import io.velo.repl.ReplContent;
 
 /**
@@ -54,6 +55,6 @@ public class RawBytesContent implements ReplContent {
 
     @Override
     public String toString() {
-        return new String(bytes);
+        return Wal.keyString(bytes);
     }
 }

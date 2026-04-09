@@ -3,6 +3,7 @@ package io.velo.repl.content;
 import io.activej.bytebuf.ByteBuf;
 import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
+import io.velo.persist.Wal;
 import io.velo.repl.ReplContent;
 
 /**
@@ -30,9 +31,10 @@ public class Hello implements ReplContent {
      */
     @Override
     public void encodeTo(ByteBuf toBuf) {
+        var addressBytes = Wal.keyBytes(netListenAddresses);
         toBuf.writeLong(slaveUuid);
-        toBuf.writeInt(netListenAddresses.length());
-        toBuf.write(netListenAddresses.getBytes());
+        toBuf.writeInt(addressBytes.length);
+        toBuf.write(addressBytes);
 
         writeReplProperties(toBuf);
     }
@@ -56,6 +58,6 @@ public class Hello implements ReplContent {
      */
     @Override
     public int encodeLength() {
-        return 8 + 4 + netListenAddresses.length() + 2 + 18;
+        return 8 + 4 + Wal.keyBytes(netListenAddresses).length + 2 + 18;
     }
 }

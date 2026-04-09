@@ -237,12 +237,12 @@ public class XGroup extends BaseCommand {
 
         return switch (replType) {
             case error -> {
-                log.error("Repl handle receive error={}, slot={}", new String(contentBytes), slot);
+                log.error("Repl handle receive error={}, slot={}", Wal.keyString(contentBytes), slot);
                 yield Repl.emptyReply();
             }
             case ping -> {
                 // server received ping from client
-                var netListenAddresses = new String(contentBytes);
+                var netListenAddresses = Wal.keyString(contentBytes);
                 var array = netListenAddresses.split(":");
                 var host = array[0];
                 var port = Integer.parseInt(array[1]);
@@ -276,12 +276,12 @@ public class XGroup extends BaseCommand {
             case hello -> hello(slot, contentBytes);
             case hi -> hi(slot, contentBytes);
             case test -> {
-                log.info("Repl handle test: slave uuid={}, message={}, slot={}", slaveUuid, new String(contentBytes), slot);
+                log.info("Repl handle test: slave uuid={}, message={}, slot={}", slaveUuid, Wal.keyString(contentBytes), slot);
                 yield Repl.emptyReply();
             }
             case bye -> {
                 // server received bye from client
-                var netListenAddresses = new String(contentBytes);
+                var netListenAddresses = Wal.keyString(contentBytes);
                 log.warn("Repl master handle bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
 
                 if (replPair == null) {
@@ -293,7 +293,7 @@ public class XGroup extends BaseCommand {
             }
             case byeBye -> {
                 // client received bye from server
-                var netListenAddresses = new String(contentBytes);
+                var netListenAddresses = Wal.keyString(contentBytes);
                 log.warn("Repl slave handle bye bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
 
                 oneSlot.addDelayNeedCloseReplPair(replPair);
@@ -326,7 +326,7 @@ public class XGroup extends BaseCommand {
         var len = buffer.getInt();
         var b = new byte[len];
         buffer.get(b);
-        var netListenAddresses = new String(b);
+        var netListenAddresses = Wal.keyString(b);
 
         // ignore remote slot number
         var slaveSlotNumber = buffer.getShort();

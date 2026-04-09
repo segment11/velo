@@ -1,6 +1,7 @@
 package io.velo.repl;
 
 import io.netty.buffer.ByteBuf;
+import io.velo.persist.Wal;
 import io.velo.repl.content.RawBytesContent;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.TestOnly;
@@ -129,10 +130,10 @@ public class Repl {
      * @return the REPL error message
      */
     public static ReplReply error(short slot, ReplPair replPair, String errorMessage) {
-        return reply(slot, replPair, ReplType.error, new RawBytesContent(errorMessage.getBytes()));
+        return reply(slot, replPair, ReplType.error, new RawBytesContent(Wal.keyBytes(errorMessage)));
     }
 
-    private static final byte[] NULL_BYTES = "null".getBytes();
+    private static final byte[] NULL_BYTES = Wal.keyBytes("null");
 
     /**
      * Creates a REPL error message.
@@ -144,7 +145,7 @@ public class Repl {
      */
     public static ReplReply error(short slot, long slaveUuid, String errorMessage) {
         return new ReplReply(slaveUuid, slot, ReplType.error,
-                new RawBytesContent(errorMessage == null ? NULL_BYTES : errorMessage.getBytes()));
+                new RawBytesContent(errorMessage == null ? NULL_BYTES : Wal.keyBytes(errorMessage)));
     }
 
     /**
@@ -157,7 +158,7 @@ public class Repl {
      */
     @TestOnly
     public static ReplReply test(short slot, ReplPair replPair, String message) {
-        return reply(slot, replPair, ReplType.test, new RawBytesContent(message.getBytes()));
+        return reply(slot, replPair, ReplType.test, new RawBytesContent(Wal.keyBytes(message)));
     }
 
     private static final ReplContent BYTE_0_CONTENT = new ReplContent() {

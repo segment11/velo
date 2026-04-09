@@ -1,6 +1,7 @@
 package io.velo.repl
 
 import io.netty.buffer.Unpooled
+import io.velo.persist.Wal
 import io.velo.repl.content.Hello
 import io.velo.repl.content.Ping
 import spock.lang.Specification
@@ -176,5 +177,21 @@ class ReplTest extends Specification {
 
         then:
         thrown(IllegalArgumentException)
+    }
+
+    def 'test error and test content use utf8 bytes'() {
+        given:
+        final short slot = 0
+        final ReplPair replPair = ReplPairTest.mockAsSlave()
+
+        when:
+        def testReply = Repl.test(slot, replPair, '你好')
+        def errorReply = Repl.error(slot, replPair, '你好')
+        def nullErrorReply = Repl.error(slot, replPair.slaveUuid, null)
+
+        then:
+        Repl.decode(Unpooled.wrappedBuffer(testReply.buffer().array())).data == Wal.keyBytes('你好')
+        Repl.decode(Unpooled.wrappedBuffer(errorReply.buffer().array())).data == Wal.keyBytes('你好')
+        Repl.decode(Unpooled.wrappedBuffer(nullErrorReply.buffer().array())).data == Wal.keyBytes('null')
     }
 }

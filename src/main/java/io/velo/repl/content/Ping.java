@@ -1,6 +1,7 @@
 package io.velo.repl.content;
 
 import io.activej.bytebuf.ByteBuf;
+import io.velo.persist.Wal;
 import io.velo.repl.ReplContent;
 
 /**
@@ -29,7 +30,7 @@ public class Ping implements ReplContent {
      */
     @Override
     public void encodeTo(ByteBuf toBuf) {
-        toBuf.write(netListenAddresses.getBytes());
+        toBuf.write(Wal.keyBytes(netListenAddresses));
     }
 
     /**
@@ -41,6 +42,6 @@ public class Ping implements ReplContent {
      */
     @Override
     public int encodeLength() {
-        return netListenAddresses.length();
+        return Wal.keyBytes(netListenAddresses).length;
     }
 }
