@@ -256,7 +256,10 @@ public class HttpHeaderBody {
                         return;
                     } else {
                         if (lastHeaderName != null) {
-                            var headerName = lastHeaderName.trim();
+                            var headerName = lastHeaderName;
+                            if (!headerName.equals(headerName.trim())) {
+                                throw new IllegalArgumentException("Malformed http header name");
+                            }
                             if (headerName.isEmpty()) {
                                 throw new IllegalArgumentException("Malformed http header name");
                             }
