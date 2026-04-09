@@ -103,7 +103,7 @@ class ReplDecoderTest extends Specification {
         decoder.tryDecode(bufs)
 
         then:
-        thrown(io.activej.common.exception.MalformedDataException)
+        thrown(MalformedDataException)
     }
 
     def 'test decode invalid repl keyword throws'() {
@@ -145,6 +145,48 @@ class ReplDecoderTest extends Specification {
         decoder.tryDecode(bufs)
 
         then:
-        thrown(io.activej.common.exception.MalformedDataException)
+        thrown(MalformedDataException)
+    }
+
+    def 'test decode header only positive repl content length waits for body'() {
+        given:
+        def decoder = new ReplDecoder()
+        def bb = new byte[Repl.HEADER_LENGTH]
+        def buffer = ByteBuffer.wrap(bb)
+        buffer.put('X-REPL'.bytes)
+        buffer.putLong(0L)
+        buffer.putShort((short) 0)
+        buffer.put(ReplType.ping.code)
+        buffer.putInt(3)
+        def bufs = new ByteBufs(1)
+        bufs.add(ByteBuf.wrapForReading(bb))
+
+        when:
+        def requestList = decoder.tryDecode(bufs)
+
+        then:
+        requestList.isEmpty()
+        decoder.toFullyReadRequest != null
+        decoder.toFullyReadRequest.leftToRead() == 3
+    }
+
+    def 'test decode header only zero repl content length throws'() {
+        given:
+        def decoder = new ReplDecoder()
+        def bb = new byte[Repl.HEADER_LENGTH]
+        def buffer = ByteBuffer.wrap(bb)
+        buffer.put('X-REPL'.bytes)
+        buffer.putLong(0L)
+        buffer.putShort((short) 0)
+        buffer.put(ReplType.ping.code)
+        buffer.putInt(0)
+        def bufs = new ByteBufs(1)
+        bufs.add(ByteBuf.wrapForReading(bb))
+
+        when:
+        decoder.tryDecode(bufs)
+
+        then:
+        thrown(MalformedDataException)
     }
 }

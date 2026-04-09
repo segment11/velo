@@ -189,7 +189,7 @@ public class Repl {
      * @return a decoded ReplRequest or null if there aren't enough bytes to form a complete request
      */
     public static ReplRequest decode(ByteBuf buf) {
-        if (buf.readableBytes() <= HEADER_LENGTH) {
+        if (buf.readableBytes() < HEADER_LENGTH) {
             return null;
         }
 

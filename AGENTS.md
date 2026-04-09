@@ -71,6 +71,7 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 
 - Use `java.*` imports first, then `javax.*`, then third-party, then project imports
 - Avoid wildcard imports (`import java.util.*;`)
+- Do not use fully qualified class names in code when a normal import is appropriate
 - Group imports by type with blank lines between groups
 - Remove unused imports
 
@@ -108,6 +109,7 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 
 - Use `CompileStatic` transformation (configured in `config.groovy`)
 - Follow Java naming conventions for consistency
+- Prefer imports over fully qualified class names in code and tests
 - Use type annotations where beneficial for performance
 - Use Groovy styles for simpler code (refer to `src/test/groovy/GroovyStyleRefer.groovy`)
 

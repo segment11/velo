@@ -138,4 +138,43 @@ class ReplTest extends Specification {
         then:
         thrown(IllegalArgumentException)
     }
+
+    def 'test decode header only positive repl content length returns partial request'() {
+        given:
+        def bb = new byte[Repl.HEADER_LENGTH]
+        def buffer = ByteBuffer.wrap(bb)
+        buffer.put('X-REPL'.bytes)
+        buffer.putLong(0L)
+        buffer.putShort((short) 0)
+        buffer.put(ReplType.ping.code)
+        buffer.putInt(3)
+        def nettyBuf = Unpooled.wrappedBuffer(bb)
+
+        when:
+        def request = Repl.decode(nettyBuf)
+
+        then:
+        request != null
+        !request.fullyRead
+        request.leftToRead() == 3
+        request.data.length == 0
+    }
+
+    def 'test decode header only zero repl content length throws'() {
+        given:
+        def bb = new byte[Repl.HEADER_LENGTH]
+        def buffer = ByteBuffer.wrap(bb)
+        buffer.put('X-REPL'.bytes)
+        buffer.putLong(0L)
+        buffer.putShort((short) 0)
+        buffer.put(ReplType.ping.code)
+        buffer.putInt(0)
+        def nettyBuf = Unpooled.wrappedBuffer(bb)
+
+        when:
+        Repl.decode(nettyBuf)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
 }
