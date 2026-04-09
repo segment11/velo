@@ -295,4 +295,15 @@ class RESPTest extends Specification {
         then:
         thrown(IllegalArgumentException)
     }
+
+    def 'test decode negative bulk length throws'() {
+        given:
+        def resp = new RESP()
+
+        when:
+        resp.decode(Unpooled.wrappedBuffer('*1\r\n$-1\r\n'.bytes))
+
+        then:
+        thrown(IllegalArgumentException)
+    }
 }

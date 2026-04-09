@@ -188,6 +188,9 @@ public class RESP {
                             break outerLoop;
                         }
                         int size = parseRedisNumber(lineBuf);
+                        if (size < 0) {
+                            throw new IllegalArgumentException("Invalid bulk size: " + size);
+                        }
                         if (bb.readableBytes() < size + 2) {
                             bb.readerIndex(readerIndex);
                             break outerLoop;

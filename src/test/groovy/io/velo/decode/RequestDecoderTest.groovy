@@ -317,6 +317,22 @@ class RequestDecoderTest extends Specification {
         thrown(MalformedDataException)
     }
 
+    def 'test decode negative resp bulk length throws'() {
+        given:
+        def decoder = new RequestDecoder()
+        def buf = ByteBuf.wrapForReading(
+                '*1\r\n$-1\r\n'.bytes
+        )
+        def bufs = new ByteBufs(1)
+        bufs.add(buf)
+
+        when:
+        decoder.tryDecode(bufs)
+
+        then:
+        thrown(MalformedDataException)
+    }
+
     def 'test decode repl'() {
         given:
         def decoder = new RequestDecoder()
