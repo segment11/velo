@@ -265,6 +265,9 @@ public class HttpHeaderBody {
                     }
                 }
             } else if (bf[headerLength - 1] == e && lastHeaderName == null) {
+                if (headerLength - startIndex - 1 <= 0) {
+                    throw new IllegalArgumentException("Malformed http header name");
+                }
                 lastHeaderName = new String(bf, startIndex, headerLength - startIndex - 1);
                 startIndex = headerLength;
             }
