@@ -213,7 +213,9 @@ public class Repl {
         }
 
         var dataLength = buf.readInt();
-        assert dataLength > 0;
+        if (dataLength <= 0) {
+            throw new IllegalArgumentException("Repl content length should be positive");
+        }
 
         var readLength = Math.min(buf.readableBytes(), dataLength);
         if (readLength != 0) {

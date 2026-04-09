@@ -2,6 +2,7 @@ package io.velo.decode
 
 import io.activej.bytebuf.ByteBuf
 import io.activej.bytebuf.ByteBufs
+import io.activej.common.exception.MalformedDataException
 import io.velo.repl.Repl
 import io.velo.repl.ReplType
 import io.velo.repl.content.Ping
@@ -115,6 +116,27 @@ class ReplDecoderTest extends Specification {
         buffer.putShort((short) 0)
         buffer.put(ReplType.ping.code)
         buffer.putInt(1)
+        buffer.put((byte) 1)
+        def bufs = new ByteBufs(1)
+        bufs.add(ByteBuf.wrapForReading(bb))
+
+        when:
+        decoder.tryDecode(bufs)
+
+        then:
+        thrown(MalformedDataException)
+    }
+
+    def 'test decode zero repl content length throws'() {
+        given:
+        def decoder = new ReplDecoder()
+        def bb = new byte[21 + 1]
+        def buffer = ByteBuffer.wrap(bb)
+        buffer.put('X-REPL'.bytes)
+        buffer.putLong(0L)
+        buffer.putShort((short) 0)
+        buffer.put(ReplType.ping.code)
+        buffer.putInt(0)
         buffer.put((byte) 1)
         def bufs = new ByteBufs(1)
         bufs.add(ByteBuf.wrapForReading(bb))

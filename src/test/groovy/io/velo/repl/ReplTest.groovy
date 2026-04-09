@@ -119,4 +119,23 @@ class ReplTest extends Specification {
         then:
         thrown(IllegalArgumentException)
     }
+
+    def 'test decode zero repl content length throws'() {
+        given:
+        def bb = new byte[Repl.HEADER_LENGTH + 1]
+        def buffer = ByteBuffer.wrap(bb)
+        buffer.put('X-REPL'.bytes)
+        buffer.putLong(0L)
+        buffer.putShort((short) 0)
+        buffer.put(ReplType.ping.code)
+        buffer.putInt(0)
+        buffer.put((byte) 1)
+        def nettyBuf = Unpooled.wrappedBuffer(bb)
+
+        when:
+        Repl.decode(nettyBuf)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
 }
