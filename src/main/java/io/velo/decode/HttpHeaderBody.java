@@ -258,6 +258,8 @@ public class HttpHeaderBody {
                             headers.put(lastHeaderName.trim(), new String(bf, startIndex, headerLength - startIndex - 2).trim());
                             startIndex = headerLength;
                             lastHeaderName = null;
+                        } else {
+                            throw new IllegalArgumentException("Malformed http header line");
                         }
                     }
                 }

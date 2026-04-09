@@ -253,6 +253,22 @@ class RequestDecoderTest extends Specification {
         thrown(MalformedDataException)
     }
 
+    def 'test decode malformed http header line throws'() {
+        given:
+        def decoder = new RequestDecoder()
+        def buf = ByteBuf.wrapForReading(
+                "GET / HTTP/1.1\r\nHost localhost\r\n\r\n".bytes
+        )
+        def bufs = new ByteBufs(1)
+        bufs.add(buf)
+
+        when:
+        decoder.tryDecode(bufs)
+
+        then:
+        thrown(MalformedDataException)
+    }
+
     def 'test decode malformed resp bulk string delimiter throws'() {
         given:
         def decoder = new RequestDecoder()
