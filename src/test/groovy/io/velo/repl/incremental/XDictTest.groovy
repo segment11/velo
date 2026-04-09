@@ -4,6 +4,7 @@ import io.velo.CompressedValue
 import io.velo.Dict
 import io.velo.DictMap
 import io.velo.persist.Consts
+import io.velo.persist.Wal
 import io.velo.repl.BinlogContent
 import spock.lang.Specification
 
@@ -82,5 +83,28 @@ class XDictTest extends Specification {
         cleanup:
         dictMap.clearAll()
         dictMap.cleanUp()
+    }
+
+    def 'test encode and decode non ascii key prefix uses utf8 bytes'() {
+        given:
+        def keyPrefix = '前缀:'
+        def keyPrefixBytes = Wal.keyBytes(keyPrefix)
+        def dictBytes = new byte[300]
+        def dict = new Dict(dictBytes)
+        def xDict = new XDict(keyPrefix, dict)
+
+        expect:
+        xDict.encodedLength() == 1 + 4 + 4 + 8 + 2 + keyPrefixBytes.length + 2 + dictBytes.length
+
+        when:
+        def encoded = xDict.encodeWithType()
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.get()
+        def xDict2 = XDict.decodeFrom(buffer)
+
+        then:
+        xDict2.encodedLength() == encoded.length
+        xDict2.keyPrefixOrSuffix == keyPrefix
+        xDict2.dict.dictBytes == dictBytes
     }
 }

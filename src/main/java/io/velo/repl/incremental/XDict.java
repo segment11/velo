@@ -3,6 +3,7 @@ package io.velo.repl.incremental;
 import io.velo.CompressedValue;
 import io.velo.Dict;
 import io.velo.DictMap;
+import io.velo.persist.Wal;
 import io.velo.repl.BinlogContent;
 import io.velo.repl.ReplPair;
 import org.slf4j.Logger;
@@ -70,7 +71,7 @@ public class XDict implements BinlogContent {
         // 1 byte for type, 4 bytes for encoded length for check
         // 4 bytes for seq, 8 bytes for created time
         // 2 bytes for key prefix length, key prefix, 2 bytes for dict bytes length, dict bytes
-        return 1 + 4 + 4 + 8 + 2 + keyPrefixOrSuffix.length() + 2 + dict.getDictBytes().length;
+        return 1 + 4 + 4 + 8 + 2 + Wal.keyBytes(keyPrefixOrSuffix).length + 2 + dict.getDictBytes().length;
     }
 
     /**
@@ -80,6 +81,7 @@ public class XDict implements BinlogContent {
      */
     @Override
     public byte[] encodeWithType() {
+        var keyPrefixBytes = Wal.keyBytes(keyPrefixOrSuffix);
         var bytes = new byte[encodedLength()];
         var buffer = ByteBuffer.wrap(bytes);
 
@@ -87,8 +89,8 @@ public class XDict implements BinlogContent {
         buffer.putInt(bytes.length);
         buffer.putInt(dict.getSeq());
         buffer.putLong(dict.getCreatedTime());
-        buffer.putShort((short) keyPrefixOrSuffix.length());
-        buffer.put(keyPrefixOrSuffix.getBytes());
+        buffer.putShort((short) keyPrefixBytes.length);
+        buffer.put(keyPrefixBytes);
         buffer.putShort((short) dict.getDictBytes().length);
         buffer.put(dict.getDictBytes());
 
@@ -116,7 +118,7 @@ public class XDict implements BinlogContent {
 
         var keyPrefixBytes = new byte[keyPrefixLength];
         buffer.get(keyPrefixBytes);
-        var keyPrefix = new String(keyPrefixBytes);
+        var keyPrefix = Wal.keyString(keyPrefixBytes);
         var dictBytesLength = buffer.getShort();
         var dictBytes = new byte[dictBytesLength];
         buffer.get(dictBytes);
