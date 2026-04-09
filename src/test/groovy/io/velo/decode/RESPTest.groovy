@@ -262,4 +262,15 @@ class RESPTest extends Specification {
         cleanup:
         ConfForGlobal.bigStringNoMemoryCopySize = 1024 * 256
     }
+
+    def 'test decode malformed bulk string delimiter throws'() {
+        given:
+        def resp = new RESP()
+
+        when:
+        resp.decode(Unpooled.wrappedBuffer('*1\r\n$4\r\nPINGxx'.bytes))
+
+        then:
+        thrown(IllegalArgumentException)
+    }
 }

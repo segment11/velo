@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory;
 public class RESP {
     private static final byte BYTES_MARKER = '$';
     private static final byte ARRAY_MARKER = '*';
+    private static final byte CR = '\r';
+    private static final byte LF = '\n';
 
     // Maximum length of a positive long in characters
     private static final int POSITIVE_LONG_MAX_LENGTH = 19; // length of Long.MAX_VALUE
@@ -111,6 +113,14 @@ public class RESP {
         return data;
     }
 
+    private void requireBulkStringCrlf(ByteBuf bb, int size) {
+        int crIndex = bb.readerIndex() + size;
+        int lfIndex = crIndex + 1;
+        if (bb.getByte(crIndex) != CR || bb.getByte(lfIndex) != LF) {
+            throw new IllegalArgumentException("Bulk string not terminated by CRLF");
+        }
+    }
+
     BigStringNoMemoryCopy bigStringNoMemoryCopy = new BigStringNoMemoryCopy();
 
     /**
@@ -166,6 +176,7 @@ public class RESP {
                             bb.readerIndex(readerIndex);
                             break outerLoop;
                         }
+                        requireBulkStringCrlf(bb, size);
 
                         // for no memory copy
                         if (size >= ConfForGlobal.bigStringNoMemoryCopySize && bb instanceof CompositeByteBuf cbb && cbb.numComponents() == 1) {
