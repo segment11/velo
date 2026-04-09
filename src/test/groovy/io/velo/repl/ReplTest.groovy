@@ -74,9 +74,15 @@ class ReplTest extends Specification {
         ByteBuffer.wrap(pingBytes).putShort(Repl.PROTOCOL_KEYWORD_BYTES.length + 8, (short) 0)
         pingBytes[Repl.PROTOCOL_KEYWORD_BYTES.length + 8 + 2] = (byte) -10
         nettyBuf.readerIndex(0)
-        request = Repl.decode(nettyBuf)
+        exception = false
+        try {
+            Repl.decode(nettyBuf)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
         then:
-        request == null
+        exception
 
         when:
         pingBytes[Repl.PROTOCOL_KEYWORD_BYTES.length + 8 + 2] = ReplType.ping.code
@@ -98,5 +104,19 @@ class ReplTest extends Specification {
         def xx = new Repl.ReplReplyFromBytes(1L, (short) 0, ReplType.ping, new byte[10], 5, 5)
         then:
         xx.buffer().limit() == Repl.HEADER_LENGTH + 5
+    }
+
+    def 'test decode invalid protocol keyword throws'() {
+        given:
+        def ping = new Ping('localhost:6380')
+        def bytes = Repl.buffer(0L, (byte) 0, ReplType.ping, ping).array()
+        bytes[0] = 'Y'.bytes[0]
+        def nettyBuf = Unpooled.wrappedBuffer(bytes)
+
+        when:
+        Repl.decode(nettyBuf)
+
+        then:
+        thrown(IllegalArgumentException)
     }
 }

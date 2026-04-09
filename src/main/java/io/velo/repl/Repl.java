@@ -197,7 +197,7 @@ public class Repl {
         buf.readBytes(protocolBytes);
         if (!Arrays.equals(protocolBytes, PROTOCOL_KEYWORD_BYTES)) {
             log.warn("Invalid protocol keyword");
-            return null;
+            throw new IllegalArgumentException("Invalid protocol keyword");
         }
 
         var slaveUuid = buf.readLong();
