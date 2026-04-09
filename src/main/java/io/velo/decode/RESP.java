@@ -18,14 +18,14 @@ public class RESP {
     private static final byte CR = '\r';
     private static final byte LF = '\n';
 
-    // Maximum length of a positive long in characters
-    private static final int POSITIVE_LONG_MAX_LENGTH = 19; // length of Long.MAX_VALUE
+    // Maximum length of a positive int in characters
+    private static final int POSITIVE_INT_MAX_LENGTH = 10; // length of Integer.MAX_VALUE
 
     /**
      * A private static class that implements ByteProcessor to process numeric values from ByteBuf.
      */
     private static final class NumberProcessor implements ByteProcessor {
-        private int result;
+        private long result;
 
         /**
          * Process a byte to form a number.
@@ -48,7 +48,7 @@ public class RESP {
          *
          * @return the processed number
          */
-        public int content() {
+        public long content() {
             return result;
         }
 
@@ -78,7 +78,7 @@ public class RESP {
         if (readableBytes <= extraOneByteForNegative) {
             throw new IllegalArgumentException("No number to parse=" + in.toString(CharsetUtil.US_ASCII));
         }
-        if (readableBytes > POSITIVE_LONG_MAX_LENGTH + extraOneByteForNegative) {
+        if (readableBytes > POSITIVE_INT_MAX_LENGTH + extraOneByteForNegative) {
             throw new IllegalArgumentException("Too many characters to be a valid RESP Integer=" +
                     in.toString(CharsetUtil.US_ASCII));
         }
@@ -86,11 +86,21 @@ public class RESP {
             numberProcessor.reset();
             in.skipBytes(extraOneByteForNegative);
             in.forEachByte(numberProcessor);
-            return -1 * numberProcessor.content();
+            long value = numberProcessor.content();
+            if (value > ((long) Integer.MAX_VALUE) + 1L) {
+                throw new IllegalArgumentException("RESP Integer out of int range=" +
+                        in.toString(CharsetUtil.US_ASCII));
+            }
+            return (int) -value;
         }
         numberProcessor.reset();
         in.forEachByte(numberProcessor);
-        return numberProcessor.content();
+        long value = numberProcessor.content();
+        if (value > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("RESP Integer out of int range=" +
+                    in.toString(CharsetUtil.US_ASCII));
+        }
+        return (int) value;
     }
 
     /**

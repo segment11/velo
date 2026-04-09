@@ -266,6 +266,22 @@ class RequestDecoderTest extends Specification {
         thrown(MalformedDataException)
     }
 
+    def 'test decode oversized resp number throws'() {
+        given:
+        def decoder = new RequestDecoder()
+        def buf = ByteBuf.wrapForReading(
+                '*4294967297\r\n'.bytes
+        )
+        def bufs = new ByteBufs(1)
+        bufs.add(buf)
+
+        when:
+        decoder.tryDecode(bufs)
+
+        then:
+        thrown(MalformedDataException)
+    }
+
     def 'test decode repl'() {
         given:
         def decoder = new RequestDecoder()

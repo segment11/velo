@@ -284,4 +284,15 @@ class RESPTest extends Specification {
         then:
         thrown(IllegalArgumentException)
     }
+
+    def 'test decode oversized positive number throws'() {
+        given:
+        def resp = new RESP()
+
+        when:
+        resp.decode(Unpooled.wrappedBuffer('*4294967297\r\n'.bytes))
+
+        then:
+        thrown(IllegalArgumentException)
+    }
 }
