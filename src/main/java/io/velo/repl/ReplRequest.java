@@ -85,7 +85,9 @@ public class ReplRequest {
         this.type = type;
         this.data = data;
         this.expectLength = expectLength;
-        assert data.length <= expectLength;
+        if (data.length > expectLength) {
+            throw new IllegalArgumentException("Repl request data length exceeds expected length");
+        }
     }
 
     /**
@@ -113,7 +115,12 @@ public class ReplRequest {
      * @param n        the number of bytes to read
      */
     public void nextRead(ByteBuf nettyBuf, int n) {
-        assert n > 0;
+        if (n <= 0) {
+            throw new IllegalArgumentException("Repl request next read length should be positive");
+        }
+        if (data.length + n > expectLength) {
+            throw new IllegalArgumentException("Repl request next read exceeds expected length");
+        }
         var dataExtend = new byte[data.length + n];
         System.arraycopy(data, 0, dataExtend, 0, data.length);
         nettyBuf.readBytes(dataExtend, data.length, n);

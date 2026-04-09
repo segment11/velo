@@ -36,4 +36,34 @@ class ReplRequestTest extends Specification {
         then:
         req2.fullyRead
     }
+
+    def 'test constructor rejects data longer than expected length'() {
+        when:
+        new ReplRequest(1L, slot, ReplType.test, new byte[11], 10)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def 'test next read rejects non positive length'() {
+        given:
+        def req = new ReplRequest(1L, slot, ReplType.test, new byte[5], 10)
+
+        when:
+        req.nextRead(Unpooled.wrappedBuffer(new byte[1]), 0)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def 'test next read rejects overflow beyond expected length'() {
+        given:
+        def req = new ReplRequest(1L, slot, ReplType.test, new byte[5], 10)
+
+        when:
+        req.nextRead(Unpooled.wrappedBuffer(new byte[6]), 6)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
 }
