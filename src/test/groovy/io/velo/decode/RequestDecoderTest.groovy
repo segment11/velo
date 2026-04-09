@@ -9,6 +9,7 @@ import io.velo.repl.content.Ping
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 
 class RequestDecoderTest extends Specification {
     def "test decode"() {
@@ -192,7 +193,7 @@ class RequestDecoderTest extends Specification {
 
         when:
         def getBuf = ByteBuf.wrapForReading(
-                "GET /?get&%E4%BD%A0%E5%A5%BD HTTP/1.1\r\nHost: localhost:8080\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                "GET /?get&%E4%BD%A0%E5%A5%BD HTTP/1.1\r\nHost: localhost:8080\r\n\r\n".getBytes(StandardCharsets.UTF_8)
         )
         def getBufs = new ByteBufs(1)
         getBufs.add(getBuf)
@@ -200,13 +201,13 @@ class RequestDecoderTest extends Specification {
 
         then:
         getRequestList.size() == 1
-        new String(getRequestList[0].data[1], java.nio.charset.StandardCharsets.UTF_8) == '你好'
+        new String(getRequestList[0].data[1], StandardCharsets.UTF_8) == '你好'
 
         when:
         def postBody = 'set 你好 值'
         def postBuf = ByteBuf.wrapForReading(
-                "POST / HTTP/1.1\r\nContent-Length: ${postBody.getBytes(java.nio.charset.StandardCharsets.UTF_8).length}\r\n\r\n${postBody}"
-                        .getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                "POST / HTTP/1.1\r\nContent-Length: ${postBody.getBytes(StandardCharsets.UTF_8).length}\r\n\r\n${postBody}"
+                        .getBytes(StandardCharsets.UTF_8)
         )
         def postBufs = new ByteBufs(1)
         postBufs.add(postBuf)
@@ -214,8 +215,26 @@ class RequestDecoderTest extends Specification {
 
         then:
         postRequestList.size() == 1
-        new String(postRequestList[0].data[1], java.nio.charset.StandardCharsets.UTF_8) == '你好'
-        new String(postRequestList[0].data[2], java.nio.charset.StandardCharsets.UTF_8) == '值'
+        new String(postRequestList[0].data[1], StandardCharsets.UTF_8) == '你好'
+        new String(postRequestList[0].data[2], StandardCharsets.UTF_8) == '值'
+    }
+
+    def 'test decode http query decodes tokens after splitting'() {
+        given:
+        def decoder = new RequestDecoder()
+        def buf = ByteBuf.wrapForReading(
+                "GET /?get&my%26key HTTP/1.1\r\nHost: localhost:8080\r\n\r\n".getBytes(StandardCharsets.UTF_8)
+        )
+        def bufs = new ByteBufs(1)
+        bufs.add(buf)
+
+        when:
+        def requestList = decoder.tryDecode(bufs)
+
+        then:
+        requestList.size() == 1
+        requestList[0].data.length == 2
+        new String(requestList[0].data[1], StandardCharsets.UTF_8) == 'my&key'
     }
 
     def 'test decode malformed complete http request line throws'() {

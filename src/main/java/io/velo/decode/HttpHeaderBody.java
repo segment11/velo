@@ -236,7 +236,7 @@ public class HttpHeaderBody {
                     }
 
                     requestType = arr[0];
-                    url = URLDecoder.decode(arr[1], StandardCharsets.UTF_8);
+                    url = arr[1];
                     httpVersion = arr[2];
                     startIndex = headerLength;
                 } else {

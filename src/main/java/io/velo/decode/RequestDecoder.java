@@ -11,6 +11,7 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
@@ -137,7 +138,8 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                         var arr = h.url.substring(pos + 1).split("&");
                         data = new byte[arr.length][];
                         for (int i = 0; i < arr.length; i++) {
-                            data[i] = arr[i].getBytes(StandardCharsets.UTF_8);
+                            data[i] = URLDecoder.decode(arr[i], StandardCharsets.UTF_8)
+                                    .getBytes(StandardCharsets.UTF_8);
                         }
                     }
                 } else {
