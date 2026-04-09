@@ -50,9 +50,9 @@ class RequestDecoderTest extends Specification {
         )
         bufs3 = new ByteBufs(1)
         bufs3.add(buf3)
-        requestList3 = decoder.tryDecode(bufs3)
+        decoder.tryDecode(bufs3)
         then:
-        requestList3.isEmpty()
+        thrown(MalformedDataException)
 
         when:
         buf3 = ByteBuf.wrapForReading(

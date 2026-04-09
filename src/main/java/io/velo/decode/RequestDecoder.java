@@ -24,6 +24,28 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
     // in local thread
     private final RESP resp = new RESP();
 
+    private static boolean isShortPrefix(ByteBuf buf, byte[] target) {
+        int readable = buf.readableBytes();
+        if (readable > target.length) {
+            return false;
+        }
+        int readerIndex = buf.readerIndex();
+        for (int i = 0; i < readable; i++) {
+            if (buf.getByte(readerIndex + i) != target[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isPotentialShortHttpOrRepl(ByteBuf buf) {
+        return isShortPrefix(buf, HttpHeaderBody.GET)
+                || isShortPrefix(buf, HttpHeaderBody.POST)
+                || isShortPrefix(buf, HttpHeaderBody.PUT)
+                || isShortPrefix(buf, HttpHeaderBody.DELETE)
+                || isShortPrefix(buf, Repl.PROTOCOL_KEYWORD_BYTES);
+    }
+
     static ByteBuf fromBufs(ByteBufs bufs) {
         io.netty.buffer.CompositeByteBuf compositeByteBuf = Unpooled.compositeBuffer();
         int capacity = 0;
@@ -67,7 +89,10 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
         Map<String, String> httpHeaders = null;
         if (buf.capacity() < 6) {
             if (buf.getByte(buf.readerIndex()) != '*') {
-                return null;
+                if (isPotentialShortHttpOrRepl(buf)) {
+                    return null;
+                }
+                throw new IllegalArgumentException("Unexpected short protocol prefix=" + buf.getByte(buf.readerIndex()));
             }
             data = resp.decode(buf);
             if (data == null) {
