@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
 
 /**
  * A decoder for incoming requests that can handle both HTTP and RESP (Redis Serialization Protocol) protocols.
@@ -106,24 +107,24 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                     var pos = h.url.indexOf("?");
                     if (pos == -1) {
                         data = new byte[1][];
-                        data[0] = "zzz".getBytes();
+                        data[0] = "zzz".getBytes(StandardCharsets.UTF_8);
                     } else {
                         var arr = h.url.substring(pos + 1).split("&");
                         data = new byte[arr.length][];
                         for (int i = 0; i < arr.length; i++) {
-                            data[i] = arr[i].getBytes();
+                            data[i] = arr[i].getBytes(StandardCharsets.UTF_8);
                         }
                     }
                 } else {
                     var body = h.body();
                     if (body == null) {
                         data = new byte[1][];
-                        data[0] = "zzz".getBytes();
+                        data[0] = "zzz".getBytes(StandardCharsets.UTF_8);
                     } else {
-                        var arr = new String(body).split(" ");
+                        var arr = new String(body, StandardCharsets.UTF_8).split(" ");
                         data = new byte[arr.length][];
                         for (int i = 0; i < arr.length; i++) {
-                            data[i] = arr[i].getBytes();
+                            data[i] = arr[i].getBytes(StandardCharsets.UTF_8);
                         }
                     }
                 }

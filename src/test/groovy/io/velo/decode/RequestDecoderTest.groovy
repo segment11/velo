@@ -186,6 +186,38 @@ class RequestDecoderTest extends Specification {
         requestList3.isEmpty()
     }
 
+    def 'test decode http uses utf8 tokens'() {
+        given:
+        def decoder = new RequestDecoder()
+
+        when:
+        def getBuf = ByteBuf.wrapForReading(
+                "GET /?get&%E4%BD%A0%E5%A5%BD HTTP/1.1\r\nHost: localhost:8080\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        )
+        def getBufs = new ByteBufs(1)
+        getBufs.add(getBuf)
+        def getRequestList = decoder.tryDecode(getBufs)
+
+        then:
+        getRequestList.size() == 1
+        new String(getRequestList[0].data[1], java.nio.charset.StandardCharsets.UTF_8) == '你好'
+
+        when:
+        def postBody = 'set 你好 值'
+        def postBuf = ByteBuf.wrapForReading(
+                "POST / HTTP/1.1\r\nContent-Length: ${postBody.getBytes(java.nio.charset.StandardCharsets.UTF_8).length}\r\n\r\n${postBody}"
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        )
+        def postBufs = new ByteBufs(1)
+        postBufs.add(postBuf)
+        def postRequestList = decoder.tryDecode(postBufs)
+
+        then:
+        postRequestList.size() == 1
+        new String(postRequestList[0].data[1], java.nio.charset.StandardCharsets.UTF_8) == '你好'
+        new String(postRequestList[0].data[2], java.nio.charset.StandardCharsets.UTF_8) == '值'
+    }
+
     def 'test decode malformed complete http request line throws'() {
         given:
         def decoder = new RequestDecoder()
