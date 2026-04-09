@@ -209,7 +209,7 @@ public class Repl {
 
         var replType = ReplType.fromCode(buf.readByte());
         if (replType == null) {
-            return null;
+            throw new IllegalArgumentException("Unknown repl type");
         }
 
         var dataLength = buf.readInt();

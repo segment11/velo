@@ -83,4 +83,25 @@ class ReplDecoderTest extends Specification {
         requestList2[0].fullyRead
         decoder.toFullyReadRequest == null
     }
+
+    def 'test decode unknown repl type throws'() {
+        given:
+        def decoder = new ReplDecoder()
+        def bb = new byte[21 + 1]
+        def buffer = ByteBuffer.wrap(bb)
+        buffer.put('X-REPL'.bytes)
+        buffer.putLong(0L)
+        buffer.putShort((short) 0)
+        buffer.put((byte) 127)
+        buffer.putInt(1)
+        buffer.put((byte) 1)
+        def bufs = new ByteBufs(1)
+        bufs.add(ByteBuf.wrapForReading(bb))
+
+        when:
+        decoder.tryDecode(bufs)
+
+        then:
+        thrown(io.activej.common.exception.MalformedDataException)
+    }
 }
