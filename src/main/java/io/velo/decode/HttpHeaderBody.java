@@ -165,10 +165,10 @@ public class HttpHeaderBody {
                 try {
                     contentLengthCache = Integer.parseInt(s.trim());
                     if (contentLengthCache < 0) {
-                        contentLengthCache = 0;
+                        throw new IllegalArgumentException("Http content length should be non-negative");
                     }
                 } catch (NumberFormatException e) {
-                    contentLengthCache = 0;
+                    throw new IllegalArgumentException("Http content length is invalid", e);
                 }
             } else {
                 contentLengthCache = 0;

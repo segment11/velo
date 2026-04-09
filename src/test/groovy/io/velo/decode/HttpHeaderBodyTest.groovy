@@ -115,14 +115,14 @@ class HttpHeaderBodyTest extends Specification {
         def h22 = new HttpHeaderBody()
         h22.feed(postHeader22)
         then:
-        h22.contentLength() == 0
+        thrown(IllegalArgumentException)
 
         when:
         postHeader22 = "POST / HTTP/1.1\r\nAccept: text/html\r\nX-key: X-value\r\nContent-Length: a\r\n\r\n".bytes
         h22 = new HttpHeaderBody()
         h22.feed(postHeader22)
         then:
-        h22.contentLength() == 0
+        thrown(IllegalArgumentException)
 
         when:
         def fullHttpHeaderWithBody = "POST / HTTP/1.1\r\nContent-Length: 4\r\n\r\n1234".bytes
