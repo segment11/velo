@@ -58,6 +58,7 @@ class ToSlaveExistsBigStringTest extends Specification {
         content.encodeTo(buf)
         buffer = ByteBuffer.wrap(bytes)
         then:
+        buf.tail() == content.encodeLength()
         buffer.getInt() == 0
         buffer.getInt() == 1
         buffer.get() == (byte) 1

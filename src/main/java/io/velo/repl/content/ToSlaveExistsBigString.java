@@ -7,6 +7,7 @@ import org.apache.commons.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -96,6 +97,7 @@ public class ToSlaveExistsBigString implements ReplContent {
             return;
         }
 
+        var countPosition = toBuf.tail();
         toBuf.writeInt(toSendIdList.size());
         toBuf.writeByte((byte) (isSendAllOnce ? 1 : 0));
 
@@ -122,8 +124,7 @@ public class ToSlaveExistsBigString implements ReplContent {
         }
 
         if (existCount != toSendIdList.size()) {
-            toBuf.tail(4);
-            toBuf.writeInt(existCount);
+            ByteBuffer.wrap(toBuf.array()).putInt(countPosition, existCount);
         }
     }
 
