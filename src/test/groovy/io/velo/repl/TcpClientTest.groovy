@@ -12,6 +12,8 @@ import io.velo.ConfForGlobal
 import io.velo.MultiWorkerServer
 import io.velo.RequestHandler
 import io.velo.SocketInspector
+import io.velo.SocketInspectorTest
+import io.activej.net.socket.tcp.TcpSocket
 import io.velo.decode.RequestDecoder
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
@@ -59,7 +61,19 @@ class TcpClientTest extends Specification {
         tcpClient.notConnectedErrorCount == 1001
 
         when:
-        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector() {
+            @Override
+            void onConnect(TcpSocket socket) {
+            }
+
+            @Override
+            void onRead(TcpSocket socket, ByteBuf buf) {
+            }
+
+            @Override
+            void onWrite(TcpSocket socket, ByteBuf buf, int bytes) {
+            }
+        }
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, eventloop.eventloopThread.threadId())
@@ -119,5 +133,33 @@ class TcpClientTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+    }
+
+    def 'test null repl reply closes socket'() {
+        given:
+        short slot = 0
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        def socket2 = SocketInspectorTest.mockTcpSocket(eventloopCurrent, 46380)
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, null, Config.create())
+        def replPair = ReplPairTest.mockAsSlave(10L, 1L)
+        def tcpClient = new TcpClient(slot, eventloopCurrent, requestHandler, replPair)
+
+        when:
+        def promise = tcpClient.toReplyBufferOrClose(null, socket)
+
+        then:
+        promise != null
+        socket.closed
+
+        when:
+        def promise2 = tcpClient.toReplyBufferOrClose(Repl.emptyReply(), socket2)
+
+        then:
+        promise2 != null
+        !socket2.closed
     }
 }

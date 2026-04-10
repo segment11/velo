@@ -12,6 +12,7 @@ import io.velo.*;
 import io.velo.command.XGroup;
 import io.velo.decode.ReplDecoder;
 import io.velo.decode.Request;
+import io.velo.reply.Reply;
 import io.velo.repl.content.Ping;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -154,11 +155,7 @@ public class TcpClient implements NeedCleanUp {
 
                                     try {
                                         var reply = xGroup.handleRepl(replRequest);
-                                        if (reply == null) {
-                                            promiseN[i] = Promise.of(null);
-                                        } else {
-                                            promiseN[i] = Promise.of(reply.buffer());
-                                        }
+                                        promiseN[i] = toReplyBufferOrClose(reply, socket);
                                     } catch (Exception e) {
                                         promiseN[i] = Promise.of(Repl.error(slot, replPair, "Repl slave handle error=" + e.getMessage()).buffer());
                                     }
@@ -177,6 +174,15 @@ public class TcpClient implements NeedCleanUp {
                     }
                 })
                 .whenException(e -> log.error("Could not connect to server, to server={}:{}, slot={}", host, port, slot, e));
+    }
+
+    @VisibleForTesting
+    Promise<ByteBuf> toReplyBufferOrClose(Reply reply, TcpSocket socket) {
+        if (reply == null) {
+            socket.close();
+            return Promise.of(null);
+        }
+        return Promise.of(reply.buffer());
     }
 
     /**
