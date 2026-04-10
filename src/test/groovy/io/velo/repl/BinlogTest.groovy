@@ -138,9 +138,44 @@ class BinlogTest extends Specification {
         bytes != null
 
         when:
-        bytes = binlog.readPrevRafOneSegment(binlog.currentFileIndex, oneSegmentLength * 10)
+        exception = false
+        try {
+            binlog.readPrevRafOneSegment(binlog.currentFileIndex, oneSegmentLength * 10)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        final File slotDir3 = new File('/tmp/velo-data/test-persist/test-slot3')
+        if (!slotDir3.exists()) {
+            slotDir3.mkdir()
+        }
+        def exactEofBinlog = new Binlog(slot, slotDir3, dynConfig2)
+        exactEofBinlog.prevRaf(exactEofBinlog.currentFileIndex).setLength(oneSegmentLength)
+        def exactFileLength = oneSegmentLength
+        bytes = exactEofBinlog.readPrevRafOneSegment(exactEofBinlog.currentFileIndex, exactFileLength)
         then:
         bytes == null
+
+        when:
+        exception = false
+        try {
+            exactEofBinlog.readPrevRafOneSegment(exactEofBinlog.currentFileIndex, exactFileLength + oneSegmentLength)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exactEofBinlog.cleanUp()
+        slotDir3.deleteDir()
+        then:
+        true
 
         when:
         exception = false

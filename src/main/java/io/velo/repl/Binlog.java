@@ -693,9 +693,13 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             throw new IOException("Repl read binlog segment bytes, file not exist, file index=" + fileIndex + ", slot=" + slot);
         }
 
-        // when?, not any binlog will cause this, other cases need to check, todo
-        if (prevRaf.length() <= offset) {
+        var fileLength = prevRaf.length();
+        if (fileLength == offset) {
             return null;
+        }
+        if (fileLength < offset) {
+            throw new IllegalArgumentException("Repl read binlog segment bytes, offset is beyond file length, offset=" +
+                    offset + ", file length=" + fileLength + ", slot=" + slot);
         }
 
         var bytes = new byte[oneSegmentLength];

@@ -256,6 +256,43 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test x catch up past eof returns error reply'() {
+        given:
+        def data9 = new byte[9][]
+        data9[1] = 'slot'.bytes
+        data9[2] = '0'.bytes
+        data9[3] = 'x_catch_up'.bytes
+        data9[4] = '10'.bytes
+
+        def xGroup = new XGroup('x_repl', data9, null)
+        xGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.createIfNotExistReplPairAsMaster(10L, 'localhost', 6380)
+
+        and:
+        def oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength
+        data9[5] = oneSlot.masterUuid.toString().bytes
+        data9[6] = '0'.bytes
+        data9[7] = (oneSegmentLength * 10).toString().bytes
+        data9[8] = (oneSegmentLength * 10).toString().bytes
+        xGroup.slotWithKeyHashListParsed = _XXGroup.parseSlots('x_repl', data9, slotNumber)
+
+        when:
+        def reply = xGroup.handle()
+
+        then:
+        reply instanceof ErrorReply
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test as master'() {
         given:
         ConfForGlobal.netListenAddresses = 'localhost:6379'
