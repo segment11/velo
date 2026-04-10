@@ -796,6 +796,21 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.exists_chunk_segments)
 
         when:
+        def badSegmentLength = ConfForSlot.global.confChunk.segmentLength + 128
+        def badContentBytes = new byte[16 + badSegmentLength]
+        replRequest.data = badContentBytes
+        def badRequestBuffer = ByteBuffer.wrap(badContentBytes)
+        badRequestBuffer.putInt(0)
+        badRequestBuffer.putInt(1)
+        badRequestBuffer.putInt(ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl)
+        badRequestBuffer.putInt(badSegmentLength)
+        badRequestBuffer.put(splitResult.getFirst().segmentBytes())
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        replRequest.data = contentBytes
         // last batch
         requestBuffer.position(0)
         requestBuffer.putInt(ConfForSlot.global.confChunk.maxSegmentNumber() - ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl)

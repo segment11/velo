@@ -665,7 +665,9 @@ public class XGroup extends BaseCommand {
         var segmentLength = buffer.getInt();
 
         var remoteReplProperties = replPair.getRemoteReplProperties();
-        assert segmentLength == remoteReplProperties.segmentLength();
+        if (segmentLength != remoteReplProperties.segmentLength()) {
+            throw new IllegalArgumentException("Repl slave handle error: segment length not match");
+        }
 
         if (slot == 0 && beginSegmentIndex % (1024 * 100) == 0) {
             log.warn("Repl slave ready to fetch exists chunk segments, begin segment index={}, segment count={}, slot={}",
