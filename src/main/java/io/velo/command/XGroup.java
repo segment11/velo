@@ -159,7 +159,7 @@ public class XGroup extends BaseCommand {
 
                 assert replRequest1.isFullyRead();
                 if (reply.isReplType(error)) {
-                    return new ErrorReply(new String(replRequest1.getData()));
+                    return new ErrorReply(Wal.keyString(replRequest1.getData()));
                 }
 
                 return new BulkReply(replRequest1.getData());

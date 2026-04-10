@@ -756,6 +756,7 @@ class OneSlotTest extends Specification {
         def v = Mock.prepareValueList(1)[0]
         def xWalV = new XWalV(v, true)
         oneSlot.appendBinlog(xWalV)
+        oneSlot.binlog = oneSlot.binlog
 
         expect:
         oneSlot.binlog != null

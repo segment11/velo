@@ -1052,7 +1052,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         chunk.setSegmentIndex(metaChunkSegmentIndex.get());
     }
 
-    private final Binlog binlog;
+    private Binlog binlog;
 
     /**
      * Returns the Binlog component used for logging binary data.
@@ -1061,6 +1061,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      */
     public Binlog getBinlog() {
         return binlog;
+    }
+
+    @TestOnly
+    public void setBinlog(@NotNull Binlog binlog) {
+        this.binlog = binlog;
     }
 
     /**

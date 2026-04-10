@@ -1,9 +1,7 @@
 package io.velo.command
 
-import io.activej.config.Config
 import io.netty.buffer.Unpooled
 import io.velo.*
-import io.velo.decode.Request
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
 import io.velo.repl.*
@@ -39,8 +37,6 @@ class XGroupTest extends Specification {
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
-        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, null, Config.create())
-        def _XXGroup2 = new XGroup(null, null, null, requestHandler, new Request(null, false, false))
 
         and:
         data2[1] = 'sub_cmd'.bytes
@@ -203,6 +199,57 @@ class XGroupTest extends Specification {
         reply = xGroup.handle()
         then:
         reply instanceof ErrorReply
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test x catch up error reply uses decoded repl error payload'() {
+        given:
+        def data9 = new byte[9][]
+        data9[1] = 'slot'.bytes
+        data9[2] = '0'.bytes
+        data9[3] = 'x_catch_up'.bytes
+        data9[4] = '10'.bytes
+
+        def xGroup = new XGroup('x_repl', data9, null)
+        xGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.createIfNotExistReplPairAsMaster(10L, 'localhost', 6380)
+
+        and:
+        def stubBinlog = new Binlog(slot, oneSlot.slotDir, oneSlot.dynConfig) {
+            @Override
+            Binlog.FileIndexAndOffset currentFileIndexAndOffset() {
+                new Binlog.FileIndexAndOffset(0, 0L)
+            }
+
+            @Override
+            byte[] readPrevRafOneSegment(int fileIndex, long offset) throws IOException {
+                throw new IOException('error')
+            }
+        }
+        oneSlot.binlog = stubBinlog
+
+        and:
+        data9[5] = oneSlot.masterUuid.toString().bytes
+        data9[6] = '0'.bytes
+        data9[7] = '0'.bytes
+        data9[8] = '0'.bytes
+        xGroup.slotWithKeyHashListParsed = _XXGroup.parseSlots('x_repl', data9, slotNumber)
+
+        when:
+        def reply = xGroup.handle()
+
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'Repl master handle error: read binlog file error=error'
 
         cleanup:
         localPersist.cleanUp()
