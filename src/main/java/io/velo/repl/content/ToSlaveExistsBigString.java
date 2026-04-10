@@ -50,7 +50,10 @@ public class ToSlaveExistsBigString implements ReplContent {
                 }
             }
             if (!isSentExist) {
-                toSendIdList.add(id);
+                var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
+                if (file.exists()) {
+                    toSendIdList.add(id);
+                }
             }
         }
 
@@ -104,10 +107,6 @@ public class ToSlaveExistsBigString implements ReplContent {
         var existCount = 0;
         for (var id : toSendIdList) {
             var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
-            if (!file.exists()) {
-                continue;
-            }
-
             existCount++;
 
             toBuf.writeLong(id.uuid());
@@ -150,10 +149,6 @@ public class ToSlaveExistsBigString implements ReplContent {
         var length = HEADER_LENGTH;
         for (var id : toSendIdList) {
             var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
-            if (!file.exists()) {
-                continue;
-            }
-
             var bigStringBytesLength = (int) file.length();
             length += 8 + 8 + 4 + bigStringBytesLength;
         }

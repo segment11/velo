@@ -82,6 +82,32 @@ class ToSlaveExistsBigStringTest extends Specification {
         buffer.getInt() == ToSlaveExistsBigString.ONCE_SEND_BIG_STRING_COUNT
         buffer.get() == (byte) 0
 
+        when:
+        bigStringDir.deleteDir()
+        bigStringDir.mkdirs()
+        idListInMaster.clear()
+        sentIdList.clear()
+        subDir = new File(bigStringDir, '0')
+        subDir.mkdir()
+        def total = ToSlaveExistsBigString.ONCE_SEND_BIG_STRING_COUNT + 1
+        total.times {
+            idListInMaster << new BigStringFiles.IdWithKey(it + 1L, 0, it + 1L, "")
+        }
+        new File(subDir, "${total}_${total}").text = 'x' * 11
+        content = new ToSlaveExistsBigString(0, bigStringDir, idListInMaster, sentIdList)
+        bytes = new byte[content.encodeLength()]
+        buf = ByteBuf.wrapForWriting(bytes)
+        content.encodeTo(buf)
+        buffer = ByteBuffer.wrap(bytes)
+        then:
+        buf.tail() == content.encodeLength()
+        buffer.getInt() == 0
+        buffer.getInt() == 1
+        buffer.get() == (byte) 1
+        buffer.getLong() == total
+        buffer.getLong() == total
+        buffer.getInt() == 11
+
         cleanup:
         bigStringDir.deleteDir()
     }
