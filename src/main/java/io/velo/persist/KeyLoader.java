@@ -1040,19 +1040,41 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      */
     @SlaveReplay
     public static void decodeShortStringListFromBuf(Slice slice, KeyBucket.IterateCallBack callBack) {
-        while (slice.isReadable(4)) {
+        while (slice.readableBytes() > 0) {
+            if (!slice.isReadable(4)) {
+                throw new IllegalArgumentException("Repl slave handle error: short string payload length header incomplete");
+            }
+
             var length = slice.readInt();
-            assert slice.isReadable(length);
+            if (length < 32) {
+                throw new IllegalArgumentException("Repl slave handle error: short string payload length too small=" + length);
+            }
+            if (!slice.isReadable(length)) {
+                throw new IllegalArgumentException("Repl slave handle error: short string payload truncated, need=" + length);
+            }
+
+            var readIndexBefore = slice.getReadIndex();
 
             var seq = slice.readLong();
             var keyHash = slice.readLong();
             var expireAt = slice.readLong();
             var keyLength = slice.readInt();
+            if (keyLength < 0) {
+                throw new IllegalArgumentException("Repl slave handle error: short string key length invalid=" + keyLength);
+            }
             var keyBytes = new byte[keyLength];
             slice.readBytes(keyBytes);
             var valueLength = slice.readInt();
+            if (valueLength < 0) {
+                throw new IllegalArgumentException("Repl slave handle error: short string value length invalid=" + valueLength);
+            }
             var valueBytes = new byte[valueLength];
             slice.readBytes(valueBytes);
+
+            var consumedLength = slice.getReadIndex() - readIndexBefore;
+            if (consumedLength != length) {
+                throw new IllegalArgumentException("Repl slave handle error: short string payload length mismatch=" + length);
+            }
 
             callBack.call(keyHash, expireAt, seq, Wal.keyString(keyBytes), valueBytes);
         }

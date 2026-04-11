@@ -980,7 +980,9 @@ public class XGroup extends BaseCommand {
     private Repl.ReplReply s_exists_short_string(short slot, byte[] contentBytes) {
         // client received from server
         var slice = new Slice(contentBytes);
-        assert slice.readableBytes() >= 4;
+        if (slice.readableBytes() < 4) {
+            throw new IllegalArgumentException("Repl slave handle error: short string payload too short");
+        }
         // remote
         var walGroupIndex = slice.readInt();
 
@@ -1049,15 +1051,28 @@ public class XGroup extends BaseCommand {
 
     private Repl.ReplReply s_exists_dict(short slot, byte[] contentBytes) {
         // client received from server
-        var oneSlot = localPersist.oneSlot(slot);
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 4) {
+            throw new IllegalArgumentException("Repl slave handle error: dict payload too short");
+        }
+
         var dictCount = buffer.getInt();
+        if (dictCount < 0) {
+            throw new IllegalArgumentException("Repl slave handle error: dict count invalid=" + dictCount + ", slot=" + slot);
+        }
         log.warn("Repl slave fetch exists dict, master sent dict count={}, slot={}", dictCount, slot);
 
         // decode
         try {
             for (int i = 0; i < dictCount; i++) {
+                if (buffer.remaining() < 4) {
+                    throw new IllegalArgumentException("Repl slave handle error: dict payload length header incomplete, slot=" + slot);
+                }
+
                 var encodeLength = buffer.getInt();
+                if (encodeLength <= 0 || encodeLength > buffer.remaining()) {
+                    throw new IllegalArgumentException("Repl slave handle error: dict payload length invalid=" + encodeLength + ", slot=" + slot);
+                }
                 var encodeBytes = new byte[encodeLength];
                 buffer.get(encodeBytes);
 
@@ -1075,6 +1090,9 @@ public class XGroup extends BaseCommand {
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+        if (buffer.hasRemaining()) {
+            throw new IllegalArgumentException("Repl slave handle error: dict payload has trailing bytes, slot=" + slot);
         }
 
         // next step, fetch big string
