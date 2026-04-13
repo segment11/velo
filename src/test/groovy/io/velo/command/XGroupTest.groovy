@@ -415,86 +415,47 @@ class XGroupTest extends Specification {
         // response exists wal
         when:
         replRequest.type = ReplType.exists_wal
-        contentBytes = new byte[4 + 8 + 8]
+        contentBytes = new byte[4]
         requestBuffer = ByteBuffer.wrap(contentBytes)
-        // wal group index
         requestBuffer.putInt(0)
-        // value last updated seq
-        requestBuffer.putLong(0L)
-        // short value last updated seq
-        requestBuffer.putLong(0L)
         replRequest.data = contentBytes
         r = x.handleRepl(replRequest)
         then:
-        // skip
         r.isReplType(ReplType.s_exists_wal)
 
         when:
-        requestBuffer.position(0)
-        // no log, skip
-        requestBuffer.putInt(1023)
+        contentBytes = new byte[3]
+        replRequest.data = contentBytes
         r = x.handleRepl(replRequest)
         then:
-        r.isReplType(ReplType.s_exists_wal)
-
-        when:
-        requestBuffer.position(4)
-        requestBuffer.putLong(1L)
-        r = x.handleRepl(replRequest)
-        then:
-        // no skip
-        r.isReplType(ReplType.s_exists_wal)
-
-        when:
-        requestBuffer.position(4)
-        requestBuffer.putLong(0L)
-        requestBuffer.putLong(1L)
-        r = x.handleRepl(replRequest)
-        then:
-        // no skip
-        r.isReplType(ReplType.s_exists_wal)
-
-        when:
-        requestBuffer.position(4)
-        requestBuffer.putLong(1L)
-        requestBuffer.putLong(1L)
-        r = x.handleRepl(replRequest)
-        then:
-        // no skip
-        r.isReplType(ReplType.s_exists_wal)
-
-        when:
-        requestBuffer.position(0)
-        // no log, no skip
-        requestBuffer.putInt(1024)
-        r = x.handleRepl(replRequest)
-        then:
-        r.isReplType(ReplType.s_exists_wal)
-
-        when:
-        requestBuffer.position(0)
-        // trigger log, no skip
-        requestBuffer.putInt(1024)
-        r = x.handleRepl(replRequest)
-        then:
-        r.isReplType(ReplType.s_exists_wal)
-
-        when:
-        // exception
-        def walGroupNumber = Wal.calcWalGroupNumber()
-        requestBuffer.position(0)
-        requestBuffer.putInt(walGroupNumber)
-        r = x.handleRepl(replRequest)
-        then:
-        // error
         r.isReplType(ReplType.error)
 
         when:
-        requestBuffer.position(0)
-        requestBuffer.putInt(-1)
+        contentBytes = new byte[5]
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        replRequest.data = contentBytes
         r = x.handleRepl(replRequest)
         then:
-        // error
+        r.isReplType(ReplType.error)
+
+        when:
+        def walGroupNumber = Wal.calcWalGroupNumber()
+        contentBytes = new byte[4]
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(walGroupNumber)
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        contentBytes = new byte[4]
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(-1)
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
         r.isReplType(ReplType.error)
 
         // incremental_big_string
