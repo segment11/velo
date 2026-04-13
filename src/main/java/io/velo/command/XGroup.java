@@ -566,6 +566,9 @@ public class XGroup extends BaseCommand {
     private Repl.ReplReply s_exists_wal(short slot, byte[] contentBytes) {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 4) {
+            throw new IllegalArgumentException("Repl slave handle error: wal payload too short, slot=" + slot);
+        }
         // remote group index, ignore
         var walGroupIndex = buffer.getInt();
 
@@ -575,6 +578,19 @@ public class XGroup extends BaseCommand {
 
         var firstOneSlot = localPersist.currentThreadFirstOneSlot();
         if (buffer.hasRemaining()) {
+            if (buffer.remaining() < 4) {
+                throw new IllegalArgumentException("Repl slave handle error: wal payload length header incomplete, slot=" + slot);
+            }
+
+            var oneGroupBufferSize = buffer.getInt();
+            if (oneGroupBufferSize < 0) {
+                throw new IllegalArgumentException("Repl slave handle error: wal payload group length invalid=" + oneGroupBufferSize + ", slot=" + slot);
+            }
+
+            if (contentBytes.length != 8 + oneGroupBufferSize * 2) {
+                throw new IllegalArgumentException("Repl slave handle error: wal payload length invalid, slot=" + slot);
+            }
+
             // use any wal is ok
             var firstWal = firstOneSlot.getWalByGroupIndex(0);
             try {
