@@ -572,6 +572,22 @@ class XGroupTest extends Specification {
         then:
         r2 instanceof Repl.ReplReplyFromBytes
 
+        when:
+        contentBytes = new byte[3]
+        replRequest.data = contentBytes
+        def r3 = x.handleRepl(replRequest) as ReplReply
+        then:
+        r3.isReplType(ReplType.error)
+
+        when:
+        contentBytes = new byte[5]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        r3 = x.handleRepl(replRequest) as ReplReply
+        then:
+        r3.isReplType(ReplType.error)
+
         // exists_dict
         when:
         replRequest.type = ReplType.exists_dict

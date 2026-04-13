@@ -1015,7 +1015,13 @@ public class XGroup extends BaseCommand {
     private Reply exists_short_string(short slot, byte[] contentBytes) {
         // server received from client
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 4) {
+            throw new IllegalArgumentException("Repl master handle error: exists short string payload too short, slot=" + slot);
+        }
         var walGroupIndex = buffer.getInt();
+        if (buffer.hasRemaining()) {
+            throw new IllegalArgumentException("Repl master handle error: exists short string payload has trailing bytes, slot=" + slot);
+        }
 
         var oneSlot = localPersist.oneSlot(slot);
         var slice = new Slice();
