@@ -339,8 +339,17 @@ public class XGroup extends BaseCommand {
 
         // ignore remote slot number
         var slaveSlotNumber = buffer.getShort();
-        var replProperties = new ConfForSlot.ReplProperties(buffer.getInt(), buffer.getInt(),
-                buffer.getInt(), buffer.get(), buffer.getInt(), buffer.get() == 1);
+        var bucketsPerSlot = buffer.getInt();
+        var oneChargeBucketNumber = buffer.getInt();
+        var segmentLength = buffer.getInt();
+        var segmentIndexHalf = buffer.get();
+        var segmentNumberPerFd = buffer.getInt();
+        var segmentUseCompressionFlag = buffer.get();
+        if (segmentUseCompressionFlag != 0 && segmentUseCompressionFlag != 1) {
+            throw new IllegalArgumentException("Repl master handle error: hello compression flag invalid=" + segmentUseCompressionFlag + ", slot=" + slot);
+        }
+        var replProperties = new ConfForSlot.ReplProperties(bucketsPerSlot, oneChargeBucketNumber,
+                segmentLength, segmentIndexHalf, segmentNumberPerFd, segmentUseCompressionFlag == 1);
         if (buffer.hasRemaining()) {
             throw new IllegalArgumentException("Repl master handle error: hello payload has trailing bytes, slot=" + slot);
         }

@@ -360,6 +360,13 @@ class XGroupTest extends Specification {
 
         when:
         replRequest = mockReplRequest(replPairAsSlave, ReplType.hello, hello)
+        replRequest.data[replRequest.data.length - 1] = (byte) 2
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        replRequest = mockReplRequest(replPairAsSlave, ReplType.hello, hello)
         x.replPair = null
         r = x.handleRepl(replRequest)
         then:
