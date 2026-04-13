@@ -976,6 +976,71 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.exists_short_string)
 
         when:
+        // malformed negative count should not advance repl state
+        contentBytes = new byte[4 + 4 + 1]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(-1)
+        requestBuffer.put((byte) 1)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        // malformed short payload should not read header
+        contentBytes = new byte[4 + 4]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(0)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        // malformed trailing bytes should not be ignored
+        contentBytes = new byte[4 + 4 + 1 + 1]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(0)
+        requestBuffer.put((byte) 1)
+        requestBuffer.put((byte) 1)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        // malformed entry header should not read partial entry metadata
+        contentBytes = new byte[4 + 4 + 1 + 8]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(1)
+        requestBuffer.put((byte) 1)
+        requestBuffer.putLong(1L)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        // malformed entry length should not overrun payload
+        contentBytes = new byte[4 + 4 + 1 + 8 + 8 + 4 + 1]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(1)
+        requestBuffer.put((byte) 1)
+        requestBuffer.putLong(1L)
+        requestBuffer.putLong(2L)
+        requestBuffer.putInt(2)
+        requestBuffer.put((byte) 1)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         def inMemoryGetSet = new InMemoryGetSet()
         x.byPassGetSet = inMemoryGetSet
         def s = x.findKeyMustInSlot(slot, "exists_big_string_uuids_bucket_index_" + 0)

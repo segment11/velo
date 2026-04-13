@@ -866,9 +866,15 @@ public class XGroup extends BaseCommand {
         }
 
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 4 + 4 + 1) {
+            throw new IllegalArgumentException("Repl slave handle error: big string payload too short");
+        }
         // remote bucket index
         var bucketIndex = buffer.getInt();
         var bigStringCount = buffer.getInt();
+        if (bigStringCount < 0) {
+            throw new IllegalArgumentException("Repl slave handle error: big string count invalid=" + bigStringCount + ", slot=" + slot);
+        }
         var isSendAllOnce = buffer.get() == 1;
 
         var remoteReplProperties = replPair.getRemoteReplProperties();
@@ -887,9 +893,16 @@ public class XGroup extends BaseCommand {
             }
 
             for (int i = 0; i < bigStringCount; i++) {
+                if (buffer.remaining() < 8 + 8 + 4) {
+                    throw new IllegalArgumentException("Repl slave handle error: big string entry header incomplete, slot=" + slot);
+                }
+
                 var uuid = buffer.getLong();
                 var keyHash = buffer.getLong();
                 var bigStringBytesLength = buffer.getInt();
+                if (bigStringBytesLength < 0 || bigStringBytesLength > buffer.remaining()) {
+                    throw new IllegalArgumentException("Repl slave handle error: big string payload length invalid=" + bigStringBytesLength + ", slot=" + slot);
+                }
                 var offset = buffer.position();
 
                 var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
@@ -907,6 +920,10 @@ public class XGroup extends BaseCommand {
             firstOneSlot.asyncExecute(() -> {
                 SGroup.saveRedisSet(finalRhk, sSet, this, dictMap);
             });
+        }
+
+        if (buffer.hasRemaining()) {
+            throw new IllegalArgumentException("Repl slave handle error: big string payload has trailing bytes, slot=" + slot);
         }
 
         if (isSendAllOnce) {
