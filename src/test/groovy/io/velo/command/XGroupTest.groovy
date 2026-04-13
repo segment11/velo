@@ -1108,6 +1108,17 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.error)
 
         when:
+        contentBytes = new byte[4 + 4 + 1]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(0)
+        requestBuffer.put((byte) 2)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         requestBuffer.position(0)
         requestBuffer.putInt(1)
         requestBuffer.putInt(0)

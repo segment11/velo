@@ -955,7 +955,11 @@ public class XGroup extends BaseCommand {
         if (bigStringCount < 0) {
             throw new IllegalArgumentException("Repl slave handle error: big string count invalid=" + bigStringCount + ", slot=" + slot);
         }
-        var isSendAllOnce = buffer.get() == 1;
+        var isSendAllOnceFlag = buffer.get();
+        if (isSendAllOnceFlag != 0 && isSendAllOnceFlag != 1) {
+            throw new IllegalArgumentException("Repl slave handle error: big string send-all flag invalid=" + isSendAllOnceFlag + ", slot=" + slot);
+        }
+        var isSendAllOnce = isSendAllOnceFlag == 1;
 
         var remoteReplProperties = replPair.getRemoteReplProperties();
         var bucketsPerSlotRemote = remoteReplProperties.bucketsPerSlot();
