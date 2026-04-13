@@ -597,11 +597,32 @@ class XGroupTest extends Specification {
         // exists_all_done
         when:
         replRequest.type = ReplType.exists_all_done
-        contentBytes = new byte[0]
+        contentBytes = [0] as byte[]
         replRequest.data = contentBytes
         r = x.handleRepl(replRequest)
         then:
         r.isReplType(ReplType.s_exists_all_done)
+
+        when:
+        contentBytes = new byte[0]
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        contentBytes = [1] as byte[]
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        contentBytes = [0, 0] as byte[]
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
 
         // catch_up
         when:
