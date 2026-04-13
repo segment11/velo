@@ -1411,7 +1411,11 @@ public class XGroup extends BaseCommand {
             boolean isMasterReadonly = false;
             if (resetMasterReadonlyByContentBytes) {
                 var buffer = ByteBuffer.wrap(contentBytes);
-                isMasterReadonly = buffer.get() == 1;
+                var masterReadonlyFlag = buffer.get();
+                if (masterReadonlyFlag != 0 && masterReadonlyFlag != 1) {
+                    throw new IllegalArgumentException("Repl slave handle error: catch up readonly flag invalid=" + masterReadonlyFlag + ", slot=" + slot);
+                }
+                isMasterReadonly = masterReadonlyFlag == 1;
                 var masterCurrentFileIndex = buffer.getInt();
                 var masterCurrentOffset = buffer.getLong();
 
@@ -1437,7 +1441,11 @@ public class XGroup extends BaseCommand {
             throw new IllegalArgumentException("Repl slave handle error: catch up payload too short, slot=" + slot);
         }
         var buffer = ByteBuffer.wrap(contentBytes);
-        var isMasterReadonly = buffer.get() == 1;
+        var masterReadonlyFlag = buffer.get();
+        if (masterReadonlyFlag != 0 && masterReadonlyFlag != 1) {
+            throw new IllegalArgumentException("Repl slave handle error: catch up readonly flag invalid=" + masterReadonlyFlag + ", slot=" + slot);
+        }
+        var isMasterReadonly = masterReadonlyFlag == 1;
         var fetchedFileIndex = buffer.getInt();
         var fetchedOffset = buffer.getLong();
 

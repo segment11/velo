@@ -1507,6 +1507,13 @@ class XGroupTest extends Specification {
         oneSlot.isCanRead()
 
         when:
+        contentBytes[0] = (byte) 2
+        metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         ConfForSlot.global.confRepl.catchUpOffsetMinDiff = oldCatchUpOffsetMinDiff
         contentBytes = new byte[1 + 4 + 8 + 4 + 8 + 4 + binlogOneSegmentLength]
         replRequest.data = contentBytes
@@ -1622,6 +1629,12 @@ class XGroupTest extends Specification {
         then:
         r.isEmpty()
         oneSlot.onlyOneReplPairAsSlave.allCaughtUp && !oneSlot.onlyOneReplPairAsSlave.masterReadonly
+
+        when:
+        contentBytes[0] = (byte) 2
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
 
         when:
         // pong trigger slave do catch up again
