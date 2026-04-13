@@ -1385,6 +1385,9 @@ public class XGroup extends BaseCommand {
         var readSegmentLength = buffer.getInt();
         var readSegmentBytes = new byte[readSegmentLength];
         buffer.get(readSegmentBytes);
+        if (buffer.hasRemaining()) {
+            throw new IllegalArgumentException("Repl slave handle error: catch up payload has trailing bytes, slot=" + slot);
+        }
 
         replPair.setMasterReadonly(isMasterReadonly);
         replPair.setAllCaughtUp(fetchedFileIndex == masterCurrentFileIndex && masterCurrentOffset == fetchedOffset + readSegmentLength);

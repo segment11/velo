@@ -1312,6 +1312,26 @@ class XGroupTest extends Specification {
         r.isEmpty()
 
         when:
+        contentBytes = new byte[1 + 4 + 8 + 4 + 8 + 4 + n + 1]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.put((byte) 0)
+        requestBuffer.putInt(0)
+        requestBuffer.putLong(0)
+        requestBuffer.putInt(0)
+        requestBuffer.putLong(n)
+        requestBuffer.putInt(n)
+        for (v in vList) {
+            def encoded = new XWalV(v).encodeWithType()
+            requestBuffer.put(encoded)
+        }
+        requestBuffer.put((byte) 1)
+        metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         def oldCatchUpOffsetMinDiff = ConfForSlot.global.confRepl.catchUpOffsetMinDiff
         ConfForSlot.global.confRepl.catchUpOffsetMinDiff = n
         oneSlot.setCanRead(false)
