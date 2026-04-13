@@ -579,7 +579,17 @@ class XGroupTest extends Specification {
         replRequest.data = contentBytes
         r = x.handleRepl(replRequest)
         then:
-        r.isReplType(ReplType.s_exists_dict)
+        r.isReplType(ReplType.error)
+
+        when:
+        contentBytes = new byte[4 * 2 + 1]
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(1)
+        requestBuffer.putInt(2)
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
 
         when:
         contentBytes = new byte[4 * 2]

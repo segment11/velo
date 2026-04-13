@@ -1085,6 +1085,9 @@ public class XGroup extends BaseCommand {
         // server received from client
         // client already persisted dict seq, send to client exclude sent dict
         ArrayList<Integer> sentDictSeqList = new ArrayList<>();
+        if (contentBytes.length % 4 != 0) {
+            throw new IllegalArgumentException("Repl master handle error: exists dict sent seq payload length invalid, slot=" + slot);
+        }
         if (contentBytes.length >= 4) {
             var sentDictSeqCount = contentBytes.length / 4;
 
