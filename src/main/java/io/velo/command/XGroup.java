@@ -705,10 +705,20 @@ public class XGroup extends BaseCommand {
     private Repl.ReplReply s_exists_chunk_segments(short slot, byte[] contentBytes) {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 16) {
+            throw new IllegalArgumentException("Repl slave handle error: chunk segments payload too short, slot=" + slot);
+        }
         var beginSegmentIndex = buffer.getInt();
         var segmentCount = buffer.getInt();
         var segmentBatchCount = buffer.getInt();
         var segmentLength = buffer.getInt();
+        if (segmentCount < 0) {
+            throw new IllegalArgumentException("Repl slave handle error: chunk segments count invalid=" + segmentCount + ", slot=" + slot);
+        }
+        long expectedLength = 16L + (long) segmentCount * segmentLength;
+        if (contentBytes.length != expectedLength) {
+            throw new IllegalArgumentException("Repl slave handle error: chunk segments payload length invalid, slot=" + slot);
+        }
 
         var remoteReplProperties = replPair.getRemoteReplProperties();
         if (segmentLength != remoteReplProperties.segmentLength()) {

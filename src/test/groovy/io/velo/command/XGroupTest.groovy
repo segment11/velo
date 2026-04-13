@@ -908,7 +908,26 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.exists_chunk_segments)
 
         when:
+        def malformedChunkContentBytes = new byte[17]
+        replRequest.data = malformedChunkContentBytes
+        def malformedChunkRequestBuffer = ByteBuffer.wrap(malformedChunkContentBytes)
+        malformedChunkRequestBuffer.putInt(0)
+        malformedChunkRequestBuffer.putInt(0)
+        malformedChunkRequestBuffer.putInt(ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl)
+        malformedChunkRequestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
+        malformedChunkRequestBuffer.put((byte) 1)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         // segment compression
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(1)
+        requestBuffer.putInt(ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl)
+        requestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
         var segmentBatch = new SegmentBatch(snowFlake)
         def splitAndTightResult = segmentBatch.split(list, returnPvmList)
         requestBuffer.position(16).put(splitAndTightResult.getFirst().segmentBytes())
