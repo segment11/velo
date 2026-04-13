@@ -321,9 +321,18 @@ public class XGroup extends BaseCommand {
     private Repl.ReplReply hello(short slot, byte[] contentBytes) {
         // server received hello from client
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 8 + 4) {
+            throw new IllegalArgumentException("Repl master handle error: hello payload too short, slot=" + slot);
+        }
         var slaveUuid = buffer.getLong();
 
         var len = buffer.getInt();
+        if (len < 0) {
+            throw new IllegalArgumentException("Repl master handle error: hello address length invalid=" + len + ", slot=" + slot);
+        }
+        if (buffer.remaining() < len + 20) {
+            throw new IllegalArgumentException("Repl master handle error: hello payload too short, slot=" + slot);
+        }
         var b = new byte[len];
         buffer.get(b);
         var netListenAddresses = Wal.keyString(b);
@@ -332,6 +341,9 @@ public class XGroup extends BaseCommand {
         var slaveSlotNumber = buffer.getShort();
         var replProperties = new ConfForSlot.ReplProperties(buffer.getInt(), buffer.getInt(),
                 buffer.getInt(), buffer.get(), buffer.getInt(), buffer.get() == 1);
+        if (buffer.hasRemaining()) {
+            throw new IllegalArgumentException("Repl master handle error: hello payload has trailing bytes, slot=" + slot);
+        }
 
         var array = netListenAddresses.split(":");
         var host = array[0];
@@ -398,6 +410,9 @@ public class XGroup extends BaseCommand {
     private Repl.ReplReply hi(short slot, byte[] contentBytes) {
         // client received hi from server
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 64) {
+            throw new IllegalArgumentException("Repl slave handle error: hi payload too short, slot=" + slot);
+        }
         var slaveUuid = buffer.getLong();
         var masterUuid = buffer.getLong();
         // master binlog current (latest) file index and offset
@@ -411,6 +426,9 @@ public class XGroup extends BaseCommand {
         var masterSlotNumber = buffer.getShort();
         var replProperties = new ConfForSlot.ReplProperties(buffer.getInt(), buffer.getInt(),
                 buffer.getInt(), buffer.get(), buffer.getInt(), buffer.get() == 1);
+        if (buffer.hasRemaining()) {
+            throw new IllegalArgumentException("Repl slave handle error: hi payload has trailing bytes, slot=" + slot);
+        }
 
         // should not happen
         if (slaveUuid != replPair.getSlaveUuid()) {

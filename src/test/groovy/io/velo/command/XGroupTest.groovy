@@ -339,6 +339,27 @@ class XGroupTest extends Specification {
         oneSlot.dynConfig.binlogOn
 
         when:
+        def shortHelloBytes = new byte[8 + 4]
+        def shortHelloBuffer = ByteBuffer.wrap(shortHelloBytes)
+        shortHelloBuffer.putLong(slaveUuid)
+        shortHelloBuffer.putInt(0)
+        replRequest.data = shortHelloBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        replRequest = mockReplRequest(replPairAsSlave, ReplType.hello, hello)
+        def malformedHelloBytes = new byte[replRequest.data.length + 1]
+        System.arraycopy(replRequest.data, 0, malformedHelloBytes, 0, replRequest.data.length)
+        malformedHelloBytes[malformedHelloBytes.length - 1] = (byte) 1
+        replRequest.data = malformedHelloBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        replRequest = mockReplRequest(replPairAsSlave, ReplType.hello, hello)
         x.replPair = null
         r = x.handleRepl(replRequest)
         then:
@@ -741,6 +762,26 @@ class XGroupTest extends Specification {
                 new Binlog.FileIndexAndOffset(1, 1L),
                 new Binlog.FileIndexAndOffset(0, 0L), 0)
         replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        def shortHiBytes = new byte[64 - 1]
+        replRequest.data = shortHiBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
+                new Binlog.FileIndexAndOffset(1, 1L),
+                new Binlog.FileIndexAndOffset(0, 0L), 0)
+        replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
+        def malformedHiBytes = new byte[replRequest.data.length + 1]
+        System.arraycopy(replRequest.data, 0, malformedHiBytes, 0, replRequest.data.length)
+        malformedHiBytes[malformedHiBytes.length - 1] = (byte) 1
+        replRequest.data = malformedHiBytes
         r = x.handleRepl(replRequest)
         then:
         r.isReplType(ReplType.error)
