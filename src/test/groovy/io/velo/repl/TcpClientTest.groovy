@@ -161,5 +161,13 @@ class TcpClientTest extends Specification {
         then:
         promise2 != null
         !socket2.closed
+
+        when:
+        def socket3 = SocketInspectorTest.mockTcpSocket(eventloopCurrent, 46381)
+        def promise3 = tcpClient.toReplyBufferOrClose(Repl.error(slot, replPair, 'error'), socket3)
+
+        then:
+        promise3 != null
+        socket3.closed
     }
 }

@@ -414,10 +414,10 @@ public class XGroup extends BaseCommand {
 
         // should not happen
         if (slaveUuid != replPair.getSlaveUuid()) {
-            log.error("Repl slave handle error: slave uuid not match, client slave uuid={}, server hi slave uuid={}, slot={}",
-                    replPair.getSlaveUuid(), slaveUuid, slot);
-            // this connection will close when return null, illegal data
-            return null;
+            var errorMessage = "Repl slave handle error: slave uuid not match";
+            log.error("{}, client slave uuid={}, server hi slave uuid={}, slot={}",
+                    errorMessage, replPair.getSlaveUuid(), slaveUuid, slot);
+            return Repl.error(slot, replPair, errorMessage);
         }
 
         replPair.setMasterUuid(masterUuid);

@@ -182,6 +182,11 @@ public class TcpClient implements NeedCleanUp {
             socket.close();
             return Promise.of(null);
         }
+
+        if (reply instanceof Repl.ReplReply replReply && replReply.isReplType(ReplType.error)) {
+            socket.close();
+            return Promise.of(null);
+        }
         return Promise.of(reply.buffer());
     }
 

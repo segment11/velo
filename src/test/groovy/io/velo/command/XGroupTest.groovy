@@ -743,7 +743,7 @@ class XGroupTest extends Specification {
         replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
         r = x.handleRepl(replRequest)
         then:
-        r == null
+        r.isReplType(ReplType.error)
 
         // ok
         when:
