@@ -1186,6 +1186,9 @@ public class XGroup extends BaseCommand {
 
     private Repl.ReplReply s_exists_all_done(short slot, byte[] contentBytes) {
         // client received from server
+        if (!NextStepContent.isNextStep(contentBytes)) {
+            throw new IllegalArgumentException("Repl slave handle error: exists all done payload invalid, slot=" + slot);
+        }
         log.warn("Repl master reply exists/meta fetch all done, slave uuid={}, {}, slot={}",
                 replPair.getSlaveUuid(), replPair.getHostAndPort(), slot);
 

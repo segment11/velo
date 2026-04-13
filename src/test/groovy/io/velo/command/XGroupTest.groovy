@@ -1248,13 +1248,34 @@ class XGroupTest extends Specification {
         // s_exists_all_done
         when:
         replRequest.type = ReplType.s_exists_all_done
-        contentBytes = new byte[0]
+        contentBytes = [0] as byte[]
         replRequest.data = contentBytes
         r = x.handleRepl(replRequest)
         then:
         // next step
         r.isReplType(ReplType.catch_up)
         oneSlot.metaChunkSegmentIndex.isExistsDataAllFetched()
+
+        when:
+        contentBytes = new byte[0]
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        contentBytes = [1] as byte[]
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        contentBytes = [0, 0] as byte[]
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
 
         // s_catch_up
         when:
