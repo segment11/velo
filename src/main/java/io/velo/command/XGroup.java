@@ -645,7 +645,13 @@ public class XGroup extends BaseCommand {
     private Repl.ReplReply exists_chunk_segments(short slot, byte[] contentBytes) {
         // server received from client
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 4) {
+            throw new IllegalArgumentException("Repl master handle error: exists chunk segments payload too short, slot=" + slot);
+        }
         var beginSegmentIndex = buffer.getInt();
+        if (buffer.hasRemaining()) {
+            throw new IllegalArgumentException("Repl master handle error: exists chunk segments payload has trailing bytes, slot=" + slot);
+        }
 
         if (slot == 0 && beginSegmentIndex % (1024 * 100) == 0) {
             log.warn("Repl master fetch exists chunk segments, begin segment index={}, slot={}",

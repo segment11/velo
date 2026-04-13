@@ -412,6 +412,22 @@ class XGroupTest extends Specification {
         // begin segment index, segment count, segment batch count, segment length, no data
         r.buffer().limit() == Repl.HEADER_LENGTH + 16
 
+        when:
+        contentBytes = new byte[3]
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        contentBytes = new byte[5]
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
         // response exists wal
         when:
         replRequest.type = ReplType.exists_wal
