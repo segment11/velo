@@ -875,6 +875,16 @@ class XGroupTest extends Specification {
 
         // ok
         when:
+        hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
+                new Binlog.FileIndexAndOffset(1, 1L),
+                new Binlog.FileIndexAndOffset(0, 0L), 0)
+        replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
+        replRequest.data[replRequest.data.length - 1] = (byte) 2
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         replRequest = mockReplRequest(Repl.test(slot, replPairAsMaster, 'test'))
         r = x.handleRepl(replRequest)
         then:
