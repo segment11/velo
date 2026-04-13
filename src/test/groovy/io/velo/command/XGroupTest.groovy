@@ -1212,6 +1212,15 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.exists_short_string)
 
         when:
+        contentBytes = new byte[4]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(-1)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         var keyTest = 'key:000000000001'
         def cv = new CompressedValue()
         cv.seq = 1L

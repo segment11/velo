@@ -1105,6 +1105,9 @@ public class XGroup extends BaseCommand {
 
         var remoteReplProperties = replPair.getRemoteReplProperties();
         var walGroupNumberRemote = remoteReplProperties.bucketsPerSlot() / remoteReplProperties.oneChargeBucketNumber();
+        if (walGroupIndex < 0 || walGroupIndex >= walGroupNumberRemote) {
+            throw new IllegalArgumentException("Repl slave handle error: short string wal group index invalid=" + walGroupIndex + ", slot=" + slot);
+        }
 
         if (walGroupIndex == walGroupNumberRemote - 1) {
             log.warn("Repl slave fetch data, go to step={}, slot={}", exists_chunk_segments.name(), slot);
