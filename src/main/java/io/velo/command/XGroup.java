@@ -788,10 +788,19 @@ public class XGroup extends BaseCommand {
     private Repl.ReplReply incremental_big_string(short slot, byte[] contentBytes) {
         // server received from client
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 8 + 4) {
+            throw new IllegalArgumentException("Repl master handle error: incremental big string payload too short, slot=" + slot);
+        }
         var uuid = buffer.getLong();
         var kenLength = buffer.getInt();
+        if (kenLength < 0 || kenLength > buffer.remaining()) {
+            throw new IllegalArgumentException("Repl master handle error: incremental big string key length invalid=" + kenLength + ", slot=" + slot);
+        }
         var keyBytes = new byte[kenLength];
         buffer.get(keyBytes);
+        if (buffer.hasRemaining()) {
+            throw new IllegalArgumentException("Repl master handle error: incremental big string payload has trailing bytes, slot=" + slot);
+        }
         var key = Wal.keyString(keyBytes);
 
         log.warn("Repl master fetch incremental big string, uuid={}, key={}, slot={}", uuid, key, slot);

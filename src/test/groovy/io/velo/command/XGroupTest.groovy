@@ -515,6 +515,15 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.s_incremental_big_string)
         r.buffer().limit() == Repl.HEADER_LENGTH + 8 + 4 + bigStringKey.length() + 1024
 
+        when:
+        def malformedIncrementalBigStringBytes = new byte[contentBytes.length + 1]
+        System.arraycopy(contentBytes, 0, malformedIncrementalBigStringBytes, 0, contentBytes.length)
+        malformedIncrementalBigStringBytes[malformedIncrementalBigStringBytes.length - 1] = (byte) 1
+        replRequest.data = malformedIncrementalBigStringBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
         // exists_big_string
         when:
         replRequest.type = ReplType.exists_big_string
