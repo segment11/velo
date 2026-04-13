@@ -959,6 +959,18 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.error)
 
         when:
+        def invalidRangeChunkContentBytes = new byte[16]
+        replRequest.data = invalidRangeChunkContentBytes
+        def invalidRangeChunkRequestBuffer = ByteBuffer.wrap(invalidRangeChunkContentBytes)
+        invalidRangeChunkRequestBuffer.putInt(ConfForSlot.global.confChunk.maxSegmentNumber() - 1)
+        invalidRangeChunkRequestBuffer.putInt(0)
+        invalidRangeChunkRequestBuffer.putInt(2)
+        invalidRangeChunkRequestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         // segment compression
         replRequest.data = contentBytes
         requestBuffer = ByteBuffer.wrap(contentBytes)

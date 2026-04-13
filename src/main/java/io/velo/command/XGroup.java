@@ -749,6 +749,13 @@ public class XGroup extends BaseCommand {
         }
 
         var remoteReplProperties = replPair.getRemoteReplProperties();
+        var maxSegmentNumber = remoteReplProperties.segmentNumberPerFd() * remoteReplProperties.fdPerChunk();
+        if (beginSegmentIndex < 0 || beginSegmentIndex >= maxSegmentNumber) {
+            throw new IllegalArgumentException("Repl slave handle error: chunk segments begin index invalid=" + beginSegmentIndex + ", slot=" + slot);
+        }
+        if ((long) beginSegmentIndex + segmentBatchCount > maxSegmentNumber) {
+            throw new IllegalArgumentException("Repl slave handle error: chunk segments batch range invalid, slot=" + slot);
+        }
         if (segmentLength != remoteReplProperties.segmentLength()) {
             throw new IllegalArgumentException("Repl slave handle error: segment length not match");
         }
@@ -827,7 +834,6 @@ public class XGroup extends BaseCommand {
             });
         }
 
-        var maxSegmentNumber = remoteReplProperties.segmentNumberPerFd() * remoteReplProperties.fdPerChunk();
         boolean isLastBatch = maxSegmentNumber == beginSegmentIndex + segmentBatchCount;
         if (isLastBatch) {
             // next step, fetch exists wal
