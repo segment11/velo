@@ -1244,6 +1244,32 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.error)
 
         when:
+        def invalidShortStringSlot = x.findKeyMustInSlot(slot, 'short-string-invalid-')
+        def invalidShortStringKey = invalidShortStringSlot.rawKey()
+        def invalidShortStringCv = new CompressedValue()
+        invalidShortStringCv.seq = 11L
+        invalidShortStringCv.keyHash = invalidShortStringSlot.keyHash()
+        invalidShortStringCv.compressedData = new byte[10]
+        def invalidShortStringCvEncoded = invalidShortStringCv.encode()
+        def invalidShortStringEncodedLength = 8 + 8 + 8 + 4 + invalidShortStringKey.length() + 4 + invalidShortStringCvEncoded.length
+        contentBytes = new byte[4 + 4 + invalidShortStringEncodedLength]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(-1)
+        requestBuffer.putInt(invalidShortStringEncodedLength)
+        requestBuffer.putLong(invalidShortStringCv.seq)
+        requestBuffer.putLong(invalidShortStringCv.keyHash)
+        requestBuffer.putLong(0L)
+        requestBuffer.putInt(invalidShortStringKey.length())
+        requestBuffer.put(invalidShortStringKey.bytes)
+        requestBuffer.putInt(invalidShortStringCvEncoded.length)
+        requestBuffer.put(invalidShortStringCvEncoded)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+        oneSlot.get(invalidShortStringKey, invalidShortStringSlot.bucketIndex(), invalidShortStringSlot.keyHash()) == null
+
+        when:
         var keyTest = 'key:000000000001'
         def cv = new CompressedValue()
         cv.seq = 1L

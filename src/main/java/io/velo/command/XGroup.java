@@ -1089,6 +1089,12 @@ public class XGroup extends BaseCommand {
         // remote
         var walGroupIndex = slice.readInt();
 
+        var remoteReplProperties = replPair.getRemoteReplProperties();
+        var walGroupNumberRemote = remoteReplProperties.bucketsPerSlot() / remoteReplProperties.oneChargeBucketNumber();
+        if (walGroupIndex < 0 || walGroupIndex >= walGroupNumberRemote) {
+            throw new IllegalArgumentException("Repl slave handle error: short string wal group index invalid=" + walGroupIndex + ", slot=" + slot);
+        }
+
         HashMap<Short, HashMap<String, CompressedValue>> groupedBySlot = new HashMap<>();
         KeyLoader.decodeShortStringListFromBuf(slice, (keyHash, expireAt, seq, key, valueBytes) -> {
             var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
@@ -1107,12 +1113,6 @@ public class XGroup extends BaseCommand {
                     oneSlot.put(key, bucketIndex, cv, true);
                 }
             });
-        }
-
-        var remoteReplProperties = replPair.getRemoteReplProperties();
-        var walGroupNumberRemote = remoteReplProperties.bucketsPerSlot() / remoteReplProperties.oneChargeBucketNumber();
-        if (walGroupIndex < 0 || walGroupIndex >= walGroupNumberRemote) {
-            throw new IllegalArgumentException("Repl slave handle error: short string wal group index invalid=" + walGroupIndex + ", slot=" + slot);
         }
 
         if (walGroupIndex == walGroupNumberRemote - 1) {
