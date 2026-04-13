@@ -1399,6 +1399,9 @@ public class XGroup extends BaseCommand {
             return Repl.emptyReply();
         }
 
+        if (contentBytes.length < 1 + 4 + 8 + 4 + 8 + 4) {
+            throw new IllegalArgumentException("Repl slave handle error: catch up payload too short, slot=" + slot);
+        }
         var buffer = ByteBuffer.wrap(contentBytes);
         var isMasterReadonly = buffer.get() == 1;
         var fetchedFileIndex = buffer.getInt();
@@ -1409,6 +1412,9 @@ public class XGroup extends BaseCommand {
         var masterCurrentFo = new Binlog.FileIndexAndOffset(masterCurrentFileIndex, masterCurrentOffset);
 
         var readSegmentLength = buffer.getInt();
+        if (readSegmentLength <= 0 || readSegmentLength > buffer.remaining()) {
+            throw new IllegalArgumentException("Repl slave handle error: catch up segment length invalid=" + readSegmentLength + ", slot=" + slot);
+        }
         var readSegmentBytes = new byte[readSegmentLength];
         buffer.get(readSegmentBytes);
         if (buffer.hasRemaining()) {
