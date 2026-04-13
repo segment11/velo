@@ -921,6 +921,18 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.error)
 
         when:
+        def zeroBatchChunkContentBytes = new byte[16]
+        replRequest.data = zeroBatchChunkContentBytes
+        def zeroBatchChunkRequestBuffer = ByteBuffer.wrap(zeroBatchChunkContentBytes)
+        zeroBatchChunkRequestBuffer.putInt(0)
+        zeroBatchChunkRequestBuffer.putInt(0)
+        zeroBatchChunkRequestBuffer.putInt(0)
+        zeroBatchChunkRequestBuffer.putInt(ConfForSlot.global.confChunk.segmentLength)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         // segment compression
         replRequest.data = contentBytes
         requestBuffer = ByteBuffer.wrap(contentBytes)
