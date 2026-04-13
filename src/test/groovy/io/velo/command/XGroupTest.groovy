@@ -1011,6 +1011,27 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.error)
 
         when:
+        def invalidWalSlot = x.findKeyMustInSlot(slot, 'wal-invalid-')
+        def invalidWalKey = invalidWalSlot.rawKey()
+        def invalidWalCv = new CompressedValue()
+        invalidWalCv.seq = 12L
+        invalidWalCv.keyHash = invalidWalSlot.keyHash()
+        invalidWalCv.compressedData = new byte[10]
+        def invalidWalV = new Wal.V(12L, invalidWalSlot.bucketIndex(), invalidWalSlot.keyHash(),
+                CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                invalidWalKey, invalidWalCv.encode(), false)
+        contentBytes = new byte[8 + 2 * Wal.ONE_GROUP_BUFFER_SIZE]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(-1)
+        requestBuffer.putInt(Wal.ONE_GROUP_BUFFER_SIZE)
+        requestBuffer.put(invalidWalV.encode(true))
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+        oneSlot.get(invalidWalKey, invalidWalSlot.bucketIndex(), invalidWalSlot.keyHash()) == null
+
+        when:
         // skip, no log
         contentBytes = new byte[4]
         replRequest.data = contentBytes

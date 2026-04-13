@@ -572,6 +572,12 @@ public class XGroup extends BaseCommand {
         // remote group index, ignore
         var walGroupIndex = buffer.getInt();
 
+        var remoteReplProperties = replPair.getRemoteReplProperties();
+        var walGroupNumberRemote = remoteReplProperties.bucketsPerSlot() / remoteReplProperties.oneChargeBucketNumber();
+        if (walGroupIndex < 0 || walGroupIndex >= walGroupNumberRemote) {
+            throw new IllegalArgumentException("Repl slave handle error: wal group index invalid=" + walGroupIndex + ", slot=" + slot);
+        }
+
         if (slot == 0 && walGroupIndex % 1024 == 0) {
             log.info("Repl slave update wal exists bytes, group index={}, slot={}, length={}", walGroupIndex, slot, contentBytes.length);
         }
@@ -613,9 +619,6 @@ public class XGroup extends BaseCommand {
                 throw new RuntimeException("Repl slave update wal exists bytes error, group index=" + walGroupIndex + ", slot=" + slot + ", e=" + e.getMessage());
             }
         }
-
-        var remoteReplProperties = replPair.getRemoteReplProperties();
-        var walGroupNumberRemote = remoteReplProperties.bucketsPerSlot() / remoteReplProperties.oneChargeBucketNumber();
 
         if (walGroupIndex == walGroupNumberRemote - 1) {
             log.warn("Repl slave fetch exists all done after fetch wal when slot is not the first slot, slot={}", slot);
