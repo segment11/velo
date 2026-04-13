@@ -859,7 +859,13 @@ public class XGroup extends BaseCommand {
         // send back exists big string to client, with flag can do next step
         // client already persisted big string uuid, send to client exclude sent big string
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 4) {
+            throw new IllegalArgumentException("Repl master handle error: exists big string payload too short, slot=" + slot);
+        }
         var bucketIndex = buffer.getInt();
+        if (buffer.remaining() % 16 != 0) {
+            throw new IllegalArgumentException("Repl master handle error: exists big string sent id payload length invalid, slot=" + slot);
+        }
         var sentIdList = new ArrayList<BigStringFiles.IdWithKey>();
         while (buffer.hasRemaining()) {
             var uuid = buffer.getLong();
@@ -871,6 +877,9 @@ public class XGroup extends BaseCommand {
         }
 
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
+        if (bucketIndex < 0 || bucketIndex >= bucketsPerSlot) {
+            throw new IllegalArgumentException("Repl master handle error: exists big string bucket index invalid=" + bucketIndex + ", slot=" + slot);
+        }
 
         var oneSlot = localPersist.oneSlot(slot);
         var bigStringFiles = oneSlot.getBigStringFiles();
@@ -1182,10 +1191,16 @@ public class XGroup extends BaseCommand {
     private Repl.ReplReply catch_up(short slot, byte[] contentBytes) {
         // server received from client
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 8 + 4 + 8 + 8) {
+            throw new IllegalArgumentException("Repl master handle error: catch up payload too short, slot=" + slot);
+        }
         var binlogMasterUuid = buffer.getLong();
         var needFetchFileIndex = buffer.getInt();
         var needFetchOffset = buffer.getLong();
         var lastUpdatedOffset = buffer.getLong();
+        if (buffer.hasRemaining()) {
+            throw new IllegalArgumentException("Repl master handle error: catch up payload has trailing bytes, slot=" + slot);
+        }
 
         if (needFetchOffset == 0) {
             log.debug("Repl master handle catch up from new binlog file, slot={}, slave uuid={}, {}, need fetch file index={}, offset={}",

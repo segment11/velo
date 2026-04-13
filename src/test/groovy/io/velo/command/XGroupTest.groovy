@@ -544,6 +544,22 @@ class XGroupTest extends Specification {
         then:
         r.isReplType(ReplType.s_exists_big_string)
 
+        when:
+        requestBuffer.position(0)
+        requestBuffer.putInt(ConfForSlot.global.confBucket.bucketsPerSlot)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        contentBytes = new byte[4 + 8 * 2 + 1]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(sBigString.bucketIndex())
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
         // exists_short_string
         when:
         replRequest.type = ReplType.exists_short_string
@@ -612,6 +628,37 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.s_catch_up)
 
         when:
+        contentBytes = new byte[8 + 4 + 8 + 8 + 1]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putLong(oneSlot.masterUuid)
+        requestBuffer.putInt(0)
+        requestBuffer.putLong(0)
+        requestBuffer.putLong(0)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        contentBytes = new byte[8 + 4 + 8 + 7]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putLong(oneSlot.masterUuid)
+        requestBuffer.putInt(0)
+        requestBuffer.putLong(0)
+        requestBuffer.put((byte) 0)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        contentBytes = new byte[8 + 4 + 8 + 8]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putLong(oneSlot.masterUuid)
+        requestBuffer.putInt(0)
+        requestBuffer.putLong(0)
+        requestBuffer.putLong(0)
         oneSlot.readonly = true
         r = x.handleRepl(replRequest)
         then:
