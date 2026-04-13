@@ -1344,6 +1344,9 @@ public class XGroup extends BaseCommand {
         // 13 -> readonly byte + current file index + current offset
         // 2 -> pong trigger slave begin to do catch_up again
         if (contentBytes.length == 13 || contentBytes.length == 2) {
+            if (contentBytes.length == 2 && (contentBytes[0] != 0 || contentBytes[1] != 0)) {
+                throw new IllegalArgumentException("Repl slave handle error: catch up pong trigger payload invalid, slot=" + slot);
+            }
             boolean resetMasterReadonlyByContentBytes = contentBytes.length == 13;
             boolean isMasterReadonly = false;
             if (resetMasterReadonlyByContentBytes) {

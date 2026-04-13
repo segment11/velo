@@ -1460,6 +1460,13 @@ class XGroupTest extends Specification {
         r.isEmpty()
 
         when:
+        contentBytes = [1, 0] as byte[]
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         // pong, trigger catch up
         replRequest.type = ReplType.pong
         contentBytes = new byte[0]
