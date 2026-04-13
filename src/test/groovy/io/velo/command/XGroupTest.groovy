@@ -437,6 +437,15 @@ class XGroupTest extends Specification {
 
         // response exists wal
         when:
+        contentBytes = new byte[4]
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(ConfForSlot.global.confChunk.maxSegmentNumber())
+        replRequest.data = contentBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         replRequest.type = ReplType.exists_wal
         contentBytes = new byte[4]
         requestBuffer = ByteBuffer.wrap(contentBytes)

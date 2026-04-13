@@ -689,6 +689,10 @@ public class XGroup extends BaseCommand {
         if (buffer.hasRemaining()) {
             throw new IllegalArgumentException("Repl master handle error: exists chunk segments payload has trailing bytes, slot=" + slot);
         }
+        var maxSegmentNumber = ConfForSlot.global.confChunk.maxSegmentNumber();
+        if (beginSegmentIndex < 0 || beginSegmentIndex >= maxSegmentNumber) {
+            throw new IllegalArgumentException("Repl master handle error: exists chunk segments begin index invalid=" + beginSegmentIndex + ", slot=" + slot);
+        }
 
         if (slot == 0 && beginSegmentIndex % (1024 * 100) == 0) {
             log.warn("Repl master fetch exists chunk segments, begin segment index={}, slot={}",
