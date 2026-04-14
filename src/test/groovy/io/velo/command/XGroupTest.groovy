@@ -1951,6 +1951,54 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test handle repl rejects malformed exists dict payload before saving dict'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
+        and:
+        def dictMap = DictMap.instance
+        dictMap.initDictMap(Consts.persistDir)
+        dictMap.clearAll()
+
+        and:
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+
+        def dict = new Dict(new byte[10])
+        def encoded = dict.encode('key:')
+        def contentBytes = ByteBuffer.allocate(4 + 4 + encoded.length + 1)
+                .putInt(1)
+                .putInt(encoded.length)
+                .put(encoded)
+                .put((byte) 7)
+                .array()
+        def replRequest = new ReplRequest(oneSlot.masterUuid, slot, ReplType.s_exists_dict, contentBytes, contentBytes.length)
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        when:
+        ReplReply r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('dict payload has trailing bytes')
+        dictMap.getDict('key:') == null
+        dictMap.dictSize() == 0
+
+        cleanup:
+        dictMap.clearAll()
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test handle repl rejects exists wal before remote repl properties ready'() {
         given:
         LocalPersistTest.prepareLocalPersist()

@@ -1313,6 +1313,7 @@ public class XGroup extends BaseCommand {
         }
         log.warn("Repl slave fetch exists dict, master sent dict count={}, slot={}", dictCount, slot);
 
+        ArrayList<Dict.DictWithKeyPrefixOrSuffix> dictWithKeys = new ArrayList<>(dictCount);
         // decode
         try {
             for (int i = 0; i < dictCount; i++) {
@@ -1334,16 +1335,20 @@ public class XGroup extends BaseCommand {
                     throw new IllegalArgumentException("Repl slave decode dict error, slot=" + slot);
                 }
 
-                var dict = dictWithKeyPrefixOrSuffix.dict();
-                var keyPrefixOrSuffix = dictWithKeyPrefixOrSuffix.keyPrefixOrSuffix();
-                dictMap.putDict(keyPrefixOrSuffix, dict);
-                log.warn("Repl slave save master exists dict: dict with key={}, slot={}", dictWithKeyPrefixOrSuffix, slot);
+                dictWithKeys.add(dictWithKeyPrefixOrSuffix);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
         if (buffer.hasRemaining()) {
             throw new IllegalArgumentException("Repl slave handle error: dict payload has trailing bytes, slot=" + slot);
+        }
+
+        for (var dictWithKeyPrefixOrSuffix : dictWithKeys) {
+            var dict = dictWithKeyPrefixOrSuffix.dict();
+            var keyPrefixOrSuffix = dictWithKeyPrefixOrSuffix.keyPrefixOrSuffix();
+            dictMap.putDict(keyPrefixOrSuffix, dict);
+            log.warn("Repl slave save master exists dict: dict with key={}, slot={}", dictWithKeyPrefixOrSuffix, slot);
         }
 
         // next step, fetch big string
