@@ -1847,6 +1847,44 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test handle repl rejects exists short string wal group out of range'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def slaveUuid = 11L
+        oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, 'localhost', 6380)
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        when:
+        def negativeBytes = ByteBuffer.allocate(4)
+                .putInt(-1)
+                .array()
+        ReplReply r = x.handleRepl(new ReplRequest(slaveUuid, slot, ReplType.exists_short_string, negativeBytes, negativeBytes.length))
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('exists short string wal group index invalid')
+
+        when:
+        def tooLargeBytes = ByteBuffer.allocate(4)
+                .putInt(Wal.calcWalGroupNumber())
+                .array()
+        r = x.handleRepl(new ReplRequest(slaveUuid, slot, ReplType.exists_short_string, tooLargeBytes, tooLargeBytes.length))
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('exists short string wal group index invalid')
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test handle repl rejects malformed exists dict payload'() {
         given:
         LocalPersistTest.prepareLocalPersist()

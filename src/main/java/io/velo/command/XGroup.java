@@ -1155,6 +1155,10 @@ public class XGroup extends BaseCommand {
         if (buffer.hasRemaining()) {
             throw new IllegalArgumentException("Repl master handle error: exists short string payload has trailing bytes, slot=" + slot);
         }
+        var walGroupNumber = Wal.calcWalGroupNumber();
+        if (walGroupIndex < 0 || walGroupIndex >= walGroupNumber) {
+            throw new IllegalArgumentException("Repl master handle error: exists short string wal group index invalid=" + walGroupIndex + ", slot=" + slot);
+        }
 
         var oneSlot = localPersist.oneSlot(slot);
         var slice = new Slice();
