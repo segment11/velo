@@ -2256,6 +2256,83 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test handle repl rejects malformed hi positions'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def masterUuid = 66L
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        def replPairAsMaster = ReplPairTest.mockAsMaster(masterUuid)
+        replPairAsMaster.slaveUuid = oneSlot.masterUuid
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        when:
+        def hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
+                new Binlog.FileIndexAndOffset(1, 1L),
+                new Binlog.FileIndexAndOffset(0, 0L), 0)
+        def replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
+        ByteBuffer.wrap(replRequest.data).putInt(16, -1)
+        ReplReply r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('hi current file index invalid')
+
+        when:
+        hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
+                new Binlog.FileIndexAndOffset(1, 1L),
+                new Binlog.FileIndexAndOffset(0, 0L), 0)
+        replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
+        ByteBuffer.wrap(replRequest.data).putLong(20, -1L)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('hi current offset invalid')
+
+        when:
+        hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
+                new Binlog.FileIndexAndOffset(1, 1L),
+                new Binlog.FileIndexAndOffset(0, 0L), 0)
+        replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
+        ByteBuffer.wrap(replRequest.data).putInt(28, -1)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('hi earliest file index invalid')
+
+        when:
+        hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
+                new Binlog.FileIndexAndOffset(1, 1L),
+                new Binlog.FileIndexAndOffset(0, 0L), 0)
+        replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
+        ByteBuffer.wrap(replRequest.data).putLong(32, -1L)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('hi earliest offset invalid')
+
+        when:
+        hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
+                new Binlog.FileIndexAndOffset(1, 1L),
+                new Binlog.FileIndexAndOffset(0, 0L), 0)
+        replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
+        ByteBuffer.wrap(replRequest.data).putInt(40, -1)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('hi current segment index invalid')
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test try catch up again after slave tcp client closed'() {
         given:
         def replPair = ReplPairTest.mockAsSlave()

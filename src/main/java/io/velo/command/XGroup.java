@@ -492,6 +492,21 @@ public class XGroup extends BaseCommand {
         var earliestFileIndex = buffer.getInt();
         var earliestOffset = buffer.getLong();
         var currentSegmentIndex = buffer.getInt();
+        if (currentFileIndex < 0) {
+            throw new IllegalArgumentException("Repl slave handle error: hi current file index invalid=" + currentFileIndex + ", slot=" + slot);
+        }
+        if (currentOffset < 0) {
+            throw new IllegalArgumentException("Repl slave handle error: hi current offset invalid=" + currentOffset + ", slot=" + slot);
+        }
+        if (earliestFileIndex < 0) {
+            throw new IllegalArgumentException("Repl slave handle error: hi earliest file index invalid=" + earliestFileIndex + ", slot=" + slot);
+        }
+        if (earliestOffset < 0) {
+            throw new IllegalArgumentException("Repl slave handle error: hi earliest offset invalid=" + earliestOffset + ", slot=" + slot);
+        }
+        if (currentSegmentIndex < 0) {
+            throw new IllegalArgumentException("Repl slave handle error: hi current segment index invalid=" + currentSegmentIndex + ", slot=" + slot);
+        }
 
         var masterSlotNumber = buffer.getShort();
         var bucketsPerSlot = buffer.getInt();
