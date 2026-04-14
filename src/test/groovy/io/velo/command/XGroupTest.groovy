@@ -326,6 +326,13 @@ class XGroupTest extends Specification {
         then:
         r.isReplType(ReplType.pong)
 
+        when:
+        def malformedPing = new Ping('localhost:6380:extra')
+        replRequest = mockReplRequest(replPairAsSlave, ReplType.ping, malformedPing)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
         // hello
         when:
         def hello = new Hello(slaveUuid, '测试:6380')
@@ -354,6 +361,13 @@ class XGroupTest extends Specification {
         System.arraycopy(replRequest.data, 0, malformedHelloBytes, 0, replRequest.data.length)
         malformedHelloBytes[malformedHelloBytes.length - 1] = (byte) 1
         replRequest.data = malformedHelloBytes
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        def malformedHelloAddress = new Hello(slaveUuid, '测试:6380:extra')
+        replRequest = mockReplRequest(replPairAsSlave, ReplType.hello, malformedHelloAddress)
         r = x.handleRepl(replRequest)
         then:
         r.isReplType(ReplType.error)

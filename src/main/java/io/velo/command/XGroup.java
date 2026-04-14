@@ -243,12 +243,10 @@ public class XGroup extends BaseCommand {
             case ping -> {
                 // server received ping from client
                 var netListenAddresses = Wal.keyString(contentBytes);
-                var array = netListenAddresses.split(":");
-                var host = array[0];
-                var port = Integer.parseInt(array[1]);
+                var hostAndPort = parseHostAndPort(netListenAddresses, "ping", slot);
 
                 if (replPair == null) {
-                    replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, host, port);
+                    replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, hostAndPort.host(), hostAndPort.port());
                     replPair.increaseStatsCountForReplType(ping);
                 }
 
@@ -354,13 +352,11 @@ public class XGroup extends BaseCommand {
             throw new IllegalArgumentException("Repl master handle error: hello payload has trailing bytes, slot=" + slot);
         }
 
-        var array = netListenAddresses.split(":");
-        var host = array[0];
-        var port = Integer.parseInt(array[1]);
+        var hostAndPort = parseHostAndPort(netListenAddresses, "hello", slot);
 
         var oneSlot = localPersist.oneSlot(slot);
         if (replPair == null) {
-            replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, host, port);
+            replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, hostAndPort.host(), hostAndPort.port());
             replPair.increaseStatsCountForReplType(hello);
         }
 
@@ -403,6 +399,29 @@ public class XGroup extends BaseCommand {
         requestBuffer.putLong(marginLastUpdatedOffset);
         requestBuffer.putLong(lastUpdatedOffset);
         return requestBytes;
+    }
+
+    private record HostAndPort(String host, int port) {
+    }
+
+    private static HostAndPort parseHostAndPort(String netListenAddresses, String replStep, short slot) {
+        var separatorIndex = netListenAddresses.indexOf(':');
+        if (separatorIndex <= 0 || separatorIndex != netListenAddresses.lastIndexOf(':')
+                || separatorIndex == netListenAddresses.length() - 1) {
+            throw new IllegalArgumentException("Repl master handle error: " + replStep + " address invalid=" + netListenAddresses + ", slot=" + slot);
+        }
+
+        var host = netListenAddresses.substring(0, separatorIndex);
+        var portString = netListenAddresses.substring(separatorIndex + 1);
+        try {
+            var port = Integer.parseInt(portString);
+            if (port <= 0 || port > 65535) {
+                throw new IllegalArgumentException("Repl master handle error: " + replStep + " address port invalid=" + port + ", slot=" + slot);
+            }
+            return new HostAndPort(host, port);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Repl master handle error: " + replStep + " address invalid=" + netListenAddresses + ", slot=" + slot, e);
+        }
     }
 
     private interface FillBytes {
