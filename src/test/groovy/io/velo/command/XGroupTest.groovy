@@ -2430,6 +2430,54 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test handle repl rejects malformed catch up binlog before state change'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def masterUuid = 100L
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        def replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
+
+        def replPairAsMaster = ReplPairTest.mockAsMaster(masterUuid)
+        replPairAsMaster.slaveUuid = oneSlot.masterUuid
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        and:
+        def invalidSegmentBytes = [(byte) 2] as byte[]
+
+        when:
+        def contentBytes = ByteBuffer.allocate(1 + 4 + 8 + 4 + 8 + 4 + invalidSegmentBytes.length)
+                .put((byte) 1)
+                .putInt(0)
+                .putLong(0L)
+                .putInt(0)
+                .putLong(invalidSegmentBytes.length)
+                .putInt(invalidSegmentBytes.length)
+                .put(invalidSegmentBytes)
+                .array()
+        ReplReply r = x.handleRepl(new ReplRequest(replPairAsMaster.slaveUuid, slot,
+                ReplType.s_catch_up, contentBytes, contentBytes.length))
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('decode and apply binlog error')
+        !replPairAsSlave.masterReadonly
+        !replPairAsSlave.allCaughtUp
+        replPairAsSlave.masterBinlogCurrentFileIndexAndOffset == null
+        replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset == null
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test handle repl rejects malformed big string payload before persisting entry'() {
         given:
         LocalPersistTest.prepareLocalPersist()

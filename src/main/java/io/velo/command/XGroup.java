@@ -1602,18 +1602,6 @@ public class XGroup extends BaseCommand {
             throw new IllegalArgumentException("Repl slave handle error: catch up payload has trailing bytes, slot=" + slot);
         }
 
-        replPair.setMasterReadonly(isMasterReadonly);
-        replPair.setAllCaughtUp(fetchedFileIndex == masterCurrentFileIndex && masterCurrentOffset == fetchedOffset + readSegmentLength);
-        replPair.setMasterBinlogCurrentFileIndexAndOffset(masterCurrentFo);
-
-        // only when self is as slave but also as master, need to write binlog
-        var binlog = oneSlot.getBinlog();
-        try {
-            binlog.writeFromMasterOneSegmentBytes(readSegmentBytes, fetchedFileIndex, fetchedOffset);
-        } catch (IOException e) {
-            log.error("Repl slave write binlog from master error, slot={}", slot, e);
-        }
-
         // update last catch up file index and offset
         var skipBytesN = 0;
         var isLastTimeCatchUpThisSegmentButNotCompleted = lastUpdatedFileIndex == fetchedFileIndex && lastUpdatedOffset > fetchedOffset;
@@ -1626,17 +1614,40 @@ public class XGroup extends BaseCommand {
                     " is greater than binlog one segment length=" + binlogOneSegmentLength + ", slot=" + slot);
         }
 
+        ArrayList<BinlogContent> decodedContents;
         try {
-            var n = Binlog.decodeAndApply(slot, readSegmentBytes, skipBytesN, replPair);
+            decodedContents = Binlog.decode(slot, readSegmentBytes, skipBytesN);
+        } catch (Exception e) {
+            var errorMessage = "Repl slave handle error: decode and apply binlog error, slot=" + slot;
+            log.error(errorMessage, e);
+            return Repl.error(slot, replPair, errorMessage + "=" + e.getMessage());
+        }
+
+        // only when self is as slave but also as master, need to write binlog
+        var binlog = oneSlot.getBinlog();
+        try {
+            binlog.writeFromMasterOneSegmentBytes(readSegmentBytes, fetchedFileIndex, fetchedOffset);
+        } catch (IOException e) {
+            log.error("Repl slave write binlog from master error, slot={}", slot, e);
+        }
+
+        try {
+            for (var content : decodedContents) {
+                content.apply(slot, replPair);
+            }
             if (fetchedOffset == 0 && catchUpLoopCount % 10 == 0) {
                 log.info("Repl binlog catch up success, slave uuid={}, {}, catch up file index={}, catch up offset={}, apply n={}, slot={}",
-                        replPair.getSlaveUuid(), replPair.getHostAndPort(), fetchedFileIndex, fetchedOffset, n, slot);
+                        replPair.getSlaveUuid(), replPair.getHostAndPort(), fetchedFileIndex, fetchedOffset, decodedContents.size(), slot);
             }
         } catch (Exception e) {
             var errorMessage = "Repl slave handle error: decode and apply binlog error, slot=" + slot;
             log.error(errorMessage, e);
             return Repl.error(slot, replPair, errorMessage + "=" + e.getMessage());
         }
+
+        replPair.setMasterReadonly(isMasterReadonly);
+        replPair.setAllCaughtUp(fetchedFileIndex == masterCurrentFileIndex && masterCurrentOffset == fetchedOffset + readSegmentLength);
+        replPair.setMasterBinlogCurrentFileIndexAndOffset(masterCurrentFo);
 
         // set can read if catch up to current file, and offset not too far
         var isCatchUpToCurrentFile = fetchedFileIndex == masterCurrentFileIndex;
