@@ -447,6 +447,14 @@ public class XGroup extends BaseCommand {
         }
     }
 
+    private static ConfForSlot.ReplProperties requireRemoteReplProperties(ReplPair replPair, String replStep, short slot) {
+        var remoteReplProperties = replPair.getRemoteReplProperties();
+        if (remoteReplProperties == null) {
+            throw new IllegalStateException("Repl slave handle error: remote repl properties missing before " + replStep + ", slot=" + slot);
+        }
+        return remoteReplProperties;
+    }
+
     private interface FillBytes {
         void fillBytes(ByteBuffer buffer);
     }
@@ -633,7 +641,7 @@ public class XGroup extends BaseCommand {
         // remote group index, ignore
         var walGroupIndex = buffer.getInt();
 
-        var remoteReplProperties = replPair.getRemoteReplProperties();
+        var remoteReplProperties = requireRemoteReplProperties(replPair, "wal", slot);
         var walGroupNumberRemote = remoteReplProperties.bucketsPerSlot() / remoteReplProperties.oneChargeBucketNumber();
         if (walGroupIndex < 0 || walGroupIndex >= walGroupNumberRemote) {
             throw new IllegalArgumentException("Repl slave handle error: wal group index invalid=" + walGroupIndex + ", slot=" + slot);
@@ -794,7 +802,7 @@ public class XGroup extends BaseCommand {
             throw new IllegalArgumentException("Repl slave handle error: chunk segments payload length invalid, slot=" + slot);
         }
 
-        var remoteReplProperties = replPair.getRemoteReplProperties();
+        var remoteReplProperties = requireRemoteReplProperties(replPair, "chunk segments", slot);
         var maxSegmentNumber = remoteReplProperties.segmentNumberPerFd() * remoteReplProperties.fdPerChunk();
         if (beginSegmentIndex < 0 || beginSegmentIndex >= maxSegmentNumber) {
             throw new IllegalArgumentException("Repl slave handle error: chunk segments begin index invalid=" + beginSegmentIndex + ", slot=" + slot);
@@ -1035,7 +1043,7 @@ public class XGroup extends BaseCommand {
         }
         var isSendAllOnce = isSendAllOnceFlag == 1;
 
-        var remoteReplProperties = replPair.getRemoteReplProperties();
+        var remoteReplProperties = requireRemoteReplProperties(replPair, "big string", slot);
         var bucketsPerSlotRemote = remoteReplProperties.bucketsPerSlot();
         if (bucketIndex < 0 || bucketIndex >= bucketsPerSlotRemote) {
             throw new IllegalArgumentException("Repl slave handle error: big string bucket index invalid=" + bucketIndex + ", slot=" + slot);
@@ -1170,7 +1178,7 @@ public class XGroup extends BaseCommand {
         // remote
         var walGroupIndex = slice.readInt();
 
-        var remoteReplProperties = replPair.getRemoteReplProperties();
+        var remoteReplProperties = requireRemoteReplProperties(replPair, "short string", slot);
         var walGroupNumberRemote = remoteReplProperties.bucketsPerSlot() / remoteReplProperties.oneChargeBucketNumber();
         if (walGroupIndex < 0 || walGroupIndex >= walGroupNumberRemote) {
             throw new IllegalArgumentException("Repl slave handle error: short string wal group index invalid=" + walGroupIndex + ", slot=" + slot);

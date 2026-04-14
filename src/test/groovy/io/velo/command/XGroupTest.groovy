@@ -34,6 +34,10 @@ class XGroupTest extends Specification {
         Repl.decode(nettyBuf)
     }
 
+    private static String errorMessage(ReplReply reply) {
+        Wal.keyString(mockReplRequest(reply).data)
+    }
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -1804,6 +1808,7 @@ class XGroupTest extends Specification {
         ReplReply r = x.handleRepl(replRequest)
         then:
         r.isReplType(ReplType.error)
+        errorMessage(r).contains('remote repl properties missing before short string')
 
         cleanup:
         localPersist.cleanUp()
@@ -1902,6 +1907,116 @@ class XGroupTest extends Specification {
         ReplReply r = x.handleRepl(replRequest)
         then:
         r.isReplType(ReplType.error)
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test handle repl rejects exists wal before remote repl properties ready'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
+        and:
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+
+        def contentBytes = ByteBuffer.allocate(4)
+                .putInt(0)
+                .array()
+        def replRequest = new ReplRequest(oneSlot.masterUuid, slot, ReplType.s_exists_wal, contentBytes, contentBytes.length)
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        when:
+        ReplReply r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('remote repl properties missing before wal')
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test handle repl rejects chunk segments before remote repl properties ready'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
+        and:
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+
+        def contentBytes = ByteBuffer.allocate(16)
+                .putInt(0)
+                .putInt(0)
+                .putInt(ConfForSlot.global.confChunk.onceReadSegmentCountWhenRepl)
+                .putInt(ConfForSlot.global.confChunk.segmentLength)
+                .array()
+        def replRequest = new ReplRequest(oneSlot.masterUuid, slot, ReplType.s_exists_chunk_segments, contentBytes, contentBytes.length)
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        when:
+        ReplReply r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('remote repl properties missing before chunk segments')
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test handle repl rejects exists big string before remote repl properties ready'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
+        and:
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+
+        def contentBytes = ByteBuffer.allocate(9)
+                .putInt(0)
+                .putInt(0)
+                .put((byte) 1)
+                .array()
+        def replRequest = new ReplRequest(oneSlot.masterUuid, slot, ReplType.s_exists_big_string, contentBytes, contentBytes.length)
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        when:
+        ReplReply r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('remote repl properties missing before big string')
 
         cleanup:
         localPersist.cleanUp()
