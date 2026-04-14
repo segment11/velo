@@ -348,6 +348,7 @@ public class XGroup extends BaseCommand {
         }
         var replProperties = new ConfForSlot.ReplProperties(bucketsPerSlot, oneChargeBucketNumber,
                 segmentLength, segmentIndexHalf, segmentNumberPerFd, segmentUseCompressionFlag == 1);
+        validateReplProperties("hello", slot, replProperties);
         if (buffer.hasRemaining()) {
             throw new IllegalArgumentException("Repl master handle error: hello payload has trailing bytes, slot=" + slot);
         }
@@ -424,6 +425,25 @@ public class XGroup extends BaseCommand {
         }
     }
 
+    private static void validateReplProperties(String replStep, short slot, ConfForSlot.ReplProperties replProperties) {
+        if (replProperties.bucketsPerSlot() <= 0) {
+            throw new IllegalArgumentException("Repl " + replStep + " handle error: buckets per slot invalid=" + replProperties.bucketsPerSlot() + ", slot=" + slot);
+        }
+        if (replProperties.oneChargeBucketNumber() <= 0
+                || replProperties.bucketsPerSlot() % replProperties.oneChargeBucketNumber() != 0) {
+            throw new IllegalArgumentException("Repl " + replStep + " handle error: one charge bucket number invalid=" + replProperties.oneChargeBucketNumber() + ", slot=" + slot);
+        }
+        if (replProperties.segmentNumberPerFd() <= 0) {
+            throw new IllegalArgumentException("Repl " + replStep + " handle error: segment number per fd invalid=" + replProperties.segmentNumberPerFd() + ", slot=" + slot);
+        }
+        if (replProperties.fdPerChunk() <= 0) {
+            throw new IllegalArgumentException("Repl " + replStep + " handle error: fd per chunk invalid=" + replProperties.fdPerChunk() + ", slot=" + slot);
+        }
+        if (replProperties.segmentLength() <= 0) {
+            throw new IllegalArgumentException("Repl " + replStep + " handle error: segment length invalid=" + replProperties.segmentLength() + ", slot=" + slot);
+        }
+    }
+
     private interface FillBytes {
         void fillBytes(ByteBuffer buffer);
     }
@@ -463,6 +483,7 @@ public class XGroup extends BaseCommand {
         }
         var replProperties = new ConfForSlot.ReplProperties(bucketsPerSlot, oneChargeBucketNumber,
                 segmentLength, segmentIndexHalf, segmentNumberPerFd, segmentUseCompressionFlag == 1);
+        validateReplProperties("slave hi", slot, replProperties);
         if (buffer.hasRemaining()) {
             throw new IllegalArgumentException("Repl slave handle error: hi payload has trailing bytes, slot=" + slot);
         }

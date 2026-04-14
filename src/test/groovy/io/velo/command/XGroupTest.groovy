@@ -374,6 +374,13 @@ class XGroupTest extends Specification {
 
         when:
         replRequest = mockReplRequest(replPairAsSlave, ReplType.hello, hello)
+        ByteBuffer.wrap(replRequest.data).putInt(8 + 4 + '测试:6380'.getBytes('UTF-8').length + 2 + 4, 0)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        replRequest = mockReplRequest(replPairAsSlave, ReplType.hello, hello)
         replRequest.data[replRequest.data.length - 1] = (byte) 2
         r = x.handleRepl(replRequest)
         then:
@@ -844,8 +851,22 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.exists_dict)
 
         when:
+        hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
+                new Binlog.FileIndexAndOffset(1, 1L),
+                new Binlog.FileIndexAndOffset(0, 0L), 0)
+        replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
+        ByteBuffer.wrap(replRequest.data).putInt(46 + 4, 0)
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         // already fetch all exists data, just catch up binlog
         // from beginning
+        hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
+                new Binlog.FileIndexAndOffset(1, 1L),
+                new Binlog.FileIndexAndOffset(0, 0L), 0)
+        replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
         metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
         r = x.handleRepl(replRequest)
         then:
