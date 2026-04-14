@@ -2197,6 +2197,65 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test handle repl rejects malformed master catch up positions'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def slaveUuid = 55L
+        oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, 'localhost', 6380)
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        when:
+        def negativeFileIndexBytes = ByteBuffer.allocate(8 + 4 + 8 + 8)
+                .putLong(oneSlot.masterUuid)
+                .putInt(-1)
+                .putLong(0L)
+                .putLong(0L)
+                .array()
+        ReplReply r = x.handleRepl(new ReplRequest(slaveUuid, slot, ReplType.catch_up,
+                negativeFileIndexBytes, negativeFileIndexBytes.length))
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('catch up need fetch file index invalid')
+
+        when:
+        def negativeNeedFetchOffsetBytes = ByteBuffer.allocate(8 + 4 + 8 + 8)
+                .putLong(oneSlot.masterUuid)
+                .putInt(0)
+                .putLong(-ConfForSlot.global.confRepl.binlogOneSegmentLength)
+                .putLong(0L)
+                .array()
+        r = x.handleRepl(new ReplRequest(slaveUuid, slot, ReplType.catch_up,
+                negativeNeedFetchOffsetBytes, negativeNeedFetchOffsetBytes.length))
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('catch up need fetch offset invalid')
+
+        when:
+        def negativeLastUpdatedOffsetBytes = ByteBuffer.allocate(8 + 4 + 8 + 8)
+                .putLong(oneSlot.masterUuid)
+                .putInt(0)
+                .putLong(0L)
+                .putLong(-1L)
+                .array()
+        r = x.handleRepl(new ReplRequest(slaveUuid, slot, ReplType.catch_up,
+                negativeLastUpdatedOffsetBytes, negativeLastUpdatedOffsetBytes.length))
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('catch up last updated offset invalid')
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test try catch up again after slave tcp client closed'() {
         given:
         def replPair = ReplPairTest.mockAsSlave()

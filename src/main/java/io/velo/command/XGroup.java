@@ -1373,6 +1373,15 @@ public class XGroup extends BaseCommand {
         if (buffer.hasRemaining()) {
             throw new IllegalArgumentException("Repl master handle error: catch up payload has trailing bytes, slot=" + slot);
         }
+        if (needFetchFileIndex < 0) {
+            throw new IllegalArgumentException("Repl master handle error: catch up need fetch file index invalid=" + needFetchFileIndex + ", slot=" + slot);
+        }
+        if (needFetchOffset < 0) {
+            throw new IllegalArgumentException("Repl master handle error: catch up need fetch offset invalid=" + needFetchOffset + ", slot=" + slot);
+        }
+        if (lastUpdatedOffset < 0) {
+            throw new IllegalArgumentException("Repl master handle error: catch up last updated offset invalid=" + lastUpdatedOffset + ", slot=" + slot);
+        }
 
         if (needFetchOffset == 0) {
             log.debug("Repl master handle catch up from new binlog file, slot={}, slave uuid={}, {}, need fetch file index={}, offset={}",
