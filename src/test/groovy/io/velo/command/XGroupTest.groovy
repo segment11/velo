@@ -2382,6 +2382,54 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test handle repl rejects malformed big string payload before persisting entry'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def masterUuid = 111L
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.onlyOneReplPairAsSlave.setRemoteReplProperties(ConfForSlot.global.generateReplProperties())
+        def replPairAsMaster = ReplPairTest.mockAsMaster(masterUuid)
+        replPairAsMaster.slaveUuid = oneSlot.masterUuid
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        and:
+        def bigStringSlot = x.findKeyMustInSlot(slot, 'exists-big-string')
+        def bigStringUuid = 123L
+        def bigStringBytes = new byte[32]
+        def sSet = x.findKeyMustInSlot(slot, 'exists_big_string_uuids_bucket_index_' + bigStringSlot.bucketIndex())
+
+        when:
+        def contentBytes = ByteBuffer.allocate(4 + 4 + 1 + 8 + 8 + 4 + bigStringBytes.length + 1)
+                .putInt(bigStringSlot.bucketIndex())
+                .putInt(1)
+                .put((byte) 1)
+                .putLong(bigStringUuid)
+                .putLong(bigStringSlot.keyHash())
+                .putInt(bigStringBytes.length)
+                .put(bigStringBytes)
+                .put((byte) 7)
+                .array()
+        ReplReply r = x.handleRepl(new ReplRequest(replPairAsMaster.slaveUuid, slot,
+                ReplType.s_exists_big_string, contentBytes, contentBytes.length))
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('big string payload has trailing bytes')
+        oneSlot.bigStringFiles.getBigStringFileIdList(bigStringSlot.bucketIndex()).find { it.uuid() == bigStringUuid } == null
+        SGroup.getRedisSet(sSet, x) == null
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test try catch up again after slave tcp client closed'() {
         given:
         def replPair = ReplPairTest.mockAsSlave()

@@ -1085,13 +1085,21 @@ public class XGroup extends BaseCommand {
             log.warn("Repl slave fetch exists big string, master sent big string count={}, bucket index={}, slot={}", bigStringCount, bucketIndex, slot);
         }
 
+        record BigStringEntry(long uuid, short slotInner, int bucketIndexInner, long keyHash, int offset, int length) {
+        }
+
+        ArrayList<BigStringEntry> entries = null;
+        RedisHashKeys rhk = null;
+        SlotWithKeyHash sSet = null;
+        OneSlot firstOneSlot = null;
         if (bigStringCount > 0) {
-            var firstOneSlot = localPersist.currentThreadFirstOneSlot();
-            final var sSet = findKeyMustInSlot(firstOneSlot.slot(), "exists_big_string_uuids_bucket_index_" + bucketIndex);
-            var rhk = SGroup.getRedisSet(sSet, this);
+            firstOneSlot = localPersist.currentThreadFirstOneSlot();
+            sSet = findKeyMustInSlot(firstOneSlot.slot(), "exists_big_string_uuids_bucket_index_" + bucketIndex);
+            rhk = SGroup.getRedisSet(sSet, this);
             if (rhk == null) {
                 rhk = new RedisHashKeys();
             }
+            entries = new ArrayList<>(bigStringCount);
 
             for (int i = 0; i < bigStringCount; i++) {
                 if (buffer.remaining() < 8 + 8 + 4) {
@@ -1108,23 +1116,32 @@ public class XGroup extends BaseCommand {
 
                 var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
                 var bucketIndexInner = KeyHash.bucketIndex(keyHash);
-                var oneSlot = localPersist.oneSlot(slotInner);
-                oneSlot.asyncExecute(() -> {
-                    oneSlot.getBigStringFiles().writeBigStringBytes(uuid, bucketIndexInner, keyHash, contentBytes, offset, bigStringBytesLength);
-                });
+                entries.add(new BigStringEntry(uuid, slotInner, bucketIndexInner, keyHash, offset, bigStringBytesLength));
                 buffer.position(offset + bigStringBytesLength);
 
                 rhk.add(uuid + "_" + keyHash);
             }
-
-            RedisHashKeys finalRhk = rhk;
-            firstOneSlot.asyncExecute(() -> {
-                SGroup.saveRedisSet(finalRhk, sSet, this, dictMap);
-            });
         }
 
         if (buffer.hasRemaining()) {
             throw new IllegalArgumentException("Repl slave handle error: big string payload has trailing bytes, slot=" + slot);
+        }
+
+        if (entries != null) {
+            for (var entry : entries) {
+                var oneSlot = localPersist.oneSlot(entry.slotInner());
+                oneSlot.asyncExecute(() -> {
+                    oneSlot.getBigStringFiles().writeBigStringBytes(entry.uuid(), entry.bucketIndexInner(),
+                            entry.keyHash(), contentBytes, entry.offset(), entry.length());
+                });
+            }
+
+            RedisHashKeys finalRhk = rhk;
+            SlotWithKeyHash finalSSet = sSet;
+            OneSlot finalFirstOneSlot = firstOneSlot;
+            finalFirstOneSlot.asyncExecute(() -> {
+                SGroup.saveRedisSet(finalRhk, finalSSet, this, dictMap);
+            });
         }
 
         if (isSendAllOnce) {
