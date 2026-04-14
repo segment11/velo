@@ -455,6 +455,17 @@ public class XGroup extends BaseCommand {
         return remoteReplProperties;
     }
 
+    private static void validateCatchUpPosition(int fileIndex, long offset, String positionName, short slot) {
+        if (fileIndex < 0) {
+            throw new IllegalArgumentException("Repl slave handle error: catch up " + positionName +
+                    " file index invalid=" + fileIndex + ", slot=" + slot);
+        }
+        if (offset < 0) {
+            throw new IllegalArgumentException("Repl slave handle error: catch up " + positionName +
+                    " offset invalid=" + offset + ", slot=" + slot);
+        }
+    }
+
     private interface FillBytes {
         void fillBytes(ByteBuffer buffer);
     }
@@ -1492,6 +1503,7 @@ public class XGroup extends BaseCommand {
                 isMasterReadonly = masterReadonlyFlag == 1;
                 var masterCurrentFileIndex = buffer.getInt();
                 var masterCurrentOffset = buffer.getLong();
+                validateCatchUpPosition(masterCurrentFileIndex, masterCurrentOffset, "current", slot);
 
                 replPair.setMasterReadonly(isMasterReadonly);
                 replPair.setAllCaughtUp(true);
@@ -1522,9 +1534,11 @@ public class XGroup extends BaseCommand {
         var isMasterReadonly = masterReadonlyFlag == 1;
         var fetchedFileIndex = buffer.getInt();
         var fetchedOffset = buffer.getLong();
+        validateCatchUpPosition(fetchedFileIndex, fetchedOffset, "fetched", slot);
 
         var masterCurrentFileIndex = buffer.getInt();
         var masterCurrentOffset = buffer.getLong();
+        validateCatchUpPosition(masterCurrentFileIndex, masterCurrentOffset, "current", slot);
         var masterCurrentFo = new Binlog.FileIndexAndOffset(masterCurrentFileIndex, masterCurrentOffset);
 
         var readSegmentLength = buffer.getInt();
