@@ -2061,6 +2061,58 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test handle repl rejects malformed incremental big string payload'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def masterUuid = 33L
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        def replPairAsMaster = ReplPairTest.mockAsMaster(masterUuid)
+        replPairAsMaster.slaveUuid = oneSlot.masterUuid
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        when:
+        def tooShortBytes = new byte[8 + 4 - 1]
+        ReplReply r = x.handleRepl(new ReplRequest(replPairAsMaster.slaveUuid, slot,
+                ReplType.s_incremental_big_string, tooShortBytes, tooShortBytes.length))
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('incremental big string payload too short')
+
+        when:
+        def invalidKeyLengthBytes = ByteBuffer.allocate(8 + 4)
+                .putLong(1L)
+                .putInt(1)
+                .array()
+        r = x.handleRepl(new ReplRequest(replPairAsMaster.slaveUuid, slot,
+                ReplType.s_incremental_big_string, invalidKeyLengthBytes, invalidKeyLengthBytes.length))
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('incremental big string key length invalid')
+
+        when:
+        def negativeKeyLengthBytes = ByteBuffer.allocate(8 + 4)
+                .putLong(1L)
+                .putInt(-1)
+                .array()
+        r = x.handleRepl(new ReplRequest(replPairAsMaster.slaveUuid, slot,
+                ReplType.s_incremental_big_string, negativeKeyLengthBytes, negativeKeyLengthBytes.length))
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('incremental big string key length invalid')
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test try catch up again after slave tcp client closed'() {
         given:
         def replPair = ReplPairTest.mockAsSlave()

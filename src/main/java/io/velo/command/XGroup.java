@@ -957,8 +957,14 @@ public class XGroup extends BaseCommand {
     private Repl.ReplReply s_incremental_big_string(short slot, byte[] contentBytes) {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
+        if (buffer.remaining() < 8 + 4) {
+            throw new IllegalArgumentException("Repl slave handle error: incremental big string payload too short, slot=" + slot);
+        }
         var uuid = buffer.getLong();
         var kenLength = buffer.getInt();
+        if (kenLength < 0 || kenLength > buffer.remaining()) {
+            throw new IllegalArgumentException("Repl slave handle error: incremental big string key length invalid=" + kenLength + ", slot=" + slot);
+        }
         var keyBytes = new byte[kenLength];
         buffer.get(keyBytes);
         var key = Wal.keyString(keyBytes);
