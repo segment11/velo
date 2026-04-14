@@ -743,6 +743,9 @@ public class XGroup extends BaseCommand {
         if (segmentBatchCount <= 0) {
             throw new IllegalArgumentException("Repl slave handle error: chunk segments batch count invalid=" + segmentBatchCount + ", slot=" + slot);
         }
+        if (segmentCount > segmentBatchCount) {
+            throw new IllegalArgumentException("Repl slave handle error: chunk segments count exceeds batch count, slot=" + slot);
+        }
         long expectedLength = 16L + (long) segmentCount * segmentLength;
         if (contentBytes.length != expectedLength) {
             throw new IllegalArgumentException("Repl slave handle error: chunk segments payload length invalid, slot=" + slot);
