@@ -281,6 +281,7 @@ public class XGroup extends BaseCommand {
             case bye -> {
                 // server received bye from client
                 var netListenAddresses = Wal.keyString(contentBytes);
+                parseHostAndPort(netListenAddresses, "Repl master handle error: bye address", slot);
                 log.warn("Repl master handle bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
 
                 if (replPair == null) {
@@ -293,6 +294,7 @@ public class XGroup extends BaseCommand {
             case byeBye -> {
                 // client received bye from server
                 var netListenAddresses = Wal.keyString(contentBytes);
+                parseHostAndPort(netListenAddresses, "Repl slave handle error: bye bye address", slot);
                 log.warn("Repl slave handle bye bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
 
                 oneSlot.addDelayNeedCloseReplPair(replPair);

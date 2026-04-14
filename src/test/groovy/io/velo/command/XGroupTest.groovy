@@ -402,6 +402,12 @@ class XGroupTest extends Specification {
 
         // bye
         when:
+        replRequest = mockReplRequest(replPairAsSlave, ReplType.bye, new Ping('localhost:6379:extra'))
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         replRequest = mockReplRequest(replPairAsSlave, ReplType.bye, ping)
         r = x.handleRepl(replRequest)
         then:
@@ -1755,6 +1761,12 @@ class XGroupTest extends Specification {
         r = x.handleRepl(replRequest)
         then:
         r.isEmpty()
+
+        when:
+        replRequest = mockReplRequest(replPairAsMaster, ReplType.byeBye, new Pong('localhost:6379:extra'))
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
 
         cleanup:
         ConfForSlot.global.confRepl.catchUpOffsetMinDiff = 1024 * 1024
