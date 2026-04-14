@@ -1559,6 +1559,11 @@ public class XGroup extends BaseCommand {
         var fetchedFileIndex = buffer.getInt();
         var fetchedOffset = buffer.getLong();
         validateCatchUpPosition(fetchedFileIndex, fetchedOffset, "fetched", slot);
+        var binlogOneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
+        if (fetchedOffset % binlogOneSegmentLength != 0) {
+            throw new IllegalArgumentException("Repl slave handle error: catch up fetched offset invalid=" + fetchedOffset +
+                    ", binlog one segment length=" + binlogOneSegmentLength + ", slot=" + slot);
+        }
 
         var masterCurrentFileIndex = buffer.getInt();
         var masterCurrentOffset = buffer.getLong();
@@ -1594,7 +1599,6 @@ public class XGroup extends BaseCommand {
             skipBytesN = (int) (lastUpdatedOffset - fetchedOffset);
         }
 
-        var binlogOneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
         if (skipBytesN > binlogOneSegmentLength) {
             throw new IllegalStateException("Repl slave handle error: skip bytes n=" + skipBytesN +
                     " is greater than binlog one segment length=" + binlogOneSegmentLength + ", slot=" + slot);

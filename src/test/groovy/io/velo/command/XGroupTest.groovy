@@ -2333,6 +2333,55 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test handle repl rejects unaligned slave catch up offset before state change'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def masterUuid = 99L
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        def replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
+
+        def replPairAsMaster = ReplPairTest.mockAsMaster(masterUuid)
+        replPairAsMaster.slaveUuid = oneSlot.masterUuid
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        and:
+        def v = Mock.prepareValueList(1).first()
+        def segmentBytes = new XWalV(v).encodeWithType()
+        def unalignedOffset = 1L
+
+        when:
+        def contentBytes = ByteBuffer.allocate(1 + 4 + 8 + 4 + 8 + 4 + segmentBytes.length)
+                .put((byte) 0)
+                .putInt(0)
+                .putLong(unalignedOffset)
+                .putInt(0)
+                .putLong(unalignedOffset + segmentBytes.length)
+                .putInt(segmentBytes.length)
+                .put(segmentBytes)
+                .array()
+        ReplReply r = x.handleRepl(new ReplRequest(replPairAsMaster.slaveUuid, slot,
+                ReplType.s_catch_up, contentBytes, contentBytes.length))
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('catch up fetched offset invalid')
+        !replPairAsSlave.allCaughtUp
+        replPairAsSlave.masterBinlogCurrentFileIndexAndOffset == null
+        replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset == null
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test try catch up again after slave tcp client closed'() {
         given:
         def replPair = ReplPairTest.mockAsSlave()
