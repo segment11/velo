@@ -823,6 +823,12 @@ class XGroupTest extends Specification {
         r.isEmpty()
 
         when:
+        replRequest = mockReplRequest(replPairAsMaster, ReplType.pong, new Pong('localhost:6379:extra'))
+        r = x.handleRepl(replRequest)
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
         // error
         replRequest = mockReplRequest(Repl.error(slot, replPairAsMaster, 'error'))
         r = x.handleRepl(replRequest)
@@ -1721,9 +1727,7 @@ class XGroupTest extends Specification {
 
         when:
         // pong, trigger catch up
-        replRequest.type = ReplType.pong
-        contentBytes = new byte[0]
-        replRequest.data = contentBytes
+        replRequest = mockReplRequest(replPairAsMaster, ReplType.pong, pong)
         metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, false, 0, 0L)
         r = x.handleRepl(replRequest)
         then:
