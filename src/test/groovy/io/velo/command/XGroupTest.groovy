@@ -2520,6 +2520,48 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test hi skips exists fetch when last updated file is newer than earliest file'() {
+        given:
+        ConfForGlobal.netListenAddresses = 'localhost:6380'
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
+        and:
+        final long masterUuid = 10L
+        def replPairAsMaster = ReplPairTest.mockAsMaster(masterUuid)
+        replPairAsMaster.slaveUuid = oneSlot.masterUuid
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        and:
+        def metaChunkSegmentIndex = oneSlot.metaChunkSegmentIndex
+        metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 1, 0L)
+
+        when:
+        def hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
+                new Binlog.FileIndexAndOffset(1, 200L),
+                new Binlog.FileIndexAndOffset(0, 100L), 0)
+        ReplReply r = x.handleRepl(mockReplRequest(replPairAsMaster, ReplType.hi, hi))
+
+        then:
+        r.isReplType(ReplType.catch_up)
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test handle repl rejects malformed big string payload before persisting entry'() {
         given:
         LocalPersistTest.prepareLocalPersist()

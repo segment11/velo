@@ -466,6 +466,10 @@ public class XGroup extends BaseCommand {
         }
     }
 
+    private static boolean isFileIndexAndOffsetAtOrAfter(int fileIndex, long offset, int targetFileIndex, long targetOffset) {
+        return fileIndex > targetFileIndex || (fileIndex == targetFileIndex && offset >= targetOffset);
+    }
+
     private interface FillBytes {
         void fillBytes(ByteBuffer buffer);
     }
@@ -555,7 +559,7 @@ public class XGroup extends BaseCommand {
             var lastUpdatedFileIndex = lastUpdatedFileIndexAndOffset.fileIndex();
             var lastUpdatedOffset = lastUpdatedFileIndexAndOffset.offset();
 
-            if (lastUpdatedFileIndex >= earliestFileIndex && lastUpdatedOffset >= earliestOffset) {
+            if (isFileIndexAndOffsetAtOrAfter(lastUpdatedFileIndex, lastUpdatedOffset, earliestFileIndex, earliestOffset)) {
                 // need not fetch exists data from master
                 // start fetch incremental data from master binlog
                 log.warn("Repl slave skip fetch exists data and start catch up from master binlog, " +
