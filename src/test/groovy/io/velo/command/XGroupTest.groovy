@@ -2478,6 +2478,48 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test hello hi reply uses binlog offset after skip apply append'() {
+        given:
+        ConfForGlobal.netListenAddresses = 'localhost:6379'
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
+        and:
+        final long slaveUuid = 1L
+        def replPairAsSlave = ReplPairTest.mockAsSlave(0L, slaveUuid)
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+
+        when:
+        def ping = new Ping('localhost:6380')
+        x.handleRepl(mockReplRequest(replPairAsSlave, ReplType.ping, ping))
+        ReplReply r = x.handleRepl(mockReplRequest(replPairAsSlave, ReplType.hello, new Hello(slaveUuid, 'localhost:6380')))
+        def hiRequest = mockReplRequest(r)
+        def hiBuffer = ByteBuffer.wrap(hiRequest.data)
+        hiBuffer.getLong()
+        hiBuffer.getLong()
+        hiBuffer.getInt()
+        def currentOffset = hiBuffer.getLong()
+        def currentFo = oneSlot.binlog.currentFileIndexAndOffset()
+
+        then:
+        r.isReplType(ReplType.hi)
+        currentOffset == currentFo.offset()
+        currentOffset > 0
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test handle repl rejects malformed big string payload before persisting entry'() {
         given:
         LocalPersistTest.prepareLocalPersist()
