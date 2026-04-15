@@ -727,14 +727,11 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     /**
      * Decode from one segment bytes and apply to slave repl pair
      *
-     * @param slot            the replication slot to which this content is applied
      * @param oneSegmentBytes the one segment bytes
      * @param skipBytesN      the skip bytes number
-     * @param replPair        the repl pair associated with this replication session
-     * @return the number of decoded content
+     * @return the list of decoded content
      */
-    public static ArrayList<BinlogContent> decode(short slot,
-                                                  byte[] oneSegmentBytes,
+    public static ArrayList<BinlogContent> decode(byte[] oneSegmentBytes,
                                                   int skipBytesN) {
         var byteBuffer = ByteBuffer.wrap(oneSegmentBytes);
         byteBuffer.position(skipBytesN);
@@ -761,7 +758,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
                                      byte[] oneSegmentBytes,
                                      int skipBytesN,
                                      @NotNull ReplPair replPair) {
-        var contents = decode(slot, oneSegmentBytes, skipBytesN);
+        var contents = decode(oneSegmentBytes, skipBytesN);
         for (var content : contents) {
             content.apply(slot, replPair);
         }

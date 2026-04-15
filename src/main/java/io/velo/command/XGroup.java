@@ -1620,7 +1620,7 @@ public class XGroup extends BaseCommand {
 
         ArrayList<BinlogContent> decodedContents;
         try {
-            decodedContents = Binlog.decode(slot, readSegmentBytes, skipBytesN);
+            decodedContents = Binlog.decode(readSegmentBytes, skipBytesN);
         } catch (Exception e) {
             var errorMessage = "Repl slave handle error: decode and apply binlog error, slot=" + slot;
             log.error(errorMessage, e);
