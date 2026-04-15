@@ -267,4 +267,24 @@ class ReplPairTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test parse host and port rejects empty host and invalid port range'() {
+        when:
+        ReplPair.parseHostAndPort(':6379')
+
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        ReplPair.parseHostAndPort('localhost:0')
+
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        ReplPair.parseHostAndPort('localhost:65536')
+
+        then:
+        thrown(IllegalArgumentException)
+    }
 }

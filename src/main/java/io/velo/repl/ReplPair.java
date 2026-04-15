@@ -106,11 +106,18 @@ public class ReplPair {
             return null;
         }
 
-        var parts = hostAndPort.split(":");
-        if (parts.length != 2) {
+        var separatorIndex = hostAndPort.indexOf(':');
+        if (separatorIndex <= 0 || separatorIndex != hostAndPort.lastIndexOf(':')
+                || separatorIndex == hostAndPort.length() - 1) {
             throw new IllegalArgumentException("Invalid host:port format: " + hostAndPort);
         }
-        return new HostAndPort(parts[0], Integer.parseInt(parts[1]));
+
+        var host = hostAndPort.substring(0, separatorIndex);
+        var port = Integer.parseInt(hostAndPort.substring(separatorIndex + 1));
+        if (port <= 0 || port > 65535) {
+            throw new IllegalArgumentException("Invalid host:port format: " + hostAndPort);
+        }
+        return new HostAndPort(host, port);
     }
 
     @Override
