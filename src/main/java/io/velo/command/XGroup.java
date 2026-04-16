@@ -243,7 +243,7 @@ public class XGroup extends BaseCommand {
             case ping -> {
                 // server received ping from client
                 var netListenAddresses = Wal.keyString(contentBytes);
-                var hostAndPort = parseHostAndPort(netListenAddresses, "Repl master handle error: ping address", slot);
+                var hostAndPort = ReplPair.parseHostAndPort(netListenAddresses);
 
                 if (replPair == null) {
                     replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, hostAndPort.host(), hostAndPort.port());
@@ -256,7 +256,7 @@ public class XGroup extends BaseCommand {
             case pong -> {
                 // client received pong from server
                 assert replPair != null;
-                parseHostAndPort(Wal.keyString(contentBytes), "Repl slave handle error: pong address", slot);
+                ReplPair.parseHostAndPort(Wal.keyString(contentBytes));
                 replPair.setLastPongGetTimestamp(System.currentTimeMillis());
 
                 var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();
@@ -281,7 +281,7 @@ public class XGroup extends BaseCommand {
             case bye -> {
                 // server received bye from client
                 var netListenAddresses = Wal.keyString(contentBytes);
-                parseHostAndPort(netListenAddresses, "Repl master handle error: bye address", slot);
+                ReplPair.parseHostAndPort(netListenAddresses);
                 log.warn("Repl master handle bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
 
                 if (replPair == null) {
@@ -294,7 +294,7 @@ public class XGroup extends BaseCommand {
             case byeBye -> {
                 // client received bye from server
                 var netListenAddresses = Wal.keyString(contentBytes);
-                parseHostAndPort(netListenAddresses, "Repl slave handle error: bye bye address", slot);
+                ReplPair.parseHostAndPort(netListenAddresses);
                 log.warn("Repl slave handle bye bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
 
                 oneSlot.addDelayNeedCloseReplPair(replPair);
@@ -356,7 +356,7 @@ public class XGroup extends BaseCommand {
             throw new IllegalArgumentException("Repl master handle error: hello payload has trailing bytes, slot=" + slot);
         }
 
-        var hostAndPort = parseHostAndPort(netListenAddresses, "Repl master handle error: hello address", slot);
+        var hostAndPort = ReplPair.parseHostAndPort(netListenAddresses);
 
         var oneSlot = localPersist.oneSlot(slot);
         if (replPair == null) {
@@ -403,29 +403,6 @@ public class XGroup extends BaseCommand {
         requestBuffer.putLong(marginLastUpdatedOffset);
         requestBuffer.putLong(lastUpdatedOffset);
         return requestBytes;
-    }
-
-    private record HostAndPort(String host, int port) {
-    }
-
-    private static HostAndPort parseHostAndPort(String netListenAddresses, String errorPrefix, short slot) {
-        var separatorIndex = netListenAddresses.indexOf(':');
-        if (separatorIndex <= 0 || separatorIndex != netListenAddresses.lastIndexOf(':')
-                || separatorIndex == netListenAddresses.length() - 1) {
-            throw new IllegalArgumentException(errorPrefix + " invalid=" + netListenAddresses + ", slot=" + slot);
-        }
-
-        var host = netListenAddresses.substring(0, separatorIndex);
-        var portString = netListenAddresses.substring(separatorIndex + 1);
-        try {
-            var port = Integer.parseInt(portString);
-            if (port <= 0 || port > 65535) {
-                throw new IllegalArgumentException(errorPrefix + " port invalid=" + port + ", slot=" + slot);
-            }
-            return new HostAndPort(host, port);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(errorPrefix + " invalid=" + netListenAddresses + ", slot=" + slot, e);
-        }
     }
 
     private static void validateReplProperties(String replStep, short slot, ConfForSlot.ReplProperties replProperties) {

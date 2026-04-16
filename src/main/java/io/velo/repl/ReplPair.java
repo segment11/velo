@@ -113,11 +113,15 @@ public class ReplPair {
         }
 
         var host = hostAndPort.substring(0, separatorIndex);
-        var port = Integer.parseInt(hostAndPort.substring(separatorIndex + 1));
-        if (port <= 0 || port > 65535) {
-            throw new IllegalArgumentException("Invalid host:port format: " + hostAndPort);
+        try {
+            var port = Integer.parseInt(hostAndPort.substring(separatorIndex + 1));
+            if (port <= 0 || port > 65535) {
+                throw new IllegalArgumentException("Invalid host:port format: " + hostAndPort);
+            }
+            return new HostAndPort(host, port);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid host:port format: " + hostAndPort, e);
         }
-        return new HostAndPort(host, port);
     }
 
     @Override

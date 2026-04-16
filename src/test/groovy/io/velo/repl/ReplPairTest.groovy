@@ -286,5 +286,12 @@ class ReplPairTest extends Specification {
 
         then:
         thrown(IllegalArgumentException)
+
+        when:
+        ReplPair.parseHostAndPort('localhost:abc')
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('Invalid host:port format')
     }
 }
