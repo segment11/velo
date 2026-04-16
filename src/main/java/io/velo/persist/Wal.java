@@ -637,7 +637,7 @@ public class Wal implements InMemoryEstimate {
             resetWal(true);
         }
 
-        if (groupIndex % 100 == 0) {
+        if (groupIndex % 1024 == 0) {
             log.info("Clear wal, slot={}, group index={}", slot, groupIndex);
         }
     }
@@ -1083,7 +1083,7 @@ public class Wal implements InMemoryEstimate {
 
         var n1 = readBytesToList(tmpValues, false, bytes, realDataOffset, oneGroupBufferSize);
         var n2 = readBytesToList(tmpShortValues, true, bytes, realDataOffset + oneGroupBufferSize, oneGroupBufferSize);
-        if (groupIndex % 100 == 0) {
+        if (groupIndex % 1024 == 0) {
             log.warn("Repl slave fetch wal group success, group index={}, value size={}, short value size={}, slot={}",
                     groupIndex, n1, n2, slot);
         }
