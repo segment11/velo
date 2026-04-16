@@ -2440,7 +2440,8 @@ class XGroupTest extends Specification {
         and:
         def masterUuid = 100L
         oneSlot.createReplPairAsSlave('localhost', 7379)
-        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        // Set lastUpdatedOffset to 5, so skipBytesN will be 5 when fetchedOffset is 0
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 5L)
         def replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
 
         def replPairAsMaster = ReplPairTest.mockAsMaster(masterUuid)
@@ -2451,9 +2452,12 @@ class XGroupTest extends Specification {
         x.replPair = null
 
         and:
-        def invalidSegmentBytes = [(byte) 2] as byte[]
+        // Invalid segment bytes with type code=2, but readSegmentLength is only 3 (< skipBytesN=5)
+        def invalidSegmentBytes = [(byte) 2, (byte) 0, (byte) 0] as byte[]
 
         when:
+        // Construct payload: readonlyFlag(1) + fetchedFileIndex(0) + fetchedOffset(0) + 
+        // masterCurrentFileIndex(0) + masterCurrentOffset(3) + readSegmentLength(3) + segmentBytes
         def contentBytes = ByteBuffer.allocate(1 + 4 + 8 + 4 + 8 + 4 + invalidSegmentBytes.length)
                 .put((byte) 1)
                 .putInt(0)
@@ -2467,7 +2471,8 @@ class XGroupTest extends Specification {
                 ReplType.s_catch_up, contentBytes, contentBytes.length))
         then:
         r.isReplType(ReplType.error)
-        errorMessage(r).contains('decode and apply binlog error')
+        errorMessage(r).contains('skip bytes n=5')
+        errorMessage(r).contains('is greater than read segment length=3')
         !replPairAsSlave.masterReadonly
         !replPairAsSlave.allCaughtUp
         replPairAsSlave.masterBinlogCurrentFileIndexAndOffset == null

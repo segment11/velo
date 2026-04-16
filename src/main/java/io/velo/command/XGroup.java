@@ -1617,6 +1617,10 @@ public class XGroup extends BaseCommand {
             throw new IllegalStateException("Repl slave handle error: skip bytes n=" + skipBytesN +
                     " is greater than binlog one segment length=" + binlogOneSegmentLength + ", slot=" + slot);
         }
+        if (skipBytesN > readSegmentLength) {
+            throw new IllegalStateException("Repl slave handle error: skip bytes n=" + skipBytesN +
+                    " is greater than read segment length=" + readSegmentLength + ", slot=" + slot);
+        }
 
         ArrayList<BinlogContent> decodedContents;
         try {
@@ -1625,14 +1629,6 @@ public class XGroup extends BaseCommand {
             var errorMessage = "Repl slave handle error: decode and apply binlog error, slot=" + slot;
             log.error(errorMessage, e);
             return Repl.error(slot, replPair, errorMessage + "=" + e.getMessage());
-        }
-
-        // only when self is as slave but also as master, need to write binlog
-        var binlog = oneSlot.getBinlog();
-        try {
-            binlog.writeFromMasterOneSegmentBytes(readSegmentBytes, fetchedFileIndex, fetchedOffset);
-        } catch (IOException e) {
-            log.error("Repl slave write binlog from master error, slot={}", slot, e);
         }
 
         try {
