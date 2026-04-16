@@ -561,6 +561,13 @@ public class XGroup extends BaseCommand {
             }
         }
 
+        // need flush local data
+        log.warn("Repl slave handle hi: flush local data, slot={}", slot);
+        var beginT = System.currentTimeMillis();
+        oneSlot.flush();
+        var costT = System.currentTimeMillis() - beginT;
+        log.warn("Repl slave handle hi: flush local data done, slot={}, cost={}ms", slot, costT);
+
         metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, false,
                 currentFileIndex, currentOffset);
         log.warn("Repl slave set master binlog current/latest file index and offset for incremental catch up, master binlog file index={}, offset={}, slot={}",
@@ -1117,10 +1124,9 @@ public class XGroup extends BaseCommand {
                 });
             }
 
-            RedisHashKeys finalRhk = rhk;
-            SlotWithKeyHash finalSSet = sSet;
-            OneSlot finalFirstOneSlot = firstOneSlot;
-            finalFirstOneSlot.asyncExecute(() -> {
+            var finalRhk = rhk;
+            var finalSSet = sSet;
+            firstOneSlot.asyncExecute(() -> {
                 SGroup.saveRedisSet(finalRhk, finalSSet, this, dictMap);
             });
         }
@@ -1261,7 +1267,7 @@ public class XGroup extends BaseCommand {
         // server received from client
         // client already persisted dict seq, send to client exclude sent dict
         ArrayList<Integer> sentDictSeqList = new ArrayList<>();
-        if (contentBytes.length % 4 != 0) {
+        if (!NextStepContent.isNextStep(contentBytes) && contentBytes.length % 4 != 0) {
             throw new IllegalArgumentException("Repl master handle error: exists dict sent seq payload length invalid, slot=" + slot);
         }
         if (contentBytes.length >= 4) {

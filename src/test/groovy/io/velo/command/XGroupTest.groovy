@@ -615,7 +615,8 @@ class XGroupTest extends Specification {
         // exists_dict
         when:
         replRequest.type = ReplType.exists_dict
-        contentBytes = new byte[1]
+        // byte[1] means next step
+        contentBytes = new byte[2]
         replRequest.data = contentBytes
         r = x.handleRepl(replRequest)
         then:
