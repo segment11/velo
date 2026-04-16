@@ -1629,7 +1629,7 @@ public class XGroup extends BaseCommand {
         }
 
         replPair.setMasterReadonly(isMasterReadonly);
-        replPair.setAllCaughtUp(fetchedFileIndex == masterCurrentFileIndex && masterCurrentOffset == fetchedOffset + readSegmentLength);
+        replPair.setAllCaughtUp(false);
         replPair.setMasterBinlogCurrentFileIndexAndOffset(masterCurrentFo);
 
         // set can read if catch up to current file, and offset not too far
