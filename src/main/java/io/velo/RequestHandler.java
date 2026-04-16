@@ -461,7 +461,7 @@ public class RequestHandler {
                     var bytes = reuseGGroup.get(slotWithKeyHashList.getFirst(), true);
                     return bytes != null ? new BulkReply(bytes) : NilReply.INSTANCE;
                 } catch (CannotReadException e) {
-                    log.warn("Get but server can not read, key={}", Wal.keyString(keyBytes));
+                    log.debug("Get but server can not read, key={}", Wal.keyString(keyBytes));
                     return ErrorReply.CANNOT_READ;
                 } catch (TypeMismatchException e) {
                     return ErrorReply.WRONG_TYPE;
