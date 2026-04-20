@@ -79,6 +79,19 @@ cd build/libs && java -Xmx1g -Xms1g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirect
 - `log4j2.xml` — Logging
 - `acl.conf` — ACL rules
 
+## Bug Reviews Workflow
+
+Bug review documents live under `doc/bug_reviews/`. File naming format: `bug_<N>_<module>_review_round_<R>.md` (e.g., `bug_8_replication_module_review_round_3.md`).
+
+Two-agent collaboration workflow:
+
+1. **AI agent 1 (author)** — Creates a new bug review doc in `doc/bug_reviews/` following the file-name format above. Each bug entry should include: severity, cited files with line ranges, a code excerpt, and a description of the root cause and impact.
+2. **AI agent 2 (reviewer)** — Reads the doc, verifies each bug against the current code, and updates the same doc with review notes (e.g., confirming, refuting, or refining each finding).
+3. **AI agent 1 (author)** — Implements fixes for the confirmed bugs and commits them.
+4. **AI agent 2 (reviewer)** — Reviews the committed fix, then appends a "Review Feedback" section to the same doc covering: summary of the fix, strengths, concerns, and pre-commit/post-commit follow-ups.
+
+Keep the same doc as the single source of truth across all rounds — append new sections rather than creating parallel files.
+
 ## Key Dependencies
 
 - ActiveJ 6.0-beta2 (async framework, event loop, HTTP, DI)
