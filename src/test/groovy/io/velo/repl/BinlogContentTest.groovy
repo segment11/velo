@@ -98,9 +98,25 @@ class BinlogContentTest extends Specification {
 
         when:
         def xDynConfig = new XDynConfig()
-        def xDynConfig2 = BinlogContent.Type.dyn_config.decodeFrom(ByteBuffer.wrap(new byte[0]))
+        boolean exceptionEncodedLength = false
+        try {
+            xDynConfig.encodedLength()
+        } catch (UnsupportedOperationException e) {
+            println e.message
+            exceptionEncodedLength = true
+        }
         then:
-        xDynConfig.encodedLength() == 0
-        xDynConfig2 == null
+        exceptionEncodedLength
+
+        when:
+        boolean exceptionDecode = false
+        try {
+            BinlogContent.Type.dyn_config.decodeFrom(ByteBuffer.wrap(new byte[0]))
+        } catch (UnsupportedOperationException e) {
+            println e.message
+            exceptionDecode = true
+        }
+        then:
+        exceptionDecode
     }
 }
