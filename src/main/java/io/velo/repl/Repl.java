@@ -32,6 +32,12 @@ public class Repl {
     public static final int HEADER_LENGTH = PROTOCOL_KEYWORD_BYTES.length + 8 + 2 + 1 + 4;
 
     /**
+     * Maximum REPL payload length accepted by transport.
+     * Large enough for current replication traffic while bounding memory use per in-flight frame.
+     */
+    public static final int MAX_CONTENT_LENGTH = 64 * 1024 * 1024;
+
+    /**
      * Creates a buffer containing the encoded REPL message.
      *
      * @param slaveUuid the unique identifier of the slave node
@@ -42,6 +48,7 @@ public class Repl {
      */
     public static io.activej.bytebuf.ByteBuf buffer(long slaveUuid, short slot, ReplType type, ReplContent content) {
         var encodeLength = content.encodeLength();
+        validateContentLength(encodeLength);
 
         var bytes = new byte[HEADER_LENGTH + encodeLength];
         var buf = io.activej.bytebuf.ByteBuf.wrapForWriting(bytes);
@@ -62,6 +69,8 @@ public class Repl {
                                      int offset, int length) implements Reply {
         @Override
         public io.activej.bytebuf.ByteBuf buffer() {
+            validateContentLength(length);
+
             var bytes = new byte[HEADER_LENGTH + length];
             var buf = io.activej.bytebuf.ByteBuf.wrapForWriting(bytes);
 
@@ -183,6 +192,15 @@ public class Repl {
         return EMPTY_REPLY;
     }
 
+    private static void validateContentLength(int contentLength) {
+        if (contentLength <= 0) {
+            throw new IllegalArgumentException("Repl content length should be positive");
+        }
+        if (contentLength > MAX_CONTENT_LENGTH) {
+            throw new IllegalArgumentException("Repl content length exceeds max length=" + MAX_CONTENT_LENGTH);
+        }
+    }
+
     /**
      * Decodes a byte buffer into a REPL message data array.
      *
@@ -214,9 +232,7 @@ public class Repl {
         }
 
         var dataLength = buf.readInt();
-        if (dataLength <= 0) {
-            throw new IllegalArgumentException("Repl content length should be positive");
-        }
+        validateContentLength(dataLength);
 
         var readLength = Math.min(buf.readableBytes(), dataLength);
         if (readLength != 0) {

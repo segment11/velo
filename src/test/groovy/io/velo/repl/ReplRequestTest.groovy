@@ -66,4 +66,22 @@ class ReplRequestTest extends Specification {
         then:
         thrown(IllegalArgumentException)
     }
+
+    def 'test partial request preallocates and reuses backing array'() {
+        given:
+        def req = new ReplRequest(1L, slot, ReplType.test, [1, 2, 3] as byte[], 5)
+        def dataRef = req.@data
+
+        expect:
+        req.leftToRead() == 2
+        dataRef.length == 5
+
+        when:
+        req.nextRead(Unpooled.wrappedBuffer([4, 5] as byte[]), 2)
+
+        then:
+        req.fullyRead
+        req.@data.is(dataRef)
+        req.data == [1, 2, 3, 4, 5] as byte[]
+    }
 }

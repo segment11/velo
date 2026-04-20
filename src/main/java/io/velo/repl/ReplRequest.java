@@ -3,6 +3,8 @@ package io.velo.repl;
 import io.netty.buffer.ByteBuf;
 import org.jetbrains.annotations.TestOnly;
 
+import java.util.Arrays;
+
 /**
  * Represents a request message from bytes in the REPL protocol.
  */
@@ -12,6 +14,7 @@ public class ReplRequest {
     private ReplType type;
     private int expectLength;
     private byte[] data;
+    private int dataLength;
 
     /**
      * Gets the slave's UUID.
@@ -46,7 +49,7 @@ public class ReplRequest {
      * @return the data bytes
      */
     public byte[] getData() {
-        return data;
+        return isFullyRead() ? data : Arrays.copyOf(data, dataLength);
     }
 
     @TestOnly
@@ -67,6 +70,7 @@ public class ReplRequest {
     @TestOnly
     public void setData(byte[] data) {
         this.data = data;
+        this.dataLength = data.length;
         this.expectLength = data.length;
     }
 
@@ -80,13 +84,24 @@ public class ReplRequest {
      * @param expectLength the expected length of the data bytes
      */
     public ReplRequest(long slaveUuid, short slot, ReplType type, byte[] data, int expectLength) {
+        if (expectLength <= 0) {
+            throw new IllegalArgumentException("Repl request expected length should be positive");
+        }
+        if (data.length > expectLength) {
+            throw new IllegalArgumentException("Repl request data length exceeds expected length");
+        }
+
         this.slaveUuid = slaveUuid;
         this.slot = slot;
         this.type = type;
-        this.data = data;
         this.expectLength = expectLength;
-        if (data.length > expectLength) {
-            throw new IllegalArgumentException("Repl request data length exceeds expected length");
+        this.dataLength = data.length;
+
+        if (data.length == expectLength) {
+            this.data = data;
+        } else {
+            this.data = new byte[expectLength];
+            System.arraycopy(data, 0, this.data, 0, data.length);
         }
     }
 
@@ -96,7 +111,7 @@ public class ReplRequest {
      * @return true if the request is fully read, false otherwise
      */
     public boolean isFullyRead() {
-        return data.length == expectLength;
+        return dataLength == expectLength;
     }
 
     /**
@@ -105,7 +120,7 @@ public class ReplRequest {
      * @return the number of bytes left to read
      */
     public int leftToRead() {
-        return expectLength - data.length;
+        return expectLength - dataLength;
     }
 
     /**
@@ -118,13 +133,11 @@ public class ReplRequest {
         if (n <= 0) {
             throw new IllegalArgumentException("Repl request next read length should be positive");
         }
-        if (data.length + n > expectLength) {
+        if (dataLength + n > expectLength) {
             throw new IllegalArgumentException("Repl request next read exceeds expected length");
         }
-        var dataExtend = new byte[data.length + n];
-        System.arraycopy(data, 0, dataExtend, 0, data.length);
-        nettyBuf.readBytes(dataExtend, data.length, n);
-        data = dataExtend;
+        nettyBuf.readBytes(data, dataLength, n);
+        dataLength += n;
     }
 
     /**
@@ -133,6 +146,6 @@ public class ReplRequest {
      * @return a copy of the request
      */
     public ReplRequest copyShadow() {
-        return new ReplRequest(slaveUuid, slot, type, data, expectLength);
+        return new ReplRequest(slaveUuid, slot, type, getData(), expectLength);
     }
 }
