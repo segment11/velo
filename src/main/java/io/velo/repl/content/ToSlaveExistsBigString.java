@@ -7,7 +7,6 @@ import org.apache.commons.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -100,14 +99,11 @@ public class ToSlaveExistsBigString implements ReplContent {
             return;
         }
 
-        var countPosition = toBuf.tail();
         toBuf.writeInt(toSendIdList.size());
         toBuf.writeByte((byte) (isSendAllOnce ? 1 : 0));
 
-        var existCount = 0;
         for (var id : toSendIdList) {
             var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
-            existCount++;
 
             toBuf.writeLong(id.uuid());
             toBuf.writeLong(id.keyHash());
@@ -120,10 +116,6 @@ public class ToSlaveExistsBigString implements ReplContent {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-        }
-
-        if (existCount != toSendIdList.size()) {
-            ByteBuffer.wrap(toBuf.array()).putInt(countPosition, existCount);
         }
     }
 

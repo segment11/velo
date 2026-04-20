@@ -68,7 +68,7 @@ public class XUpdateSeq implements BinlogContent {
     public int encodedLength() {
         // 1 byte for type
         // 8 bytes for seq
-        // 4 bytes for time millis
+        // 8 bytes for time millis
         return 1 + 8 + 8;
     }
 
