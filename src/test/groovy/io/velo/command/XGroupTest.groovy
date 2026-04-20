@@ -10,13 +10,18 @@ import io.velo.repl.content.Hello
 import io.velo.repl.content.Hi
 import io.velo.repl.content.Ping
 import io.velo.repl.content.Pong
+import io.velo.repl.incremental.XBigStrings
 import io.velo.repl.incremental.XWalV
+import io.velo.reply.AsyncReply
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.NilReply
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
+import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class XGroupTest extends Specification {
     def _XXGroup = new XGroup(null, null, null)
@@ -2524,6 +2529,202 @@ class XGroupTest extends Specification {
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+    }
+
+    def 'test handle repl waits for cross slot catch up apply before advancing offsets'() {
+        given:
+        ConfForGlobal.slotNumber = slotNumber
+        LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def targetEventloop = io.activej.eventloop.Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        targetEventloop.keepAlive(true)
+        Thread.start {
+            targetEventloop.run()
+        }
+        Thread.sleep(100)
+        def targetSlot = localPersist.oneSlot((short) 1)
+        targetSlot.setSlotWorkerEventloop(targetEventloop)
+        localPersist.fixSlotThreadId((short) 1, targetEventloop.eventloopThread.threadId())
+
+        def blockerEntered = new CountDownLatch(1)
+        def unblockTargetSlot = new CountDownLatch(1)
+        targetEventloop.execute {
+            blockerEntered.countDown()
+            unblockTargetSlot.await()
+        }
+        blockerEntered.await()
+
+        and:
+        def masterUuid = 101L
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        def replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
+        def replPairAsMaster = ReplPairTest.mockAsMaster(masterUuid)
+        replPairAsMaster.slaveUuid = oneSlot.masterUuid
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        and:
+        def key = 'catch-up-cross-slot'
+        while (BaseCommand.slot(key, slotNumber).slot() != (short) 1) {
+            key += 'x'
+        }
+        def keySlot = BaseCommand.slot(key, slotNumber)
+        def cv = new CompressedValue()
+        cv.seq = 1L
+        cv.keyHash = keySlot.keyHash()
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        cv.compressedData = 'v'.bytes
+        def walV = new Wal.V(1L, keySlot.bucketIndex(), keySlot.keyHash(), cv.expireAt, cv.dictSeqOrSpType,
+                key, cv.encodeAsShortString(), false)
+        def segmentBytes = new XWalV(walV, true).encodeWithType()
+        def contentBytes = ByteBuffer.allocate(1 + 4 + 8 + 4 + 8 + 4 + segmentBytes.length)
+                .put((byte) 0)
+                .putInt(0)
+                .putLong(0L)
+                .putInt(0)
+                .putLong(segmentBytes.length)
+                .putInt(segmentBytes.length)
+                .put(segmentBytes)
+                .array()
+
+        when:
+        def reply = x.handleRepl(new ReplRequest(replPairAsMaster.slaveUuid, slot,
+                ReplType.s_catch_up, contentBytes, contentBytes.length))
+
+        then:
+        reply instanceof AsyncReply
+        replPairAsSlave.masterBinlogCurrentFileIndexAndOffset == null
+        replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset == null
+
+        when:
+        unblockTargetSlot.countDown()
+        def nestedReply = (reply as AsyncReply).settablePromise.toCompletableFuture().get(5, TimeUnit.SECONDS) as ReplReply
+
+        then:
+        nestedReply != null
+        nestedReply.isEmpty()
+        replPairAsSlave.masterBinlogCurrentFileIndexAndOffset != null
+        replPairAsSlave.masterBinlogCurrentFileIndexAndOffset.offset() == segmentBytes.length
+        replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset != null
+        replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset.offset() == segmentBytes.length
+
+        cleanup:
+        unblockTargetSlot.countDown()
+        targetEventloop.breakEventloop()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.slotNumber = (short) 1
+    }
+
+    def 'test handle repl waits for cross slot big string catch up apply before advancing offsets'() {
+        given:
+        ConfForGlobal.slotNumber = slotNumber
+        LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def targetEventloop = io.activej.eventloop.Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        targetEventloop.keepAlive(true)
+        Thread.start {
+            targetEventloop.run()
+        }
+        Thread.sleep(100)
+        def targetSlot = localPersist.oneSlot((short) 1)
+        targetSlot.setSlotWorkerEventloop(targetEventloop)
+        localPersist.fixSlotThreadId((short) 1, targetEventloop.eventloopThread.threadId())
+
+        def blockerEntered = new CountDownLatch(1)
+        def unblockTargetSlot = new CountDownLatch(1)
+        targetEventloop.execute {
+            blockerEntered.countDown()
+            unblockTargetSlot.await()
+        }
+        blockerEntered.await()
+
+        and:
+        def masterUuid = 102L
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        def replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
+        def replPairAsMaster = ReplPairTest.mockAsMaster(masterUuid)
+        replPairAsMaster.slaveUuid = oneSlot.masterUuid
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        and:
+        def key = 'catch-up-cross-slot-big-string'
+        while (BaseCommand.slot(key, slotNumber).slot() != (short) 1) {
+            key += 'x'
+        }
+        def keySlot = BaseCommand.slot(key, slotNumber)
+        def uuid = 99L
+        def cv = new CompressedValue()
+        cv.seq = 2L
+        cv.keyHash = keySlot.keyHash()
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv.setCompressedDataAsBigString(uuid, CompressedValue.NULL_DICT_SEQ)
+        def segmentBytes = new XBigStrings(uuid, keySlot.bucketIndex(), keySlot.keyHash(), key, cv.encode()).encodeWithType()
+        def contentBytes = ByteBuffer.allocate(1 + 4 + 8 + 4 + 8 + 4 + segmentBytes.length)
+                .put((byte) 0)
+                .putInt(0)
+                .putLong(0L)
+                .putInt(0)
+                .putLong(segmentBytes.length)
+                .putInt(segmentBytes.length)
+                .put(segmentBytes)
+                .array()
+
+        when:
+        def reply = x.handleRepl(new ReplRequest(replPairAsMaster.slaveUuid, slot,
+                ReplType.s_catch_up, contentBytes, contentBytes.length))
+
+        then:
+        reply instanceof AsyncReply
+        replPairAsSlave.masterBinlogCurrentFileIndexAndOffset == null
+        replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset == null
+        replPairAsSlave.toFetchBigStringIdList.isEmpty()
+
+        when:
+        unblockTargetSlot.countDown()
+        def nestedReply = (reply as AsyncReply).settablePromise.toCompletableFuture().get(5, TimeUnit.SECONDS) as ReplReply
+
+        then:
+        nestedReply != null
+        nestedReply.isEmpty()
+        replPairAsSlave.masterBinlogCurrentFileIndexAndOffset != null
+        replPairAsSlave.masterBinlogCurrentFileIndexAndOffset.offset() == segmentBytes.length
+        replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset != null
+        replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset.offset() == segmentBytes.length
+        replPairAsSlave.toFetchBigStringIdList.size() == 1
+        replPairAsSlave.toFetchBigStringIdList.first().uuid() == uuid
+
+        cleanup:
+        unblockTargetSlot.countDown()
+        targetEventloop.breakEventloop()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.slotNumber = (short) 1
     }
 
     def 'test hi skips exists fetch when last updated file is newer than earliest file'() {

@@ -1,5 +1,6 @@
 package io.velo.repl.incremental;
 
+import io.activej.promise.Promise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
@@ -152,6 +153,10 @@ public class XWalV implements BinlogContent {
 
     private final LocalPersist localPersist = LocalPersist.getInstance();
 
+    private BaseCommand.SlotWithKeyHash targetSlot(String key) {
+        return BaseCommand.slot(key, ConfForGlobal.slotNumber);
+    }
+
     /**
      * Applies this binlog content to the specified replication slot and repl pair.
      * This method updates the local WAL and sets the last sequence number of the slave.
@@ -162,7 +167,7 @@ public class XWalV implements BinlogContent {
     @Override
     public void apply(short slot, ReplPair replPair) {
         var key = v.key();
-        var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
+        var s = targetSlot(key);
         // bucket index may be changed
         var v2 = new Wal.V(v.seq(), s.bucketIndex(), v.keyHash(), v.expireAt(), v.spType(), key, v.cvEncoded(), false);
 
@@ -177,5 +182,34 @@ public class XWalV implements BinlogContent {
         });
 
         replPair.setSlaveCatchUpLastSeq(v.seq());
+    }
+
+    @Override
+    public Promise<Void> applyAsync(short slot, ReplPair replPair) {
+        if (!isApplyAsync(slot)) {
+            apply(slot, replPair);
+            return Promise.complete();
+        }
+
+        var key = v.key();
+        var s = targetSlot(key);
+        var v2 = new Wal.V(v.seq(), s.bucketIndex(), v.keyHash(), v.expireAt(), v.spType(), key, v.cvEncoded(), false);
+
+        var oneSlot = localPersist.oneSlot(s.slot());
+        var walGroupIndex = Wal.calcWalGroupIndex(s.bucketIndex());
+        var targetWal = oneSlot.getWalByGroupIndex(walGroupIndex);
+        var promise = oneSlot.asyncRun(() -> {
+            var putResult = targetWal.put(isValueShort, key, v2);
+            if (putResult.needPersist()) {
+                oneSlot.doPersist(walGroupIndex, key, putResult);
+            }
+        });
+        promise.whenResult(unused -> replPair.setSlaveCatchUpLastSeq(v.seq()));
+        return promise;
+    }
+
+    @Override
+    public boolean isApplyAsync(short slot) {
+        return targetSlot(v.key()).slot() != slot;
     }
 }

@@ -12,6 +12,7 @@ import io.velo.*;
 import io.velo.command.XGroup;
 import io.velo.decode.ReplDecoder;
 import io.velo.decode.Request;
+import io.velo.reply.AsyncReply;
 import io.velo.reply.Reply;
 import io.velo.repl.content.Ping;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -181,6 +182,12 @@ public class TcpClient implements NeedCleanUp {
         if (reply == null) {
             socket.close();
             return Promise.of(null);
+        }
+
+        if (reply instanceof AsyncReply asyncReply) {
+            return asyncReply.getSettablePromise()
+                    .whenException(e -> socket.close())
+                    .then(asyncReplyInner -> toReplyBufferOrClose(asyncReplyInner, socket));
         }
 
         if (reply instanceof Repl.ReplReply replReply && replReply.isReplType(ReplType.error)) {

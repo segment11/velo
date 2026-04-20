@@ -6,6 +6,8 @@ import io.activej.common.function.SupplierEx;
 import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
+import io.activej.promise.SettablePromise;
+import io.activej.reactor.Reactor;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.velo.*;
@@ -582,7 +584,27 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
-        return Promise.ofFuture(slotWorkerEventloop.submit(runnableEx));
+        // Production path: caller is on a reactor (slot worker / network worker eventloop).
+        // Promise.ofFuture captures the caller's reactor and bounces completion callbacks
+        // back to it, so callbacks run on the caller's thread (preserving single-thread
+        // invariants of per-reactor state such as ReplPair fields and metaChunkSegmentIndex).
+        if (Reactor.getCurrentReactorOrNull() != null) {
+            return Promise.ofFuture(slotWorkerEventloop.submit(runnableEx));
+        }
+
+        // Fallback for callers not on a reactor (unit tests). Completion fires on the
+        // target slot's eventloop thread; polling from the test thread via
+        // settablePromise.getResult() is safe because the test drives a single flow.
+        SettablePromise<Void> promise = new SettablePromise<>();
+        slotWorkerEventloop.execute(() -> {
+            try {
+                runnableEx.run();
+                promise.set(null);
+            } catch (Exception e) {
+                promise.setException(e);
+            }
+        });
+        return promise;
     }
 
     /**
@@ -621,7 +643,19 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
-        return Promise.ofFuture(slotWorkerEventloop.submit(AsyncComputation.of(supplierEx)));
+        if (Reactor.getCurrentReactorOrNull() != null) {
+            return Promise.ofFuture(slotWorkerEventloop.submit(AsyncComputation.of(supplierEx)));
+        }
+
+        SettablePromise<T> promise = new SettablePromise<>();
+        slotWorkerEventloop.execute(() -> {
+            try {
+                promise.set(supplierEx.get());
+            } catch (Exception e) {
+                promise.setException(e);
+            }
+        });
+        return promise;
     }
 
     /**

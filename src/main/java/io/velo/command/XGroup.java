@@ -3,6 +3,9 @@ package io.velo.command;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.luben.zstd.Zstd;
+import io.activej.promise.Promise;
+import io.activej.promise.Promises;
+import io.activej.promise.SettablePromise;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.netty.buffer.Unpooled;
@@ -13,6 +16,7 @@ import io.velo.repl.*;
 import io.velo.repl.content.*;
 import io.velo.repl.incremental.XSkipApply;
 import io.velo.repl.support.JedisPoolHolder;
+import io.velo.reply.AsyncReply;
 import io.velo.reply.BulkReply;
 import io.velo.reply.ErrorReply;
 import io.velo.reply.NilReply;
@@ -1490,7 +1494,7 @@ public class XGroup extends BaseCommand {
 
     private long catchUpLoopCount = 0L;
 
-    private Repl.ReplReply s_catch_up(short slot, byte[] contentBytes) {
+    private Reply s_catch_up(short slot, byte[] contentBytes) {
         catchUpLoopCount++;
         var catchUpIntervalMillis = ConfForSlot.global.confRepl.catchUpIntervalMillis;
 
@@ -1615,13 +1619,37 @@ public class XGroup extends BaseCommand {
             return Repl.error(slot, replPair, errorMessage + "=" + e.getMessage());
         }
 
-        try {
-            for (var content : decodedContents) {
-                content.apply(slot, replPair);
+        boolean hasAsyncApply = false;
+        for (var content : decodedContents) {
+            if (content.isApplyAsync(slot)) {
+                hasAsyncApply = true;
+                break;
             }
-            if (fetchedOffset == 0 && catchUpLoopCount % 10 == 0) {
-                log.info("Repl binlog catch up success, slave uuid={}, {}, catch up file index={}, catch up offset={}, apply n={}, slot={}",
-                        replPair.getSlaveUuid(), replPair.getHostAndPort(), fetchedFileIndex, fetchedOffset, decodedContents.size(), slot);
+        }
+
+        if (!hasAsyncApply) {
+            try {
+                for (var content : decodedContents) {
+                    content.apply(slot, replPair);
+                }
+                if (fetchedOffset == 0 && catchUpLoopCount % 10 == 0) {
+                    log.info("Repl binlog catch up success, slave uuid={}, {}, catch up file index={}, catch up offset={}, apply n={}, slot={}",
+                            replPair.getSlaveUuid(), replPair.getHostAndPort(), fetchedFileIndex, fetchedOffset, decodedContents.size(), slot);
+                }
+                return finishSlaveCatchUpApply(slot, replPair, oneSlot, metaChunkSegmentIndex, binlogMasterUuid,
+                        isMasterReadonly, fetchedFileIndex, fetchedOffset, masterCurrentFileIndex, masterCurrentOffset,
+                        readSegmentLength, catchUpIntervalMillis);
+            } catch (Exception e) {
+                var errorMessage = "Repl slave handle error: decode and apply binlog error, slot=" + slot;
+                log.error(errorMessage, e);
+                return Repl.error(slot, replPair, errorMessage + "=" + e.getMessage());
+            }
+        }
+
+        Promise<Void>[] applyPromises = new Promise[decodedContents.size()];
+        try {
+            for (int i = 0; i < decodedContents.size(); i++) {
+                applyPromises[i] = decodedContents.get(i).applyAsync(slot, replPair);
             }
         } catch (Exception e) {
             var errorMessage = "Repl slave handle error: decode and apply binlog error, slot=" + slot;
@@ -1629,11 +1657,42 @@ public class XGroup extends BaseCommand {
             return Repl.error(slot, replPair, errorMessage + "=" + e.getMessage());
         }
 
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var allApplyPromise = applyPromises.length == 1 ? applyPromises[0] : Promises.all(applyPromises);
+        allApplyPromise.whenComplete((unused, e) -> {
+            if (e != null) {
+                var errorMessage = "Repl slave handle error: decode and apply binlog error, slot=" + slot;
+                log.error(errorMessage, e);
+                finalPromise.set(Repl.error(slot, replPair, errorMessage + "=" + e.getMessage()));
+                return;
+            }
+
+            try {
+                if (fetchedOffset == 0 && catchUpLoopCount % 10 == 0) {
+                    log.info("Repl binlog catch up success, slave uuid={}, {}, catch up file index={}, catch up offset={}, apply n={}, slot={}",
+                            replPair.getSlaveUuid(), replPair.getHostAndPort(), fetchedFileIndex, fetchedOffset, decodedContents.size(), slot);
+                }
+                finalPromise.set(finishSlaveCatchUpApply(slot, replPair, oneSlot, metaChunkSegmentIndex, binlogMasterUuid,
+                        isMasterReadonly, fetchedFileIndex, fetchedOffset, masterCurrentFileIndex, masterCurrentOffset,
+                        readSegmentLength, catchUpIntervalMillis));
+            } catch (Exception ex) {
+                var errorMessage = "Repl slave handle error: decode and apply binlog error, slot=" + slot;
+                log.error(errorMessage, ex);
+                finalPromise.set(Repl.error(slot, replPair, errorMessage + "=" + ex.getMessage()));
+            }
+        });
+        return new AsyncReply(finalPromise);
+    }
+
+    private Reply finishSlaveCatchUpApply(short slot, @NotNull ReplPair replPair, @NotNull OneSlot oneSlot,
+                                          @NotNull MetaChunkSegmentIndex metaChunkSegmentIndex, long binlogMasterUuid,
+                                          boolean isMasterReadonly, int fetchedFileIndex, long fetchedOffset,
+                                          int masterCurrentFileIndex, long masterCurrentOffset, int readSegmentLength,
+                                          int catchUpIntervalMillis) {
         replPair.setMasterReadonly(isMasterReadonly);
         replPair.setAllCaughtUp(false);
-        replPair.setMasterBinlogCurrentFileIndexAndOffset(masterCurrentFo);
+        replPair.setMasterBinlogCurrentFileIndexAndOffset(new Binlog.FileIndexAndOffset(masterCurrentFileIndex, masterCurrentOffset));
 
-        // set can read if catch up to current file, and offset not too far
         var isCatchUpToCurrentFile = fetchedFileIndex == masterCurrentFileIndex;
         boolean canRead;
         if (isCatchUpToCurrentFile) {
@@ -1655,21 +1714,18 @@ public class XGroup extends BaseCommand {
 
         replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(new Binlog.FileIndexAndOffset(fetchedFileIndex, fetchedOffset + readSegmentLength));
 
-        // catch up latest segment, delay to catch up again
         var marginCurrentOffset = Binlog.marginFileOffset(masterCurrentOffset);
         var isCatchUpOffsetInLatestSegment = isCatchUpToCurrentFile && fetchedOffset == marginCurrentOffset;
         if (isCatchUpOffsetInLatestSegment) {
             metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(binlogMasterUuid, true,
                     fetchedFileIndex, fetchedOffset + readSegmentLength);
 
-            // still catch up current (latest) segment, delay
             var content = toMasterCatchUp(binlogMasterUuid, fetchedFileIndex, fetchedOffset, fetchedOffset + readSegmentLength);
-            oneSlot.delayRun(catchUpIntervalMillis, () -> {
-                replPair.write(catch_up, content);
-            });
+            oneSlot.delayRun(catchUpIntervalMillis, () -> replPair.write(catch_up, content));
             return Repl.emptyReply();
         }
 
+        var binlogOneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
         if (readSegmentLength != binlogOneSegmentLength) {
             throw new IllegalStateException("Repl slave handle error: read segment length=" + readSegmentLength +
                     " is not equal to binlog one segment length=" + binlogOneSegmentLength);
@@ -1678,25 +1734,20 @@ public class XGroup extends BaseCommand {
         var binlogOneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength;
         var isCatchUpLastSegmentInOneFile = fetchedOffset == (binlogOneFileMaxLength - binlogOneSegmentLength);
         var nextCatchUpFileIndex = isCatchUpLastSegmentInOneFile ? fetchedFileIndex + 1 : fetchedFileIndex;
-        // one segment length may != binlog one segment length, need to re-fetch this segment
         var nextCatchUpOffset = isCatchUpLastSegmentInOneFile ? 0 : fetchedOffset + binlogOneSegmentLength;
 
         metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(binlogMasterUuid, true,
                 nextCatchUpFileIndex, nextCatchUpOffset);
 
         var content = toMasterCatchUp(binlogMasterUuid, nextCatchUpFileIndex, nextCatchUpOffset, nextCatchUpOffset);
-        // when catch up to next file, delay to catch up again
         if (nextCatchUpOffset == 0) {
             log.info("Repl slave ready to catch up to next file, slave uuid={}, {}, binlog file index={}, offset={}, slot={}",
                     replPair.getSlaveUuid(), replPair.getHostAndPort(), nextCatchUpFileIndex, nextCatchUpOffset, slot);
 
-            oneSlot.delayRun(catchUpIntervalMillis, () -> {
-                replPair.write(catch_up, content);
-            });
+            oneSlot.delayRun(catchUpIntervalMillis, () -> replPair.write(catch_up, content));
             return Repl.emptyReply();
-        } else {
-            return Repl.reply(slot, replPair, catch_up, content);
         }
+        return Repl.reply(slot, replPair, catch_up, content);
     }
 
     private static boolean skipTryCatchUpAgainAfterSlaveTcpClientClosed;

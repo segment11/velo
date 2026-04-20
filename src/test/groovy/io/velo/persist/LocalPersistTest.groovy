@@ -10,6 +10,7 @@ import io.velo.reply.IntegerReply
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 class LocalPersistTest extends Specification {
     static void prepareLocalPersist(byte netWorkers = 1, short slotNumber = 1) {
@@ -148,6 +149,31 @@ class LocalPersistTest extends Specification {
         localPersist.socketInspector = null
         then:
         localPersist.socketInspector == null
+
+        cleanup:
+        eventloop.breakEventloop()
+    }
+
+    def 'test async call on slot worker eventloop'() {
+        given:
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+        Thread.sleep(100)
+
+        def localPersist = LocalPersist.instance
+        localPersist.addOneSlot(slot, eventloop)
+        def oneSlot = localPersist.oneSlot(slot)
+
+        when:
+        def result = oneSlot.asyncCall(() -> 42L).toCompletableFuture().get(5, TimeUnit.SECONDS)
+
+        then:
+        result == 42L
 
         cleanup:
         eventloop.breakEventloop()

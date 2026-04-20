@@ -1,5 +1,6 @@
 package io.velo.repl.incremental;
 
+import io.activej.promise.Promise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.ConfForGlobal;
@@ -172,6 +173,10 @@ public class XBigStrings implements BinlogContent {
 
     private final LocalPersist localPersist = LocalPersist.getInstance();
 
+    private BaseCommand.SlotWithKeyHash targetSlot() {
+        return BaseCommand.slot(key, ConfForGlobal.slotNumber);
+    }
+
     /**
      * Applies this binlog content to the specified replication slot and repl pair.
      * This method updates the local storage with the new big string and adds the UUID to the list of big strings to fetch.
@@ -185,7 +190,7 @@ public class XBigStrings implements BinlogContent {
         var keyHash = KeyHash.hash(keyBytes);
         var cv = CompressedValue.decode(cvEncoded, keyBytes, keyHash);
 
-        var s = BaseCommand.slot(key, ConfForGlobal.slotNumber);
+        var s = targetSlot();
         var oneSlot = localPersist.oneSlot(s.slot());
         oneSlot.asyncExecute(() -> {
             oneSlot.put(key, s.bucketIndex(), cv, true);
@@ -193,5 +198,28 @@ public class XBigStrings implements BinlogContent {
 
         // use remote bucket index
         replPair.addToFetchBigStringId(uuid, bucketIndex, keyHash, key);
+    }
+
+    @Override
+    public Promise<Void> applyAsync(short slot, ReplPair replPair) {
+        if (!isApplyAsync(slot)) {
+            apply(slot, replPair);
+            return Promise.complete();
+        }
+
+        var keyBytes = Wal.keyBytes(key);
+        var keyHash = KeyHash.hash(keyBytes);
+        var cv = CompressedValue.decode(cvEncoded, keyBytes, keyHash);
+
+        var s = targetSlot();
+        var oneSlot = localPersist.oneSlot(s.slot());
+        var promise = oneSlot.asyncRun(() -> oneSlot.put(key, s.bucketIndex(), cv, true));
+        promise.whenResult(unused -> replPair.addToFetchBigStringId(uuid, bucketIndex, keyHash, key));
+        return promise;
+    }
+
+    @Override
+    public boolean isApplyAsync(short slot) {
+        return targetSlot().slot() != slot;
     }
 }

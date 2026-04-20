@@ -1,5 +1,6 @@
 package io.velo.repl;
 
+import io.activej.promise.Promise;
 import io.velo.repl.incremental.*;
 
 import java.nio.ByteBuffer;
@@ -53,4 +54,14 @@ public interface BinlogContent {
 
     @SlaveReplay
     void apply(short slot, ReplPair replPair);
+
+    @SlaveReplay
+    default Promise<Void> applyAsync(short slot, ReplPair replPair) {
+        apply(slot, replPair);
+        return Promise.complete();
+    }
+
+    default boolean isApplyAsync(short slot) {
+        return false;
+    }
 }

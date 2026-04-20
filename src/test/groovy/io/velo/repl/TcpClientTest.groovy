@@ -8,6 +8,7 @@ import io.activej.csp.supplier.ChannelSuppliers
 import io.activej.eventloop.Eventloop
 import io.activej.net.SimpleServer
 import io.activej.promise.Promise
+import io.activej.promise.SettablePromise
 import io.velo.ConfForGlobal
 import io.velo.MultiWorkerServer
 import io.velo.RequestHandler
@@ -19,6 +20,8 @@ import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.repl.content.RawBytesContent
+import io.velo.reply.AsyncReply
+import io.velo.reply.Reply
 import spock.lang.Specification
 
 import java.time.Duration
@@ -169,5 +172,33 @@ class TcpClientTest extends Specification {
         then:
         promise3 != null
         socket3.closed
+    }
+
+    def 'test async repl reply waits for nested reply buffer'() {
+        given:
+        short slot = 0
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent, 46382)
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, null, Config.create())
+        def replPair = ReplPairTest.mockAsSlave(10L, 1L)
+        def tcpClient = new TcpClient(slot, eventloopCurrent, requestHandler, replPair)
+        def settablePromise = new SettablePromise<Reply>()
+
+        when:
+        def promise = tcpClient.toReplyBufferOrClose(new AsyncReply(settablePromise), socket)
+        settablePromise.set(Repl.test(slot, replPair, 'ok'))
+
+        then:
+        50.times {
+            if (promise.getResult() != null) {
+                return
+            }
+            Thread.sleep(20)
+        }
+        promise.getResult() != null
+        !socket.closed
     }
 }
