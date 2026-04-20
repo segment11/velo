@@ -2,8 +2,10 @@ package io.velo.repl.content;
 
 import io.activej.bytebuf.ByteBuf;
 import io.velo.persist.BigStringFiles;
+import io.velo.repl.Repl;
 import io.velo.repl.ReplContent;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.VisibleForTesting;
 
 import java.io.File;
 import java.io.IOException;
@@ -24,7 +26,10 @@ public class ToSlaveExistsBigString implements ReplContent {
     /**
      * The maximum number of big strings that can be sent in one batch.
      */
+    @VisibleForTesting
     static final int ONCE_SEND_BIG_STRING_COUNT = 10;
+
+    private static final int ENTRY_HEADER_LENGTH = 8 + 8 + 4;
 
     /**
      * Constructs a new {@link ToSlaveExistsBigString} message.
@@ -38,7 +43,7 @@ public class ToSlaveExistsBigString implements ReplContent {
         this.bucketIndex = bucketIndex;
         this.bigStringDir = bigStringDir;
 
-        var toSendIdList = new ArrayList<BigStringFiles.IdWithKey>();
+        var candidateIdList = new ArrayList<BigStringFiles.IdWithKey>();
         // Exclude UUIDs that have already been sent
         for (var id : idListInMaster) {
             var isSentExist = false;
@@ -51,16 +56,33 @@ public class ToSlaveExistsBigString implements ReplContent {
             if (!isSentExist) {
                 var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
                 if (file.exists()) {
-                    toSendIdList.add(id);
+                    candidateIdList.add(id);
                 }
             }
         }
 
-        this.isSendAllOnce = toSendIdList.isEmpty() || toSendIdList.size() <= ONCE_SEND_BIG_STRING_COUNT;
-        if (!isSendAllOnce) {
-            toSendIdList = new ArrayList<>(toSendIdList.subList(0, ONCE_SEND_BIG_STRING_COUNT));
+        var toSendIdList = new ArrayList<BigStringFiles.IdWithKey>();
+        var encodeLength = HEADER_LENGTH;
+        for (var id : candidateIdList) {
+            if (toSendIdList.size() >= ONCE_SEND_BIG_STRING_COUNT) {
+                break;
+            }
+
+            var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
+            var oneEntryEncodedLength = ENTRY_HEADER_LENGTH + (int) file.length();
+            if (encodeLength + oneEntryEncodedLength > Repl.MAX_CONTENT_LENGTH) {
+                if (toSendIdList.isEmpty()) {
+                    throw new IllegalStateException("Repl big string content length exceeds max length=" + Repl.MAX_CONTENT_LENGTH
+                            + ", bucket index=" + bucketIndex + ", uuid=" + id.uuid());
+                }
+                break;
+            }
+
+            toSendIdList.add(id);
+            encodeLength += oneEntryEncodedLength;
         }
 
+        this.isSendAllOnce = toSendIdList.size() == candidateIdList.size();
         this.toSendIdList = toSendIdList;
     }
 
@@ -95,7 +117,7 @@ public class ToSlaveExistsBigString implements ReplContent {
 
         if (toSendIdList.isEmpty()) {
             toBuf.writeInt(0);
-            toBuf.writeByte((byte) 1);
+            toBuf.writeByte((byte) (isSendAllOnce ? 1 : 0));
             return;
         }
 
@@ -142,7 +164,7 @@ public class ToSlaveExistsBigString implements ReplContent {
         for (var id : toSendIdList) {
             var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
             var bigStringBytesLength = (int) file.length();
-            length += 8 + 8 + 4 + bigStringBytesLength;
+            length += ENTRY_HEADER_LENGTH + bigStringBytesLength;
         }
         return length;
     }

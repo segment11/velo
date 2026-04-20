@@ -3,6 +3,7 @@ package io.velo.repl.content
 import io.activej.bytebuf.ByteBuf
 import io.velo.persist.BigStringFiles
 import io.velo.persist.Consts
+import io.velo.repl.Repl
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -107,6 +108,36 @@ class ToSlaveExistsBigStringTest extends Specification {
         buffer.getLong() == total
         buffer.getLong() == total
         buffer.getInt() == 11
+
+        when:
+        bigStringDir.deleteDir()
+        bigStringDir.mkdirs()
+        idListInMaster.clear()
+        sentIdList.clear()
+        subDir = new File(bigStringDir, '0')
+        subDir.mkdir()
+
+        def largeFileLength = 30 * 1024 * 1024
+        3.times {
+            def uuid = it + 1L
+            idListInMaster << new BigStringFiles.IdWithKey(uuid, 0, uuid, "")
+            def file = new File(subDir, "${uuid}_${uuid}")
+            def raf = new RandomAccessFile(file, 'rw')
+            raf.setLength(largeFileLength)
+            raf.close()
+        }
+
+        content = new ToSlaveExistsBigString(0, bigStringDir, idListInMaster, sentIdList)
+        bytes = new byte[content.encodeLength()]
+        buf = ByteBuf.wrapForWriting(bytes)
+        content.encodeTo(buf)
+        buffer = ByteBuffer.wrap(bytes)
+        then:
+        content.encodeLength() < Repl.MAX_CONTENT_LENGTH
+        buf.tail() == content.encodeLength()
+        buffer.getInt() == 0
+        buffer.getInt() == 2
+        buffer.get() == (byte) 0
 
         cleanup:
         bigStringDir.deleteDir()
