@@ -106,7 +106,7 @@ public class XSkipApply implements BinlogContent {
      */
     @Override
     public void apply(short slot, ReplPair replPair) {
-        log.warn("Repl skip apply, seq={}}", seq);
+        log.warn("Repl skip apply, seq={}", seq);
 
         replPair.setSlaveCatchUpLastSeq(seq);
     }
