@@ -21,7 +21,7 @@ public class ToSlaveExistsBigString implements ReplContent {
     private final int bucketIndex;
     private final File bigStringDir;
     private final List<BigStringFiles.IdWithKey> toSendIdList;
-    private final boolean isSendAllOnce;
+    private final boolean isCurrentBucketDone;
 
     /**
      * The maximum number of big strings that can be sent in one batch.
@@ -82,7 +82,7 @@ public class ToSlaveExistsBigString implements ReplContent {
             encodeLength += oneEntryEncodedLength;
         }
 
-        this.isSendAllOnce = toSendIdList.size() == candidateIdList.size();
+        this.isCurrentBucketDone = toSendIdList.size() == candidateIdList.size();
         this.toSendIdList = toSendIdList;
     }
 
@@ -117,12 +117,12 @@ public class ToSlaveExistsBigString implements ReplContent {
 
         if (toSendIdList.isEmpty()) {
             toBuf.writeInt(0);
-            toBuf.writeByte((byte) (isSendAllOnce ? 1 : 0));
+            toBuf.writeByte((byte) (isCurrentBucketDone ? 1 : 0));
             return;
         }
 
         toBuf.writeInt(toSendIdList.size());
-        toBuf.writeByte((byte) (isSendAllOnce ? 1 : 0));
+        toBuf.writeByte((byte) (isCurrentBucketDone ? 1 : 0));
 
         for (var id : toSendIdList) {
             var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());

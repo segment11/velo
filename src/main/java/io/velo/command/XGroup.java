@@ -1057,11 +1057,11 @@ public class XGroup extends BaseCommand {
         if (bigStringCount < 0) {
             throw new IllegalArgumentException("Repl slave handle error: big string count invalid=" + bigStringCount + ", slot=" + slot);
         }
-        var isSendAllOnceFlag = buffer.get();
-        if (isSendAllOnceFlag != 0 && isSendAllOnceFlag != 1) {
-            throw new IllegalArgumentException("Repl slave handle error: big string send-all flag invalid=" + isSendAllOnceFlag + ", slot=" + slot);
+        var isCurrentBucketDoneFlag = buffer.get();
+        if (isCurrentBucketDoneFlag != 0 && isCurrentBucketDoneFlag != 1) {
+            throw new IllegalArgumentException("Repl slave handle error: big string send-all flag invalid=" + isCurrentBucketDoneFlag + ", slot=" + slot);
         }
-        var isSendAllOnce = isSendAllOnceFlag == 1;
+        var isCurrentBucketDone = isCurrentBucketDoneFlag == 1;
 
         var remoteReplProperties = requireRemoteReplProperties(replPair, "big string", slot);
         var bucketsPerSlotRemote = remoteReplProperties.bucketsPerSlot();
@@ -1131,7 +1131,7 @@ public class XGroup extends BaseCommand {
             });
         }
 
-        if (isSendAllOnce) {
+        if (isCurrentBucketDone) {
             if (bucketIndex == bucketsPerSlotRemote - 1) {
                 log.warn("Repl slave fetch data, go to step={}, slot={}", exists_short_string.name(), slot);
                 return Repl.reply(slot, replPair, exists_short_string, new RawBytesContent(new byte[4]));
