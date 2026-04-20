@@ -1059,7 +1059,8 @@ public class XGroup extends BaseCommand {
         }
         var isCurrentBucketDoneFlag = buffer.get();
         if (isCurrentBucketDoneFlag != 0 && isCurrentBucketDoneFlag != 1) {
-            throw new IllegalArgumentException("Repl slave handle error: big string send-all flag invalid=" + isCurrentBucketDoneFlag + ", slot=" + slot);
+            throw new IllegalArgumentException("Repl slave handle error: big string current-bucket-done flag invalid="
+                    + isCurrentBucketDoneFlag + ", slot=" + slot);
         }
         var isCurrentBucketDone = isCurrentBucketDoneFlag == 1;
 

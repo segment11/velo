@@ -118,5 +118,27 @@ class BinlogContentTest extends Specification {
         }
         then:
         exceptionDecode
+
+        when:
+        boolean exceptionEncodeWithType = false
+        try {
+            xDynConfig.encodeWithType()
+        } catch (UnsupportedOperationException e) {
+            println e.message
+            exceptionEncodeWithType = true
+        }
+        then:
+        exceptionEncodeWithType
+
+        when:
+        boolean exceptionApply = false
+        try {
+            xDynConfig.apply((short) 0, null)
+        } catch (UnsupportedOperationException e) {
+            println e.message
+            exceptionApply = true
+        }
+        then:
+        exceptionApply
     }
 }

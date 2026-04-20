@@ -142,4 +142,34 @@ class ToSlaveExistsBigStringTest extends Specification {
         cleanup:
         bigStringDir.deleteDir()
     }
+
+    def 'test single oversized file throws'() {
+        given:
+        def bigStringDir = new File(Consts.slotDir, 'big-string')
+        bigStringDir.deleteDir()
+        bigStringDir.mkdirs()
+
+        def subDir = new File(bigStringDir, '0')
+        subDir.mkdir()
+
+        def uuid = 1L
+        def keyHash = 1L
+        def file = new File(subDir, "${uuid}_${keyHash}")
+        def raf = new RandomAccessFile(file, 'rw')
+        raf.setLength(Repl.MAX_CONTENT_LENGTH + 1L)
+        raf.close()
+
+        def idListInMaster = [new BigStringFiles.IdWithKey(uuid, 0, keyHash, '')]
+
+        when:
+        new ToSlaveExistsBigString(0, bigStringDir, idListInMaster, [])
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains("max length=${Repl.MAX_CONTENT_LENGTH}")
+        e.message.contains('uuid=1')
+
+        cleanup:
+        bigStringDir.deleteDir()
+    }
 }
