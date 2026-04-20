@@ -136,6 +136,9 @@ public class XWalV implements BinlogContent {
         var keyBytes = new byte[keyLength];
         buffer.get(keyBytes);
         var cvEncodedLength = buffer.getInt();
+        if (cvEncodedLength < 0) {
+            throw new IllegalStateException("Cv encoded length error, cv encoded length=" + cvEncodedLength);
+        }
         var cvEncoded = new byte[cvEncodedLength];
         buffer.get(cvEncoded);
 

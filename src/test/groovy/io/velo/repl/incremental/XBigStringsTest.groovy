@@ -82,6 +82,22 @@ class XBigStringsTest extends Specification {
         exception
 
         when:
+        exception = false
+        buffer.position(1)
+        def keyBytesLen = key.bytes.length
+        def cvEncodedLenOffset = 1 + 4 + 8 + 4 + 8 + 2 + keyBytesLen
+        buffer.putInt(cvEncodedLenOffset, -1)
+        buffer.position(1)
+        try {
+            xBigStrings.decodeFrom(buffer)
+        } catch (IllegalStateException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
         final short slot = 0
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance

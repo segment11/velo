@@ -74,6 +74,21 @@ class XDictTest extends Specification {
         exception
 
         when:
+        exception = false
+        buffer.position(1)
+        buffer.putShort(1 + 4 + 4 + 8, (short) 1)
+        buffer.putShort(1 + 4 + 4 + 8 + 2 + 1, (short) -1)
+        buffer.position(1)
+        try {
+            XDict.decodeFrom(buffer)
+        } catch (IllegalStateException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
         def dictMap = DictMap.instance
         dictMap.initDictMap(Consts.testDir)
         xDict.apply(slot, null)

@@ -120,6 +120,9 @@ public class XDict implements BinlogContent {
         buffer.get(keyPrefixBytes);
         var keyPrefix = Wal.keyString(keyPrefixBytes);
         var dictBytesLength = buffer.getShort();
+        if (dictBytesLength <= 0) {
+            throw new IllegalStateException("Dict bytes length error, dict bytes length=" + dictBytesLength);
+        }
         var dictBytes = new byte[dictBytesLength];
         buffer.get(dictBytes);
 
