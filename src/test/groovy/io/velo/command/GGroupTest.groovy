@@ -573,19 +573,22 @@ class GGroupTest extends Specification {
         when:
         def reply = gGroup.execute('geosearch xxx fromlonlat 15 13 frommember mmm bybox 400 400 km asc desc withdist withhash withcoord count 2')
         then:
-        reply == MultiBulkReply.EMPTY
+        reply == ErrorReply.SYNTAX
 
         when:
         gGroup.execute('geoadd xxx 13.361389 38.115556 m0 15.087269 37.502669 m1 20 40 out_one 15 37 mmm')
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37 frommember mmm! bybox 400 400 km asc desc withdist withhash withcoord count 2')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37 frommember mmm bybox 400 400 km asc withdist withhash withcoord count 2')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 2
+        reply == ErrorReply.SYNTAX
 
         when:
         // only return member
-        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 frommember mmm bybox 100 100 asc count 1')
+        reply = gGroup.execute('geosearch xxx frommember mmm bybox 100 100 asc count 1')
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
@@ -657,7 +660,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('geosearch xxx byradius 100 km bybox a b')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = gGroup.execute('geosearch xxx byradius 100 km bybox 1 1 km')

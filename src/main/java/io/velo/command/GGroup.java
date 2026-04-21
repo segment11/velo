@@ -542,6 +542,9 @@ public class GGroup extends BaseCommand {
         boolean isWithHash = false;
         boolean isWithCoord = false;
         boolean hasCenterSource = false;
+        boolean hasFromLonLat = false;
+        boolean hasByRadius = false;
+        boolean hasByBox = false;
 
         for (int i = 2; i < dd.length; i++) {
             var arg = new String(dd[i]);
@@ -566,6 +569,9 @@ public class GGroup extends BaseCommand {
                 if (i + 2 >= dd.length) {
                     return ErrorReply.SYNTAX;
                 }
+                if (hasFromLonLat || fromMember != null) {
+                    return ErrorReply.SYNTAX;
+                }
                 try {
                     fromLon = Double.parseDouble(new String(dd[i + 1]));
                     fromLat = Double.parseDouble(new String(dd[i + 2]));
@@ -573,9 +579,13 @@ public class GGroup extends BaseCommand {
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_FLOAT;
                 }
+                hasFromLonLat = true;
                 hasCenterSource = true;
             } else if ("frommember".equalsIgnoreCase(arg)) {
                 if (i + 1 >= dd.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                if (hasFromLonLat || fromMember != null) {
                     return ErrorReply.SYNTAX;
                 }
                 fromMember = new String(dd[i + 1]);
@@ -583,6 +593,9 @@ public class GGroup extends BaseCommand {
                 hasCenterSource = true;
             } else if ("byradius".equalsIgnoreCase(arg)) {
                 if (i + 1 >= dd.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                if (hasByRadius || hasByBox) {
                     return ErrorReply.SYNTAX;
                 }
                 try {
@@ -601,8 +614,12 @@ public class GGroup extends BaseCommand {
                         i++;
                     }
                 }
+                hasByRadius = true;
             } else if ("bybox".equalsIgnoreCase(arg)) {
                 if (i + 2 >= dd.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                if (hasByRadius || hasByBox) {
                     return ErrorReply.SYNTAX;
                 }
                 try {
@@ -623,6 +640,7 @@ public class GGroup extends BaseCommand {
                         i++;
                     }
                 }
+                hasByBox = true;
             } else if ("withdist".equalsIgnoreCase(arg)) {
                 isWithDist = true;
             } else if ("withhash".equalsIgnoreCase(arg)) {
