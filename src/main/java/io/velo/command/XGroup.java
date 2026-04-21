@@ -720,19 +720,41 @@ public class XGroup extends BaseCommand {
 
         var nextGroupIndex = walGroupIndex + 1;
         if (nextGroupIndex % 1024 == 0) {
-            // delay; also wait for pending cross-slot writes before issuing the next request
-            Promise<Void> gate = pendingWrites != null ? pendingWrites : Promise.complete();
-            gate.whenComplete((unused, e) -> {
-                if (e != null) {
-                    log.error("Repl slave exists wal pending writes error, slot={}", slot, e);
-                    return;
-                }
-                firstOneSlot.delayRun(1000, () -> replPair.write(exists_wal, fillBytes(4, buf -> buf.putInt(nextGroupIndex))));
-            });
-            return Repl.emptyReply();
+            return delayNextExistsRequest(pendingWrites, slot, firstOneSlot, 1000,
+                    () -> replPair.write(exists_wal, fillBytes(4, buf -> buf.putInt(nextGroupIndex))));
         }
 
         return wrapExistsReplyAfter(pendingWrites, slot, Repl.reply(slot, replPair, exists_wal, fillBytes(4, buf -> buf.putInt(nextGroupIndex))));
+    }
+
+    /**
+     * Delays the next exists-phase request until `pendingWrites` completes, then schedules
+     * `scheduleNext` on the first slot eventloop after `delayMillis`. If `pendingWrites` fails,
+     * returns an `AsyncReply` that resolves to `Repl.error(...)` so the failure surfaces on the
+     * wire instead of leaving the replication session silently stuck.
+     */
+    private Reply delayNextExistsRequest(Promise<Void> pendingWrites, short slot, OneSlot firstOneSlot,
+                                         int delayMillis, Runnable scheduleNext) {
+        Promise<Void> gate = pendingWrites != null ? pendingWrites : Promise.complete();
+        if (gate.isComplete()) {
+            if (gate.isException()) {
+                log.error("Repl slave exists apply error, slot={}", slot, gate.getException());
+                return Repl.error(slot, replPair, "Repl slave exists apply error=" + gate.getException().getMessage());
+            }
+            firstOneSlot.delayRun(delayMillis, scheduleNext);
+            return Repl.emptyReply();
+        }
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        gate.whenComplete((unused, e) -> {
+            if (e != null) {
+                log.error("Repl slave exists apply error, slot={}", slot, e);
+                finalPromise.set(Repl.error(slot, replPair, "Repl slave exists apply error=" + e.getMessage()));
+                return;
+            }
+            firstOneSlot.delayRun(delayMillis, scheduleNext);
+            finalPromise.set(Repl.emptyReply());
+        });
+        return new AsyncReply(finalPromise);
     }
 
     /**
@@ -970,16 +992,8 @@ public class XGroup extends BaseCommand {
 
         var oneSlot = localPersist.oneSlot(slot);
         if (nextBatchBeginSegmentIndex % (64 * 1024) == 0) {
-            // delay; also wait for pending cross-slot writes before issuing the next request
-            Promise<Void> gate = pendingWrites != null ? pendingWrites : Promise.complete();
-            gate.whenComplete((unused, e) -> {
-                if (e != null) {
-                    log.error("Repl slave exists chunk segments pending writes error, slot={}", slot, e);
-                    return;
-                }
-                oneSlot.delayRun(100, () -> replPair.write(exists_chunk_segments, content));
-            });
-            return Repl.emptyReply();
+            return delayNextExistsRequest(pendingWrites, slot, oneSlot, 100,
+                    () -> replPair.write(exists_chunk_segments, content));
         }
 
         return wrapExistsReplyAfter(pendingWrites, slot, Repl.reply(slot, replPair, exists_chunk_segments, content));
@@ -1275,7 +1289,7 @@ public class XGroup extends BaseCommand {
         return new Repl.ReplReplyFromBytes(replPair.getSlaveUuid(), slot, s_exists_short_string, slice.getArray(), 0, slice.getWriteIndex());
     }
 
-    private Repl.ReplReply s_exists_short_string(short slot, byte[] contentBytes) {
+    private Reply s_exists_short_string(short slot, byte[] contentBytes) {
         // client received from server
         var slice = new Slice(contentBytes);
         if (slice.readableBytes() < 4) {
@@ -1297,36 +1311,39 @@ public class XGroup extends BaseCommand {
             groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
         });
 
-        for (var entry : groupedBySlot.entrySet()) {
-            var slotInner = entry.getKey();
-            var oneSlot = localPersist.oneSlot(slotInner);
-            oneSlot.asyncExecute(() -> {
-                for (var entry2 : entry.getValue().entrySet()) {
-                    var key = entry2.getKey();
-                    var cv = entry2.getValue();
-                    var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
-                    oneSlot.put(key, bucketIndex, cv, true);
-                }
-            });
+        Promise<Void> pendingWrites = null;
+        if (!groupedBySlot.isEmpty()) {
+            Promise<Void>[] promises = new Promise[groupedBySlot.size()];
+            int pi = 0;
+            for (var entry : groupedBySlot.entrySet()) {
+                var slotInner = entry.getKey();
+                var targetOneSlot = localPersist.oneSlot(slotInner);
+                promises[pi++] = targetOneSlot.asyncRun(() -> {
+                    for (var entry2 : entry.getValue().entrySet()) {
+                        var key = entry2.getKey();
+                        var cv = entry2.getValue();
+                        var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
+                        targetOneSlot.put(key, bucketIndex, cv, true);
+                    }
+                });
+            }
+            pendingWrites = promises.length == 1 ? promises[0] : Promises.all(promises);
         }
 
         if (walGroupIndex == walGroupNumberRemote - 1) {
             log.warn("Repl slave fetch data, go to step={}, slot={}", exists_chunk_segments.name(), slot);
-            return Repl.reply(slot, replPair, exists_chunk_segments, new RawBytesContent(new byte[4]));
-        } else {
-            var firstOneSlot = localPersist.currentThreadFirstOneSlot();
-
-            var nextGroupIndex = walGroupIndex + 1;
-            if (nextGroupIndex % 1024 == 0) {
-                // delay
-                firstOneSlot.delayRun(1000, () -> {
-                    replPair.write(exists_short_string, fillBytes(4, buf -> buf.putInt(nextGroupIndex)));
-                });
-                return Repl.emptyReply();
-            } else {
-                return Repl.reply(slot, replPair, exists_short_string, fillBytes(4, buf -> buf.putInt(nextGroupIndex)));
-            }
+            return wrapExistsReplyAfter(pendingWrites, slot, Repl.reply(slot, replPair, exists_chunk_segments, new RawBytesContent(new byte[4])));
         }
+
+        var firstOneSlot = localPersist.currentThreadFirstOneSlot();
+        var nextGroupIndex = walGroupIndex + 1;
+        if (nextGroupIndex % 1024 == 0) {
+            // delay; wait for pending cross-slot writes, then schedule the next request
+            return delayNextExistsRequest(pendingWrites, slot, firstOneSlot, 1000,
+                    () -> replPair.write(exists_short_string, fillBytes(4, buf -> buf.putInt(nextGroupIndex))));
+        }
+
+        return wrapExistsReplyAfter(pendingWrites, slot, Repl.reply(slot, replPair, exists_short_string, fillBytes(4, buf -> buf.putInt(nextGroupIndex))));
     }
 
     private Repl.ReplReply exists_dict(short slot, byte[] contentBytes) {

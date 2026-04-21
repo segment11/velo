@@ -2825,6 +2825,105 @@ class XGroupTest extends Specification {
         ConfForGlobal.slotNumber = (short) 1
     }
 
+    def 'test handle repl waits for cross slot exists short string writes before replying'() {
+        given:
+        ConfForGlobal.slotNumber = slotNumber
+        LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def targetEventloop = io.activej.eventloop.Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        targetEventloop.keepAlive(true)
+        Thread.start {
+            targetEventloop.run()
+        }
+        Thread.sleep(100)
+        def targetSlot = localPersist.oneSlot((short) 1)
+        targetSlot.setSlotWorkerEventloop(targetEventloop)
+        localPersist.fixSlotThreadId((short) 1, targetEventloop.eventloopThread.threadId())
+
+        def blockerEntered = new CountDownLatch(1)
+        def unblockTargetSlot = new CountDownLatch(1)
+        targetEventloop.execute {
+            blockerEntered.countDown()
+            unblockTargetSlot.await()
+        }
+        blockerEntered.await()
+
+        and:
+        def masterUuid = 301L
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.onlyOneReplPairAsSlave.setRemoteReplProperties(ConfForSlot.global.generateReplProperties())
+        def replPairAsMaster = ReplPairTest.mockAsMaster(masterUuid)
+        replPairAsMaster.slaveUuid = oneSlot.masterUuid
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        and:
+        // pick a key that hashes to target slot 1 (cross-slot from replication slot 0)
+        def key = 'exists-short-string-cross-slot'
+        while (BaseCommand.slot(key, slotNumber).slot() != (short) 1) {
+            key += 'x'
+        }
+        def keySlot = BaseCommand.slot(key, slotNumber)
+
+        def keyBytes = key.bytes
+        def cv = new CompressedValue()
+        cv.seq = 7L
+        cv.keyHash = keySlot.keyHash()
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        cv.compressedData = 'v'.bytes
+        def valueBytes = cv.encodeAsShortString()
+
+        // encode: 4-byte walGroupIndex + one short-string entry
+        int entryLength = 8 + 8 + 8 + 4 + keyBytes.length + 4 + valueBytes.length
+        def slice = new io.velo.Slice(4 + 4 + entryLength)
+        slice.writeInt(0) // walGroupIndex (remote, ignored)
+        slice.writeInt(entryLength) // length of this short-string record
+        slice.writeLong(cv.seq)
+        slice.writeLong(keySlot.keyHash())
+        slice.writeLong(cv.expireAt)
+        slice.writeInt(keyBytes.length)
+        slice.writeBytes(keyBytes)
+        slice.writeInt(valueBytes.length)
+        slice.writeBytes(valueBytes)
+
+        def contentBytes = Arrays.copyOf(slice.getArray(), slice.getWriteIndex())
+
+        when:
+        def reply = x.handleRepl(new ReplRequest(replPairAsMaster.slaveUuid, slot,
+                ReplType.s_exists_short_string, contentBytes, contentBytes.length))
+
+        then:
+        // reply is delayed because the cross-slot write to target slot 1 is blocked
+        reply instanceof AsyncReply
+
+        when:
+        unblockTargetSlot.countDown()
+        def nestedReply = (reply as AsyncReply).settablePromise.toCompletableFuture().get(5, TimeUnit.SECONDS) as ReplReply
+
+        then:
+        // reply resolves after the blocked write drains; advances to the next exists step
+        nestedReply != null
+        nestedReply.isReplType(ReplType.exists_short_string) || nestedReply.isReplType(ReplType.exists_chunk_segments)
+
+        cleanup:
+        unblockTargetSlot.countDown()
+        targetEventloop.breakEventloop()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.slotNumber = (short) 1
+    }
+
     def 'test handle repl rejects malformed big string payload before persisting entry'() {
         given:
         LocalPersistTest.prepareLocalPersist()
