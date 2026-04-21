@@ -881,6 +881,10 @@ public class MultiWorkerServer extends Launcher {
 
     private boolean isReuseNetWorkerEventloop = false;
 
+    @TestOnly
+    // need not thread safe
+    private static boolean isJvmCollectorRegistered = false;
+
     /**
      * Starts the application.
      *
@@ -989,11 +993,14 @@ public class MultiWorkerServer extends Launcher {
         }
 
         // metrics
-        CollectorRegistry.defaultRegistry.register(new StandardExports());
-        CollectorRegistry.defaultRegistry.register(new BufferPoolsExports());
-        CollectorRegistry.defaultRegistry.register(new MemoryPoolsExports());
-        CollectorRegistry.defaultRegistry.register(new GarbageCollectorExports());
-        logger.info("Prometheus jvm hotspot metrics registered");
+        if (!isJvmCollectorRegistered) {
+            CollectorRegistry.defaultRegistry.register(new StandardExports());
+            CollectorRegistry.defaultRegistry.register(new BufferPoolsExports());
+            CollectorRegistry.defaultRegistry.register(new MemoryPoolsExports());
+            CollectorRegistry.defaultRegistry.register(new GarbageCollectorExports());
+            logger.info("Prometheus jvm hotspot metrics registered");
+            isJvmCollectorRegistered = true;
+        }
 
         UP_TIME = System.currentTimeMillis();
         STATIC_GLOBAL_V.resetInfoServer(configInject);
