@@ -580,7 +580,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      * @return {@code true} if this is a new append operation, {@code false} otherwise.
      */
     @VisibleForTesting
-    boolean writeSegments(byte[] bytes, int segmentCount) {
+    public boolean writeSegments(byte[] bytes, int segmentCount) {
         if (segmentCount != 1 && segmentCount != BATCH_ONCE_SEGMENT_COUNT_WRITE) {
             throw new IllegalArgumentException("Write segment count not support=" + segmentCount);
         }
