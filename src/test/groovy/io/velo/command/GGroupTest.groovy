@@ -361,8 +361,13 @@ class GGroupTest extends Specification {
         when:
         def reply = gGroup.execute('geoadd a nx xx ch 1.0 2.0 m0 2.0 3.0 m1')
         then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geoadd a nx 1.0 2.0 m0')
+        then:
         reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 2
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = gGroup.execute('geoadd a nx 1.0 2.0 m0')
@@ -402,6 +407,18 @@ class GGroupTest extends Specification {
 
         when:
         reply = gGroup.execute('geoadd a nx 1.a 2.0 m0')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // invalid longitude > 180
+        reply = gGroup.execute('geoadd a 181.0 38.115556 m0')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // invalid latitude > 85.05112877980659
+        reply = gGroup.execute('geoadd a 15.0 90.0 m0')
         then:
         reply == ErrorReply.NOT_FLOAT
 
@@ -456,24 +473,36 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('geodist xxx m0 m1')
         then:
         reply instanceof BulkReply
+        // distance in meters should be ~166274
+        def distM = new String((reply as BulkReply).getRaw()).toDouble()
+        distM > 166000 && distM < 167000
 
         when:
         reply = gGroup.execute('geodist xxx m0 m1 KM')
         then:
         reply instanceof BulkReply
-
-        when:
-        reply = gGroup.execute('geodist xxx m0 m1 M')
-        then:
-        reply instanceof BulkReply
+        // distance in km should be ~166.27 (166274 / 1000)
+        def distKm = new String((reply as BulkReply).getRaw()).toDouble()
+        distKm > 166 && distKm < 167
 
         when:
         reply = gGroup.execute('geodist xxx m0 m1 MI')
         then:
         reply instanceof BulkReply
+        // distance in miles should be ~103.3 (166274 / 1609.34)
+        def distMi = new String((reply as BulkReply).getRaw()).toDouble()
+        distMi > 103 && distMi < 104
 
         when:
         reply = gGroup.execute('geodist xxx m0 m1 FT')
+        then:
+        reply instanceof BulkReply
+        // distance in feet should be ~545523 (166274 / 0.3048)
+        def distFt = new String((reply as BulkReply).getRaw()).toDouble()
+        distFt > 545000 && distFt < 546000
+
+        when:
+        reply = gGroup.execute('geodist xxx m0 m1 M')
         then:
         reply instanceof BulkReply
 
@@ -633,7 +662,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('geosearch xxx byradius 100 km bybox 1 1 km')
         then:
-        reply == MultiBulkReply.EMPTY
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = gGroup.execute('geosearch xxx count')

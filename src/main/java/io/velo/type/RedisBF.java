@@ -173,11 +173,15 @@ public class RedisBF {
     /**
      * Estimates the memory allocated by the Bloom Filters.
      *
-     * @return the estimated memory allocation (not yet implemented)
+     * @return the estimated memory allocation in bytes
      */
     public int memoryAllocatedEstimate() {
-        // todo
-        return 0;
+        long totalBits = 0;
+        for (One one : list) {
+            double m = -one.capacity * Math.log(fpp) / (Math.log(2) * Math.log(2));
+            totalBits += (long) Math.ceil(m);
+        }
+        return (int) ((totalBits + 7) / 8);
     }
 
     /**

@@ -75,6 +75,22 @@ public class RedisGeo {
                 case UNKNOWN -> distance;
             };
         }
+
+        /**
+         * Converts distance from meters to this unit.
+         *
+         * @param meters distance in meters
+         * @return distance in this unit
+         */
+        public double fromMeters(double meters) {
+            return switch (this) {
+                case M -> meters;
+                case KM -> meters / 1000;
+                case MI -> meters / 1609.34;
+                case FT -> meters / 0.3048;
+                case UNKNOWN -> meters;
+            };
+        }
     }
 
     private final HashMap<String, P> map = new HashMap<>();
@@ -234,10 +250,10 @@ public class RedisGeo {
         return p.lon >= westLon;
     }
 
-    private static final double GEO_LONG_MAX = 180.0;
-    private static final double GEO_LONG_MIN = -180.0;
-    private static final double GEO_LAT_MAX = 85.05112877980659;
-    private static final double GEO_LAT_MIN = -85.05112877980659;
+    public static final double GEO_LONG_MAX = 180.0;
+    public static final double GEO_LONG_MIN = -180.0;
+    public static final double GEO_LAT_MAX = 85.05112877980659;
+    public static final double GEO_LAT_MIN = -85.05112877980659;
 
     /**
      * Encodes a geographic point into a geohash.

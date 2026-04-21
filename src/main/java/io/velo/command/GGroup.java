@@ -390,6 +390,10 @@ public class GGroup extends BaseCommand {
                 try {
                     var lon = Double.parseDouble(new String(data[i]));
                     var lat = Double.parseDouble(new String(data[i + 1]));
+                    if (lon > RedisGeo.GEO_LONG_MAX || lon < RedisGeo.GEO_LONG_MIN ||
+                        lat > RedisGeo.GEO_LAT_MAX || lat < RedisGeo.GEO_LAT_MIN) {
+                        return ErrorReply.NOT_FLOAT;
+                    }
                     var member = new String(data[i + 2]);
                     itemList.add(new GeoItem(lon, lat, member));
                     i += 2;
@@ -400,6 +404,10 @@ public class GGroup extends BaseCommand {
         }
 
         if (itemList.isEmpty()) {
+            return ErrorReply.SYNTAX;
+        }
+
+        if (isNx && isXx) {
             return ErrorReply.SYNTAX;
         }
 
@@ -474,7 +482,7 @@ public class GGroup extends BaseCommand {
         }
 
         var distance = RedisGeo.distance(p0, p1);
-        return new BulkReply(unit.toMeters(distance));
+        return new BulkReply(unit.fromMeters(distance));
     }
 
     private Reply geohash(boolean isGeopos) {
@@ -526,12 +534,14 @@ public class GGroup extends BaseCommand {
         double byBoxWidth = -1;
         double byBoxHeight = -1;
         var byBoxUnit = RedisGeo.Unit.M;
+        var outputUnit = RedisGeo.Unit.M;
 
         boolean isDesc = false;
         int count = -1;
         boolean isWithDist = false;
         boolean isWithHash = false;
         boolean isWithCoord = false;
+        boolean hasCenterSource = false;
 
         for (int i = 2; i < dd.length; i++) {
             var arg = new String(dd[i]);
@@ -563,12 +573,14 @@ public class GGroup extends BaseCommand {
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_FLOAT;
                 }
+                hasCenterSource = true;
             } else if ("frommember".equalsIgnoreCase(arg)) {
                 if (i + 1 >= dd.length) {
                     return ErrorReply.SYNTAX;
                 }
                 fromMember = new String(dd[i + 1]);
                 i++;
+                hasCenterSource = true;
             } else if ("byradius".equalsIgnoreCase(arg)) {
                 if (i + 1 >= dd.length) {
                     return ErrorReply.SYNTAX;
@@ -624,6 +636,16 @@ public class GGroup extends BaseCommand {
 
         if (byRadius == -1 && byBoxWidth == -1) {
             return ErrorReply.SYNTAX;
+        }
+
+        if (!hasCenterSource) {
+            return ErrorReply.SYNTAX;
+        }
+
+        if (byRadius != -1) {
+            outputUnit = byRadiusUnit;
+        } else {
+            outputUnit = byBoxUnit;
         }
 
         var isNeedStoreToDstKey = dstKeyBytes != null;
@@ -736,7 +758,7 @@ public class GGroup extends BaseCommand {
 
             var ii = 1;
             if (isWithDist) {
-                subReplies[ii] = new BulkReply(result.distance());
+                subReplies[ii] = new BulkReply(outputUnit.fromMeters(result.distance()));
                 ii++;
             }
             if (isWithHash) {

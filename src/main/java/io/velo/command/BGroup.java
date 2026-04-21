@@ -542,7 +542,11 @@ public class BGroup extends BaseCommand {
                 if (data.length <= i + 1) {
                     return ErrorReply.SYNTAX;
                 }
-                initCapacity = Integer.parseInt(new String(data[i + 1]));
+                try {
+                    initCapacity = Integer.parseInt(new String(data[i + 1]));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
                 needCreateNew = true;
             }
 
@@ -550,7 +554,11 @@ public class BGroup extends BaseCommand {
                 if (data.length <= i + 1) {
                     return ErrorReply.SYNTAX;
                 }
-                initFpp = Double.parseDouble(new String(data[i + 1]));
+                try {
+                    initFpp = Double.parseDouble(new String(data[i + 1]));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_FLOAT;
+                }
                 if (initFpp <= 0 || initFpp >= 1) {
                     return new ErrorReply("error must be > 0 and < 1");
                 }
@@ -561,7 +569,11 @@ public class BGroup extends BaseCommand {
                 if (data.length <= i + 1) {
                     return ErrorReply.SYNTAX;
                 }
-                initExpansion = Byte.parseByte(new String(data[i + 1]));
+                try {
+                    initExpansion = Byte.parseByte(new String(data[i + 1]));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
                 if (initExpansion > RedisBF.MAX_EXPANSION) {
                     return new ErrorReply("expansion too large");
                 }
@@ -691,12 +703,22 @@ public class BGroup extends BaseCommand {
         var initExpansion = RedisBF.DEFAULT_EXPANSION;
         boolean nonScaling = false;
 
-        var initFpp = Double.parseDouble(new String(data[2]));
+        double initFpp;
+        try {
+            initFpp = Double.parseDouble(new String(data[2]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_FLOAT;
+        }
         if (initFpp <= 0 || initFpp >= 1) {
             return new ErrorReply("error must be > 0 and < 1");
         }
 
-        var initCapacity = Integer.parseInt(new String(data[3]));
+        int initCapacity;
+        try {
+            initCapacity = Integer.parseInt(new String(data[3]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
 
         for (int i = 4; i < data.length; i++) {
             var arg = new String(data[i]);
@@ -705,7 +727,11 @@ public class BGroup extends BaseCommand {
                 if (data.length <= i + 1) {
                     return ErrorReply.SYNTAX;
                 }
-                initExpansion = Byte.parseByte(new String(data[i + 1]));
+                try {
+                    initExpansion = Byte.parseByte(new String(data[i + 1]));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
                 if (initExpansion > RedisBF.MAX_EXPANSION) {
                     return new ErrorReply("expansion too large");
                 }

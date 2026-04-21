@@ -57,17 +57,32 @@ class RedisGeoTest extends Specification {
     }
 
     def 'test unit'() {
-        expect:
-        RedisGeo.Unit.M.toMeters(1.0) == 1.0
-        RedisGeo.Unit.UNKNOWN.toMeters(1.0) == 1.0
-        RedisGeo.Unit.KM.toMeters(1.0) == 1000.0
-        RedisGeo.Unit.MI.toMeters(1.0) == 1609.34
-        RedisGeo.Unit.FT.toMeters(1.0) == 0.3048
+        given:
+        def M = RedisGeo.Unit.M
+        def KM = RedisGeo.Unit.KM
+        def MI = RedisGeo.Unit.MI
+        def FT = RedisGeo.Unit.FT
 
-        RedisGeo.Unit.fromString('m') == RedisGeo.Unit.M
-        RedisGeo.Unit.fromString('km') == RedisGeo.Unit.KM
-        RedisGeo.Unit.fromString('mi') == RedisGeo.Unit.MI
-        RedisGeo.Unit.fromString('ft') == RedisGeo.Unit.FT
+        expect:
+        M.toMeters(1.0d) == 1.0d
+        KM.toMeters(1.0d) == 1000.0d
+        MI.toMeters(1.0d) == 1609.34d
+        FT.toMeters(1.0d) == 0.3048d
+
+        KM.fromMeters(1000.0d) == 1.0d
+        MI.fromMeters(1609.34d) == 1.0d
+        FT.fromMeters(0.3048d) == 1.0d
+        M.fromMeters(1.0d) == 1.0d
+
+        // round-trip: fromMeters(toMeters(x)) == x
+        KM.fromMeters(KM.toMeters(1.0d)) == 1.0d
+        MI.fromMeters(MI.toMeters(1.0d)) == 1.0d
+        FT.fromMeters(FT.toMeters(1.0d)) == 1.0d
+
+        RedisGeo.Unit.fromString('m') == M
+        RedisGeo.Unit.fromString('km') == KM
+        RedisGeo.Unit.fromString('mi') == MI
+        RedisGeo.Unit.fromString('ft') == FT
         RedisGeo.Unit.fromString('xx') == RedisGeo.Unit.UNKNOWN
     }
 

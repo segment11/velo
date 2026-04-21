@@ -690,6 +690,25 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('bf.insert a items item0')
         then:
         reply == ErrorReply.WRONG_TYPE
+
+        when:
+        inMemoryGetSet.remove(slot, 'b')
+        reply = bGroup.execute('bf.insert b capacity nope items item0')
+        then:
+        // bad capacity should return NOT_INTEGER
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = bGroup.execute('bf.insert b error nope items item0')
+        then:
+        // bad error should return NOT_FLOAT
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        reply = bGroup.execute('bf.insert b expansion nope items item0')
+        then:
+        // bad expansion should return NOT_INTEGER
+        reply == ErrorReply.NOT_INTEGER
     }
 
     def 'test bf scandump and loadchunk'() {
@@ -795,6 +814,18 @@ class BGroupTest extends Specification {
         then:
         // error should > 0 and < 1
         reply instanceof ErrorReply
+
+        when:
+        reply = bGroup.execute('bf.reserve a nope 1000')
+        then:
+        // bad fpp should return NOT_FLOAT
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        reply = bGroup.execute('bf.reserve a 0.01 nope')
+        then:
+        // bad capacity should return NOT_INTEGER
+        reply == ErrorReply.NOT_INTEGER
     }
 
     def 'test blpop'() {
