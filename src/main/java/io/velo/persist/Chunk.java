@@ -316,44 +316,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         return targetSegmentIndex % segmentNumberPerFd;
     }
 
-    /**
-     * Enumerates flags used to mark segment statuses.
-     */
-    public enum Flag {
-        init((byte) 100),
-        new_write((byte) 0),
-        reuse_new((byte) 10),
-        merged_and_persisted((byte) -10);
+    public static final byte SEGMENT_FLAG_REUSABLE = 0;
+    public static final byte SEGMENT_FLAG_HAS_DATA = 1;
 
-        final byte flagByte;
-
-        public byte flagByte() {
-            return flagByte;
-        }
-
-        Flag(byte flagByte) {
-            this.flagByte = flagByte;
-        }
-
-        /**
-         * Determine if a flag byte indicates that a segment can be reused.
-         *
-         * @param flagByteTarget the flag byte to check
-         * @return true if the flag indicates the segment can be reused, false otherwise
-         */
-        static boolean canReuse(byte flagByteTarget) {
-            return flagByteTarget == init.flagByte || flagByteTarget == merged_and_persisted.flagByte;
-        }
-
-        /**
-         * Get a string representation of this flag, including its byte value.
-         *
-         * @return the string representation of this flag
-         */
-        @Override
-        public String toString() {
-            return name() + "(" + flagByte + ")";
-        }
+    public static boolean isSegmentReusable(byte flagByte) {
+        return flagByte == SEGMENT_FLAG_REUSABLE;
     }
 
     /**
@@ -418,11 +385,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             for (var segment : segments) {
                 int targetSegmentIndex = segment.tmpSegmentIndex() + currentSegmentIndex;
                 var bytes = segment.segmentBytes();
-                boolean isNewAppend = writeSegments(bytes, 1);
+                writeSegments(bytes, 1);
 
                 // need set segment flag so that merge worker can merge
                 oneSlot.setSegmentMergeFlag(targetSegmentIndex,
-                        isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segment.segmentSeq(), walGroupIndex);
+                        SEGMENT_FLAG_HAS_DATA, segment.segmentSeq(), walGroupIndex);
 
                 moveSegmentIndexNext(1);
             }
@@ -454,11 +421,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                     segmentSeqListSubBatch.add(segment.segmentSeq());
                 }
 
-                boolean isNewAppend = writeSegments(tmpBatchBytes, BATCH_ONCE_SEGMENT_COUNT_WRITE);
+                writeSegments(tmpBatchBytes, BATCH_ONCE_SEGMENT_COUNT_WRITE);
 
                 // need set segment flag so that merge worker can merge
                 oneSlot.setSegmentMergeFlagBatch(segmentIndex, BATCH_ONCE_SEGMENT_COUNT_WRITE,
-                        isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, segmentSeqListSubBatch, walGroupIndex);
+                        SEGMENT_FLAG_HAS_DATA, segmentSeqListSubBatch, walGroupIndex);
 
                 moveSegmentIndexNext(BATCH_ONCE_SEGMENT_COUNT_WRITE);
             }
@@ -467,11 +434,11 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
                 var leftSegment = segments.get(batchCount * BATCH_ONCE_SEGMENT_COUNT_WRITE + i);
                 var bytes = leftSegment.segmentBytes();
                 int targetSegmentIndex = leftSegment.tmpSegmentIndex() + currentSegmentIndex;
-                boolean isNewAppend = writeSegments(bytes, 1);
+                writeSegments(bytes, 1);
 
                 // need set segment flag so that merge worker can merge
                 oneSlot.setSegmentMergeFlag(targetSegmentIndex,
-                        isNewAppend ? Flag.new_write.flagByte : Flag.reuse_new.flagByte, leftSegment.segmentSeq(), walGroupIndex);
+                        SEGMENT_FLAG_HAS_DATA, leftSegment.segmentSeq(), walGroupIndex);
 
                 moveSegmentIndexNext(1);
             }

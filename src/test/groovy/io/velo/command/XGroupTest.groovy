@@ -586,7 +586,7 @@ class XGroupTest extends Specification {
         def segmentLength = ConfForSlot.global.confChunk.segmentLength
         chunk.segmentIndex = 0
         chunk.writeSegments(new byte[segmentLength], 1)
-        oneSlot.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1, 0)
+        oneSlot.setSegmentMergeFlag(0, Chunk.SEGMENT_FLAG_HAS_DATA, 1, 0)
 
         contentBytes = new byte[4]
         requestBuffer = ByteBuffer.wrap(contentBytes)

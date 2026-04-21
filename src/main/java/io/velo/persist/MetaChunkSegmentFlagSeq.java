@@ -66,7 +66,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     private void fillSegmentFlagInit(byte[] innerBytes) {
         var initBytes = new byte[ONE_LENGTH];
         var initBuffer = ByteBuffer.wrap(initBytes);
-        initBuffer.put(Chunk.Flag.init.flagByte);
+        initBuffer.put(Chunk.SEGMENT_FLAG_REUSABLE);
         initBuffer.putLong(0L);
         initBuffer.putInt(INIT_WAL_GROUP_INDEX);
 
@@ -112,7 +112,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             var offset = i * segmentNumberPerFd * ONE_LENGTH;
             for (int j = 0; j < segmentNumberPerFd; j++) {
                 var flagByte = inMemoryCachedBytes[offset];
-                bitSet.set(j, Chunk.Flag.canReuse(flagByte));
+                bitSet.set(j, Chunk.isSegmentReusable(flagByte));
                 offset += ONE_LENGTH;
             }
         }
@@ -121,7 +121,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         int offset = halfSegmentNumber * ONE_LENGTH;
         for (int i = halfSegmentNumber; i < maxSegmentNumber; i++) {
             var flagByte = inMemoryCachedBytes[offset];
-            if (flagByte != Chunk.Flag.init.flagByte()) {
+            if (flagByte != Chunk.SEGMENT_FLAG_REUSABLE) {
                 isOverHalfSegmentNumberForFirstReuseLoop = true;
                 break;
             }
@@ -361,7 +361,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
                 currentWalGroupIndex = walGroupIndex;
             }
 
-            if (Chunk.Flag.canReuse(flagByte) || currentWalGroupIndex != walGroupIndex) {
+            if (Chunk.isSegmentReusable(flagByte) || currentWalGroupIndex != walGroupIndex) {
                 if (tmpBeginSegmentIndex != -1) {
                     markPersistedSegmentIndexToTargetWalGroup(currentWalGroupIndex, tmpBeginSegmentIndex, (short) continueUsedSegmentCount);
                     markedCount++;
@@ -580,7 +580,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
         updateBitSetCanReuseForSegmentIndex(segmentIndex / segmentNumberPerFd,
                 segmentIndex % segmentNumberPerFd,
-                Chunk.Flag.canReuse(flagByte));
+                Chunk.isSegmentReusable(flagByte));
 
         if (!isOverHalfSegmentNumberForFirstReuseLoop) {
             if (segmentIndex >= halfSegmentNumber) {
@@ -615,7 +615,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
         StatKeyCountInBuckets.writeToRaf(offset, bytes, inMemoryCachedByteBuffer, raf);
 
-        var canReuse = Chunk.Flag.canReuse(flagByte);
+        var canReuse = Chunk.isSegmentReusable(flagByte);
         for (int i = 0; i < segmentCount; i++) {
             var segmentIndex = beginSegmentIndex + i;
             updateBitSetCanReuseForSegmentIndex(segmentIndex / segmentNumberPerFd,

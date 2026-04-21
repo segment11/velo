@@ -989,10 +989,10 @@ class OneSlotTest extends Specification {
         exception
 
         when:
-        oneSlot.updateSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L)
+        oneSlot.updateSegmentMergeFlag(0, Chunk.SEGMENT_FLAG_HAS_DATA, 1L)
         List<Long> segmentSeqList = [1L]
         oneSlot.setSegmentMergeFlagBatch(0, 1,
-                Chunk.Flag.new_write.flagByte(), segmentSeqList, 0)
+                Chunk.SEGMENT_FLAG_HAS_DATA, segmentSeqList, 0)
         then:
         1 == 1
 

@@ -43,7 +43,6 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
-import static io.velo.persist.Chunk.Flag;
 import static io.velo.persist.Chunk.SegmentFlag;
 import static io.velo.persist.FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE;
 import static io.velo.persist.SegmentBatch2.SEGMENT_HEADER_LENGTH;
@@ -2080,7 +2079,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 return false;
             }
 
-            if (!Chunk.Flag.canReuse(flagByte)) {
+            if (!Chunk.isSegmentReusable(flagByte)) {
                 hasDataArray[0] = true;
                 return false;
             }
@@ -2223,7 +2222,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             // refer to Chunk.ONCE_PREPARE_SEGMENT_COUNT
             // last segments not write at all, need skip
             if (segmentBytesBatchRead == null || relativeOffsetInBatchBytes >= segmentBytesBatchRead.length) {
-                setSegmentMergeFlag(segmentIndex, Flag.merged_and_persisted.flagByte, 0L, 0);
+                setSegmentMergeFlag(segmentIndex, Chunk.SEGMENT_FLAG_REUSABLE, 0L, 0);
                 updatedFlagPersistedSegmentIndexList.add(segmentIndex);
 
                 continue;
@@ -2324,7 +2323,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             assert (segmentIndexList.getLast() - segmentIndexList.getFirst() == segmentIndexList.size() - 1);
 
             setSegmentMergeFlagBatch(segmentIndexList.getFirst(), segmentIndexList.size(),
-                    Flag.merged_and_persisted.flagByte, null, walGroupIndex);
+                    Chunk.SEGMENT_FLAG_REUSABLE, null, walGroupIndex);
         }
     }
 

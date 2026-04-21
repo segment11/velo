@@ -13,10 +13,10 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         def one = new MetaChunkSegmentFlagSeq(slot, slotDir)
 
         when:
-        one.setSegmentMergeFlag(10, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        one.setSegmentMergeFlag(10, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 0)
         def segmentFlag = one.getSegmentMergeFlag(10)
         then:
-        segmentFlag.flagByte() == Chunk.Flag.new_write.flagByte()
+        segmentFlag.flagByte() == Chunk.SEGMENT_FLAG_HAS_DATA
         segmentFlag.segmentSeq() == 1L
         segmentFlag.walGroupIndex() == 0
 
@@ -34,7 +34,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         10.times {
             seqLongList << (it as Long)
         }
-        one.setSegmentMergeFlagBatch(10, 10, Chunk.Flag.new_write.flagByte(), seqLongList, 0)
+        one.setSegmentMergeFlagBatch(10, 10, Chunk.SEGMENT_FLAG_HAS_DATA, seqLongList, 0)
         then:
         one.getSegmentSeqListBatchForRepl(10, 10) == seqLongList
 
@@ -158,11 +158,11 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         markedCount == 0
 
         when:
-        one.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        one.setSegmentMergeFlag(1, Chunk.Flag.new_write.flagByte(), 1L, 0)
-        one.setSegmentMergeFlag(2, Chunk.Flag.new_write.flagByte(), 1L, 1)
-        one.setSegmentMergeFlag(3, Chunk.Flag.new_write.flagByte(), 1L, 1)
-        one.setSegmentMergeFlag(5, Chunk.Flag.new_write.flagByte(), 1L, 2)
+        one.setSegmentMergeFlag(0, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 0)
+        one.setSegmentMergeFlag(1, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 0)
+        one.setSegmentMergeFlag(2, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 1)
+        one.setSegmentMergeFlag(3, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 1)
+        one.setSegmentMergeFlag(5, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 2)
         markedCount = one.reloadMarkPersistedSegmentIndex()
         one.printMarkedPersistedSegmentIndex(0)
         one.printMarkedPersistedSegmentIndex(1)
@@ -188,20 +188,20 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         segmentIndex == 0
 
         when:
-        one.setSegmentMergeFlag(0, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        one.setSegmentMergeFlag(0, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 0)
         segmentIndex = one.findCanReuseSegmentIndex(0, 10)
         then:
         segmentIndex == 1
 
         when:
-        one.setSegmentMergeFlag(2, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        one.setSegmentMergeFlag(2, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 0)
         segmentIndex = one.findCanReuseSegmentIndex(0, 10)
         then:
         segmentIndex == 3
 
         when:
         for (int i = 4; i < ConfForSlot.global.confChunk.maxSegmentNumber(); i += 9) {
-            one.setSegmentMergeFlag(i, Chunk.Flag.new_write.flagByte(), 1L, 0)
+            one.setSegmentMergeFlag(i, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 0)
         }
         segmentIndex = one.findCanReuseSegmentIndex(0, 10)
         then:
@@ -237,7 +237,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         one.canTruncateFdIndex == -1
 
         when:
-        one.setSegmentMergeFlag(8192, Chunk.Flag.new_write.flagByte(), 1L, 0)
+        one.setSegmentMergeFlag(8192, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 0)
         one.updateBitSetCanReuseForSegmentIndex(1, 0, false)
         8.times {
             one.run()

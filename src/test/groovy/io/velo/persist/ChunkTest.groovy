@@ -1,6 +1,7 @@
 package io.velo.persist
 
 import io.velo.ConfForSlot
+import io.velo.SnowFlake
 import spock.lang.Specification
 
 class ChunkTest extends Specification {
@@ -22,14 +23,18 @@ class ChunkTest extends Specification {
 
     def 'test base'() {
         given:
-        def flagInit = Chunk.Flag.init
-        println flagInit
-        println flagInit.flagByte()
-        println new Chunk.SegmentFlag(flagInit.flagByte(), 1L, 0)
+        def reusableFlagByte = Chunk.SEGMENT_FLAG_REUSABLE
+        def hasDataFlagByte = Chunk.SEGMENT_FLAG_HAS_DATA
+        println reusableFlagByte
+        println hasDataFlagByte
+        println new Chunk.SegmentFlag(reusableFlagByte, 1L, 0)
 
         expect:
-        Chunk.Flag.canReuse(Chunk.Flag.init.flagByte()) && Chunk.Flag.canReuse(Chunk.Flag.merged_and_persisted.flagByte())
-        !Chunk.Flag.canReuse(Chunk.Flag.new_write.flagByte())
+        reusableFlagByte == (byte) 0
+        hasDataFlagByte == (byte) 1
+        Chunk.isSegmentReusable(reusableFlagByte)
+        !Chunk.isSegmentReusable(hasDataFlagByte)
+        !Chunk.isSegmentReusable((byte) 2)
     }
 
     def 'test segment index'() {
@@ -205,14 +210,14 @@ class ChunkTest extends Specification {
         4.times {
             blankSeqList << 0L
         }
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.Flag.init.flagByte(), blankSeqList, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.SEGMENT_FLAG_REUSABLE, blankSeqList, 0)
         chunk.segmentIndex = 0
         chunk.persist(0, vList, null)
         then:
         chunk.segmentIndex == 2
 
         when:
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.Flag.init.flagByte(), blankSeqList, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, blankSeqList.size(), Chunk.SEGMENT_FLAG_REUSABLE, blankSeqList, 0)
         chunk.segmentIndex = 0
         def vListManyCount = Mock.prepareValueList(100, 0)
         (1..<16).each {
@@ -223,13 +228,38 @@ class ChunkTest extends Specification {
         chunk.segmentIndex > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE
 
         when:
+        List<Long> reusableSeqListWithBatchRemainder = []
+        (FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE + 1).times {
+            reusableSeqListWithBatchRemainder << 0L
+        }
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, reusableSeqListWithBatchRemainder.size(),
+                Chunk.SEGMENT_FLAG_REUSABLE, reusableSeqListWithBatchRemainder, 0)
+        chunk.segmentIndex = 0
+        def segmentBatch = ConfForSlot.global.confChunk.isSegmentUseCompression ?
+                new SegmentBatch(new SnowFlake(1, 1)) :
+                new SegmentBatch2(new SnowFlake(1, 1))
+        def vListWithBatchRemainder = (1..1000).findResult { n ->
+            def candidate = Mock.prepareValueList(n)
+            def pvmList = []
+            def segmentCount = segmentBatch.split(candidate, pvmList).size()
+            segmentCount == FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE + 1 ? candidate : null
+        }
+        assert vListWithBatchRemainder != null
+        chunk.persist(0, vListWithBatchRemainder, null)
+        then:
+        chunk.segmentIndex == FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE + 1
+        (0..FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE).every {
+            oneSlot.metaChunkSegmentFlagSeq.getSegmentMergeFlag(it).flagByte() == Chunk.SEGMENT_FLAG_HAS_DATA
+        }
+
+        when:
         int halfSegmentNumber = (confChunk.maxSegmentNumber() / 2).intValue()
         chunk.fdLengths[0] = 4096 * 100
         List<Long> seqList = []
         32.times {
             seqList << 0L
         }
-        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, seqList.size(), Chunk.Flag.merged_and_persisted.flagByte(), seqList, 0)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, seqList.size(), Chunk.SEGMENT_FLAG_REUSABLE, seqList, 0)
         chunk.segmentIndex = 0
         chunk.persist(0, vListManyCount, null)
         then:

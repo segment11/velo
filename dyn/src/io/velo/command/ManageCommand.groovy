@@ -273,7 +273,7 @@ class ManageCommand extends BaseCommand {
             if (isIterateAll) {
                 final String outputFileName = 'chunk_segment_flag.txt'
                 new File(outputDir, outputFileName).withWriter { writer ->
-                    writer.writeLine Chunk.Flag.values().collect { it.name() + ':' + it.flagByte() }.join(',')
+                    writer.writeLine "can_use:${Chunk.SEGMENT_FLAG_REUSABLE},has_data:${Chunk.SEGMENT_FLAG_HAS_DATA}"
                     oneSlot.metaChunkSegmentFlagSeq.iterateAll { segmentIndex, flagByte, seq, walGroupIndex ->
                         writer.writeLine("$segmentIndex, $flagByte, $seq, $walGroupIndex")
                         true
@@ -282,7 +282,7 @@ class ManageCommand extends BaseCommand {
             } else {
                 final String outputFileName = 'chunk_segment_flag_range.txt'
                 new File(outputDir, outputFileName).withWriter { writer ->
-                    writer.writeLine Chunk.Flag.values().collect { it.name() + ':' + it.flagByte() }.join(',')
+                    writer.writeLine "can_use:${Chunk.SEGMENT_FLAG_REUSABLE},has_data:${Chunk.SEGMENT_FLAG_HAS_DATA}"
                     oneSlot.metaChunkSegmentFlagSeq.iterateRange(beginSegmentIndex, segmentCount) { segmentIndex, flagByte, seq, walGroupIndex ->
                         writer.writeLine("$segmentIndex, $flagByte, $seq, $walGroupIndex")
                         true
