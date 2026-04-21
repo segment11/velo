@@ -374,9 +374,15 @@ class RequestDecoderTest extends Specification {
         buf2 = ByteBuf.wrapForReading(bb)
         bufs2 = new ByteBufs(1)
         bufs2.add(buf2)
-        requestList = decoder.tryDecode(bufs2)
+        boolean exception = false
+        try {
+            requestList = decoder.tryDecode(bufs2)
+        } catch (Exception e) {
+            println e.message
+            exception = true
+        }
         then:
-        requestList.isEmpty()
+        exception
     }
 
     def 'test decode fragmented http prefix shorter than 6 bytes'() {
