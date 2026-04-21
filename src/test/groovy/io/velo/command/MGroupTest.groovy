@@ -388,7 +388,7 @@ class MGroupTest extends Specification {
         inMemoryGetSet.put('a', cv0)
         inMemoryGetSet.put('b', cv1)
         reply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS a b')
-        def jedis = redisServer.initJedis()
+        def jedis = redisServer.initJedis('127.0.0.1', redisServer.port)
         then:
         reply == OKReply.INSTANCE
         jedis.get('a') == 'value0'
