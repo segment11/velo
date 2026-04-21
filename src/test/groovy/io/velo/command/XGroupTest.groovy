@@ -2769,6 +2769,62 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test hi resets first slot fetched exists all done flag on master uuid change for non first slot'() {
+        given:
+        ConfForGlobal.netListenAddresses = 'localhost:6380'
+        ConfForGlobal.slotNumber = slotNumber
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        def nonFirstSlot = localPersist.oneSlot((short) 1)
+
+        and:
+        ConfForGlobal.indexWorkers = (byte) 1
+        localPersist.startIndexHandlerPool()
+        Thread.sleep(1000)
+
+        and:
+        // simulate prior session: global flag was set true by a completed first-slot handshake
+        localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(true)
+
+        // non-first slot had a different master persisted; fresh hi arrives with a new master uuid
+        def oldMasterUuid = 500L
+        nonFirstSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(oldMasterUuid, true, 0, 0L)
+
+        def newMasterUuid = 501L
+        def replPairAsMaster = ReplPairTest.mockAsMaster(newMasterUuid)
+        replPairAsMaster.slaveUuid = nonFirstSlot.masterUuid
+        nonFirstSlot.createReplPairAsSlave('localhost', 6379)
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        when:
+        def hi = new Hi(replPairAsMaster.slaveUuid, newMasterUuid,
+                new Binlog.FileIndexAndOffset(0, 0L),
+                new Binlog.FileIndexAndOffset(0, 0L), 0)
+        // send with slot=1 (non-first slot) to exercise the failover-on-non-first-slot path
+        def hiReply = Repl.reply((short) 1, replPairAsMaster, ReplType.hi, hi)
+        def nettyBuf = io.netty.buffer.Unpooled.wrappedBuffer(hiReply.buffer().array())
+        def hiReplRequest = Repl.decode(nettyBuf)
+        x.handleRepl(hiReplRequest)
+
+        then:
+        // flag must be reset to false so non-first slots' s_catch_up gate will delay
+        // until slot 0 refreshes dicts from the new master
+        !localPersist.isAsSlaveFirstSlotFetchedExistsAllDone()
+
+        cleanup:
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.slotNumber = (short) 1
+    }
+
     def 'test handle repl rejects malformed big string payload before persisting entry'() {
         given:
         LocalPersistTest.prepareLocalPersist()

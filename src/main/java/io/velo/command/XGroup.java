@@ -523,10 +523,6 @@ public class XGroup extends BaseCommand {
 
         replPair.setRemoteReplProperties(replProperties);
 
-        if (slot == localPersist.firstOneSlot().slot()) {
-            localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(false);
-        }
-
         var oneSlot = localPersist.oneSlot(slot);
         log.warn("Repl slave set meta chunk segment index, segment index={}, slot={}", currentSegmentIndex, slot);
 
@@ -534,6 +530,14 @@ public class XGroup extends BaseCommand {
 
         var lastUpdatedMasterUuid = metaChunkSegmentIndex.getMasterUuid();
         var isExistsDataAllFetched = metaChunkSegmentIndex.isExistsDataAllFetched();
+
+        // Reset the global dict-ready barrier when either the first slot re-syncs (original behavior)
+        // or the master UUID changed (failover). Without the second condition, a non-first slot that
+        // reaches hi() before slot 0 after failover can observe a stale `true` barrier and start
+        // applying binlog from the new master before slot 0 has refreshed the dict.
+        if (slot == localPersist.firstOneSlot().slot() || lastUpdatedMasterUuid != masterUuid) {
+            localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(false);
+        }
         if (lastUpdatedMasterUuid == masterUuid && isExistsDataAllFetched) {
             // last updated means next batch, but not fetch yet, refer end of method s_cache_up
             var lastUpdatedFileIndexAndOffset = metaChunkSegmentIndex.getMasterBinlogFileIndexAndOffset();
@@ -650,7 +654,7 @@ public class XGroup extends BaseCommand {
         }
     }
 
-    private Repl.ReplReply s_exists_wal(short slot, byte[] contentBytes) {
+    private Reply s_exists_wal(short slot, byte[] contentBytes) {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
         if (buffer.remaining() < 4) {
@@ -670,6 +674,7 @@ public class XGroup extends BaseCommand {
         }
 
         var firstOneSlot = localPersist.currentThreadFirstOneSlot();
+        Promise<Void> pendingWrites = null;
         if (buffer.hasRemaining()) {
             if (buffer.remaining() < 4) {
                 throw new IllegalArgumentException("Repl slave handle error: wal payload length header incomplete, slot=" + slot);
@@ -699,8 +704,9 @@ public class XGroup extends BaseCommand {
                     }
                 }));
 
-                putToTargetWal(false, groupedBySlot);
-                putToTargetWal(true, groupedShortValueBySlot);
+                var p1 = putToTargetWal(false, groupedBySlot);
+                var p2 = putToTargetWal(true, groupedShortValueBySlot);
+                pendingWrites = Promises.all(p1, p2);
             } catch (IOException e) {
                 log.error("Repl slave update wal exists bytes error, group index={}, slot={}", walGroupIndex, slot, e);
                 throw new RuntimeException("Repl slave update wal exists bytes error, group index=" + walGroupIndex + ", slot=" + slot + ", e=" + e.getMessage());
@@ -709,30 +715,69 @@ public class XGroup extends BaseCommand {
 
         if (walGroupIndex == walGroupNumberRemote - 1) {
             log.warn("Repl slave fetch exists all done after fetch wal when slot is not the first slot, slot={}", slot);
-            return Repl.reply(slot, replPair, exists_all_done, NextStepContent.INSTANCE);
-        } else {
-            var nextGroupIndex = walGroupIndex + 1;
-            if (nextGroupIndex % 1024 == 0) {
-                // delay
-                firstOneSlot.delayRun(1000, () -> {
-                    replPair.write(exists_wal, fillBytes(4, buf -> buf.putInt(nextGroupIndex)));
-                });
-                return Repl.emptyReply();
-            } else {
-                return Repl.reply(slot, replPair, exists_wal, fillBytes(4, buf -> buf.putInt(nextGroupIndex)));
-            }
+            return wrapExistsReplyAfter(pendingWrites, slot, Repl.reply(slot, replPair, exists_all_done, NextStepContent.INSTANCE));
         }
+
+        var nextGroupIndex = walGroupIndex + 1;
+        if (nextGroupIndex % 1024 == 0) {
+            // delay; also wait for pending cross-slot writes before issuing the next request
+            Promise<Void> gate = pendingWrites != null ? pendingWrites : Promise.complete();
+            gate.whenComplete((unused, e) -> {
+                if (e != null) {
+                    log.error("Repl slave exists wal pending writes error, slot={}", slot, e);
+                    return;
+                }
+                firstOneSlot.delayRun(1000, () -> replPair.write(exists_wal, fillBytes(4, buf -> buf.putInt(nextGroupIndex))));
+            });
+            return Repl.emptyReply();
+        }
+
+        return wrapExistsReplyAfter(pendingWrites, slot, Repl.reply(slot, replPair, exists_wal, fillBytes(4, buf -> buf.putInt(nextGroupIndex))));
     }
 
-    private void putToTargetWal(boolean isShortValue, HashMap<Short, HashMap<String, Wal.V>> groupedBySlot) {
+    /**
+     * Wraps an exists-phase next-step reply so it is not sent until all queued cross-slot writes
+     * have completed. Prevents the slave from advancing the handshake (and eventually persisting
+     * `isExistsDataAllFetched = true` in `s_exists_all_done`) while target-slot writes are still
+     * in flight — a crash in that window would leave durable progress ahead of actual data.
+     */
+    private Reply wrapExistsReplyAfter(Promise<Void> pendingWrites, short slot, Reply innerReply) {
+        if (pendingWrites == null) {
+            return innerReply;
+        }
+        // Fast path: when all target slots were on the current thread (e.g., single-slot setups
+        // or tests with fixSlotThreadId), asyncRun runs synchronously and returns a completed
+        // promise. Skip AsyncReply wrapping so existing pipelines and tests see a ReplReply.
+        if (pendingWrites.isComplete()) {
+            if (pendingWrites.isException()) {
+                log.error("Repl slave exists apply error, slot={}", slot, pendingWrites.getException());
+                return Repl.error(slot, replPair, "Repl slave exists apply error=" + pendingWrites.getException().getMessage());
+            }
+            return innerReply;
+        }
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        pendingWrites.whenComplete((unused, e) -> {
+            if (e != null) {
+                log.error("Repl slave exists apply error, slot={}", slot, e);
+                finalPromise.set(Repl.error(slot, replPair, "Repl slave exists apply error=" + e.getMessage()));
+                return;
+            }
+            finalPromise.set(innerReply);
+        });
+        return new AsyncReply(finalPromise);
+    }
+
+    private Promise<Void> putToTargetWal(boolean isShortValue, HashMap<Short, HashMap<String, Wal.V>> groupedBySlot) {
         if (groupedBySlot.isEmpty()) {
-            return;
+            return Promise.complete();
         }
 
+        Promise<Void>[] promises = new Promise[groupedBySlot.size()];
+        int i = 0;
         for (var entry : groupedBySlot.entrySet()) {
             var slotInner = entry.getKey();
             var oneSlot = localPersist.oneSlot(slotInner);
-            oneSlot.asyncExecute(() -> {
+            promises[i++] = oneSlot.asyncRun(() -> {
                 for (var entry2 : entry.getValue().entrySet()) {
                     var key = entry2.getKey();
                     var v = entry2.getValue();
@@ -746,6 +791,7 @@ public class XGroup extends BaseCommand {
                 }
             });
         }
+        return promises.length == 1 ? promises[0] : Promises.all(promises);
     }
 
     private Repl.ReplReply exists_chunk_segments(short slot, byte[] contentBytes) {
@@ -796,7 +842,7 @@ public class XGroup extends BaseCommand {
         return Repl.reply(slot, replPair, s_exists_chunk_segments, content);
     }
 
-    private Repl.ReplReply s_exists_chunk_segments(short slot, byte[] contentBytes) {
+    private Reply s_exists_chunk_segments(short slot, byte[] contentBytes) {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
         if (buffer.remaining() < 16) {
@@ -893,40 +939,50 @@ public class XGroup extends BaseCommand {
             buffer.position(offset + segmentLength);
         }
 
-        for (var entry : groupedBySlot.entrySet()) {
-            var slotInner = entry.getKey();
-            var oneSlot = localPersist.oneSlot(slotInner);
-            oneSlot.asyncExecute(() -> {
-                for (var entry2 : entry.getValue().entrySet()) {
-                    var key = entry2.getKey();
-                    var cv = entry2.getValue();
-                    var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
-                    oneSlot.put(key, bucketIndex, cv, true);
-                }
-            });
+        Promise<Void> pendingWrites = null;
+        if (!groupedBySlot.isEmpty()) {
+            Promise<Void>[] promises = new Promise[groupedBySlot.size()];
+            int pi = 0;
+            for (var entry : groupedBySlot.entrySet()) {
+                var slotInner = entry.getKey();
+                var targetOneSlot = localPersist.oneSlot(slotInner);
+                promises[pi++] = targetOneSlot.asyncRun(() -> {
+                    for (var entry2 : entry.getValue().entrySet()) {
+                        var key = entry2.getKey();
+                        var cv = entry2.getValue();
+                        var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
+                        targetOneSlot.put(key, bucketIndex, cv, true);
+                    }
+                });
+            }
+            pendingWrites = promises.length == 1 ? promises[0] : Promises.all(promises);
         }
 
         boolean isLastBatch = maxSegmentNumber == beginSegmentIndex + segmentBatchCount;
         if (isLastBatch) {
             // next step, fetch exists wal
             log.warn("Repl slave fetch data, go to step={}, slot={}", exists_wal.name(), slot);
-            return Repl.reply(slot, replPair, exists_wal, new RawBytesContent(new byte[4]));
-        } else {
-            var nextBatchBeginSegmentIndex = beginSegmentIndex + segmentBatchCount;
-            var content = fillBytes(4, buf -> {
-                buf.putInt(nextBatchBeginSegmentIndex);
-            });
-
-            var oneSlot = localPersist.oneSlot(slot);
-            if (nextBatchBeginSegmentIndex % (64 * 1024) == 0) {
-                oneSlot.delayRun(100, () -> {
-                    replPair.write(exists_chunk_segments, content);
-                });
-                return Repl.emptyReply();
-            } else {
-                return Repl.reply(slot, replPair, exists_chunk_segments, content);
-            }
+            return wrapExistsReplyAfter(pendingWrites, slot, Repl.reply(slot, replPair, exists_wal, new RawBytesContent(new byte[4])));
         }
+
+        var nextBatchBeginSegmentIndex = beginSegmentIndex + segmentBatchCount;
+        var content = fillBytes(4, buf -> buf.putInt(nextBatchBeginSegmentIndex));
+
+        var oneSlot = localPersist.oneSlot(slot);
+        if (nextBatchBeginSegmentIndex % (64 * 1024) == 0) {
+            // delay; also wait for pending cross-slot writes before issuing the next request
+            Promise<Void> gate = pendingWrites != null ? pendingWrites : Promise.complete();
+            gate.whenComplete((unused, e) -> {
+                if (e != null) {
+                    log.error("Repl slave exists chunk segments pending writes error, slot={}", slot, e);
+                    return;
+                }
+                oneSlot.delayRun(100, () -> replPair.write(exists_chunk_segments, content));
+            });
+            return Repl.emptyReply();
+        }
+
+        return wrapExistsReplyAfter(pendingWrites, slot, Repl.reply(slot, replPair, exists_chunk_segments, content));
     }
 
     private Repl.ReplReply incremental_big_string(short slot, byte[] contentBytes) {
@@ -1043,7 +1099,7 @@ public class XGroup extends BaseCommand {
         return Repl.reply(slot, replPair, s_exists_big_string, toSlaveExistsBigString);
     }
 
-    private Repl.ReplReply s_exists_big_string(short slot, byte[] contentBytes) {
+    private Reply s_exists_big_string(short slot, byte[] contentBytes) {
         // client received from server
         if (NextStepContent.isNextStep(contentBytes)) {
             // next step, fetch exists chunk segments
@@ -1120,32 +1176,37 @@ public class XGroup extends BaseCommand {
             throw new IllegalArgumentException("Repl slave handle error: big string payload has trailing bytes, slot=" + slot);
         }
 
+        Promise<Void> pendingWrites = null;
         if (entries != null) {
+            Promise<Void>[] promises = new Promise[entries.size() + 1];
+            int pi = 0;
             for (var entry : entries) {
-                var oneSlot = localPersist.oneSlot(entry.slotInner());
-                oneSlot.asyncExecute(() -> {
-                    oneSlot.getBigStringFiles().writeBigStringBytes(entry.uuid(), entry.bucketIndexInner(),
+                var targetOneSlot = localPersist.oneSlot(entry.slotInner());
+                promises[pi++] = targetOneSlot.asyncRun(() -> {
+                    targetOneSlot.getBigStringFiles().writeBigStringBytes(entry.uuid(), entry.bucketIndexInner(),
                             entry.keyHash(), contentBytes, entry.offset(), entry.length());
                 });
             }
 
             var finalRhk = rhk;
             var finalSSet = sSet;
-            firstOneSlot.asyncExecute(() -> {
-                SGroup.saveRedisSet(finalRhk, finalSSet, this, dictMap);
-            });
+            promises[pi] = firstOneSlot.asyncRun(() -> SGroup.saveRedisSet(finalRhk, finalSSet, this, dictMap));
+            pendingWrites = promises.length == 1 ? promises[0] : Promises.all(promises);
         }
 
+        Reply innerReply;
         if (isCurrentBucketDone) {
             if (bucketIndex == bucketsPerSlotRemote - 1) {
                 log.warn("Repl slave fetch data, go to step={}, slot={}", exists_short_string.name(), slot);
-                return Repl.reply(slot, replPair, exists_short_string, new RawBytesContent(new byte[4]));
+                innerReply = Repl.reply(slot, replPair, exists_short_string, new RawBytesContent(new byte[4]));
             } else {
-                return fetchExistsBigString(slot, bucketIndex + 1);
+                innerReply = fetchExistsBigString(slot, bucketIndex + 1);
             }
         } else {
-            return fetchExistsBigString(slot, bucketIndex);
+            innerReply = fetchExistsBigString(slot, bucketIndex);
         }
+
+        return wrapExistsReplyAfter(pendingWrites, slot, innerReply);
     }
 
     @VisibleForTesting
