@@ -544,10 +544,9 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      *
      * @param bytes        the byte array containing the data to write
      * @param segmentCount the number of segments to write
-     * @return {@code true} if this is a new append operation, {@code false} otherwise.
      */
     @VisibleForTesting
-    public boolean writeSegments(byte[] bytes, int segmentCount) {
+    public void writeSegments(byte[] bytes, int segmentCount) {
         if (segmentCount != 1 && segmentCount != BATCH_ONCE_SEGMENT_COUNT_WRITE) {
             throw new IllegalArgumentException("Write segment count not support=" + segmentCount);
         }
@@ -562,14 +561,10 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             fdReadWrite.writeSegmentsBatch(segmentIndexTargetFd, bytes, false);
         }
 
-        boolean isNewAppend = false;
         int afterThisBatchOffset = (segmentIndexTargetFd + segmentCount) * chunkSegmentLength;
         if (fdLengths[fdIndex] < afterThisBatchOffset) {
             fdLengths[fdIndex] = afterThisBatchOffset;
-            isNewAppend = true;
         }
-
-        return isNewAppend;
     }
 
     /**

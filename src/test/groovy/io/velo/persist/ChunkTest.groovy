@@ -28,6 +28,7 @@ class ChunkTest extends Specification {
         println reusableFlagByte
         println hasDataFlagByte
         println new Chunk.SegmentFlag(reusableFlagByte, 1L, 0)
+        def writeSegmentsMethod = Chunk.getDeclaredMethod('writeSegments', byte[], int)
 
         expect:
         reusableFlagByte == (byte) 0
@@ -35,6 +36,7 @@ class ChunkTest extends Specification {
         Chunk.isSegmentReusable(reusableFlagByte)
         !Chunk.isSegmentReusable(hasDataFlagByte)
         !Chunk.isSegmentReusable((byte) 2)
+        writeSegmentsMethod.returnType == Void.TYPE
     }
 
     def 'test segment index'() {
