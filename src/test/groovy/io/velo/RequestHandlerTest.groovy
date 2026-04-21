@@ -187,7 +187,7 @@ class RequestHandlerTest extends Specification {
         def replParseData = new byte[1][]
         replParseData[0] = 'ignored'.bytes
         def replParseRequest = new Request(replParseData, false, true)
-        replParseRequest.replRequest = new ReplRequest(0L, slot, ReplType.ping, new byte[0], 0)
+        replParseRequest.replRequest = new ReplRequest(0L, slot, ReplType.ping, new byte[4], 4)
         requestHandler.parseSlots(replParseRequest)
         then:
         replParseRequest.slotWithKeyHashList.size() == 1
