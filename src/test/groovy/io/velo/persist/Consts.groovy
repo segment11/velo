@@ -56,6 +56,7 @@ class Consts {
     static boolean downloadAndStartZookeeper(String host = 'localhost', int port = 2181) {
         if (checkConnectAvailable(host, port)) {
             println 'Zookeeper already started'
+            Consts.zookeeperWorkDir.mkdir()
             return true
         }
 
