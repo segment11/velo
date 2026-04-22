@@ -311,4 +311,23 @@ class RedisHHTest extends Specification {
         rh2.size() == 1
         rh2.get(new String(keyBytes)) == bytes
     }
+
+    def 'test encode throws when size exceeds Short.MAX_VALUE'() {
+        given:
+        def rh = new RedisHH()
+        rh.put('a', 'b'.bytes)
+        def mapField = RedisHH.class.getDeclaredField('map')
+        mapField.setAccessible(true)
+        def map = (Map) mapField.get(rh)
+        (Short.MAX_VALUE + 1).times { i ->
+            map.put('field_' + i, ('v_' + i).bytes)
+        }
+
+        when:
+        rh.encode()
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds Short.MAX_VALUE')
+    }
 }

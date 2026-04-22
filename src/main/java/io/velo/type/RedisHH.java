@@ -175,10 +175,13 @@ public class RedisHH {
             bodyBytesLength += 8 + 2 + Wal.keyBytes(key).length + 4 + value.length;
         }
 
-        short size = (short) map.size();
+        int size = map.size();
+        if (size > Short.MAX_VALUE) {
+            throw new IllegalStateException("Hash size " + size + " exceeds Short.MAX_VALUE");
+        }
 
         var buffer = ByteBuffer.allocate(bodyBytesLength + HEADER_LENGTH);
-        buffer.putShort(size);
+        buffer.putShort((short) size);
         // tmp no dict seq
         buffer.putInt(0);
         buffer.putInt(bodyBytesLength);
@@ -206,7 +209,7 @@ public class RedisHH {
 
         var rawBytesWithHeader = buffer.array();
         if (bodyBytesLength > TO_COMPRESS_MIN_DATA_LENGTH && dict != null) {
-            var compressedBytes = compressIfBytesLengthIsLong(dict, bodyBytesLength, rawBytesWithHeader, size, crc);
+            var compressedBytes = compressIfBytesLengthIsLong(dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
             if (compressedBytes != null) {
                 return compressedBytes;
             }
