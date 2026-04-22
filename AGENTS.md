@@ -220,6 +220,7 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 
 ### Testing Guidelines
 
+- Follow TDD for every feature, bug fix, refactor, and behavior change: write the test first, run it and verify it fails for the expected reason, then implement the minimal code to make it pass
 - Write comprehensive tests for new functionality
 - Use Spock's data-driven testing for multiple scenarios
 - Test edge cases and error conditions
@@ -236,10 +237,28 @@ Two-agent collaboration workflow:
 
 1. **AI agent 1 (author)** — Creates a new bug review doc in `doc/bug_reviews/` following the file-name format above. Each bug entry should include: severity, cited files with line ranges, a code excerpt, and a description of the root cause and impact.
 2. **AI agent 2 (reviewer)** — Reads the doc, verifies each bug against the current code, and updates the same doc with review notes (e.g., confirming, refuting, or refining each finding).
-3. **One AI agent (1 or 2)** — Implements fixes for the confirmed bugs and commits them.
+3. **One AI agent (1 or 2)** — Implements fixes for the confirmed bugs one by one. Each bug fix must follow TDD, must be verified with relevant tests plus JaCoCo coverage inspection, and must end with its own commit before moving to the next bug.
 4. **Another AI agent** — Reviews the committed fix, then appends a "Review Feedback" section to the same doc covering: summary of the fix, strengths, concerns, and pre-commit/post-commit follow-ups.
 
 Keep the same doc as the single source of truth across all rounds — append new sections rather than creating parallel files.
+
+### Bug Fix Execution Workflow
+
+After bugs are confirmed in the review doc, fix them in this order and do not batch unrelated confirmed bugs into one commit:
+
+1. Pick one confirmed bug.
+2. Add or update the relevant test first.
+3. Run the relevant test and confirm it fails for the expected reason.
+4. Implement the minimal production code change for that single bug.
+5. Re-run the relevant tests and confirm they pass.
+6. Inspect the JaCoCo HTML report and confirm the changed lines or branches for that bug were actually executed.
+7. Commit that single bug fix with a short commit message.
+8. Move to the next confirmed bug and repeat from step 1.
+
+Notes:
+- Do not start production code for a bug fix before the failing test exists.
+- Do not claim a bug is fixed from a green test alone; JaCoCo confirmation is also required.
+- If multiple bugs touch the same area, still keep review, test intent, and commits separated bug by bug unless the user explicitly asks for batching.
 
 > **Tips for bug reviews**: When reviewing bugs in a module, create a new branch based on `main` and name it `review/<module-type>` (e.g., `review/persist`, `review/replication`). The module name can be inferred from existing docs under `doc/design/*.md` (e.g., `doc/design/02_persist_layer_design.md` indicates the `persist` module).
 
