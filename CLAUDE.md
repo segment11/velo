@@ -87,10 +87,12 @@ Two-agent collaboration workflow:
 
 1. **AI agent 1 (author)** — Creates a new bug review doc in `doc/bug_reviews/` following the file-name format above. Each bug entry should include: severity, cited files with line ranges, a code excerpt, and a description of the root cause and impact.
 2. **AI agent 2 (reviewer)** — Reads the doc, verifies each bug against the current code, and updates the same doc with review notes (e.g., confirming, refuting, or refining each finding).
-3. **AI agent 1 (author)** — Implements fixes for the confirmed bugs and commits them.
-4. **AI agent 2 (reviewer)** — Reviews the committed fix, then appends a "Review Feedback" section to the same doc covering: summary of the fix, strengths, concerns, and pre-commit/post-commit follow-ups.
+3. **One AI agent (1 or 2)** — Implements fixes for the confirmed bugs and commits them.
+4. **Another AI agent** — Reviews the committed fix, then appends a "Review Feedback" section to the same doc covering: summary of the fix, strengths, concerns, and pre-commit/post-commit follow-ups.
 
 Keep the same doc as the single source of truth across all rounds — append new sections rather than creating parallel files.
+
+> **Tips for bug reviews**: When reviewing bugs in a module, create a new branch based on `main` and name it `review/<module-type>` (e.g., `review/persist`, `review/replication`). The module name can be inferred from existing docs under `doc/design/*.md` (e.g., `doc/design/02_persist_layer_design.md` indicates the `persist` module).
 
 ## Key Dependencies
 
