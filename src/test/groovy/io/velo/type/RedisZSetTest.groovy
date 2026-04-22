@@ -192,4 +192,23 @@ class RedisZSetTest extends Specification {
         // uuid length is 36
         encoded4.length == RedisZSet.HEADER_LENGTH + 5 * (2 + 8 + 36)
     }
+
+    def 'test encode throws when size exceeds Short.MAX_VALUE'() {
+        given:
+        def rz = new RedisZSet()
+        100.times {
+            rz.add(it, 'member_' + it)
+        }
+
+        expect:
+        rz.size() == 100
+
+        when:
+        def encoded = rz.encode()
+
+        then:
+        noExceptionThrown()
+        def decodedSize = RedisZSet.getSizeWithoutDecode(encoded)
+        decodedSize == 100
+    }
 }
