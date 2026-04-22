@@ -167,10 +167,13 @@ public class RedisList {
             bodyBytesLength += 2 + e.length;
         }
 
-        short size = (short) list.size();
+        int size = list.size();
+        if (size > Short.MAX_VALUE) {
+            throw new IllegalStateException("List size " + size + " exceeds Short.MAX_VALUE");
+        }
 
         var buffer = ByteBuffer.allocate(bodyBytesLength + HEADER_LENGTH);
-        buffer.putShort(size);
+        buffer.putShort((short) size);
         // tmp no dict seq
         buffer.putInt(0);
         buffer.putInt(bodyBytesLength);
@@ -191,7 +194,7 @@ public class RedisList {
 
         var rawBytesWithHeader = buffer.array();
         if (bodyBytesLength > TO_COMPRESS_MIN_DATA_LENGTH && dict != null) {
-            var compressedBytes = RedisHH.compressIfBytesLengthIsLong(dict, bodyBytesLength, rawBytesWithHeader, size, crc);
+            var compressedBytes = RedisHH.compressIfBytesLengthIsLong(dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
             if (compressedBytes != null) {
                 return compressedBytes;
             }
