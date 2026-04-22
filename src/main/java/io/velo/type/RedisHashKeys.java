@@ -145,10 +145,13 @@ public class RedisHashKeys {
             bodyBytesLength += 2 + Wal.keyBytes(e).length;
         }
 
-        short size = (short) set.size();
+        int size = set.size();
+        if (size > Short.MAX_VALUE) {
+            throw new IllegalStateException("HashKeys size " + size + " exceeds Short.MAX_VALUE");
+        }
 
         var buffer = ByteBuffer.allocate(bodyBytesLength + HEADER_LENGTH);
-        buffer.putShort(size);
+        buffer.putShort((short) size);
         // tmp no dict seq
         buffer.putInt(0);
         buffer.putInt(bodyBytesLength);
@@ -170,7 +173,7 @@ public class RedisHashKeys {
 
         var rawBytesWithHeader = buffer.array();
         if (bodyBytesLength > TO_COMPRESS_MIN_DATA_LENGTH && dict != null) {
-            var compressedBytes = RedisHH.compressIfBytesLengthIsLong(dict, bodyBytesLength, rawBytesWithHeader, size, crc);
+            var compressedBytes = RedisHH.compressIfBytesLengthIsLong(dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
             if (compressedBytes != null) {
                 return compressedBytes;
             }
