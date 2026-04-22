@@ -169,6 +169,7 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 
 ### Testing Guidelines
 
+- For stronger regression tests and branch-focused coverage, refer to `doc/write_better_test_cases_for_ai_agents.md`
 - Write comprehensive tests for new functionality
 - Use Spock's data-driven testing for multiple scenarios
 - Test edge cases and error conditions

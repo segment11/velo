@@ -221,6 +221,7 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 ### Testing Guidelines
 
 - Follow TDD for every feature, bug fix, refactor, and behavior change: write the test first, run it and verify it fails for the expected reason, then implement the minimal code to make it pass
+- For stronger regression tests and branch-focused coverage, refer to `doc/write_better_test_cases_for_ai_agents.md`
 - Write comprehensive tests for new functionality
 - Use Spock's data-driven testing for multiple scenarios
 - Test edge cases and error conditions
