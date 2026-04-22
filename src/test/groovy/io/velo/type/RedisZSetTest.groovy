@@ -196,25 +196,22 @@ class RedisZSetTest extends Specification {
     def 'test encode throws when size exceeds Short.MAX_VALUE'() {
         given:
         def rz = new RedisZSet()
-        rz.add(1, 'a')
+        int sizeToTest = ((int) Short.MAX_VALUE) + 1
 
         when:
-        def setField = RedisZSet.getDeclaredField('set')
-        setField.setAccessible(true)
-        def treeSet = setField.get(rz)
-
-        and:
-        def addMethod = treeSet.getClass().getDeclaredMethod('add', Object)
-        addMethod.setAccessible(true)
+        sizeToTest.times { i ->
+            rz.add((double) i, "member" + i)
+        }
 
         then:
-        rz.size() == 1
+        rz.size() == sizeToTest
 
         when:
         rz.encode()
 
         then:
-        noExceptionThrown()
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds')
     }
 
     def 'test encode normal size works'() {

@@ -181,13 +181,21 @@ class RedisHashKeysTest extends Specification {
     def 'test encode throws when size exceeds Short.MAX_VALUE'() {
         given:
         def rhk = new RedisHashKeys()
-        rhk.add('field1')
+        int sizeToTest = ((int) Short.MAX_VALUE) + 1
 
         when:
-        def encoded = rhk.encode()
+        sizeToTest.times { i ->
+            rhk.add("field" + i)
+        }
 
         then:
-        noExceptionThrown()
-        rhk.size() == 1
+        rhk.size() == sizeToTest
+
+        when:
+        rhk.encode()
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds')
     }
 }

@@ -172,14 +172,22 @@ class RedisListTest extends Specification {
     def 'test encode throws when size exceeds Short.MAX_VALUE'() {
         given:
         def rl = new RedisList()
-        rl.addFirst('a'.bytes)
+        int sizeToTest = ((int) Short.MAX_VALUE) + 1
 
         when:
-        def encoded = rl.encode()
+        sizeToTest.times { i ->
+            rl.addLast(("item" + i).bytes)
+        }
 
         then:
-        noExceptionThrown()
-        rl.size() == 1
+        rl.size() == sizeToTest
+
+        when:
+        rl.encode()
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds')
     }
 
     def 'test iterate throws when entry length is invalid'() {
