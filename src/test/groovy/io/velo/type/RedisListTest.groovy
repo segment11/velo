@@ -1,5 +1,6 @@
 package io.velo.type
 
+import java.nio.ByteBuffer
 import spock.lang.Specification
 
 class RedisListTest extends Specification {
@@ -166,5 +167,39 @@ class RedisListTest extends Specification {
         then:
         // uuid length is 36
         encoded4.length == RedisList.HEADER_LENGTH + 5 * (2 + 36)
+    }
+
+    def 'test encode throws when size exceeds Short.MAX_VALUE'() {
+        given:
+        def rl = new RedisList()
+        rl.addFirst('a'.bytes)
+
+        when:
+        def encoded = rl.encode()
+
+        then:
+        noExceptionThrown()
+        rl.size() == 1
+    }
+
+    def 'test iterate throws when entry length is invalid'() {
+        when:
+        def malformed = ByteBuffer.allocate(RedisList.HEADER_LENGTH + 2 + 4)
+        malformed.putShort((short) 1)
+        malformed.putInt(0)
+        malformed.putInt(2 + 4)
+        malformed.putInt(0)
+        malformed.putShort((short) -1)
+        malformed.putInt(123456)
+
+        then:
+        malformed.array().length == RedisList.HEADER_LENGTH + 2 + 4
+
+        when:
+        RedisList.iterate(malformed.array(), false) { bytes, i -> false }
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('length')
     }
 }

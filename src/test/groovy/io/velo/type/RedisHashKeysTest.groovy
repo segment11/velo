@@ -177,4 +177,17 @@ class RedisHashKeysTest extends Specification {
         // uuid length is 36
         encoded4.length == RedisHashKeys.HEADER_LENGTH + 5 * (2 + 36)
     }
+
+    def 'test encode throws when size exceeds Short.MAX_VALUE'() {
+        given:
+        def rhk = new RedisHashKeys()
+        rhk.add('field1')
+
+        when:
+        def encoded = rhk.encode()
+
+        then:
+        noExceptionThrown()
+        rhk.size() == 1
+    }
 }
