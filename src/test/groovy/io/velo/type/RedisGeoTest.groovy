@@ -105,4 +105,10 @@ class RedisGeoTest extends Specification {
         RedisGeo.geohashEncode(0, 0, 11, 0, 0, 10, (byte) 26) == 0
         RedisGeo.geohashEncode(0, 0, 0, 9, 0, 10, (byte) 26) == 0
     }
+
+    def 'test geohashEncode handles degenerate bounding box'() {
+        expect:
+        RedisGeo.geohashEncode(0, 0, 0, 10, 0, 5, (byte) 26) == 0
+        RedisGeo.geohashEncode(0, 10, 0, 0, 5, 0, (byte) 26) == 0
+    }
 }

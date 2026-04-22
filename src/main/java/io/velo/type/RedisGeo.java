@@ -278,6 +278,10 @@ public class RedisGeo {
             return 0;
         }
 
+        if (lat_max == lat_min || lon_max == lon_min) {
+            return 0;
+        }
+
         double lat_offset = (lat - lat_min) / (lat_max - lat_min);
         double lon_offset = (lon - lon_min) / (lon_max - lon_min);
 
