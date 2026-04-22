@@ -13,6 +13,7 @@ import org.jetbrains.annotations.VisibleForTesting;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 
 /**
  * Handles Redis commands starting with letter 'Z'.
@@ -653,6 +654,7 @@ public class ZGroup extends BaseCommand {
                 }
 
                 var it = rz.getSet().iterator();
+                var scoreUpdates = new HashMap<String, Double>();
                 while (it.hasNext()) {
                     var sv = it.next();
                     var otherSv = otherRz.get(sv.member());
@@ -672,18 +674,29 @@ public class ZGroup extends BaseCommand {
                         if (isWeights) {
                             memberScore *= weights[0];
                         }
-                        sv.score(memberScore);
                         sv.isAlreadyWeighted = true;
                     }
 
                     var otherMemberScore = isWeights ? weights[otherKeyIndex + 1] * otherSv.score() : otherSv.score();
                     if (isAggregateSum) {
-                        sv.score(memberScore + otherMemberScore);
+                        scoreUpdates.put(sv.member(), memberScore + otherMemberScore);
                     } else if (isAggregateMin) {
-                        sv.score(Math.min(memberScore, otherMemberScore));
+                        scoreUpdates.put(sv.member(), Math.min(memberScore, otherMemberScore));
                     } else {
-                        sv.score(Math.max(memberScore, otherMemberScore));
+                        scoreUpdates.put(sv.member(), Math.max(memberScore, otherMemberScore));
                     }
+                }
+
+                for (var entry : scoreUpdates.entrySet()) {
+                    var member = entry.getKey();
+                    var newScore = entry.getValue();
+                    var svExist = memberMap.get(member);
+                    memberMap.remove(member);
+                    rz.getSet().remove(svExist);
+                    var sv = new RedisZSet.ScoreValue(newScore, member);
+                    sv.isAlreadyWeighted = true;
+                    rz.getSet().add(sv);
+                    memberMap.put(member, sv);
                 }
 
                 otherKeyIndex++;
@@ -696,6 +709,7 @@ public class ZGroup extends BaseCommand {
                     continue;
                 }
 
+                var scoreUpdates = new HashMap<String, Double>();
                 for (var otherSv : otherRz.getSet()) {
                     var sv = rz.get(otherSv.member());
                     if (sv == null) {
@@ -714,19 +728,30 @@ public class ZGroup extends BaseCommand {
                             if (isWeights) {
                                 memberScore *= weights[0];
                             }
-                            sv.score(memberScore);
                             sv.isAlreadyWeighted = true;
                         }
 
                         var otherMemberScore = isWeights ? weights[otherKeyIndex + 1] * otherSv.score() : otherSv.score();
                         if (isAggregateSum) {
-                            sv.score(memberScore + otherMemberScore);
+                            scoreUpdates.put(sv.member(), memberScore + otherMemberScore);
                         } else if (isAggregateMin) {
-                            sv.score(Math.min(memberScore, otherMemberScore));
+                            scoreUpdates.put(sv.member(), Math.min(memberScore, otherMemberScore));
                         } else {
-                            sv.score(Math.max(memberScore, otherMemberScore));
+                            scoreUpdates.put(sv.member(), Math.max(memberScore, otherMemberScore));
                         }
                     }
+                }
+
+                for (var entry : scoreUpdates.entrySet()) {
+                    var member = entry.getKey();
+                    var newScore = entry.getValue();
+                    var svExist = rz.getMemberMap().get(member);
+                    rz.getMemberMap().remove(member);
+                    rz.getSet().remove(svExist);
+                    var newSv = new RedisZSet.ScoreValue(newScore, member);
+                    newSv.isAlreadyWeighted = true;
+                    rz.getSet().add(newSv);
+                    rz.getMemberMap().put(member, newSv);
                 }
 
                 otherKeyIndex++;

@@ -1375,6 +1375,89 @@ zunionstore
         eventloop.breakEventloop()
     }
 
+    def 'test zunionstore maintains sorted order after score mutation'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def zGroup = new ZGroup(null, null, null)
+        zGroup.byPassGetSet = inMemoryGetSet
+        zGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def cvA = Mock.prepareCompressedValueList(1)[0]
+        cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzA = new RedisZSet()
+        rzA.add(1.0, 'a')
+        rzA.add(2.0, 'b')
+        rzA.add(3.0, 'c')
+        cvA.compressedData = rzA.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvA)
+
+        def cvB = Mock.prepareCompressedValueList(1)[0]
+        cvB.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzB = new RedisZSet()
+        rzB.add(100.0, 'a')
+        rzB.add(4.0, 'd')
+        cvB.compressedData = rzB.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvB)
+
+        def reply = zGroup.execute('zunionstore dst 2 a b')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 4
+
+        when:
+        def resultCv = inMemoryGetSet.getBuf(slot, 'dst', 0, 0L).cv()
+        def resultRz = RedisZSet.decode(resultCv.compressedData)
+        def membersInOrder = resultRz.getSet().collect { it.member() }
+        def scoresInOrder = resultRz.getSet().collect { it.score() }
+        then:
+        membersInOrder == ['b', 'c', 'd', 'a']
+        scoresInOrder == [2.0, 3.0, 4.0, 101.0]
+    }
+
+    def 'test zinterstore maintains sorted order after score mutation'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def zGroup = new ZGroup(null, null, null)
+        zGroup.byPassGetSet = inMemoryGetSet
+        zGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def cvA = Mock.prepareCompressedValueList(1)[0]
+        cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzA = new RedisZSet()
+        rzA.add(1.0, 'a')
+        rzA.add(2.0, 'b')
+        rzA.add(3.0, 'c')
+        cvA.compressedData = rzA.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvA)
+
+        def cvB = Mock.prepareCompressedValueList(1)[0]
+        cvB.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzB = new RedisZSet()
+        rzB.add(100.0, 'a')
+        rzB.add(200.0, 'b')
+        rzB.add(4.0, 'd')
+        cvB.compressedData = rzB.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvB)
+
+        def reply = zGroup.execute('zinterstore dst 2 a b')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 2
+
+        when:
+        def resultCv = inMemoryGetSet.getBuf(slot, 'dst', 0, 0L).cv()
+        def resultRz = RedisZSet.decode(resultCv.compressedData)
+        def membersInOrder = resultRz.getSet().collect { it.member() }
+        def scoresInOrder = resultRz.getSet().collect { it.score() }
+        then:
+        membersInOrder == ['a', 'b']
+        scoresInOrder == [101.0, 202.0]
+    }
+
     def 'test zmscore'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
