@@ -344,7 +344,7 @@ public class RedisGeo {
      * @return the geohash as a byte array
      */
     public static byte[] hash(P p) {
-        var l = geohashEncode(-180, 180, -90, 90, p.lon, p.lat, (byte) 26);
+        var l = geohashEncode(GEO_LONG_MIN, GEO_LONG_MAX, GEO_LAT_MIN, GEO_LAT_MAX, p.lon, p.lat, (byte) 26);
 
         var bytes = new byte[11];
         int i;

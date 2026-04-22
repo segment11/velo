@@ -111,4 +111,34 @@ class RedisGeoTest extends Specification {
         RedisGeo.geohashEncode(0, 0, 0, 10, 0, 5, (byte) 26) == 0
         RedisGeo.geohashEncode(0, 10, 0, 0, 5, 0, (byte) 26) == 0
     }
+
+    def 'test hash and hashAsStore use consistent latitude bounds'() {
+        given:
+        def p = new RedisGeo.P(15.087269, 37.502669)
+
+        when:
+        def hashResult = RedisGeo.hash(p)
+        def hashAsStoreResult = RedisGeo.hashAsStore(p)
+
+        then:
+        hashResult.length == 11
+        hashAsStoreResult != 0
+    }
+
+    def 'test hash uses Redis-compatible latitude bounds'() {
+        given:
+        def pBeyondRedis = new RedisGeo.P(15.087269, 86.0)
+
+        when:
+        def hashAsStoreBeyond = RedisGeo.hashAsStore(pBeyondRedis)
+
+        then:
+        hashAsStoreBeyond == 0
+
+        when:
+        def hashBeyond = RedisGeo.hash(pBeyondRedis)
+
+        then:
+        new String(hashBeyond) == "00000000000"
+    }
 }
