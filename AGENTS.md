@@ -122,6 +122,26 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 
 ## Architecture Guidelines
 
+### Multi-module Structure
+- **velo** (root): Main project
+- **segment_common**: Shared utilities submodule
+- **segmentweb**: Web framework submodule
+
+### Source Layout
+- `src/main/java/io/velo/` — Core Java source
+- `src/main/groovy/` — Groovy source (cluster watch/failover management)
+- `src/test/groovy/` — Tests (Spock framework)
+- `dyn/src/` — Hot-reloadable Groovy commands (cluster, config, info, manage, extend)
+- `dyn/test/` — Tests for dynamic commands
+
+### Threading Model
+- Network worker threads handle connections
+- Slot worker threads handle data operations (thread-local data, run-to-completion model)
+- `@ThreadNeedLocal` annotation marks thread-local requirements
+
+### Entry Point
+`io.velo.MultiWorkerServer` — main class using ActiveJ launcher
+
 ### Package Structure
 
 ```
@@ -208,12 +228,28 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 - Test thread-safety for concurrent operations
 - After running tests for a change, check the JaCoCo report for the touched classes and make sure the changed code path was executed
 
+## Bug Reviews Workflow
+
+Bug review documents live under `doc/bug_reviews/`. File naming format: `bug_<N>_<module>_review_round_<R>.md` (e.g., `bug_8_replication_module_review_round_3.md`).
+
+Two-agent collaboration workflow:
+
+1. **AI agent 1 (author)** — Creates a new bug review doc in `doc/bug_reviews/` following the file-name format above. Each bug entry should include: severity, cited files with line ranges, a code excerpt, and a description of the root cause and impact.
+2. **AI agent 2 (reviewer)** — Reads the doc, verifies each bug against the current code, and updates the same doc with review notes (e.g., confirming, refuting, or refining each finding).
+3. **One AI agent (1 or 2)** — Implements fixes for the confirmed bugs and commits them.
+4. **Another AI agent** — Reviews the committed fix, then appends a "Review Feedback" section to the same doc covering: summary of the fix, strengths, concerns, and pre-commit/post-commit follow-ups.
+
+Keep the same doc as the single source of truth across all rounds — append new sections rather than creating parallel files.
+
+> **Tips for bug reviews**: When reviewing bugs in a module, create a new branch based on `main` and name it `review/<module-type>` (e.g., `review/persist`, `review/replication`). The module name can be inferred from existing docs under `doc/design/*.md` (e.g., `doc/design/02_persist_layer_design.md` indicates the `persist` module).
+
 ## Configuration
 
 ### Key Configuration Files
 
 - `velo.properties`: Main application configuration
 - `log4j2.xml`: Logging configuration
+- `acl.conf`: ACL rules
 - `build.gradle`: Build configuration and dependencies
 
 ### Environment Setup
@@ -316,11 +352,13 @@ def 'test your functionality'() {
 ### Core Dependencies
 
 - ActiveJ 6.0-beta2: Async framework
+- Zstd-jni: Compression with trainable dictionaries
 - Groovy 4.0.12: Dynamic language support
 - Spock 2.3: Testing framework
-- RocksDB 9.7.3: Storage engine only for key analysis, not main storage
-- Jackson 2.14.3: JSON processing
 - Jedis 4.4.7: Redis client
+- RocksDB 9.7.3: Key analysis only, not main storage
+- Apache Curator: ZooKeeper for cluster coordination
+- Prometheus simpleclient: Metrics
 
 ### Build Tools
 
