@@ -3,6 +3,21 @@ package io.velo.type
 import spock.lang.Specification
 
 class RedisGeoTest extends Specification {
+    private static String toGeohashString(long l) {
+        def geoalphabet = "0123456789bcdefghjkmnpqrstuvwxyz".bytes
+        def bytes = new byte[11]
+        for (int i = 0; i < 11; i++) {
+            int idx
+            if (i == 10) {
+                idx = 0
+            } else {
+                idx = (int) ((l >> (52 - ((i + 1) * 5))) & 0x1f)
+            }
+            bytes[i] = geoalphabet[idx]
+        }
+        return new String(bytes)
+    }
+
     def 'test member and encode'() {
         given:
         def rg = new RedisGeo()
@@ -112,33 +127,27 @@ class RedisGeoTest extends Specification {
         RedisGeo.geohashEncode(0, 10, 0, 0, 5, 0, (byte) 26) == 0
     }
 
-    def 'test hash and hashAsStore use consistent latitude bounds'() {
+    def 'test hash uses standard geohash latitude normalization'() {
         given:
         def p = new RedisGeo.P(15.087269, 37.502669)
+        def expected = toGeohashString(RedisGeo.geohashEncode(-180, 180, -90, 90, p.lon, p.lat, (byte) 26))
 
         when:
-        def hashResult = RedisGeo.hash(p)
-        def hashAsStoreResult = RedisGeo.hashAsStore(p)
+        def hashResult = new String(RedisGeo.hash(p))
 
         then:
-        hashResult.length == 11
-        hashAsStoreResult != 0
+        hashResult == expected
     }
 
-    def 'test hash uses Redis-compatible latitude bounds'() {
+    def 'test hashAsStore keeps internal Redis geo bounds'() {
         given:
-        def pBeyondRedis = new RedisGeo.P(15.087269, 86.0)
+        def p = new RedisGeo.P(15.087269, 37.502669)
+        def storeHash = RedisGeo.hashAsStore(p)
+        def standardHash = RedisGeo.geohashEncode(-180, 180, -90, 90, p.lon, p.lat, (byte) 26)
 
-        when:
-        def hashAsStoreBeyond = RedisGeo.hashAsStore(pBeyondRedis)
-
-        then:
-        hashAsStoreBeyond == 0
-
-        when:
-        def hashBeyond = RedisGeo.hash(pBeyondRedis)
-
-        then:
-        new String(hashBeyond) == "00000000000"
+        expect:
+        storeHash != 0
+        standardHash != 0
+        storeHash != standardHash
     }
 }
