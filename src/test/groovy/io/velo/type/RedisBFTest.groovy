@@ -2,6 +2,8 @@ package io.velo.type
 
 import spock.lang.Specification
 
+import java.nio.ByteBuffer
+
 class RedisBFTest extends Specification {
     def items = (0..<100).collect { 'item:' + it }
     def items200 = (0..<200).collect { 'item:' + it }
@@ -146,5 +148,37 @@ class RedisBFTest extends Specification {
         then:
         def e = thrown(RuntimeException)
         e.message.contains('overflow')
+    }
+
+    def 'test constructor rejects non-positive expansion'() {
+        when:
+        new RedisBF(1000, 0.01, (byte) 0, false)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('expansion must be positive')
+
+        when:
+        new RedisBF(1000, 0.01, (byte) -1, false)
+
+        then:
+        def e2 = thrown(IllegalArgumentException)
+        e2.message.contains('expansion must be positive')
+    }
+
+    def 'test decode rejects non-positive expansion'() {
+        given:
+        def bf = new RedisBF(1000, 0.01, (byte) 2, false)
+        bf.put('a')
+        def encoded = bf.encode()
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.put(0, (byte) 0)
+
+        when:
+        RedisBF.decode(encoded)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('expansion must be positive')
     }
 }

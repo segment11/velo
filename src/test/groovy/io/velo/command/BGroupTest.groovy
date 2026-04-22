@@ -828,6 +828,44 @@ class BGroupTest extends Specification {
         reply == ErrorReply.NOT_INTEGER
     }
 
+    def 'test bf reserve rejects non-positive expansion'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = bGroup.execute('bf.reserve a 0.01 100 expansion 0')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = bGroup.execute('bf.reserve b 0.01 100 expansion -1')
+        then:
+        reply instanceof ErrorReply
+    }
+
+    def 'test bf insert rejects non-positive expansion'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = bGroup.execute('bf.insert a capacity 1000 error 0.01 expansion 0 items item0')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = bGroup.execute('bf.insert a capacity 1000 error 0.01 expansion -1 items item0')
+        then:
+        reply instanceof ErrorReply
+    }
+
     def 'test blpop'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

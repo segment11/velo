@@ -577,6 +577,9 @@ public class BGroup extends BaseCommand {
                 if (initExpansion > RedisBF.MAX_EXPANSION) {
                     return new ErrorReply("expansion too large");
                 }
+                if (initExpansion <= 0) {
+                    return new ErrorReply("expansion must be positive");
+                }
                 needCreateNew = true;
             }
 
@@ -734,6 +737,9 @@ public class BGroup extends BaseCommand {
                 }
                 if (initExpansion > RedisBF.MAX_EXPANSION) {
                     return new ErrorReply("expansion too large");
+                }
+                if (initExpansion <= 0) {
+                    return new ErrorReply("expansion must be positive");
                 }
             }
 

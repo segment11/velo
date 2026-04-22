@@ -135,6 +135,9 @@ public class RedisBF {
      * @param nonScaling    whether the Bloom Filter is non-scaling
      */
     public RedisBF(int initCapacity, double initFpp, byte initExpansion, boolean nonScaling) {
+        if (initExpansion <= 0) {
+            throw new IllegalArgumentException("BF expansion must be positive, got: " + initExpansion);
+        }
         this.fpp = initFpp;
         this.expansion = initExpansion;
         this.nonScaling = nonScaling;
@@ -305,6 +308,9 @@ public class RedisBF {
 
         var r = new RedisBF();
         r.expansion = buffer.get();
+        if (r.expansion <= 0) {
+            throw new IllegalStateException("BF expansion must be positive, got: " + r.expansion);
+        }
         r.nonScaling = buffer.get() != 0;
         r.fpp = buffer.getDouble();
         var listSize = buffer.getInt();
