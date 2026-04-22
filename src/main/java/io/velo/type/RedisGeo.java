@@ -386,16 +386,22 @@ public class RedisGeo {
             bodyBytesLength += 2 + Wal.keyBytes(member).length + 16;
         }
 
-        short size = (short) map.size();
+        int size = map.size();
+        if (size > Short.MAX_VALUE) {
+            throw new IllegalStateException("Geo size " + size + " exceeds Short.MAX_VALUE");
+        }
 
         var buffer = ByteBuffer.allocate(bodyBytesLength + HEADER_LENGTH);
-        buffer.putShort(size);
+        buffer.putShort((short) size);
         buffer.putInt(bodyBytesLength);
         // tmp crc
         buffer.putInt(0);
         for (var entry : map.entrySet()) {
             var member = entry.getKey();
             var memberBytes = Wal.keyBytes(member);
+            if (memberBytes.length > Short.MAX_VALUE) {
+                throw new IllegalStateException("Geo member length " + memberBytes.length + " exceeds Short.MAX_VALUE");
+            }
             var p = entry.getValue();
             buffer.putShort((short) memberBytes.length);
             buffer.put(memberBytes);

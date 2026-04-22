@@ -197,4 +197,36 @@ class RedisGeoTest extends Specification {
         noExceptionThrown()
         rg.size() == 3
     }
+
+    def 'test encode throws when entry count exceeds Short.MAX_VALUE'() {
+        given:
+        def rg = new RedisGeo()
+        def mapField = RedisGeo.class.getDeclaredField('map')
+        mapField.setAccessible(true)
+        def map = (Map) mapField.get(rg)
+        (Short.MAX_VALUE + 1).times { i ->
+            map.put('m_' + i, new RedisGeo.P(0, 0))
+        }
+
+        when:
+        rg.encode()
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds Short.MAX_VALUE')
+    }
+
+    def 'test encode throws when member length exceeds Short.MAX_VALUE'() {
+        given:
+        def rg = new RedisGeo()
+        def bigMember = new String(new char[Short.MAX_VALUE + 1])
+        rg.add(bigMember, 0, 0)
+
+        when:
+        rg.encode()
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds Short.MAX_VALUE')
+    }
 }
