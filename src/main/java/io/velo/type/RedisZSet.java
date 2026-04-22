@@ -510,6 +510,12 @@ public class RedisZSet {
         int rank = 0;
         for (int i = 0; i < size; i++) {
             int len = buffer.getShort();
+            if (len <= 0) {
+                throw new IllegalStateException("Invalid zset member length: " + len + ", expected > 0");
+            }
+            if (len + 8 > buffer.remaining()) {
+                throw new IllegalStateException("Invalid zset member length: " + len + ", exceeds remaining buffer");
+            }
             double score = buffer.getDouble();
             var bytes = new byte[len];
             buffer.get(bytes);
@@ -569,6 +575,12 @@ public class RedisZSet {
 
         for (int i = 0; i < size; i++) {
             int len = buffer.getShort();
+            if (len <= 0) {
+                throw new IllegalStateException("Invalid zset member length: " + len + ", expected > 0");
+            }
+            if (len + 8 > buffer.remaining()) {
+                throw new IllegalStateException("Invalid zset member length: " + len + ", exceeds remaining buffer");
+            }
             double score = buffer.getDouble();
             var bytes = new byte[len];
             buffer.get(bytes);

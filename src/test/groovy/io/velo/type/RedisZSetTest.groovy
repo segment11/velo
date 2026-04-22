@@ -2,6 +2,8 @@ package io.velo.type
 
 import spock.lang.Specification
 
+import java.nio.ByteBuffer
+
 class RedisZSetTest extends Specification {
     def 'zset'() {
         given:
@@ -231,5 +233,69 @@ class RedisZSetTest extends Specification {
         noExceptionThrown()
         def decodedSize = RedisZSet.getSizeWithoutDecode(encoded)
         decodedSize == 100
+    }
+
+    def 'test decode throws on invalid member length'() {
+        given:
+        def rz = new RedisZSet()
+        rz.add(1.0, 'a')
+        def encoded = rz.encode()
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.putShort(RedisZSet.HEADER_LENGTH, (short) -1)
+
+        when:
+        RedisZSet.decode(encoded, false)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('Invalid zset member length')
+    }
+
+    def 'test iterate throws on invalid member length'() {
+        given:
+        def rz = new RedisZSet()
+        rz.add(1.0, 'a')
+        def encoded = rz.encode()
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.putShort(RedisZSet.HEADER_LENGTH, (short) -1)
+
+        when:
+        RedisZSet.iterate(encoded, false) { bytes, score, rank -> false }
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('Invalid zset member length')
+    }
+
+    def 'test decode throws on oversized member length'() {
+        given:
+        def rz = new RedisZSet()
+        rz.add(1.0, 'a')
+        def encoded = rz.encode()
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.putShort(RedisZSet.HEADER_LENGTH, (short) 10000)
+
+        when:
+        RedisZSet.decode(encoded, false)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds remaining buffer')
+    }
+
+    def 'test iterate throws on oversized member length'() {
+        given:
+        def rz = new RedisZSet()
+        rz.add(1.0, 'a')
+        def encoded = rz.encode()
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.putShort(RedisZSet.HEADER_LENGTH, (short) 10000)
+
+        when:
+        RedisZSet.iterate(encoded, false) { bytes, score, rank -> false }
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds remaining buffer')
     }
 }
