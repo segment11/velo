@@ -150,4 +150,51 @@ class RedisGeoTest extends Specification {
         standardHash != 0
         storeHash != standardHash
     }
+
+    def 'test add throws on invalid coordinates'() {
+        given:
+        def rg = new RedisGeo()
+
+        when:
+        rg.add('test', 200, 37.502669)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.toLowerCase().contains('longitude')
+
+        when:
+        rg.add('test', -200, 37.502669)
+
+        then:
+        e = thrown(IllegalArgumentException)
+        e.message.toLowerCase().contains('longitude')
+
+        when:
+        rg.add('test', 15, 100)
+
+        then:
+        e = thrown(IllegalArgumentException)
+        e.message.toLowerCase().contains('latitude')
+
+        when:
+        rg.add('test', 15, -100)
+
+        then:
+        e = thrown(IllegalArgumentException)
+        e.message.toLowerCase().contains('latitude')
+    }
+
+    def 'test add accepts valid coordinates'() {
+        given:
+        def rg = new RedisGeo()
+
+        when:
+        rg.add('valid1', 180, 85.05112877980659)
+        rg.add('valid2', -180, -85.05112877980659)
+        rg.add('valid3', 0, 0)
+
+        then:
+        noExceptionThrown()
+        rg.size() == 3
+    }
 }

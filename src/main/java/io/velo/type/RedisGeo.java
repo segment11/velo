@@ -150,6 +150,12 @@ public class RedisGeo {
      * @param latitude  the latitude of the geographic point
      */
     public void add(String member, double longitude, double latitude) {
+        if (longitude > GEO_LONG_MAX || longitude < GEO_LONG_MIN) {
+            throw new IllegalArgumentException("Longitude must be between " + GEO_LONG_MIN + " and " + GEO_LONG_MAX);
+        }
+        if (latitude > GEO_LAT_MAX || latitude < GEO_LAT_MIN) {
+            throw new IllegalArgumentException("Latitude must be between " + GEO_LAT_MIN + " and " + GEO_LAT_MAX);
+        }
         map.put(member, new P(longitude, latitude));
     }
 
