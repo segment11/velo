@@ -81,4 +81,70 @@ class RedisBFTest extends Specification {
         redisBF2.capacity() == 100 + 200
         redisBF2.listSize() == 2
     }
+
+    def 'test isFull handles zero capacity'() {
+        given:
+        def redisBF = new RedisBF(true)
+        redisBF.put('item1')
+
+        when:
+        def encoded = redisBF.encode()
+        def decodedBF = RedisBF.decode(encoded)
+
+        then:
+        decodedBF.listSize() == 1
+
+        when:
+        def field = RedisBF.getDeclaredField('list')
+        field.setAccessible(true)
+        def list = field.get(decodedBF)
+        def oneClass = Class.forName('io.velo.type.RedisBF$One')
+        def capacityField = oneClass.getDeclaredField('capacity')
+        capacityField.setAccessible(true)
+        def itemInsertedField = oneClass.getDeclaredField('itemInserted')
+        itemInsertedField.setAccessible(true)
+        def one = list[0]
+        capacityField.set(one, 0)
+        itemInsertedField.set(one, 0)
+
+        then:
+        noExceptionThrown()
+        one.isFull() == true
+    }
+
+    def 'test capacity expansion overflow detection'() {
+        given:
+        def redisBF = new RedisBF(true)
+
+        when:
+        def encoded = redisBF.encode()
+        def decodedBF = RedisBF.decode(encoded)
+
+        then:
+        decodedBF.listSize() == 1
+
+        when:
+        def field = RedisBF.getDeclaredField('list')
+        field.setAccessible(true)
+        def list = field.get(decodedBF)
+        def oneClass = Class.forName('io.velo.type.RedisBF$One')
+        def capacityField = oneClass.getDeclaredField('capacity')
+        capacityField.setAccessible(true)
+        def itemInsertedField = oneClass.getDeclaredField('itemInserted')
+        itemInsertedField.setAccessible(true)
+        def one = list[0]
+        def largeCapacity = (int) (Integer.MAX_VALUE / 2.0) + 1
+        capacityField.set(one, largeCapacity)
+        itemInsertedField.set(one, (int) (largeCapacity * 0.91))
+
+        then:
+        one.isFull()
+
+        when:
+        decodedBF.put('trigger_expansion_item')
+
+        then:
+        def e = thrown(RuntimeException)
+        e.message.contains('overflow')
+    }
 }

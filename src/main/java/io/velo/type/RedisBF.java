@@ -38,6 +38,9 @@ public class RedisBF {
          * @return true if the Bloom Filter is full, false otherwise
          */
         public boolean isFull() {
+            if (capacity == 0) {
+                return true;
+            }
             return itemInserted / (double) capacity >= 0.9;
         }
     }
@@ -235,6 +238,9 @@ public class RedisBF {
         }
 
         var lastOne = list.getLast();
+        if (lastOne.capacity > Integer.MAX_VALUE / expansion) {
+            throw new RuntimeException("BF capacity overflow");
+        }
         var newOneCapacity = lastOne.capacity * expansion;
 
         var newOne = new One();
