@@ -256,6 +256,10 @@ public class Wal implements InMemoryEstimate {
     void lazyReadFromFile() throws IOException {
         var n1 = readWal(walSharedFile, delayToKeyBucketValues, false);
         var n2 = readWal(walSharedFileShortValue, delayToKeyBucketShortValues, true);
+
+        mergeAfterReload();
+
+        refreshBigStringUuidMap();
         initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketValues);
         initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketShortValues);
 
@@ -589,11 +593,42 @@ public class Wal implements InMemoryEstimate {
     private void addBigStringUuidIfMatch(V v) {
         // deleted flag or test value
         if (v.cvEncoded.length < 28) {
+            bigStringFileUuidByKey.remove(v.key);
             return;
         }
 
         if (CompressedValue.onlyReadSpType(v.cvEncoded) == CompressedValue.SP_TYPE_BIG_STRING) {
             bigStringFileUuidByKey.put(v.key, CompressedValue.getBigStringMetaUuid(v.cvEncoded));
+        } else {
+            bigStringFileUuidByKey.remove(v.key);
+        }
+    }
+
+    private void refreshBigStringUuidMap() {
+        bigStringFileUuidByKey.clear();
+        for (var entry : delayToKeyBucketShortValues.entrySet()) {
+            var latest = getV(entry.getKey());
+            if (latest == entry.getValue()) {
+                addBigStringUuidIfMatch(latest);
+            }
+        }
+    }
+
+    private void mergeAfterReload() {
+        var keysInBoth = new ArrayList<String>();
+        for (var key : delayToKeyBucketShortValues.keySet()) {
+            if (delayToKeyBucketValues.containsKey(key)) {
+                keysInBoth.add(key);
+            }
+        }
+        for (var key : keysInBoth) {
+            var vShort = delayToKeyBucketShortValues.get(key);
+            var v = delayToKeyBucketValues.get(key);
+            if (vShort.seq > v.seq) {
+                delayToKeyBucketValues.remove(key);
+            } else {
+                delayToKeyBucketShortValues.remove(key);
+            }
         }
     }
 
@@ -979,15 +1014,14 @@ public class Wal implements InMemoryEstimate {
                 }
             }
 
-            if (!needPersist) {
-                addBigStringUuidIfMatch(v);
-            }
+            addBigStringUuidIfMatch(v);
 
             return new PutResult(needPersist, true, null, needPersist ? 0 : offset);
         }
 
         delayToKeyBucketValues.put(key, v);
         delayToKeyBucketShortValues.remove(key);
+        bigStringFileUuidByKey.remove(key);
 
         lastSeqAfterPut = v.seq;
 
@@ -1006,6 +1040,11 @@ public class Wal implements InMemoryEstimate {
                 }
             }
         }
+
+        if (!needPersist) {
+            addBigStringUuidIfMatch(v);
+        }
+
         return new PutResult(needPersist, false, null, needPersist ? 0 : offset);
     }
 

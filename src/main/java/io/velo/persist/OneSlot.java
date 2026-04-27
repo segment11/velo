@@ -1882,6 +1882,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     walShortValueWriteIndex = targetWal.fileToWriteIndex;
                 }
             } else {
+                overwrittenBigStringUuid = getCurrentBigStringUuid(targetWal, key, bucketIndex, cv.getKeyHash());
                 var cvEncoded = cv.encode();
                 v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
                         key, cvEncoded, isFromMerge);

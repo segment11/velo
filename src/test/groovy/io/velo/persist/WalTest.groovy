@@ -289,6 +289,114 @@ class WalTest extends Specification {
         fileShortValue.delete()
     }
 
+    def 'clear big string uuid when key changes to non big string wal value'() {
+        given:
+        ConfForSlot.global = ConfForSlot.debugMode
+
+        def file = new File(Consts.slotDir, 'test-raf-big-string-clear.wal')
+        def fileShortValue = new File(Consts.slotDir, 'test-raf-big-string-clear-short-value.wal')
+        if (file.exists()) {
+            file.delete()
+        }
+        if (fileShortValue.exists()) {
+            fileShortValue.delete()
+        }
+
+        FileUtils.touch(file)
+        FileUtils.touch(fileShortValue)
+
+        def raf = new RandomAccessFile(file, 'rw')
+        def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
+        def snowFlake = new SnowFlake(1, 1)
+        def oneSlot = new OneSlot(slot)
+        def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+
+        def bigStringKey = 'big-string-key'
+        def bigStringKeyHash = KeyHash.hash(bigStringKey.bytes)
+        def bigStringCv = new CompressedValue()
+        bigStringCv.seq = 100L
+        bigStringCv.keyHash = bigStringKeyHash
+        bigStringCv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        bigStringCv.setCompressedDataAsBigString(5678L, CompressedValue.NULL_DICT_SEQ)
+        def bigStringV = new Wal.V(100L, 0, bigStringKeyHash, CompressedValue.NO_EXPIRE, CompressedValue.SP_TYPE_BIG_STRING,
+                bigStringKey, bigStringCv.encode(), false)
+
+        when:
+        wal.put(true, bigStringKey, bigStringV)
+
+        then:
+        wal.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+
+        when:
+        def reloadedWalWithBigString = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+        reloadedWalWithBigString.lazyReadFromFile()
+
+        then:
+        reloadedWalWithBigString.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+
+        when:
+        def normalShortCvEncoded = Mock.prepareShortStringCvEncoded(bigStringKey, 'normal-short')
+        def normalShortV = new Wal.V(101L, 0, bigStringKeyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                bigStringKey, normalShortCvEncoded, false)
+        wal.put(true, bigStringKey, normalShortV)
+
+        then:
+        !wal.bigStringFileUuidByKey.containsKey(bigStringKey)
+
+        when:
+        wal.put(true, bigStringKey, bigStringV)
+
+        then:
+        wal.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+
+        when:
+        def normalCv = new CompressedValue()
+        normalCv.seq = 102L
+        normalCv.keyHash = bigStringKeyHash
+        normalCv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        normalCv.compressedData = 'normal-long'.bytes
+        def normalV = new Wal.V(102L, 0, bigStringKeyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                bigStringKey, normalCv.encode(), false)
+        wal.put(false, bigStringKey, normalV)
+
+        then:
+        !wal.bigStringFileUuidByKey.containsKey(bigStringKey)
+
+        when:
+        def reloadedWalAfterNormal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+        reloadedWalAfterNormal.lazyReadFromFile()
+
+        then:
+        !reloadedWalAfterNormal.bigStringFileUuidByKey.containsKey(bigStringKey)
+
+        when:
+        wal.put(true, bigStringKey, bigStringV)
+
+        then:
+        wal.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+
+        when:
+        wal.removeDelay(bigStringKey, 0, bigStringKeyHash, 0L)
+
+        then:
+        !wal.bigStringFileUuidByKey.containsKey(bigStringKey)
+
+        when:
+        def reloadedWalAfterDelete = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+        reloadedWalAfterDelete.lazyReadFromFile()
+
+        then:
+        !reloadedWalAfterDelete.bigStringFileUuidByKey.containsKey(bigStringKey)
+
+        cleanup:
+        wal.clear()
+        wal.clear(false)
+        raf.close()
+        rafShortValue.close()
+        file.delete()
+        fileShortValue.delete()
+    }
+
     def 'test value change to short value'() {
         given:
         def file = new File(Consts.slotDir, 'test-raf.wal')
@@ -533,6 +641,78 @@ class WalTest extends Specification {
         !wal.inWalKeysFormScan(5L).isEmpty()
 
         cleanup:
+        raf.close()
+        rafShortValue.close()
+        file.delete()
+        fileShortValue.delete()
+    }
+
+    def 'test merge after reload resolves overlapping keys between short and normal maps'() {
+        given:
+        ConfForSlot.global = ConfForSlot.debugMode
+
+        def file = new File(Consts.slotDir, 'test-raf.wal')
+        def fileShortValue = new File(Consts.slotDir, 'test-raf-short-value.wal')
+        if (file.exists()) file.delete()
+        if (fileShortValue.exists()) fileShortValue.delete()
+        FileUtils.touch(file)
+        FileUtils.touch(fileShortValue)
+
+        def raf = new RandomAccessFile(file, 'rw')
+        def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
+        def snowFlake = new SnowFlake(1, 1)
+        def oneSlot = new OneSlot(slot)
+        def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+
+        def key = 'conflict-key'
+        def keyHash = KeyHash.hash(key.bytes)
+
+        when: 'write normal value first, then overwrite with short value (higher seq)'
+        def normalV = new Wal.V(1L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, ('normal-value').bytes, false)
+        wal.put(false, key, normalV)
+
+        def shortV = new Wal.V(2L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, ('short-value').bytes, false)
+        wal.put(true, key, shortV)
+
+        then: 'at runtime, only short map has the key'
+        !wal.delayToKeyBucketValues.containsKey(key)
+        wal.delayToKeyBucketShortValues.containsKey(key)
+
+        when: 'simulate reload - both WAL files are re-read independently'
+        wal.delayToKeyBucketValues.clear()
+        wal.delayToKeyBucketShortValues.clear()
+        wal.lazyReadFromFile()
+
+        then: 'after reload + merge, only short map has the key (seq 2 > seq 1)'
+        !wal.delayToKeyBucketValues.containsKey(key)
+        wal.delayToKeyBucketShortValues.containsKey(key)
+        wal.getV(key).seq == 2L
+
+        when: 'write short value first, then overwrite with normal value (higher seq)'
+        wal.clear()
+        wal.clear(false)
+        def shortV2 = new Wal.V(5L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, ('short-value-2').bytes, false)
+        wal.put(true, key, shortV2)
+
+        def normalV2 = new Wal.V(10L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, ('normal-value-2').bytes, false)
+        wal.put(false, key, normalV2)
+
+        wal.delayToKeyBucketValues.clear()
+        wal.delayToKeyBucketShortValues.clear()
+        wal.lazyReadFromFile()
+
+        then: 'after reload + merge, only normal map has the key (seq 10 > seq 5)'
+        wal.delayToKeyBucketValues.containsKey(key)
+        !wal.delayToKeyBucketShortValues.containsKey(key)
+        wal.getV(key).seq == 10L
+
+        cleanup:
+        wal.clear()
+        wal.clear(false)
         raf.close()
         rafShortValue.close()
         file.delete()
