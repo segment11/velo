@@ -488,13 +488,14 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     @VisibleForTesting
     void moveSegmentIndexNext(int segmentCount) {
         if (segmentCount > 1) {
+            var maxSegmentNumber = maxSegmentIndex + 1;
             var newSegmentIndex = segmentIndex + segmentCount;
-            if (newSegmentIndex == maxSegmentIndex) {
+            if (newSegmentIndex >= maxSegmentNumber) {
+                if (newSegmentIndex > maxSegmentNumber) {
+                    throw new SegmentOverflowException("Segment index overflow, s=" + slot + ", i=" + segmentIndex +
+                            ", c=" + segmentCount + ", max=" + maxSegmentIndex);
+                }
                 newSegmentIndex = 0;
-            } else if (newSegmentIndex > maxSegmentIndex) {
-                // already skip fd last segments for prepare write batch, never reach here
-                throw new SegmentOverflowException("Segment index overflow, s=" + slot + ", i=" + segmentIndex +
-                        ", c=" + segmentCount + ", max=" + maxSegmentIndex);
             }
             segmentIndex = newSegmentIndex;
             return;

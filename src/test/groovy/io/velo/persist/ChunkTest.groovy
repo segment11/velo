@@ -85,6 +85,11 @@ class ChunkTest extends Specification {
         when:
         chunk.moveSegmentIndexNext(segmentNumberPerFd - 1)
         then:
+        chunk.segmentIndex == confChunk.maxSegmentNumber() - 1
+
+        when:
+        chunk.moveSegmentIndexNext(1)
+        then:
         chunk.segmentIndex == 0
 
         when:
@@ -101,6 +106,12 @@ class ChunkTest extends Specification {
         when:
         chunk.segmentIndex = confChunk.maxSegmentNumber() - 1
         chunk.moveSegmentIndexNext(1)
+        then:
+        chunk.segmentIndex == 0
+
+        when:
+        chunk.segmentIndex = confChunk.maxSegmentNumber() - 4
+        chunk.moveSegmentIndexNext(4)
         then:
         chunk.segmentIndex == 0
 
