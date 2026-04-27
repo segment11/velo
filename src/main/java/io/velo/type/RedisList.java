@@ -256,6 +256,9 @@ public class RedisList {
             if (len <= 0) {
                 throw new IllegalStateException("Invalid list entry length: " + len + ", expected > 0");
             }
+            if (len > buffer.remaining()) {
+                throw new IllegalStateException("Invalid list entry length: " + len + ", exceeds remaining buffer");
+            }
             var bytes = new byte[len];
             buffer.get(bytes);
             r.list.add(bytes);
@@ -308,6 +311,9 @@ public class RedisList {
             int len = buffer.getShort();
             if (len <= 0) {
                 throw new IllegalStateException("Invalid list entry length: " + len + ", expected > 0");
+            }
+            if (len > buffer.remaining()) {
+                throw new IllegalStateException("Invalid list entry length: " + len + ", exceeds remaining buffer");
             }
             var bytes = new byte[len];
             buffer.get(bytes);

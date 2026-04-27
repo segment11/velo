@@ -210,4 +210,36 @@ class RedisListTest extends Specification {
         def e = thrown(IllegalStateException)
         e.message.contains('length')
     }
+
+    def 'test decode throws on oversized positive entry length'() {
+        given:
+        def rl = new RedisList()
+        rl.addFirst('a'.bytes)
+        def encoded = rl.encode()
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.putShort(RedisList.HEADER_LENGTH, (short) 10000)
+
+        when:
+        RedisList.decode(encoded, false)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds remaining buffer')
+    }
+
+    def 'test iterate throws on oversized positive entry length'() {
+        given:
+        def rl = new RedisList()
+        rl.addFirst('a'.bytes)
+        def encoded = rl.encode()
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.putShort(RedisList.HEADER_LENGTH, (short) 10000)
+
+        when:
+        RedisList.iterate(encoded, false) { bytes, i -> false }
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds remaining buffer')
+    }
 }
