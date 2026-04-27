@@ -256,6 +256,9 @@ public class Wal implements InMemoryEstimate {
     void lazyReadFromFile() throws IOException {
         var n1 = readWal(walSharedFile, delayToKeyBucketValues, false);
         var n2 = readWal(walSharedFileShortValue, delayToKeyBucketShortValues, true);
+
+        mergeAfterReload();
+
         refreshBigStringUuidMap();
         initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketValues);
         initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketShortValues);
@@ -452,12 +455,7 @@ public class Wal implements InMemoryEstimate {
 
         var allValues = new HashMap<String, V>();
         allValues.putAll(delayToKeyBucketShortValues);
-        for (var entry : delayToKeyBucketValues.entrySet()) {
-            var existing = allValues.get(entry.getKey());
-            if (existing == null || entry.getValue().seq > existing.seq) {
-                allValues.put(entry.getKey(), entry.getValue());
-            }
-        }
+        allValues.putAll(delayToKeyBucketValues);
 
         for (var entry : allValues.entrySet()) {
             if (tmpSkipCount > 0) {
@@ -612,6 +610,24 @@ public class Wal implements InMemoryEstimate {
             var latest = getV(entry.getKey());
             if (latest == entry.getValue()) {
                 addBigStringUuidIfMatch(latest);
+            }
+        }
+    }
+
+    private void mergeAfterReload() {
+        var keysInBoth = new ArrayList<String>();
+        for (var key : delayToKeyBucketShortValues.keySet()) {
+            if (delayToKeyBucketValues.containsKey(key)) {
+                keysInBoth.add(key);
+            }
+        }
+        for (var key : keysInBoth) {
+            var vShort = delayToKeyBucketShortValues.get(key);
+            var v = delayToKeyBucketValues.get(key);
+            if (vShort.seq > v.seq) {
+                delayToKeyBucketValues.remove(key);
+            } else {
+                delayToKeyBucketShortValues.remove(key);
             }
         }
     }

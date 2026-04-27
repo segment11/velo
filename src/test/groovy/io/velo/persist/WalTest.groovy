@@ -647,7 +647,7 @@ class WalTest extends Specification {
         fileShortValue.delete()
     }
 
-    def 'test scan resolves seq conflict between short and normal values'() {
+    def 'test merge after reload resolves overlapping keys between short and normal maps'() {
         given:
         ConfForSlot.global = ConfForSlot.debugMode
 
@@ -661,63 +661,54 @@ class WalTest extends Specification {
         def raf = new RandomAccessFile(file, 'rw')
         def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
         def snowFlake = new SnowFlake(1, 1)
-        def wal = new Wal(slot, null, 0, raf, rafShortValue, snowFlake)
+        def oneSlot = new OneSlot(slot)
+        def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
 
-        when: 'simulate post-reload: same key in both maps, short value is newer (higher seq)'
         def key = 'conflict-key'
         def keyHash = KeyHash.hash(key.bytes)
-        // normal value with seq=1 (older)
+
+        when: 'write normal value first, then overwrite with short value (higher seq)'
         def normalV = new Wal.V(1L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
                 key, ('normal-value').bytes, false)
-        wal.delayToKeyBucketValues.put(key, normalV)
+        wal.put(false, key, normalV)
 
-        // short value with seq=2 (newer)
         def shortV = new Wal.V(2L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
                 key, ('short-value').bytes, false)
-        wal.delayToKeyBucketShortValues.put(key, shortV)
+        wal.put(true, key, shortV)
 
-        def r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
+        then: 'at runtime, only short map has the key'
+        !wal.delayToKeyBucketValues.containsKey(key)
+        wal.delayToKeyBucketShortValues.containsKey(key)
 
-        then: 'scan should return the newer short value, not the stale normal value'
-        r.keys().size() == 1
-        r.keys()[0] == key
-        // getV resolves correctly using seq
+        when: 'simulate reload - both WAL files are re-read independently'
+        wal.delayToKeyBucketValues.clear()
+        wal.delayToKeyBucketShortValues.clear()
+        wal.lazyReadFromFile()
+
+        then: 'after reload + merge, only short map has the key (seq 2 > seq 1)'
+        !wal.delayToKeyBucketValues.containsKey(key)
+        wal.delayToKeyBucketShortValues.containsKey(key)
         wal.getV(key).seq == 2L
 
-        when: 'simulate the reverse: normal value is newer (higher seq)'
-        wal.delayToKeyBucketValues.clear()
-        wal.delayToKeyBucketShortValues.clear()
-        def normalV2 = new Wal.V(10L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
-                key, ('normal-value-2').bytes, false)
-        wal.delayToKeyBucketValues.put(key, normalV2)
-
+        when: 'write short value first, then overwrite with normal value (higher seq)'
+        wal.clear()
+        wal.clear(false)
         def shortV2 = new Wal.V(5L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
                 key, ('short-value-2').bytes, false)
-        wal.delayToKeyBucketShortValues.put(key, shortV2)
+        wal.put(true, key, shortV2)
 
-        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
+        def normalV2 = new Wal.V(10L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, ('normal-value-2').bytes, false)
+        wal.put(false, key, normalV2)
 
-        then: 'scan should return the newer normal value'
-        r.keys().size() == 1
-        r.keys()[0] == key
-        wal.getV(key).seq == 10L
-
-        when: 'short value is a delete tombstone (newer) that should hide normal value'
         wal.delayToKeyBucketValues.clear()
         wal.delayToKeyBucketShortValues.clear()
-        def normalV3 = new Wal.V(3L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
-                key, ('normal-value-3').bytes, false)
-        wal.delayToKeyBucketValues.put(key, normalV3)
+        wal.lazyReadFromFile()
 
-        byte[] deleteEncoded = [CompressedValue.SP_FLAG_DELETE_TMP]
-        def deleteV = new Wal.V(20L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
-                key, deleteEncoded, false)
-        wal.delayToKeyBucketShortValues.put(key, deleteV)
-
-        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
-
-        then: 'scan should skip the key because the newer value is a delete tombstone'
-        r.keys().isEmpty()
+        then: 'after reload + merge, only normal map has the key (seq 10 > seq 5)'
+        wal.delayToKeyBucketValues.containsKey(key)
+        !wal.delayToKeyBucketShortValues.containsKey(key)
+        wal.getV(key).seq == 10L
 
         cleanup:
         wal.clear()
