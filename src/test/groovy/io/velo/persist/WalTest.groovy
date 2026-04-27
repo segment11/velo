@@ -289,6 +289,114 @@ class WalTest extends Specification {
         fileShortValue.delete()
     }
 
+    def 'clear big string uuid when key changes to non big string wal value'() {
+        given:
+        ConfForSlot.global = ConfForSlot.debugMode
+
+        def file = new File(Consts.slotDir, 'test-raf-big-string-clear.wal')
+        def fileShortValue = new File(Consts.slotDir, 'test-raf-big-string-clear-short-value.wal')
+        if (file.exists()) {
+            file.delete()
+        }
+        if (fileShortValue.exists()) {
+            fileShortValue.delete()
+        }
+
+        FileUtils.touch(file)
+        FileUtils.touch(fileShortValue)
+
+        def raf = new RandomAccessFile(file, 'rw')
+        def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
+        def snowFlake = new SnowFlake(1, 1)
+        def oneSlot = new OneSlot(slot)
+        def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+
+        def bigStringKey = 'big-string-key'
+        def bigStringKeyHash = KeyHash.hash(bigStringKey.bytes)
+        def bigStringCv = new CompressedValue()
+        bigStringCv.seq = 100L
+        bigStringCv.keyHash = bigStringKeyHash
+        bigStringCv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        bigStringCv.setCompressedDataAsBigString(5678L, CompressedValue.NULL_DICT_SEQ)
+        def bigStringV = new Wal.V(100L, 0, bigStringKeyHash, CompressedValue.NO_EXPIRE, CompressedValue.SP_TYPE_BIG_STRING,
+                bigStringKey, bigStringCv.encode(), false)
+
+        when:
+        wal.put(true, bigStringKey, bigStringV)
+
+        then:
+        wal.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+
+        when:
+        def reloadedWalWithBigString = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+        reloadedWalWithBigString.lazyReadFromFile()
+
+        then:
+        reloadedWalWithBigString.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+
+        when:
+        def normalShortCvEncoded = Mock.prepareShortStringCvEncoded(bigStringKey, 'normal-short')
+        def normalShortV = new Wal.V(101L, 0, bigStringKeyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                bigStringKey, normalShortCvEncoded, false)
+        wal.put(true, bigStringKey, normalShortV)
+
+        then:
+        !wal.bigStringFileUuidByKey.containsKey(bigStringKey)
+
+        when:
+        wal.put(true, bigStringKey, bigStringV)
+
+        then:
+        wal.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+
+        when:
+        def normalCv = new CompressedValue()
+        normalCv.seq = 102L
+        normalCv.keyHash = bigStringKeyHash
+        normalCv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        normalCv.compressedData = 'normal-long'.bytes
+        def normalV = new Wal.V(102L, 0, bigStringKeyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                bigStringKey, normalCv.encode(), false)
+        wal.put(false, bigStringKey, normalV)
+
+        then:
+        !wal.bigStringFileUuidByKey.containsKey(bigStringKey)
+
+        when:
+        def reloadedWalAfterNormal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+        reloadedWalAfterNormal.lazyReadFromFile()
+
+        then:
+        !reloadedWalAfterNormal.bigStringFileUuidByKey.containsKey(bigStringKey)
+
+        when:
+        wal.put(true, bigStringKey, bigStringV)
+
+        then:
+        wal.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+
+        when:
+        wal.removeDelay(bigStringKey, 0, bigStringKeyHash, 0L)
+
+        then:
+        !wal.bigStringFileUuidByKey.containsKey(bigStringKey)
+
+        when:
+        def reloadedWalAfterDelete = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+        reloadedWalAfterDelete.lazyReadFromFile()
+
+        then:
+        !reloadedWalAfterDelete.bigStringFileUuidByKey.containsKey(bigStringKey)
+
+        cleanup:
+        wal.clear()
+        wal.clear(false)
+        raf.close()
+        rafShortValue.close()
+        file.delete()
+        fileShortValue.delete()
+    }
+
     def 'test value change to short value'() {
         given:
         def file = new File(Consts.slotDir, 'test-raf.wal')

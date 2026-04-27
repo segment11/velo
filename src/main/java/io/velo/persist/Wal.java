@@ -256,6 +256,7 @@ public class Wal implements InMemoryEstimate {
     void lazyReadFromFile() throws IOException {
         var n1 = readWal(walSharedFile, delayToKeyBucketValues, false);
         var n2 = readWal(walSharedFileShortValue, delayToKeyBucketShortValues, true);
+        refreshBigStringUuidMap();
         initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketValues);
         initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketShortValues);
 
@@ -589,11 +590,24 @@ public class Wal implements InMemoryEstimate {
     private void addBigStringUuidIfMatch(V v) {
         // deleted flag or test value
         if (v.cvEncoded.length < 28) {
+            bigStringFileUuidByKey.remove(v.key);
             return;
         }
 
         if (CompressedValue.onlyReadSpType(v.cvEncoded) == CompressedValue.SP_TYPE_BIG_STRING) {
             bigStringFileUuidByKey.put(v.key, CompressedValue.getBigStringMetaUuid(v.cvEncoded));
+        } else {
+            bigStringFileUuidByKey.remove(v.key);
+        }
+    }
+
+    private void refreshBigStringUuidMap() {
+        bigStringFileUuidByKey.clear();
+        for (var entry : delayToKeyBucketShortValues.entrySet()) {
+            var latest = getV(entry.getKey());
+            if (latest == entry.getValue()) {
+                addBigStringUuidIfMatch(latest);
+            }
         }
     }
 
@@ -979,15 +993,14 @@ public class Wal implements InMemoryEstimate {
                 }
             }
 
-            if (!needPersist) {
-                addBigStringUuidIfMatch(v);
-            }
+            addBigStringUuidIfMatch(v);
 
             return new PutResult(needPersist, true, null, needPersist ? 0 : offset);
         }
 
         delayToKeyBucketValues.put(key, v);
         delayToKeyBucketShortValues.remove(key);
+        bigStringFileUuidByKey.remove(key);
 
         lastSeqAfterPut = v.seq;
 
@@ -1006,6 +1019,11 @@ public class Wal implements InMemoryEstimate {
                 }
             }
         }
+
+        if (!needPersist) {
+            addBigStringUuidIfMatch(v);
+        }
+
         return new PutResult(needPersist, false, null, needPersist ? 0 : offset);
     }
 
