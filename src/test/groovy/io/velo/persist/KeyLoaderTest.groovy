@@ -404,6 +404,27 @@ class KeyLoaderTest extends Specification {
         keyLoader.cleanUp()
     }
 
+    def 'test interval delete expired big string files skips pvm entries'() {
+        given:
+        def keyLoader = prepareKeyLoader()
+
+        def pvm = new PersistValueMeta()
+        pvm.segmentIndex = 1
+        pvm.segmentOffset = 2
+        keyLoader.putValueByKey(0, 'expired-pvm-key', 200L, System.currentTimeMillis() - 1000, 200L, pvm.encode())
+
+        when:
+        int count = keyLoader.intervalDeleteExpiredBigStringFiles()
+
+        then:
+        count == 0
+        noExceptionThrown()
+
+        cleanup:
+        keyLoader.flush()
+        keyLoader.cleanUp()
+    }
+
     def 'persist short value list'() {
         given:
         def keyLoader = prepareKeyLoader()
