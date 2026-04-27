@@ -175,6 +175,31 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         ConfForSlot.global = ConfForSlot.c1m
     }
 
+    def 'test reload marks persisted segment run ending at chunk tail'() {
+        given:
+        final File slotDirTmp = new File(Consts.persistDir, 'test-slot-tmp')
+        slotDirTmp.mkdirs()
+
+        ConfForSlot.global = ConfForSlot.debugMode
+        def one = new MetaChunkSegmentFlagSeq(slot, slotDirTmp)
+        def walGroupIndex = 7
+        def tailBeginSegmentIndex = ConfForSlot.global.confChunk.maxSegmentNumber() - 2
+
+        when:
+        one.setSegmentMergeFlagBatch(tailBeginSegmentIndex, 2, Chunk.SEGMENT_FLAG_HAS_DATA, [1L, 2L], walGroupIndex)
+        def markedCount = one.reloadMarkPersistedSegmentIndex()
+        def needMerge = one.findThoseNeedToMerge(walGroupIndex)
+
+        then:
+        markedCount == 1
+        needMerge[0] == tailBeginSegmentIndex
+        needMerge[1] == 2
+
+        cleanup:
+        slotDirTmp.deleteDir()
+        ConfForSlot.global = ConfForSlot.c1m
+    }
+
     def 'test find can reuse segment index'() {
         given:
         final File slotDirTmp = new File(Consts.persistDir, 'test-slot-tmp')

@@ -379,6 +379,11 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             }
         }
 
+        if (tmpBeginSegmentIndex != -1) {
+            markPersistedSegmentIndexToTargetWalGroup(currentWalGroupIndex, tmpBeginSegmentIndex, (short) continueUsedSegmentCount);
+            markedCount++;
+        }
+
         return markedCount;
     }
 
