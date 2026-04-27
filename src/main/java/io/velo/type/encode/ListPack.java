@@ -116,7 +116,7 @@ public class ListPack {
                 nettyBuf.skipBytes(1);
             } else if ((c & ListPack12BitStringMask) == ListPack12BitString) {  // 12bit string
                 nettyBuf.skipBytes(1);
-                valueLen = nettyBuf.readUnsignedShortLE() & 0xFFF;
+                valueLen = ((c & 0xF) << 8) | nettyBuf.readUnsignedByte();
                 valueBytes = new byte[valueLen];
                 nettyBuf.readBytes(valueBytes);
                 // skip the value bytes and the length of the element
