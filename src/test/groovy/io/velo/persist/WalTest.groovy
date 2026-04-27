@@ -647,6 +647,87 @@ class WalTest extends Specification {
         fileShortValue.delete()
     }
 
+    def 'test scan resolves seq conflict between short and normal values'() {
+        given:
+        ConfForSlot.global = ConfForSlot.debugMode
+
+        def file = new File(Consts.slotDir, 'test-raf.wal')
+        def fileShortValue = new File(Consts.slotDir, 'test-raf-short-value.wal')
+        if (file.exists()) file.delete()
+        if (fileShortValue.exists()) fileShortValue.delete()
+        FileUtils.touch(file)
+        FileUtils.touch(fileShortValue)
+
+        def raf = new RandomAccessFile(file, 'rw')
+        def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
+        def snowFlake = new SnowFlake(1, 1)
+        def wal = new Wal(slot, null, 0, raf, rafShortValue, snowFlake)
+
+        when: 'simulate post-reload: same key in both maps, short value is newer (higher seq)'
+        def key = 'conflict-key'
+        def keyHash = KeyHash.hash(key.bytes)
+        // normal value with seq=1 (older)
+        def normalV = new Wal.V(1L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, ('normal-value').bytes, false)
+        wal.delayToKeyBucketValues.put(key, normalV)
+
+        // short value with seq=2 (newer)
+        def shortV = new Wal.V(2L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, ('short-value').bytes, false)
+        wal.delayToKeyBucketShortValues.put(key, shortV)
+
+        def r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
+
+        then: 'scan should return the newer short value, not the stale normal value'
+        r.keys().size() == 1
+        r.keys()[0] == key
+        // getV resolves correctly using seq
+        wal.getV(key).seq == 2L
+
+        when: 'simulate the reverse: normal value is newer (higher seq)'
+        wal.delayToKeyBucketValues.clear()
+        wal.delayToKeyBucketShortValues.clear()
+        def normalV2 = new Wal.V(10L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, ('normal-value-2').bytes, false)
+        wal.delayToKeyBucketValues.put(key, normalV2)
+
+        def shortV2 = new Wal.V(5L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, ('short-value-2').bytes, false)
+        wal.delayToKeyBucketShortValues.put(key, shortV2)
+
+        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
+
+        then: 'scan should return the newer normal value'
+        r.keys().size() == 1
+        r.keys()[0] == key
+        wal.getV(key).seq == 10L
+
+        when: 'short value is a delete tombstone (newer) that should hide normal value'
+        wal.delayToKeyBucketValues.clear()
+        wal.delayToKeyBucketShortValues.clear()
+        def normalV3 = new Wal.V(3L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, ('normal-value-3').bytes, false)
+        wal.delayToKeyBucketValues.put(key, normalV3)
+
+        byte[] deleteEncoded = [CompressedValue.SP_FLAG_DELETE_TMP]
+        def deleteV = new Wal.V(20L, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                key, deleteEncoded, false)
+        wal.delayToKeyBucketShortValues.put(key, deleteV)
+
+        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
+
+        then: 'scan should skip the key because the newer value is a delete tombstone'
+        r.keys().isEmpty()
+
+        cleanup:
+        wal.clear()
+        wal.clear(false)
+        raf.close()
+        rafShortValue.close()
+        file.delete()
+        fileShortValue.delete()
+    }
+
     def 'test reset write position'() {
         given:
         Debug.instance.bulkLoad = true

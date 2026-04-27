@@ -452,7 +452,12 @@ public class Wal implements InMemoryEstimate {
 
         var allValues = new HashMap<String, V>();
         allValues.putAll(delayToKeyBucketShortValues);
-        allValues.putAll(delayToKeyBucketValues);
+        for (var entry : delayToKeyBucketValues.entrySet()) {
+            var existing = allValues.get(entry.getKey());
+            if (existing == null || entry.getValue().seq > existing.seq) {
+                allValues.put(entry.getKey(), entry.getValue());
+            }
+        }
 
         for (var entry : allValues.entrySet()) {
             if (tmpSkipCount > 0) {
