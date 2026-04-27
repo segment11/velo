@@ -286,7 +286,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     public void run() {
         boolean isAllCanClear1KSegmentsGroup = true;
         var bitSet = segmentCanReuseBitSet[checkFdIndex];
-        var beginSegmentIndex = checkFdIndex * segmentNumberPerFd + check1KSegmentsGroupIndex * 1024;
+        var beginSegmentIndex = check1KSegmentsGroupIndex * 1024;
 
         for (int i = 0; i < 1024; i++) {
             if (!bitSet.get(beginSegmentIndex + i)) {

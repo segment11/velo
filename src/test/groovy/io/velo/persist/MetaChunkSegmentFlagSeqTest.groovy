@@ -249,4 +249,28 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         slotDirTmp.deleteDir()
         ConfForSlot.global = ConfForSlot.c1m
     }
+
+    def 'test truncate check uses per-FD bitset index for fd index > 0'() {
+        given:
+        final File slotDirTmp = new File(Consts.persistDir, 'test-slot-tmp')
+        slotDirTmp.mkdirs()
+
+        ConfForSlot.global = ConfForSlot.debugMode
+        def one = new MetaChunkSegmentFlagSeq(slot, slotDirTmp)
+
+        when: 'make FD 0 not fully reusable so truncation does not stop at FD 0'
+        one.updateBitSetCanReuseForSegmentIndex(0, 0, false)
+
+        and: 'run 16 iterations: 8 for FD 0 (fails), 8 for FD 1 (all reusable by default)'
+        16.times {
+            one.run()
+        }
+
+        then: 'FD 1 segments are all reusable, so canTruncateFdIndex should be 1'
+        one.canTruncateFdIndex == 1
+
+        cleanup:
+        slotDirTmp.deleteDir()
+        ConfForSlot.global = ConfForSlot.c1m
+    }
 }
