@@ -229,4 +229,58 @@ class RedisGeoTest extends Specification {
         def e = thrown(IllegalStateException)
         e.message.contains('exceeds Short.MAX_VALUE')
     }
+
+    def 'test decode throws on oversized member length'() {
+        given:
+        def rg = new RedisGeo()
+        rg.add('member1', 13, 38)
+        def encoded = rg.encode()
+        def buffer = java.nio.ByteBuffer.wrap(encoded)
+        buffer.putShort(RedisGeo.HEADER_LENGTH, (short) 10000)
+
+        when:
+        RedisGeo.decode(encoded, false)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds remaining buffer')
+    }
+
+    def 'test decode throws on invalid coordinates in payload'() {
+        given:
+        def rg = new RedisGeo()
+        rg.add('member1', 13, 38)
+        def encoded = rg.encode()
+        def buffer = java.nio.ByteBuffer.wrap(encoded)
+        def memberLenOffset = RedisGeo.HEADER_LENGTH
+        def memberLen = buffer.getShort(memberLenOffset)
+        def lonOffset = memberLenOffset + 2 + memberLen
+        buffer.putDouble(lonOffset, 999.0)
+
+        when:
+        RedisGeo.decode(encoded, false)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.toLowerCase().contains('longitude')
+    }
+
+    def 'test decode throws on invalid latitude in payload'() {
+        given:
+        def rg = new RedisGeo()
+        rg.add('member1', 13, 38)
+        def encoded = rg.encode()
+        def buffer = java.nio.ByteBuffer.wrap(encoded)
+        def memberLenOffset = RedisGeo.HEADER_LENGTH
+        def memberLen = buffer.getShort(memberLenOffset)
+        def latOffset = memberLenOffset + 2 + memberLen + 8
+        buffer.putDouble(latOffset, 999.0)
+
+        when:
+        RedisGeo.decode(encoded, false)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.toLowerCase().contains('latitude')
+    }
 }

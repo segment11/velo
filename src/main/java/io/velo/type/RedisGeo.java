@@ -459,10 +459,19 @@ public class RedisGeo {
             if (memberLength <= 0) {
                 throw new IllegalStateException("Invalid member length: " + memberLength + ", expected > 0");
             }
+            if (memberLength + 16 > buffer.remaining()) {
+                throw new IllegalStateException("Invalid member length: " + memberLength + ", exceeds remaining buffer");
+            }
             var memberBytes = new byte[memberLength];
             buffer.get(memberBytes);
             var lon = buffer.getDouble();
             var lat = buffer.getDouble();
+            if (lon > GEO_LONG_MAX || lon < GEO_LONG_MIN) {
+                throw new IllegalArgumentException("Longitude must be between " + GEO_LONG_MIN + " and " + GEO_LONG_MAX);
+            }
+            if (lat > GEO_LAT_MAX || lat < GEO_LAT_MIN) {
+                throw new IllegalArgumentException("Latitude must be between " + GEO_LAT_MIN + " and " + GEO_LAT_MAX);
+            }
             r.map.put(Wal.keyString(memberBytes), new P(lon, lat));
         }
         return r;
