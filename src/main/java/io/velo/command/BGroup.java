@@ -654,6 +654,7 @@ public class BGroup extends BaseCommand {
         var encoded = new byte[encodedLength];
 
         Zstd.decompressByteArray(encoded, 0, encodedLength, dumpBytes, 4, dumpBytes.length - 4);
+        RedisBF.decode(encoded);
         set(encoded, slotWithKeyHash, CompressedValue.SP_TYPE_BLOOM_BITMAP);
         return OKReply.INSTANCE;
     }

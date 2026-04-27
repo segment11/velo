@@ -314,6 +314,9 @@ public class RedisBF {
         r.nonScaling = buffer.get() != 0;
         r.fpp = buffer.getDouble();
         var listSize = buffer.getInt();
+        if (listSize <= 0 || listSize > MAX_LIST_SIZE) {
+            throw new IllegalStateException("BF list size must be between 1 and " + MAX_LIST_SIZE + ", got: " + listSize);
+        }
         for (int i = 0; i < listSize; i++) {
             var filterBytesLength = buffer.getInt();
             if (filterBytesLength <= 0) {

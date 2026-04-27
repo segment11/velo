@@ -181,4 +181,52 @@ class RedisBFTest extends Specification {
         def e = thrown(IllegalStateException)
         e.message.contains('expansion must be positive')
     }
+
+    def 'test decode rejects empty sub-filter list'() {
+        given:
+        def buf = ByteBuffer.allocate(1 + 1 + 8 + 4)
+        buf.put((byte) 2)
+        buf.put((byte) 0)
+        buf.putDouble(0.01)
+        buf.putInt(0)
+
+        when:
+        RedisBF.decode(buf.array())
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('list size')
+    }
+
+    def 'test decode rejects negative sub-filter list size'() {
+        given:
+        def buf = ByteBuffer.allocate(1 + 1 + 8 + 4)
+        buf.put((byte) 2)
+        buf.put((byte) 0)
+        buf.putDouble(0.01)
+        buf.putInt(-1)
+
+        when:
+        RedisBF.decode(buf.array())
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('list size')
+    }
+
+    def 'test decode rejects sub-filter list exceeding max size'() {
+        given:
+        def buf = ByteBuffer.allocate(1 + 1 + 8 + 4)
+        buf.put((byte) 2)
+        buf.put((byte) 0)
+        buf.putDouble(0.01)
+        buf.putInt(100)
+
+        when:
+        RedisBF.decode(buf.array())
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('list size')
+    }
 }
