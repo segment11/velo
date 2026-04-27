@@ -43,7 +43,7 @@ public class ZipList {
                 } else if ((encoding & ZIP_STR_MASK) == ZIP_STR_14B) {
                     len = ((encoding & 0x3F) << 8) | nettyBuf.readUnsignedByte();
                 } else if ((encoding & ZIP_STR_MASK) == ZIP_STR_32B) {
-                    len = nettyBuf.readIntLE();
+                    len = nettyBuf.readInt();
                 } else {
                     throw new IllegalStateException("Invalid string encoding");
                 }
