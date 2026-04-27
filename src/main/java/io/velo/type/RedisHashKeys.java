@@ -235,6 +235,9 @@ public class RedisHashKeys {
             if (len <= 0) {
                 throw new IllegalStateException("Length error, length=" + len);
             }
+            if (len > buffer.remaining()) {
+                throw new IllegalStateException("Length error, length=" + len + ", exceeds remaining buffer");
+            }
 
             var bytes = new byte[len];
             buffer.get(bytes);
@@ -288,6 +291,9 @@ public class RedisHashKeys {
             int len = buffer.getShort();
             if (len <= 0) {
                 throw new IllegalStateException("Length error, length=" + len);
+            }
+            if (len > buffer.remaining()) {
+                throw new IllegalStateException("Length error, length=" + len + ", exceeds remaining buffer");
             }
 
             var bytes = new byte[len];

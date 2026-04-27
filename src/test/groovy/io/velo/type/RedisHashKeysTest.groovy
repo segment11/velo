@@ -198,4 +198,36 @@ class RedisHashKeysTest extends Specification {
         def e = thrown(IllegalStateException)
         e.message.contains('exceeds')
     }
+
+    def 'test decode throws on oversized positive field length'() {
+        given:
+        def rhk = new RedisHashKeys()
+        rhk.add('field1')
+        def encoded = rhk.encode()
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.putShort(RedisHashKeys.HEADER_LENGTH, (short) 10000)
+
+        when:
+        RedisHashKeys.decode(encoded, false)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds remaining buffer')
+    }
+
+    def 'test iterate throws on oversized positive field length'() {
+        given:
+        def rhk = new RedisHashKeys()
+        rhk.add('field1')
+        def encoded = rhk.encode()
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.putShort(RedisHashKeys.HEADER_LENGTH, (short) 10000)
+
+        when:
+        RedisHashKeys.iterate(encoded, false) { bytes, i -> false }
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('exceeds remaining buffer')
+    }
 }
