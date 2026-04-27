@@ -638,6 +638,42 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test overwrite big string with normal long value enqueues stale file for deletion'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def bucketIndex = 0
+        def key = 'big-str-oversize-key'
+        def s = BaseCommand.slot(key, slotNumber)
+        def keyHash = s.keyHash()
+
+        and: 'write a big-string value (oversized triggers big-string path via isPersistLengthOverSegmentLength)'
+        def cvBig = new CompressedValue()
+        cvBig.seq = oneSlot.snowFlake.nextId()
+        cvBig.keyHash = keyHash
+        cvBig.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
+        oneSlot.put(key, bucketIndex, cvBig)
+        def bigStringUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+        assert bigStringUuid != null
+
+        when: 'overwrite with a normal long value (not short, not big-string, not oversized)'
+        def cvNormal = new CompressedValue()
+        cvNormal.seq = oneSlot.snowFlake.nextId()
+        cvNormal.keyHash = keyHash
+        cvNormal.compressedData = ('x' * 200).bytes
+        oneSlot.put(key, bucketIndex, cvNormal)
+
+        then: 'old big-string file should be enqueued for immediate deletion'
+        !oneSlot.delayToDeleteBigStringFileIds.isEmpty()
+        oneSlot.delayToDeleteBigStringFileIds.first.uuid() == bigStringUuid
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test overwrite short big string meta deletes stale uuid on first cleanup tick'() {
         given:
         LocalPersistTest.prepareLocalPersist()
