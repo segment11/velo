@@ -182,7 +182,7 @@ public class Wal implements InMemoryEstimate {
                 throw new IllegalStateException("Read key bytes error, key length=" + keyLength + ", read length=" + n);
             }
             var cvEncodedLength = is.readInt();
-            if (cvEncodedLength < 0) {
+            if (cvEncodedLength <= 0) {
                 throw new IllegalStateException("CV encoded length error, cv encoded length=" + cvEncodedLength);
             }
             if (cvEncodedLength > vLength - ENCODED_HEADER_LENGTH - keyLength) {

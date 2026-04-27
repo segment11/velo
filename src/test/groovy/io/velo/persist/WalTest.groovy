@@ -206,6 +206,19 @@ class WalTest extends Specification {
         exception
 
         when:
+        exception = false
+        v1Buffer.putInt(cvEncodedLengthOffset, 0)
+        v1Buffer.putInt(0, Wal.V.ENCODED_HEADER_LENGTH + v1.key().length() - 4)
+        try {
+            Wal.V.decode(new DataInputStream(new ByteArrayInputStream(v1Encoded)))
+        } catch (IllegalStateException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
         def n = wal.readWal(null, toMap, true)
         then:
         n == 0
