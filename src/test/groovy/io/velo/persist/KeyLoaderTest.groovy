@@ -642,4 +642,63 @@ class KeyLoaderTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test decodeShortStringListFromBuf throws on oversized key length'() {
+        given:
+        def slice = new Slice(256)
+        // write a record with valid outer length but oversized keyLength
+        // header: seq(8) + keyHash(8) + expireAt(8) + keyLength(4) + valueLength(4) = 32
+        def keyLength = 100
+        def valueLength = 10
+        def outerLength = 32 + keyLength + valueLength
+        slice.writeInt(outerLength)
+        slice.writeLong(1L)   // seq
+        slice.writeLong(2L)   // keyHash
+        slice.writeLong(0L)   // expireAt
+        // write keyLength larger than what fits in a small outer length
+        slice.writeInt(outerLength + 1000) // oversized keyLength
+        slice.writeInt(valueLength)
+        // pad remaining
+        while (slice.writeIndex < slice.array.length) {
+            slice.writeByte(0)
+        }
+
+        def sliceForRead = new Slice(slice.array, 0, outerLength + 4)
+
+        when:
+        KeyLoader.decodeShortStringListFromBuf(sliceForRead) { keyHash, expireAt, seq, key, valueBytes -> }
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('key length')
+    }
+
+    def 'test decodeShortStringListFromBuf throws on oversized value length'() {
+        given:
+        def slice = new Slice(256)
+        def keyLength = 5
+        def valueLength = 10
+        def outerLength = 32 + keyLength + valueLength
+        slice.writeInt(outerLength)
+        slice.writeLong(1L)   // seq
+        slice.writeLong(2L)   // keyHash
+        slice.writeLong(0L)   // expireAt
+        slice.writeInt(keyLength)
+        // write key bytes
+        5.times { slice.writeByte('x'.bytes[0]) }
+        // write valueLength larger than what remains
+        slice.writeInt(outerLength + 1000)
+        while (slice.writeIndex < slice.array.length) {
+            slice.writeByte(0)
+        }
+
+        def sliceForRead = new Slice(slice.array, 0, outerLength + 4)
+
+        when:
+        KeyLoader.decodeShortStringListFromBuf(sliceForRead) { keyHash, expireAt, seq, key, valueBytes -> }
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('value length')
+    }
 }

@@ -1062,11 +1062,17 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             if (keyLength < 0) {
                 throw new IllegalArgumentException("Repl slave handle error: short string key length invalid=" + keyLength);
             }
+            if (keyLength > length - 32 - 4) {
+                throw new IllegalArgumentException("Repl slave handle error: short string key length exceeds record, key length=" + keyLength);
+            }
             var keyBytes = new byte[keyLength];
             slice.readBytes(keyBytes);
             var valueLength = slice.readInt();
             if (valueLength < 0) {
                 throw new IllegalArgumentException("Repl slave handle error: short string value length invalid=" + valueLength);
+            }
+            if (valueLength != length - 32 - keyLength) {
+                throw new IllegalArgumentException("Repl slave handle error: short string value length exceeds record, value length=" + valueLength);
             }
             var valueBytes = new byte[valueLength];
             slice.readBytes(valueBytes);
