@@ -91,6 +91,12 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         slotDirTmp.mkdirs()
 
         def one = new MetaChunkSegmentFlagSeq(slot, slotDirTmp)
+        def markPersisted = { int walGroupIndex, int beginSegmentIndex, short segmentCount ->
+            one.markPersistedSegmentIndexToTargetWalGroup(walGroupIndex, beginSegmentIndex, segmentCount)
+            segmentCount.times { i ->
+                one.setSegmentMergeFlag(beginSegmentIndex + i, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, walGroupIndex)
+            }
+        }
 
         when:
         def r = one.findThoseNeedToMerge(0)
@@ -104,14 +110,14 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
 
         when:
-        one.markPersistedSegmentIndexToTargetWalGroup(0, 0, (short) 10)
+        markPersisted(0, 0, (short) 10)
         r = one.findThoseNeedToMerge(0)
         then:
         r[0] == 0
         r[1] == 10
 
         when:
-        one.markPersistedSegmentIndexToTargetWalGroup(0, 0, (short) 34)
+        markPersisted(0, 0, (short) 34)
         r = one.findThoseNeedToMerge(0)
         then:
         r[0] == 0
@@ -125,22 +131,23 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
 
         when:
         one.splitMarkedRunForPreRead = MetaChunkSegmentFlagSeq.SPLIT_MARKED_RUN_ONCE_FOR_PRE_READ
-        one.markPersistedSegmentIndexToTargetWalGroup(0, 0, (short) 10)
+        markPersisted(0, 0, (short) 10)
         r = one.findThoseNeedToMerge(0)
         then:
         r[0] == 0
         r[1] == 5
 
         when:
-        one.markPersistedSegmentIndexToTargetWalGroup(0, 0, (short) 10)
+        markPersisted(0, 0, (short) 10)
         r = one.findThoseNeedToMerge(0)
         then:
         r[0] == 5
         r[1] == 5
 
         when:
+        one.splitMarkedRunForPreRead = MetaChunkSegmentFlagSeq.PRE_READ_WHOLE_MARKED_RUN
         99.times {
-            one.markPersistedSegmentIndexToTargetWalGroup(0, it * 10, (short) 10)
+            markPersisted(0, it * 10, (short) 10)
         }
         200.times {
             // find then clear
@@ -153,7 +160,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         when:
         one.clear()
         100.times { i ->
-            one.markPersistedSegmentIndexToTargetWalGroup(0, i, (short) 1)
+            markPersisted(0, i, (short) 1)
         }
         then:
         noExceptionThrown()
@@ -166,12 +173,41 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         when:
         one.isOverHalfSegmentNumberForFirstReuseLoop = true
         r = one.findThoseNeedToMerge(0)
-        one.markPersistedSegmentIndexToTargetWalGroup(0, 100, (short) 1)
+        markPersisted(0, 100, (short) 1)
         then:
         r[1] == 1
         noExceptionThrown()
 
         when:
+        one.clear()
+        one.isOverHalfSegmentNumberForFirstReuseLoop = true
+        markPersisted(0, 0, (short) 1)
+        one.setSegmentMergeFlag(0, Chunk.SEGMENT_FLAG_REUSABLE, 0L, 0)
+        r = one.findThoseNeedToMerge(0)
+        then:
+        r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
+
+        when:
+        one.clear()
+        one.isOverHalfSegmentNumberForFirstReuseLoop = true
+        markPersisted(0, 0, (short) 4)
+        one.setSegmentMergeFlagBatch(0, 4, Chunk.SEGMENT_FLAG_REUSABLE, null, 0)
+        r = one.findThoseNeedToMerge(0)
+        then:
+        r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
+
+        when:
+        one.clear()
+        one.isOverHalfSegmentNumberForFirstReuseLoop = true
+        one.splitMarkedRunForPreRead = MetaChunkSegmentFlagSeq.SPLIT_MARKED_RUN_ONCE_FOR_PRE_READ
+        markPersisted(0, 0, (short) 4)
+        one.setSegmentMergeFlagBatch(0, 4, Chunk.SEGMENT_FLAG_REUSABLE, null, 0)
+        r = one.findThoseNeedToMerge(0)
+        then:
+        r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
+
+        when:
+        one.splitMarkedRunForPreRead = MetaChunkSegmentFlagSeq.PRE_READ_WHOLE_MARKED_RUN
         one.clear()
         def markedCount = one.reloadMarkPersistedSegmentIndex()
         then:
