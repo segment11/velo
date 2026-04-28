@@ -99,6 +99,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
                 markedLongs[j] = 0L;
             }
             beginSegmentIndexMoveIndexGroupByWalGroupIndex[i] = 0;
+            beginSegmentIndexReadIndexGroupByWalGroupIndex[i] = 0;
         }
     }
 
@@ -153,6 +154,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
         this.beginSegmentIndexGroupByWalGroupIndex = new long[Wal.calcWalGroupNumber()][MARK_BEGIN_SEGMENT_INDEX_COUNT];
         this.beginSegmentIndexMoveIndexGroupByWalGroupIndex = new int[Wal.calcWalGroupNumber()];
+        this.beginSegmentIndexReadIndexGroupByWalGroupIndex = new int[Wal.calcWalGroupNumber()];
 
         initBitSetValueAndMarkedSegmentIndexWhenFirstStartOrClear();
 
@@ -337,6 +339,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     private static final int MARK_BEGIN_SEGMENT_INDEX_COUNT = 100;
     private final long[][] beginSegmentIndexGroupByWalGroupIndex;
     private final int[] beginSegmentIndexMoveIndexGroupByWalGroupIndex;
+    private final int[] beginSegmentIndexReadIndexGroupByWalGroupIndex;
 
     /**
      * Reloads the marked persisted segment index.
@@ -426,13 +429,15 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
      */
     public void markPersistedSegmentIndexToTargetWalGroup(int walGroupIndex, int beginSegmentIndex, short segmentCount) {
         var beginSegmentIndexMoveIndex = beginSegmentIndexMoveIndexGroupByWalGroupIndex[walGroupIndex];
+        var readIndex = beginSegmentIndexReadIndexGroupByWalGroupIndex[walGroupIndex];
         var next = beginSegmentIndexMoveIndex + 1;
         if (next == MARK_BEGIN_SEGMENT_INDEX_COUNT) {
             next = 0;
         }
 
-        // make sure already pre-read and cleared
-        assert (beginSegmentIndexGroupByWalGroupIndex[walGroupIndex][next] == 0L);
+        if (beginSegmentIndexGroupByWalGroupIndex[walGroupIndex][next] != 0L) {
+            throw new IllegalStateException("Circular buffer overflow: attempting to overwrite uncleared entry at index " + next);
+        }
 
         beginSegmentIndexGroupByWalGroupIndex[walGroupIndex][next] = (long) beginSegmentIndex << 32 | segmentCount << 16 | preReadFindTimesForOncePersist;
         beginSegmentIndexMoveIndexGroupByWalGroupIndex[walGroupIndex] = next;
@@ -458,15 +463,28 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         }
 
         var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
-        for (int i = 0; i < MARK_BEGIN_SEGMENT_INDEX_COUNT; i++) {
-            var markedLong = markedLongs[i];
+        var writeIndex = beginSegmentIndexMoveIndexGroupByWalGroupIndex[walGroupIndex];
+        var readIndex = beginSegmentIndexReadIndexGroupByWalGroupIndex[walGroupIndex];
+
+        if (readIndex == writeIndex && markedLongs[readIndex] == 0L) {
+            return NOT_FIND_SEGMENT_INDEX_AND_COUNT;
+        }
+
+        int startReadIndex = readIndex;
+        int iterations = 0;
+        while (iterations < MARK_BEGIN_SEGMENT_INDEX_COUNT) {
+            var markedLong = markedLongs[readIndex];
             if (markedLong != 0L) {
                 var segmentIndex = (int) (markedLong >> 32);
                 var segmentCount = (short) (markedLong >> 16 & 0xFFFF);
 
                 if (segmentCount == 1) {
-                    // clear
-                    markedLongs[i] = 0L;
+                    markedLongs[readIndex] = 0L;
+                    int nextReadIndex = readIndex + 1;
+                    if (nextReadIndex == MARK_BEGIN_SEGMENT_INDEX_COUNT) {
+                        nextReadIndex = 0;
+                    }
+                    beginSegmentIndexReadIndexGroupByWalGroupIndex[walGroupIndex] = nextReadIndex;
                     return new int[]{segmentIndex, segmentCount};
                 }
 
@@ -479,15 +497,30 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
                     short halfSegmentCount = (short) (segmentCount / 2);
                     short leftSegmentCount = (short) (segmentCount - halfSegmentCount);
 
-                    markedLongs[i] = (long) (segmentIndex + halfSegmentCount) << 32 | leftSegmentCount << 16;
+                    markedLongs[readIndex] = (long) segmentIndex + halfSegmentCount << 32 | leftSegmentCount << 16;
                     return new int[]{segmentIndex, halfSegmentCount};
                 } else {
-                    // clear
-                    markedLongs[i] = 0L;
+                    markedLongs[readIndex] = 0L;
+                    int nextReadIndex = readIndex + 1;
+                    if (nextReadIndex == MARK_BEGIN_SEGMENT_INDEX_COUNT) {
+                        nextReadIndex = 0;
+                    }
+                    beginSegmentIndexReadIndexGroupByWalGroupIndex[walGroupIndex] = nextReadIndex;
                     return new int[]{segmentIndex, segmentCount};
                 }
             }
+
+            readIndex++;
+            if (readIndex == MARK_BEGIN_SEGMENT_INDEX_COUNT) {
+                readIndex = 0;
+            }
+            iterations++;
+
+            if (readIndex == writeIndex && markedLongs[readIndex] == 0L) {
+                break;
+            }
         }
+
         return NOT_FIND_SEGMENT_INDEX_AND_COUNT;
     }
 

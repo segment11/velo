@@ -144,12 +144,17 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
 
         when:
-        10.times {
-            one.markPersistedSegmentIndexToTargetWalGroup(0, it, (short) 1)
+        one.clear()
+        100.times { i ->
+            one.markPersistedSegmentIndexToTargetWalGroup(0, i, (short) 1)
         }
-        r = one.findThoseNeedToMerge(0)
         then:
-        r[1] == 1
+        noExceptionThrown()
+
+        when:
+        one.markPersistedSegmentIndexToTargetWalGroup(0, 100, (short) 1)
+        then:
+        thrown(IllegalStateException)
 
         when:
         one.clear()
