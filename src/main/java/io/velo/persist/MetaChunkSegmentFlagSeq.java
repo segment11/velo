@@ -413,9 +413,22 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         System.out.println("next: " + next);
     }
 
-    // once find those need merge, half of full, or invalid cv count is not much, for perf
+    static final byte PRE_READ_WHOLE_MARKED_RUN = 0;
+    static final byte SPLIT_MARKED_RUN_ONCE_FOR_PRE_READ = 1;
+
+    /*
+     * A marker stores one persisted segment run for a WAL group:
+     * high 32 bits: begin segment index
+     * next 16 bits: segment count
+     * low 8 bits: pre-read split flag
+     *
+     * The split flag is copied into each new marker. PRE_READ_WHOLE_MARKED_RUN lets the next
+     * pre-read consume the whole run. SPLIT_MARKED_RUN_ONCE_FOR_PRE_READ makes the next pre-read
+     * consume only the first half and keep the second half marked for a later WAL flush. This
+     * spreads merge I/O across flushes instead of merging too many old segments in one persist.
+     */
     @VisibleForTesting
-    byte preReadFindTimesForOncePersist = 0;
+    byte splitMarkedRunForPreRead = PRE_READ_WHOLE_MARKED_RUN;
 
     /**
      * Marks the persisted segment index for a specific wal group index. After Chunk persist some segments of one WAL group.
@@ -435,7 +448,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             }
 
             if (markedLongs[next] == 0L) {
-                markedLongs[next] = (long) beginSegmentIndex << 32 | segmentCount << 16 | preReadFindTimesForOncePersist;
+                markedLongs[next] = (long) beginSegmentIndex << 32 | segmentCount << 16 | splitMarkedRunForPreRead;
                 beginSegmentIndexMoveIndexGroupByWalGroupIndex[walGroupIndex] = next;
                 return;
             }
@@ -478,15 +491,17 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
                     return new int[]{segmentIndex, segmentCount};
                 }
 
-                var findTimes = (byte) (markedLong & 0xFF);
+                var splitFlag = (byte) (markedLong & 0xFF);
                 if (segmentCount > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE) {
-                    findTimes = 1;
+                    splitFlag = SPLIT_MARKED_RUN_ONCE_FOR_PRE_READ;
                 }
 
-                if (findTimes == 1) {
+                if (splitFlag == SPLIT_MARKED_RUN_ONCE_FOR_PRE_READ) {
                     short halfSegmentCount = (short) (segmentCount / 2);
                     short leftSegmentCount = (short) (segmentCount - halfSegmentCount);
 
+                    // Keep the second half as a normal marker. The next pre-read can consume it whole
+                    // unless it is still larger than the merge read batch limit.
                     markedLongs[i] = (long) (segmentIndex + halfSegmentCount) << 32 | leftSegmentCount << 16;
                     return new int[]{segmentIndex, halfSegmentCount};
                 } else {

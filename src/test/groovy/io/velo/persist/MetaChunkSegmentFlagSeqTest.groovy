@@ -124,7 +124,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r[1] == 17
 
         when:
-        one.preReadFindTimesForOncePersist = 1
+        one.splitMarkedRunForPreRead = MetaChunkSegmentFlagSeq.SPLIT_MARKED_RUN_ONCE_FOR_PRE_READ
         one.markPersistedSegmentIndexToTargetWalGroup(0, 0, (short) 10)
         r = one.findThoseNeedToMerge(0)
         then:
