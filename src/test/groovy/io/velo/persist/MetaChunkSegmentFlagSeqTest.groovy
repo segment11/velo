@@ -157,6 +157,14 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         thrown(IllegalStateException)
 
         when:
+        one.isOverHalfSegmentNumberForFirstReuseLoop = true
+        r = one.findThoseNeedToMerge(0)
+        one.markPersistedSegmentIndexToTargetWalGroup(0, 100, (short) 1)
+        then:
+        r[1] == 1
+        noExceptionThrown()
+
+        when:
         one.clear()
         def markedCount = one.reloadMarkPersistedSegmentIndex()
         then:
