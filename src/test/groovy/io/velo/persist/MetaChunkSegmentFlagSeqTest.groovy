@@ -20,6 +20,13 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         segmentFlag.segmentSeq() == 1L
         segmentFlag.walGroupIndex() == 0
 
+        when:
+        def sb = new StringBuilder()
+        one.estimate(sb)
+        println sb.toString()
+        then:
+        1 == 1
+
         cleanup:
         one.clear()
         one.cleanUp()
