@@ -506,6 +506,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             final short[] addedKeyCount = {0};
             final short[] tmpSkipCount = {skipCount};
             final short[] expiredOrNotMatchedCount = {0};
+            final short[] postScanStartSkippedCount = {0};
             final long currentTimeMillis = System.currentTimeMillis();
             keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (tmpSkipCount[0] > 0) {
@@ -547,6 +548,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
                 // skip data that is new added after time do scan
                 if (seq > beginScanSeq) {
+                    postScanStartSkippedCount[0]++;
                     return;
                 }
 
@@ -560,7 +562,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             });
 
             if (countArray[0] <= 0) {
-                var nextTimeSkipCount = skipCount + expiredOrNotMatchedCount[0] + addedKeyCount[0];
+                var nextTimeSkipCount = skipCount + expiredOrNotMatchedCount[0] + postScanStartSkippedCount[0] + addedKeyCount[0];
                 return new ScanCursor(slot, walGroupIndex, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) nextTimeSkipCount, splitIndex);
             }
         }

@@ -539,6 +539,45 @@ class KeyLoaderTest extends Specification {
         keyLoader2.cleanUp()
     }
 
+def 'test scan cursor counts post-scan-start entries'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def keyLoader = oneSlot.keyLoader
+
+        and:
+        List<PersistValueMeta> pvmList = []
+        20.times { i ->
+            def pvm = new PersistValueMeta()
+            pvm.key = "key:" + i.toString().padLeft(12, '0')
+            pvm.keyHash = KeyHash.hash(pvm.key.bytes)
+            pvm.bucketIndex = 0
+            pvm.segmentOffset = i
+            pvm.shortType = KeyLoader.typeAsByteString
+            pvm.seq = i < 5 ? 1000L : 100L
+            pvmList << pvm
+        }
+        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, null)
+
+        when:
+        ConfForSlot.global.confBucket.onceScanMaxLoopCount = 10000
+        def beginScanSeq = 500L
+        def r1 = keyLoader.scan(0, (byte) 0, (short) 0, KeyLoader.typeAsByteString, 'key:*', 3, beginScanSeq)
+
+        then:
+        r1.keys().size() == 3
+        r1.keys().every { k -> k.startsWith('key:') }
+        r1.scanCursor().keyBucketsSkipCount() == 5 + 3
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test scan'() {
         given:
         ConfForSlot.global.confBucket.initialSplitNumber = (byte) 3
