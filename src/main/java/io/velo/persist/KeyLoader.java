@@ -596,7 +596,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                                                   final int count,
                                                   final long beginScanSeq) {
         final ArrayList<String> keys = new ArrayList<>(Utils.nearestPowerOfTwo(count));
-        final var inWalKeys = oneSlot.getWalByGroupIndex(walGroupIndex).inWalKeysFormScan(beginScanSeq);
 
         var walGroupNumber = Wal.calcWalGroupNumber();
         var maxSplitNumber = metaKeyBucketSplitNumber.maxSplitNumber();
@@ -608,6 +607,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         // the second is real scan loop count, if size == 0, not real scan, just return
         final int[] countArray = new int[]{count, 0};
         for (int j = walGroupIndex; j < walGroupNumber; j++) {
+            final var inWalKeys = oneSlot.getWalByGroupIndex(j).inWalKeysFormScan(beginScanSeq);
             for (int i = 0; i < maxSplitNumber; i++) {
                 if (j == walGroupIndex && i < splitIndex) {
                     continue;

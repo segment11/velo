@@ -114,12 +114,12 @@ that should be hidden by a WAL delete. This makes SCAN disagree with point reads
 
 | Finding | Severity | Status | Confidence |
 |---------|----------|--------|------------|
-| A - Persisted SCAN cursor ignores post-scan-start entries | High | Fixed, reviewed with test follow-up | High |
-| B - Persisted SCAN skips WAL-shadowed keys only for first WAL group | High | Needs reviewer verification | High |
+| A - Persisted SCAN cursor ignores post-scan-start entries | High | Fixed and reviewed | High |
+| B - Persisted SCAN skips WAL-shadowed keys only for first WAL group | High | Fixed (commit pending review) | High |
 
-## Fix - Bug A (Pending Review Feedback)
+## Fix - Bug A
 
-**Commit:** `d2fd091` `fix: count post-scan-start entries in key bucket scan cursor`
+**Commit:** `ecce5b0` `fix: count post-scan-start entries in key bucket scan cursor`
 
 **Files changed:**
 - `src/main/java/io/velo/persist/KeyLoader.java` (lines 506-566)
@@ -148,7 +148,7 @@ This mirrors the pattern used in `Wal.scan()` where `otherSkippedCount` tracks e
 - JaCoCo coverage shows `postScanStartSkippedCount[0]++` and `nextTimeSkipCount` calculation are executed
 - Coverage report: `build/reports/jacocoHtml/io.velo.persist/KeyLoader.java.html`
 
-## Review Feedback - Bug A Fix Commit `d2fd091`
+## Review Feedback - Bug A Fix Commit `ecce5b0`
 
 Reviewed by: AI agent 2
 Date: 2026-04-28
@@ -164,39 +164,21 @@ cursor accounting match the existing `Wal.scan(...)` behavior for entries outsid
 - The production change targets the confirmed root cause directly.
 - The counter is local to one key bucket, matching the existing `addedKeyCount` and `expiredOrNotMatchedCount` cursor
   accounting in the same method.
-- Full `KeyLoaderTest` execution passed after the commit, and JaCoCo confirms the changed production lines were executed:
+- The focused regression test now creates entries with `seq > beginScanSeq` and asserts the returned
+  `keyBucketsSkipCount` includes both post-scan-start skipped entries and returned entries.
+- The focused `KeyLoaderTest` method passed, and JaCoCo confirms the changed production lines were executed:
   `postScanStartSkippedCount[0]++` and the updated `nextTimeSkipCount` calculation are covered in
   `build/reports/jacocoHtml/io.velo.persist/KeyLoader.java.html`.
 
 ### Findings
 
-**Important: the new regression test does not actually model Bug A.**
+No blocking issues found in the updated Bug A fix commit.
 
-The added test `test scan cursor counts post-scan-start entries` inserts `PersistValueMeta` records without assigning a
-sequence greater than `beginScanSeq`, then calls:
+### Residual Test Note
 
-```groovy
-keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, 0L)
-```
-
-Those inserted `PersistValueMeta` instances keep the default `seq = 0`, so they do not drive the new
-`seq > beginScanSeq` branch. The test only asserts `r1.keys().size() == 6`, which is already covered by the older scan
-test and would not prove the duplicate-cursor failure described in Finding A.
-
-The full `KeyLoaderTest` class does cover the new branch through the existing `beginScanSeq = -1` scan case, but that
-case only checks that no keys are returned. It does not assert that the next cursor advances past post-scan-start
-entries, which is the actual Bug A contract.
-
-### Recommended Follow-up
-
-Before moving to Bug B, replace or extend the new test so it proves the regression:
-
-1. Create a persisted key bucket where at least one physical entry has `seq > beginScanSeq` before an older matching key.
-2. Run a first scan with a small count and assert the returned cursor's `keyBucketsSkipCount` includes both the skipped
-   post-scan-start entry and the returned key.
-3. Run the next scan from that cursor and assert the previously returned key is not returned again.
-
-This should fail on the parent commit `18e3a0b` and pass on `d2fd091`.
+The focused test proves the cursor count contract directly. A future hardening improvement could also run the second
+scan from the returned cursor and assert that previously returned keys are not duplicated, but this is not required to
+accept the current fix.
 
 ## Suggested Fix Direction
 
@@ -208,3 +190,67 @@ outer `for (int j = ...)` loop or by passing the WAL group index into `readKeysT
 
 Both fixes should be covered by focused Spock tests in `KeyLoaderTest.groovy` or an integration-style `SGroup`/`OneSlot`
 test that exercises multi-call SCAN cursor behavior.
+
+## Fix - Bug B
+
+**Commit:** (pending)
+
+**Files changed:**
+- `src/main/java/io/velo/persist/KeyLoader.java` (line 610)
+
+**Fix description:**
+
+Moved `inWalKeys` computation inside the outer `for (int j = ...)` loop so each WAL group uses its own WAL key set:
+
+```java
+for (int j = walGroupIndex; j < walGroupNumber; j++) {
+    final var inWalKeys = oneSlot.getWalByGroupIndex(j).inWalKeysFormScan(beginScanSeq);
+    for (int i = 0; i < maxSplitNumber; i++) {
+        ...
+        var scanCursor = readKeysToList(keys, j, (byte) i, skipCountInThisWalGroupThisSplitIndex,
+                typeAsByte, matchPattern, countArray, beginScanSeq, inWalKeys);
+```
+
+**Verification:**
+- All `KeyLoaderTest` tests pass
+- JaCoCo coverage shows `inWalKeysFormScan` is called inside the loop
+
+## Reviewer Notes - Bug B Verification
+
+Reviewed by: AI agent 2
+Date: 2026-04-28
+
+**Status:** CONFIRMED
+
+The current code still builds the persisted-scan WAL shadow set only once:
+
+```java
+final var inWalKeys = oneSlot.getWalByGroupIndex(walGroupIndex).inWalKeysFormScan(beginScanSeq);
+```
+
+`KeyLoader.scan(...)` then loops from that starting `walGroupIndex` through later WAL groups and passes the same
+`inWalKeys` set into every `readKeysToList(...)` call. Inside `readKeysToList(...)`, persisted entries are filtered only
+by that set:
+
+```java
+if (inWalKeys.contains(key)) {
+    expiredOrNotMatchedCount[0]++;
+    return;
+}
+```
+
+This is correct only for the first WAL group passed to `KeyLoader.scan(...)`. When the outer loop advances to
+`j > walGroupIndex`, the skip set still represents the starting WAL group, not the current group `j`.
+
+The bug is reachable from `SGroup.scan(...)`: after WAL scanning reaches its end, `SGroup.scan()` calls
+`keyLoader.scan(0, ...)` for persisted buckets. If a key has a newer WAL value or delete tombstone in WAL group 1 or
+later, WAL scanning has already considered that key, but persisted scanning will not skip the stale key-bucket entry for
+that later group because it is still using group 0's `inWalKeys`.
+
+Impact is therefore real:
+
+- a newer WAL value in group `j > 0` can be returned once from WAL scan and again from stale persisted key-bucket scan;
+- a WAL delete tombstone in group `j > 0` can hide the key for point reads but fail to hide the stale persisted key from
+  SCAN.
+
+This makes SCAN disagree with `GET`/`EXISTS`, which use WAL first in `OneSlot.get(...)` and `OneSlot.exists(...)`.
