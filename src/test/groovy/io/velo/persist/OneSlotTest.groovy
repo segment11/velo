@@ -98,10 +98,11 @@ class OneSlotTest extends Specification {
         when:
         def persistConfig2 = Config.create().with('volumeDirsBySlot',
                 '/tmp/data0:0-31,/tmp/data1:32-63,/tmp/data2:64-95,/tmp/data3:96-127')
-        new File('/tmp/data0').mkdirs()
-        new File('/tmp/data1').mkdirs()
-        new File('/tmp/data2').mkdirs()
-        new File('/tmp/data3').mkdirs()
+        def volumeDirs = ['/tmp/data0', '/tmp/data1', '/tmp/data2', '/tmp/data3'].collect { new File(it) }
+        volumeDirs.each {
+            it.deleteDir()
+            it.mkdirs()
+        }
         def tmpTestSlotNumber = (short) 128
         ConfVolumeDirsForSlot.initFromConfig(persistConfig2, tmpTestSlotNumber)
         def oneSlot0 = new OneSlot(slot, slotNumber, snowFlake, Consts.persistDir, persistConfig2)
@@ -151,6 +152,7 @@ class OneSlotTest extends Specification {
         oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()
         oneSlot.cleanUp()
         Consts.persistDir.deleteDir()
+        volumeDirs?.each { it.deleteDir() }
     }
 
     def 'test repl pair'() {
@@ -1093,6 +1095,8 @@ class OneSlotTest extends Specification {
         when:
         metaChunkSegmentFlagSeq.isOverHalfSegmentNumberForFirstReuseLoop = true
         metaChunkSegmentFlagSeq.markPersistedSegmentIndexToTargetWalGroup(walGroupIndex, 0, (short) 10)
+        oneSlot.setSegmentMergeFlagBatch(0, 10, Chunk.SEGMENT_FLAG_HAS_DATA,
+                (0..<10).collect { 1L }, walGroupIndex)
         e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
         then:
         e != null
