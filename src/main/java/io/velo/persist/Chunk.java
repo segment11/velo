@@ -275,6 +275,15 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         segmentIndex = 0;
     }
 
+    void truncateAll() {
+        for (int i = 0; i < fdLengths.length; i++) {
+            if (fdLengths[i] != 0) {
+                fdReadWriteArray[i].truncate();
+                fdLengths[i] = 0;
+            }
+        }
+    }
+
     /**
      * Calculate the file descriptor index for the current segment index.
      *
