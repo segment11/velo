@@ -688,13 +688,13 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             oneInnerCount = length / oneInnerLength;
         }
 
-        var offset = oneInnerIndex * oneInnerLength;
+        long offset = (long) oneInnerIndex * oneInnerLength;
         if (offset >= writeIndex) {
             return null;
         }
 
         int readLength = length;
-        var lastSegmentOffset = offset + (oneInnerCount * oneInnerLength);
+        long lastSegmentOffset = offset + ((long) oneInnerCount * oneInnerLength);
         if (writeIndex <= lastSegmentOffset) {
             readLength = (int) (writeIndex - offset);
         }
@@ -775,7 +775,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         var isOnlyOneSegment = oneInnerCount == 1;
         var isPwriteBatch = oneInnerCount == BATCH_ONCE_SEGMENT_COUNT_WRITE;
 
-        int offset = oneInnerIndex * oneInnerLength;
+        long offset = (long) oneInnerIndex * oneInnerLength;
 
         // clear buffer before write
         buffer.clear();
