@@ -1586,7 +1586,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             throw new IllegalStateException("Load persisted segment bytes error, pvm=" + pvm);
         }
 
-
         if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
             segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
         }
@@ -1704,6 +1703,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var cvEncodedFromWal = getFromWal(key, bucketIndex, isExpiredFlagArray);
         if (cvEncodedFromWal != null) {
             // write batch kv is the newest
+            // note: isDeleted true branch is dead code for current delete path (EXPIRE_NOW=-1 always expires first),
+            // but isDeleted() IS executed for every normal WAL entry (JaCoCo confirms). see bug_17 doc.
             return !CompressedValue.isDeleted(cvEncodedFromWal);
         }
 
