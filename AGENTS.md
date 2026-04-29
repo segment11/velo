@@ -61,7 +61,7 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 - Max heap size: 8G for tests
 - Fork every: 1 test (isolated test execution)
 - Standard streams are shown during test execution
-- Test coverage is generated automatically after tests
+- Test coverage is generated automatically after unit tests; JaCoCo HTML files are under `build/reports/jacocoHtml/`
 
 ## Code Style Guidelines
 
@@ -214,7 +214,7 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 1. Run relevant tests: `./gradlew test --tests "*YourTest*"`
 2. Run full test suite if changes are significant
 3. Check code coverage with JaCoCo report, if coverage is below 80%, show warnings and consider adding more tests
-4. After running relevant tests, inspect the JaCoCo HTML report and confirm the changed code lines or branches were actually executed; a passing test alone is not enough
+4. After running relevant tests, inspect the JaCoCo HTML report under `build/reports/jacocoHtml/` and confirm the changed code lines or branches were actually executed; a passing test alone is not enough
 5. Test Redis protocol compatibility if applicable
 6. Verify performance with JMH benchmarks if relevant
 
@@ -228,7 +228,7 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 - Mock external dependencies appropriately
 - Use as much as existing test codes
 - Test thread-safety for concurrent operations
-- After running tests for a change, check the JaCoCo report for the touched classes and make sure the changed code path was executed
+- After running tests for a change, check the JaCoCo HTML report in `build/reports/jacocoHtml/` for the touched classes and make sure the changed code path was executed
 
 ## Bug Reviews Workflow
 

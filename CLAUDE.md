@@ -42,7 +42,7 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 - Max heap size: 8G for tests
 - Fork every: 1 test (isolated test execution)
 - Standard streams are shown during test execution
-- Test coverage is generated automatically after tests
+- Test coverage is generated automatically after unit tests; JaCoCo HTML files are under `build/reports/jacocoHtml/`
 
 ## Architecture
 
@@ -145,7 +145,7 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 - Refer to `src/test/groovy/GroovyStyleRefer.groovy` for Groovy style patterns
 - Commands follow the alphabetical group pattern — add new commands to the appropriate letter group
 - Follow TDD for every feature, bug fix, refactor, and behavior change: write the test first, verify it fails for the expected reason, then write the minimal code to pass
-- After running relevant tests for a change, inspect the JaCoCo HTML report and confirm the changed code lines or branches were actually executed
+- After running relevant tests for a change, inspect the JaCoCo HTML report under `build/reports/jacocoHtml/` and confirm the changed code lines or branches were actually executed
 
 ## Development Workflow
 
@@ -163,7 +163,7 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 1. Run relevant tests: `./gradlew test --tests "*YourTest*"`
 2. Run the full test suite if changes are significant
 3. Check code coverage with JaCoCo and warn if coverage is below 80%, then consider adding more tests
-4. Inspect the JaCoCo HTML report and confirm the changed lines or branches were actually executed; a passing test alone is not enough
+4. Inspect the JaCoCo HTML report under `build/reports/jacocoHtml/` and confirm the changed lines or branches were actually executed; a passing test alone is not enough
 5. Test Redis protocol compatibility if applicable
 6. Verify performance with JMH benchmarks if relevant
 
@@ -176,7 +176,7 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 - Mock external dependencies appropriately
 - Reuse as much of the existing test code as possible
 - Test thread-safety for concurrent operations
-- After running tests for a change, check the JaCoCo report for the touched classes and make sure the changed code path was executed
+- After running tests for a change, check the JaCoCo HTML report in `build/reports/jacocoHtml/` for the touched classes and make sure the changed code path was executed
 
 ## Configuration
 
