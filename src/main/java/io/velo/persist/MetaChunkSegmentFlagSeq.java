@@ -267,7 +267,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
     private int checkFdIndex = 0;
     private int check1KSegmentsGroupIndex = 0;
-    int canTruncateFdIndex;
+    int canTruncateFdIndex = -1;
 
     /**
      * Returns the name of the task.
