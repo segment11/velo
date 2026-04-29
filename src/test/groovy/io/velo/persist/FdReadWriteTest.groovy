@@ -49,10 +49,6 @@ class FdReadWriteTest extends Specification {
         fdChunk.writeCountTotal = 1
         fdChunk.lruHitCounter = 1
         fdChunk.lruMissCounter = 1
-        fdKeyBucket.keyBucketSharedBytesCompressCountTotal = 1
-        fdKeyBucket.keyBucketSharedBytesDecompressCountTotal = 1
-        fdKeyBucket.keyBucketSharedBytesBeforeCompressedBytesTotal = 1000
-        fdKeyBucket.keyBucketSharedBytesAfterCompressedBytesTotal = 100
         fdChunk.collect()
         fdKeyBucket.collect()
 

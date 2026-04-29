@@ -80,24 +80,6 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
             map.put(prefix + "after_read_compress_ratio", compressRatio);
         }
 
-        if (keyBucketSharedBytesCompressCountTotal > 0) {
-            map.put(prefix + "key_bucket_shared_bytes_compress_time_total_us", (double) keyBucketSharedBytesCompressTimeTotalUs);
-            map.put(prefix + "key_bucket_shared_bytes_compress_count_total", (double) keyBucketSharedBytesCompressCountTotal);
-            double avgUs = (double) keyBucketSharedBytesCompressTimeTotalUs / keyBucketSharedBytesCompressCountTotal;
-            map.put(prefix + "key_bucket_shared_bytes_compress_time_avg_us", avgUs);
-
-            // compress ratio
-            double compressRatio = (double) keyBucketSharedBytesAfterCompressedBytesTotal / keyBucketSharedBytesBeforeCompressedBytesTotal;
-            map.put(prefix + "key_bucket_shared_bytes_compress_ratio", compressRatio);
-        }
-
-        if (keyBucketSharedBytesDecompressCountTotal > 0) {
-            map.put(prefix + "key_bucket_shared_bytes_decompress_time_total_us", (double) keyBucketSharedBytesDecompressTimeTotalUs);
-            map.put(prefix + "key_bucket_shared_bytes_decompress_count_total", (double) keyBucketSharedBytesDecompressCountTotal);
-            double avgUs = (double) keyBucketSharedBytesDecompressTimeTotalUs / keyBucketSharedBytesDecompressCountTotal;
-            map.put(prefix + "key_bucket_shared_bytes_decompress_time_avg_us", avgUs);
-        }
-
         if (readCountTotal > 0) {
             map.put(prefix + "read_bytes_total", (double) readBytesTotal);
             map.put(prefix + "read_time_total_us", (double) readTimeTotalUs);
@@ -238,43 +220,6 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
      */
     @VisibleForTesting
     long lruMissCounter;
-
-    // Metrics for pure memory mode
-    /**
-     * The total time spent compressing shared bytes (in microseconds).
-     * Only for pure memory mode stats.
-     */
-    private long keyBucketSharedBytesCompressTimeTotalUs;
-
-    /**
-     * The total count of key bucket shared bytes compression operations.
-     */
-    @VisibleForTesting
-    long keyBucketSharedBytesCompressCountTotal;
-
-    /**
-     * The total length of key bucket shared bytes before compression.
-     */
-    @VisibleForTesting
-    long keyBucketSharedBytesBeforeCompressedBytesTotal;
-
-    /**
-     * The total length of key bucket shared bytes after compression.
-     */
-    @VisibleForTesting
-    long keyBucketSharedBytesAfterCompressedBytesTotal;
-
-    /**
-     * The total time spent decompressing shared bytes (in microseconds).
-     */
-    private long keyBucketSharedBytesDecompressTimeTotalUs;
-
-    /**
-     * The total count of key bucket shared bytes decompression operations.
-     */
-    @VisibleForTesting
-    long keyBucketSharedBytesDecompressCountTotal;
-    // Metric stats end
 
     /**
      * The number of segments to batch write at once.
@@ -773,7 +718,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         int capacity = buffer.capacity();
         var oneInnerCount = capacity / oneInnerLength;
         var isOnlyOneSegment = oneInnerCount == 1;
-        var isPwriteBatch = oneInnerCount == BATCH_ONCE_SEGMENT_COUNT_WRITE;
+        var isWriteBatch = oneInnerCount == BATCH_ONCE_SEGMENT_COUNT_WRITE;
 
         long offset = (long) oneInnerIndex * oneInnerLength;
 
@@ -815,7 +760,7 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
 
         // set to lru cache
         if (isLRUOn) {
-            if (isRefreshLRUCache && isChunkFd && (isOnlyOneSegment || isPwriteBatch)) {
+            if (isRefreshLRUCache && isChunkFd && (isOnlyOneSegment || isWriteBatch)) {
                 for (int i = 0; i < oneInnerCount; i++) {
                     var bytes = new byte[oneInnerLength];
                     buffer.position(i * oneInnerLength);
