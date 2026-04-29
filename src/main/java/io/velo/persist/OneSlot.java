@@ -1991,6 +1991,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             wal.clear(false);
         }
 
+        for (var lru : kvByWalGroupIndexLRU.values()) {
+            lru.clear();
+        }
+
         // truncate all wal raf file
         if (raf != null) {
             try {

@@ -996,6 +996,41 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test flush clears kv lru cache so post-flush get returns null'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and: 'put many keys to trigger persist to key loader, then clear WAL so get reads from LRU'
+        ConfForSlot.global.confWal.shortValueSizeTrigger = 100
+        def bucketIndex0KeyList = batchPut(oneSlot, 300, 10, 0, slotNumber)
+        def firstKey = bucketIndex0KeyList[0]
+        def sFirstKey = BaseCommand.slot(firstKey, slotNumber)
+
+        when: 'clear WAL so subsequent get will read from LRU cache (not WAL)'
+        oneSlot.getWalByBucketIndex(0).clear()
+
+        and: 'get the key to populate LRU cache from key loader'
+        def resultBeforeFlush = oneSlot.get(firstKey, sFirstKey.bucketIndex(), sFirstKey.keyHash())
+        then: 'key should be readable from LRU after being loaded from key loader'
+        resultBeforeFlush != null
+
+        when: 'flush the slot'
+        oneSlot.flush()
+
+        and: 'get the key after flush - should return null since slot data was cleared'
+        def resultAfterFlush = oneSlot.get(firstKey, sFirstKey.bucketIndex(), sFirstKey.keyHash())
+
+        then: 'post-flush get should return null (bug: currently returns stale LRU value)'
+        resultAfterFlush == null
+
+        cleanup:
+        oneSlot.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test direct methods call'() {
         given:
         LocalPersistTest.prepareLocalPersist()
