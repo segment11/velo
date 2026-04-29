@@ -643,7 +643,10 @@ public class Wal implements InMemoryEstimate {
             log.error("Truncate wal group error", e);
         }
 
-        // reset write position
+        resetWritePositionsOnly(isShortValue);
+    }
+
+    void resetWritePositionsOnly(boolean isShortValue) {
         if (isShortValue) {
             writePositionShortValue = 0;
             lastSeqShortValueAfterPut = 0L;

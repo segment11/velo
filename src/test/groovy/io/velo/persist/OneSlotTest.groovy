@@ -1033,6 +1033,37 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test flush resets WAL write positions so post-flush writes are not lost on reload'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and: 'set high triggers to avoid auto-persist during test'
+        ConfForSlot.global.confWal.shortValueSizeTrigger = 100000
+        ConfForSlot.global.confWal.valueSizeTrigger = 100000
+
+        when: 'put keys via direct WAL access to build up write position'
+        def wal = oneSlot.getWalByGroupIndex(0)
+        def vList = Mock.prepareValueList(10, 0)
+        wal.put(false, vList[0].key(), vList[0])
+        wal.put(false, vList[1].key(), vList[1])
+        def posAfterPuts = wal.writePosition
+        then: 'write position should be non-zero after puts'
+        posAfterPuts > 0
+
+        when: 'flush the slot'
+        oneSlot.flush()
+        def posAfterFlush = wal.writePosition
+        then: 'write position should be 0 after flush (bug: currently still non-zero)'
+        posAfterFlush == 0
+
+        cleanup:
+        oneSlot.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test direct methods call'() {
         given:
         LocalPersistTest.prepareLocalPersist()

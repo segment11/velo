@@ -2014,6 +2014,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
+        for (var wal : walArray) {
+            wal.resetWritePositionsOnly(false);
+            wal.resetWritePositionsOnly(true);
+        }
+
         if (this.metaChunkSegmentFlagSeq != null) {
             this.metaChunkSegmentFlagSeq.clear();
         }
