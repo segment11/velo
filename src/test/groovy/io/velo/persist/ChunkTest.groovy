@@ -156,6 +156,34 @@ class ChunkTest extends Specification {
         oneSlot.metaChunkSegmentFlagSeq.cleanUp()
     }
 
+    def 'test truncateAll'() {
+        given:
+        def chunk = prepareOne(slot)
+        def oneSlot = chunk.oneSlot
+        chunk.initFds()
+
+        when:
+        chunk.fdLengths[0] = 4096
+        chunk.fdLengths[1] = 8192
+        chunk.truncateAll()
+        then:
+        chunk.fdLengths[0] == 0
+        chunk.fdLengths[1] == 0
+
+        when:
+        chunk.fdLengths[0] = 0
+        chunk.fdLengths[1] = 0
+        chunk.truncateAll()
+        then:
+        chunk.fdLengths[0] == 0
+        chunk.fdLengths[1] == 0
+
+        cleanup:
+        chunk.cleanUp()
+        oneSlot.metaChunkSegmentFlagSeq.clear()
+        oneSlot.metaChunkSegmentFlagSeq.cleanUp()
+    }
+
     def 'test read'() {
         given:
         def chunk = prepareOne(slot)

@@ -275,6 +275,10 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         segmentIndex = 0;
     }
 
+    /**
+     * Truncates all chunk fd files and resets their lengths to zero.
+     * Called during flush to reclaim SSD space and reset chunk state.
+     */
     void truncateAll() {
         for (int i = 0; i < fdLengths.length; i++) {
             if (fdLengths[i] != 0) {
