@@ -712,6 +712,11 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             raf.write(tmpBytes);
             inMemoryCachedByteBuffer.position(0).put(tmpBytes);
             initBitSetValueAndMarkedSegmentIndexWhenFirstStartOrClear();
+
+            // reset marks
+            checkFdIndex = 0;
+            check1KSegmentsGroupIndex = 0;
+            canTruncateFdIndex = -1;
             System.out.println("Meta chunk segment flag seq clear done, set init flags.");
         } catch (IOException e) {
             throw new RuntimeException(e);
