@@ -2028,6 +2028,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         if (this.chunk != null) {
             this.chunk.resetAsFlush();
+            for (int i = 0; i < this.chunk.fdLengths.length; i++) {
+                if (this.chunk.fdLengths[i] != 0) {
+                    this.chunk.fdReadWriteArray[i].truncate();
+                    this.chunk.fdLengths[i] = 0;
+                }
+            }
         }
 
         if (this.bigStringFiles != null) {
