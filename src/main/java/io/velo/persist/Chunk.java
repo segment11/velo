@@ -101,7 +101,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     final SegmentBatch segmentBatch;
     private final SegmentBatch2 segmentBatch2;
 
-    int[] fdLengths;
+    long[] fdLengths;
     FdReadWrite[] fdReadWriteArray;
 
     /**
@@ -159,13 +159,13 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      */
     @VisibleForTesting
     void initFds() throws IOException {
-        this.fdLengths = new int[fdPerChunk];
+        this.fdLengths = new long[fdPerChunk];
         this.fdReadWriteArray = new FdReadWrite[fdPerChunk];
         for (int i = 0; i < fdPerChunk; i++) {
             // Prometheus metric labels use _ instead of -
             var name = "chunk_data_index_" + i + "_slot_" + slot;
             var file = new File(slotDir, "chunk-data-" + i);
-            fdLengths[i] = (int) file.length();
+            fdLengths[i] = file.length();
 
             var fdReadWrite = new FdReadWrite(name, file);
             fdReadWrite.initByteBuffers(true, i);
@@ -281,9 +281,9 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      */
     void truncateAll() {
         for (int i = 0; i < fdLengths.length; i++) {
-            if (fdLengths[i] != 0) {
+            if (fdLengths[i] != 0L) {
                 fdReadWriteArray[i].truncate();
-                fdLengths[i] = 0;
+                fdLengths[i] = 0L;
             }
         }
     }
@@ -575,7 +575,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             fdReadWrite.writeSegmentsBatch(segmentIndexTargetFd, bytes, false);
         }
 
-        int afterThisBatchOffset = (segmentIndexTargetFd + segmentCount) * chunkSegmentLength;
+        long afterThisBatchOffset = (long) (segmentIndexTargetFd + segmentCount) * chunkSegmentLength;
         if (fdLengths[fdIndex] < afterThisBatchOffset) {
             fdLengths[fdIndex] = afterThisBatchOffset;
         }

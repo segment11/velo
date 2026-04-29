@@ -1310,10 +1310,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         var fdLength = chunk.fdLengths[fdIndex];
-        if (fdLength != 0) {
+        if (fdLength != 0L) {
             var fd = chunk.fdReadWriteArray[fdIndex];
             fd.truncate();
-            chunk.fdLengths[fdIndex] = 0;
+            chunk.fdLengths[fdIndex] = 0L;
         }
         metaChunkSegmentFlagSeq.canTruncateFdIndex = -1;
     }
