@@ -115,7 +115,7 @@ that should be hidden by a WAL delete. This makes SCAN disagree with point reads
 | Finding | Severity | Status | Confidence |
 |---------|----------|--------|------------|
 | A - Persisted SCAN cursor ignores post-scan-start entries | High | Fixed and reviewed | High |
-| B - Persisted SCAN skips WAL-shadowed keys only for first WAL group | High | Fixed (commit pending review) | High |
+| B - Persisted SCAN skips WAL-shadowed keys only for first WAL group | High | Fixed, reviewed with test follow-up | High |
 
 ## Fix - Bug A
 
@@ -193,7 +193,7 @@ test that exercises multi-call SCAN cursor behavior.
 
 ## Fix - Bug B
 
-**Commit:** (pending)
+**Commit:** `ffd960e` `fix: compute inWalKeys per WAL group in KeyLoader.scan()`
 
 **Files changed:**
 - `src/main/java/io/velo/persist/KeyLoader.java` (line 610)
@@ -214,6 +214,43 @@ for (int j = walGroupIndex; j < walGroupNumber; j++) {
 **Verification:**
 - All `KeyLoaderTest` tests pass
 - JaCoCo coverage shows `inWalKeysFormScan` is called inside the loop
+
+## Review Feedback - Bug B Fix Commit `ffd960e`
+
+Reviewed by: AI agent 2
+Date: 2026-04-28
+
+### Summary of the Fix
+
+The commit moves `inWalKeysFormScan(beginScanSeq)` from the start of `KeyLoader.scan(...)` into the outer WAL-group
+loop. Each persisted WAL-group scan now receives the shadow-key set for the same WAL group `j` that
+`readKeysToList(...)` is scanning.
+
+### Strengths
+
+- The production change is minimal and targets the confirmed root cause directly.
+- The new placement preserves one `inWalKeys` set per WAL group and reuses it across split indexes in that group, which
+  is the right granularity for the current key-bucket scan loop.
+- `./gradlew :cleanTest :test --tests "io.velo.persist.KeyLoaderTest"` passed.
+- JaCoCo confirms the moved line is executed in `KeyLoader.scan(...)`: line 610 in
+  `build/reports/jacocoHtml/io.velo.persist/KeyLoader.java.html` is covered.
+
+### Findings
+
+No production-code issue found in the Bug B fix.
+
+### Test Gap
+
+The commit does not add a focused regression test for Bug B. Existing `KeyLoaderTest` coverage executes the moved line,
+but it does not prove the actual stale-key scenario:
+
+- a persisted key-bucket entry in WAL group `j > 0`;
+- a WAL value or delete tombstone for the same key in that same later group;
+- `KeyLoader.scan(0, ...)` should skip the persisted stale key because it now computes `inWalKeys` for group `j`.
+
+Recommended follow-up: add a focused Spock test that fails on parent commit `ecce5b0` and passes on `ffd960e`. The test
+should set up a persisted key in a later WAL group plus a matching WAL shadow key in that same group, then assert the
+persisted scan result does not include the stale key.
 
 ## Reviewer Notes - Bug B Verification
 
