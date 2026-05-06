@@ -336,7 +336,7 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         //   - splitNumber=3: all in split 0, 50 > 48 -> need another split
         //   - splitNumber=9: ~25 cells per used split < 48 -> fits
         def upperBits = [3L, 6L, 12L, 15L, 21L, 24L]
-        def longKeyList = []
+        List<Wal.V> longKeyList = []
         25.times { i ->
             def key = 'long_key_for_recheck_test_' + i.toString().padLeft(16, '0')
             def cv = new CompressedValue()

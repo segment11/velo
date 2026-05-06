@@ -13,6 +13,19 @@ def map = [a: 1, b: 2, c: 3]
 def list1 = List.of(1, 2, 3)
 def map1 = Map.of('a', 1, 'b', 2, 'c', 3)
 
+// generics, prefer use typed definition if not a basic type like String/Number
+record SubValue(int a, int b) {}
+
+List<SubValue> subValueList = []
+10.times {
+    subValueList << new SubValue(it, it + 1)
+}
+// do not
+def subValueList2 = []
+10.times {
+    subValueList2 << new SubValue(it, it + 1)
+}
+
 // use 'def' to define variable, not var or class
 def a = 1
 // do not
