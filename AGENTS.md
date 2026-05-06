@@ -21,17 +21,20 @@ system written in Java with Groovy components.
 # Build the project
 ./gradlew jar
 
-# Run all tests
+# Run all tests in all Gradle projects, including submodules
 ./gradlew test
 
-# Run a single test class
-./gradlew test --tests "io.velo.UtilsTest"
+# Run root Velo tests only (ignores submodule test tasks)
+./gradlew :test
 
-# Run a single test method (Spock/Groovy)
-./gradlew test --tests "io.velo.UtilsTest.test base"
+# Run a single root Velo test class
+./gradlew :test --tests "io.velo.UtilsTest"
 
-# Run tests with specific pattern
-./gradlew test --tests "*Test"
+# Run a single root Velo test method (Spock/Groovy)
+./gradlew :test --tests "io.velo.UtilsTest.test base"
+
+# Run root Velo tests with specific pattern
+./gradlew :test --tests "*Test"
 
 # Clean build artifacts
 ./gradlew clean
@@ -58,6 +61,8 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 ### Test Execution Notes
 
 - Tests use Spock framework (Groovy-based) with JUnit 5 platform
+- Prefer `./gradlew :test --tests "..."` for focused root-module unit tests; plain `./gradlew test` also selects
+  `segment_common:test` and `segmentweb:test`
 - Max heap size: 8G for tests
 - Fork every: 1 test (isolated test execution)
 - Standard streams are shown during test execution

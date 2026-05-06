@@ -20,10 +20,11 @@ Velo is a Redis protocol compatible, low-latency, hash-index based, slot-shardin
 ./gradlew clean                # Clean build artifacts
 
 # Test (Spock framework on JUnit 5, forkEvery=1, maxHeap=8G)
-./gradlew test                                          # Run all tests
-./gradlew test --tests "io.velo.UtilsTest"              # Single test class
-./gradlew test --tests "io.velo.UtilsTest.test base"    # Single test method
-./gradlew test --tests "*GroupTest"                      # Pattern match
+./gradlew test                                          # Run all tests in all Gradle projects, including submodules
+./gradlew :test                                         # Run root Velo tests only
+./gradlew :test --tests "io.velo.UtilsTest"             # Single root Velo test class
+./gradlew :test --tests "io.velo.UtilsTest.test base"   # Single root Velo test method
+./gradlew :test --tests "*GroupTest"                    # Root Velo pattern match
 
 # Coverage & benchmarks
 ./gradlew jacocoTestReport     # Coverage report (auto-runs after test)
@@ -39,6 +40,8 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 ### Test Execution Notes
 
 - Tests use Spock framework (Groovy-based) with JUnit 5 platform
+- Prefer `./gradlew :test --tests "..."` for focused root-module unit tests; plain `./gradlew test` also selects
+  `segment_common:test` and `segmentweb:test`
 - Max heap size: 8G for tests
 - Fork every: 1 test (isolated test execution)
 - Standard streams are shown during test execution
