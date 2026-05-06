@@ -191,4 +191,47 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         keyLoader.cleanUp()
         Consts.slotDir.deleteDir()
     }
+
+    def 'test split rechecked after increasing split number'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = 1
+        final short slot = 0
+        def keyLoader = KeyLoaderTest.prepareKeyLoader()
+
+        and:
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        // Use controlled keyHash values where upper 32 bits are multiples of 3.
+        // (keyHash >> 32) % 3 == 0 for all entries -> all cluster in split 0 at splitNumber=3
+        // (keyHash >> 32) % 9 varies (3,6) -> spread across splits at splitNumber=9
+        // 25 entries * 2 cells = 50 cells:
+        //   - splitNumber=1: 50 > 48 -> need split
+        //   - splitNumber=3: all in split 0, 50 > 48 -> need another split
+        //   - splitNumber=9: ~25 cells per used split < 48 -> fits
+        def upperBits = [3L, 6L, 12L, 15L, 21L, 24L]
+        def longKeyList = []
+        25.times { i ->
+            def key = 'long_key_for_recheck_test_' + i.toString().padLeft(16, '0')
+            def cv = new CompressedValue()
+            cv.compressedData = ('value' + i).bytes
+            def cvEncoded = cv.encodeAsShortString()
+            def keyHash = upperBits[i % upperBits.size()] << 32
+            longKeyList << new Wal.V(i, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                    key, cvEncoded, false)
+        }
+
+        when:
+        inner.putAll(longKeyList)
+
+        then:
+        inner.isSplit
+        longKeyList.every {
+            inner.getValueX(it.bucketIndex(), it.key(), it.keyHash()).valueBytes() == it.cvEncoded()
+        }
+
+        cleanup:
+        keyLoader.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
 }
