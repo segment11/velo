@@ -2,6 +2,7 @@ package io.velo.persist
 
 import io.velo.CompressedValue
 import io.velo.ConfForSlot
+import io.velo.KeyHash
 import spock.lang.Specification
 
 class KeyBucketsInOneWalGroupTest extends Specification {
@@ -146,6 +147,44 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         inner2.keyCountForStatsTmp[0] == 4
         shortValueList[1..4].every {
             inner2.getValueX(it.bucketIndex(), it.key(), it.keyHash()) != null
+        }
+
+        cleanup:
+        keyLoader.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
+
+    def 'test split decision uses cell cost not entry count'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = 1
+        final short slot = 0
+        def keyLoader = KeyLoaderTest.prepareKeyLoader()
+
+        and:
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        // 40-byte keys + short value -> 2+40+1+23 = 66 > 60 -> 2 cells each
+        // 25 entries * 2 cells = 50 > 48 (INIT_CAPACITY), but entry count 25 < 48
+        def longKeyList = []
+        25.times { i ->
+            def key = 'long_key_for_multicell_test_' + i.toString().padLeft(16, '0')
+            def keyBytes = key.bytes
+            def keyHash = KeyHash.hash(keyBytes)
+            def cv = new CompressedValue()
+            cv.compressedData = ('value' + i).bytes
+            def cvEncoded = cv.encodeAsShortString()
+            longKeyList << new Wal.V(i, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                    key, cvEncoded, false)
+        }
+
+        when:
+        inner.putAll(longKeyList)
+
+        then:
+        inner.isSplit
+        longKeyList.every {
+            inner.getValueX(it.bucketIndex(), it.key(), it.keyHash()).valueBytes() == it.cvEncoded()
         }
 
         cleanup:

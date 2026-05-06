@@ -276,7 +276,7 @@ public class KeyBucketsInOneWalGroup {
             var pvm = entry.getValue();
 
             var splitIndex = KeyHash.splitIndex(pvm.keyHash, currentSplitNumber, bucketIndex);
-            cellCostBySplitIndex[splitIndex]++;
+            cellCostBySplitIndex[splitIndex] += pvm.cellCostInKeyBucket();
             if (cellCostBySplitIndex[splitIndex] > KeyBucket.INIT_CAPACITY) {
                 needSplit = true;
                 break;
