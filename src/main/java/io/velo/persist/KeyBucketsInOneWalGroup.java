@@ -257,6 +257,11 @@ public class KeyBucketsInOneWalGroup {
                 if (existPvm != null) {
                     cvExpiredOrDeleted(existPvm.key, existPvm.extendBytes);
                 }
+            } else if (pvm.expireAt != CompressedValue.NO_EXPIRE && pvm.expireAt < currentTimeMillis) {
+                var existPvm = map.remove(pvm.key);
+                if (existPvm != null) {
+                    cvExpiredOrDeleted(existPvm.key, existPvm.extendBytes);
+                }
             } else {
                 var existPvm = map.put(pvm.key, pvm);
                 // update
