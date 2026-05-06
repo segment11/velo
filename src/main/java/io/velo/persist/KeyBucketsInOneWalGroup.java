@@ -236,6 +236,7 @@ public class KeyBucketsInOneWalGroup {
             keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
                     cvExpiredOrDeleted(key, valueBytes);
+                    return;
                 }
 
                 var pvm = new PersistValueMeta();

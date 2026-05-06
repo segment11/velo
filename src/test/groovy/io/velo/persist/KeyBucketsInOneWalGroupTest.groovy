@@ -107,4 +107,49 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         keyLoader.cleanUp()
         Consts.slotDir.deleteDir()
     }
+
+    def 'test expired entries are not reinserted during merge'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = 1
+        final short slot = 0
+        def keyLoader = KeyLoaderTest.prepareKeyLoader()
+
+        and:
+        // First round: persist 5 entries, entry 0 has already-expired TTL
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        def shortValueList = Mock.prepareShortValueList(5, (byte) 0) { v ->
+            if (v.seq() == 0L) {
+                return new Wal.V(v.seq(), v.bucketIndex(), v.keyHash(),
+                        System.currentTimeMillis() - 1, CompressedValue.NULL_DICT_SEQ,
+                        v.key(), v.cvEncoded(), false)
+            }
+            return v
+        }
+
+        when:
+        inner.putAll(shortValueList)
+        def sharedBytesList = inner.encodeAfterPutBatch()
+        keyLoader.writeSharedBytesList(sharedBytesList, inner.beginBucketIndex)
+        keyLoader.updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp)
+        then:
+        inner.keyCountForStatsTmp[0] == 5
+
+        when:
+        // Second round: reload from disk, merge with empty list for bucket 0
+        def inner2 = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        def emptyPvmList = []
+        inner2.putPvmListToTargetBucket(emptyPvmList, 0)
+        then:
+        inner2.getValueX(0, shortValueList[0].key(), shortValueList[0].keyHash()) == null
+        inner2.keyCountForStatsTmp[0] == 4
+        shortValueList[1..4].every {
+            inner2.getValueX(it.bucketIndex(), it.key(), it.keyHash()) != null
+        }
+
+        cleanup:
+        keyLoader.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
 }
