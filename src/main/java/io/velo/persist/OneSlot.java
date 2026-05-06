@@ -1952,7 +1952,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      */
     public void doPersist(int walGroupIndex, @NotNull String key, @NotNull Wal.PutResult putResult) {
         var targetWal = walArray[walGroupIndex];
-        putValueToWal(putResult.isValueShort(), targetWal);
+        try {
+            putValueToWal(putResult.isValueShort(), targetWal);
+        } catch (Exception e) {
+            var needPutV = putResult.needPutV();
+            if (needPutV != null) {
+                targetWal.recoverNeedPutV(putResult.isValueShort(), key, needPutV);
+            }
+            throw e;
+        }
         lastPersistTimeMs = System.currentTimeMillis();
 
         if (putResult.isValueShort()) {

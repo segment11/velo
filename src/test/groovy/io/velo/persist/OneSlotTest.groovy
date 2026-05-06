@@ -1232,4 +1232,92 @@ class OneSlotTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test needPutV recovered when doPersist throws'() {
+        given:
+        def originalSegmentNumberPerFd = ConfForSlot.global.confChunk.segmentNumberPerFd
+        def originalFdPerChunk = ConfForSlot.global.confChunk.fdPerChunk
+        def originalValueSizeTrigger = ConfForSlot.global.confWal.valueSizeTrigger
+
+        ConfForSlot.global.confChunk.segmentNumberPerFd = 8
+        ConfForSlot.global.confChunk.fdPerChunk = (byte) 1
+        // high trigger so persist is triggered by WAL buffer overflow, not value count
+        ConfForSlot.global.confWal.valueSizeTrigger = 10000
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def bucketIndex = 0
+        def targetKeyList = Mock.prepareTargetBucketIndexKeyList(100, bucketIndex)
+        def random = new Random()
+
+        // do some successful writes to fill segments
+        for (int i = 0; i < 50; i++) {
+            def key = targetKeyList[i]
+            def cv = new CompressedValue()
+            cv.keyHash = KeyHash.hash(key.bytes)
+            cv.compressedData = new byte[100]
+            random.nextBytes(cv.compressedData)
+            cv.seq = oneSlot.snowFlake.nextId()
+            oneSlot.put(key, bucketIndex, cv)
+        }
+
+        // mark ALL segments as HAS_DATA (non-reusable) so next persist will fail
+        def maxSegIndex = oneSlot.chunk.maxSegmentIndex
+        for (int i = 0; i <= maxSegIndex; i++) {
+            oneSlot.setSegmentMergeFlag(i, Chunk.SEGMENT_FLAG_HAS_DATA, 0L, 0)
+        }
+        def flagSeq = oneSlot.metaChunkSegmentFlagSeq
+        for (def bitSet : flagSeq.segmentCanReuseBitSet) {
+            bitSet.clear()
+        }
+
+        def wal = oneSlot.getWalByGroupIndex(0)
+
+        when:
+        // fill WAL buffer until it overflows — the overflowing put returns needPutV != null
+        // then doPersist() is called and putValueToWal() throws SegmentOverflowException
+        boolean exceptionThrown = false
+        String lostKey = null
+        for (int i = 50; i < 100; i++) {
+            def key = targetKeyList[i]
+            // use larger data to fill the WAL buffer faster
+            def cv = new CompressedValue()
+            cv.keyHash = KeyHash.hash(key.bytes)
+            cv.compressedData = new byte[2000]
+            random.nextBytes(cv.compressedData)
+            cv.seq = oneSlot.snowFlake.nextId()
+
+            try {
+                oneSlot.put(key, bucketIndex, cv)
+            } catch (SegmentOverflowException e) {
+                exceptionThrown = true
+                lostKey = key
+                println "SegmentOverflowException caught for key=${key}, delayToKeyBucketValues.size=${wal.delayToKeyBucketValues.size()}"
+                break
+            }
+        }
+
+        then:
+        exceptionThrown
+        lostKey != null
+
+        when:
+        // with the fix, needPutV should be recovered into WAL delay maps
+        def isInDelayMaps = wal.delayToKeyBucketValues.containsKey(lostKey) ||
+                wal.delayToKeyBucketShortValues.containsKey(lostKey)
+
+        then:
+        isInDelayMaps
+
+        cleanup:
+        ConfForSlot.global.confChunk.segmentNumberPerFd = originalSegmentNumberPerFd
+        ConfForSlot.global.confChunk.fdPerChunk = originalFdPerChunk
+        ConfForSlot.global.confWal.valueSizeTrigger = originalValueSizeTrigger
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

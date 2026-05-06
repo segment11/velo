@@ -384,18 +384,8 @@ public class Wal implements InMemoryEstimate {
 
     final long fileToWriteIndex;
 
-    @TestOnly
-    long getLastSeqAfterPut() {
-        return lastSeqAfterPut;
-    }
-
-    @TestOnly
-    long getLastSeqShortValueAfterPut() {
-        return lastSeqShortValueAfterPut;
-    }
-
-    private long lastSeqAfterPut;
-    private long lastSeqShortValueAfterPut;
+    long lastSeqAfterPut;
+    long lastSeqShortValueAfterPut;
 
     /**
      * Gets the number of keys in the WAL.
@@ -1049,6 +1039,50 @@ public class Wal implements InMemoryEstimate {
         }
 
         return new PutResult(needPersist, false, null, needPersist ? 0 : offset);
+    }
+
+    /**
+     * Recovers a deferred Wal.V that was returned as needPutV when the WAL buffer was full,
+     * but whose persist cycle failed. Attempts to compact the WAL buffer and write the entry
+     * to the WAL file for durability, then inserts into the delay map with full bookkeeping
+     * (opposite-map cleanup, sequence counter update, big-string UUID tracking).
+     *
+     * @param isValueShort whether the value is short
+     * @param key          the key
+     * @param v            the Wal.V to recover
+     */
+    void recoverNeedPutV(boolean isValueShort, @NotNull String key, @NotNull V v) {
+        var encodeLength = v.encodeLength();
+        var offset = isValueShort ? writePositionShortValue : writePosition;
+
+        if (offset + encodeLength > ONE_GROUP_BUFFER_SIZE && isOnRewrite) {
+            offset = rewriteOneGroup(isValueShort);
+        }
+
+        if (offset + encodeLength <= ONE_GROUP_BUFFER_SIZE) {
+            var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
+            putVToFile(v, isValueShort, offset, targetGroupBeginOffset);
+            if (isValueShort) {
+                writePositionShortValue = offset + encodeLength;
+            } else {
+                writePosition = offset + encodeLength;
+            }
+        } else {
+            log.warn("Recover needPutV skipped WAL file write, buffer still full after rewrite, slot={}, group={}, key={}",
+                    slot, groupIndex, key);
+        }
+
+        if (isValueShort) {
+            delayToKeyBucketShortValues.put(key, v);
+            delayToKeyBucketValues.remove(key);
+            lastSeqShortValueAfterPut = v.seq;
+            addBigStringUuidIfMatch(v);
+        } else {
+            delayToKeyBucketValues.put(key, v);
+            delayToKeyBucketShortValues.remove(key);
+            bigStringFileUuidByKey.remove(key);
+            lastSeqAfterPut = v.seq;
+        }
     }
 
     int intervalDeleteExpiredBigStringFiles() {
