@@ -25,7 +25,7 @@ Reviewed paths:
 
 The contract is that `get()` returns raw data and callers check expiry. This is the same pattern as `getValueXByKey` which also doesn't check expiry — the caller `get()` itself checks at line 1572. The sole caller of `get()` (`BaseCommand.getCv()`) checks `cv.isExpired()` at line 634 immediately after decoding. The LRU path is consistent with this layered design.
 
-## Finding 2: `getFromWal()` treats delete tombstones as expired entries — `isDeleted` check in `get()` is dead code
+## Finding 2: `exists()` and `get()` `isDeleted` check — `true` branch unreachable for current delete path
 
 **Severity:** N/A — Not a bug, defensive code
 
