@@ -1749,11 +1749,19 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var targetWal = walArray[walGroupIndex];
         var putResult = targetWal.removeDelay(key, bucketIndex, keyHash, lastPersistTimeMs);
 
-        var xWalV = new XWalV(putResult.needPutV(), putResult.isValueShort());
-        appendBinlog(xWalV);
+        // Same as put(): defer binlog when needPutV != null (buffer overflow, value not WAL-durable yet)
+        if (putResult.needPutV() == null) {
+            var xWalV = new XWalV(putResult.needPutV(), putResult.isValueShort());
+            appendBinlog(xWalV);
+        }
 
         if (putResult.needPersist()) {
             doPersist(walGroupIndex, key, putResult);
+        }
+
+        if (putResult.needPutV() != null) {
+            var xWalV = new XWalV(putResult.needPutV(), putResult.isValueShort());
+            appendBinlog(xWalV);
         }
     }
 
@@ -1828,6 +1836,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var isValueShort = cv.isShortString();
         Wal.V v;
+        XBigStrings xBigStrings = null;
         // is use faster kv style, save short string in key buckets, not short string save key and value in record log
         if (isValueShort) {
             byte[] cvEncoded;
@@ -1870,8 +1879,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 cvAsBigString.setCompressedDataAsBigString(bigStringUuid, cv.getDictSeqOrSpType());
 
                 var cvBigStringEncoded = cvAsBigString.encode();
-                var xBigStrings = new XBigStrings(bigStringUuid, bucketIndex, cv.getKeyHash(), key, cvBigStringEncoded);
-                appendBinlog(xBigStrings);
+                xBigStrings = new XBigStrings(bigStringUuid, bucketIndex, cv.getKeyHash(), key, cvBigStringEncoded);
 
                 v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), CompressedValue.SP_TYPE_BIG_STRING,
                         key, cvBigStringEncoded, isFromMerge);
@@ -1903,12 +1911,28 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
+        // When needPutV != null, the value was NOT written to WAL file or delay maps (buffer overflow).
+        // Defer binlog until after persist succeeds to avoid replicating a rejected write.
+        // For already-accepted writes (needPutV == null), binlog immediately — value is WAL-durable.
+        if (putResult.needPutV() == null) {
+            if (xBigStrings != null) {
+                appendBinlog(xBigStrings);
+            }
+            var xWalV = new XWalV(v, isValueShort);
+            appendBinlog(xWalV);
+        }
+
         if (putResult.needPersist()) {
             doPersist(walGroupIndex, key, putResult);
         }
 
-        var xWalV = new XWalV(v, isValueShort);
-        appendBinlog(xWalV);
+        if (putResult.needPutV() != null) {
+            if (xBigStrings != null) {
+                appendBinlog(xBigStrings);
+            }
+            var xWalV = new XWalV(v, isValueShort);
+            appendBinlog(xWalV);
+        }
     }
 
     private Long getCurrentBigStringUuid(@NotNull Wal targetWal, @NotNull String key, int bucketIndex, long keyHash) {

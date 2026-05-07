@@ -1249,6 +1249,9 @@ class OneSlotTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
 
+        // enable binlog so assertions are non-vacuous
+        oneSlot.dynConfig.setBinlogOn(true)
+
         and:
         def bucketIndex = 0
         def targetKeyList = Mock.prepareTargetBucketIndexKeyList(100, bucketIndex)
@@ -1265,8 +1268,9 @@ class OneSlotTest extends Specification {
             oneSlot.put(key, bucketIndex, cv)
         }
 
-        // record binlog offset before failure
-        def binlogOffsetBefore = oneSlot.binlog != null ? oneSlot.binlog.currentReplOffset() : 0L
+        // record binlog offset before failure — should be > 0 since successful writes were binlogged
+        def binlogOffsetBefore = oneSlot.binlog.currentReplOffset()
+        println "Binlog on=${oneSlot.dynConfig.isBinlogOn()}, offset before failure writes=${binlogOffsetBefore}"
 
         // mark ALL segments as HAS_DATA (non-reusable) so next persist will fail
         def maxSegIndex = oneSlot.chunk.maxSegmentIndex
@@ -1283,9 +1287,9 @@ class OneSlotTest extends Specification {
         when:
         // fill WAL buffer until it overflows — the overflowing put returns needPutV != null
         // then doPersist() is called and putValueToWal() throws SegmentOverflowException
-        // binlog append is AFTER doPersist, so the failed write should not appear in binlog
         boolean exceptionThrown = false
         String failedKey = null
+        long binlogOffsetRightBeforeFail = 0L
         for (int i = 50; i < 100; i++) {
             def key = targetKeyList[i]
             def cv = new CompressedValue()
@@ -1294,12 +1298,15 @@ class OneSlotTest extends Specification {
             random.nextBytes(cv.compressedData)
             cv.seq = oneSlot.snowFlake.nextId()
 
+            // capture offset before each attempt
+            binlogOffsetRightBeforeFail = oneSlot.binlog.currentReplOffset()
+
             try {
                 oneSlot.put(key, bucketIndex, cv)
             } catch (SegmentOverflowException e) {
                 exceptionThrown = true
                 failedKey = key
-                println "SegmentOverflowException caught for key=${key}"
+                println "SegmentOverflowException caught for key=${key}, binlog offset before this write=${binlogOffsetRightBeforeFail}"
                 break
             }
         }
@@ -1312,9 +1319,10 @@ class OneSlotTest extends Specification {
         !wal.delayToKeyBucketValues.containsKey(failedKey)
         !wal.delayToKeyBucketShortValues.containsKey(failedKey)
 
-        // binlog was NOT appended for the failed write
-        def binlogOffsetAfter = oneSlot.binlog != null ? oneSlot.binlog.currentReplOffset() : 0L
-        binlogOffsetAfter == binlogOffsetBefore
+        // binlog was NOT appended for the failed write — offset should be the same as
+        // right before the failing put (since the failing put throws before appending)
+        def binlogOffsetAfter = oneSlot.binlog.currentReplOffset()
+        binlogOffsetAfter == binlogOffsetRightBeforeFail
 
         cleanup:
         ConfForSlot.global.confChunk.segmentNumberPerFd = originalSegmentNumberPerFd
