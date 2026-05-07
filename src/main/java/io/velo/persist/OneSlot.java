@@ -1749,9 +1749,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var targetWal = walArray[walGroupIndex];
         var putResult = targetWal.removeDelay(key, bucketIndex, keyHash, lastPersistTimeMs);
 
-        // Same as put(): defer binlog when needPutV != null (buffer overflow, value not WAL-durable yet)
         if (putResult.needPutV() == null) {
-            var xWalV = new XWalV(putResult.needPutV(), putResult.isValueShort());
+            var xWalV = new XWalV(putResult.v(), putResult.isValueShort());
             appendBinlog(xWalV);
         }
 
@@ -1760,7 +1759,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         if (putResult.needPutV() != null) {
-            var xWalV = new XWalV(putResult.needPutV(), putResult.isValueShort());
+            var xWalV = new XWalV(putResult.v(), putResult.isValueShort());
             appendBinlog(xWalV);
         }
     }
@@ -1918,7 +1917,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             if (xBigStrings != null) {
                 appendBinlog(xBigStrings);
             }
-            var xWalV = new XWalV(v, isValueShort);
+            var xWalV = new XWalV(putResult.v(), isValueShort);
             appendBinlog(xWalV);
         }
 
@@ -1930,7 +1929,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             if (xBigStrings != null) {
                 appendBinlog(xBigStrings);
             }
-            var xWalV = new XWalV(v, isValueShort);
+            var xWalV = new XWalV(putResult.v(), isValueShort);
             appendBinlog(xWalV);
         }
     }
