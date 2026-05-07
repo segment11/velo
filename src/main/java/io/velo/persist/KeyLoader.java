@@ -895,6 +895,21 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
+     * Replaces one WAL group's key-bucket index with the given PVM list.
+     * Used by chunk-scan recovery because the current key buckets may be the broken index.
+     *
+     * @param walGroupIndex the WAL group index
+     * @param pvmList       the live PVM list rebuilt from chunk records
+     */
+    public void replacePvmListBatchInOneWalGroupForRebuild(int walGroupIndex,
+                                                           @NotNull ArrayList<PersistValueMeta> pvmList) {
+        var inner = new KeyBucketsInOneWalGroup(slot, walGroupIndex, this, false);
+        inner.putAllPvmList(pvmList);
+
+        doAfterPutAll(walGroupIndex, inner);
+    }
+
+    /**
      * Persists a batch of short values in a specific WAL group.
      *
      * @param walGroupIndex  the WAL group index

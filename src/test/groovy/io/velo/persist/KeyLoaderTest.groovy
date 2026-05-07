@@ -539,6 +539,61 @@ class KeyLoaderTest extends Specification {
         keyLoader2.cleanUp()
     }
 
+    def 'replace pvm list for rebuild does not merge with existing key buckets'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
+        def keyLoader = prepareKeyLoader()
+
+        and:
+        List<PersistValueMeta> existingPvmList = []
+        3.times {
+            def key = "old-key:" + it
+            def pvm = new PersistValueMeta()
+            pvm.key = key
+            pvm.keyHash = KeyHash.hash(key.bytes)
+            pvm.bucketIndex = 0
+            pvm.segmentIndex = 1
+            pvm.segmentOffset = it
+            pvm.seq = it
+            pvm.shortType = KeyLoader.typeAsByteString
+            existingPvmList << pvm
+        }
+        keyLoader.updatePvmListBatchAfterWriteSegments(0, existingPvmList, null)
+
+        and:
+        List<PersistValueMeta> rebuiltPvmList = []
+        def rebuiltKey = 'rebuilt-key:0'
+        def rebuiltPvm = new PersistValueMeta()
+        rebuiltPvm.key = rebuiltKey
+        rebuiltPvm.keyHash = KeyHash.hash(rebuiltKey.bytes)
+        rebuiltPvm.bucketIndex = 0
+        rebuiltPvm.segmentIndex = 9
+        rebuiltPvm.segmentOffset = 99
+        rebuiltPvm.seq = 99L
+        rebuiltPvm.shortType = KeyLoader.typeAsByteString
+        rebuiltPvmList << rebuiltPvm
+
+        expect:
+        existingPvmList.every {
+            keyLoader.getValueXByKey(0, it.key, it.keyHash).valueBytes() == it.encode()
+        }
+        keyLoader.getKeyCountInBucketIndex(0) == 3
+
+        when:
+        keyLoader.replacePvmListBatchInOneWalGroupForRebuild(0, rebuiltPvmList)
+
+        then:
+        existingPvmList.every {
+            keyLoader.getValueXByKey(0, it.key, it.keyHash) == null
+        }
+        keyLoader.getValueXByKey(0, rebuiltPvm.key, rebuiltPvm.keyHash).valueBytes() == rebuiltPvm.encode()
+        keyLoader.getKeyCountInBucketIndex(0) == 1
+
+        cleanup:
+        keyLoader.flush()
+        keyLoader.cleanUp()
+    }
+
 def 'test scan cursor counts post-scan-start entries'() {
         given:
         ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1

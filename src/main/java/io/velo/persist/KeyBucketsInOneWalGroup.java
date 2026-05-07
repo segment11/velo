@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +29,18 @@ public class KeyBucketsInOneWalGroup {
      * @param keyLoader     the KeyLoader instance used to load key data
      */
     public KeyBucketsInOneWalGroup(short slot, int walGroupIndex, @NotNull KeyLoader keyLoader) {
+        this(slot, walGroupIndex, keyLoader, true);
+    }
+
+    /**
+     * Constructs a KeyBucketsInOneWalGroup instance.
+     *
+     * @param slot          the slot index to which the key buckets belong
+     * @param walGroupIndex the index of the WAL group
+     * @param keyLoader     the KeyLoader instance used to load key data
+     * @param readExisting  whether to load the current key-bucket index before updates
+     */
+    KeyBucketsInOneWalGroup(short slot, int walGroupIndex, @NotNull KeyLoader keyLoader, boolean readExisting) {
         this.slot = slot;
         this.keyLoader = keyLoader;
 
@@ -35,7 +48,15 @@ public class KeyBucketsInOneWalGroup {
         this.keyCountForStatsTmp = new short[oneChargeBucketNumber];
         this.beginBucketIndex = oneChargeBucketNumber * walGroupIndex;
 
-        this.readBeforePutBatch();
+        if (readExisting) {
+            this.readBeforePutBatch();
+        } else {
+            this.splitNumberTmp = new byte[oneChargeBucketNumber];
+            Arrays.fill(this.splitNumberTmp, ConfForSlot.global.confBucket.initialSplitNumber);
+            for (int i = 0; i < ConfForSlot.global.confBucket.initialSplitNumber; i++) {
+                listList.add(prepareListInitWithNull());
+            }
+        }
     }
 
     private final short slot;

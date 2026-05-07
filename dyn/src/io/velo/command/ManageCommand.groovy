@@ -10,6 +10,7 @@ import io.activej.promise.SettablePromise
 import io.velo.*
 import io.velo.ingest.ParquetGroupToValue
 import io.velo.persist.Chunk
+import io.velo.persist.ChunkWalGroupRebuilder
 import io.velo.persist.LocalPersist
 import io.velo.persist.OneSlot
 import io.velo.persist.Wal
@@ -293,6 +294,36 @@ class ManageCommand extends BaseCommand {
             log.info 'Output chunk segment flag to file cost {}us', costNT / 1000
 
             return OKReply.INSTANCE
+        } else if (subSubCmd == 'rebuild-from-chunk') {
+            // manage slot 0 rebuild-from-chunk 0 preview
+            // manage slot 0 rebuild-from-chunk 0 apply
+            if (data.length != 6) {
+                return ErrorReply.FORMAT
+            }
+
+            int walGroupIndex
+            try {
+                walGroupIndex = Integer.parseInt(new String(data[4]))
+            } catch (NumberFormatException ignored) {
+                return ErrorReply.INVALID_INTEGER
+            }
+
+            if (walGroupIndex < 0 || walGroupIndex >= Wal.calcWalGroupNumber()) {
+                return new ErrorReply('wal group index out of range')
+            }
+
+            def mode = ChunkWalGroupRebuilder.Mode.fromText(new String(data[5]))
+            if (mode == null) {
+                return ErrorReply.SYNTAX
+            }
+
+            def beginNT = System.nanoTime()
+            def result = oneSlot.rebuildKeyBucketsFromChunk(walGroupIndex, mode)
+            def costNT = System.nanoTime() - beginNT
+            log.warn 'Manage rebuild-from-chunk {}, slot={}, wal group index={}, cost {}us, result={}',
+                    mode.text(), slot, walGroupIndex, costNT / 1000, result
+
+            return new BulkReply(new ObjectMapper().writeValueAsBytes(result))
         } else if (subSubCmd == 'set-readonly') {
             oneSlot.readonly = true
             return new BulkReply(('slot ' + slot + ' set readonly').bytes)

@@ -124,7 +124,7 @@ public void doPersist(int walGroupIndex, @NotNull String key, @NotNull Wal.PutRe
 
 ---
 
-## Finding 2: Segment space leak on partial failure in `Chunk.persist()`
+## Finding 2: Key-bucket index inconsistency after partial failure in `Chunk.persist()`
 
 **Severity:** Medium
 
@@ -152,39 +152,44 @@ oneSlot.setMetaChunkSegmentIndexInt(segmentIndex); // line 490
 
 `Chunk.persist()` writes segment bytes to disk and sets `SEGMENT_FLAG_HAS_DATA` flags (lines 397-458) **before** calling `keyLoader.updatePvmListBatchAfterWriteSegments()` (line 483). If the key-bucket update throws (e.g., `BucketFullException`), the following occurs:
 
-1. Segments have `SEGMENT_FLAG_HAS_DATA` in the flag bitset — they are NOT reusable
+1. Segments have `SEGMENT_FLAG_HAS_DATA` in the flag bitset and can be found by chunk-file recovery
 2. `markPersistedSegmentIndexToTargetWalGroup()` (line 487) is never called, so the merge tracker never finds these segments for future merge-read
 3. `setMetaChunkSegmentIndexInt()` (line 490) is never called, so the segment index is not advanced in metadata
-4. These segments remain permanently flagged as `HAS_DATA` but are **unreferenced** by any key bucket — orphaned
+4. These segments are not referenced by the current key buckets, because key-bucket metadata update failed
 
 **Impact:**
 
-- Progressive segment space leak on repeated persist failures
-- Over time, this could exhaust available segments and cause `SegmentOverflowException` on all writes for the slot
-- The leak is bounded by total segment count but could significantly reduce effective storage capacity
-- Combined with Finding 1, a single `BucketFullException` causes both data loss AND segment space leak
+- Current key buckets can be inconsistent with chunk data after a partial failure
+- Normal reads through key buckets may miss data that was written to chunk files
+- Segments remain `HAS_DATA`, which is useful for recovery but can delay space reclamation until a rebuild/merge path runs
+- Repeated failures can still reduce available segment space, but the written bytes are recoverable if chunk scan is used
 
 **Suggested fix direction:**
 
-On failure after segments are written but before key-bucket update, mark the just-written segments as `SEGMENT_FLAG_REUSABLE` to reclaim them:
+Do **not** blindly reset the just-written `HAS_DATA` flags to `SEGMENT_FLAG_REUSABLE` if segment bytes were written
+successfully. In the intended data-broken recovery flow, chunk files are the recoverable persisted data and key buckets
+are a rebuildable index. Resetting the flags would hide recoverable data from a full chunk scan.
 
-```java
-try {
-    keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, pvmList, keyBucketsInOneWalGroupGiven);
-} catch (Exception e) {
-    // Roll back: mark written segments as reusable
-    for (int i = 0; i < segmentCount; i++) {
-        oneSlot.setSegmentMergeFlag(currentSegmentIndex + i, Chunk.SEGMENT_FLAG_REUSABLE, 0L, 0);
-    }
-    throw e;
-}
-```
+The preferred recovery direction is:
+
+1. Treat chunk files / `HAS_DATA` segment flags as the source for persisted normal-value recovery.
+2. Re-read chunk files and group decoded records by WAL group, so memory usage is bounded by one WAL group's keys.
+3. Within each WAL group, resolve duplicate records by key using the latest sequence, and apply delete/expire filtering.
+4. Rebuild key buckets from the resolved live records.
+5. Merge/compact the WAL group's live records and mark stale/duplicate/invalid segment ranges reusable only after rebuild
+   succeeds.
+6. Replay WAL files after chunk rebuild, because WAL contains newer unpersisted writes.
+
+Recovery must validate segment headers/records; segments with incomplete or invalid bytes should be skipped or marked
+reusable according to the corruption policy. Valid `HAS_DATA` segments should remain scannable until rebuild/merge has
+made a new consistent index.
 
 **Regression tests should include:**
 
 - Force `BucketFullException` during `updatePvmListBatchAfterWriteSegments()`
-- Verify that the segments written before the exception are marked reusable
-- Verify that subsequent writes can reuse those segments
+- Verify that segments written before the exception remain `HAS_DATA` and are visible to the rebuild scanner
+- Verify that the rebuild path can reconstruct key buckets by WAL group from chunk data
+- Verify that stale/duplicate records are removed only after successful rebuild/merge
 
 ---
 
@@ -411,7 +416,7 @@ Consider triggering segment merge-check even during short-value persist cycles, 
 | Finding | Severity | Status | Confidence |
 |---------|----------|--------|------------|
 | 1 - Silent data loss of `needPutV` when `putValueToWal()` throws | **High** | **Needs fix** | High |
-| 2 - Segment space leak on partial failure in `Chunk.persist()` | Medium | **Needs fix** | High |
+| 2 - Key-bucket index inconsistency after partial `Chunk.persist()` failure | Medium | **Needs recovery design / fix** | High |
 | 3 - Merge marker consumed before merge completes | Medium | **Needs decision** | Medium |
 | 4 - Big string file orphaned if persist fails after file write | Medium | **Needs fix** | Medium |
 | 5 - `encodeAfterPutBatch()` inconsistent iteration bound | Low | **Fragile but safe** | Medium |
@@ -453,9 +458,9 @@ Reviewer recommendation:
 Fix is needed. The fix should preserve failure atomicity for `needPutV` and should also revisit binlog append ordering or
 rollback behavior so failed local writes are not replicated as if they succeeded.
 
-#### Finding 2 - Segment space leak on partial failure in `Chunk.persist()`
+#### Finding 2 - Key-bucket index inconsistency after partial failure in `Chunk.persist()`
 
-**Status:** Confirmed.
+**Status:** Confirmed, with revised fix direction.
 
 Verified current code:
 
@@ -469,8 +474,14 @@ Verified current code:
 Reviewer conclusion:
 
 If key-bucket update fails after segment writes, the written segments remain marked as data but are not referenced by key
-buckets and are not added to the merge marker queue. They are also not reusable according to `segmentCanReuseBitSet`.
-This is a real segment-space leak. Fix is needed.
+buckets and are not added to the merge marker queue. This is a real index-consistency/recovery issue, but the segment
+bytes are still recoverable data if the recovery path scans chunk files.
+
+Do not treat immediate rollback to `SEGMENT_FLAG_REUSABLE` as the default fix. The intended recovery model is that key
+buckets are a rebuildable index, while valid chunk records can be re-read, grouped by WAL group, resolved by latest
+sequence per key, merged/compacted, and used to rebuild key buckets. Keeping valid `HAS_DATA` flags lets this recovery
+flow discover the written data. Fix is needed in the chunk-scan rebuild / merge-reconstruction path rather than by
+blindly clearing flags after key-bucket update failure.
 
 #### Finding 3 - Merge marker consumed before merge completes
 
@@ -553,7 +564,7 @@ as an operational/space-reclamation tradeoff, not a required bug fix.
 | Finding | AI Agent 2 Status | Fix Needed |
 |---------|-------------------|------------|
 | 1 - `needPutV` dropped on persist failure | Confirmed with corrected impact | Yes |
-| 2 - Segment leak after partial `Chunk.persist()` failure | Confirmed | Yes |
+| 2 - Key-bucket index inconsistency after partial `Chunk.persist()` failure | Confirmed with revised recovery direction | Yes |
 | 3 - Merge marker consumed before successful merge | Confirmed | Yes / design change |
 | 4 - Big-string orphan on failed persist | Partially confirmed | Defensive cleanup recommended |
 | 5 - `encodeAfterPutBatch()` bound mismatch | Refuted as current bug | No |

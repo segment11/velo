@@ -480,7 +480,14 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
 
         var beginT = System.nanoTime();
-        keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, pvmList, keyBucketsInOneWalGroupGiven);
+        try {
+            keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, pvmList, keyBucketsInOneWalGroupGiven);
+        } catch (RuntimeException e) {
+            log.error("Update key buckets after write chunk segments failed, s={}, wal group index={}, begin segment index={}, " +
+                            "segment count={}, next segment index={}, value count={}, pvm count={}",
+                    slot, walGroupIndex, currentSegmentIndex, segmentCount, segmentIndex, list.size(), pvmList.size(), e);
+            throw e;
+        }
         var costT = (System.nanoTime() - beginT) / 1000;
         updatePvmBatchCostTimeTotalUs += costT;
 

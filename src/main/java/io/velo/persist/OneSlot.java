@@ -2366,6 +2366,18 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     /**
+     * Rebuild one WAL group's key-bucket index by scanning chunk segments.
+     *
+     * @param walGroupIndex the WAL group index
+     * @param mode          preview or apply
+     * @return rebuild stats
+     */
+    public ChunkWalGroupRebuilder.RebuildResult rebuildKeyBucketsFromChunk(int walGroupIndex,
+                                                                           ChunkWalGroupRebuilder.Mode mode) {
+        return new ChunkWalGroupRebuilder(slot, this).rebuild(walGroupIndex, mode);
+    }
+
+    /**
      * check segment index is valid
      *
      * @param segmentIndex the target segment index

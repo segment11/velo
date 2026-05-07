@@ -5,6 +5,7 @@ import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
+import io.velo.persist.Wal
 import io.velo.reply.*
 import redis.clients.jedis.Jedis
 import spock.lang.Specification
@@ -788,6 +789,45 @@ class ManageCommandTest extends Specification {
         when:
         data6[4] = '0'.bytes
         data6[5] = 'a'.bytes
+        reply = manage.manageInOneSlot()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        def dataRebuild = new byte[6][]
+        dataRebuild[1] = 'slot'.bytes
+        dataRebuild[2] = '0'.bytes
+        dataRebuild[3] = 'rebuild-from-chunk'.bytes
+        dataRebuild[4] = '0'.bytes
+        dataRebuild[5] = 'preview'.bytes
+        manage.data = dataRebuild
+        reply = manage.manageInOneSlot()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw).contains('"mode":"preview"')
+
+        when:
+        dataRebuild[5] = 'apply'.bytes
+        reply = manage.manageInOneSlot()
+        then:
+        reply instanceof BulkReply
+        new String(((BulkReply) reply).raw).contains('"applied":true')
+
+        when:
+        dataRebuild[5] = 'bad'.bytes
+        reply = manage.manageInOneSlot()
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        dataRebuild[4] = Wal.calcWalGroupNumber().toString().bytes
+        dataRebuild[5] = 'preview'.bytes
+        reply = manage.manageInOneSlot()
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        dataRebuild[4] = 'a'.bytes
         reply = manage.manageInOneSlot()
         then:
         reply == ErrorReply.INVALID_INTEGER
