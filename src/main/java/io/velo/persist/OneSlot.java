@@ -1749,12 +1749,22 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var targetWal = walArray[walGroupIndex];
         var putResult = targetWal.removeDelay(key, bucketIndex, keyHash, lastPersistTimeMs);
 
+        boolean isBinlogAppended = false;
         if (putResult.needPersist()) {
+            // Already written to WAL file/map, so binlog can be appended before doPersist().
+            if (putResult.needPutV() == null) {
+                var xWalV = new XWalV(putResult.v(), putResult.isValueShort());
+                appendBinlog(xWalV);
+                isBinlogAppended = true;
+            }
+
             doPersist(walGroupIndex, key, putResult);
         }
 
-        var xWalV = new XWalV(putResult.v(), putResult.isValueShort());
-        appendBinlog(xWalV);
+        if (!isBinlogAppended) {
+            var xWalV = new XWalV(putResult.v(), putResult.isValueShort());
+            appendBinlog(xWalV);
+        }
     }
 
     long threadIdProtectedForSafe = -1;
@@ -1903,15 +1913,28 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
+        boolean isBinlogAppended = false;
         if (putResult.needPersist()) {
+            // Already written to WAL file/map, so binlog can be appended before doPersist().
+            if (putResult.needPutV() == null) {
+                if (xBigStrings != null) {
+                    appendBinlog(xBigStrings);
+                }
+                var xWalV = new XWalV(putResult.v(), isValueShort);
+                appendBinlog(xWalV);
+                isBinlogAppended = true;
+            }
+
             doPersist(walGroupIndex, key, putResult);
         }
 
-        if (xBigStrings != null) {
-            appendBinlog(xBigStrings);
+        if (!isBinlogAppended) {
+            if (xBigStrings != null) {
+                appendBinlog(xBigStrings);
+            }
+            var xWalV = new XWalV(putResult.v(), isValueShort);
+            appendBinlog(xWalV);
         }
-        var xWalV = new XWalV(putResult.v(), isValueShort);
-        appendBinlog(xWalV);
     }
 
     private Long getCurrentBigStringUuid(@NotNull Wal targetWal, @NotNull String key, int bucketIndex, long keyHash) {
