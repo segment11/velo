@@ -44,7 +44,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     private final int maxSegmentNumber;
 
     // for find those segments can reuse
-    private final BitSet[] segmentCanReuseBitSet;
+    @VisibleForTesting
+    final BitSet[] segmentCanReuseBitSet;
     // for truncate file to save ssd space
     // at least chunk segment number is 8K, each 1K segment use one bit to indicate whether this group of segments is all merged
     // when the bit set is all 0, it means all segments in this file are all merged, so we can truncate file to save ssd space

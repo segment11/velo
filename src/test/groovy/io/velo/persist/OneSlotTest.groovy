@@ -1233,7 +1233,7 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
-    def 'test needPutV recovered when doPersist throws'() {
+    def 'test binlog not appended and needPutV not recovered when doPersist throws'() {
         given:
         def originalSegmentNumberPerFd = ConfForSlot.global.confChunk.segmentNumberPerFd
         def originalFdPerChunk = ConfForSlot.global.confChunk.fdPerChunk
@@ -1265,6 +1265,9 @@ class OneSlotTest extends Specification {
             oneSlot.put(key, bucketIndex, cv)
         }
 
+        // record binlog offset before failure
+        def binlogOffsetBefore = oneSlot.binlog != null ? oneSlot.binlog.currentReplOffset() : 0L
+
         // mark ALL segments as HAS_DATA (non-reusable) so next persist will fail
         def maxSegIndex = oneSlot.chunk.maxSegmentIndex
         for (int i = 0; i <= maxSegIndex; i++) {
@@ -1280,11 +1283,11 @@ class OneSlotTest extends Specification {
         when:
         // fill WAL buffer until it overflows — the overflowing put returns needPutV != null
         // then doPersist() is called and putValueToWal() throws SegmentOverflowException
+        // binlog append is AFTER doPersist, so the failed write should not appear in binlog
         boolean exceptionThrown = false
-        String lostKey = null
+        String failedKey = null
         for (int i = 50; i < 100; i++) {
             def key = targetKeyList[i]
-            // use larger data to fill the WAL buffer faster
             def cv = new CompressedValue()
             cv.keyHash = KeyHash.hash(key.bytes)
             cv.compressedData = new byte[2000]
@@ -1295,23 +1298,23 @@ class OneSlotTest extends Specification {
                 oneSlot.put(key, bucketIndex, cv)
             } catch (SegmentOverflowException e) {
                 exceptionThrown = true
-                lostKey = key
-                println "SegmentOverflowException caught for key=${key}, delayToKeyBucketValues.size=${wal.delayToKeyBucketValues.size()}"
+                failedKey = key
+                println "SegmentOverflowException caught for key=${key}"
                 break
             }
         }
 
         then:
         exceptionThrown
-        lostKey != null
+        failedKey != null
 
-        when:
-        // with the fix, needPutV should be recovered into WAL delay maps
-        def isInDelayMaps = wal.delayToKeyBucketValues.containsKey(lostKey) ||
-                wal.delayToKeyBucketShortValues.containsKey(lostKey)
+        // the failed write is NOT in the WAL delay maps (not recovered)
+        !wal.delayToKeyBucketValues.containsKey(failedKey)
+        !wal.delayToKeyBucketShortValues.containsKey(failedKey)
 
-        then:
-        isInDelayMaps
+        // binlog was NOT appended for the failed write
+        def binlogOffsetAfter = oneSlot.binlog != null ? oneSlot.binlog.currentReplOffset() : 0L
+        binlogOffsetAfter == binlogOffsetBefore
 
         cleanup:
         ConfForSlot.global.confChunk.segmentNumberPerFd = originalSegmentNumberPerFd

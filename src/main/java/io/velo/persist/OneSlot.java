@@ -1903,12 +1903,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
-        var xWalV = new XWalV(v, isValueShort);
-        appendBinlog(xWalV);
-
         if (putResult.needPersist()) {
             doPersist(walGroupIndex, key, putResult);
         }
+
+        var xWalV = new XWalV(v, isValueShort);
+        appendBinlog(xWalV);
     }
 
     private Long getCurrentBigStringUuid(@NotNull Wal targetWal, @NotNull String key, int bucketIndex, long keyHash) {
@@ -1952,15 +1952,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      */
     public void doPersist(int walGroupIndex, @NotNull String key, @NotNull Wal.PutResult putResult) {
         var targetWal = walArray[walGroupIndex];
-        try {
-            putValueToWal(putResult.isValueShort(), targetWal);
-        } catch (Exception e) {
-            var needPutV = putResult.needPutV();
-            if (needPutV != null) {
-                targetWal.recoverNeedPutV(putResult.isValueShort(), key, needPutV);
-            }
-            throw e;
-        }
+        putValueToWal(putResult.isValueShort(), targetWal);
         lastPersistTimeMs = System.currentTimeMillis();
 
         if (putResult.isValueShort()) {
