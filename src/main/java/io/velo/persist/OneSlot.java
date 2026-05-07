@@ -1749,19 +1749,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var targetWal = walArray[walGroupIndex];
         var putResult = targetWal.removeDelay(key, bucketIndex, keyHash, lastPersistTimeMs);
 
-        if (putResult.needPutV() == null) {
-            var xWalV = new XWalV(putResult.v(), putResult.isValueShort());
-            appendBinlog(xWalV);
-        }
-
         if (putResult.needPersist()) {
             doPersist(walGroupIndex, key, putResult);
         }
 
-        if (putResult.needPutV() != null) {
-            var xWalV = new XWalV(putResult.v(), putResult.isValueShort());
-            appendBinlog(xWalV);
-        }
+        var xWalV = new XWalV(putResult.v(), putResult.isValueShort());
+        appendBinlog(xWalV);
     }
 
     long threadIdProtectedForSafe = -1;
@@ -1910,28 +1903,15 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
-        // When needPutV != null, the value was NOT written to WAL file or delay maps (buffer overflow).
-        // Defer binlog until after persist succeeds to avoid replicating a rejected write.
-        // For already-accepted writes (needPutV == null), binlog immediately — value is WAL-durable.
-        if (putResult.needPutV() == null) {
-            if (xBigStrings != null) {
-                appendBinlog(xBigStrings);
-            }
-            var xWalV = new XWalV(putResult.v(), isValueShort);
-            appendBinlog(xWalV);
-        }
-
         if (putResult.needPersist()) {
             doPersist(walGroupIndex, key, putResult);
         }
 
-        if (putResult.needPutV() != null) {
-            if (xBigStrings != null) {
-                appendBinlog(xBigStrings);
-            }
-            var xWalV = new XWalV(putResult.v(), isValueShort);
-            appendBinlog(xWalV);
+        if (xBigStrings != null) {
+            appendBinlog(xBigStrings);
         }
+        var xWalV = new XWalV(putResult.v(), isValueShort);
+        appendBinlog(xWalV);
     }
 
     private Long getCurrentBigStringUuid(@NotNull Wal targetWal, @NotNull String key, int bucketIndex, long keyHash) {
