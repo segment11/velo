@@ -2362,6 +2362,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             setSegmentMergeFlagBatch(segmentIndexList.getFirst(), segmentIndexList.size(),
                     Chunk.SEGMENT_FLAG_REUSABLE, null, walGroupIndex);
+
+            metaChunkSegmentFlagSeq.commitMergedRange(walGroupIndex, segmentIndexList.getFirst(), segmentIndexList.size());
         }
     }
 

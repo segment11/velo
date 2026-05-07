@@ -492,7 +492,6 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
                         markedLongs[i] = 0L;
                         continue;
                     }
-                    markedLongs[i] = 0L;
                     return new int[]{segmentIndex, segmentCount};
                 }
 
@@ -503,28 +502,57 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
                 if (splitFlag == SPLIT_MARKED_RUN_ONCE_FOR_PRE_READ) {
                     short halfSegmentCount = (short) (segmentCount / 2);
-                    short leftSegmentCount = (short) (segmentCount - halfSegmentCount);
 
                     if (!isMarkedSegmentRangeStillMergeable(walGroupIndex, segmentIndex, halfSegmentCount)) {
                         markedLongs[i] = 0L;
                         continue;
                     }
 
-                    // Keep the second half as a normal marker. The next pre-read can consume it whole
-                    // unless it is still larger than the merge read batch limit.
-                    markedLongs[i] = (long) (segmentIndex + halfSegmentCount) << 32 | leftSegmentCount << 16;
                     return new int[]{segmentIndex, halfSegmentCount};
                 } else {
                     if (!isMarkedSegmentRangeStillMergeable(walGroupIndex, segmentIndex, segmentCount)) {
                         markedLongs[i] = 0L;
                         continue;
                     }
-                    markedLongs[i] = 0L;
                     return new int[]{segmentIndex, segmentCount};
                 }
             }
         }
         return NOT_FIND_SEGMENT_INDEX_AND_COUNT;
+    }
+
+    /**
+     * Commits a successfully merged range by updating or clearing the corresponding marker.
+     * If the marker exactly matches the merged range, it is cleared.
+     * If the marker covers a larger range (split case), it is updated to the remaining portion.
+     *
+     * @param walGroupIndex     the wal group index
+     * @param mergedSegmentIndex the start segment index of the merged range
+     * @param mergedSegmentCount the number of segments that were merged
+     */
+    public void commitMergedRange(int walGroupIndex, int mergedSegmentIndex, int mergedSegmentCount) {
+        var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
+        for (int i = 0; i < MARK_BEGIN_SEGMENT_INDEX_COUNT; i++) {
+            var markedLong = markedLongs[i];
+            if (markedLong == 0L) {
+                continue;
+            }
+
+            var markerSegmentIndex = (int) (markedLong >> 32);
+            var markerSegmentCount = (short) (markedLong >> 16 & 0xFFFF);
+
+            if (markerSegmentIndex == mergedSegmentIndex && markerSegmentCount == mergedSegmentCount) {
+                markedLongs[i] = 0L;
+                return;
+            }
+
+            if (markerSegmentIndex == mergedSegmentIndex && markerSegmentCount > mergedSegmentCount) {
+                var remainingSegmentIndex = markerSegmentIndex + mergedSegmentCount;
+                var remainingSegmentCount = markerSegmentCount - mergedSegmentCount;
+                markedLongs[i] = (long) remainingSegmentIndex << 32 | remainingSegmentCount << 16;
+                return;
+            }
+        }
     }
 
     private boolean isMarkedSegmentRangeStillMergeable(int walGroupIndex, int beginSegmentIndex, int segmentCount) {
