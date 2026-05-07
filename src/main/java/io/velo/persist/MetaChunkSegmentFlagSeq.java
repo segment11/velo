@@ -526,7 +526,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
      * If the marker exactly matches the merged range, it is cleared.
      * If the marker covers a larger range (split case), it is updated to the remaining portion.
      *
-     * @param walGroupIndex     the wal group index
+     * @param walGroupIndex      the wal group index
      * @param mergedSegmentIndex the start segment index of the merged range
      * @param mergedSegmentCount the number of segments that were merged
      */
@@ -549,10 +549,22 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             if (markerSegmentIndex == mergedSegmentIndex && markerSegmentCount > mergedSegmentCount) {
                 var remainingSegmentIndex = markerSegmentIndex + mergedSegmentCount;
                 var remainingSegmentCount = markerSegmentCount - mergedSegmentCount;
-                markedLongs[i] = (long) remainingSegmentIndex << 32 | remainingSegmentCount << 16;
+                markedLongs[i] = (long) remainingSegmentIndex << 32 | (long) remainingSegmentCount << 16;
                 return;
             }
         }
+    }
+
+    @VisibleForTesting
+    int countMarkersForWalGroup(int walGroupIndex) {
+        var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
+        int count = 0;
+        for (int i = 0; i < MARK_BEGIN_SEGMENT_INDEX_COUNT; i++) {
+            if (markedLongs[i] != 0L) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private boolean isMarkedSegmentRangeStillMergeable(int walGroupIndex, int beginSegmentIndex, int segmentCount) {

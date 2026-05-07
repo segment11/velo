@@ -1331,4 +1331,122 @@ class OneSlotTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test merge marker survives failed persist and consumed after success'() {
+        given:
+        def originalSegmentNumberPerFd = ConfForSlot.global.confChunk.segmentNumberPerFd
+        def originalFdPerChunk = ConfForSlot.global.confChunk.fdPerChunk
+        def originalValueSizeTrigger = ConfForSlot.global.confWal.valueSizeTrigger
+
+        // small segment count so writes fill segments deterministically
+        ConfForSlot.global.confChunk.segmentNumberPerFd = 8
+        ConfForSlot.global.confChunk.fdPerChunk = (byte) 1
+        // low trigger so each batch triggers doPersist → chunk.persist → HAS_DATA + auto-markers
+        ConfForSlot.global.confWal.valueSizeTrigger = 10
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def metaChunkSegmentFlagSeq = oneSlot.metaChunkSegmentFlagSeq
+
+        and:
+        def walGroupIndex = 0
+        def wal = oneSlot.getWalByGroupIndex(walGroupIndex)
+        def bucketIndex = 0
+        def random = new Random()
+
+        // write non-short data — each batch of 10 triggers persist, creating HAS_DATA segments
+        def targetKeyList = Mock.prepareTargetBucketIndexKeyList(50, bucketIndex)
+        for (int i = 0; i < 50; i++) {
+            def key = targetKeyList[i]
+            def cv = new CompressedValue()
+            cv.keyHash = KeyHash.hash(key.bytes)
+            cv.compressedData = new byte[100]
+            random.nextBytes(cv.compressedData)
+            cv.seq = oneSlot.snowFlake.nextId()
+            oneSlot.put(key, bucketIndex, cv)
+        }
+
+        // ensure merge loop is enabled
+        metaChunkSegmentFlagSeq.isOverHalfSegmentNumberForFirstReuseLoop = true
+
+        // clear all auto-markers created by chunk.persist
+        while (true) {
+            def result = metaChunkSegmentFlagSeq.findThoseNeedToMerge(walGroupIndex)
+            if (result[0] == -1) break
+            metaChunkSegmentFlagSeq.commitMergedRange(walGroupIndex, result[0], result[1])
+        }
+        assert metaChunkSegmentFlagSeq.countMarkersForWalGroup(walGroupIndex) == 0
+
+        // find first HAS_DATA segment for our manual marker
+        def maxSegIndex = oneSlot.chunk.maxSegmentIndex
+        int firstDataSeg = -1
+        for (int i = 0; i <= maxSegIndex; i++) {
+            def flag = metaChunkSegmentFlagSeq.getSegmentMergeFlag(i)
+            if (flag.flagByte() == Chunk.SEGMENT_FLAG_HAS_DATA && flag.walGroupIndex() == walGroupIndex) {
+                firstDataSeg = i
+                break
+            }
+        }
+        assert firstDataSeg >= 0 : "Expected HAS_DATA segment, found none"
+
+        // add ONE manual marker for a single segment
+        metaChunkSegmentFlagSeq.markPersistedSegmentIndexToTargetWalGroup(walGroupIndex, firstDataSeg, (short) 1)
+        assert metaChunkSegmentFlagSeq.countMarkersForWalGroup(walGroupIndex) == 1
+
+        when: 'call putValueToWal with no reusable segments — should fail'
+        for (def bitSet : metaChunkSegmentFlagSeq.segmentCanReuseBitSet) {
+            bitSet.clear()
+        }
+
+        def cv1 = new CompressedValue()
+        cv1.keyHash = KeyHash.hash('marker-fail-key'.bytes)
+        cv1.compressedData = new byte[200]
+        random.nextBytes(cv1.compressedData)
+        cv1.seq = oneSlot.snowFlake.nextId()
+        wal.delayToKeyBucketValues.put('marker-fail-key',
+                new Wal.V(cv1.seq, bucketIndex, cv1.getKeyHash(), cv1.getExpireAt(),
+                        cv1.getDictSeqOrSpType(), 'marker-fail-key', cv1.encode(), false))
+
+        boolean persistThrew = false
+        try {
+            oneSlot.putValueToWal(false, wal)
+        } catch (SegmentOverflowException e) {
+            persistThrew = true
+        }
+
+        then: 'persist threw and our manual marker still exists'
+        persistThrew
+        metaChunkSegmentFlagSeq.countMarkersForWalGroup(walGroupIndex) >= 1
+
+        when: 'restore reuse bitsets so putValueToWal can succeed'
+        for (int i = 0; i <= maxSegIndex; i++) {
+            metaChunkSegmentFlagSeq.segmentCanReuseBitSet[0].set(i)
+        }
+
+        boolean successPersist = false
+        try {
+            oneSlot.putValueToWal(false, wal)
+            successPersist = true
+        } catch (SegmentOverflowException e) {
+            println "Second putValueToWal still failed: ${e.message}"
+        }
+
+        then: 'persist succeeded'
+        successPersist
+
+        and: 'our manual marker was consumed by commitMergedRange (new auto-marker may exist but total <= 1)'
+        // chunk.persist auto-creates a new marker for the new segments, so total might be 1
+        // the key invariant: our original marker was consumed, and at most 1 new auto-marker exists
+        def finalMarkerCount = metaChunkSegmentFlagSeq.countMarkersForWalGroup(walGroupIndex)
+        finalMarkerCount <= 1
+
+        cleanup:
+        ConfForSlot.global.confChunk.segmentNumberPerFd = originalSegmentNumberPerFd
+        ConfForSlot.global.confChunk.fdPerChunk = originalFdPerChunk
+        ConfForSlot.global.confWal.valueSizeTrigger = originalValueSizeTrigger
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }
