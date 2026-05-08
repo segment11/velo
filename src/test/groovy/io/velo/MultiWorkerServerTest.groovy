@@ -1037,4 +1037,34 @@ class MultiWorkerServerTest extends Specification {
         Consts.persistDir.deleteDir()
         ConfForGlobal.clusterEnabled = false
     }
+
+    def 'test bucket LRU percent computes correct maxSize for non-100 percent'() {
+        given:
+        var m1 = new MultiWorkerServer.InnerModule()
+        var cc = ConfForSlot.global
+
+        def config50 = Config.create()
+                .with('doFileLock', "false")
+                .with("net.listenAddresses", "localhost:7379")
+                .with("debugMode", "true")
+                .with("pureMemory", "true")
+                .with("zookeeperConnectString", 'localhost:2181')
+                .with("bucket.bucketsPerSlot", cc.confBucket.bucketsPerSlot.toString())
+                .with("bucket.initialSplitNumber", cc.confBucket.initialSplitNumber.toString())
+                .with("bucket.lruPerFd.percent", "50")
+                .with("chunk.segmentNumberPerFd", cc.confChunk.segmentNumberPerFd.toString())
+                .with("chunk.fdPerChunk", cc.confChunk.fdPerChunk.toString())
+                .with("chunk.segmentLength", cc.confChunk.segmentLength.toString())
+                .with("wal.oneChargeBucketNumber", cc.confWal.oneChargeBucketNumber.toString())
+                .with("wal.valueSizeTrigger", cc.confWal.valueSizeTrigger.toString())
+                .with("wal.shortValueSizeTrigger", cc.confWal.shortValueSizeTrigger.toString())
+        m1.skipZookeeperConnectCheck = true
+
+        when:
+        m1.confForSlot(config50)
+
+        then:
+        def buckets = ConfForSlot.global.confBucket.bucketsPerSlot
+        ConfForSlot.global.confBucket.lruPerFd.maxSize == buckets / 2
+    }
 }

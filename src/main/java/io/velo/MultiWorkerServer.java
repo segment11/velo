@@ -1337,7 +1337,7 @@ public class MultiWorkerServer extends Launcher {
             if (bucketLruPerFdPercent < 0 || bucketLruPerFdPercent > 100) {
                 throw new IllegalArgumentException("Key bucket fd read lru percent be between 0 and 100");
             }
-            c.confBucket.lruPerFd.maxSize = bucketLruPerFdPercent / 100 * c.confBucket.bucketsPerSlot;
+            c.confBucket.lruPerFd.maxSize = bucketLruPerFdPercent * c.confBucket.bucketsPerSlot / 100;
             c.confBucket.checkIfValid();
 
             // override chunk conf items
