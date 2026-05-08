@@ -1375,7 +1375,7 @@ class OneSlotTest extends Specification {
         while (true) {
             def result = metaChunkSegmentFlagSeq.findThoseNeedToMerge(walGroupIndex)
             if (result[0] == -1) break
-            metaChunkSegmentFlagSeq.commitMergedRange(walGroupIndex, result[0], result[1])
+            metaChunkSegmentFlagSeq.commitMergedRangeWithMarkerIdx(walGroupIndex, result[0], result[1], result[2])
         }
         assert metaChunkSegmentFlagSeq.countMarkersForWalGroup(walGroupIndex) == 0
 

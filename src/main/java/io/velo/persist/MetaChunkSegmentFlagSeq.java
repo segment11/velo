@@ -522,40 +522,6 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     }
 
     /**
-     * Commits a successfully merged range by updating or clearing the corresponding marker.
-     * If the marker exactly matches the merged range, it is cleared.
-     * If the marker covers a larger range (split case), it is updated to the remaining portion.
-     *
-     * @param walGroupIndex      the wal group index
-     * @param mergedSegmentIndex the start segment index of the merged range
-     * @param mergedSegmentCount the number of segments that were merged
-     */
-    public void commitMergedRange(int walGroupIndex, int mergedSegmentIndex, int mergedSegmentCount) {
-        var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
-        for (int i = 0; i < MARK_BEGIN_SEGMENT_INDEX_COUNT; i++) {
-            var markedLong = markedLongs[i];
-            if (markedLong == 0L) {
-                continue;
-            }
-
-            var markerSegmentIndex = (int) (markedLong >> 32);
-            var markerSegmentCount = (short) (markedLong >> 16 & 0xFFFF);
-
-            if (markerSegmentIndex == mergedSegmentIndex && markerSegmentCount == mergedSegmentCount) {
-                markedLongs[i] = 0L;
-                return;
-            }
-
-            if (markerSegmentIndex == mergedSegmentIndex && markerSegmentCount > mergedSegmentCount) {
-                var remainingSegmentIndex = markerSegmentIndex + mergedSegmentCount;
-                var remainingSegmentCount = markerSegmentCount - mergedSegmentCount;
-                markedLongs[i] = (long) remainingSegmentIndex << 32 | (long) remainingSegmentCount << 16;
-                return;
-            }
-        }
-    }
-
-    /**
      * Commits a successfully merged range using the marker array index for O(1) lookup.
      *
      * @param walGroupIndex      the wal group index

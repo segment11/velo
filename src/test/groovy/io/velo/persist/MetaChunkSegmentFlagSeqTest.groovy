@@ -117,7 +117,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r[1] == 10
 
         when: 'commit the range'
-        one.commitMergedRange(0, r[0], r[1])
+        one.commitMergedRangeWithMarkerIdx(0, r[0], r[1], r[2])
         r = one.findThoseNeedToMerge(0)
         then:
         r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
@@ -130,7 +130,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r[1] == 17
 
         when: 'commit first half, mark REUSABLE, then find second half'
-        one.commitMergedRange(0, 0, 17)
+        one.commitMergedRangeWithMarkerIdx(0, 0, 17, r[2])
         one.setSegmentMergeFlagBatch(0, 17, Chunk.SEGMENT_FLAG_REUSABLE, null, 0)
         r = one.findThoseNeedToMerge(0)
         then:
@@ -138,7 +138,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r[1] == 17
 
         when: 'commit second half'
-        one.commitMergedRange(0, 17, 17)
+        one.commitMergedRangeWithMarkerIdx(0, 17, 17, r[2])
         r = one.findThoseNeedToMerge(0)
         then:
         r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
@@ -152,7 +152,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r[1] == 5
 
         when: 'commit first half, mark REUSABLE, find second half'
-        one.commitMergedRange(0, 0, 5)
+        one.commitMergedRangeWithMarkerIdx(0, 0, 5, r[2])
         one.setSegmentMergeFlagBatch(0, 5, Chunk.SEGMENT_FLAG_REUSABLE, null, 0)
         r = one.findThoseNeedToMerge(0)
         then:
@@ -160,7 +160,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r[1] == 5
 
         when: 'commit second half'
-        one.commitMergedRange(0, 5, 5)
+        one.commitMergedRangeWithMarkerIdx(0, 5, 5, r[2])
         r = one.findThoseNeedToMerge(0)
         then:
         r == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
@@ -173,7 +173,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         200.times {
             def found = one.findThoseNeedToMerge(0)
             if (found[0] != -1) {
-                one.commitMergedRange(0, found[0], found[1])
+                one.commitMergedRangeWithMarkerIdx(0, found[0], found[1], found[2])
             }
         }
         r = one.findThoseNeedToMerge(0)
@@ -196,7 +196,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         when:
         one.isOverHalfSegmentNumberForFirstReuseLoop = true
         r = one.findThoseNeedToMerge(0)
-        one.commitMergedRange(0, r[0], r[1])
+        one.commitMergedRangeWithMarkerIdx(0, r[0], r[1], r[2])
         markPersisted(0, 100, (short) 1)
         then:
         r[1] == 1
@@ -410,7 +410,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r2[1] == 10
 
         when: 'commit the merged range'
-        one.commitMergedRange(0, r1[0], r1[1])
+        one.commitMergedRangeWithMarkerIdx(0, r1[0], r1[1], r1[2])
 
         then: 'marker is consumed, no more range to merge'
         one.findThoseNeedToMerge(0) == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
@@ -452,7 +452,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r2[1] == 5
 
         when: 'commit first half — marker should update to second half'
-        one.commitMergedRange(0, 0, 5)
+        one.commitMergedRangeWithMarkerIdx(0, 0, 5, r1[2])
         // mark first half as REUSABLE so isMarkedSegmentRangeStillMergeable passes for second half
         one.setSegmentMergeFlagBatch(0, 5, Chunk.SEGMENT_FLAG_REUSABLE, null, 0)
         def r3 = one.findThoseNeedToMerge(0)
@@ -462,7 +462,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         r3[1] == 5
 
         when: 'commit second half'
-        one.commitMergedRange(0, 5, 5)
+        one.commitMergedRangeWithMarkerIdx(0, 5, 5, r3[2])
 
         then: 'no more ranges'
         one.findThoseNeedToMerge(0) == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
