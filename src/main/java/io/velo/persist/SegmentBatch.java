@@ -115,10 +115,13 @@ public class SegmentBatch implements InSlotMetricCollector {
 
     /**
      * Record to hold compressed segment bytes, its index, and sequence number.
+     * When {@code isRaw} is true, {@code compressedBytes} contains the raw (uncompressed)
+     * segment bytes of exactly {@code chunkSegmentLength} and should be written directly
+     * without tight packing.
      */
     @VisibleForTesting
     record SegmentCompressedBytesWithIndex(byte[] compressedBytes, int tmpSegmentIndex, long segmentSeq,
-                                           int valueBytesLength) {
+                                           int valueBytesLength, boolean isRaw) {
         @Override
         public @NotNull String toString() {
             return "SegmentCompressedBytesWithIndex{" +
@@ -126,6 +129,7 @@ public class SegmentBatch implements InSlotMetricCollector {
                     ", segmentSeq=" + segmentSeq +
                     ", valueBytesLength=" + valueBytesLength +
                     ", compressedBytes.length=" + compressedBytes.length +
+                    ", isRaw=" + isRaw +
                     '}';
         }
     }
@@ -245,12 +249,37 @@ public class SegmentBatch implements InSlotMetricCollector {
 
         int afterTightSegmentIndex = segments.getFirst().tmpSegmentIndex;
         for (var segment : segments) {
+            // Raw (uncompressed) segments are exactly chunkSegmentLength bytes and
+            // must be written directly, not tight-packed with an additional header.
+            if (segment.isRaw) {
+                if (!onceList.isEmpty()) {
+                    var tightOne = tightSegments(afterTightSegmentIndex, onceList, returnPvmList);
+                    r.add(tightOne);
+                    afterTightSegmentIndex++;
+                    onceList.clear();
+                    onceListBytesLength = 0;
+                }
+
+                for (var pvm : returnPvmList) {
+                    if (pvm.segmentIndex == segment.tmpSegmentIndex) {
+                        pvm.segmentIndex = afterTightSegmentIndex;
+                    }
+                }
+                r.add(new SegmentTightBytesWithLengthAndSegmentIndex(
+                        segment.compressedBytes, afterTightSegmentIndex, (byte) 1,
+                        segment.segmentSeq, segment.valueBytesLength));
+                afterTightSegmentIndex++;
+                continue;
+            }
+
             var compressedBytes = segment.compressedBytes;
 
             if (onceList.size() == MAX_BLOCK_NUMBER || onceListBytesLength + compressedBytes.length > chunkSegmentLength - HEADER_LENGTH) {
-                var tightOne = tightSegments(afterTightSegmentIndex, onceList, returnPvmList);
-                r.add(tightOne);
-                afterTightSegmentIndex++;
+                if (!onceList.isEmpty()) {
+                    var tightOne = tightSegments(afterTightSegmentIndex, onceList, returnPvmList);
+                    r.add(tightOne);
+                    afterTightSegmentIndex++;
+                }
 
                 onceList.clear();
                 onceListBytesLength = 0;
@@ -260,8 +289,10 @@ public class SegmentBatch implements InSlotMetricCollector {
             onceListBytesLength += compressedBytes.length;
         }
 
-        var tightOne = tightSegments(afterTightSegmentIndex, onceList, returnPvmList);
-        r.add(tightOne);
+        if (!onceList.isEmpty()) {
+            var tightOne = tightSegments(afterTightSegmentIndex, onceList, returnPvmList);
+            r.add(tightOne);
+        }
 
         afterTightSegmentCountTotal += r.size();
         return r;
@@ -338,8 +369,6 @@ public class SegmentBatch implements InSlotMetricCollector {
         long segmentSeq = snowFlake.nextId();
         var valueBytesLength = SegmentBatch2.encodeToBuffer(list, buffer, returnPvmList, tmpSegmentIndex, segmentSeq);
 
-        // Important: 4KB decompress cost ~200us, so use 4KB segment length for better read latency
-        // Double compress
         compressCountTotal++;
         var beginT = System.nanoTime();
         var compressedBytes = Zstd.compress(bytes);
@@ -348,10 +377,17 @@ public class SegmentBatch implements InSlotMetricCollector {
         compressBytesTotal += bytes.length;
         compressedBytesTotal += compressedBytes.length;
 
+        if (compressedBytes.length >= bytes.length) {
+            var rawCopy = Arrays.copyOf(bytes, bytes.length);
+            buffer.clear();
+            Arrays.fill(bytes, (byte) 0);
+            return new SegmentCompressedBytesWithIndex(rawCopy, tmpSegmentIndex, segmentSeq, valueBytesLength, true);
+        }
+
         buffer.clear();
         Arrays.fill(bytes, (byte) 0);
 
-        return new SegmentCompressedBytesWithIndex(compressedBytes, tmpSegmentIndex, segmentSeq, valueBytesLength);
+        return new SegmentCompressedBytesWithIndex(compressedBytes, tmpSegmentIndex, segmentSeq, valueBytesLength, false);
     }
 
     /**
@@ -368,6 +404,14 @@ public class SegmentBatch implements InSlotMetricCollector {
                                                         byte[] tightBytesWithLength,
                                                         @NotNull PersistValueMeta pvm,
                                                         @NotNull Chunk chunk) {
+        // If segment type is NORMAL (byte at offset 8 == 0), the data was not
+        // compressed — return a copy directly.
+        if (tightBytesWithLength.length == chunk.chunkSegmentLength
+                && tightBytesWithLength.length > 8
+                && tightBytesWithLength[8] == Chunk.SegmentType.NORMAL.val) {
+            return tightBytesWithLength;
+        }
+
         var buffer = ByteBuffer.wrap(tightBytesWithLength);
         buffer.position(subBlockMetaPosition(pvm.subBlockIndex));
         var subBlockOffset = buffer.getShort();
