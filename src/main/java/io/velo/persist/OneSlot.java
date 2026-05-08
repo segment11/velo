@@ -2225,7 +2225,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     record BeforePersistWalExtFromMerge(@NotNull ArrayList<Integer> segmentIndexList,
                                         @NotNull ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList,
-                                        @NotNull ArrayList<Integer> updatedFlagPersistedSegmentIndexList) {
+                                        @NotNull ArrayList<Integer> updatedFlagPersistedSegmentIndexList,
+                                        int markerIdx) {
         boolean isEmpty() {
             return segmentIndexList.isEmpty();
         }
@@ -2247,6 +2248,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var firstSegmentIndex = firstSegmentIndexWithReadSegmentCountArray[0];
         var segmentCount = firstSegmentIndexWithReadSegmentCountArray[1];
+        var markerIdx = firstSegmentIndexWithReadSegmentCountArray[2];
         var segmentBytesBatchRead = readForMerge(firstSegmentIndex, segmentCount);
 
         ArrayList<Integer> segmentIndexList = new ArrayList<>();
@@ -2270,7 +2272,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             segmentIndexList.add(segmentIndex);
         }
 
-        return new BeforePersistWalExtFromMerge(segmentIndexList, cvList, updatedFlagPersistedSegmentIndexList);
+        return new BeforePersistWalExtFromMerge(segmentIndexList, cvList, updatedFlagPersistedSegmentIndexList, markerIdx);
     }
 
     @VisibleForTesting
@@ -2363,7 +2365,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             setSegmentMergeFlagBatch(segmentIndexList.getFirst(), segmentIndexList.size(),
                     Chunk.SEGMENT_FLAG_REUSABLE, null, walGroupIndex);
 
-            metaChunkSegmentFlagSeq.commitMergedRange(walGroupIndex, segmentIndexList.getFirst(), segmentIndexList.size());
+            metaChunkSegmentFlagSeq.commitMergedRangeWithMarkerIdx(walGroupIndex, segmentIndexList.getFirst(), segmentIndexList.size(), ext.markerIdx());
         }
     }
 

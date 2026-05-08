@@ -471,4 +471,63 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         slotDirTmp.deleteDir()
         ConfForSlot.global = ConfForSlot.c1m
     }
+
+    def 'test findThoseNeedToMerge returns marker array index for O(1) commitMergedRange'() {
+        given:
+        final File slotDirTmp = new File(Consts.persistDir, 'test-slot-tmp')
+        slotDirTmp.mkdirs()
+
+        def one = new MetaChunkSegmentFlagSeq(slot, slotDirTmp)
+        one.isOverHalfSegmentNumberForFirstReuseLoop = true
+
+        def markPersisted = { int walGroupIndex, int beginSegmentIndex, short segmentCount ->
+            one.markPersistedSegmentIndexToTargetWalGroup(walGroupIndex, beginSegmentIndex, segmentCount)
+            segmentCount.times { i ->
+                one.setSegmentMergeFlag(beginSegmentIndex + i, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, walGroupIndex)
+            }
+        }
+
+        when: 'mark 3 separate ranges'
+        markPersisted(0, 0, (short) 5)
+        markPersisted(0, 10, (short) 3)
+        markPersisted(0, 20, (short) 7)
+        // add REUSABLE segments between ranges so they are separate markers
+        for (int i = 5; i < 10; i++) one.setSegmentMergeFlag(i, Chunk.SEGMENT_FLAG_REUSABLE, 0L, 0)
+        for (int i = 13; i < 20; i++) one.setSegmentMergeFlag(i, Chunk.SEGMENT_FLAG_REUSABLE, 0L, 0)
+
+        def r1 = one.findThoseNeedToMerge(0)
+
+        then: 'result has 3 elements — segmentIndex, segmentCount, markerIdx'
+        r1.length == 3
+        r1[0] == 0
+        r1[1] == 5
+        r1[2] >= 0
+
+        when: 'commit using the markerIdx — should clear the exact marker'
+        one.commitMergedRangeWithMarkerIdx(0, r1[0], r1[1], r1[2])
+
+        then: 'first marker consumed'
+        def r2 = one.findThoseNeedToMerge(0)
+        r2[0] == 10
+        r2[1] == 3
+        r2[2] >= 0
+
+        when: 'commit second marker using its returned index'
+        one.commitMergedRangeWithMarkerIdx(0, r2[0], r2[1], r2[2])
+
+        then: 'second marker consumed, third remains'
+        def r3 = one.findThoseNeedToMerge(0)
+        r3[0] == 20
+        r3[1] == 7
+
+        when: 'commit third'
+        one.commitMergedRangeWithMarkerIdx(0, r3[0], r3[1], r3[2])
+
+        then: 'all markers consumed'
+        one.findThoseNeedToMerge(0) == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
+
+        cleanup:
+        slotDirTmp.deleteDir()
+        ConfForSlot.global = ConfForSlot.c1m
+    }
 }

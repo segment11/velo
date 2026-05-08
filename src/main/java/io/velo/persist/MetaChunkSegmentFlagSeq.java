@@ -464,7 +464,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Represents the not found segment index and count.
      */
-    static final int[] NOT_FIND_SEGMENT_INDEX_AND_COUNT = new int[]{-1, 0};
+    static final int[] NOT_FIND_SEGMENT_INDEX_AND_COUNT = new int[]{-1, 0, -1};
 
     @VisibleForTesting
     boolean isOverHalfSegmentNumberForFirstReuseLoop = false;
@@ -492,7 +492,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
                         markedLongs[i] = 0L;
                         continue;
                     }
-                    return new int[]{segmentIndex, segmentCount};
+                    return new int[]{segmentIndex, segmentCount, i};
                 }
 
                 var splitFlag = (byte) (markedLong & 0xFF);
@@ -508,13 +508,13 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
                         continue;
                     }
 
-                    return new int[]{segmentIndex, halfSegmentCount};
+                    return new int[]{segmentIndex, halfSegmentCount, i};
                 } else {
                     if (!isMarkedSegmentRangeStillMergeable(walGroupIndex, segmentIndex, segmentCount)) {
                         markedLongs[i] = 0L;
                         continue;
                     }
-                    return new int[]{segmentIndex, segmentCount};
+                    return new int[]{segmentIndex, segmentCount, i};
                 }
             }
         }
@@ -552,6 +552,37 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
                 markedLongs[i] = (long) remainingSegmentIndex << 32 | (long) remainingSegmentCount << 16;
                 return;
             }
+        }
+    }
+
+    /**
+     * Commits a successfully merged range using the marker array index for O(1) lookup.
+     *
+     * @param walGroupIndex      the wal group index
+     * @param mergedSegmentIndex the start segment index of the merged range
+     * @param mergedSegmentCount the number of segments that were merged
+     * @param markerIdx          the marker array index returned by {@link #findThoseNeedToMerge(int)}
+     */
+    public void commitMergedRangeWithMarkerIdx(int walGroupIndex, int mergedSegmentIndex, int mergedSegmentCount, int markerIdx) {
+        var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
+        var markedLong = markedLongs[markerIdx];
+        if (markedLong == 0L) {
+            return;
+        }
+
+        var markerSegmentIndex = (int) (markedLong >> 32);
+        var markerSegmentCount = (short) (markedLong >> 16 & 0xFFFF);
+        assert markerSegmentIndex == mergedSegmentIndex;
+
+        if (markerSegmentCount == mergedSegmentCount) {
+            markedLongs[markerIdx] = 0L;
+            return;
+        }
+
+        if (markerSegmentCount > mergedSegmentCount) {
+            var remainingSegmentIndex = markerSegmentIndex + mergedSegmentCount;
+            var remainingSegmentCount = markerSegmentCount - mergedSegmentCount;
+            markedLongs[markerIdx] = (long) remainingSegmentIndex << 32 | (long) remainingSegmentCount << 16;
         }
     }
 

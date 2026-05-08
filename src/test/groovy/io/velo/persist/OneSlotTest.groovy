@@ -1113,7 +1113,7 @@ class OneSlotTest extends Specification {
         def oneSlot = localPersist.oneSlot(slot)
         def metaChunkSegmentFlagSeq = oneSlot.metaChunkSegmentFlagSeq
 
-        def ext = new OneSlot.BeforePersistWalExtFromMerge([], [], [])
+        def ext = new OneSlot.BeforePersistWalExtFromMerge([], [], [], -1)
         expect:
         ext.isEmpty()
 
