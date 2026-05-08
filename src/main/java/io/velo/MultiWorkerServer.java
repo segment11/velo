@@ -1331,7 +1331,7 @@ public class MultiWorkerServer extends Launcher {
                 c.confBucket.initialSplitNumber = config.get(ofInteger(), "bucket.initialSplitNumber").byteValue();
             }
             if (config.getChild("bucket.onceScanMaxLoopCount").hasValue()) {
-                c.confBucket.onceScanMaxLoopCount = config.get(ofInteger(), "bucket.onceScanMaxLoopCount").byteValue();
+                c.confBucket.onceScanMaxLoopCount = config.get(ofInteger(), "bucket.onceScanMaxLoopCount");
             }
             var bucketLruPerFdPercent = config.get(ofInteger(), "bucket.lruPerFd.percent", 100);
             if (bucketLruPerFdPercent < 0 || bucketLruPerFdPercent > 100) {
@@ -1365,7 +1365,7 @@ public class MultiWorkerServer extends Launcher {
             c.confWal.atLeastDoPersistOnceIntervalMs = config.get(ofInteger(), "wal.atLeastDoPersistOnceIntervalMs", 2);
             c.confWal.checkAtLeastDoPersistOnceSizeRate = config.get(ofDouble(), "wal.checkAtLeastDoPersistOnceSizeRate", 0.8);
             if (config.getChild("wal.onceScanMaxLoopCount").hasValue()) {
-                c.confWal.onceScanMaxLoopCount = config.get(ofInteger(), "wal.onceScanMaxLoopCount").byteValue();
+                c.confWal.onceScanMaxLoopCount = config.get(ofInteger(), "wal.onceScanMaxLoopCount");
             }
             c.confWal.checkIfValid();
 

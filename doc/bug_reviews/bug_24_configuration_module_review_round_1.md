@@ -148,7 +148,7 @@ On restart, slot 0's DynConfig constructor replays persisted items from the JSON
 | Finding | Severity | Status | Confidence |
 |---------|----------|--------|------------|
 | 1 - Integer division truncates bucket LRU percent to zero | Medium | **Fixed** — multiplication before division | High |
-| 2 - `byteValue()` truncates `onceScanMaxLoopCount` for values > 127 | Medium | **Needs fix** | High |
+| 2 - `byteValue()` truncates `onceScanMaxLoopCount` for values > 127 | Medium | **Fixed** — removed `.byteValue()`, use Integer directly | High |
 | Non-Finding: Empty `ConfRepl.checkIfValid()` | Low | Informational | High |
 | Non-Finding: `initDynConfigItems` slot 0 only | Informational | By design | High |
 
@@ -226,3 +226,55 @@ such as `monitor_big_key_top_k`, applying only to the first slot is observable b
 correctly treats the reviewed global init path as by design.
 
 Status: **Confirmed non-finding.**
+
+---
+
+## Review Feedback: Finding 1 Fix
+
+Reviewer: AI agent 2
+Review date: 2026-05-08
+Reviewed commit: `4b1a293476b7a8e51416ad345f54c2054f01bc8c`
+Commit message: `fix: integer division truncation in bucket LRU percent config`
+
+### Summary Of Fix
+
+The fix changes bucket LRU percent sizing from division-before-multiplication to
+multiplication-before-division:
+
+```java
+c.confBucket.lruPerFd.maxSize = bucketLruPerFdPercent * c.confBucket.bucketsPerSlot / 100;
+```
+
+This directly addresses the confirmed root cause: integer division no longer truncates configured values in
+`1..99` to zero before multiplying by `bucketsPerSlot`.
+
+### Strengths
+
+- The production change is minimal and localized to the configuration calculation in
+  `MultiWorkerServer.confForSlot()`.
+- The calculation remains integer-based and safe for current bounds. `bucketLruPerFdPercent <= 100`, and
+  `KeyBucket.MAX_BUCKETS_PER_SLOT` is `262144`, so the maximum product remains far below `Integer.MAX_VALUE`.
+- The new Spock regression test covers a non-100 percent value (`50`) and verifies the configured LRU max size
+  is half of the bucket count instead of zero.
+- The focused test executes the changed line according to JaCoCo.
+
+### Concerns
+
+No blocking concerns found for this fix.
+
+One non-blocking improvement for future coverage would be to add boundary examples for `0`, `99`, and `100`.
+The current `50` case is enough to prove the original truncation bug is fixed, while the existing validation
+still guards values outside `0..100`.
+
+### Verification
+
+- Ran:
+  `./gradlew :test --rerun-tasks --tests "io.velo.MultiWorkerServerTest.test bucket LRU percent computes correct maxSize for non-100 percent"`
+- Result: `BUILD SUCCESSFUL`; the selected Spock test passed.
+- JaCoCo confirmation:
+  `build/reports/jacocoHtml/io.velo/MultiWorkerServer.java.html` marks line 1340 as covered (`fc`).
+
+### Post-Commit Follow-Ups
+
+- Finding 1 is fixed by commit `4b1a293476b7a8e51416ad345f54c2054f01bc8c`.
+- Finding 2 remains open and should be fixed separately, with its own TDD cycle and commit.

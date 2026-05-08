@@ -1067,4 +1067,35 @@ class MultiWorkerServerTest extends Specification {
         def buckets = ConfForSlot.global.confBucket.bucketsPerSlot
         ConfForSlot.global.confBucket.lruPerFd.maxSize == buckets / 2
     }
+
+    def 'test onceScanMaxLoopCount accepts values above 127 via config'() {
+        given:
+        var m1 = new MultiWorkerServer.InnerModule()
+        var cc = ConfForSlot.global
+
+        def config = Config.create()
+                .with('doFileLock', "false")
+                .with("net.listenAddresses", "localhost:7379")
+                .with("debugMode", "true")
+                .with("pureMemory", "true")
+                .with("zookeeperConnectString", 'localhost:2181')
+                .with("bucket.bucketsPerSlot", cc.confBucket.bucketsPerSlot.toString())
+                .with("bucket.initialSplitNumber", cc.confBucket.initialSplitNumber.toString())
+                .with("bucket.onceScanMaxLoopCount", "512")
+                .with("chunk.segmentNumberPerFd", cc.confChunk.segmentNumberPerFd.toString())
+                .with("chunk.fdPerChunk", cc.confChunk.fdPerChunk.toString())
+                .with("chunk.segmentLength", cc.confChunk.segmentLength.toString())
+                .with("wal.oneChargeBucketNumber", cc.confWal.oneChargeBucketNumber.toString())
+                .with("wal.valueSizeTrigger", cc.confWal.valueSizeTrigger.toString())
+                .with("wal.shortValueSizeTrigger", cc.confWal.shortValueSizeTrigger.toString())
+                .with("wal.onceScanMaxLoopCount", "512")
+        m1.skipZookeeperConnectCheck = true
+
+        when:
+        m1.confForSlot(config)
+
+        then:
+        ConfForSlot.global.confBucket.onceScanMaxLoopCount == 512
+        ConfForSlot.global.confWal.onceScanMaxLoopCount == 512
+    }
 }
