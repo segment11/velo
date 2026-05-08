@@ -278,3 +278,54 @@ still guards values outside `0..100`.
 
 - Finding 1 is fixed by commit `4b1a293476b7a8e51416ad345f54c2054f01bc8c`.
 - Finding 2 remains open and should be fixed separately, with its own TDD cycle and commit.
+
+---
+
+## Review Feedback: Finding 2 Fix
+
+Reviewer: AI agent 2
+Review date: 2026-05-08
+Reviewed commit: `1dffa10b4d987cd22f2b586016e6f27e7d924f0e`
+Commit message: `fix: remove byteValue() truncation for onceScanMaxLoopCount config`
+
+### Summary Of Fix
+
+The fix removes the narrowing `.byteValue()` conversion from both `onceScanMaxLoopCount` config paths:
+
+```java
+c.confBucket.onceScanMaxLoopCount = config.get(ofInteger(), "bucket.onceScanMaxLoopCount");
+c.confWal.onceScanMaxLoopCount = config.get(ofInteger(), "wal.onceScanMaxLoopCount");
+```
+
+This preserves the parsed integer value before the existing `1..1024` validation checks run.
+
+### Strengths
+
+- The production change is minimal and directly targets the confirmed truncation bug.
+- Both affected config paths are fixed: bucket and WAL.
+- The existing validation remains responsible for rejecting values outside `1..1024`, so the fix does not
+  broaden accepted values beyond the intended range.
+- The new regression test configures both values as `512`, which would have been truncated to `0` by the old
+  `.byteValue()` code and rejected by validation.
+- The focused test executes both changed lines according to JaCoCo.
+
+### Concerns
+
+No blocking concerns found for this fix.
+
+One non-blocking improvement for future regression coverage would be to include a wrapped-but-valid case such
+as `257`, which used to become `1` and could pass validation with the wrong value. The current `512` case is
+still sufficient to prove values above `127` are preserved rather than narrowed.
+
+### Verification
+
+- Ran:
+  `./gradlew :test --rerun-tasks --tests "io.velo.MultiWorkerServerTest.test onceScanMaxLoopCount accepts values above 127 via config"`
+- Result: `BUILD SUCCESSFUL`; the selected Spock test passed.
+- JaCoCo confirmation:
+  `build/reports/jacocoHtml/io.velo/MultiWorkerServer.java.html` marks lines 1334 and 1368 as covered (`fc`).
+
+### Post-Commit Follow-Ups
+
+- Finding 2 is fixed by commit `1dffa10b4d987cd22f2b586016e6f27e7d924f0e`.
+- Both confirmed findings in this bug review now have committed fixes and post-commit review feedback.
