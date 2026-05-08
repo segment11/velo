@@ -372,3 +372,64 @@ readable through the compression-mode read helper.
 **When `needPersist=false`:** The overwrite check runs immediately after `Wal.put()`, which is correct because the new UUID was added to `bigStringFileUuidByKey` during `put()`. Moving the check after the `if (putResult.needPersist())` block is a no-op in this case since the block is skipped.
 
 **Test:** `OneSlotTest.'test overwrite big string when WAL buffer full schedules old file for deletion'` — manipulates `writePositionShortValue` to near `ONE_GROUP_BUFFER_SIZE` to trigger the buffer-full early return, then verifies the old big-string file is scheduled for deletion and the new UUID is in the WAL map.
+
+---
+
+## Review Feedback After Finding 2 Fix Commit
+
+Reviewer: AI agent 2
+
+Reviewed commit: `eef81fd fix: move big-string overwrite detection after doPersist()`
+
+Review date: 2026-05-08
+
+### Findings
+
+No blocking issues found in the committed Finding 2 fix.
+
+### Summary Of Fix
+
+The commit moves `overwrittenBigStringUuid` cleanup detection in `OneSlot.put(...)` from immediately after
+`targetWal.put(...)` to after the optional `doPersist(...)` call. This addresses the buffer-full early-return path where
+`Wal.put(...)` returns `needPersist=true` before inserting the new big-string UUID into `bigStringFileUuidByKey`.
+
+### Strengths
+
+- The moved check now observes the post-`doPersist(...)` WAL state, so the `needPutV` re-put path has populated
+  `bigStringFileUuidByKey` with the new UUID before the old-vs-current UUID comparison.
+- The new regression test directly drives the buffer-full early return by setting `writePositionShortValue` near
+  `Wal.ONE_GROUP_BUFFER_SIZE` with `isOnRewrite=false`.
+- Existing overwrite-focused tests still pass, covering non-buffer-full overwrite behavior.
+
+### Concerns
+
+- JaCoCo still reports one missed branch at `OneSlot.java:1927`, the case where `overwrittenBigStringUuid` equals the
+  current UUID and no deletion is enqueued. This is not part of the fixed failure mode, but it remains a small branch
+  coverage gap around the moved condition.
+
+### Verification
+
+Commands run fresh:
+
+```bash
+./gradlew :test --tests "io.velo.persist.OneSlotTest.test overwrite big string when WAL buffer full schedules old file for deletion" --rerun-tasks
+./gradlew :test --tests "io.velo.persist.OneSlotTest.test overwrite*" --rerun-tasks
+```
+
+Results:
+
+- The focused buffer-full regression test passed with `BUILD SUCCESSFUL`.
+- The overwrite-focused test set ran 4 tests, 0 failures, 0 ignored.
+
+JaCoCo inspection after the overwrite-focused run:
+
+- `OneSlot.java:1911` (`putResult.needPersist()`) covered with both branches covered.
+- `OneSlot.java:1922` (`doPersist(...)`) covered.
+- `OneSlot.java:1925` (`overwrittenBigStringUuid != null`) covered with both branches covered.
+- `OneSlot.java:1928` (`delayToDeleteBigStringFileIds.add(...)`) covered.
+- `OneSlot.java:1982`, `1986`, and `1993` covered for the short-value `doPersist(...)` and `needPutV` re-put path.
+
+### Conclusion
+
+Finding 2 can be treated as fixed and covered for the reviewed buffer-full delayed-cleanup bug. The old big-string file is
+now scheduled for deletion after `doPersist(...)` has reinserted the new big-string UUID into the WAL map.
