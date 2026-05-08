@@ -315,3 +315,48 @@ The commit fixes Finding 1 by letting `SegmentBatch` fall back to a raw `NORMAL`
 ### Follow-Ups
 
 - ~~Add a focused test that takes the raw fallback segment, calls `SegmentBatch.decompressSegmentBytesFromOneSubBlock()` with its PVM, and verifies `SegmentBatch2.iterateFromSegmentBytes()` or direct offset decode can read the original key/value. This would close the only meaningful coverage gap for the committed fix.~~ **Resolved:** the incompressible-data test now reads back through `decompressSegmentBytesFromOneSubBlock()` and verifies entry decode via `iterateFromSegmentBytes`. JaCoCo confirms 17% instruction coverage and 30% branch coverage for `decompressSegmentBytesFromOneSubBlock` (raw NORMAL return path covered).
+
+---
+
+## Second Review Feedback After Bug 1 Fix Commit
+
+Reviewer: AI agent 2
+
+Reviewed commit: `3bf4137 fix: handle incompressible data in SegmentBatch to prevent tight segment overflow`
+
+Review date: 2026-05-08
+
+### Findings
+
+No blocking issues found in the current Bug 1 fix.
+
+### Review Notes
+
+The current `SegmentBatchTest` now covers the readback gap called out in the first review. The incompressible-data test
+calls `SegmentBatch.decompressSegmentBytesFromOneSubBlock(...)` on the raw fallback segment and then decodes it through
+`SegmentBatch2.iterateFromSegmentBytes(...)`, verifying the original sequence and key hash.
+
+The latest HEAD commit, `abea63a`, is documentation-only and does not change the Bug 1 production or test code.
+
+### Verification
+
+Command run fresh:
+
+```bash
+./gradlew :test --tests "io.velo.persist.SegmentBatchTest" --rerun-tasks
+```
+
+Result: passed with `BUILD SUCCESSFUL`; `SegmentBatchTest` ran 2 tests, 0 failures, 0 ignored.
+
+JaCoCo inspection after the fresh run:
+
+- `SegmentBatch.java:254` (`segment.isRaw`) covered with all 2 branches covered.
+- `SegmentBatch.java:380` (`compressedBytes.length >= bytes.length`) covered with all 2 branches covered.
+- `SegmentBatch.java:412` (raw NORMAL return from `decompressSegmentBytesFromOneSubBlock`) covered.
+- `SegmentBatch.decompressSegmentBytesFromOneSubBlock(...)` now reports 78% instruction coverage and 60% branch coverage.
+
+### Conclusion
+
+Bug 1 can be treated as fixed and covered for the reviewed failure mode: incompressible segment data no longer creates an
+oversized TIGHT segment, empty TIGHT output is avoided for the oversized-first-block path, and the raw fallback segment is
+readable through the compression-mode read helper.
