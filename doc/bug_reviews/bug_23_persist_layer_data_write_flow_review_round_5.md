@@ -229,8 +229,8 @@ Or perform the overwrite detection unconditionally in `doPersist()` after the re
 
 | Finding | Severity | Status | Confidence |
 |---------|----------|--------|------------|
-| 1 - SegmentBatch tight segment overflow on incompressible data | **High** | **Needs fix** | High |
-| 2 - Big string overwrite delayed cleanup when `needPersist=true` | Low | **Minor / cosmetic** | High |
+| 1 - SegmentBatch tight segment overflow on incompressible data | **High** | **Fixed** (commit `3bf4137`) | High |
+| 2 - Big string overwrite delayed cleanup when `needPersist=true` | Low | **Fixed** — overwrite detection moved to after `doPersist()` so the new UUID is visible in `bigStringFileUuidByKey` | High |
 
 ---
 
@@ -360,3 +360,15 @@ JaCoCo inspection after the fresh run:
 Bug 1 can be treated as fixed and covered for the reviewed failure mode: incompressible segment data no longer creates an
 oversized TIGHT segment, empty TIGHT output is avoided for the oversized-first-block path, and the raw fallback segment is
 readable through the compression-mode read helper.
+
+---
+
+## Finding 2 Fix
+
+**Fix approach:** Move the big-string overwrite detection (`overwrittenBigStringUuid` check) from before `doPersist()` to after it in `OneSlot.put()` (`src/main/java/io/velo/persist/OneSlot.java:1908-1930`).
+
+**Why it works:** When `Wal.put()` returns `needPersist=true` via the buffer-full early return, the new UUID is not yet in `bigStringFileUuidByKey`. After `doPersist()` completes, the new value has been re-put to the WAL and `addBigStringUuidIfMatch()` has updated `bigStringFileUuidByKey` with the new UUID. The overwrite check now correctly sees `oldUuid != newUuid` and schedules the old file for deletion.
+
+**When `needPersist=false`:** The overwrite check runs immediately after `Wal.put()`, which is correct because the new UUID was added to `bigStringFileUuidByKey` during `put()`. Moving the check after the `if (putResult.needPersist())` block is a no-op in this case since the block is skipped.
+
+**Test:** `OneSlotTest.'test overwrite big string when WAL buffer full schedules old file for deletion'` — manipulates `writePositionShortValue` to near `ONE_GROUP_BUFFER_SIZE` to trigger the buffer-full early return, then verifies the old big-string file is scheduled for deletion and the new UUID is in the WAL map.
