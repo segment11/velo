@@ -2,6 +2,7 @@ package io.velo.persist
 
 import io.velo.CompressedValue
 import io.velo.ConfForSlot
+import io.velo.KeyHash
 import spock.lang.Specification
 
 class KeyBucketsInOneWalGroupTest extends Specification {
@@ -102,6 +103,258 @@ class KeyBucketsInOneWalGroupTest extends Specification {
         }
         then:
         exception
+
+        cleanup:
+        keyLoader.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
+
+    def 'test expired entries are not reinserted during merge'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = 1
+        final short slot = 0
+        def keyLoader = KeyLoaderTest.prepareKeyLoader()
+
+        and:
+        // First round: persist 5 entries, entry 0 has already-expired TTL
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        def shortValueList = Mock.prepareShortValueList(5, (byte) 0) { v ->
+            if (v.seq() == 0L) {
+                return new Wal.V(v.seq(), v.bucketIndex(), v.keyHash(),
+                        System.currentTimeMillis() - 1, CompressedValue.NULL_DICT_SEQ,
+                        v.key(), v.cvEncoded(), false)
+            }
+            return v
+        }
+
+        when:
+        inner.putAll(shortValueList)
+        def sharedBytesList = inner.encodeAfterPutBatch()
+        keyLoader.writeSharedBytesList(sharedBytesList, inner.beginBucketIndex)
+        keyLoader.updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp)
+        then:
+        // Expired entry 0 is filtered out during first flush
+        inner.keyCountForStatsTmp[0] == 4
+        inner.getValueX(shortValueList[0].bucketIndex(), shortValueList[0].key(), shortValueList[0].keyHash()) == null
+        shortValueList[1..4].every {
+            inner.getValueX(it.bucketIndex(), it.key(), it.keyHash()) != null
+        }
+
+        when:
+        // Second round: reload from disk, merge with empty list for bucket 0
+        def inner2 = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        def emptyPvmList = []
+        inner2.putPvmListToTargetBucket(emptyPvmList, 0)
+        then:
+        inner2.getValueX(0, shortValueList[0].key(), shortValueList[0].keyHash()) == null
+        inner2.keyCountForStatsTmp[0] == 4
+        shortValueList[1..4].every {
+            inner2.getValueX(it.bucketIndex(), it.key(), it.keyHash()) != null
+        }
+
+        cleanup:
+        keyLoader.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
+
+    def 'test split decision uses cell cost not entry count'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = 1
+        final short slot = 0
+        def keyLoader = KeyLoaderTest.prepareKeyLoader()
+
+        and:
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        // 40-byte keys + short value -> 2+40+1+23 = 66 > 60 -> 2 cells each
+        // 25 entries * 2 cells = 50 > 48 (INIT_CAPACITY), but entry count 25 < 48
+        List<Wal.V> longKeyList = []
+        25.times { i ->
+            def key = 'long_key_for_multicell_test_' + i.toString().padLeft(16, '0')
+            def keyBytes = key.bytes
+            def keyHash = KeyHash.hash(keyBytes)
+            def cv = new CompressedValue()
+            cv.compressedData = ('value' + i).bytes
+            def cvEncoded = cv.encodeAsShortString()
+            longKeyList << new Wal.V(i, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                    key, cvEncoded, false)
+        }
+
+        when:
+        inner.putAll(longKeyList)
+
+        then:
+        inner.isSplit
+        longKeyList.every {
+            inner.getValueX(it.bucketIndex(), it.key(), it.keyHash()).valueBytes() == it.cvEncoded()
+        }
+
+        cleanup:
+        keyLoader.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
+
+    def 'test incoming expired short WalV is not persisted to key buckets'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = 1
+        final short slot = 0
+        def keyLoader = KeyLoaderTest.prepareKeyLoader()
+
+        and:
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        and:
+        def expiredTime = System.currentTimeMillis() - 1
+        def shortValueList = Mock.prepareShortValueList(5, (byte) 0) { v ->
+            if (v.seq() == 0L) {
+                return new Wal.V(v.seq(), v.bucketIndex(), v.keyHash(),
+                        expiredTime, CompressedValue.NULL_DICT_SEQ,
+                        v.key(), v.cvEncoded(), false)
+            }
+            return v
+        }
+
+        when:
+        inner.putAll(shortValueList)
+
+        then:
+        inner.keyCountForStatsTmp[0] == 4
+        shortValueList[1..4].every {
+            inner.getValueX(it.bucketIndex(), it.key(), it.keyHash()) != null
+        }
+        inner.getValueX(shortValueList[0].bucketIndex(), shortValueList[0].key(),
+                shortValueList[0].keyHash()) == null
+
+        cleanup:
+        keyLoader.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
+
+    def 'test incoming expired PVM is not persisted to key buckets'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = 1
+        final short slot = 0
+        def keyLoader = KeyLoaderTest.prepareKeyLoader()
+
+        and:
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        and:
+        def expiredTime = System.currentTimeMillis() - 1
+        def pvmList = []
+        5.times { i ->
+            def pvm = new PersistValueMeta()
+            pvm.key = 'key:' + i.toString().padLeft(12, '0')
+            pvm.keyHash = KeyHash.hash(pvm.key.bytes)
+            pvm.bucketIndex = 0
+            pvm.expireAt = i == 0 ? expiredTime : CompressedValue.NO_EXPIRE
+            pvm.seq = i
+            pvm.extendBytes = new byte[10]
+            pvmList << pvm
+        }
+
+        when:
+        inner.putAllPvmList(pvmList)
+
+        then:
+        inner.keyCountForStatsTmp[0] == 4
+        (1..4).every { i ->
+            inner.getValueX(0, 'key:' + i.toString().padLeft(12, '0'),
+                    KeyHash.hash(('key:' + i.toString().padLeft(12, '0')).bytes)) != null
+        }
+        inner.getValueX(0, pvmList[0].key, pvmList[0].keyHash) == null
+
+        cleanup:
+        keyLoader.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
+
+    def 'test incoming expired PVM removes existing key-bucket entry and calls cleanup'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = 1
+        final short slot = 0
+        def keyLoader = KeyLoaderTest.prepareKeyLoader()
+
+        and:
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        and:
+        def existingKey = 'key:000000000000'
+        def existingKeyHash = KeyHash.hash(existingKey.bytes)
+        def existingCv = new CompressedValue()
+        existingCv.compressedData = 'value0'.bytes
+        def existingValueBytes = existingCv.encodeAsShortString()
+
+        def shortValueList = Mock.prepareShortValueList(1, (byte) 0)
+        inner.putAll(shortValueList)
+
+        and:
+        def expiredTime = System.currentTimeMillis() - 1
+        def pvmList = []
+        def expiredPvm = new PersistValueMeta()
+        expiredPvm.key = existingKey
+        expiredPvm.keyHash = existingKeyHash
+        expiredPvm.bucketIndex = 0
+        expiredPvm.expireAt = expiredTime
+        expiredPvm.seq = 1
+        expiredPvm.extendBytes = new byte[10]
+        pvmList << expiredPvm
+
+        when:
+        inner.putAllPvmList(pvmList)
+
+        then:
+        inner.keyCountForStatsTmp[0] == 0
+        inner.getValueX(0, existingKey, existingKeyHash) == null
+
+        cleanup:
+        keyLoader.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
+
+    def 'test split rechecked after increasing split number'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = 1
+        final short slot = 0
+        def keyLoader = KeyLoaderTest.prepareKeyLoader()
+
+        and:
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        // Use controlled keyHash values where upper 32 bits are multiples of 3.
+        // (keyHash >> 32) % 3 == 0 for all entries -> all cluster in split 0 at splitNumber=3
+        // (keyHash >> 32) % 9 varies (3,6) -> spread across splits at splitNumber=9
+        // 25 entries * 2 cells = 50 cells:
+        //   - splitNumber=1: 50 > 48 -> need split
+        //   - splitNumber=3: all in split 0, 50 > 48 -> need another split
+        //   - splitNumber=9: ~25 cells per used split < 48 -> fits
+        def upperBits = [3L, 6L, 12L, 15L, 21L, 24L]
+        List<Wal.V> longKeyList = []
+        25.times { i ->
+            def key = 'long_key_for_recheck_test_' + i.toString().padLeft(16, '0')
+            def cv = new CompressedValue()
+            cv.compressedData = ('value' + i).bytes
+            def cvEncoded = cv.encodeAsShortString()
+            def keyHash = upperBits[i % upperBits.size()] << 32
+            longKeyList << new Wal.V(i, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                    key, cvEncoded, false)
+        }
+
+        when:
+        inner.putAll(longKeyList)
+
+        then:
+        inner.isSplit
+        longKeyList.every {
+            inner.getValueX(it.bucketIndex(), it.key(), it.keyHash()).valueBytes() == it.cvEncoded()
+        }
 
         cleanup:
         keyLoader.cleanUp()

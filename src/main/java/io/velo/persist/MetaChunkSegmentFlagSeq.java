@@ -44,7 +44,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     private final int maxSegmentNumber;
 
     // for find those segments can reuse
-    private final BitSet[] segmentCanReuseBitSet;
+    @VisibleForTesting
+    final BitSet[] segmentCanReuseBitSet;
     // for truncate file to save ssd space
     // at least chunk segment number is 8K, each 1K segment use one bit to indicate whether this group of segments is all merged
     // when the bit set is all 0, it means all segments in this file are all merged, so we can truncate file to save ssd space
@@ -267,7 +268,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
     private int checkFdIndex = 0;
     private int check1KSegmentsGroupIndex = 0;
-    int canTruncateFdIndex;
+    int canTruncateFdIndex = -1;
 
     /**
      * Returns the name of the task.
@@ -463,7 +464,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     /**
      * Represents the not found segment index and count.
      */
-    static final int[] NOT_FIND_SEGMENT_INDEX_AND_COUNT = new int[]{-1, 0};
+    static final int[] NOT_FIND_SEGMENT_INDEX_AND_COUNT = new int[]{-1, 0, -1};
 
     @VisibleForTesting
     boolean isOverHalfSegmentNumberForFirstReuseLoop = false;
@@ -491,8 +492,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
                         markedLongs[i] = 0L;
                         continue;
                     }
-                    markedLongs[i] = 0L;
-                    return new int[]{segmentIndex, segmentCount};
+                    return new int[]{segmentIndex, segmentCount, i};
                 }
 
                 var splitFlag = (byte) (markedLong & 0xFF);
@@ -502,28 +502,66 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
                 if (splitFlag == SPLIT_MARKED_RUN_ONCE_FOR_PRE_READ) {
                     short halfSegmentCount = (short) (segmentCount / 2);
-                    short leftSegmentCount = (short) (segmentCount - halfSegmentCount);
 
                     if (!isMarkedSegmentRangeStillMergeable(walGroupIndex, segmentIndex, halfSegmentCount)) {
                         markedLongs[i] = 0L;
                         continue;
                     }
 
-                    // Keep the second half as a normal marker. The next pre-read can consume it whole
-                    // unless it is still larger than the merge read batch limit.
-                    markedLongs[i] = (long) (segmentIndex + halfSegmentCount) << 32 | leftSegmentCount << 16;
-                    return new int[]{segmentIndex, halfSegmentCount};
+                    return new int[]{segmentIndex, halfSegmentCount, i};
                 } else {
                     if (!isMarkedSegmentRangeStillMergeable(walGroupIndex, segmentIndex, segmentCount)) {
                         markedLongs[i] = 0L;
                         continue;
                     }
-                    markedLongs[i] = 0L;
-                    return new int[]{segmentIndex, segmentCount};
+                    return new int[]{segmentIndex, segmentCount, i};
                 }
             }
         }
         return NOT_FIND_SEGMENT_INDEX_AND_COUNT;
+    }
+
+    /**
+     * Commits a successfully merged range using the marker array index for O(1) lookup.
+     *
+     * @param walGroupIndex      the wal group index
+     * @param mergedSegmentIndex the start segment index of the merged range
+     * @param mergedSegmentCount the number of segments that were merged
+     * @param markerIdx          the marker array index returned by {@link #findThoseNeedToMerge(int)}
+     */
+    public void commitMergedRangeWithMarkerIdx(int walGroupIndex, int mergedSegmentIndex, int mergedSegmentCount, int markerIdx) {
+        var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
+        var markedLong = markedLongs[markerIdx];
+        if (markedLong == 0L) {
+            return;
+        }
+
+        var markerSegmentIndex = (int) (markedLong >> 32);
+        var markerSegmentCount = (short) (markedLong >> 16 & 0xFFFF);
+        assert markerSegmentIndex == mergedSegmentIndex;
+
+        if (markerSegmentCount == mergedSegmentCount) {
+            markedLongs[markerIdx] = 0L;
+            return;
+        }
+
+        if (markerSegmentCount > mergedSegmentCount) {
+            var remainingSegmentIndex = markerSegmentIndex + mergedSegmentCount;
+            var remainingSegmentCount = markerSegmentCount - mergedSegmentCount;
+            markedLongs[markerIdx] = (long) remainingSegmentIndex << 32 | (long) remainingSegmentCount << 16;
+        }
+    }
+
+    @VisibleForTesting
+    int countMarkersForWalGroup(int walGroupIndex) {
+        var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
+        int count = 0;
+        for (int i = 0; i < MARK_BEGIN_SEGMENT_INDEX_COUNT; i++) {
+            if (markedLongs[i] != 0L) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private boolean isMarkedSegmentRangeStillMergeable(int walGroupIndex, int beginSegmentIndex, int segmentCount) {
@@ -712,6 +750,11 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             raf.write(tmpBytes);
             inMemoryCachedByteBuffer.position(0).put(tmpBytes);
             initBitSetValueAndMarkedSegmentIndexWhenFirstStartOrClear();
+
+            // reset marks
+            checkFdIndex = 0;
+            check1KSegmentsGroupIndex = 0;
+            canTruncateFdIndex = -1;
             System.out.println("Meta chunk segment flag seq clear done, set init flags.");
         } catch (IOException e) {
             throw new RuntimeException(e);

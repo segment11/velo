@@ -539,6 +539,100 @@ class KeyLoaderTest extends Specification {
         keyLoader2.cleanUp()
     }
 
+    def 'replace pvm list for rebuild does not merge with existing key buckets'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
+        def keyLoader = prepareKeyLoader()
+
+        and:
+        List<PersistValueMeta> existingPvmList = []
+        3.times {
+            def key = "old-key:" + it
+            def pvm = new PersistValueMeta()
+            pvm.key = key
+            pvm.keyHash = KeyHash.hash(key.bytes)
+            pvm.bucketIndex = 0
+            pvm.segmentIndex = 1
+            pvm.segmentOffset = it
+            pvm.seq = it
+            pvm.shortType = KeyLoader.typeAsByteString
+            existingPvmList << pvm
+        }
+        keyLoader.updatePvmListBatchAfterWriteSegments(0, existingPvmList, null)
+
+        and:
+        List<PersistValueMeta> rebuiltPvmList = []
+        def rebuiltKey = 'rebuilt-key:0'
+        def rebuiltPvm = new PersistValueMeta()
+        rebuiltPvm.key = rebuiltKey
+        rebuiltPvm.keyHash = KeyHash.hash(rebuiltKey.bytes)
+        rebuiltPvm.bucketIndex = 0
+        rebuiltPvm.segmentIndex = 9
+        rebuiltPvm.segmentOffset = 99
+        rebuiltPvm.seq = 99L
+        rebuiltPvm.shortType = KeyLoader.typeAsByteString
+        rebuiltPvmList << rebuiltPvm
+
+        expect:
+        existingPvmList.every {
+            keyLoader.getValueXByKey(0, it.key, it.keyHash).valueBytes() == it.encode()
+        }
+        keyLoader.getKeyCountInBucketIndex(0) == 3
+
+        when:
+        keyLoader.replacePvmListBatchInOneWalGroupForRebuild(0, rebuiltPvmList)
+
+        then:
+        existingPvmList.every {
+            keyLoader.getValueXByKey(0, it.key, it.keyHash) == null
+        }
+        keyLoader.getValueXByKey(0, rebuiltPvm.key, rebuiltPvm.keyHash).valueBytes() == rebuiltPvm.encode()
+        keyLoader.getKeyCountInBucketIndex(0) == 1
+
+        cleanup:
+        keyLoader.flush()
+        keyLoader.cleanUp()
+    }
+
+def 'test scan cursor counts post-scan-start entries'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def keyLoader = oneSlot.keyLoader
+
+        and:
+        List<PersistValueMeta> pvmList = []
+        20.times { i ->
+            def pvm = new PersistValueMeta()
+            pvm.key = "key:" + i.toString().padLeft(12, '0')
+            pvm.keyHash = KeyHash.hash(pvm.key.bytes)
+            pvm.bucketIndex = 0
+            pvm.segmentOffset = i
+            pvm.shortType = KeyLoader.typeAsByteString
+            pvm.seq = i < 5 ? 1000L : 100L
+            pvmList << pvm
+        }
+        keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, null)
+
+        when:
+        ConfForSlot.global.confBucket.onceScanMaxLoopCount = 10000
+        def beginScanSeq = 500L
+        def r1 = keyLoader.scan(0, (byte) 0, (short) 0, KeyLoader.typeAsByteString, 'key:*', 3, beginScanSeq)
+
+        then:
+        r1.keys().size() == 3
+        r1.keys().every { k -> k.startsWith('key:') }
+        r1.scanCursor().keyBucketsSkipCount() == 5 + 3
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test scan'() {
         given:
         ConfForSlot.global.confBucket.initialSplitNumber = (byte) 3

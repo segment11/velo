@@ -812,4 +812,5 @@ class WalTest extends Specification {
         wal.clear()
         wal.clear(false)
     }
+
 }

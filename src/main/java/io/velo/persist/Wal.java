@@ -216,7 +216,7 @@ public class Wal implements InMemoryEstimate {
     /**
      * Represents the result of a put operation in the WAL.
      */
-    public record PutResult(boolean needPersist, boolean isValueShort, @Nullable V needPutV, int offset) {
+    public record PutResult(boolean needPersist, boolean isValueShort, @NotNull V v, @Nullable V needPutV, int offset) {
     }
 
     long initMemoryN = 0;
@@ -384,18 +384,8 @@ public class Wal implements InMemoryEstimate {
 
     final long fileToWriteIndex;
 
-    @TestOnly
-    long getLastSeqAfterPut() {
-        return lastSeqAfterPut;
-    }
-
-    @TestOnly
-    long getLastSeqShortValueAfterPut() {
-        return lastSeqShortValueAfterPut;
-    }
-
-    private long lastSeqAfterPut;
-    private long lastSeqShortValueAfterPut;
+    long lastSeqAfterPut;
+    long lastSeqShortValueAfterPut;
 
     /**
      * Gets the number of keys in the WAL.
@@ -643,7 +633,10 @@ public class Wal implements InMemoryEstimate {
             log.error("Truncate wal group error", e);
         }
 
-        // reset write position
+        resetWritePositionsOnly(isShortValue);
+    }
+
+    void resetWritePositionsOnly(boolean isShortValue) {
         if (isShortValue) {
             writePositionShortValue = 0;
             lastSeqShortValueAfterPut = 0L;
@@ -964,7 +957,7 @@ public class Wal implements InMemoryEstimate {
                     needPersistKvCountTotal += keyCount;
                     needPersistOffsetTotal += offset;
 
-                    return new PutResult(true, isValueShort, v, 0);
+                    return new PutResult(true, isValueShort, v, v, 0);
                 }
 
                 needPersist = false;
@@ -975,7 +968,7 @@ public class Wal implements InMemoryEstimate {
                 needPersistKvCountTotal += keyCount;
                 needPersistOffsetTotal += offset;
 
-                return new PutResult(true, isValueShort, v, 0);
+                return new PutResult(true, isValueShort, v, v, 0);
             }
         }
 
@@ -1016,7 +1009,7 @@ public class Wal implements InMemoryEstimate {
 
             addBigStringUuidIfMatch(v);
 
-            return new PutResult(needPersist, true, null, needPersist ? 0 : offset);
+            return new PutResult(needPersist, true, v, null, needPersist ? 0 : offset);
         }
 
         delayToKeyBucketValues.put(key, v);
@@ -1045,7 +1038,7 @@ public class Wal implements InMemoryEstimate {
             addBigStringUuidIfMatch(v);
         }
 
-        return new PutResult(needPersist, false, null, needPersist ? 0 : offset);
+        return new PutResult(needPersist, false, v, null, needPersist ? 0 : offset);
     }
 
     int intervalDeleteExpiredBigStringFiles() {

@@ -401,6 +401,10 @@ public enum ConfForSlot {
                 throw new IllegalArgumentException("Chunk fd per chunk too large, fd per chunk should be less than " + ConfForSlot.ConfChunk.MAX_FD_PER_CHUNK);
             }
 
+            if (segmentNumberPerFd < 1024 || segmentNumberPerFd % 1024 != 0) {
+                throw new IllegalArgumentException("Chunk segment number per fd invalid, chunk segment number per fd should be at least 1024 and a multiple of 1024");
+            }
+
             if (!ConfForSlot.ConfChunk.VALID_SEGMENT_LENGTH_LIST.contains(segmentLength)) {
                 throw new IllegalArgumentException("Chunk segment length invalid, chunk segment length should be one of "
                         + ConfForSlot.ConfChunk.VALID_SEGMENT_LENGTH_LIST);

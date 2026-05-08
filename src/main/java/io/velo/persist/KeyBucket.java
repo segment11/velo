@@ -697,7 +697,7 @@ public class KeyBucket {
     /**
      * Checks if a key-value pair can be put into the specified cell index.
      *
-     * @param key       the key.
+     * @param keyBytes  the byte array of the key.
      * @param keyHash   the hash value of the key.
      * @param cellIndex the index of the cell to check.
      * @param cellCount the number of cells required for storing the key-value pair.

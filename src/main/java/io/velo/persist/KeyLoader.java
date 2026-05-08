@@ -506,6 +506,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             final short[] addedKeyCount = {0};
             final short[] tmpSkipCount = {skipCount};
             final short[] expiredOrNotMatchedCount = {0};
+            final short[] postScanStartSkippedCount = {0};
             final long currentTimeMillis = System.currentTimeMillis();
             keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (tmpSkipCount[0] > 0) {
@@ -547,6 +548,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
                 // skip data that is new added after time do scan
                 if (seq > beginScanSeq) {
+                    postScanStartSkippedCount[0]++;
                     return;
                 }
 
@@ -560,7 +562,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             });
 
             if (countArray[0] <= 0) {
-                var nextTimeSkipCount = skipCount + expiredOrNotMatchedCount[0] + addedKeyCount[0];
+                var nextTimeSkipCount = skipCount + expiredOrNotMatchedCount[0] + postScanStartSkippedCount[0] + addedKeyCount[0];
                 return new ScanCursor(slot, walGroupIndex, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) nextTimeSkipCount, splitIndex);
             }
         }
@@ -594,7 +596,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                                                   final int count,
                                                   final long beginScanSeq) {
         final ArrayList<String> keys = new ArrayList<>(Utils.nearestPowerOfTwo(count));
-        final var inWalKeys = oneSlot.getWalByGroupIndex(walGroupIndex).inWalKeysFormScan(beginScanSeq);
 
         var walGroupNumber = Wal.calcWalGroupNumber();
         var maxSplitNumber = metaKeyBucketSplitNumber.maxSplitNumber();
@@ -606,6 +607,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         // the second is real scan loop count, if size == 0, not real scan, just return
         final int[] countArray = new int[]{count, 0};
         for (int j = walGroupIndex; j < walGroupNumber; j++) {
+            final var inWalKeys = oneSlot.getWalByGroupIndex(j).inWalKeysFormScan(beginScanSeq);
             for (int i = 0; i < maxSplitNumber; i++) {
                 if (j == walGroupIndex && i < splitIndex) {
                     continue;
@@ -887,6 +889,21 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                                                      @Nullable KeyBucketsInOneWalGroup keyBucketsInOneWalGroupGiven) {
         var inner = keyBucketsInOneWalGroupGiven != null ? keyBucketsInOneWalGroupGiven :
                 new KeyBucketsInOneWalGroup(slot, walGroupIndex, this);
+        inner.putAllPvmList(pvmList);
+
+        doAfterPutAll(walGroupIndex, inner);
+    }
+
+    /**
+     * Replaces one WAL group's key-bucket index with the given PVM list.
+     * Used by chunk-scan recovery because the current key buckets may be the broken index.
+     *
+     * @param walGroupIndex the WAL group index
+     * @param pvmList       the live PVM list rebuilt from chunk records
+     */
+    public void replacePvmListBatchInOneWalGroupForRebuild(int walGroupIndex,
+                                                           @NotNull ArrayList<PersistValueMeta> pvmList) {
+        var inner = new KeyBucketsInOneWalGroup(slot, walGroupIndex, this, false);
         inner.putAllPvmList(pvmList);
 
         doAfterPutAll(walGroupIndex, inner);

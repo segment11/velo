@@ -1,6 +1,10 @@
 /gradle/
 /.idea/
 /.gradle/
+/.settings/
 /gradlew
 /gradlew.bat
 /build/
+/bin/
+/velo-data/
+/segment_common/bin/

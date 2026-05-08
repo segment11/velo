@@ -281,4 +281,38 @@ class ConfForSlotTest extends Specification {
         ConfForGlobal.machineId = 0L
         ConfForGlobal.slotNumber = 1
     }
+
+    def 'test chunk segment number per fd must align to truncate check group size'() {
+        given:
+        def c = ConfForSlot.c1m.confChunk
+        def oldSegmentNumberPerFd = c.segmentNumberPerFd
+        def oldFdPerChunk = c.fdPerChunk
+        def oldSegmentLength = c.segmentLength
+        def oldOnceReadSegmentCountWhenRepl = c.onceReadSegmentCountWhenRepl
+        def oldEstimateOneValueLength = ConfForGlobal.estimateOneValueLength
+        def oldEstimateKeyNumber = ConfForGlobal.estimateKeyNumber
+
+        and:
+        c.segmentNumberPerFd = 256 * 1024 + 512
+        c.fdPerChunk = 1
+        c.segmentLength = 4096
+        c.onceReadSegmentCountWhenRepl = 64
+        ConfForGlobal.estimateOneValueLength = 200
+        ConfForGlobal.estimateKeyNumber = 1_000_000L
+
+        when:
+        c.checkIfValid()
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('multiple of 1024')
+
+        cleanup:
+        c.segmentNumberPerFd = oldSegmentNumberPerFd
+        c.fdPerChunk = oldFdPerChunk
+        c.segmentLength = oldSegmentLength
+        c.onceReadSegmentCountWhenRepl = oldOnceReadSegmentCountWhenRepl
+        ConfForGlobal.estimateOneValueLength = oldEstimateOneValueLength
+        ConfForGlobal.estimateKeyNumber = oldEstimateKeyNumber
+    }
 }

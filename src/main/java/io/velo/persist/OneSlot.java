@@ -1310,10 +1310,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         var fdLength = chunk.fdLengths[fdIndex];
-        if (fdLength != 0) {
+        if (fdLength != 0L) {
             var fd = chunk.fdReadWriteArray[fdIndex];
             fd.truncate();
-            chunk.fdLengths[fdIndex] = 0;
+            chunk.fdLengths[fdIndex] = 0L;
         }
         metaChunkSegmentFlagSeq.canTruncateFdIndex = -1;
     }
@@ -1586,7 +1586,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             throw new IllegalStateException("Load persisted segment bytes error, pvm=" + pvm);
         }
 
-
         if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
             segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
         }
@@ -1704,6 +1703,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var cvEncodedFromWal = getFromWal(key, bucketIndex, isExpiredFlagArray);
         if (cvEncodedFromWal != null) {
             // write batch kv is the newest
+            // note: isDeleted true branch is dead code for current delete path (EXPIRE_NOW=-1 always expires first),
+            // but isDeleted() IS executed for every normal WAL entry (JaCoCo confirms). see bug_17 doc.
             return !CompressedValue.isDeleted(cvEncodedFromWal);
         }
 
@@ -1748,11 +1749,21 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var targetWal = walArray[walGroupIndex];
         var putResult = targetWal.removeDelay(key, bucketIndex, keyHash, lastPersistTimeMs);
 
-        var xWalV = new XWalV(putResult.needPutV(), putResult.isValueShort());
-        appendBinlog(xWalV);
-
+        boolean isBinlogAppended = false;
         if (putResult.needPersist()) {
+            // Already written to WAL file/map, so binlog can be appended before doPersist().
+            if (putResult.needPutV() == null) {
+                var xWalV = new XWalV(putResult.v(), putResult.isValueShort());
+                appendBinlog(xWalV);
+                isBinlogAppended = true;
+            }
+
             doPersist(walGroupIndex, key, putResult);
+        }
+
+        if (!isBinlogAppended) {
+            var xWalV = new XWalV(putResult.v(), putResult.isValueShort());
+            appendBinlog(xWalV);
         }
     }
 
@@ -1827,6 +1838,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var isValueShort = cv.isShortString();
         Wal.V v;
+        XBigStrings xBigStrings = null;
         // is use faster kv style, save short string in key buckets, not short string save key and value in record log
         if (isValueShort) {
             byte[] cvEncoded;
@@ -1869,8 +1881,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 cvAsBigString.setCompressedDataAsBigString(bigStringUuid, cv.getDictSeqOrSpType());
 
                 var cvBigStringEncoded = cvAsBigString.encode();
-                var xBigStrings = new XBigStrings(bigStringUuid, bucketIndex, cv.getKeyHash(), key, cvBigStringEncoded);
-                appendBinlog(xBigStrings);
+                xBigStrings = new XBigStrings(bigStringUuid, bucketIndex, cv.getKeyHash(), key, cvBigStringEncoded);
 
                 v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), CompressedValue.SP_TYPE_BIG_STRING,
                         key, cvBigStringEncoded, isFromMerge);
@@ -1902,11 +1913,27 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
-        var xWalV = new XWalV(v, isValueShort);
-        appendBinlog(xWalV);
-
+        boolean isBinlogAppended = false;
         if (putResult.needPersist()) {
+            // Already written to WAL file/map, so binlog can be appended before doPersist().
+            if (putResult.needPutV() == null) {
+                if (xBigStrings != null) {
+                    appendBinlog(xBigStrings);
+                }
+                var xWalV = new XWalV(putResult.v(), isValueShort);
+                appendBinlog(xWalV);
+                isBinlogAppended = true;
+            }
+
             doPersist(walGroupIndex, key, putResult);
+        }
+
+        if (!isBinlogAppended) {
+            if (xBigStrings != null) {
+                appendBinlog(xBigStrings);
+            }
+            var xWalV = new XWalV(putResult.v(), isValueShort);
+            appendBinlog(xWalV);
         }
     }
 
@@ -1991,6 +2018,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             wal.clear(false);
         }
 
+        for (var lru : kvByWalGroupIndexLRU.values()) {
+            lru.clear();
+        }
+
         // truncate all wal raf file
         if (raf != null) {
             try {
@@ -2010,6 +2041,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
+        for (var wal : walArray) {
+            wal.resetWritePositionsOnly(false);
+            wal.resetWritePositionsOnly(true);
+        }
+
         if (this.metaChunkSegmentFlagSeq != null) {
             this.metaChunkSegmentFlagSeq.clear();
         }
@@ -2019,6 +2055,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         if (this.chunk != null) {
             this.chunk.resetAsFlush();
+            this.chunk.truncateAll();
         }
 
         if (this.bigStringFiles != null) {
@@ -2188,7 +2225,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     record BeforePersistWalExtFromMerge(@NotNull ArrayList<Integer> segmentIndexList,
                                         @NotNull ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList,
-                                        @NotNull ArrayList<Integer> updatedFlagPersistedSegmentIndexList) {
+                                        @NotNull ArrayList<Integer> updatedFlagPersistedSegmentIndexList,
+                                        int markerIdx) {
         boolean isEmpty() {
             return segmentIndexList.isEmpty();
         }
@@ -2210,6 +2248,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var firstSegmentIndex = firstSegmentIndexWithReadSegmentCountArray[0];
         var segmentCount = firstSegmentIndexWithReadSegmentCountArray[1];
+        var markerIdx = firstSegmentIndexWithReadSegmentCountArray[2];
         var segmentBytesBatchRead = readForMerge(firstSegmentIndex, segmentCount);
 
         ArrayList<Integer> segmentIndexList = new ArrayList<>();
@@ -2233,7 +2272,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             segmentIndexList.add(segmentIndex);
         }
 
-        return new BeforePersistWalExtFromMerge(segmentIndexList, cvList, updatedFlagPersistedSegmentIndexList);
+        return new BeforePersistWalExtFromMerge(segmentIndexList, cvList, updatedFlagPersistedSegmentIndexList, markerIdx);
     }
 
     @VisibleForTesting
@@ -2325,7 +2364,21 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
             setSegmentMergeFlagBatch(segmentIndexList.getFirst(), segmentIndexList.size(),
                     Chunk.SEGMENT_FLAG_REUSABLE, null, walGroupIndex);
+
+            metaChunkSegmentFlagSeq.commitMergedRangeWithMarkerIdx(walGroupIndex, segmentIndexList.getFirst(), segmentIndexList.size(), ext.markerIdx());
         }
+    }
+
+    /**
+     * Rebuild one WAL group's key-bucket index by scanning chunk segments.
+     *
+     * @param walGroupIndex the WAL group index
+     * @param mode          preview or apply
+     * @return rebuild stats
+     */
+    public ChunkWalGroupRebuilder.RebuildResult rebuildKeyBucketsFromChunk(int walGroupIndex,
+                                                                           ChunkWalGroupRebuilder.Mode mode) {
+        return new ChunkWalGroupRebuilder(slot, this).rebuild(walGroupIndex, mode);
     }
 
     /**

@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +29,18 @@ public class KeyBucketsInOneWalGroup {
      * @param keyLoader     the KeyLoader instance used to load key data
      */
     public KeyBucketsInOneWalGroup(short slot, int walGroupIndex, @NotNull KeyLoader keyLoader) {
+        this(slot, walGroupIndex, keyLoader, true);
+    }
+
+    /**
+     * Constructs a KeyBucketsInOneWalGroup instance.
+     *
+     * @param slot          the slot index to which the key buckets belong
+     * @param walGroupIndex the index of the WAL group
+     * @param keyLoader     the KeyLoader instance used to load key data
+     * @param readExisting  whether to load the current key-bucket index before updates
+     */
+    KeyBucketsInOneWalGroup(short slot, int walGroupIndex, @NotNull KeyLoader keyLoader, boolean readExisting) {
         this.slot = slot;
         this.keyLoader = keyLoader;
 
@@ -35,7 +48,15 @@ public class KeyBucketsInOneWalGroup {
         this.keyCountForStatsTmp = new short[oneChargeBucketNumber];
         this.beginBucketIndex = oneChargeBucketNumber * walGroupIndex;
 
-        this.readBeforePutBatch();
+        if (readExisting) {
+            this.readBeforePutBatch();
+        } else {
+            this.splitNumberTmp = new byte[oneChargeBucketNumber];
+            Arrays.fill(this.splitNumberTmp, ConfForSlot.global.confBucket.initialSplitNumber);
+            for (int i = 0; i < ConfForSlot.global.confBucket.initialSplitNumber; i++) {
+                listList.add(prepareListInitWithNull());
+            }
+        }
     }
 
     private final short slot;
@@ -236,6 +257,7 @@ public class KeyBucketsInOneWalGroup {
             keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
                 if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
                     cvExpiredOrDeleted(key, valueBytes);
+                    return;
                 }
 
                 var pvm = new PersistValueMeta();
@@ -256,6 +278,11 @@ public class KeyBucketsInOneWalGroup {
                 if (existPvm != null) {
                     cvExpiredOrDeleted(existPvm.key, existPvm.extendBytes);
                 }
+            } else if (pvm.expireAt != CompressedValue.NO_EXPIRE && pvm.expireAt < currentTimeMillis) {
+                var existPvm = map.remove(pvm.key);
+                if (existPvm != null) {
+                    cvExpiredOrDeleted(existPvm.key, existPvm.extendBytes);
+                }
             } else {
                 var existPvm = map.put(pvm.key, pvm);
                 // update
@@ -268,40 +295,44 @@ public class KeyBucketsInOneWalGroup {
             }
         }
 
-        // check if need split
-        boolean needSplit = false;
-        var cellCostBySplitIndex = new int[currentSplitNumber];
-        for (var entry : map.entrySet()) {
-            var pvm = entry.getValue();
-
-            var splitIndex = KeyHash.splitIndex(pvm.keyHash, currentSplitNumber, bucketIndex);
-            cellCostBySplitIndex[splitIndex]++;
-            if (cellCostBySplitIndex[splitIndex] > KeyBucket.INIT_CAPACITY) {
-                needSplit = true;
+        // check if need split, repeat until all splits fit or max split number reached
+        byte targetSplitNumber = currentSplitNumber;
+        while (true) {
+            var cellCostBySplitIndex = new int[targetSplitNumber];
+            boolean overCapacity = false;
+            for (var entry : map.entrySet()) {
+                var pvm = entry.getValue();
+                var splitIndex = KeyHash.splitIndex(pvm.keyHash, targetSplitNumber, bucketIndex);
+                cellCostBySplitIndex[splitIndex] += pvm.cellCostInKeyBucket();
+                if (cellCostBySplitIndex[splitIndex] > KeyBucket.INIT_CAPACITY) {
+                    overCapacity = true;
+                    break;
+                }
+            }
+            if (!overCapacity) {
                 break;
             }
-        }
 
-        if (needSplit) {
-            var newMaxSplitNumber = currentSplitNumber * KeyLoader.SPLIT_MULTI_STEP;
+            var newMaxSplitNumber = targetSplitNumber * KeyLoader.SPLIT_MULTI_STEP;
             if (newMaxSplitNumber > KeyLoader.MAX_SPLIT_NUMBER) {
                 log.warn("Bucket full, split number exceed max split number=" + KeyLoader.MAX_SPLIT_NUMBER + ", slot={}, bucket index={}",
                         slot, bucketIndex);
-                // log all keys
                 log.warn("Failed keys to put={}", pvmListThisBucket.stream().map(pvm -> pvm.key).collect(Collectors.toList()));
                 throw new BucketFullException("Bucket full, split number exceed max split number=" + KeyLoader.MAX_SPLIT_NUMBER +
                         ", slot=" + slot + ", bucket index=" + bucketIndex);
             }
+            targetSplitNumber = (byte) newMaxSplitNumber;
+        }
 
-            if (listList.size() < newMaxSplitNumber) {
-                for (int i = listList.size(); i < newMaxSplitNumber; i++) {
+        if (targetSplitNumber > currentSplitNumber) {
+            if (listList.size() < targetSplitNumber) {
+                for (int i = listList.size(); i < targetSplitNumber; i++) {
                     listList.add(prepareListInitWithNull());
-//                    assert listList.size() == i + 1;
                 }
             }
 
-            currentSplitNumber = (byte) newMaxSplitNumber;
-            splitNumberTmp[relativeBucketIndex] = (byte) newMaxSplitNumber;
+            currentSplitNumber = targetSplitNumber;
+            splitNumberTmp[relativeBucketIndex] = targetSplitNumber;
             isSplit = true;
         }
 

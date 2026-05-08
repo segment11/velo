@@ -101,7 +101,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     final SegmentBatch segmentBatch;
     private final SegmentBatch2 segmentBatch2;
 
-    int[] fdLengths;
+    long[] fdLengths;
     FdReadWrite[] fdReadWriteArray;
 
     /**
@@ -159,13 +159,13 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
      */
     @VisibleForTesting
     void initFds() throws IOException {
-        this.fdLengths = new int[fdPerChunk];
+        this.fdLengths = new long[fdPerChunk];
         this.fdReadWriteArray = new FdReadWrite[fdPerChunk];
         for (int i = 0; i < fdPerChunk; i++) {
             // Prometheus metric labels use _ instead of -
             var name = "chunk_data_index_" + i + "_slot_" + slot;
             var file = new File(slotDir, "chunk-data-" + i);
-            fdLengths[i] = (int) file.length();
+            fdLengths[i] = file.length();
 
             var fdReadWrite = new FdReadWrite(name, file);
             fdReadWrite.initByteBuffers(true, i);
@@ -273,6 +273,19 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     @SlaveReplay
     void resetAsFlush() {
         segmentIndex = 0;
+    }
+
+    /**
+     * Truncates all chunk fd files and resets their lengths to zero.
+     * Called during flush to reclaim SSD space and reset chunk state.
+     */
+    void truncateAll() {
+        for (int i = 0; i < fdLengths.length; i++) {
+            if (fdLengths[i] != 0L) {
+                fdReadWriteArray[i].truncate();
+                fdLengths[i] = 0L;
+            }
+        }
     }
 
     /**
@@ -467,7 +480,14 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
 
         var beginT = System.nanoTime();
-        keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, pvmList, keyBucketsInOneWalGroupGiven);
+        try {
+            keyLoader.updatePvmListBatchAfterWriteSegments(walGroupIndex, pvmList, keyBucketsInOneWalGroupGiven);
+        } catch (RuntimeException e) {
+            log.error("Update key buckets after write chunk segments failed, s={}, wal group index={}, begin segment index={}, " +
+                            "segment count={}, next segment index={}, value count={}, pvm count={}",
+                    slot, walGroupIndex, currentSegmentIndex, segmentCount, segmentIndex, list.size(), pvmList.size(), e);
+            throw e;
+        }
         var costT = (System.nanoTime() - beginT) / 1000;
         updatePvmBatchCostTimeTotalUs += costT;
 
@@ -562,7 +582,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             fdReadWrite.writeSegmentsBatch(segmentIndexTargetFd, bytes, false);
         }
 
-        int afterThisBatchOffset = (segmentIndexTargetFd + segmentCount) * chunkSegmentLength;
+        long afterThisBatchOffset = (long) (segmentIndexTargetFd + segmentCount) * chunkSegmentLength;
         if (fdLengths[fdIndex] < afterThisBatchOffset) {
             fdLengths[fdIndex] = afterThisBatchOffset;
         }

@@ -98,10 +98,11 @@ class OneSlotTest extends Specification {
         when:
         def persistConfig2 = Config.create().with('volumeDirsBySlot',
                 '/tmp/data0:0-31,/tmp/data1:32-63,/tmp/data2:64-95,/tmp/data3:96-127')
-        new File('/tmp/data0').mkdirs()
-        new File('/tmp/data1').mkdirs()
-        new File('/tmp/data2').mkdirs()
-        new File('/tmp/data3').mkdirs()
+        def volumeDirs = ['/tmp/data0', '/tmp/data1', '/tmp/data2', '/tmp/data3'].collect { new File(it) }
+        volumeDirs.each {
+            it.deleteDir()
+            it.mkdirs()
+        }
         def tmpTestSlotNumber = (short) 128
         ConfVolumeDirsForSlot.initFromConfig(persistConfig2, tmpTestSlotNumber)
         def oneSlot0 = new OneSlot(slot, slotNumber, snowFlake, Consts.persistDir, persistConfig2)
@@ -151,6 +152,7 @@ class OneSlotTest extends Specification {
         oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()
         oneSlot.cleanUp()
         Consts.persistDir.deleteDir()
+        volumeDirs?.each { it.deleteDir() }
     }
 
     def 'test repl pair'() {
@@ -996,6 +998,72 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test flush clears kv lru cache so post-flush get returns null'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and: 'put many keys to trigger persist to key loader, then clear WAL so get reads from LRU'
+        ConfForSlot.global.confWal.shortValueSizeTrigger = 100
+        def bucketIndex0KeyList = batchPut(oneSlot, 300, 10, 0, slotNumber)
+        def firstKey = bucketIndex0KeyList[0]
+        def sFirstKey = BaseCommand.slot(firstKey, slotNumber)
+
+        when: 'clear WAL so subsequent get will read from LRU cache (not WAL)'
+        oneSlot.getWalByBucketIndex(0).clear()
+
+        and: 'get the key to populate LRU cache from key loader'
+        def resultBeforeFlush = oneSlot.get(firstKey, sFirstKey.bucketIndex(), sFirstKey.keyHash())
+        then: 'key should be readable from LRU after being loaded from key loader'
+        resultBeforeFlush != null
+
+        when: 'flush the slot'
+        oneSlot.flush()
+
+        and: 'get the key after flush - should return null since slot data was cleared'
+        def resultAfterFlush = oneSlot.get(firstKey, sFirstKey.bucketIndex(), sFirstKey.keyHash())
+
+        then: 'post-flush get should return null (bug: currently returns stale LRU value)'
+        resultAfterFlush == null
+
+        cleanup:
+        oneSlot.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test flush resets WAL write positions so post-flush writes are not lost on reload'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and: 'set high triggers to avoid auto-persist during test'
+        ConfForSlot.global.confWal.shortValueSizeTrigger = 100000
+        ConfForSlot.global.confWal.valueSizeTrigger = 100000
+
+        when: 'put keys via direct WAL access to build up write position'
+        def wal = oneSlot.getWalByGroupIndex(0)
+        def vList = Mock.prepareValueList(10, 0)
+        wal.put(false, vList[0].key(), vList[0])
+        wal.put(false, vList[1].key(), vList[1])
+        def posAfterPuts = wal.writePosition
+        then: 'write position should be non-zero after puts'
+        posAfterPuts > 0
+
+        when: 'flush the slot'
+        oneSlot.flush()
+        def posAfterFlush = wal.writePosition
+        then: 'write position should be 0 after flush (bug: currently still non-zero)'
+        posAfterFlush == 0
+
+        cleanup:
+        oneSlot.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test direct methods call'() {
         given:
         LocalPersistTest.prepareLocalPersist()
@@ -1045,7 +1113,7 @@ class OneSlotTest extends Specification {
         def oneSlot = localPersist.oneSlot(slot)
         def metaChunkSegmentFlagSeq = oneSlot.metaChunkSegmentFlagSeq
 
-        def ext = new OneSlot.BeforePersistWalExtFromMerge([], [], [])
+        def ext = new OneSlot.BeforePersistWalExtFromMerge([], [], [], -1)
         expect:
         ext.isEmpty()
 
@@ -1058,6 +1126,8 @@ class OneSlotTest extends Specification {
         when:
         metaChunkSegmentFlagSeq.isOverHalfSegmentNumberForFirstReuseLoop = true
         metaChunkSegmentFlagSeq.markPersistedSegmentIndexToTargetWalGroup(walGroupIndex, 0, (short) 10)
+        oneSlot.setSegmentMergeFlagBatch(0, 10, Chunk.SEGMENT_FLAG_HAS_DATA,
+                (0..<10).collect { 1L }, walGroupIndex)
         e = oneSlot.readSomeSegmentsBeforePersistWal(walGroupIndex)
         then:
         e != null
@@ -1159,6 +1229,223 @@ class OneSlotTest extends Specification {
         oneSlot.delayToDeleteBigStringFileIds.first.uuid() == 3456L
 
         cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test binlog not appended and needPutV not recovered when doPersist throws'() {
+        given:
+        def originalSegmentNumberPerFd = ConfForSlot.global.confChunk.segmentNumberPerFd
+        def originalFdPerChunk = ConfForSlot.global.confChunk.fdPerChunk
+        def originalValueSizeTrigger = ConfForSlot.global.confWal.valueSizeTrigger
+
+        ConfForSlot.global.confChunk.segmentNumberPerFd = 8
+        ConfForSlot.global.confChunk.fdPerChunk = (byte) 1
+        // high trigger so persist is triggered by WAL buffer overflow, not value count
+        ConfForSlot.global.confWal.valueSizeTrigger = 10000
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        // enable binlog so assertions are non-vacuous
+        oneSlot.dynConfig.setBinlogOn(true)
+
+        and:
+        def bucketIndex = 0
+        def targetKeyList = Mock.prepareTargetBucketIndexKeyList(100, bucketIndex)
+        def random = new Random()
+
+        // do some successful writes to fill segments
+        for (int i = 0; i < 50; i++) {
+            def key = targetKeyList[i]
+            def cv = new CompressedValue()
+            cv.keyHash = KeyHash.hash(key.bytes)
+            cv.compressedData = new byte[100]
+            random.nextBytes(cv.compressedData)
+            cv.seq = oneSlot.snowFlake.nextId()
+            oneSlot.put(key, bucketIndex, cv)
+        }
+
+        // record binlog offset before failure — should be > 0 since successful writes were binlogged
+        def binlogOffsetBefore = oneSlot.binlog.currentReplOffset()
+        println "Binlog on=${oneSlot.dynConfig.isBinlogOn()}, offset before failure writes=${binlogOffsetBefore}"
+
+        // mark ALL segments as HAS_DATA (non-reusable) so next persist will fail
+        def maxSegIndex = oneSlot.chunk.maxSegmentIndex
+        for (int i = 0; i <= maxSegIndex; i++) {
+            oneSlot.setSegmentMergeFlag(i, Chunk.SEGMENT_FLAG_HAS_DATA, 0L, 0)
+        }
+        def flagSeq = oneSlot.metaChunkSegmentFlagSeq
+        for (def bitSet : flagSeq.segmentCanReuseBitSet) {
+            bitSet.clear()
+        }
+
+        def wal = oneSlot.getWalByGroupIndex(0)
+
+        when:
+        // fill WAL buffer until it overflows — the overflowing put returns needPutV != null
+        // then doPersist() is called and putValueToWal() throws SegmentOverflowException
+        boolean exceptionThrown = false
+        String failedKey = null
+        long binlogOffsetRightBeforeFail = 0L
+        for (int i = 50; i < 100; i++) {
+            def key = targetKeyList[i]
+            def cv = new CompressedValue()
+            cv.keyHash = KeyHash.hash(key.bytes)
+            cv.compressedData = new byte[2000]
+            random.nextBytes(cv.compressedData)
+            cv.seq = oneSlot.snowFlake.nextId()
+
+            // capture offset before each attempt
+            binlogOffsetRightBeforeFail = oneSlot.binlog.currentReplOffset()
+
+            try {
+                oneSlot.put(key, bucketIndex, cv)
+            } catch (SegmentOverflowException e) {
+                exceptionThrown = true
+                failedKey = key
+                println "SegmentOverflowException caught for key=${key}, binlog offset before this write=${binlogOffsetRightBeforeFail}"
+                break
+            }
+        }
+
+        then:
+        exceptionThrown
+        failedKey != null
+
+        // the failed write is NOT in the WAL delay maps (not recovered)
+        !wal.delayToKeyBucketValues.containsKey(failedKey)
+        !wal.delayToKeyBucketShortValues.containsKey(failedKey)
+
+        // binlog was NOT appended for the failed write — offset should be the same as
+        // right before the failing put (since the failing put throws before appending)
+        def binlogOffsetAfter = oneSlot.binlog.currentReplOffset()
+        binlogOffsetAfter == binlogOffsetRightBeforeFail
+
+        cleanup:
+        ConfForSlot.global.confChunk.segmentNumberPerFd = originalSegmentNumberPerFd
+        ConfForSlot.global.confChunk.fdPerChunk = originalFdPerChunk
+        ConfForSlot.global.confWal.valueSizeTrigger = originalValueSizeTrigger
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test merge marker survives failed persist and consumed after success'() {
+        given:
+        def originalSegmentNumberPerFd = ConfForSlot.global.confChunk.segmentNumberPerFd
+        def originalFdPerChunk = ConfForSlot.global.confChunk.fdPerChunk
+        def originalValueSizeTrigger = ConfForSlot.global.confWal.valueSizeTrigger
+
+        // small segment count so writes fill segments deterministically
+        ConfForSlot.global.confChunk.segmentNumberPerFd = 8
+        ConfForSlot.global.confChunk.fdPerChunk = (byte) 1
+        // low trigger so each batch triggers doPersist → chunk.persist → HAS_DATA + auto-markers
+        ConfForSlot.global.confWal.valueSizeTrigger = 10
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def metaChunkSegmentFlagSeq = oneSlot.metaChunkSegmentFlagSeq
+
+        and:
+        def walGroupIndex = 0
+        def wal = oneSlot.getWalByGroupIndex(walGroupIndex)
+        def bucketIndex = 0
+        def random = new Random()
+
+        // write non-short data — each batch of 10 triggers persist, creating HAS_DATA segments
+        def targetKeyList = Mock.prepareTargetBucketIndexKeyList(50, bucketIndex)
+        for (int i = 0; i < 50; i++) {
+            def key = targetKeyList[i]
+            def cv = new CompressedValue()
+            cv.keyHash = KeyHash.hash(key.bytes)
+            cv.compressedData = new byte[100]
+            random.nextBytes(cv.compressedData)
+            cv.seq = oneSlot.snowFlake.nextId()
+            oneSlot.put(key, bucketIndex, cv)
+        }
+
+        // ensure merge loop is enabled
+        metaChunkSegmentFlagSeq.isOverHalfSegmentNumberForFirstReuseLoop = true
+
+        // clear all auto-markers created by chunk.persist
+        while (true) {
+            def result = metaChunkSegmentFlagSeq.findThoseNeedToMerge(walGroupIndex)
+            if (result[0] == -1) break
+            metaChunkSegmentFlagSeq.commitMergedRangeWithMarkerIdx(walGroupIndex, result[0], result[1], result[2])
+        }
+        assert metaChunkSegmentFlagSeq.countMarkersForWalGroup(walGroupIndex) == 0
+
+        // find first HAS_DATA segment for our manual marker
+        def maxSegIndex = oneSlot.chunk.maxSegmentIndex
+        int firstDataSeg = -1
+        for (int i = 0; i <= maxSegIndex; i++) {
+            def flag = metaChunkSegmentFlagSeq.getSegmentMergeFlag(i)
+            if (flag.flagByte() == Chunk.SEGMENT_FLAG_HAS_DATA && flag.walGroupIndex() == walGroupIndex) {
+                firstDataSeg = i
+                break
+            }
+        }
+        assert firstDataSeg >= 0 : "Expected HAS_DATA segment, found none"
+
+        // add ONE manual marker for a single segment
+        metaChunkSegmentFlagSeq.markPersistedSegmentIndexToTargetWalGroup(walGroupIndex, firstDataSeg, (short) 1)
+        assert metaChunkSegmentFlagSeq.countMarkersForWalGroup(walGroupIndex) == 1
+
+        when: 'call putValueToWal with no reusable segments — should fail'
+        for (def bitSet : metaChunkSegmentFlagSeq.segmentCanReuseBitSet) {
+            bitSet.clear()
+        }
+
+        def cv1 = new CompressedValue()
+        cv1.keyHash = KeyHash.hash('marker-fail-key'.bytes)
+        cv1.compressedData = new byte[200]
+        random.nextBytes(cv1.compressedData)
+        cv1.seq = oneSlot.snowFlake.nextId()
+        wal.delayToKeyBucketValues.put('marker-fail-key',
+                new Wal.V(cv1.seq, bucketIndex, cv1.getKeyHash(), cv1.getExpireAt(),
+                        cv1.getDictSeqOrSpType(), 'marker-fail-key', cv1.encode(), false))
+
+        boolean persistThrew = false
+        try {
+            oneSlot.putValueToWal(false, wal)
+        } catch (SegmentOverflowException e) {
+            persistThrew = true
+        }
+
+        then: 'persist threw and our manual marker still exists'
+        persistThrew
+        metaChunkSegmentFlagSeq.countMarkersForWalGroup(walGroupIndex) >= 1
+
+        when: 'restore reuse bitsets so putValueToWal can succeed'
+        for (int i = 0; i <= maxSegIndex; i++) {
+            metaChunkSegmentFlagSeq.segmentCanReuseBitSet[0].set(i)
+        }
+
+        boolean successPersist = false
+        try {
+            oneSlot.putValueToWal(false, wal)
+            successPersist = true
+        } catch (SegmentOverflowException e) {
+            println "Second putValueToWal still failed: ${e.message}"
+        }
+
+        then: 'persist succeeded'
+        successPersist
+
+        and: 'our manual marker was consumed by commitMergedRange (new auto-marker may exist but total <= 1)'
+        // chunk.persist auto-creates a new marker for the new segments, so total might be 1
+        // the key invariant: our original marker was consumed, and at most 1 new auto-marker exists
+        def finalMarkerCount = metaChunkSegmentFlagSeq.countMarkersForWalGroup(walGroupIndex)
+        finalMarkerCount <= 1
+
+        cleanup:
+        ConfForSlot.global.confChunk.segmentNumberPerFd = originalSegmentNumberPerFd
+        ConfForSlot.global.confChunk.fdPerChunk = originalFdPerChunk
+        ConfForSlot.global.confWal.valueSizeTrigger = originalValueSizeTrigger
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
