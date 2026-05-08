@@ -417,8 +417,8 @@ Consider triggering segment merge-check even during short-value persist cycles, 
 |---------|----------|--------|------------|
 | 1 - Silent data loss of `needPutV` when `putValueToWal()` throws | **High** | **Fixed** (commits `dded848`, `8da172f`, `0ef0214`, `7027130`, `6ff9728`, `6c36c98`) | High |
 | 2 - Key-bucket index inconsistency after partial `Chunk.persist()` failure | Medium | **By design — use chunk recovery/rebuild data flow** | High |
-| 3 - Merge marker consumed before merge completes | Medium | **Needs decision** | Medium |
-| 4 - Big string file orphaned if persist fails after file write | Medium | **Needs fix** | Medium |
+| 3 - Merge marker consumed before merge completes | Medium | **Fixed** (commits `6b35f90`, `59ce705`, `313978d`, `9a90e09`) | Medium |
+| 4 - Big string file orphaned if persist fails after file write | Medium | **Fixed** — addressed by Bug 22 #1 fix (`dded848`): `needPutV` is now recovered into WAL delay maps when `doPersist()` throws, so the new big string file retains its WAL reference after recovery | High |
 | 5 - `encodeAfterPutBatch()` inconsistent iteration bound | Low | **Fragile but safe** | Medium |
 | 6 - Short value persist skips segment merge | Low / Informational | **By design** | High |
 
