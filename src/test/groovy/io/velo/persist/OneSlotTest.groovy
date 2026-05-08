@@ -1449,4 +1449,48 @@ class OneSlotTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test overwrite big string when WAL buffer full schedules old file for deletion'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def bucketIndex = 0
+        def key = 'kerry-test-big-string-overwrite-buffer-full-key'
+
+        and: 'write first big string value'
+        def cv1 = new CompressedValue()
+        cv1.seq = oneSlot.snowFlake.nextId()
+        cv1.keyHash = 333333333L
+        cv1.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
+        oneSlot.put(key, bucketIndex, cv1)
+        def firstUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+        assert firstUuid != null
+
+        and: 'manipulate WAL state so next short-value put triggers buffer-full early return'
+        def wal = oneSlot.getWalByBucketIndex(bucketIndex)
+        wal.writePositionShortValue = Wal.ONE_GROUP_BUFFER_SIZE - 10
+        wal.isOnRewrite = false
+
+        when: 'overwrite with second big string — triggers needPersist=true (buffer full)'
+        def cv2 = new CompressedValue()
+        cv2.seq = oneSlot.snowFlake.nextId()
+        cv2.keyHash = 333333333L
+        cv2.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
+        oneSlot.put(key, bucketIndex, cv2)
+
+        then: 'old big-string file should be scheduled for deletion'
+        !oneSlot.delayToDeleteBigStringFileIds.isEmpty()
+        oneSlot.delayToDeleteBigStringFileIds.any { it.uuid() == firstUuid }
+
+        and: 'new UUID should be in the WAL map'
+        def currentUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+        currentUuid != null
+        currentUuid != firstUuid
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }
