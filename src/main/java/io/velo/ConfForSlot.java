@@ -560,7 +560,25 @@ public enum ConfForSlot {
          * Checks if the replication configuration is valid.
          */
         public void checkIfValid() {
-
+            if (binlogOneSegmentLength <= 0) {
+                throw new IllegalArgumentException("Repl binlog one segment length must be > 0, given: " + binlogOneSegmentLength);
+            }
+            if (binlogOneSegmentLength > binlogOneFileMaxLength) {
+                throw new IllegalArgumentException("Repl binlog one segment length (" + binlogOneSegmentLength
+                        + ") must be <= binlog one file max length (" + binlogOneFileMaxLength + ")");
+            }
+            if (binlogForReadCacheSegmentMaxCount <= 0) {
+                throw new IllegalArgumentException("Repl binlog for read cache segment max count must be > 0, given: " + binlogForReadCacheSegmentMaxCount);
+            }
+            if (binlogFileKeepMaxCount <= 0) {
+                throw new IllegalArgumentException("Repl binlog file keep max count must be > 0, given: " + binlogFileKeepMaxCount);
+            }
+            if (catchUpOffsetMinDiff <= 0) {
+                throw new IllegalArgumentException("Repl catch up offset min diff must be > 0, given: " + catchUpOffsetMinDiff);
+            }
+            if (catchUpIntervalMillis <= 0) {
+                throw new IllegalArgumentException("Repl catch up interval millis must be > 0, given: " + catchUpIntervalMillis);
+            }
         }
 
         @Override

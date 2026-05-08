@@ -315,4 +315,77 @@ class ConfForSlotTest extends Specification {
         ConfForGlobal.estimateOneValueLength = oldEstimateOneValueLength
         ConfForGlobal.estimateKeyNumber = oldEstimateKeyNumber
     }
+
+    def 'test conf repl checkIfValid rejects invalid values'() {
+        given:
+        def repl = ConfForSlot.c1m.confRepl
+        def savedSegmentLength = repl.binlogOneSegmentLength
+        def savedFileMaxLength = repl.binlogOneFileMaxLength
+        def savedCacheMaxCount = repl.binlogForReadCacheSegmentMaxCount
+        def savedKeepMaxCount = repl.binlogFileKeepMaxCount
+        def savedOffsetMinDiff = repl.catchUpOffsetMinDiff
+        def savedIntervalMs = repl.catchUpIntervalMillis
+
+        when: 'segment length <= 0'
+        repl.binlogOneSegmentLength = 0
+        repl.checkIfValid()
+        then:
+        def e1 = thrown(IllegalArgumentException)
+        e1.message.contains('segment length')
+
+        when: 'segment length > file max length'
+        repl.binlogOneSegmentLength = 999
+        repl.binlogOneFileMaxLength = 100
+        repl.checkIfValid()
+        then:
+        def e2 = thrown(IllegalArgumentException)
+        e2.message.contains('segment length')
+
+        when: 'cache segment max count <= 0'
+        repl.binlogOneSegmentLength = 1024 * 1024
+        repl.binlogOneFileMaxLength = 512 * 1024 * 1024
+        repl.binlogForReadCacheSegmentMaxCount = (short) 0
+        repl.checkIfValid()
+        then:
+        def e3 = thrown(IllegalArgumentException)
+        e3.message.contains('cache segment')
+
+        when: 'file keep max count <= 0'
+        repl.binlogForReadCacheSegmentMaxCount = (short) 10
+        repl.binlogFileKeepMaxCount = (short) 0
+        repl.checkIfValid()
+        then:
+        def e4 = thrown(IllegalArgumentException)
+        e4.message.contains('file keep')
+
+        when: 'catch up offset min diff <= 0'
+        repl.binlogFileKeepMaxCount = (short) 10
+        repl.catchUpOffsetMinDiff = 0
+        repl.checkIfValid()
+        then:
+        def e5 = thrown(IllegalArgumentException)
+        e5.message.contains('offset')
+
+        when: 'catch up interval millis <= 0'
+        repl.catchUpOffsetMinDiff = 1024 * 1024
+        repl.catchUpIntervalMillis = 0
+        repl.checkIfValid()
+        then:
+        def e6 = thrown(IllegalArgumentException)
+        e6.message.contains('interval')
+
+        when: 'all valid values pass'
+        repl.catchUpIntervalMillis = 100
+        repl.checkIfValid()
+        then:
+        noExceptionThrown()
+
+        cleanup:
+        repl.binlogOneSegmentLength = savedSegmentLength
+        repl.binlogOneFileMaxLength = savedFileMaxLength
+        repl.binlogForReadCacheSegmentMaxCount = savedCacheMaxCount
+        repl.binlogFileKeepMaxCount = savedKeepMaxCount
+        repl.catchUpOffsetMinDiff = savedOffsetMinDiff
+        repl.catchUpIntervalMillis = savedIntervalMs
+    }
 }
