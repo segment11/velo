@@ -18,56 +18,51 @@ class TGroupTest extends Specification {
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
+        data2[1] = 'a'.bytes
         int slotNumber = 128
 
-        and:
-        data2[1] = 'a'.bytes
+        expect:
+        _TGroup.parseSlots(cmd, data2, slotNumber).size() == expectedSize
 
-        when:
-        def sTtlList = _TGroup.parseSlots('ttl', data2, slotNumber)
-        def sTypeList = _TGroup.parseSlots('type', data2, slotNumber)
-        def sList = _TGroup.parseSlots('txxx', data2, slotNumber)
-        then:
-        sTtlList.size() == 1
-        sTypeList.size() == 1
-        sList.size() == 0
-
-        when:
-        def data1 = new byte[1][]
-        sTypeList = _TGroup.parseSlots('type', data1, slotNumber)
-        sTtlList = _TGroup.parseSlots('ttl', data1, slotNumber)
-        then:
-        sTypeList.size() == 0
-        sTtlList.size() == 0
+        where:
+        cmd     | expectedSize
+        'ttl'   | 1
+        'type'  | 1
+        'txxx'  | 0
     }
 
-    def 'test handle'() {
+    def 'test parse slot - insufficient data'() {
         given:
         def data1 = new byte[1][]
+        int slotNumber = 128
 
-        def tGroup = new TGroup('ttl', data1, null)
+        expect:
+        _TGroup.parseSlots('type', data1, slotNumber).size() == 0
+        _TGroup.parseSlots('ttl', data1, slotNumber).size() == 0
+    }
+
+    def 'test handle - format errors'() {
+        given:
+        def tGroup = new TGroup(null, null, null)
+        tGroup.from(BaseCommand.mockAGroup())
+
+        expect:
+        tGroup.execute(input) == expected
+
+        where:
+        input  | expected
+        'ttl'  | ErrorReply.FORMAT
+        'type' | ErrorReply.FORMAT
+        'zzz'  | NilReply.INSTANCE
+    }
+
+    def 'test handle - time'() {
+        given:
+        def tGroup = new TGroup(null, null, null)
         tGroup.from(BaseCommand.mockAGroup())
 
         when:
-        def reply = tGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        tGroup.cmd = 'type'
-        reply = tGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        tGroup.cmd = 'zzz'
-        reply = tGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
-
-        when:
-        tGroup.cmd = 'time'
-        reply = tGroup.handle()
+        def reply = tGroup.execute('time')
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2

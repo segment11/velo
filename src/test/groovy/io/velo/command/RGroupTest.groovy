@@ -19,150 +19,90 @@ class RGroupTest extends Specification {
     final short slot = 0
     def _RGroup = new RGroup(null, null, null)
 
-    def 'test parse slot'() {
+    def 'test parse slot - single key'() {
         given:
         def data3 = new byte[3][]
-        int slotNumber = 128
-
-        and:
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
+        int slotNumber = 128
 
-        when:
-        def sRenameList = _RGroup.parseSlots('rename', data3, slotNumber)
-        def sRenamenxList = _RGroup.parseSlots('renamenx', data3, slotNumber)
-        def sRpoplpushList = _RGroup.parseSlots('rpoplpush', data3, slotNumber)
-        def sRestoreList = _RGroup.parseSlots('restore', data3, slotNumber)
-        def sRpopList = _RGroup.parseSlots('rpop', data3, slotNumber)
-        def sRpushList = _RGroup.parseSlots('rpush', data3, slotNumber)
-        def sRpushxList = _RGroup.parseSlots('rpushx', data3, slotNumber)
-        def sList = _RGroup.parseSlots('rxxx', data3, slotNumber)
-        then:
-        sRenameList.size() == 2
-        sRenamenxList.size() == 2
-        sRpoplpushList.size() == 2
-        sRestoreList.size() == 0
-        sRpopList.size() == 1
-        sRpushList.size() == 1
-        sRpushxList.size() == 1
-        sList.size() == 0
+        expect:
+        _RGroup.parseSlots(cmd, data3, slotNumber).size() == expectedSize
 
-        when:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        sRenameList = _RGroup.parseSlots('rename', data4, slotNumber)
-        sRpoplpushList = _RGroup.parseSlots('rpoplpush', data4, slotNumber)
-        sRestoreList = _RGroup.parseSlots('restore', data4, slotNumber)
-        sRpopList = _RGroup.parseSlots('rpop', data4, slotNumber)
-        then:
-        sRenameList.size() == 0
-        sRpoplpushList.size() == 0
-        sRestoreList.size() == 1
-        sRpopList.size() == 0
-
-        when:
-        def data1 = new byte[1][]
-        sRpushList = _RGroup.parseSlots('rpush', data1, slotNumber)
-        sRpushxList = _RGroup.parseSlots('rpushx', data1, slotNumber)
-        then:
-        sRpushList.size() == 0
-        sRpushxList.size() == 0
-
-        when:
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-        sRpopList = _RGroup.parseSlots('rpop', data2, slotNumber)
-        then:
-        sRpopList.size() == 1
+        where:
+        cmd          | expectedSize
+        'rename'     | 2
+        'renamenx'   | 2
+        'rpoplpush'  | 2
+        'restore'    | 0
+        'rpop'       | 1
+        'rpush'      | 1
+        'rpushx'     | 1
+        'rxxx'       | 0
     }
 
-    def 'test handle'() {
+    def 'test parse slot - edge cases'() {
         given:
+        def data3 = new byte[3][]
+        data3[1] = 'a'.bytes
+        data3[2] = 'b'.bytes
+        def data4 = new byte[4][]
+        data4[1] = 'a'.bytes
         def data1 = new byte[1][]
-        def socket = SocketInspectorTest.mockTcpSocket()
+        def data2 = new byte[2][]
+        data2[1] = 'a'.bytes
+        int slotNumber = 128
 
-        def rGroup = new RGroup('readonly', data1, socket)
+        expect:
+        _RGroup.parseSlots('rename', data4, slotNumber).size() == 0
+        _RGroup.parseSlots('rpoplpush', data4, slotNumber).size() == 0
+        _RGroup.parseSlots('restore', data4, slotNumber).size() == 1
+        _RGroup.parseSlots('rpop', data4, slotNumber).size() == 0
+        _RGroup.parseSlots('rpush', data1, slotNumber).size() == 0
+        _RGroup.parseSlots('rpushx', data1, slotNumber).size() == 0
+        _RGroup.parseSlots('rpop', data2, slotNumber).size() == 1
+    }
+
+    def 'test handle - format errors'() {
+        given:
+        def rGroup = new RGroup(null, null, null)
         rGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = rGroup.handle()
-        then:
-        reply == OKReply.INSTANCE
+        expect:
+        rGroup.execute(input) == expected
+
+        where:
+        input       | expected
+        'rename'    | ErrorReply.FORMAT
+        'renamenx'  | ErrorReply.FORMAT
+        'randomkey a'| ErrorReply.FORMAT
+        'replicaof' | ErrorReply.FORMAT
+        'restore'   | ErrorReply.FORMAT
+        'rpop'      | ErrorReply.FORMAT
+        'rpoplpush' | ErrorReply.FORMAT
+        'rpush'     | ErrorReply.FORMAT
+        'rpushx'    | ErrorReply.FORMAT
+        'zzz'       | NilReply.INSTANCE
+    }
+
+    def 'test handle - readonly readwrite role'() {
+        given:
+        def socket = SocketInspectorTest.mockTcpSocket()
+        def rGroup = new RGroup('readonly', new byte[1][], socket)
+        rGroup.from(BaseCommand.mockAGroup())
+
+        expect:
+        rGroup.handle() == OKReply.INSTANCE
 
         when:
         rGroup.cmd = 'readwrite'
-        reply = rGroup.handle()
         then:
-        reply == OKReply.INSTANCE
-
-        when:
-        rGroup.cmd = 'rename'
-        reply = rGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        rGroup.cmd = 'renamenx'
-        reply = rGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        def data2 = new byte[2][]
-        rGroup.cmd = 'randomkey'
-        rGroup.data = data2
-        reply = rGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        rGroup.cmd = 'replicaof'
-        rGroup.data = data1
-        reply = rGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        rGroup.cmd = 'restore'
-        reply = rGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        rGroup.handle() == OKReply.INSTANCE
 
         when:
         rGroup.cmd = 'role'
-        reply = rGroup.handle()
         then:
-        reply instanceof MultiBulkReply
-
-        when:
-        rGroup.cmd = 'rpop'
-        reply = rGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        rGroup.cmd = 'rpoplpush'
-        reply = rGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        rGroup.cmd = 'rpush'
-        reply = rGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        rGroup.cmd = 'rpushx'
-        reply = rGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        rGroup.cmd = 'zzz'
-        reply = rGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        rGroup.handle() instanceof MultiBulkReply
     }
 
     def 'test randomkey'() {

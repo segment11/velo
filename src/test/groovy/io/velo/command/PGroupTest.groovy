@@ -20,98 +20,75 @@ class PGroupTest extends Specification {
 
     final short slot = 0
 
-    def 'test parse slot'() {
+    def 'test parse slot - single key'() {
         given:
         def data2 = new byte[2][]
+        data2[1] = 'a'.bytes
+        def data4 = new byte[4][]
+        data4[1] = 'a'.bytes
         int slotNumber = 128
 
-        def data4 = new byte[4][]
+        expect:
+        _PGroup.parseSlots('pexpire', data4, slotNumber).size() == 1
+        _PGroup.parseSlots('pexpireat', data4, slotNumber).size() == 1
+        _PGroup.parseSlots('pexpiretime', data2, slotNumber).size() == 1
+        _PGroup.parseSlots('pfadd', data2, slotNumber).size() == 0
+        _PGroup.parseSlots('pfcount', data2, slotNumber).size() == 1
+        _PGroup.parseSlots('pfmerge', data2, slotNumber).size() == 0
+        _PGroup.parseSlots('pttl', data2, slotNumber).size() == 1
+        _PGroup.parseSlots('persist', data2, slotNumber).size() == 1
+        _PGroup.parseSlots('psetex', data4, slotNumber).size() == 1
+        _PGroup.parseSlots('pxxx', data2, slotNumber).size() == 0
+    }
 
-        and:
+    def 'test parse slot - edge cases'() {
+        given:
+        def data2 = new byte[2][]
         data2[1] = 'a'.bytes
-
-        data4[1] = 'a'.bytes
-
-        when:
-        def sPexpireList = _PGroup.parseSlots('pexpire', data4, slotNumber)
-        def sPexpireatList = _PGroup.parseSlots('pexpireat', data4, slotNumber)
-        def sPexpiretimeList = _PGroup.parseSlots('pexpiretime', data2, slotNumber)
-        def sPfaddList = _PGroup.parseSlots('pfadd', data2, slotNumber)
-        def sPfcountList = _PGroup.parseSlots('pfcount', data2, slotNumber)
-        def sPfmergeList = _PGroup.parseSlots('pfmerge', data2, slotNumber)
-        def sPttlList = _PGroup.parseSlots('pttl', data2, slotNumber)
-        def sPersistList = _PGroup.parseSlots('persist', data2, slotNumber)
-        def sPsetexList = _PGroup.parseSlots('psetex', data4, slotNumber)
-        def sList = _PGroup.parseSlots('pxxx', data2, slotNumber)
-        then:
-        sPexpireList.size() == 1
-        sPexpireatList.size() == 1
-        sPexpiretimeList.size() == 1
-        sPfaddList.size() == 0
-        sPfcountList.size() == 1
-        sPfmergeList.size() == 0
-        sPttlList.size() == 1
-        sPersistList.size() == 1
-        sPsetexList.size() == 1
-        sList.size() == 0
-
-        when:
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
-        sPexpireatList = _PGroup.parseSlots('pexpireat', data3, slotNumber)
-        then:
-        sPexpireatList.size() == 1
-
-        when:
-        // wrong size
-        sPexpireList = _PGroup.parseSlots('pexpire', data2, slotNumber)
-        then:
-        sPexpireList.size() == 0
-
-        when:
-        sPexpireatList = _PGroup.parseSlots('pexpireat', data2, slotNumber)
-        then:
-        sPexpireatList.size() == 0
-
-        when:
-        sPexpiretimeList = _PGroup.parseSlots('pexpiretime', data4, slotNumber)
-        then:
-        sPexpiretimeList.size() == 0
-
-        when:
-        sPfaddList = _PGroup.parseSlots('pfadd', data3, slotNumber)
-        then:
-        sPfaddList.size() == 1
-
-        when:
+        def data4 = new byte[4][]
+        data4[1] = 'a'.bytes
         def data1 = new byte[1][]
-        sPfcountList = _PGroup.parseSlots('pfcount', data1, slotNumber)
-        then:
-        sPfcountList.size() == 0
+        int slotNumber = 128
 
-        when:
-        sPfmergeList = _PGroup.parseSlots('pfmerge', data3, slotNumber)
-        then:
-        sPfmergeList.size() == 2
+        expect:
+        _PGroup.parseSlots('pexpireat', data3, slotNumber).size() == 1
+        _PGroup.parseSlots('pfadd', data3, slotNumber).size() == 1
+        _PGroup.parseSlots('pfmerge', data3, slotNumber).size() == 2
 
-        when:
-        sPttlList = _PGroup.parseSlots('pttl', data4, slotNumber)
-        then:
-        sPttlList.size() == 0
-
-        when:
-        sPersistList = _PGroup.parseSlots('persist', data4, slotNumber)
-        then:
-        sPersistList.size() == 0
-
-        when:
-        sPsetexList = _PGroup.parseSlots('psetex', data2, slotNumber)
-        then:
-        sPsetexList.size() == 0
+        // wrong sizes
+        _PGroup.parseSlots('pexpire', data2, slotNumber).size() == 0
+        _PGroup.parseSlots('pexpireat', data2, slotNumber).size() == 0
+        _PGroup.parseSlots('pexpiretime', data4, slotNumber).size() == 0
+        _PGroup.parseSlots('pfcount', data1, slotNumber).size() == 0
+        _PGroup.parseSlots('pttl', data4, slotNumber).size() == 0
+        _PGroup.parseSlots('persist', data4, slotNumber).size() == 0
+        _PGroup.parseSlots('psetex', data2, slotNumber).size() == 0
     }
 
-    def 'test handle'() {
+    def 'test handle - format errors'() {
+        given:
+        def pGroup = new PGroup(null, null, null)
+        pGroup.from(BaseCommand.mockAGroup())
+
+        expect:
+        pGroup.execute(input) == expected
+
+        where:
+        input    | expected
+        'persist'| ErrorReply.FORMAT
+        'pfadd'  | ErrorReply.FORMAT
+        'pfcount'| ErrorReply.FORMAT
+        'pfmerge'| ErrorReply.FORMAT
+        'psetex' | ErrorReply.FORMAT
+        'publish'| ErrorReply.FORMAT
+        'pubsub' | ErrorReply.FORMAT
+        'pxxx'   | NilReply.INSTANCE
+    }
+
+    def 'test handle - functional'() {
         given:
         final short slot = 0
 
@@ -151,44 +128,12 @@ class PGroupTest extends Specification {
         (reply as IntegerReply).integer == -2
 
         when:
-        def data1 = new byte[1][]
-        pGroup.cmd = 'persist'
-        pGroup.data = data1
-        reply = pGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        pGroup.cmd = 'pfadd'
-        reply = pGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        pGroup.cmd = 'pfcount'
-        reply = pGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        pGroup.cmd = 'pfmerge'
-        reply = pGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
         pGroup.data = data2
         pGroup.cmd = 'pttl'
         reply = pGroup.handle()
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == -2
-
-        when:
-        pGroup.cmd = 'psetex'
-        reply = pGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
 
         when:
         def data4 = new byte[4][]
@@ -201,25 +146,6 @@ class PGroupTest extends Specification {
         reply = pGroup.handle()
         then:
         reply == OKReply.INSTANCE
-
-        when:
-        pGroup.cmd = 'pxxx'
-        reply = pGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
-
-        when:
-        pGroup.cmd = 'publish'
-        pGroup.data = data1
-        reply = pGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        pGroup.cmd = 'pubsub'
-        reply = pGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
 
         when:
         def socketInspector = new SocketInspector()

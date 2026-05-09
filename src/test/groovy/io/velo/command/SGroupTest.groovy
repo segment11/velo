@@ -114,64 +114,36 @@ sunionstore
         sListList22.every { it.size() == 0 }
     }
 
-    def 'test handle'() {
+    def 'test handle - format errors'() {
         given:
-        def data1 = new byte[1][]
-
-        def sGroup = new SGroup('set', data1, null)
+        def sGroup = new SGroup(null, null, null)
         sGroup.from(BaseCommand.mockAGroup())
 
+        when:
         def allCmdList = singleKeyCmdList1 + multiKeyCmdList2 + ['sintercard', 'smove', 'scan']
-
-        when:
-        sGroup.data = data1
-        def sAllList = allCmdList.collect {
-            sGroup.cmd = it
-            sGroup.handle()
-        }
+        def replyList = allCmdList.collect { sGroup.execute(it) }
         then:
-        sAllList.every {
-            it == ErrorReply.FORMAT
-        }
+        replyList.every { it == ErrorReply.FORMAT }
+    }
+
+    def 'test handle - special cases'() {
+        given:
+        def sGroup = new SGroup(null, null, null)
+        sGroup.from(BaseCommand.mockAGroup())
+
+        expect:
+        sGroup.execute('sentinel') == ErrorReply.NOT_SUPPORT
+        sGroup.execute('select 1') == ErrorReply.NOT_SUPPORT
+        sGroup.execute('subscribe') == ErrorReply.FORMAT
+        sGroup.execute('slaveof') == ErrorReply.FORMAT
+        sGroup.execute('zzz') == NilReply.INSTANCE
 
         when:
-        sGroup.cmd = 'sentinel'
-        def reply = sGroup.handle()
-        then:
-        reply == ErrorReply.NOT_SUPPORT
-
-        when:
-        sGroup.cmd = 'save'
         def data2 = new byte[2][]
-        sGroup.data = data2
-        reply = sGroup.handle()
+        def sGroup2 = new SGroup('save', data2, null)
+        sGroup2.from(BaseCommand.mockAGroup())
         then:
-        reply == OKReply.INSTANCE
-
-        when:
-        sGroup.data = data1
-        sGroup.cmd = 'select'
-        reply = sGroup.handle()
-        then:
-        reply == ErrorReply.NOT_SUPPORT
-
-        when:
-        sGroup.cmd = 'subscribe'
-        reply = sGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        sGroup.cmd = 'slaveof'
-        reply = sGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        sGroup.cmd = 'zzz'
-        reply = sGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        sGroup2.handle() == OKReply.INSTANCE
     }
 
     def 'test save'() {
