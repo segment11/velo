@@ -1328,7 +1328,11 @@ public class MultiWorkerServer extends Launcher {
                 c.confBucket.bucketsPerSlot = config.get(ofInteger(), "bucket.bucketsPerSlot");
             }
             if (config.getChild("bucket.initialSplitNumber").hasValue()) {
-                c.confBucket.initialSplitNumber = config.get(ofInteger(), "bucket.initialSplitNumber").byteValue();
+                int initialSplitNumberInt = config.get(ofInteger(), "bucket.initialSplitNumber");
+                if (initialSplitNumberInt != 1 && initialSplitNumberInt != 3 && initialSplitNumberInt != 9) {
+                    throw new IllegalArgumentException("bucket.initialSplitNumber must be 1, 3, or 9, given: " + initialSplitNumberInt);
+                }
+                c.confBucket.initialSplitNumber = (byte) initialSplitNumberInt;
             }
             if (config.getChild("bucket.onceScanMaxLoopCount").hasValue()) {
                 c.confBucket.onceScanMaxLoopCount = config.get(ofInteger(), "bucket.onceScanMaxLoopCount");

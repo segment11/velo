@@ -293,8 +293,8 @@ public enum ConfForSlot {
             if (bucketsPerSlot % 1024 != 0) {
                 throw new IllegalArgumentException("Bucket count per slot should be multiple of 1024");
             }
-            if (initialSplitNumber != 1 && initialSplitNumber != 3) {
-                throw new IllegalArgumentException("Initial split number too large, initial split number should be 1 or 3");
+            if (initialSplitNumber != 1 && initialSplitNumber != 3 && initialSplitNumber != 9) {
+                throw new IllegalArgumentException("Initial split number should be 1, 3, or 9, given: " + initialSplitNumber);
             }
             if (onceScanMaxLoopCount <= 0 || onceScanMaxLoopCount > 1024) {
                 throw new IllegalArgumentException("Once scan max loop count should be between 1 and 1024, given: " + onceScanMaxLoopCount);

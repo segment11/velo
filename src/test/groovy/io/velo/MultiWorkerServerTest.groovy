@@ -1169,4 +1169,60 @@ class MultiWorkerServerTest extends Specification {
         ConfForSlot.global.confRepl.binlogForReadCacheSegmentMaxCount == (short) 20
         ConfForSlot.global.confRepl.binlogFileKeepMaxCount == (short) 30
     }
+
+    def 'test bucket initialSplitNumber rejects overflow and accepts only 1, 3, or 9'() {
+        given:
+        var m1 = new MultiWorkerServer.InnerModule()
+        var cc = ConfForSlot.global
+        m1.skipZookeeperConnectCheck = true
+
+        def makeConfig = { String value ->
+            Config.create()
+                    .with('doFileLock', "false")
+                    .with("net.listenAddresses", "localhost:7379")
+                    .with("pureMemory", "true")
+                    .with("zookeeperConnectString", 'localhost:2181')
+                    .with("bucket.bucketsPerSlot", cc.confBucket.bucketsPerSlot.toString())
+                    .with("bucket.initialSplitNumber", value)
+                    .with("chunk.segmentNumberPerFd", cc.confChunk.segmentNumberPerFd.toString())
+                    .with("chunk.fdPerChunk", cc.confChunk.fdPerChunk.toString())
+                    .with("chunk.segmentLength", cc.confChunk.segmentLength.toString())
+                    .with("wal.oneChargeBucketNumber", cc.confWal.oneChargeBucketNumber.toString())
+                    .with("wal.valueSizeTrigger", cc.confWal.valueSizeTrigger.toString())
+                    .with("wal.shortValueSizeTrigger", cc.confWal.shortValueSizeTrigger.toString())
+        }
+
+        when: '257 would truncate to byte 1, should be rejected'
+        m1.confForSlot(makeConfig("257"))
+        then:
+        def e1 = thrown(IllegalArgumentException)
+        e1.message.contains("initialSplitNumber")
+
+        when: '259 would truncate to byte 3, should be rejected'
+        m1.confForSlot(makeConfig("259"))
+        then:
+        def e2 = thrown(IllegalArgumentException)
+        e2.message.contains("initialSplitNumber")
+
+        when: 'invalid value 2 should be rejected'
+        m1.confForSlot(makeConfig("2"))
+        then:
+        def e3 = thrown(IllegalArgumentException)
+        e3.message.contains("initialSplitNumber")
+
+        when: 'valid value 1'
+        m1.confForSlot(makeConfig("1"))
+        then:
+        ConfForSlot.global.confBucket.initialSplitNumber == (byte) 1
+
+        when: 'valid value 3'
+        m1.confForSlot(makeConfig("3"))
+        then:
+        ConfForSlot.global.confBucket.initialSplitNumber == (byte) 3
+
+        when: 'valid value 9'
+        m1.confForSlot(makeConfig("9"))
+        then:
+        ConfForSlot.global.confBucket.initialSplitNumber == (byte) 9
+    }
 }

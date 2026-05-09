@@ -87,6 +87,13 @@ class ConfForSlotTest extends Specification {
 
         when:
         exception = false
+        c.confBucket.initialSplitNumber = (byte) 9
+        c.confBucket.checkIfValid()
+        then:
+        !exception
+
+        when:
+        exception = false
         c.confBucket.initialSplitNumber = (byte) 1
         c.confBucket.onceScanMaxLoopCount = 0
         try {
