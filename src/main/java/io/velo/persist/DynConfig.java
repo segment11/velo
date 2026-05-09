@@ -46,18 +46,7 @@ public class DynConfig {
             SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, new DynConfigItem() {
                 @Override
                 public Object parseAndValidate(@NotNull Object value) {
-                    int maxConnections;
-                    try {
-                        maxConnections = Integer.parseInt(value.toString());
-                    } catch (NumberFormatException e) {
-                        throw new IllegalArgumentException(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG
-                                + " must be an integer, given: " + value, e);
-                    }
-                    if (maxConnections <= 0) {
-                        throw new IllegalArgumentException(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG
-                                + " must be > 0, given: " + maxConnections);
-                    }
-                    return maxConnections;
+                    return parsePositiveInt(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, value);
                 }
 
                 @Override
@@ -66,18 +55,106 @@ public class DynConfig {
                     MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections(maxConnections);
                     log.warn("Dyn config for global set max_connections={}, slot={}", value, currentSlot);
                 }
-            }
-    );
+            },
+            TrainSampleJob.KEY_IN_DYN_CONFIG, new DynConfigItem() {
+                @Override
+                public Object parseAndValidate(@NotNull Object value) {
+                    var valueString = value.toString();
+                    if (valueString.isBlank()) {
+                        throw new IllegalArgumentException(TrainSampleJob.KEY_IN_DYN_CONFIG + " must not be blank");
+                    }
+                    return valueString;
+                }
 
-    private static final Set<String> LEGACY_SUPPORTED_KEYS = Set.of(
-            TrainSampleJob.KEY_IN_DYN_CONFIG,
-            BigKeyTopK.KEY_IN_DYN_CONFIG,
-            "type_zset_member_max_length",
-            "type_set_member_max_length",
-            "type_zset_max_size",
-            "type_hash_max_size",
-            "type_list_max_size",
-            "repl_connect_timeout_millis"
+                @Override
+                public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
+                    ArrayList<String> keyPrefixOrSuffixGroupList = new ArrayList<>(Arrays.asList(((String) value).split(",")));
+                    TrainSampleJob.setKeyPrefixOrSuffixGroupList(keyPrefixOrSuffixGroupList);
+                    log.warn("Dyn config for global set dict_key_prefix_groups={}, slot={}", value, currentSlot);
+                }
+            },
+            BigKeyTopK.KEY_IN_DYN_CONFIG, new DynConfigItem() {
+                @Override
+                public Object parseAndValidate(@NotNull Object value) {
+                    return parsePositiveInt(BigKeyTopK.KEY_IN_DYN_CONFIG, value);
+                }
+
+                @Override
+                public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
+                    oneSlot.initBigKeyTopK((int) value);
+                    log.warn("Global config for current slot set monitor_big_key_top_k={}, slot={}", value, currentSlot);
+                }
+            },
+            "type_zset_member_max_length", new DynConfigItem() {
+                @Override
+                public Object parseAndValidate(@NotNull Object value) {
+                    return parsePositiveShort("type_zset_member_max_length", value);
+                }
+
+                @Override
+                public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
+                    RedisZSet.ZSET_MEMBER_MAX_LENGTH = (Short) value;
+                    log.warn("Dyn config for global set zset_member_max_length={}, slot={}", value, currentSlot);
+                }
+            },
+            "type_set_member_max_length", new DynConfigItem() {
+                @Override
+                public Object parseAndValidate(@NotNull Object value) {
+                    return parsePositiveShort("type_set_member_max_length", value);
+                }
+
+                @Override
+                public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
+                    RedisHashKeys.SET_MEMBER_MAX_LENGTH = (Short) value;
+                    log.warn("Dyn config for global set set_member_max_length={}, slot={}", value, currentSlot);
+                }
+            },
+            "type_zset_max_size", new DynConfigItem() {
+                @Override
+                public Object parseAndValidate(@NotNull Object value) {
+                    return parsePositiveShort("type_zset_max_size", value);
+                }
+
+                @Override
+                public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
+                    RedisZSet.ZSET_MAX_SIZE = (Short) value;
+                    log.warn("Dyn config for global set zset_max_size={}, slot={}", value, currentSlot);
+                }
+            },
+            "type_hash_max_size", new DynConfigItem() {
+                @Override
+                public Object parseAndValidate(@NotNull Object value) {
+                    return parsePositiveShort("type_hash_max_size", value);
+                }
+
+                @Override
+                public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
+                    RedisHashKeys.HASH_MAX_SIZE = (Short) value;
+                    log.warn("Dyn config for global set hash_max_size={}, slot={}", value, currentSlot);
+                }
+            },
+            "type_list_max_size", new DynConfigItem() {
+                @Override
+                public Object parseAndValidate(@NotNull Object value) {
+                    return parsePositiveShort("type_list_max_size", value);
+                }
+
+                @Override
+                public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
+                    RedisList.LIST_MAX_SIZE = (Short) value;
+                    log.warn("Dyn config for global set list_max_size={}, slot={}", value, currentSlot);
+                }
+            },
+            "repl_connect_timeout_millis", new DynConfigItem() {
+                @Override
+                public Object parseAndValidate(@NotNull Object value) {
+                    return parsePositiveLong("repl_connect_timeout_millis", value);
+                }
+
+                @Override
+                public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
+                }
+            }
     );
 
     private static final Set<String> INTERNAL_KEYS = Set.of(
@@ -96,7 +173,41 @@ public class DynConfig {
      * @return true if the key can be updated through dynamic configuration commands
      */
     public static boolean isSupportedKey(@NotNull String key) {
-        return SUPPORTED_ITEMS.containsKey(key) || LEGACY_SUPPORTED_KEYS.contains(key);
+        return SUPPORTED_ITEMS.containsKey(key);
+    }
+
+    private static int parsePositiveInt(@NotNull String key, @NotNull Object value) {
+        int valueInt;
+        try {
+            valueInt = Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(key + " must be an integer, given: " + value, e);
+        }
+        if (valueInt <= 0) {
+            throw new IllegalArgumentException(key + " must be > 0, given: " + valueInt);
+        }
+        return valueInt;
+    }
+
+    private static short parsePositiveShort(@NotNull String key, @NotNull Object value) {
+        int valueInt = parsePositiveInt(key, value);
+        if (valueInt > Short.MAX_VALUE) {
+            throw new IllegalArgumentException(key + " must be <= " + Short.MAX_VALUE + ", given: " + valueInt);
+        }
+        return (short) valueInt;
+    }
+
+    private static long parsePositiveLong(@NotNull String key, @NotNull Object value) {
+        long valueLong;
+        try {
+            valueLong = Long.parseLong(value.toString());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(key + " must be a long, given: " + value, e);
+        }
+        if (valueLong <= 0) {
+            throw new IllegalArgumentException(key + " must be > 0, given: " + valueLong);
+        }
+        return valueLong;
     }
 
     /**
@@ -359,7 +470,7 @@ public class DynConfig {
         if (item != null) {
             return item.parseAndValidate(value);
         }
-        if (LEGACY_SUPPORTED_KEYS.contains(key) || INTERNAL_KEYS.contains(key)) {
+        if (INTERNAL_KEYS.contains(key)) {
             return value;
         }
         throw new IllegalArgumentException("Unsupported dyn config key: " + key);

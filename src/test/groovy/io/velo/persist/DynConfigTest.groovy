@@ -5,6 +5,9 @@ import io.velo.MultiWorkerServer
 import io.velo.SocketInspector
 import io.velo.TrainSampleJob
 import io.velo.monitor.BigKeyTopK
+import io.velo.type.RedisHashKeys
+import io.velo.type.RedisList
+import io.velo.type.RedisZSet
 import spock.lang.Specification
 
 class DynConfigTest extends Specification {
@@ -173,6 +176,56 @@ class DynConfigTest extends Specification {
         e.message.contains('unknown_key')
         config.get('unknown_key') == null
         !new ObjectMapper().readValue(tmpFile, HashMap).containsKey('unknown_key')
+
+        cleanup:
+        tmpFile.delete()
+        tmpFile2.delete()
+    }
+
+    def 'test supported config items normalize and validate values'() {
+        given:
+        if (tmpFile.exists()) {
+            tmpFile.delete()
+        }
+        def oneSlot = new OneSlot(slot)
+        def config = new DynConfig(slot, tmpFile, oneSlot)
+
+        when:
+        config.update(TrainSampleJob.KEY_IN_DYN_CONFIG, 'key:,xxx:')
+        config.update(BigKeyTopK.KEY_IN_DYN_CONFIG, '100')
+        config.update('type_zset_member_max_length', '128')
+        config.update('type_set_member_max_length', '129')
+        config.update('type_zset_max_size', '512')
+        config.update('type_hash_max_size', '513')
+        config.update('type_list_max_size', '514')
+        config.update('repl_connect_timeout_millis', '6000')
+
+        then:
+        TrainSampleJob.keyPrefixOrSuffixGroupList == ['key:', 'xxx:']
+        oneSlot.bigKeyTopK != null
+        config.get(BigKeyTopK.KEY_IN_DYN_CONFIG) == 100
+        RedisZSet.ZSET_MEMBER_MAX_LENGTH == (short) 128
+        RedisHashKeys.SET_MEMBER_MAX_LENGTH == (short) 129
+        RedisZSet.ZSET_MAX_SIZE == (short) 512
+        RedisHashKeys.HASH_MAX_SIZE == (short) 513
+        RedisList.LIST_MAX_SIZE == (short) 514
+        config.getLongValue('repl_connect_timeout_millis', 1L) == 6000L
+
+        and:
+        def json = new ObjectMapper().readValue(tmpFile, HashMap)
+        json[BigKeyTopK.KEY_IN_DYN_CONFIG] == 100
+        json['type_hash_max_size'] == 513
+        json['repl_connect_timeout_millis'] == 6000L
+
+        when:
+        config.update('type_hash_max_size', '0')
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('type_hash_max_size')
+        RedisHashKeys.HASH_MAX_SIZE == (short) 513
+        config.get('type_hash_max_size') == (short) 513
+        new ObjectMapper().readValue(tmpFile, HashMap)['type_hash_max_size'] == 513
 
         cleanup:
         tmpFile.delete()
