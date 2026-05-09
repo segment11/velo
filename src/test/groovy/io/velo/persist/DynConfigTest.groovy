@@ -1,5 +1,6 @@
 package io.velo.persist
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.velo.MultiWorkerServer
 import io.velo.SocketInspector
 import io.velo.TrainSampleJob
@@ -97,16 +98,56 @@ class DynConfigTest extends Specification {
         TrainSampleJob.keyPrefixOrSuffixGroupList == ['key:', 'xxx:']
 
         when:
-        // replay invalid max_connections value should be ignored, keeping previous value
+        // invalid max_connections should be rejected, keeping previous value
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections(50)
         config.update(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, 0)
         then:
+        thrown(IllegalArgumentException)
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.maxConnections == 50
 
         when:
         config.update(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, -1)
         then:
+        thrown(IllegalArgumentException)
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.maxConnections == 50
+
+        cleanup:
+        tmpFile.delete()
+        tmpFile2.delete()
+    }
+
+    def 'test max connections validates before persist'() {
+        given:
+        if (tmpFile.exists()) {
+            tmpFile.delete()
+        }
+        def oneSlot = new OneSlot(slot)
+        def config = new DynConfig(slot, tmpFile, oneSlot)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
+
+        when:
+        config.update(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, '100')
+
+        then:
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.maxConnections == 100
+        config.get(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG) == 100
+
+        when:
+        config.update(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, '0')
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.maxConnections == 100
+        config.get(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG) == 100
+        new ObjectMapper().readValue(tmpFile, HashMap)[SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG] == 100
+
+        when:
+        config = new DynConfig(slot, tmpFile, oneSlot)
+
+        then:
+        config.get(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG) == 100
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.maxConnections == 100
 
         cleanup:
         tmpFile.delete()

@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * This class manages dynamic configuration settings for a Velo slot.
@@ -30,8 +31,42 @@ public class DynConfig {
 
     private final short slot;
     private final File dynConfigFile;
+    private final OneSlot oneSlot;
 
     private final HashMap<String, Object> data;
+
+    private interface DynConfigItem {
+        Object parseAndValidate(@NotNull Object value);
+
+        void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value);
+    }
+
+    private static final Map<String, DynConfigItem> SUPPORTED_ITEMS = Map.of(
+            SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, new DynConfigItem() {
+                @Override
+                public Object parseAndValidate(@NotNull Object value) {
+                    int maxConnections;
+                    try {
+                        maxConnections = Integer.parseInt(value.toString());
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG
+                                + " must be an integer, given: " + value, e);
+                    }
+                    if (maxConnections <= 0) {
+                        throw new IllegalArgumentException(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG
+                                + " must be > 0, given: " + maxConnections);
+                    }
+                    return maxConnections;
+                }
+
+                @Override
+                public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
+                    int maxConnections = (int) value;
+                    MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections(maxConnections);
+                    log.warn("Dyn config for global set max_connections={}, slot={}", value, currentSlot);
+                }
+            }
+    );
 
     /**
      * Retrieves the value associated with a given key.
@@ -267,6 +302,7 @@ public class DynConfig {
     public DynConfig(short slot, @NotNull File dynConfigFile, @NotNull OneSlot oneSlot) throws IOException {
         this.slot = slot;
         this.dynConfigFile = dynConfigFile;
+        this.oneSlot = oneSlot;
         this.afterUpdateCallback = new AfterUpdateCallbackInner(slot, oneSlot);
 
         if (!dynConfigFile.exists()) {
@@ -280,8 +316,24 @@ public class DynConfig {
             log.info("Init dyn config, data={}, slot={}", data, slot);
 
             for (var entry : data.entrySet()) {
-                afterUpdateCallback.afterUpdate(entry.getKey(), entry.getValue());
+                var value = parseAndValidate(entry.getKey(), entry.getValue());
+                entry.setValue(value);
+                applyUpdate(entry.getKey(), value);
             }
+        }
+    }
+
+    private static Object parseAndValidate(@NotNull String key, @NotNull Object value) {
+        var item = SUPPORTED_ITEMS.get(key);
+        return item == null ? value : item.parseAndValidate(value);
+    }
+
+    private void applyUpdate(@NotNull String key, @NotNull Object value) {
+        var item = SUPPORTED_ITEMS.get(key);
+        if (item != null) {
+            item.apply(slot, oneSlot, value);
+        } else {
+            afterUpdateCallback.afterUpdate(key, value);
         }
     }
 
@@ -293,12 +345,13 @@ public class DynConfig {
      * @throws IOException If an error occurs while writing to the configuration file.
      */
     public void update(@NotNull String key, @NotNull Object value) throws IOException {
-        data.put(key, value);
+        var valueToUpdate = parseAndValidate(key, value);
+        data.put(key, valueToUpdate);
         var objectMapper = new ObjectMapper();
         objectMapper.writeValue(dynConfigFile, data);
-        log.info("Update dyn config, key={}, value={}, slot={}", key, value, slot);
+        log.info("Update dyn config, key={}, value={}, slot={}", key, valueToUpdate, slot);
 
-        afterUpdateCallback.afterUpdate(key, value);
+        applyUpdate(key, valueToUpdate);
     }
 
     /**
