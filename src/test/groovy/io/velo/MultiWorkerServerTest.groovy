@@ -558,7 +558,7 @@ class MultiWorkerServerTest extends Specification {
                 .with("repl.binlogForReadCacheSegmentMaxCount", cc.confRepl.binlogForReadCacheSegmentMaxCount.toString())
                 .with("bigString.lru.maxSize", cc.lruBigString.maxSize.toString())
                 .with("kv.lru.maxSize", cc.lruKeyAndCompressedValueEncoded.maxSize.toString())
-                .with("dynConfig", Config.create().with("a", "b"))
+                .with("dynConfig", Config.create().with("repl_connect_timeout_millis", "6000"))
         m1.skipZookeeperConnectCheck = true
         m1.confForSlot(configX)
         m1.beforeCreateHandler(c, snowFlakes, configX)
@@ -1066,6 +1066,46 @@ class MultiWorkerServerTest extends Specification {
         then:
         def buckets = ConfForSlot.global.confBucket.bucketsPerSlot
         ConfForSlot.global.confBucket.lruPerFd.maxSize == buckets / 2
+    }
+
+    def 'test startup dyn config items clear when config omits dynConfig'() {
+        given:
+        var m1 = new MultiWorkerServer.InnerModule()
+        var cc = ConfForSlot.global
+        m1.skipZookeeperConnectCheck = true
+        ConfForGlobal.initDynConfigItems.clear()
+
+        def baseConfig = {
+            Config.create()
+                    .with('doFileLock', "false")
+                    .with("net.listenAddresses", "localhost:7379")
+                    .with("debugMode", "true")
+                    .with("pureMemory", "true")
+                    .with("zookeeperConnectString", 'localhost:2181')
+                    .with("bucket.bucketsPerSlot", cc.confBucket.bucketsPerSlot.toString())
+                    .with("bucket.initialSplitNumber", cc.confBucket.initialSplitNumber.toString())
+                    .with("chunk.segmentNumberPerFd", cc.confChunk.segmentNumberPerFd.toString())
+                    .with("chunk.fdPerChunk", cc.confChunk.fdPerChunk.toString())
+                    .with("chunk.segmentLength", cc.confChunk.segmentLength.toString())
+                    .with("wal.oneChargeBucketNumber", cc.confWal.oneChargeBucketNumber.toString())
+                    .with("wal.valueSizeTrigger", cc.confWal.valueSizeTrigger.toString())
+                    .with("wal.shortValueSizeTrigger", cc.confWal.shortValueSizeTrigger.toString())
+        }
+
+        when:
+        m1.confForSlot(baseConfig().with("dynConfig", Config.create().with("type_zset_max_size", "4096")))
+
+        then:
+        ConfForGlobal.initDynConfigItems["type_zset_max_size"] == "4096"
+
+        when:
+        m1.confForSlot(baseConfig())
+
+        then:
+        ConfForGlobal.initDynConfigItems.isEmpty()
+
+        cleanup:
+        ConfForGlobal.initDynConfigItems.clear()
     }
 
     def 'test onceScanMaxLoopCount accepts values above 127 via config'() {
