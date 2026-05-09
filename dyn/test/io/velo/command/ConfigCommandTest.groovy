@@ -33,12 +33,13 @@ class ConfigCommandTest extends Specification {
         reply.getClass() == replyType
 
         where:
-        input               | replyType
-        'config help'       | MultiBulkReply
-        'config'            | ErrorReply
-        'config set key'    | ErrorReply
-        'config get key'    | NilReply
-        'config xxx key'    | ErrorReply
+        input            | replyType
+        'config help'    | MultiBulkReply
+        'config'         | ErrorReply
+        'config set key' | ErrorReply
+        'config get key' | NilReply
+        'config get'     | ErrorReply
+        'config xxx key' | ErrorReply
     }
 
     def 'test get'() {
