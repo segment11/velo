@@ -212,31 +212,20 @@ zunionstore
         sZintercardList.size() == 0
     }
 
-    def 'test handle'() {
+    def 'test handle - format errors'() {
         given:
-        def data1 = new byte[1][]
-
-        def zGroup = new ZGroup('zadd', data1, null)
+        def zGroup = new ZGroup(null, null, null)
         zGroup.from(BaseCommand.mockAGroup())
 
         def allCmdList = singleKeyCmdList1 + multiKeyCmdList2 + multiKeyCmdList3 + ['zrangestore', 'zintercard']
 
         when:
-        zGroup.data = data1
-        def sAllList = allCmdList.collect {
-            zGroup.cmd = it
-            zGroup.handle()
-        }
+        def replyList = allCmdList.collect { zGroup.execute(it) }
         then:
-        sAllList.every {
-            it == ErrorReply.FORMAT
-        }
+        replyList.every { it == ErrorReply.FORMAT }
 
-        when:
-        zGroup.cmd = 'zzz'
-        def reply = zGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        expect:
+        zGroup.execute('zzz') == NilReply.INSTANCE
     }
 
     private RedisZSet fromMem(InMemoryGetSet inMemoryGetSet, String key) {

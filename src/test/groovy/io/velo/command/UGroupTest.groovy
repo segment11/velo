@@ -28,21 +28,16 @@ class UGroupTest extends Specification {
 
     def 'test handle'() {
         given:
-        def data1 = new byte[1][]
-
-        def uGroup = new UGroup('unsubscribe', data1, null)
+        def uGroup = new UGroup(null, null, null)
         uGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = uGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        uGroup.execute(input) == expected
 
-        when:
-        uGroup.cmd = 'ux'
-        reply = uGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        where:
+        input         | expected
+        'unsubscribe' | ErrorReply.FORMAT
+        'ux'          | NilReply.INSTANCE
     }
 
     def 'test unsubscribe'() {

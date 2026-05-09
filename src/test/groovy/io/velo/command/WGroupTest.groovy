@@ -37,21 +37,16 @@ class WGroupTest extends Specification {
 
     def 'test handle'() {
         given:
-        def data1 = new byte[1][]
-
-        def wGroup = new WGroup('wait', data1, null)
+        def wGroup = new WGroup(null, null, null)
         wGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = wGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        wGroup.execute(input) == expected
 
-        when:
-        wGroup.cmd = 'wx'
-        reply = wGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        where:
+        input  | expected
+        'wait' | ErrorReply.FORMAT
+        'wx'   | NilReply.INSTANCE
     }
 
     def 'test wait'() {
