@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * This class manages dynamic configuration settings for a Velo slot.
@@ -67,6 +68,36 @@ public class DynConfig {
                 }
             }
     );
+
+    private static final Set<String> LEGACY_SUPPORTED_KEYS = Set.of(
+            TrainSampleJob.KEY_IN_DYN_CONFIG,
+            BigKeyTopK.KEY_IN_DYN_CONFIG,
+            "type_zset_member_max_length",
+            "type_set_member_max_length",
+            "type_zset_max_size",
+            "type_hash_max_size",
+            "type_list_max_size",
+            "repl_connect_timeout_millis"
+    );
+
+    private static final Set<String> INTERNAL_KEYS = Set.of(
+            "masterUuid",
+            "readonly",
+            "canRead",
+            "canWrite",
+            "binlogOn",
+            "testKey"
+    );
+
+    /**
+     * Returns whether the key is supported for external dynamic configuration updates.
+     *
+     * @param key the dynamic configuration key
+     * @return true if the key can be updated through dynamic configuration commands
+     */
+    public static boolean isSupportedKey(@NotNull String key) {
+        return SUPPORTED_ITEMS.containsKey(key) || LEGACY_SUPPORTED_KEYS.contains(key);
+    }
 
     /**
      * Retrieves the value associated with a given key.
@@ -325,7 +356,13 @@ public class DynConfig {
 
     private static Object parseAndValidate(@NotNull String key, @NotNull Object value) {
         var item = SUPPORTED_ITEMS.get(key);
-        return item == null ? value : item.parseAndValidate(value);
+        if (item != null) {
+            return item.parseAndValidate(value);
+        }
+        if (LEGACY_SUPPORTED_KEYS.contains(key) || INTERNAL_KEYS.contains(key)) {
+            return value;
+        }
+        throw new IllegalArgumentException("Unsupported dyn config key: " + key);
     }
 
     private void applyUpdate(@NotNull String key, @NotNull Object value) {

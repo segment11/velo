@@ -257,6 +257,17 @@ class ManageCommandTest extends Specification {
         reply instanceof AsyncReply
 
         when:
+        data4[2] = 'unknown_key'.bytes
+        data4[3] = 'value'.bytes
+        reply = manage.dynConfig()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result instanceof ErrorReply && (result as ErrorReply).message.contains('unknown_key')
+        }.result
+        oneSlot.dynConfig.get('unknown_key') == null
+
+        when:
         def data1 = new byte[1][]
         manage.data = data1
         reply = manage.dynConfig()

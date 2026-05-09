@@ -70,7 +70,6 @@ class DynConfigTest extends Specification {
         config.update('type_zset_max_size', 4096)
         config.update('type_hash_max_size', 4096)
         config.update('type_list_max_size', 4096)
-        config.update('xxx', 1)
         then:
         config.afterUpdateCallback != null
         config.masterUuid == 1234L
@@ -78,7 +77,6 @@ class DynConfigTest extends Specification {
         config.readonly
         !config.canRead
         !config.canWrite
-        config.getLongValue('xxx', 2) == 1
         config.getLongValue('yyy', 2) == 2
 
         when:
@@ -148,6 +146,33 @@ class DynConfigTest extends Specification {
         then:
         config.get(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG) == 100
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.maxConnections == 100
+
+        cleanup:
+        tmpFile.delete()
+        tmpFile2.delete()
+    }
+
+    def 'test unsupported config key is rejected before persist'() {
+        given:
+        if (tmpFile.exists()) {
+            tmpFile.delete()
+        }
+        def oneSlot = new OneSlot(slot)
+        def config = new DynConfig(slot, tmpFile, oneSlot)
+
+        expect:
+        DynConfig.isSupportedKey(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG)
+        DynConfig.isSupportedKey(BigKeyTopK.KEY_IN_DYN_CONFIG)
+        !DynConfig.isSupportedKey('unknown_key')
+
+        when:
+        config.update('unknown_key', 'value')
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('unknown_key')
+        config.get('unknown_key') == null
+        !new ObjectMapper().readValue(tmpFile, HashMap).containsKey('unknown_key')
 
         cleanup:
         tmpFile.delete()

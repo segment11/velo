@@ -908,7 +908,7 @@ class ManageCommand extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error 'Manage dyn-config set error={}', e.message
-                finalPromise.exception = e
+                finalPromise.set(new ErrorReply(e.message))
                 return
             }
 
