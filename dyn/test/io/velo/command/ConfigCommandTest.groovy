@@ -70,45 +70,25 @@ class ConfigCommandTest extends Specification {
 
     def 'test get'() {
         given:
-        def data3 = new byte[3][]
-        data3[0] = 'config'.bytes
-        data3[1] = 'get'.bytes
-        data3[2] = 'key'.bytes
-
-        def cGroup = new CGroup('config', data3, null)
+        def cGroup = new CGroup('config', null, null)
         cGroup.from(BaseCommand.mockAGroup())
         def configCommand = new ConfigCommand(cGroup)
 
         when:
-        def reply = configCommand._get()
+        def reply = configCommand.execute('config get key')
         then:
         reply == NilReply.INSTANCE
 
         when:
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
-        data3[2] = 'max_connections'.bytes
-        reply = configCommand._get()
+        reply = configCommand.execute('config get max_connections')
         then:
         reply instanceof BulkReply
-
-        when:
-        def data1 = new byte[1][]
-        data1[0] = 'config'.bytes
-        configCommand.data = data1
-        reply = configCommand._get()
-        then:
-        reply == ErrorReply.SYNTAX
     }
 
     def 'test set'() {
         given:
-        def data4 = new byte[4][]
-        data4[0] = 'config'.bytes
-        data4[1] = 'set'.bytes
-        data4[2] = 'key'.bytes
-        data4[3] = 'value'.bytes
-
-        def cGroup = new CGroup('config', data4, null)
+        def cGroup = new CGroup('config', null, null)
         cGroup.from(BaseCommand.mockAGroup())
         def configCommand = new ConfigCommand(cGroup)
 
@@ -118,44 +98,35 @@ class ConfigCommandTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
 
         when:
-        def reply = configCommand._set()
+        def reply = configCommand.execute('config set key value')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        data4[2] = 'timeout'.bytes
-        data4[3] = '10'.bytes
-        reply = configCommand._set()
+        reply = configCommand.execute('config set timeout 10')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
-        data4[2] = 'max_connections'.bytes
-        data4[3] = '100'.bytes
-        reply = configCommand._set()
+        reply = configCommand.execute('config set max_connections 100')
         then:
         reply == OKReply.INSTANCE
 
         when:
-        data4[3] = '0'.bytes
-        reply = configCommand._set()
+        reply = configCommand.execute('config set max_connections 0')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        data4[3] = '-1'.bytes
-        reply = configCommand._set()
+        reply = configCommand.execute('config set max_connections -1')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        def data1 = new byte[1][]
-        data1[0] = 'config'.bytes
-        configCommand.data = data1
-        reply = configCommand._set()
+        reply = configCommand.execute('config')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == ErrorReply.FORMAT
 
         cleanup:
         localPersist.cleanUp()
