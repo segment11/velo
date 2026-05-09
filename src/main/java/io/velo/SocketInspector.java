@@ -574,6 +574,9 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @param maxConnections the maximum number of connections to set
      */
     public synchronized void setMaxConnections(int maxConnections) {
+        if (maxConnections <= 0) {
+            throw new IllegalArgumentException("maxConnections must be > 0, given: " + maxConnections);
+        }
         this.maxConnections = maxConnections;
     }
 

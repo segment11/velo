@@ -80,8 +80,13 @@ public class DynConfig {
             // Handle updates for specific keys
             switch (key) {
                 case SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG -> {
-                    MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections((int) value);
-                    log.warn("Dyn config for global set max_connections={}, slot={}", value, currentSlot);
+                    int valueInt = (int) value;
+                    if (valueInt <= 0) {
+                        log.error("Dyn config for global set max_connections ignored, invalid value={}, slot={}", value, currentSlot);
+                    } else {
+                        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections(valueInt);
+                        log.warn("Dyn config for global set max_connections={}, slot={}", value, currentSlot);
+                    }
                 }
                 case TrainSampleJob.KEY_IN_DYN_CONFIG -> {
                     ArrayList<String> keyPrefixOrSuffixGroupList = new ArrayList<>(Arrays.asList(((String) value).split(",")));

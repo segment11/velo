@@ -131,6 +131,18 @@ class ConfigCommandTest extends Specification {
         reply == OKReply.INSTANCE
 
         when:
+        data4[3] = '0'.bytes
+        reply = configCommand._set()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        data4[3] = '-1'.bytes
+        reply = configCommand._set()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
         def data1 = new byte[1][]
         data1[0] = 'config'.bytes
         configCommand.data = data1

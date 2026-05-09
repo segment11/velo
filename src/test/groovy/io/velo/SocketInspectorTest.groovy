@@ -203,6 +203,21 @@ class SocketInspectorTest extends Specification {
         inspector.subscribeClientCount() == 0
 
         when:
+        inspector.setMaxConnections(100)
+        then:
+        inspector.maxConnections == 100
+
+        when:
+        inspector.setMaxConnections(0)
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        inspector.setMaxConnections(-1)
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
         def channel = 'test_channel'
         def channel2 = 'test_channel2'
         def messageReply = new BulkReply('test_message')

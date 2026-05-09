@@ -67,6 +67,10 @@ class ConfigCommand extends BaseCommand {
                 return ErrorReply.INVALID_INTEGER
             }
 
+            if (maxConnections <= 0) {
+                return ErrorReply.INVALID_INTEGER
+            }
+
             MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections(maxConnections)
             log.warn "Global config set max_connections={}", maxConnections
 

@@ -1531,6 +1531,9 @@ public class MultiWorkerServer extends Launcher {
         @Provides
         SocketInspector socketInspector(Config config) {
             int maxConnections = config.get(ofInteger(), "net.maxConnections", 1000);
+            if (maxConnections <= 0) {
+                throw new IllegalArgumentException("net.maxConnections must be > 0, given: " + maxConnections);
+            }
 
             var r = new SocketInspector();
             r.setMaxConnections(maxConnections);

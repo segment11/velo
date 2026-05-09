@@ -96,6 +96,18 @@ class DynConfigTest extends Specification {
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.maxConnections == 100
         TrainSampleJob.keyPrefixOrSuffixGroupList == ['key:', 'xxx:']
 
+        when:
+        // replay invalid max_connections value should be ignored, keeping previous value
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections(50)
+        config.update(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, 0)
+        then:
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.maxConnections == 50
+
+        when:
+        config.update(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, -1)
+        then:
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.maxConnections == 50
+
         cleanup:
         tmpFile.delete()
         tmpFile2.delete()
