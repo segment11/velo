@@ -82,11 +82,9 @@ class ConfigCommand extends BaseCommand {
                 return new ErrorReply("update dyn config error=" + e.message)
             }
             return OKReply.INSTANCE
-        } else {
-            // todo
         }
 
-        OKReply.INSTANCE
+        ErrorReply.SYNTAX
     }
 
     Reply _get() {

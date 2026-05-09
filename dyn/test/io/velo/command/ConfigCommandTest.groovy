@@ -120,7 +120,14 @@ class ConfigCommandTest extends Specification {
         when:
         def reply = configCommand._set()
         then:
-        reply == OKReply.INSTANCE
+        reply == ErrorReply.SYNTAX
+
+        when:
+        data4[2] = 'timeout'.bytes
+        data4[3] = '10'.bytes
+        reply = configCommand._set()
+        then:
+        reply == ErrorReply.SYNTAX
 
         when:
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
