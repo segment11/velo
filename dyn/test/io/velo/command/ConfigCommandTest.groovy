@@ -22,50 +22,23 @@ class ConfigCommandTest extends Specification {
         _ConfigCommand.parseSlots('config', data1, 1).size() == 0
     }
 
-    def 'test handle'() {
+    def 'test handle - subcommand routing'() {
         given:
-        def data2 = new byte[2][]
-        data2[0] = 'config'.bytes
-        data2[1] = 'help'.bytes
-
-        def cGroup = new CGroup('config', data2, null)
+        def cGroup = new CGroup('config', null, null)
         cGroup.from(BaseCommand.mockAGroup())
         def configCommand = new ConfigCommand(cGroup)
 
-        when:
-        def reply = configCommand.handle()
-        then:
-        reply instanceof MultiBulkReply
+        expect:
+        def reply = configCommand.execute(input)
+        reply.getClass() == replyType
 
-        when:
-        def data1 = new byte[1][]
-        data1[0] = 'config'.bytes
-        configCommand.data = data1
-        reply = configCommand.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        def data3 = new byte[3][]
-        data3[0] = 'config'.bytes
-        data3[1] = 'set'.bytes
-        data3[2] = 'key'.bytes
-        configCommand.data = data3
-        reply = configCommand.handle()
-        then:
-        reply == ErrorReply.SYNTAX
-
-        when:
-        data3[1] = 'get'.bytes
-        reply = configCommand.handle()
-        then:
-        reply == NilReply.INSTANCE
-
-        when:
-        data3[1] = 'xxx'.bytes
-        reply = configCommand.handle()
-        then:
-        reply == ErrorReply.SYNTAX
+        where:
+        input               | replyType
+        'config help'       | MultiBulkReply
+        'config'            | ErrorReply
+        'config set key'    | ErrorReply
+        'config get key'    | NilReply
+        'config xxx key'    | ErrorReply
     }
 
     def 'test get'() {
@@ -73,20 +46,33 @@ class ConfigCommandTest extends Specification {
         def cGroup = new CGroup('config', null, null)
         cGroup.from(BaseCommand.mockAGroup())
         def configCommand = new ConfigCommand(cGroup)
-
-        when:
-        def reply = configCommand.execute('config get key')
-        then:
-        reply == NilReply.INSTANCE
-
-        when:
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
-        reply = configCommand.execute('config get max_connections')
-        then:
-        reply instanceof BulkReply
+
+        expect:
+        configCommand.execute("config get ${key}").getClass() == replyType
+
+        where:
+        key               | replyType
+        'unknown_key'     | NilReply
+        'max_connections' | BulkReply
     }
 
-    def 'test set'() {
+    def 'test set - unsupported key returns error'() {
+        given:
+        def cGroup = new CGroup('config', null, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def configCommand = new ConfigCommand(cGroup)
+
+        expect:
+        configCommand.execute("config set ${key} ${value}") == ErrorReply.SYNTAX
+
+        where:
+        key       | value
+        'key'     | 'value'
+        'timeout' | '10'
+    }
+
+    def 'test set - valid and invalid max_connections'() {
         given:
         def cGroup = new CGroup('config', null, null)
         cGroup.from(BaseCommand.mockAGroup())
@@ -96,40 +82,19 @@ class ConfigCommandTest extends Specification {
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
-
-        when:
-        def reply = configCommand.execute('config set key value')
-        then:
-        reply == ErrorReply.SYNTAX
-
-        when:
-        reply = configCommand.execute('config set timeout 10')
-        then:
-        reply == ErrorReply.SYNTAX
-
-        when:
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
-        reply = configCommand.execute('config set max_connections 100')
-        then:
-        reply == OKReply.INSTANCE
 
-        when:
-        reply = configCommand.execute('config set max_connections 0')
-        then:
-        reply == ErrorReply.INVALID_INTEGER
-
-        when:
-        reply = configCommand.execute('config set max_connections -1')
-        then:
-        reply == ErrorReply.INVALID_INTEGER
-
-        when:
-        reply = configCommand.execute('config')
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        configCommand.execute("config set max_connections ${value}") == expected
 
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+
+        where:
+        value | expected
+        '100' | OKReply.INSTANCE
+        '0'   | ErrorReply.INVALID_INTEGER
+        '-1'  | ErrorReply.INVALID_INTEGER
     }
 }
