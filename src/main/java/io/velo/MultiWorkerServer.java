@@ -47,6 +47,7 @@ import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.monitor.RuntimeCpuCollector;
 import io.velo.persist.LocalPersist;
+import io.velo.persist.Wal;
 import io.velo.repl.LeaderSelector;
 import io.velo.repl.ReplPair;
 import io.velo.repl.cluster.Shard;
@@ -1363,7 +1364,12 @@ public class MultiWorkerServer extends Launcher {
 
             // override wal conf items
             var walValueSizeTrigger = 200;
-            c.confWal.oneChargeBucketNumber = config.get(ofInteger(), "wal.oneChargeBucketNumber", 32);
+            int oneChargeBucketNumber = config.get(ofInteger(), "wal.oneChargeBucketNumber", 32);
+            if (!Wal.VALID_ONE_CHARGE_BUCKET_NUMBER_LIST.contains(oneChargeBucketNumber)) {
+                throw new IllegalArgumentException("Wal one charge bucket number invalid, wal one charge bucket number should be in "
+                        + Wal.VALID_ONE_CHARGE_BUCKET_NUMBER_LIST);
+            }
+            c.confWal.oneChargeBucketNumber = oneChargeBucketNumber;
             c.confWal.valueSizeTrigger = config.get(ofInteger(), "wal.valueSizeTrigger", walValueSizeTrigger);
             c.confWal.shortValueSizeTrigger = config.get(ofInteger(), "wal.shortValueSizeTrigger", walValueSizeTrigger);
             c.confWal.atLeastDoPersistOnceIntervalMs = config.get(ofInteger(), "wal.atLeastDoPersistOnceIntervalMs", 2);
