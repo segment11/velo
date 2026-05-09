@@ -31,21 +31,16 @@ class KGroupTest extends Specification {
 
     def 'test handle'() {
         given:
-        def data1 = new byte[1][]
-
-        def kGroup = new KGroup('keys', data1, null)
+        def kGroup = new KGroup(null, null, null)
         kGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = kGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        kGroup.execute(input) == expected
 
-        when:
-        kGroup.cmd = 'zzz'
-        reply = kGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        where:
+        input   | expected
+        'keys'  | ErrorReply.FORMAT
+        'zzz'   | NilReply.INSTANCE
     }
 
     def 'test keys'() {

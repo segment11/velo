@@ -73,41 +73,26 @@ httl
         }
     }
 
-    def 'test handle'() {
+    def 'test handle - format errors'() {
         given:
-        def data1 = new byte[1][]
-
-        def hGroup = new HGroup('hdel', data1, null)
+        def hGroup = new HGroup(null, null, null)
         hGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = hGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        hGroup.execute(cmd) == ErrorReply.FORMAT
 
-        when:
-        def data2 = new byte[2][]
-        data2[1] = '4'.bytes
-        hGroup.cmd = 'hello'
-        hGroup.data = data2
-        reply = hGroup.handle()
-        then:
-        reply instanceof ErrorReply
+        where:
+        cmd << cmdLines
+    }
 
-        when:
-        hGroup.data = data1
-        def replyList = cmdLines.collect {
-            hGroup.cmd = it
-            hGroup.handle()
-        }
-        then:
-        replyList.every { it == ErrorReply.FORMAT }
+    def 'test handle - hello and zzz'() {
+        given:
+        def hGroup = new HGroup(null, null, null)
+        hGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        hGroup.cmd = 'zzz'
-        reply = hGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        expect:
+        hGroup.execute('hello 4') instanceof ErrorReply
+        hGroup.execute('zzz') == NilReply.INSTANCE
     }
 
     final short slot = 0

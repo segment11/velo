@@ -18,25 +18,41 @@ class MGroupTest extends Specification {
     def _MGroup = new MGroup(null, null, null)
     final short slot = 0
 
-    def 'test parse slot'() {
+    def 'test parse slot - mget mset'() {
         given:
         def data5 = new byte[5][]
-        int slotNumber = 128
-
-        and:
         data5[1] = 'a'.bytes
         data5[2] = '0'.bytes
         data5[3] = '0'.bytes
         data5[4] = '0'.bytes
+        int slotNumber = 128
 
-        when:
-        def sMgetList = _MGroup.parseSlots('mget', data5, slotNumber)
-        def sMsetList = _MGroup.parseSlots('mset', data5, slotNumber)
-        def s = _MGroup.parseSlots('mxxx', data5, slotNumber)
-        then:
-        sMgetList.size() == 4
-        sMsetList.size() == 2
-        s.size() == 0
+        expect:
+        _MGroup.parseSlots(cmd, data5, slotNumber).size() == expectedSize
+
+        where:
+        cmd    | expectedSize
+        'mget' | 4
+        'mset' | 2
+        'mxxx' | 0
+    }
+
+    def 'test parse slot - edge cases'() {
+        given:
+        def data5 = new byte[5][]
+        data5[1] = 'a'.bytes
+        data5[2] = '0'.bytes
+        data5[3] = '0'.bytes
+        data5[4] = '0'.bytes
+        def data1 = new byte[1][]
+        def data4 = new byte[4][]
+        int slotNumber = 128
+
+        expect:
+        _MGroup.parseSlots('mget', data1, slotNumber).size() == 0
+        _MGroup.parseSlots('mset', data1, slotNumber).size() == 0
+        _MGroup.parseSlots('mset', data4, slotNumber).size() == 0
+        _MGroup.parseSlots('mset', data5, slotNumber).size() == 2
 
         when:
         def classpath = Utils.projectPath("/dyn/src")
@@ -44,87 +60,42 @@ class MGroupTest extends Specification {
         data5[1] = 'slot'.bytes
         data5[2] = '0'.bytes
         data5[3] = 'view-persist-key-count'.bytes
-        def sManageList = _MGroup.parseSlots('manage', data5, slotNumber)
         then:
-        sManageList.size() == 1
-
-        when:
-        def data1 = new byte[1][]
-        def sList = _MGroup.parseSlots('mget', data1, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
-        sList = _MGroup.parseSlots('mset', data1, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
-        def data4 = new byte[4][]
-        sMsetList = _MGroup.parseSlots('mset', data4, slotNumber)
-        then:
-        sMsetList.size() == 0
-
-        when:
-        sList = _MGroup.parseSlots('manage', data1, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
-        sList = _MGroup.parseSlots('mset', data5, slotNumber)
-        then:
-        sList.size() == 2
+        _MGroup.parseSlots('manage', data5, slotNumber).size() == 1
+        _MGroup.parseSlots('manage', data1, slotNumber).size() == 0
 
         when:
         data5[1] = 'xxx'.bytes
-        sList = _MGroup.parseSlots('zzz', data5, slotNumber)
         then:
-        sList.size() == 0
+        _MGroup.parseSlots('zzz', data5, slotNumber).size() == 0
     }
 
-    def 'test handle'() {
+    def 'test handle - format errors'() {
         given:
-        def data1 = new byte[1][]
-
-        def mGroup = new MGroup('mget', data1, null)
+        def mGroup = new MGroup(null, null, null)
         mGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = mGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        mGroup.execute(input) == expected
 
-        when:
-        mGroup.cmd = 'mset'
-        reply = mGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        where:
+        input    | expected
+        'mget'   | ErrorReply.FORMAT
+        'mset'   | ErrorReply.FORMAT
+        'msetnx' | ErrorReply.FORMAT
+        'move'   | ErrorReply.NOT_SUPPORT
+        'zzz'    | NilReply.INSTANCE
+    }
 
-        when:
-        mGroup.cmd = 'msetnx'
-        reply = mGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        mGroup.cmd = 'move'
-        reply = mGroup.handle()
-        then:
-        reply == ErrorReply.NOT_SUPPORT
-
-        when:
+    def 'test handle - manage'() {
+        given:
+        def mGroup = new MGroup(null, null, null)
+        mGroup.from(BaseCommand.mockAGroup())
         def classpath = Utils.projectPath("/dyn/src")
         CachedGroovyClassLoader.instance.init(GroovyClassLoader.getClass().classLoader, classpath, null)
-        mGroup.cmd = 'manage'
-        reply = mGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
 
-        when:
-        mGroup.cmd = 'zzz'
-        reply = mGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        expect:
+        mGroup.execute('manage') == ErrorReply.FORMAT
     }
 
     def 'test mget'() {

@@ -20,167 +20,85 @@ class LGroupTest extends Specification {
     final short slot = 0
     def _LGroup = new LGroup(null, null, null)
 
-    def 'test parse slot'() {
+    def 'test parse slot - single key'() {
         given:
         def data2 = new byte[2][]
+        data2[1] = 'a'.bytes
         int slotNumber = 128
 
-        and:
-        data2[1] = 'a'.bytes
+        expect:
+        _LGroup.parseSlots(cmd, data2, slotNumber).size() == expectedSize
 
-        when:
-        def sLindexList = _LGroup.parseSlots('lindex', data2, slotNumber)
-        def sLinsertList = _LGroup.parseSlots('linsert', data2, slotNumber)
-        def sLlenList = _LGroup.parseSlots('llen', data2, slotNumber)
-        def sLpopList = _LGroup.parseSlots('lpop', data2, slotNumber)
-        def sLposList = _LGroup.parseSlots('lpos', data2, slotNumber)
-        def sLpushList = _LGroup.parseSlots('lpush', data2, slotNumber)
-        def sLpushxList = _LGroup.parseSlots('lpushx', data2, slotNumber)
-        def sLrangeList = _LGroup.parseSlots('lrange', data2, slotNumber)
-        def sLremList = _LGroup.parseSlots('lrem', data2, slotNumber)
-        def sLsetList = _LGroup.parseSlots('lset', data2, slotNumber)
-        def sLtrimList = _LGroup.parseSlots('ltrim', data2, slotNumber)
-        def sList = _LGroup.parseSlots('lxxx', data2, slotNumber)
-        then:
-        sLindexList.size() == 1
-        sLinsertList.size() == 1
-        sLlenList.size() == 1
-        sLpopList.size() == 1
-        sLposList.size() == 1
-        sLpushList.size() == 1
-        sLpushxList.size() == 1
-        sLrangeList.size() == 1
-        sLremList.size() == 1
-        sLsetList.size() == 1
-        sLtrimList.size() == 1
-        sList.size() == 0
+        where:
+        cmd       | expectedSize
+        'lindex'  | 1
+        'linsert' | 1
+        'llen'    | 1
+        'lpop'    | 1
+        'lpos'    | 1
+        'lpush'   | 1
+        'lpushx'  | 1
+        'lrange'  | 1
+        'lrem'    | 1
+        'lset'    | 1
+        'ltrim'   | 1
+        'lxxx'    | 0
+    }
 
-        when:
+    def 'test parse slot - multi key and edge cases'() {
+        given:
+        int slotNumber = 128
         def data1 = new byte[1][]
-        sLinsertList = _LGroup.parseSlots('linsert', data1, slotNumber)
-        then:
-        sLinsertList.size() == 0
-
-        when:
         def data5 = new byte[5][]
         data5[1] = 'a'.bytes
         data5[2] = 'a'.bytes
-        def sLmoveList = _LGroup.parseSlots('lmove', data5, slotNumber)
-        then:
-        sLmoveList.size() == 2
-
-        when:
         def data6 = new byte[6][]
         data6[1] = 'a'.bytes
         data6[2] = 'b'.bytes
-        sLmoveList = _LGroup.parseSlots('lmove', data6, slotNumber)
-        then:
-        sLmoveList.size() == 2
-
-        when:
         def data7 = new byte[7][]
         data7[1] = 'a'.bytes
         data7[2] = 'b'.bytes
-        sLmoveList = _LGroup.parseSlots('lmove', data7, slotNumber)
-        then:
-        sLmoveList.size() == 0
+
+        expect:
+        _LGroup.parseSlots('linsert', data1, slotNumber).size() == 0
+        _LGroup.parseSlots('lmove', data5, slotNumber).size() == 2
+        _LGroup.parseSlots('lmove', data6, slotNumber).size() == 2
+        _LGroup.parseSlots('lmove', data7, slotNumber).size() == 0
     }
 
-    def 'test handle'() {
+    def 'test handle - format errors'() {
         given:
-        def data1 = new byte[1][]
-
-        def lGroup = new LGroup('lastsave', data1, null)
+        def lGroup = new LGroup(null, null, null)
         lGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = lGroup.handle()
-        then:
-        reply instanceof IntegerReply
+        expect:
+        lGroup.execute(input) == expected
 
-        when:
-        lGroup.cmd = 'lindex'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        where:
+        input      | expected
+        'lindex'   | ErrorReply.FORMAT
+        'linsert'  | ErrorReply.FORMAT
+        'llen'     | ErrorReply.FORMAT
+        'lmove'    | ErrorReply.FORMAT
+        'lpop'     | ErrorReply.FORMAT
+        'lpos'     | ErrorReply.FORMAT
+        'lpush'    | ErrorReply.FORMAT
+        'lpushx'   | ErrorReply.FORMAT
+        'lrange'   | ErrorReply.FORMAT
+        'lrem'     | ErrorReply.FORMAT
+        'lset'     | ErrorReply.FORMAT
+        'ltrim'    | ErrorReply.FORMAT
+        'load-rdb' | ErrorReply.FORMAT
+        'zzz'      | NilReply.INSTANCE
+    }
 
-        when:
-        lGroup.cmd = 'linsert'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+    def 'test handle - lastsave'() {
+        given:
+        def lGroup = new LGroup(null, null, null)
+        lGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        lGroup.cmd = 'llen'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        lGroup.cmd = 'lmove'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        lGroup.cmd = 'lpop'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        lGroup.cmd = 'lpos'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        lGroup.cmd = 'lpush'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        lGroup.cmd = 'lpushx'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        lGroup.cmd = 'lrange'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        lGroup.cmd = 'lrem'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        lGroup.cmd = 'lset'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        lGroup.cmd = 'ltrim'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        lGroup.cmd = 'load-rdb'
-        reply = lGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        lGroup.cmd = 'zzz'
-        reply = lGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        expect:
+        lGroup.execute('lastsave') instanceof IntegerReply
     }
 
     def 'test lindex'() {

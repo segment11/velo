@@ -25,69 +25,66 @@ class IGroupTest extends Specification {
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
+        data2[1] = 'a'.bytes
         int slotNumber = 128
 
-        and:
-        data2[1] = 'a'.bytes
+        expect:
+        _IGroup.parseSlots(cmd, data2, slotNumber).size() == expectedSize
 
-        when:
-        def sIncrList = _IGroup.parseSlots('incr', data2, slotNumber)
-        def sIncrbyList = _IGroup.parseSlots('incrby', data2, slotNumber)
-        def sIncrbyfloatList = _IGroup.parseSlots('incrbyfloat', data2, slotNumber)
-        def sList = _IGroup.parseSlots('ixxx', data2, slotNumber)
-        then:
-        sIncrList.size() == 1
-        sIncrbyList.size() == 1
-        sIncrbyfloatList.size() == 1
-        sList.size() == 0
-
-        when:
-        def data1 = new byte[1][]
-
-        sIncrbyList = _IGroup.parseSlots('incrby', data1, slotNumber)
-        then:
-        sIncrbyList.size() == 0
+        where:
+        cmd            | expectedSize
+        'incr'         | 1
+        'incrby'       | 1
+        'incrbyfloat'  | 1
+        'ixxx'         | 0
     }
 
-    def 'test handle'() {
+    def 'test parse slot - insufficient data'() {
         given:
         def data1 = new byte[1][]
+        int slotNumber = 128
 
-        def iGroup = new IGroup('incr', data1, null)
+        expect:
+        _IGroup.parseSlots('incrby', data1, slotNumber).size() == 0
+    }
+
+    def 'test handle - format errors'() {
+        given:
+        def iGroup = new IGroup(null, null, null)
         iGroup.from(BaseCommand.mockAGroup())
 
-        and:
+        expect:
+        iGroup.execute(input) == expected
+
+        where:
+        input         | expected
+        'incr'        | ErrorReply.FORMAT
+        'incrby'      | ErrorReply.FORMAT
+        'incrbyfloat' | ErrorReply.FORMAT
+        'ingest'      | ErrorReply.FORMAT
+        'ingest_sst'  | ErrorReply.FORMAT
+        'zzz'         | NilReply.INSTANCE
+    }
+
+    def 'test handle - incrby incrbyfloat info'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def iGroup = new IGroup(null, null, null)
+        iGroup.byPassGetSet = inMemoryGetSet
+        iGroup.from(BaseCommand.mockAGroup())
+
         def loader = CachedGroovyClassLoader.instance
         def classpath = Utils.projectPath('/dyn/src')
         loader.init(GroovyClassLoader.getClass().classLoader, classpath, null)
 
         when:
-        def reply = iGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        iGroup.cmd = 'incrby'
-        reply = iGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        iGroup.cmd = 'incrbyfloat'
-        reply = iGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        def inMemoryGetSet = new InMemoryGetSet()
-        iGroup.byPassGetSet = inMemoryGetSet
         def data33 = new byte[3][]
         data33[1] = 'a'.bytes
         data33[2] = '1'.bytes
         iGroup.cmd = 'incrby'
         iGroup.data = data33
         iGroup.slotWithKeyHashListParsed = _IGroup.parseSlots('incrby', data33, iGroup.slotNumber)
-        reply = iGroup.handle()
+        def reply = iGroup.handle()
         then:
         reply instanceof IntegerReply
 
@@ -104,25 +101,6 @@ class IGroupTest extends Specification {
         reply = iGroup.handle()
         then:
         reply instanceof BulkReply
-
-        when:
-        iGroup.cmd = 'ingest'
-        iGroup.data = data1
-        reply = iGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        iGroup.cmd = 'ingest_sst'
-        reply = iGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        iGroup.cmd = 'zzz'
-        reply = iGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
     }
 
     def 'test handle2'() {
