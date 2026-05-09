@@ -18,237 +18,102 @@ class BGroupTest extends Specification {
     def _BGroup = new BGroup(null, null, null)
     final short slot = 0
 
-    def 'test parse slot'() {
+    def 'test parse slot - single key'() {
         given:
-        def data2 = new byte[2][]
         int slotNumber = 128
-
-        and:
+        def data2 = new byte[2][]
         data2[1] = 'a'.bytes
 
-        when:
-        def sList = _BGroup.parseSlots('bitcount', data2, slotNumber)
-        then:
-        sList.size() == 1
+        expect:
+        _BGroup.parseSlots(cmd, data2, slotNumber).size() == expectedSize
 
-        when:
+        where:
+        cmd           | expectedSize
+        'bitcount'    | 1
+        'bitfield'    | 1
+        'bitfield_ro' | 1
+        'bitpos'      | 1
+        'bf.add'      | 1
+        'bitop'       | 0
+        'bgsave'      | 0
+        'blmove'      | 0
+        'brpoplpush'  | 0
+        'blpop'       | 0
+        'brpop'       | 0
+    }
+
+    def 'test parse slot - multi key'() {
+        given:
+        int slotNumber = 128
         def data1 = new byte[1][]
-        sList = _BGroup.parseSlots('bitcount', data1, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
-        sList = _BGroup.parseSlots('bitfield', data2, slotNumber)
-        then:
-        sList.size() == 1
-
-        when:
-        sList = _BGroup.parseSlots('bitfield_ro', data2, slotNumber)
-        then:
-        sList.size() == 1
-
-        when:
-        sList = _BGroup.parseSlots('bitpos', data2, slotNumber)
-        then:
-        sList.size() == 1
-
-        when:
-        sList = _BGroup.parseSlots('bitop', data2, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
         def data5 = new byte[5][]
         data5[1] = 'and'.bytes
         data5[2] = 'a'.bytes
         data5[3] = 'b'.bytes
         data5[4] = 'c'.bytes
-        sList = _BGroup.parseSlots('bitop', data5, slotNumber)
-        then:
-        sList.size() == 3
-
-        when:
-        def sBfList = _BGroup.parseSlots('bf.add', data2, slotNumber)
-        then:
-        sBfList.size() == 1
-
-        when:
-        sList = _BGroup.parseSlots('bgsave', data2, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
-        sList = _BGroup.parseSlots('blmove', data2, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
-        sList = _BGroup.parseSlots('brpoplpush', data2, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
+        def data4 = new byte[4][]
+        data4[1] = 'a'.bytes
+        data4[2] = 'a'.bytes
+        data4[3] = 'b'.bytes
         def data6 = new byte[6][]
         data6[1] = 'a'.bytes
         data6[2] = 'b'.bytes
         data6[3] = 'left'.bytes
         data6[4] = 'right'.bytes
         data6[5] = '0'.bytes
-        sList = _BGroup.parseSlots('blmove', data6, slotNumber)
-        then:
-        sList.size() == 2
 
-        when:
-        sList = _BGroup.parseSlots('blpop', data2, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
-        sList = _BGroup.parseSlots('brpop', data2, slotNumber)
-        then:
-        sList.size() == 0
-
-        when:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'a'.bytes
-        data4[3] = 'b'.bytes
-        sList = _BGroup.parseSlots('blpop', data4, slotNumber)
-        then:
-        sList.size() == 2
-
-        when:
-        sList = _BGroup.parseSlots('brpop', data4, slotNumber)
-        then:
-        sList.size() == 2
+        expect:
+        _BGroup.parseSlots('bitcount', data1, slotNumber).size() == 0
+        _BGroup.parseSlots('bitop', data5, slotNumber).size() == 3
+        _BGroup.parseSlots('blpop', data4, slotNumber).size() == 2
+        _BGroup.parseSlots('brpop', data4, slotNumber).size() == 2
+        _BGroup.parseSlots('blmove', data6, slotNumber).size() == 2
     }
 
-    def 'test handle'() {
+    def 'test handle - format errors'() {
         given:
-        def data1 = new byte[1][]
-
-        def bGroup = new BGroup('bitcount', data1, null)
+        def bGroup = new BGroup(null, null, null)
         bGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        bGroup.execute(cmd) == ErrorReply.FORMAT
 
-        when:
-        bGroup.cmd = 'bitpos'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        where:
+        cmd << [
+                'bitcount', 'bitpos',
+                'bf.add', 'bf.madd', 'bf.card', 'bf.exists', 'bf.mexists',
+                'bf.info', 'bf.insert', 'bf.loadchunk', 'bf.reserve', 'bf.scandump',
+                'blmove', 'blpop', 'brpop'
+        ]
+    }
 
-        when:
-        bGroup.cmd = 'bf.add'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+    def 'test handle - special cases'() {
+        given:
+        def bGroup = new BGroup(null, null, null)
+        bGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        bGroup.cmd = 'bf.madd'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        bGroup.execute(input) == expected
 
-        when:
-        bGroup.cmd = 'bf.card'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        where:
+        input       | expected
+        'bf.xxx'    | ErrorReply.SYNTAX
+        'bgsave'    | OKReply.INSTANCE
+        'zzz'       | NilReply.INSTANCE
+    }
 
-        when:
-        bGroup.cmd = 'bf.exists'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        bGroup.cmd = 'bf.mexists'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        bGroup.cmd = 'bf.info'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        bGroup.cmd = 'bf.insert'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        bGroup.cmd = 'bf.loadchunk'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        bGroup.cmd = 'bf.reserve'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        bGroup.cmd = 'bf.scandump'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        bGroup.cmd = 'bf.xxx'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.SYNTAX
-
-        when:
-        bGroup.cmd = 'bgsave'
-        reply = bGroup.handle()
-        then:
-        reply == OKReply.INSTANCE
-
-        when:
-        bGroup.cmd = 'blmove'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        bGroup.cmd = 'blpop'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        bGroup.cmd = 'brpop'
-        reply = bGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
+    def 'test handle - brpoplpush timeout'() {
+        given:
         def data4 = new byte[4][]
         data4[1] = 'a'.bytes
         data4[2] = 'b'.bytes
         data4[3] = '3601'.bytes
-        bGroup.cmd = 'brpoplpush'
-        bGroup.data = data4
+        def bGroup = new BGroup('brpoplpush', data4, null)
+        bGroup.from(BaseCommand.mockAGroup())
         bGroup.slotWithKeyHashListParsed = _BGroup.parseSlots('brpoplpush', data4, 1)
-        reply = bGroup.handle()
-        then:
-        // timeout exceeds 3600
-        reply instanceof ErrorReply
 
-        when:
-        bGroup.cmd = 'zzz'
-        reply = bGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        expect:
+        bGroup.handle() instanceof ErrorReply
     }
 
     def 'test bitcount'() {

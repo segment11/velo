@@ -21,43 +21,29 @@ class AGroupTest extends Specification {
 
     def 'test parse slot'() {
         given:
-        def data3 = new byte[3][]
         int slotNumber = 128
-
-        and:
+        def data3 = new byte[3][]
         data3[1] = 'a'.bytes
 
-        when:
-        def sAppendList = _AGroup.parseSlots('append', data3, slotNumber)
-        then:
-        sAppendList.size() == 1
+        expect:
+        _AGroup.parseSlots(cmd, data3, slotNumber).size() == expectedSize
 
-        when:
-        sAppendList = _AGroup.parseSlots('axxx', data3, slotNumber)
-        then:
-        sAppendList.size() == 0
+        where:
+        cmd      | expectedSize
+        'append' | 1
+        'axxx'   | 0
+    }
 
-        when:
+    def 'test parse slot - more cases'() {
+        given:
+        int slotNumber = 128
         def data1 = new byte[1][]
-        sAppendList = _AGroup.parseSlots('append', data1, slotNumber)
-        then:
-        sAppendList.size() == 0
-
-        when:
+        def data3 = new byte[3][]
         data3[1] = 'cat'.bytes
         data3[2] = 'admin'.bytes
-        def sAclList = _AGroup.parseSlots('acl', data3, slotNumber)
-        then:
-        sAclList.size() == 1
-
-        when:
-        data3[1] = 'dryrun'.bytes
-        data3[2] = 'test'.bytes
-        sAclList = _AGroup.parseSlots('acl', data3, slotNumber)
-        then:
-        sAclList.size() == 0
-
-        when:
+        def data3dryrun = new byte[3][]
+        data3dryrun[1] = 'dryrun'.bytes
+        data3dryrun[2] = 'test'.bytes
         def snowFlake = new SnowFlake(1, 1)
         _AGroup.requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) slotNumber, snowFlake, Config.create())
         def data5 = new byte[5][]
@@ -65,39 +51,28 @@ class AGroupTest extends Specification {
         data5[2] = 'test'.bytes
         data5[3] = 'get'.bytes
         data5[4] = 'a'.bytes
-        def sAclList2 = _AGroup.parseSlots('acl', data5, slotNumber)
-        then:
-        sAclList2.size() == 1
 
-        when:
-        def sAclList3 = _AGroup.parseSlots('acl', data1, slotNumber)
-        then:
-        sAclList3.size() == 0
+        expect:
+        _AGroup.parseSlots('append', data1, slotNumber).size() == 0
+        _AGroup.parseSlots('acl', data3, slotNumber).size() == 1
+        _AGroup.parseSlots('acl', data3dryrun, slotNumber).size() == 0
+        _AGroup.parseSlots('acl', data5, slotNumber).size() == 1
+        _AGroup.parseSlots('acl', data1, slotNumber).size() == 0
     }
 
     def 'test handle'() {
         given:
-        def data1 = new byte[1][]
-
-        def aGroup = new AGroup('append', data1, null)
+        def aGroup = new AGroup(null, null, null)
         aGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = aGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        aGroup.execute(input) == expected
 
-        when:
-        aGroup.cmd = 'acl'
-        reply = aGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        aGroup.cmd = 'zzz'
-        reply = aGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        where:
+        input    | expected
+        'append' | ErrorReply.FORMAT
+        'acl'    | ErrorReply.FORMAT
+        'zzz'    | NilReply.INSTANCE
     }
 
     def 'test append'() {

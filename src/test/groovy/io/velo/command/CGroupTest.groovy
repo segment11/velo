@@ -19,64 +19,39 @@ class CGroupTest extends Specification {
 
     def 'test parse slot'() {
         given:
-        def data3 = new byte[3][]
         int slotNumber = 128
-
-        and:
+        def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
 
-        when:
+        and:
         LocalPersist.instance.addOneSlotForTest2(slot)
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
 
-        def sCopyList = _CGroup.parseSlots('copy', data3, slotNumber)
-        then:
-        sCopyList.size() == 2
+        expect:
+        _CGroup.parseSlots('copy', data3, slotNumber).size() == 2
 
-        when:
+        and: 'insufficient data'
         def data2 = new byte[2][]
-        sCopyList = _CGroup.parseSlots('copy', data2, slotNumber)
-        then:
-        sCopyList.size() == 0
+        _CGroup.parseSlots('copy', data2, slotNumber).size() == 0
     }
 
     def 'test handle'() {
         given:
-        def data1 = new byte[1][]
-
-        def cGroup = new CGroup('client', data1, null)
+        def cGroup = new CGroup(null, null, null)
         cGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = cGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        cGroup.execute(input) == expected
 
-        when:
-        cGroup.cmd = 'clusterx'
-        cGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        cGroup.cmd = 'config'
-        cGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        cGroup.cmd = 'copy'
-        reply = cGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        cGroup.cmd = 'zzz'
-        reply = cGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        where:
+        input       | expected
+        'client'    | ErrorReply.FORMAT
+        'clusterx'  | ErrorReply.FORMAT
+        'config'    | ErrorReply.FORMAT
+        'copy'      | ErrorReply.FORMAT
+        'zzz'       | NilReply.INSTANCE
     }
 
     def 'test client'() {

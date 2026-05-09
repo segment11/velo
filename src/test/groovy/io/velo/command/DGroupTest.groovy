@@ -21,124 +21,84 @@ class DGroupTest extends Specification {
     final short slot = 0
     def _DGroup = new DGroup(null, null, null)
 
-    def 'test parse slot'() {
+    def 'test parse slot - single key'() {
         given:
-        def data2 = new byte[2][]
         int slotNumber = 128
-
-        and:
+        def data2 = new byte[2][]
         data2[1] = 'a'.bytes
 
-        when:
-        def sDecrList = _DGroup.parseSlots('decr', data2, slotNumber)
-        def sDecrByList = _DGroup.parseSlots('decrby', data2, slotNumber)
-        def sDecrByFloatList = _DGroup.parseSlots('decrbyfloat', data2, slotNumber)
-        def sDelList = _DGroup.parseSlots('del', data2, slotNumber)
-        def sDumpList = _DGroup.parseSlots('dump', data2, slotNumber)
-        def sList = _DGroup.parseSlots('dxxx', data2, slotNumber)
-        then:
-        sDecrList.size() == 1
-        sDecrByList.size() == 0
-        sDecrByFloatList.size() == 0
-        sDelList.size() == 1
-        sDumpList.size() == 1
-        sList.size() == 0
+        expect:
+        _DGroup.parseSlots(cmd, data2, slotNumber).size() == expectedSize
 
-        when:
+        where:
+        cmd            | expectedSize
+        'decr'         | 1
+        'del'          | 1
+        'dump'         | 1
+        'decrby'       | 0
+        'decrbyfloat'  | 0
+    }
+
+    def 'test parse slot - multi key and edge cases'() {
+        given:
+        int slotNumber = 128
+        def data1 = new byte[1][]
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
-        sDelList = _DGroup.parseSlots('del', data3, slotNumber)
-        sDecrByList = _DGroup.parseSlots('decrby', data3, slotNumber)
-        then:
-        sDelList.size() == 2
-        sDecrByList.size() == 1
+        def data3debug = new byte[3][]
+        data3debug[1] = 'object'.bytes
+        data3debug[2] = 'x'.bytes
 
-        when:
-        data3[1] = 'object'.bytes
-        def sDebugList = _DGroup.parseSlots('debug', data3, slotNumber)
-        then:
-        sDebugList.size() == 1
-
-        when:
-        def data1 = new byte[1][]
-        sDebugList = _DGroup.parseSlots('debug', data1, slotNumber)
-        sDecrList = _DGroup.parseSlots('decr', data1, slotNumber)
-        sDelList = _DGroup.parseSlots('del', data1, slotNumber)
-        sDumpList = _DGroup.parseSlots('dump', data1, slotNumber)
-        then:
-        sDebugList.size() == 0
-        sDecrList.size() == 0
-        sDelList.size() == 0
-        sDumpList.size() == 0
+        expect:
+        _DGroup.parseSlots('del', data3, slotNumber).size() == 2
+        _DGroup.parseSlots('decrby', data3, slotNumber).size() == 1
+        _DGroup.parseSlots('debug', data3debug, slotNumber).size() == 1
+        _DGroup.parseSlots('debug', data1, slotNumber).size() == 0
+        _DGroup.parseSlots('decr', data1, slotNumber).size() == 0
+        _DGroup.parseSlots('del', data1, slotNumber).size() == 0
+        _DGroup.parseSlots('dump', data1, slotNumber).size() == 0
     }
 
-    def 'test handle'() {
+    def 'test handle - format errors'() {
         given:
-        def data1 = new byte[1][]
+        def dGroup = new DGroup(null, null, null)
+        dGroup.from(BaseCommand.mockAGroup())
 
+        expect:
+        dGroup.execute(input) == expected
+
+        where:
+        input         | expected
+        'debug'       | ErrorReply.FORMAT
+        'del'         | ErrorReply.FORMAT
+        'dump'        | ErrorReply.FORMAT
+        'decr'        | ErrorReply.FORMAT
+        'decrby'      | ErrorReply.FORMAT
+        'decrbyfloat' | ErrorReply.FORMAT
+        'dbsize a'    | ErrorReply.FORMAT
+        'zzz'         | NilReply.INSTANCE
+    }
+
+    def 'test handle - decr decrby decrbyfloat'() {
+        given:
         def inMemoryGetSet = new InMemoryGetSet()
-
-        def dGroup = new DGroup('debug', data1, null)
+        def dGroup = new DGroup(null, null, null)
         dGroup.byPassGetSet = inMemoryGetSet
         dGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = dGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        dGroup.cmd = 'del'
-        reply = dGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        dGroup.cmd = 'dump'
-        reply = dGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
+        when: 'decr'
         def data2 = new byte[2][]
         data2[1] = 'a'.bytes
         dGroup.data = data2
-        dGroup.cmd = 'dbsize'
-        reply = dGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        dGroup.data = data1
-        dGroup.cmd = 'decr'
-        reply = dGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        dGroup.cmd = 'decrby'
-        reply = dGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        dGroup.cmd = 'decrbyfloat'
-        reply = dGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        dGroup.data = data2
         dGroup.cmd = 'decr'
         dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decr', data2, dGroup.slotNumber)
-        reply = dGroup.handle()
+        def reply = dGroup.handle()
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == -1
 
-        when:
-        // decrby
+        when: 'decrby not integer'
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
@@ -149,8 +109,7 @@ class DGroupTest extends Specification {
         then:
         reply == ErrorReply.NOT_INTEGER
 
-        when:
-        // decrby
+        when: 'decrby'
         data3[1] = 'n'.bytes
         data3[2] = '1'.bytes
         dGroup.setNumber(0, dGroup.slotWithKeyHashListParsed.getFirst())
@@ -159,8 +118,7 @@ class DGroupTest extends Specification {
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == -1
 
-        when:
-        // decrbyfloat
+        when: 'decrbyfloat not float'
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
         dGroup.data = data3
@@ -170,8 +128,7 @@ class DGroupTest extends Specification {
         then:
         reply == ErrorReply.NOT_FLOAT
 
-        when:
-        // decrbyfloat
+        when: 'decrbyfloat'
         data3[1] = 'n'.bytes
         data3[2] = '1'.bytes
         dGroup.setNumber(0, dGroup.slotWithKeyHashListParsed.getFirst())
@@ -179,12 +136,6 @@ class DGroupTest extends Specification {
         then:
         reply instanceof DoubleReply
         (reply as DoubleReply).doubleValue() == -1
-
-        when:
-        dGroup.cmd = 'zzz'
-        reply = dGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
     }
 
     def 'test debug'() {
