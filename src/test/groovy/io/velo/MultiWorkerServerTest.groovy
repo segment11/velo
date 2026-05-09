@@ -1098,4 +1098,75 @@ class MultiWorkerServerTest extends Specification {
         ConfForSlot.global.confBucket.onceScanMaxLoopCount == 512
         ConfForSlot.global.confWal.onceScanMaxLoopCount == 512
     }
+
+    def 'test repl short config rejects overflow values'() {
+        given:
+        var m1 = new MultiWorkerServer.InnerModule()
+        var cc = ConfForSlot.global
+        m1.skipZookeeperConnectCheck = true
+
+        def makeConfig = { String key, String value ->
+            Config.create()
+                    .with('doFileLock', "false")
+                    .with("net.listenAddresses", "localhost:7379")
+                    .with("debugMode", "true")
+                    .with("pureMemory", "true")
+                    .with("zookeeperConnectString", 'localhost:2181')
+                    .with("bucket.bucketsPerSlot", cc.confBucket.bucketsPerSlot.toString())
+                    .with("bucket.initialSplitNumber", cc.confBucket.initialSplitNumber.toString())
+                    .with("chunk.segmentNumberPerFd", cc.confChunk.segmentNumberPerFd.toString())
+                    .with("chunk.fdPerChunk", cc.confChunk.fdPerChunk.toString())
+                    .with("chunk.segmentLength", cc.confChunk.segmentLength.toString())
+                    .with("wal.oneChargeBucketNumber", cc.confWal.oneChargeBucketNumber.toString())
+                    .with("wal.valueSizeTrigger", cc.confWal.valueSizeTrigger.toString())
+                    .with("wal.shortValueSizeTrigger", cc.confWal.shortValueSizeTrigger.toString())
+                    .with(key, value)
+        }
+
+        when: '65537 would truncate to short 1, should be rejected'
+        m1.confForSlot(makeConfig("repl.binlogForReadCacheSegmentMaxCount", "65537"))
+        then:
+        def e1 = thrown(IllegalArgumentException)
+        e1.message.contains("binlogForReadCacheSegmentMaxCount")
+
+        when: '65538 would truncate to short 2, should be rejected'
+        m1.confForSlot(makeConfig("repl.binlogFileKeepMaxCount", "65538"))
+        then:
+        def e2 = thrown(IllegalArgumentException)
+        e2.message.contains("binlogFileKeepMaxCount")
+
+        when: 'negative value should be rejected for cache segment max count'
+        m1.confForSlot(makeConfig("repl.binlogForReadCacheSegmentMaxCount", "-1"))
+        then:
+        def e3 = thrown(IllegalArgumentException)
+        e3.message.contains("binlogForReadCacheSegmentMaxCount")
+
+        when: 'negative value should be rejected for file keep max count'
+        m1.confForSlot(makeConfig("repl.binlogFileKeepMaxCount", "-1"))
+        then:
+        def e4 = thrown(IllegalArgumentException)
+        e4.message.contains("binlogFileKeepMaxCount")
+
+        when: 'valid values should be accepted'
+        def validConfig = Config.create()
+                .with('doFileLock', "false")
+                .with("net.listenAddresses", "localhost:7379")
+                .with("debugMode", "true")
+                .with("pureMemory", "true")
+                .with("zookeeperConnectString", 'localhost:2181')
+                .with("bucket.bucketsPerSlot", cc.confBucket.bucketsPerSlot.toString())
+                .with("bucket.initialSplitNumber", cc.confBucket.initialSplitNumber.toString())
+                .with("chunk.segmentNumberPerFd", cc.confChunk.segmentNumberPerFd.toString())
+                .with("chunk.fdPerChunk", cc.confChunk.fdPerChunk.toString())
+                .with("chunk.segmentLength", cc.confChunk.segmentLength.toString())
+                .with("wal.oneChargeBucketNumber", cc.confWal.oneChargeBucketNumber.toString())
+                .with("wal.valueSizeTrigger", cc.confWal.valueSizeTrigger.toString())
+                .with("wal.shortValueSizeTrigger", cc.confWal.shortValueSizeTrigger.toString())
+                .with("repl.binlogForReadCacheSegmentMaxCount", "20")
+                .with("repl.binlogFileKeepMaxCount", "30")
+        m1.confForSlot(validConfig)
+        then:
+        ConfForSlot.global.confRepl.binlogForReadCacheSegmentMaxCount == (short) 20
+        ConfForSlot.global.confRepl.binlogFileKeepMaxCount == (short) 30
+    }
 }

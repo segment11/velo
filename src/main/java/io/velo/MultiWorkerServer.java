@@ -1377,8 +1377,16 @@ public class MultiWorkerServer extends Launcher {
                 throw new IllegalArgumentException("repl.binlogOneFileMaxLength must be > 0, value=" + c.confRepl.binlogOneFileMaxLength +
                         " (max allowed is 2GB-1 due to int type, check for overflow)");
             }
-            c.confRepl.binlogForReadCacheSegmentMaxCount = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount", 10).shortValue();
-            c.confRepl.binlogFileKeepMaxCount = config.get(ofInteger(), "repl.binlogFileKeepMaxCount", 10).shortValue();
+            int binlogForReadCacheSegmentMaxCountInt = config.get(ofInteger(), "repl.binlogForReadCacheSegmentMaxCount", 10);
+            if (binlogForReadCacheSegmentMaxCountInt <= 0 || binlogForReadCacheSegmentMaxCountInt > Short.MAX_VALUE) {
+                throw new IllegalArgumentException("repl.binlogForReadCacheSegmentMaxCount must be between 1 and " + Short.MAX_VALUE + ", given: " + binlogForReadCacheSegmentMaxCountInt);
+            }
+            c.confRepl.binlogForReadCacheSegmentMaxCount = (short) binlogForReadCacheSegmentMaxCountInt;
+            int binlogFileKeepMaxCountInt = config.get(ofInteger(), "repl.binlogFileKeepMaxCount", 10);
+            if (binlogFileKeepMaxCountInt <= 0 || binlogFileKeepMaxCountInt > Short.MAX_VALUE) {
+                throw new IllegalArgumentException("repl.binlogFileKeepMaxCount must be between 1 and " + Short.MAX_VALUE + ", given: " + binlogFileKeepMaxCountInt);
+            }
+            c.confRepl.binlogFileKeepMaxCount = (short) binlogFileKeepMaxCountInt;
             c.confRepl.catchUpOffsetMinDiff = config.get(ofInteger(), "repl.catchUpOffsetMinDiff", 1024 * 1024);
             c.confRepl.catchUpIntervalMillis = config.get(ofInteger(), "repl.catchUpIntervalMillis", 100);
             c.confRepl.checkIfValid();
