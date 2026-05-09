@@ -16,109 +16,71 @@ class GGroupTest extends Specification {
     def _GGroup = new GGroup(null, null, null)
     final short slot = 0
 
-    def 'test parse slot'() {
+    def 'test parse slot - single key'() {
         given:
-        def data2 = new byte[2][]
         int slotNumber = 128
-
-        and:
+        def data2 = new byte[2][]
         data2[1] = 'a'.bytes
 
-        when:
-        def sGetList = _GGroup.parseSlots('get', data2, slotNumber)
-        def sGetBitList = _GGroup.parseSlots('getbit', data2, slotNumber)
-        def sGetDelList = _GGroup.parseSlots('getdel', data2, slotNumber)
-        def sGetExList = _GGroup.parseSlots('getex', data2, slotNumber)
-        def sGetRangeList = _GGroup.parseSlots('getrange', data2, slotNumber)
-        def sGetSetList = _GGroup.parseSlots('getset', data2, slotNumber)
-        def sGeoaddList = _GGroup.parseSlots('geoadd', data2, slotNumber)
-        def sGeosearchstoreList = _GGroup.parseSlots('geosearchstore', data2, slotNumber)
-        def sList = _GGroup.parseSlots('gxxx', data2, slotNumber)
-        then:
-        sGetList.size() == 1
-        sGetBitList.size() == 1
-        sGetDelList.size() == 1
-        sGetExList.size() == 1
-        sGetRangeList.size() == 1
-        sGetSetList.size() == 1
-        sGeoaddList.size() == 1
-        sGeosearchstoreList.size() == 0
-        sList.size() == 0
+        expect:
+        _GGroup.parseSlots(cmd, data2, slotNumber).size() == expectedSize
 
-        when:
+        where:
+        cmd              | expectedSize
+        'get'            | 1
+        'getbit'         | 1
+        'getdel'         | 1
+        'getex'          | 1
+        'getrange'       | 1
+        'getset'         | 1
+        'geoadd'         | 1
+        'geosearchstore' | 0
+        'gxxx'           | 0
+    }
+
+    def 'test parse slot - multi key and edge cases'() {
+        given:
+        int slotNumber = 128
+        def data1 = new byte[1][]
         def data4 = new byte[4][]
         data4[1] = 'a'.bytes
         data4[2] = 'b'.bytes
-        sGeosearchstoreList = _GGroup.parseSlots('geosearchstore', data4, slotNumber)
-        then:
-        sGeosearchstoreList.size() == 2
 
-        when:
-        def data1 = new byte[1][]
-        sGetList = _GGroup.parseSlots('get', data1, slotNumber)
-        sGeoaddList = _GGroup.parseSlots('geoadd', data1, slotNumber)
-        then:
-        sGetList.size() == 0
-        sGeoaddList.size() == 0
+        expect:
+        _GGroup.parseSlots('geosearchstore', data4, slotNumber).size() == 2
+        _GGroup.parseSlots('get', data1, slotNumber).size() == 0
+        _GGroup.parseSlots('geoadd', data1, slotNumber).size() == 0
     }
 
-    def 'test handle'() {
+    def 'test handle - format errors'() {
         given:
-        def data1 = new byte[1][]
-
-        def gGroup = new GGroup('getbit', data1, null)
+        def gGroup = new GGroup(null, null, null)
         gGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = gGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        gGroup.execute(input) == expected
 
-        when:
-        gGroup.cmd = 'getdel'
-        reply = gGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        where:
+        input      | expected
+        'getbit'   | ErrorReply.FORMAT
+        'getdel'   | ErrorReply.FORMAT
+        'getex'    | ErrorReply.FORMAT
+        'getrange' | ErrorReply.FORMAT
+        'getset'   | ErrorReply.FORMAT
+        'geoadd'   | ErrorReply.FORMAT
+        'zzz'      | NilReply.INSTANCE
+    }
 
-        when:
-        gGroup.cmd = 'getex'
-        reply = gGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+    def 'test handle - georadius not support'() {
+        given:
+        def gGroup = new GGroup(null, null, null)
+        gGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        gGroup.cmd = 'getrange'
-        reply = gGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
+        expect:
+        gGroup.execute(input) == ErrorReply.NOT_SUPPORT
 
-        when:
-        gGroup.cmd = 'getset'
-        reply = gGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        gGroup.cmd = 'geoadd'
-        reply = gGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        def data2 = new byte[2][]
-        gGroup.data = data2
-        then:
-        ['georadius', 'georadius_ro', 'georadiusbymember', 'georadiusbymember_ro'].every {
-            gGroup.cmd = it
-            reply = gGroup.handle()
-            reply == ErrorReply.NOT_SUPPORT
-        }
-
-        when:
-        gGroup.cmd = 'zzz'
-        reply = gGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        where:
+        input << ['georadius a', 'georadius_ro a', 'georadiusbymember a', 'georadiusbymember_ro a']
     }
 
     def 'test getbit'() {

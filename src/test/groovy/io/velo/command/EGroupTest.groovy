@@ -17,97 +17,66 @@ class EGroupTest extends Specification {
     final short slot = 0
     def _EGroup = new EGroup(null, null, null)
 
-    def 'test parse slot'() {
+    def 'test parse slot - single key'() {
         given:
-        def data2 = new byte[2][]
         int slotNumber = 128
-
-        and:
+        def data2 = new byte[2][]
         data2[1] = 'a'.bytes
 
-        when:
-        def sExistsList = _EGroup.parseSlots('exists', data2, slotNumber)
-        def sExpireList = _EGroup.parseSlots('expire', data2, slotNumber)
-        def sExpireAtList = _EGroup.parseSlots('expireat', data2, slotNumber)
-        def sExpireTimeList = _EGroup.parseSlots('expiretime', data2, slotNumber)
-        def sList = _EGroup.parseSlots('exxx', data2, slotNumber)
-        then:
-        sExistsList.size() == 1
-        sExpireList.size() == 1
-        sExpireAtList.size() == 1
-        sExpireTimeList.size() == 1
-        sList.size() == 0
+        expect:
+        _EGroup.parseSlots(cmd, data2, slotNumber).size() == expectedSize
 
-        when:
+        where:
+        cmd          | expectedSize
+        'exists'     | 1
+        'expire'     | 1
+        'expireat'   | 1
+        'expiretime' | 1
+        'exxx'       | 0
+    }
+
+    def 'test parse slot - multi key and edge cases'() {
+        given:
+        int slotNumber = 128
+        def data1 = new byte[1][]
         def data3 = new byte[3][]
         data3[1] = 'a'.bytes
         data3[2] = 'b'.bytes
-        sExistsList = _EGroup.parseSlots('exists', data3, slotNumber)
-        then:
-        sExistsList.size() == 2
-
-        when:
         def classpath = Utils.projectPath("/dyn/src")
         CachedGroovyClassLoader.instance.init(GroovyClassLoader.getClass().classLoader, classpath, null)
-        def sExtendList = _EGroup.parseSlots('extend', data3, slotNumber)
-        then:
-        sExtendList.size() == 0
 
-        when:
-        def data1 = new byte[1][]
-        sExistsList = _EGroup.parseSlots('exists', data1, slotNumber)
-        sExpireList = _EGroup.parseSlots('expire', data1, slotNumber)
-        then:
-        sExistsList.size() == 0
-        sExpireList.size() == 0
+        expect:
+        _EGroup.parseSlots('exists', data3, slotNumber).size() == 2
+        _EGroup.parseSlots('extend', data3, slotNumber).size() == 0
+        _EGroup.parseSlots('exists', data1, slotNumber).size() == 0
+        _EGroup.parseSlots('expire', data1, slotNumber).size() == 0
     }
 
-    def 'test handle'() {
+    def 'test handle - format errors'() {
         given:
-        def data1 = new byte[1][]
-
-        def inMemoryGetSet = new InMemoryGetSet()
-
-        def eGroup = new EGroup('exists', data1, null)
-        eGroup.byPassGetSet = inMemoryGetSet
+        def eGroup = new EGroup(null, null, null)
         eGroup.from(BaseCommand.mockAGroup())
 
-        eGroup.slotWithKeyHashListParsed = _EGroup.parseSlots('exists', data1, eGroup.slotNumber)
+        expect:
+        eGroup.execute(input) == expected
+
+        where:
+        input         | expected
+        'exists'      | ErrorReply.FORMAT
+        'expire'      | ErrorReply.FORMAT
+        'expireat'    | ErrorReply.FORMAT
+        'expiretime'  | ErrorReply.FORMAT
+        'echo'        | ErrorReply.FORMAT
+        'zzz'         | NilReply.INSTANCE
+    }
+
+    def 'test handle - echo and extend'() {
+        given:
+        def eGroup = new EGroup(null, null, null)
+        eGroup.from(BaseCommand.mockAGroup())
 
         when:
-        def reply = eGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-        when:
-        eGroup.cmd = 'expire'
-        reply = eGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        eGroup.cmd = 'expireat'
-        reply = eGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        eGroup.cmd = 'expiretime'
-        reply = eGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        eGroup.cmd = 'echo'
-        reply = eGroup.handle()
-        then:
-        reply == ErrorReply.FORMAT
-
-        when:
-        def data2 = new byte[2][]
-        data2[1] = 'a'.bytes
-        eGroup.data = data2
-        eGroup.cmd = 'echo'
-        reply = eGroup.handle()
+        def reply = eGroup.execute('echo a')
         then:
         reply instanceof BulkReply
         (reply as BulkReply).raw == 'a'.bytes
@@ -115,16 +84,9 @@ class EGroupTest extends Specification {
         when:
         def classpath = Utils.projectPath("/dyn/src")
         CachedGroovyClassLoader.instance.init(GroovyClassLoader.getClass().classLoader, classpath, null)
-        eGroup.cmd = 'extend'
-        reply = eGroup.handle()
+        reply = eGroup.execute('extend a')
         then:
         reply instanceof BulkReply
-
-        when:
-        eGroup.cmd = 'zzz'
-        reply = eGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
     }
 
     def 'test exists'() {

@@ -18,48 +18,30 @@ class FGroupTest extends Specification {
 
     def 'test parse slot'() {
         given:
-        def data2 = new byte[2][]
         int slotNumber = 128
-
-        and:
+        def data2 = new byte[2][]
         data2[1] = 'a'.bytes
 
-        when:
-        def sFlushDbList = _FGroup.parseSlots('failover', data2, slotNumber)
-        then:
-        sFlushDbList.size() == 0
+        expect:
+        _FGroup.parseSlots('failover', data2, slotNumber).size() == 0
     }
 
     def 'test handle'() {
         given:
         def data2 = new byte[2][]
         data2[1] = 'a'.bytes
-
-        def fGroup = new FGroup('failover', data2, null)
+        def fGroup = new FGroup(cmd, data2, null)
         fGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = fGroup.handle()
-        then:
-        reply == OKReply.INSTANCE
+        expect:
+        fGroup.handle() == expected
 
-        when:
-        fGroup.cmd = 'flushall'
-        reply = fGroup.handle()
-        then:
-        reply == OKReply.INSTANCE
-
-        when:
-        fGroup.cmd = 'flushdb'
-        reply = fGroup.handle()
-        then:
-        reply == OKReply.INSTANCE
-
-        when:
-        fGroup.cmd = 'zzz'
-        reply = fGroup.handle()
-        then:
-        reply == NilReply.INSTANCE
+        where:
+        cmd         | expected
+        'failover'  | OKReply.INSTANCE
+        'flushall'  | OKReply.INSTANCE
+        'flushdb'   | OKReply.INSTANCE
+        'zzz'       | NilReply.INSTANCE
     }
 
     final short slot = 0
