@@ -612,4 +612,60 @@ class RequestHandlerTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test http metrics requires auth when PASSWORD is set'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.dynConfig.binlogOn = false
+
+        and:
+        AclUsers.instance.initForTest()
+        AclUsers.instance.upInsert('default') { u ->
+            u.on = true
+            u.password = U.Password.plain('secret123')
+        }
+
+        and:
+        def snowFlake = new SnowFlake(1, 1)
+        def requestHandler = new RequestHandler(workerId, netWorkers, slotNumber, snowFlake, Config.create())
+
+        def eventloopCurrent = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent, 46390)
+        SocketInspector.setAuthUser(socket, 'default')
+
+        when:
+        ConfForGlobal.PASSWORD = 'secret123'
+        SocketInspector.clearUserData(socket)
+        def httpData = new byte[1][]
+        httpData[0] = 'metrics'.bytes
+        def httpRequest = new Request(httpData, true, false)
+        def reply = requestHandler.handle(httpRequest, socket)
+        then:
+        reply == ErrorReply.NO_AUTH
+
+        when:
+        // HAProxy endpoints should work without auth
+        LeaderSelector.instance.hasLeadershipLocalMocked = true
+        httpData[0] = 'master'.bytes
+        reply = requestHandler.handle(httpRequest, socket)
+        then:
+        reply instanceof BulkReply
+
+        when:
+        LeaderSelector.instance.hasLeadershipLocalMocked = false
+        httpData[0] = 'master_or_slave'.bytes
+        reply = requestHandler.handle(httpRequest, socket)
+        then:
+        reply instanceof BulkReply
+
+        cleanup:
+        ConfForGlobal.PASSWORD = null
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

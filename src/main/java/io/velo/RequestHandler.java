@@ -284,10 +284,53 @@ public class RequestHandler {
 
         // http special handle
         if (request.isHttp() && data.length == 1) {
+            var firstDataBytes = data[0];
+
+            // auth gate for non-health-check HTTP endpoints
+            if (firstDataBytes != null && SocketInspector.getAuthUser(socket) == null && ConfForGlobal.PASSWORD != null) {
+                var firstDataString = new String(firstDataBytes, StandardCharsets.UTF_8);
+                boolean isHealthCheck = URL_QUERY_FOR_HAPROXY_FILTER_MASTER.equals(firstDataString)
+                        || URL_QUERY_FOR_HAPROXY_FILTER_MASTER_OR_SLAVE.equals(firstDataString)
+                        || URL_QUERY_FOR_HAPROXY_FILTER_SLAVE.equals(firstDataString)
+                        || firstDataString.startsWith(URL_QUERY_FOR_HAPROXY_FILTER_SLAVE_WITH_ZONE);
+                if (!isHealthCheck) {
+                    var headerValue = request.getHttpHeader(HEADER_NAME_FOR_BASIC_AUTH);
+                    if (headerValue == null) {
+                        return ErrorReply.NO_AUTH;
+                    }
+
+                    if (!headerValue.regionMatches(true, 0, "Basic ", 0, 6)) {
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    final byte[] authDecodedBytes;
+                    try {
+                        authDecodedBytes = Base64.getDecoder().decode(headerValue.substring(6));
+                    } catch (IllegalArgumentException e) {
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    var auth = new String(authDecodedBytes, StandardCharsets.UTF_8);
+                    var splitIndex = auth.indexOf(':');
+                    if (splitIndex < 0) {
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    var user = auth.substring(0, splitIndex);
+                    var passwordRaw = auth.substring(splitIndex + 1);
+
+                    var u = aclUsers.get(user);
+                    if (u == null || !u.isOn() || !u.checkPassword(passwordRaw)) {
+                        return ErrorReply.AUTH_FAILED;
+                    }
+
+                    SocketInspector.setAuthUser(socket, user);
+                }
+            }
+
             // metrics, prometheus format
             // url should be ?metrics, http://localhost:7379/?metrics
             // for one target slot beside 0 metrics: http://localhost:7379/?manage&slot&0&view-metrics
-            var firstDataBytes = data[0];
             if (Arrays.equals(firstDataBytes, URL_QUERY_METRICS_BYTES)) {
                 var sw = new StringWriter();
                 try {
