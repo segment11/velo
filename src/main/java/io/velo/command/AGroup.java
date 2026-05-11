@@ -170,7 +170,7 @@ public class AGroup extends BaseCommand {
                 return aclCheckResult.isKeyFail() ? ErrorReply.ACL_PERMIT_KEY_LIMIT : ErrorReply.ACL_PERMIT_LIMIT;
             }
 
-            return requestHandler.handle(redirectRequest, socket);
+            return OKReply.INSTANCE;
         } else if ("genpass".equals(subCmd)) {
             if (data.length != 2 && data.length != 3) {
                 return ErrorReply.SYNTAX;

@@ -211,7 +211,18 @@ class AGroupTest extends Specification {
         }
         reply = aGroup.execute('acl dryrun a get a')
         then:
-        reply == NilReply.INSTANCE
+        reply == OKReply.INSTANCE
+
+        // dryrun should NOT execute the target command - privilege escalation bug
+        when:
+        aclUsers.upInsert('a') { u ->
+            u.addRCmd(true, RCmd.fromLiteral('+set'))
+        }
+        def beforeDryrunSet = aGroup.get(aGroup.slot('dryrun-test-key'))
+        reply = aGroup.execute('acl dryrun a set dryrun-test-key value')
+        then:
+        reply == OKReply.INSTANCE
+        aGroup.get(aGroup.slot('dryrun-test-key')) == beforeDryrunSet
 
         when:
         reply = aGroup.execute('acl dryrun a')
