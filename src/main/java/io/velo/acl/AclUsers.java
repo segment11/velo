@@ -56,6 +56,8 @@ public class AclUsers {
     @ThreadNeedLocal
     private Inner[] inners;
 
+    private Inner preInitInner;
+
     /**
      * Initializes the AclUsers instance with event loops associated with slot worker threads.
      *
@@ -70,6 +72,14 @@ public class AclUsers {
             var eventloopThread = eventloop.getEventloopThread();
             inners[i] = new Inner(eventloopThread != null ? eventloopThread.threadId() : Thread.currentThread().threadId());
         }
+
+        if (preInitInner != null) {
+            for (var inner : inners) {
+                inner.users.clear();
+                inner.users.addAll(preInitInner.users);
+            }
+            preInitInner = null;
+        }
         log.info("Acl users init by slot worker eventloop array");
     }
 
@@ -80,6 +90,18 @@ public class AclUsers {
     public void initForTest() {
         inners = new Inner[1];
         inners[0] = new Inner(Thread.currentThread().threadId());
+
+        if (preInitInner != null) {
+            inners[0].users.clear();
+            inners[0].users.addAll(preInitInner.users);
+            preInitInner = null;
+        }
+    }
+
+    @TestOnly
+    public void resetForTest() {
+        inners = null;
+        preInitInner = null;
     }
 
     /**
@@ -89,7 +111,10 @@ public class AclUsers {
      */
     public Inner getInner() {
         if (inners == null) {
-            return null;
+            if (preInitInner == null) {
+                preInitInner = new Inner(Thread.currentThread().threadId());
+            }
+            return preInitInner;
         }
         var currentThreadId = Thread.currentThread().threadId();
         for (var inner : inners) {
@@ -239,6 +264,9 @@ public class AclUsers {
      * @param doInTargetEventloop the operation to perform
      */
     private void changeUser(DoInTargetEventloop doInTargetEventloop) {
+        if (inners == null) {
+            return;
+        }
         var currentThreadId = Thread.currentThread().threadId();
         for (int i = 0; i < inners.length; i++) {
             var inner = inners[i];

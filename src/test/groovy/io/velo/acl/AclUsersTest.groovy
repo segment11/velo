@@ -110,4 +110,61 @@ class AclUsersTest extends Specification {
         cleanup:
         eventloop.breakEventloop()
     }
+
+    def 'test upInsert before init does not NPE and state preserved after init'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.resetForTest()
+
+        when:
+        aclUsers.upInsert(U.DEFAULT_USER) { u ->
+            u.password = U.Password.plain('pre-init-password')
+        }
+        then:
+        noExceptionThrown()
+
+        when:
+        aclUsers.initForTest()
+        def defaultUser = aclUsers.get(U.DEFAULT_USER)
+        then:
+        defaultUser != null
+        defaultUser.checkPassword('pre-init-password')
+    }
+
+    def 'test upInsert before initBySlotWorkerEventloopArray preserves state'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.resetForTest()
+
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        Thread.sleep(100)
+
+        when:
+        aclUsers.upInsert(U.DEFAULT_USER) { u ->
+            u.password = U.Password.plain('staged-password')
+        }
+        Eventloop[] testEventloopArray = [eventloop, eventloopCurrent]
+        aclUsers.initBySlotWorkerEventloopArray(testEventloopArray)
+        Thread.sleep(200)
+        def defaultUser = aclUsers.get(U.DEFAULT_USER)
+        then:
+        defaultUser != null
+        defaultUser.checkPassword('staged-password')
+        eventloop.submit(AsyncComputation.of(SupplierEx.of {
+            aclUsers.get(U.DEFAULT_USER) != null
+        })).get()
+
+        cleanup:
+        eventloop.breakEventloop()
+    }
 }
