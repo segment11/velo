@@ -600,9 +600,12 @@ public class U {
                 }
 
                 boolean isWrite = Category.isWriteCmd(cmd);
+                boolean isReadWrite = Category.isReadWriteCmd(cmd);
+                boolean cmdRead = !isWrite;
+                boolean cmdWrite = isWrite;
                 boolean matched = false;
                 for (var rKey : rKeyList) {
-                    if (rKey.match(slotWithKeyHash.rawKey(), !isWrite, isWrite)) {
+                    if (rKey.match(slotWithKeyHash.rawKey(), cmdRead, cmdWrite, isReadWrite)) {
                         matched = true;
                         break;
                     }

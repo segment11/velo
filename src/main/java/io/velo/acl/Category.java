@@ -28,6 +28,12 @@ public enum Category {
      */
     private static final HashSet<String> writeCmdSet = new HashSet<>();
 
+    private static final HashSet<String> readWriteCmdSet = new HashSet<>();
+
+    public static boolean isReadWriteCmd(String cmd) {
+        return readWriteCmdSet.contains(cmd);
+    }
+
     /**
      * Checks if a given command is a write command.
      *
@@ -872,6 +878,19 @@ public enum Category {
         }
 
         writeCmdSet.addAll(writeCmdList);
+
+        readWriteCmdSet.addAll(List.of(
+                "getdel",
+                "getex",
+                "getset",
+                "lmove",
+                "smove",
+                "rename",
+                "renamenx",
+                "restore",
+                "geosearchstore",
+                "sort"
+        ));
     }
 
     /**

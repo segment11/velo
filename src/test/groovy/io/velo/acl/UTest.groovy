@@ -401,6 +401,36 @@ class UTest extends Specification {
         u.checkCmdAndKey('set', dataSet, slotsSet)
     }
 
+    def 'test %W~ denies read-write commands like GETDEL and GETSET'() {
+        given:
+        def u = new U('writeonly2')
+        u.addRCmd(true, RCmd.fromLiteral('+@all'))
+        u.addRKey(true, RKey.fromLiteral('%W~data:*'))
+
+        def dataGetdel = new byte[2][]
+        dataGetdel[0] = 'getdel'.bytes
+        dataGetdel[1] = 'data:x'.bytes
+        def slotsGetdel = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        expect:
+        !u.checkCmdAndKey('getdel', dataGetdel, slotsGetdel)
+    }
+
+    def 'test %R~ denies read-write commands like GETDEL and GETSET'() {
+        given:
+        def u = new U('readonly2')
+        u.addRCmd(true, RCmd.fromLiteral('+@all'))
+        u.addRKey(true, RKey.fromLiteral('%R~data:*'))
+
+        def dataGetdel = new byte[2][]
+        dataGetdel[0] = 'getdel'.bytes
+        dataGetdel[1] = 'data:x'.bytes
+        def slotsGetdel = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        expect:
+        !u.checkCmdAndKey('getdel', dataGetdel, slotsGetdel)
+    }
+
     def 'test checkChannels uses OR across rules - original'() {
         given:
         def u = new U('kerry')

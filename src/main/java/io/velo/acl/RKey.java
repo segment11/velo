@@ -40,14 +40,17 @@ public class RKey {
      * @return true if the key matches the pattern and the command types align with the RKey's permissions, false otherwise
      */
     boolean match(String key, boolean cmdRead, boolean cmdWrite) {
+        return match(key, cmdRead, cmdWrite, false);
+    }
+
+    boolean match(String key, boolean cmdRead, boolean cmdWrite, boolean needsBoth) {
         if (type == Type.all) {
             return true;
         } else if (type == Type.read) {
-            return KeyLoader.isKeyMatch(key, pattern) && cmdRead;
+            return KeyLoader.isKeyMatch(key, pattern) && cmdRead && !needsBoth;
         } else if (type == Type.write) {
-            return KeyLoader.isKeyMatch(key, pattern) && cmdWrite;
+            return KeyLoader.isKeyMatch(key, pattern) && cmdWrite && !needsBoth;
         } else {
-            // type == Type.read_write
             return KeyLoader.isKeyMatch(key, pattern);
         }
     }
