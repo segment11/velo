@@ -88,6 +88,9 @@ public class AclUsers {
      * @return the Inner instance, or null if no matching instance is found
      */
     public Inner getInner() {
+        if (inners == null) {
+            return null;
+        }
         var currentThreadId = Thread.currentThread().threadId();
         for (var inner : inners) {
             if (inner.expectThreadId == currentThreadId) {

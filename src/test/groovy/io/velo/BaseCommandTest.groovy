@@ -107,6 +107,24 @@ class BaseCommandTest extends Specification {
         ConfForGlobal.slotNumber = 1
     }
 
+    def 'test getAuthU returns registry default user not static singleton'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+        def socket = SocketInspectorTest.mockTcpSocket()
+
+        when:
+        def newUser = new U(U.DEFAULT_USER)
+        newUser.on = true
+        newUser.password = U.Password.plain('configured-password')
+        aclUsers.replaceUsers([newUser])
+        def u = BaseCommand.getAuthU(socket)
+
+        then:
+        u != U.INIT_DEFAULT_U
+        u.checkPassword('configured-password')
+    }
+
     def 'test slot from raw key bytes keeps original bytes for hash'() {
         given:
         ConfForSlot.global = ConfForSlot.from(1_000_000)

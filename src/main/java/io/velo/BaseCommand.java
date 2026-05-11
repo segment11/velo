@@ -188,7 +188,11 @@ public abstract class BaseCommand {
      */
     public static @NotNull U getAuthU(ITcpSocket socket0) {
         var authUser = SocketInspector.getAuthUser(socket0);
-        return authUser == null ? U.INIT_DEFAULT_U : aclUsers.get(authUser);
+        if (authUser == null) {
+            var defaultUser = aclUsers.get(U.DEFAULT_USER);
+            return defaultUser != null ? defaultUser : U.INIT_DEFAULT_U;
+        }
+        return aclUsers.get(authUser);
     }
 
     protected @NotNull U getAuthU() {
