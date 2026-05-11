@@ -464,6 +464,51 @@ class UTest extends Specification {
         !u.checkCmdAndKey('blmove', dataBlmove, slotsBlmove)
     }
 
+    def 'test %W~ denies destructive pop commands that return values'() {
+        given:
+        def u = new U('writeonly4')
+        u.addRCmd(true, RCmd.fromLiteral('+@all'))
+        u.addRKey(true, RKey.fromLiteral('%W~data:*'))
+
+        def dataLpop = new byte[2][]
+        dataLpop[0] = 'lpop'.bytes
+        dataLpop[1] = 'data:x'.bytes
+        def slotsLpop = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        def dataRpop = new byte[2][]
+        dataRpop[0] = 'rpop'.bytes
+        dataRpop[1] = 'data:x'.bytes
+        def slotsRpop = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        def dataSpop = new byte[2][]
+        dataSpop[0] = 'spop'.bytes
+        dataSpop[1] = 'data:x'.bytes
+        def slotsSpop = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        def dataZpopmax = new byte[2][]
+        dataZpopmax[0] = 'zpopmax'.bytes
+        dataZpopmax[1] = 'data:x'.bytes
+        def slotsZpopmax = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        def dataBlpop = new byte[2][]
+        dataBlpop[0] = 'blpop'.bytes
+        dataBlpop[1] = 'data:x'.bytes
+        def slotsBlpop = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        def dataBrpop = new byte[2][]
+        dataBrpop[0] = 'brpop'.bytes
+        dataBrpop[1] = 'data:x'.bytes
+        def slotsBrpop = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        expect:
+        !u.checkCmdAndKey('lpop', dataLpop, slotsLpop)
+        !u.checkCmdAndKey('rpop', dataRpop, slotsRpop)
+        !u.checkCmdAndKey('spop', dataSpop, slotsSpop)
+        !u.checkCmdAndKey('zpopmax', dataZpopmax, slotsZpopmax)
+        !u.checkCmdAndKey('blpop', dataBlpop, slotsBlpop)
+        !u.checkCmdAndKey('brpop', dataBrpop, slotsBrpop)
+    }
+
     def 'test checkChannels uses OR across rules - original'() {
         given:
         def u = new U('kerry')
