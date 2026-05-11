@@ -111,6 +111,56 @@ class AclUsersTest extends Specification {
         eventloop.breakEventloop()
     }
 
+    def 'test upInsert does not double-apply callback on current thread inner'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+
+        def callCount = 0
+        when:
+        aclUsers.upInsert('counter-user') { u ->
+            callCount++
+            u.password = U.Password.plain('pw')
+        }
+        then:
+        callCount == 1
+        aclUsers.get('counter-user') != null
+
+        when:
+        callCount = 0
+        aclUsers.delete('counter-user')
+        then:
+        aclUsers.get('counter-user') == null
+
+        cleanup:
+        aclUsers.initForTest()
+    }
+
+    def 'test replaceUsers does not double-apply on current thread inner'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+
+        aclUsers.upInsert('to-replace') { u ->
+            u.password = U.Password.plain('old')
+        }
+
+        // Replace with a single user that has a known password
+        List<U> newUsers = [new U('replaced-user')]
+        newUsers[0].password = U.Password.plain('new-pw')
+
+        when:
+        aclUsers.replaceUsers(newUsers)
+        def user = aclUsers.get('replaced-user')
+        then:
+        user != null
+        user.checkPassword('new-pw')
+        aclUsers.get('to-replace') == null
+
+        cleanup:
+        aclUsers.initForTest()
+    }
+
     def 'test upInsert before init does not NPE and state preserved after init'() {
         given:
         def aclUsers = AclUsers.instance

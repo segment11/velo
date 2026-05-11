@@ -271,13 +271,13 @@ public class AclUsers {
         for (int i = 0; i < inners.length; i++) {
             var inner = inners[i];
             if (inner.expectThreadId == currentThreadId) {
-                doInTargetEventloop.doSth(inner);
-            } else {
-                var targetEventloop = slotWorkerEventloopArray[i];
-                targetEventloop.execute(() -> {
-                    doInTargetEventloop.doSth(inner);
-                });
+                // skip current thread's inner; caller already applied the mutation
+                continue;
             }
+            var targetEventloop = slotWorkerEventloopArray[i];
+            targetEventloop.execute(() -> {
+                doInTargetEventloop.doSth(inner);
+            });
         }
     }
 
