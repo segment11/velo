@@ -48,14 +48,22 @@ class RCmdTest extends Specification {
         then:
         one.literal() == '+@admin'
         one.match('acl', null)
-        one.match('acl_x', null)
+        !one.match('acl_x', null)
         !one.match('bitcount', null)
+        !one.match('manage', null)
 
         when:
         one.allow = false
         then:
         one.literal() == '-@admin'
         one.match('acl', null)
+
+        when:
+        one.allow = true
+        one.category = Category.read
+        then:
+        !one.match('manage', null)
+        !one.match('acl_x', null)
 
         when:
         one.allow = true

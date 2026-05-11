@@ -61,8 +61,7 @@ public class RCmd {
 
             var categoryList = Category.getCategoryListByCmd(cmd);
             if (categoryList == null) {
-                // velo extra commands
-                return true;
+                return false;
             }
 
             for (var cmdCategory : categoryList) {
