@@ -204,7 +204,7 @@ class AclUsersTest extends Specification {
         userOnEl2.checkPassword('routed-pw')
 
         when:
-        aclUsers.delete('routed-user')
+        def deleteResult = aclUsers.delete('routed-user')
         Thread.sleep(500)
         def deletedOnEl1 = eventloop1.submit(AsyncComputation.of(SupplierEx.of {
             aclUsers.get('routed-user')
@@ -213,8 +213,70 @@ class AclUsersTest extends Specification {
             aclUsers.get('routed-user')
         })).get()
         then:
+        deleteResult
         deletedOnEl1 == null
         deletedOnEl2 == null
+
+        when:
+        def deleteNonExistent = aclUsers.delete('nonexistent-user')
+        then:
+        !deleteNonExistent
+
+        cleanup:
+        eventloop1.breakEventloop()
+        eventloop2.breakEventloop()
+    }
+
+    def 'test non-owner replaceUsers routes through eventloop'() {
+        given:
+        def aclUsers = AclUsers.instance
+
+        def eventloop1 = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop1.keepAlive(true)
+        Thread.start {
+            eventloop1.run()
+        }
+        def eventloop2 = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop2.keepAlive(true)
+        Thread.start {
+            eventloop2.run()
+        }
+        Thread.sleep(200)
+        Eventloop[] testEventloopArray = [eventloop1, eventloop2]
+        aclUsers.initBySlotWorkerEventloopArray(testEventloopArray)
+
+        // First add a user
+        aclUsers.upInsert('old-user') { u ->
+            u.password = U.Password.plain('old-pw')
+        }
+        Thread.sleep(500)
+
+        // Replace from non-owner thread
+        List<U> newUsers = [new U('new-user')]
+        newUsers[0].password = U.Password.plain('new-pw')
+
+        when:
+        aclUsers.replaceUsers(newUsers)
+        Thread.sleep(500)
+        def userOnEl1 = eventloop1.submit(AsyncComputation.of(SupplierEx.of {
+            aclUsers.get('new-user')
+        })).get()
+        def userOnEl2 = eventloop2.submit(AsyncComputation.of(SupplierEx.of {
+            aclUsers.get('new-user')
+        })).get()
+        def oldOnEl1 = eventloop1.submit(AsyncComputation.of(SupplierEx.of {
+            aclUsers.get('old-user')
+        })).get()
+        then:
+        userOnEl1 != null
+        userOnEl1.checkPassword('new-pw')
+        userOnEl2 != null
+        userOnEl2.checkPassword('new-pw')
+        oldOnEl1 == null
 
         cleanup:
         eventloop1.breakEventloop()

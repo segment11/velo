@@ -325,7 +325,13 @@ public class AclUsers {
      */
     public boolean delete(String user) {
         var inner = getOwnedInner();
-        var flag = inner != null && inner.delete(user);
+        boolean flag;
+        if (inner != null) {
+            flag = inner.delete(user);
+        } else {
+            // non-owner thread: check existence via read fallback, actual delete via eventloop
+            flag = getInner().get(user) != null;
+        }
 
         changeUser(inner2 -> {
             inner2.delete(user);
