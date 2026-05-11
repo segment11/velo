@@ -195,7 +195,12 @@ public class U {
      * @param password the password to add
      */
     public void addPassword(Password password) {
-        // check duplicate
+        if (password.isNoPass()) {
+            passwords.clear();
+        } else {
+            passwords.removeIf(Password::isNoPass);
+        }
+
         if (passwords.stream().anyMatch(p -> p.equals(password))) {
             return;
         }

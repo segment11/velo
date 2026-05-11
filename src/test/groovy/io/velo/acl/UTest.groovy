@@ -390,4 +390,45 @@ class UTest extends Specification {
         then:
         !u.checkCmdAndKey('get', data, slots3)
     }
+
+    def 'test adding real password removes nopass sentinel'() {
+        given:
+        def u = new U('testuser')
+        u.addPassword(U.Password.NO_PASSWORD)
+
+        expect:
+        u.checkPassword('') || u.checkPassword('anything')
+
+        when:
+        u.addPassword(U.Password.plain('secret'))
+        then:
+        u.checkPassword('secret')
+        !u.checkPassword('anything')
+        u.literal().contains('nopass') == false
+
+        when:
+        u.resetPassword()
+        u.addPassword(U.Password.plain('pw1'))
+        u.addPassword(U.Password.plain('pw2'))
+        u.addPassword(U.Password.NO_PASSWORD)
+        then:
+        u.passwords.size() == 1
+        u.passwords[0].isNoPass()
+        u.checkPassword('pw1')
+    }
+
+    def 'test nopass clears existing passwords'() {
+        given:
+        def u = new U('testuser2')
+        u.addPassword(U.Password.plain('alpha'))
+        u.addPassword(U.Password.sha256Hex('beta'))
+
+        expect:
+        u.checkPassword('alpha')
+
+        when:
+        u.addPassword(U.Password.NO_PASSWORD)
+        then:
+        u.checkPassword('anything')
+    }
 }
