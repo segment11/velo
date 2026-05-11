@@ -522,4 +522,44 @@ class AGroupTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test acl load replicates users to binlog'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def aGroup = new AGroup(null, null, null)
+        aGroup.byPassGetSet = inMemoryGetSet
+        aGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.dynConfig.binlogOn = true
+
+        // write an ACL file with a known user
+        when:
+        def aclFile = new File('acl_test_load.conf')
+        if (aclFile.exists()) {
+            aclFile.delete()
+        }
+        aclFile.createNewFile()
+        aclFile.text = 'user default on nopass ~* +@all &*\nuser testuser on #abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab +@read ~*'
+        ValkeyRawConfSupport.aclFilename = 'acl_test_load.conf'
+        def reply = aGroup.execute('acl load')
+        then:
+        reply == OKReply.INSTANCE
+        aclUsers.get('testuser') != null
+        aclUsers.get('testuser').isOn()
+
+        cleanup:
+        aclFile.delete()
+        ValkeyRawConfSupport.aclFilename = 'users.acl'
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

@@ -231,6 +231,24 @@ public class AGroup extends BaseCommand {
 
             try {
                 aclUsers.loadAclFile();
+
+                // replicate loaded users to replicas
+                var firstOneSlot = localPersist.firstOneSlot();
+                if (firstOneSlot != null && firstOneSlot.getDynConfig().isBinlogOn()) {
+                    var users = aclUsers.getInner().getUsers();
+                    for (var u : users) {
+                        var setuserLine = "acl setuser " + u.literal().substring("user ".length());
+                        firstOneSlot.asyncCall(() -> {
+                            try {
+                                firstOneSlot.getBinlog().append(new XAclUpdate(setuserLine));
+                            } catch (IOException e) {
+                                throw new RuntimeException("Append binlog error, acl line=" + setuserLine, e);
+                            }
+                            return null;
+                        });
+                    }
+                }
+
                 return OKReply.INSTANCE;
             } catch (Exception e) {
                 return new ErrorReply(e.getMessage());
