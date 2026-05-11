@@ -431,6 +431,39 @@ class UTest extends Specification {
         !u.checkCmdAndKey('getdel', dataGetdel, slotsGetdel)
     }
 
+    def 'test %W~ denies RPOPLPUSH, BLMOVE, COPY'() {
+        given:
+        def u = new U('writeonly3')
+        u.addRCmd(true, RCmd.fromLiteral('+@all'))
+        u.addRKey(true, RKey.fromLiteral('%W~src:*'))
+        u.addRKey(false, RKey.fromLiteral('%W~dst:*'))
+
+        def dataRpoplpush = new byte[3][]
+        dataRpoplpush[0] = 'rpoplpush'.bytes
+        dataRpoplpush[1] = 'src:x'.bytes
+        dataRpoplpush[2] = 'dst:x'.bytes
+        def slotsRpoplpush = [BaseCommand.slot('src:x'.bytes, (short) 1), BaseCommand.slot('dst:x'.bytes, (short) 1)]
+
+        def dataCopy = new byte[3][]
+        dataCopy[0] = 'copy'.bytes
+        dataCopy[1] = 'src:x'.bytes
+        dataCopy[2] = 'dst:x'.bytes
+        def slotsCopy = [BaseCommand.slot('src:x'.bytes, (short) 1), BaseCommand.slot('dst:x'.bytes, (short) 1)]
+
+        def dataBlmove = new byte[5][]
+        dataBlmove[0] = 'blmove'.bytes
+        dataBlmove[1] = 'src:x'.bytes
+        dataBlmove[2] = 'dst:x'.bytes
+        dataBlmove[3] = 'left'.bytes
+        dataBlmove[4] = 'right'.bytes
+        def slotsBlmove = [BaseCommand.slot('src:x'.bytes, (short) 1), BaseCommand.slot('dst:x'.bytes, (short) 1)]
+
+        expect:
+        !u.checkCmdAndKey('rpoplpush', dataRpoplpush, slotsRpoplpush)
+        !u.checkCmdAndKey('copy', dataCopy, slotsCopy)
+        !u.checkCmdAndKey('blmove', dataBlmove, slotsBlmove)
+    }
+
     def 'test checkChannels uses OR across rules - original'() {
         given:
         def u = new U('kerry')
