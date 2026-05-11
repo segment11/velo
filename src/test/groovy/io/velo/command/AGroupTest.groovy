@@ -168,6 +168,17 @@ class AGroupTest extends Specification {
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1
 
+        when:
+        aclUsers.upInsert('a') { u ->
+            u.password = U.Password.NO_PASSWORD
+        }
+        def replyBefore = aGroup.execute('acl deluser default a')
+        def defaultUserExists = aclUsers.get('default') != null
+        then:
+        defaultUserExists
+        replyBefore instanceof IntegerReply
+        (replyBefore as IntegerReply).integer == 1
+
         // ***** *****
         when:
         def snowFlake = new SnowFlake(1, 1)

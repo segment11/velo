@@ -131,6 +131,9 @@ public class AGroup extends BaseCommand {
 
             int count = 0;
             for (var user : userList) {
+                if (user.equals(U.DEFAULT_USER)) {
+                    continue;
+                }
                 if (aclUsers.delete(user)) {
                     count++;
                 }
