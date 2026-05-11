@@ -275,12 +275,14 @@ public class U {
         var sb = new StringBuilder();
         sb.append("user ").append(user).append(" ");
         sb.append(isOn ? "on" : "off").append(" ");
-        var firstPassword = getFirstPassword();
-        if (firstPassword != null) {
-            if (firstPassword.encodeType == PasswordEncodedType.sha256Hex) {
-                sb.append(ADD_HASH_PASSWORD_PREFIX).append(firstPassword.passwordEncoded).append(" ");
+
+        for (var pwd : passwords) {
+            if (pwd.isNoPass()) {
+                sb.append(Password.NO_PASS).append(" ");
+            } else if (pwd.encodeType == PasswordEncodedType.sha256Hex) {
+                sb.append(ADD_HASH_PASSWORD_PREFIX).append(pwd.passwordEncoded).append(" ");
             } else {
-                sb.append(firstPassword.passwordEncoded).append(" ");
+                sb.append(ADD_HASH_PASSWORD_PREFIX).append(DigestUtils.sha256Hex(pwd.passwordEncoded)).append(" ");
             }
         }
 
@@ -391,21 +393,19 @@ public class U {
 
         var user = parts[1];
         var isOn = "on".equals(parts[2]);
-        var password = parts[3];
 
         var u = new U(user);
         u.setOn(isOn);
-        if (Password.NO_PASS.equals(password)) {
-            u.addPassword(Password.NO_PASSWORD);
-        } else if (password.startsWith(ADD_HASH_PASSWORD_PREFIX)) {
-            u.addPassword(Password.sha256HexEncoded(password.substring(1)));
-        } else {
-            u.addPassword(Password.plain(password));
-        }
 
-        for (int i = 4; i < parts.length; i++) {
+        for (int i = 3; i < parts.length; i++) {
             var part = parts[i];
-            if (part.startsWith("+")) {
+            if (part.startsWith(ADD_PASSWORD_PREFIX)) {
+                u.addPassword(Password.plain(part.substring(1)));
+            } else if (part.startsWith(ADD_HASH_PASSWORD_PREFIX)) {
+                u.addPassword(Password.sha256HexEncoded(part.substring(1)));
+            } else if (Password.NO_PASS.equals(part)) {
+                u.addPassword(Password.NO_PASSWORD);
+            } else if (part.startsWith("+")) {
                 u.addRCmd(false, RCmd.fromLiteral(part));
             } else if (part.startsWith("-")) {
                 u.addRCmdDisallow(false, RCmd.fromLiteral(part));
@@ -413,6 +413,8 @@ public class U {
                 u.addRKey(false, RKey.fromLiteral(part));
             } else if (part.startsWith("&")) {
                 u.addRPubSub(false, RPubSub.fromLiteral(part));
+            } else if (i == 3) {
+                u.addPassword(Password.plain(part));
             } else {
                 throw new IllegalArgumentException("Invalid literal: " + part);
             }
