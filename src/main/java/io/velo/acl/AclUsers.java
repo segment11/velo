@@ -127,6 +127,27 @@ public class AclUsers {
     }
 
     /**
+     * Returns the Inner instance owned by the current thread only (no fallback).
+     * Returns null if no inner is owned by the current thread or if not initialized.
+     * Use this for write operations to avoid mutating another thread's inner.
+     */
+    private Inner getOwnedInner() {
+        if (inners == null) {
+            if (preInitInner == null) {
+                preInitInner = new Inner(Thread.currentThread().threadId());
+            }
+            return preInitInner;
+        }
+        var currentThreadId = Thread.currentThread().threadId();
+        for (var inner : inners) {
+            if (inner.expectThreadId == currentThreadId) {
+                return inner;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Loads the ACL file and replaces the existing user list with the loaded users.
      */
     public void loadAclFile() {
@@ -288,8 +309,10 @@ public class AclUsers {
      * @param callback the callback to perform the update operation
      */
     public void upInsert(String user, UpdateCallback<U> callback) {
-        var inner = getInner();
-        inner.upInsert(user, callback);
+        var inner = getOwnedInner();
+        if (inner != null) {
+            inner.upInsert(user, callback);
+        }
 
         changeUser(inner2 -> inner2.upInsert(user, callback));
     }
@@ -301,8 +324,8 @@ public class AclUsers {
      * @return true if the user was successfully deleted from any Inner instance, otherwise false
      */
     public boolean delete(String user) {
-        var inner = getInner();
-        var flag = inner.delete(user);
+        var inner = getOwnedInner();
+        var flag = inner != null && inner.delete(user);
 
         changeUser(inner2 -> {
             inner2.delete(user);
@@ -316,9 +339,11 @@ public class AclUsers {
      * @param users the new list of user objects
      */
     public void replaceUsers(List<U> users) {
-        var inner = getInner();
-        inner.users.clear();
-        inner.users.addAll(users);
+        var inner = getOwnedInner();
+        if (inner != null) {
+            inner.users.clear();
+            inner.users.addAll(users);
+        }
 
         changeUser(inner2 -> {
             inner2.users.clear();

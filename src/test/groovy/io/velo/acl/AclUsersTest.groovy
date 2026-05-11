@@ -161,6 +161,66 @@ class AclUsersTest extends Specification {
         aclUsers.initForTest()
     }
 
+    def 'test write methods route through eventloop for non-owner thread'() {
+        given:
+        def aclUsers = AclUsers.instance
+
+        // Two eventloops on separate threads
+        def eventloop1 = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop1.keepAlive(true)
+        Thread.start {
+            eventloop1.run()
+        }
+        def eventloop2 = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop2.keepAlive(true)
+        Thread.start {
+            eventloop2.run()
+        }
+        Thread.sleep(200)
+        Eventloop[] testEventloopArray = [eventloop1, eventloop2]
+        aclUsers.initBySlotWorkerEventloopArray(testEventloopArray)
+
+        // Call upInsert from a non-worker thread (test thread)
+        when:
+        aclUsers.upInsert('routed-user') { u ->
+            u.password = U.Password.plain('routed-pw')
+        }
+        Thread.sleep(500)
+        // Verify both eventloop threads got the user
+        def userOnEl1 = eventloop1.submit(AsyncComputation.of(SupplierEx.of {
+            aclUsers.get('routed-user')
+        })).get()
+        def userOnEl2 = eventloop2.submit(AsyncComputation.of(SupplierEx.of {
+            aclUsers.get('routed-user')
+        })).get()
+        then:
+        userOnEl1 != null
+        userOnEl1.checkPassword('routed-pw')
+        userOnEl2 != null
+        userOnEl2.checkPassword('routed-pw')
+
+        when:
+        aclUsers.delete('routed-user')
+        Thread.sleep(500)
+        def deletedOnEl1 = eventloop1.submit(AsyncComputation.of(SupplierEx.of {
+            aclUsers.get('routed-user')
+        })).get()
+        def deletedOnEl2 = eventloop2.submit(AsyncComputation.of(SupplierEx.of {
+            aclUsers.get('routed-user')
+        })).get()
+        then:
+        deletedOnEl1 == null
+        deletedOnEl2 == null
+
+        cleanup:
+        eventloop1.breakEventloop()
+        eventloop2.breakEventloop()
+    }
+
     def 'test upInsert before init does not NPE and state preserved after init'() {
         given:
         def aclUsers = AclUsers.instance
