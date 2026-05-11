@@ -333,4 +333,61 @@ class UTest extends Specification {
         u.checkChannels('my_channel1')
         !u.checkChannels('your_channel1')
     }
+
+    def 'test checkChannels uses OR across rules'() {
+        given:
+        def u = new U('kerry')
+        def rPubSub1 = new RPubSub()
+        rPubSub1.pattern = 'foo*'
+        def rPubSub2 = new RPubSub()
+        rPubSub2.pattern = 'bar*'
+        u.rPubSubList << rPubSub1
+        u.rPubSubList << rPubSub2
+
+        expect:
+        u.checkChannels('foo123')
+        u.checkChannels('bar456')
+        !u.checkChannels('baz789')
+        u.checkChannels('foo123', 'bar456')
+        !u.checkChannels('foo123', 'baz789')
+    }
+
+    def 'test checkCmdAndKey uses OR across key patterns'() {
+        given:
+        def u = new U('kerry')
+        def rCmd = new RCmd()
+        rCmd.allow = true
+        rCmd.type = RCmd.Type.all
+        u.rCmdList << rCmd
+
+        def rKey1 = new RKey()
+        rKey1.type = RKey.Type.read_write
+        rKey1.pattern = 'foo*'
+        def rKey2 = new RKey()
+        rKey2.type = RKey.Type.read_write
+        rKey2.pattern = 'bar*'
+        u.rKeyList << rKey1
+        u.rKeyList << rKey2
+
+        def data = new byte[2][]
+        data[0] = 'get'.bytes
+
+        when:
+        data[1] = 'foo123'.bytes
+        def slots1 = [BaseCommand.slot('foo123'.bytes, (short) 1)]
+        then:
+        u.checkCmdAndKey('get', data, slots1)
+
+        when:
+        data[1] = 'bar456'.bytes
+        def slots2 = [BaseCommand.slot('bar456'.bytes, (short) 1)]
+        then:
+        u.checkCmdAndKey('get', data, slots2)
+
+        when:
+        data[1] = 'baz789'.bytes
+        def slots3 = [BaseCommand.slot('baz789'.bytes, (short) 1)]
+        then:
+        !u.checkCmdAndKey('get', data, slots3)
+    }
 }

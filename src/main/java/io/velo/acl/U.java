@@ -594,11 +594,16 @@ public class U {
                     continue;
                 }
 
+                boolean matched = false;
                 for (var rKey : rKeyList) {
                     // todo, cmd read / write, need to check
-                    if (!rKey.match(slotWithKeyHash.rawKey(), true, true)) {
-                        return FALSE_WHEN_CHECK_KEY;
+                    if (rKey.match(slotWithKeyHash.rawKey(), true, true)) {
+                        matched = true;
+                        break;
                     }
+                }
+                if (!matched) {
+                    return FALSE_WHEN_CHECK_KEY;
                 }
             }
         }
@@ -617,11 +622,16 @@ public class U {
             return false;
         }
 
-        for (var rPubSub : rPubSubList) {
-            for (var channel : channels) {
-                if (!rPubSub.match(channel)) {
-                    return false;
+        for (var channel : channels) {
+            boolean matched = false;
+            for (var rPubSub : rPubSubList) {
+                if (rPubSub.match(channel)) {
+                    matched = true;
+                    break;
                 }
+            }
+            if (!matched) {
+                return false;
             }
         }
         return true;
