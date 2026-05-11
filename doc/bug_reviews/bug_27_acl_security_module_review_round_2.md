@@ -728,3 +728,156 @@ AI agent 2 added a local follow-up patch after reviewing the commit:
 
 - Pre-commit: review whether numeric mutation commands such as `INCR*`, `DECR*`, `HINCRBY*`, and `ZINCRBY` should be treated as read/write because their responses reveal state derived from the old value. This is a policy decision, but it should be explicit.
 - Post-commit: replace the coarse read/write command set with command/key access metadata so option-sensitive and source/destination semantics are not handled by repeated special cases.
+
+---
+
+## Review Feedback - Bug 4 Fix
+
+Reviewer: AI agent 2
+Review date: 2026-05-11
+Reviewed commit: `e574a6e37af1c4407103a07f70ff9cadb1abf1d9` (`fix: ACL SETUSER validates all rules on temp copy before applying`)
+
+### Findings
+
+No blocking issues found.
+
+### Summary of Fix
+
+The commit changes `ACL SETUSER` so rule application is staged on a temporary `U` instance:
+
+- `src/main/java/io/velo/command/AGroup.java:317-318` creates a temp user and copies the current state into it.
+- `src/main/java/io/velo/command/AGroup.java:320-376` applies every rule to the temp user.
+- `src/main/java/io/velo/command/AGroup.java:378` copies temp state back to the live user only after all rules validate.
+- `src/main/java/io/velo/command/AGroup.java:383-385` catches both `AclInvalidRuleException` and `IllegalArgumentException`, converting invalid rules into `ACL_SETUSER_RULE_INVALID`.
+- `src/main/java/io/velo/acl/U.java:476-488` adds `copyStateFrom()` for complete ACL state copying.
+
+This addresses the original bug: a failed later rule no longer leaves earlier successful rule mutations on the live user.
+
+### Strengths
+
+- The fix preserves existing `AclUsers.upInsert()` behavior while making the callback atomic from the live user's perspective.
+- Invalid literal/category failures now return an ACL rule error instead of escaping as an uncaught `IllegalArgumentException`.
+- The regression test verifies an existing enabled user remains enabled and keeps its password after a failed `ACL SETUSER victim off ...`.
+
+### Concerns
+
+- Non-blocking test-strength note: the regression verifies `isOn` and password state, but not command/key/channel lists. The code copies those lists through the same `copyStateFrom()` method and JaCoCo confirms those copy lines are executed, so this is not a blocker.
+- Non-blocking follow-up: adding a new-user failure case such as `ACL SETUSER new on +@all ~* invalid` would directly cover the "failed command must not create a privileged user" scenario from the finding.
+
+### Verification
+
+- Ran focused tests with fresh execution: `./gradlew :cleanTest :test --tests "io.velo.command.AGroupTest" --tests "io.velo.acl.UTest" --tests "io.velo.acl.AclUsersTest" --tests "io.velo.RequestHandlerTest"` - passed.
+- Inspected test report: `build/reports/tests/test/classes/io.velo.command.AGroupTest.html` shows `test acl setuser failed rule does not partially mutate` passed.
+- Inspected JaCoCo HTML reports:
+  - `build/reports/jacocoHtml/io.velo.command/AGroup.java.html`: `AGroup.java:317-318`, `AGroup.java:374`, `AGroup.java:378`, and `AGroup.java:383-384` covered.
+  - `build/reports/jacocoHtml/io.velo.acl/U.java.html`: `U.java:477-488` covered for `copyStateFrom()`.
+
+### Follow-ups
+
+- Pre-commit: none required for Bug 4.
+- Post-commit: add optional coverage for failed new-user creation and for command/key/channel state remaining unchanged after a failed update.
+
+---
+
+## Review Feedback - Bug 5 Fix
+
+Reviewer: AI agent 2
+Review date: 2026-05-11
+Reviewed commit: `34445c1d770d32268454b0e12a8c0c920c51aaeb` (`fix: deny uncategorized commands in category ACL checks`)
+
+### Findings
+
+No blocking issues found.
+
+### Summary of Fix
+
+The commit changes category command matching so commands with no `Category` mapping no longer match arbitrary category grants:
+
+- `src/main/java/io/velo/acl/RCmd.java:62-64` now returns `false` when `Category.getCategoryListByCmd(cmd)` is `null`.
+- `src/test/groovy/io/velo/acl/RCmdTest.groovy:49-66` updates the category-rule expectations and adds direct checks that `manage` and another uncategorized command do not match `+@admin` or `+@read`.
+
+This addresses the original bypass where a user with a narrow category grant such as `+@read` could pass command ACL for uncategorized Velo commands like `manage`.
+
+### Strengths
+
+- The fix is centralized in `RCmd.match()`, so it applies to every category ACL rule without requiring command-specific checks.
+- Explicit command grants are preserved: `+manage` still uses `Type.cmd` matching and is not affected by category lookup.
+- The change is fail-closed for future uncategorized commands.
+
+### Concerns
+
+- Non-blocking test-strength note: coverage is at the `RCmd` unit level rather than an end-to-end `U.checkCmdAndKey()` or `ACL DRYRUN` case. Since `U` delegates command-rule matching to `RCmd.match()`, the security behavior is covered at the core decision point.
+- `+@all` and `allcommands` still match uncategorized commands through the explicit `Category.all` branch before category lookup. That appears intentional for all-command grants, but it is worth documenting as policy if Velo-specific operational commands should require explicit grants even for `+@all`.
+
+### Verification
+
+- Ran focused tests with fresh execution: `./gradlew :cleanTest :test --tests "io.velo.acl.RCmdTest" --tests "io.velo.acl.UTest" --tests "io.velo.acl.CategoryTest" --tests "io.velo.command.AGroupTest" --tests "io.velo.RequestHandlerTest"` - passed.
+- Inspected test report: `build/reports/tests/test/classes/io.velo.acl.RCmdTest.html` shows `test all` and `test from literal` passed.
+- Inspected JaCoCo HTML report: `build/reports/jacocoHtml/io.velo.acl/RCmd.java.html`.
+  - `RCmd.java:62` category lookup covered.
+  - `RCmd.java:63` null-category branch has all branches covered.
+  - `RCmd.java:64` new deny return for uncategorized commands covered.
+  - `RCmd.java:67-68` mapped-category iteration and match branch covered.
+  - `RCmd.java:72` mapped-but-wrong-category deny return covered.
+
+### Follow-ups
+
+- Pre-commit: none required for Bug 5.
+- Post-commit: optionally add an integration test showing a `+@read` user is denied for `manage`, while a user with explicit `+manage` is allowed.
+
+---
+
+## Review Feedback - Bug 6 Fix
+
+Reviewer: AI agent 2
+Review date: 2026-05-11
+Reviewed commit: `094e73a75b73109ea596d448824d7ecf1e4c6a2e` (`fix: require HTTP auth for metrics, exempt HAProxy health endpoints`)
+
+### Findings
+
+1. **Medium - malformed one-token HTTP requests can now throw before returning `FORMAT`**
+
+   The new auth gate reads the first HTTP token and immediately builds a `String` from it when `ConfForGlobal.PASSWORD` is set:
+
+   - `src/main/java/io/velo/RequestHandler.java:287-291`
+
+   ```java
+   var firstDataBytes = data[0];
+   ...
+   var firstDataString = new String(firstDataBytes, StandardCharsets.UTF_8);
+   ```
+
+   The existing null check is still below the metrics check:
+
+   - `src/main/java/io/velo/RequestHandler.java:344-346`
+
+   Before this commit, `request.isHttp() && data.length == 1 && data[0] == null` reached that `FORMAT` return. With `PASSWORD` configured and no pre-authenticated socket, it now dereferences `null` at line 291 before the null check. That means a malformed HTTP request can escape the normal `ErrorReply.FORMAT` path and fail with a runtime exception. The auth gate should check `firstDataBytes == null` before `new String(...)`.
+
+### Summary of Fix
+
+The commit moves an auth gate into the one-token HTTP special handling path. It requires HTTP Basic auth for `?metrics` when `ConfForGlobal.PASSWORD` is set, but intentionally treats HAProxy helper endpoints (`master`, `master_or_slave`, `slave`, and `slave_with_zone...`) as public health checks.
+
+### Strengths
+
+- `?metrics` no longer bypasses password authentication when `PASSWORD` is configured.
+- Basic auth parsing uses the same case-insensitive `Basic ` prefix and username/password validation pattern as the normal HTTP command path.
+- The test proves unauthenticated `?metrics` returns `NO_AUTH` while HAProxy health endpoints remain reachable without credentials.
+
+### Concerns
+
+- The HAProxy endpoints are still intentionally unauthenticated. If the intended policy is that `PASSWORD` protects the entire HTTP surface, this remains a partial fix for the original finding. If health endpoints are meant to be public, this should be documented as policy.
+- The new test does not cover successful Basic auth for `?metrics`, malformed Basic headers on the special endpoint path, disabled users, wrong passwords, or case-insensitive `Authorization` headers in this early gate. JaCoCo confirms those success/failure sub-branches are not covered.
+
+### Verification
+
+- Ran focused tests with fresh execution: `./gradlew :cleanTest :test --tests "io.velo.acl.RCmdTest" --tests "io.velo.acl.UTest" --tests "io.velo.acl.CategoryTest" --tests "io.velo.command.AGroupTest" --tests "io.velo.RequestHandlerTest"` - passed.
+- Inspected test report: `build/reports/tests/test/classes/io.velo.RequestHandlerTest.html` shows `test http metrics requires auth when PASSWORD is set`, `test malformed http basic auth returns auth failed`, and `test handle` passed.
+- Inspected JaCoCo HTML report: `build/reports/jacocoHtml/io.velo/RequestHandler.java.html`.
+  - `RequestHandler.java:287`, `RequestHandler.java:290-292`, `RequestHandler.java:296-299`, `RequestHandler.java:334`, and `RequestHandler.java:345` covered.
+  - `RequestHandler.java:302`, `RequestHandler.java:308`, `RequestHandler.java:323`, and `RequestHandler.java:327` not covered, so the special-endpoint valid/malformed Basic-auth paths still need tests.
+
+### Follow-ups
+
+- Pre-commit: move the `firstDataBytes == null` check before the new auth gate, and add a regression with `PASSWORD` set for a one-token HTTP request with `data[0] == null`.
+- Pre-commit: add a positive `?metrics` Basic-auth test and malformed Basic-auth tests for the special endpoint path.
+- Post-commit: document whether HAProxy health endpoints are intentionally public when `PASSWORD` is configured, or add a config flag if deployments need those endpoints protected too.
