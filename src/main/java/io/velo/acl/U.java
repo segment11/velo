@@ -600,7 +600,7 @@ public class U {
                 }
 
                 boolean isWrite = Category.isWriteCmd(cmd);
-                boolean isReadWrite = Category.isReadWriteCmd(cmd);
+                boolean isReadWrite = Category.isReadWriteCmd(cmd, data);
                 boolean cmdRead = !isWrite;
                 boolean cmdWrite = isWrite;
                 boolean matched = false;

@@ -460,6 +460,7 @@ class UTest extends Specification {
 
         expect:
         !u.checkCmdAndKey('rpoplpush', dataRpoplpush, slotsRpoplpush)
+        !u.checkCmdAndKey('brpoplpush', dataRpoplpush, slotsRpoplpush)
         !u.checkCmdAndKey('copy', dataCopy, slotsCopy)
         !u.checkCmdAndKey('blmove', dataBlmove, slotsBlmove)
     }
@@ -490,6 +491,11 @@ class UTest extends Specification {
         dataZpopmax[1] = 'data:x'.bytes
         def slotsZpopmax = [BaseCommand.slot('data:x'.bytes, (short) 1)]
 
+        def dataZpopmin = new byte[2][]
+        dataZpopmin[0] = 'zpopmin'.bytes
+        dataZpopmin[1] = 'data:x'.bytes
+        def slotsZpopmin = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
         def dataBlpop = new byte[2][]
         dataBlpop[0] = 'blpop'.bytes
         dataBlpop[1] = 'data:x'.bytes
@@ -505,8 +511,41 @@ class UTest extends Specification {
         !u.checkCmdAndKey('rpop', dataRpop, slotsRpop)
         !u.checkCmdAndKey('spop', dataSpop, slotsSpop)
         !u.checkCmdAndKey('zpopmax', dataZpopmax, slotsZpopmax)
+        !u.checkCmdAndKey('zpopmin', dataZpopmin, slotsZpopmin)
         !u.checkCmdAndKey('blpop', dataBlpop, slotsBlpop)
         !u.checkCmdAndKey('brpop', dataBrpop, slotsBrpop)
+    }
+
+    def 'test %W~ denies write commands that return previous string values'() {
+        given:
+        def u = new U('writeonly5')
+        u.addRCmd(true, RCmd.fromLiteral('+@all'))
+        u.addRKey(true, RKey.fromLiteral('%W~data:*'))
+
+        def dataSet = new byte[3][]
+        dataSet[0] = 'set'.bytes
+        dataSet[1] = 'data:x'.bytes
+        dataSet[2] = 'new'.bytes
+        def slotsSet = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        def dataSetGet = new byte[4][]
+        dataSetGet[0] = 'set'.bytes
+        dataSetGet[1] = 'data:x'.bytes
+        dataSetGet[2] = 'new'.bytes
+        dataSetGet[3] = 'get'.bytes
+        def slotsSetGet = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        def dataSetbit = new byte[4][]
+        dataSetbit[0] = 'setbit'.bytes
+        dataSetbit[1] = 'data:x'.bytes
+        dataSetbit[2] = '0'.bytes
+        dataSetbit[3] = '1'.bytes
+        def slotsSetbit = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        expect:
+        u.checkCmdAndKey('set', dataSet, slotsSet)
+        !u.checkCmdAndKey('set', dataSetGet, slotsSetGet)
+        !u.checkCmdAndKey('setbit', dataSetbit, slotsSetbit)
     }
 
     def 'test checkChannels uses OR across rules - original'() {

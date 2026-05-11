@@ -34,6 +34,22 @@ public enum Category {
         return readWriteCmdSet.contains(cmd);
     }
 
+    public static boolean isReadWriteCmd(String cmd, byte[][] data) {
+        if (isReadWriteCmd(cmd)) {
+            return true;
+        }
+
+        if ("set".equals(cmd) && data != null) {
+            for (int i = 3; i < data.length; i++) {
+                if ("get".equalsIgnoreCase(new String(data[i]))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Checks if a given command is a write command.
      *
@@ -894,6 +910,7 @@ public enum Category {
                 "spop",
                 "zpopmax",
                 "zpopmin",
+                "setbit",
                 "smove",
                 "copy",
                 "rename",
