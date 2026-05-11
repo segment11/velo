@@ -420,15 +420,9 @@ class AGroupTest extends Specification {
         reply == OKReply.INSTANCE
 
         when:
-        boolean exception = false
-        try {
-            aGroup.execute('acl setuser a _on')
-        } catch (IllegalArgumentException e) {
-            println e.message
-            exception = true
-        }
+        reply = aGroup.execute('acl setuser a _on')
         then:
-        exception
+        reply instanceof ErrorReply
 
         when:
         reply = aGroup.execute('acl setuser')
@@ -478,6 +472,51 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl')
         then:
         reply == ErrorReply.FORMAT
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test acl setuser failed rule does not partially mutate'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def aGroup = new AGroup(null, null, null)
+        aGroup.byPassGetSet = inMemoryGetSet
+        aGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.dynConfig.binlogOn = true
+
+        // Set up victim with known state
+        when:
+        def reply = aGroup.execute('acl setuser victim on +@all ~* >secret')
+        then:
+        reply == OKReply.INSTANCE
+
+        // Verify victim state before failed SETUSER
+        def victimBefore = aclUsers.get('victim')
+        victimBefore.isOn()
+        victimBefore.checkPassword('secret')
+
+        // SETUSER with valid rule then invalid rule - should fail
+        when:
+        reply = aGroup.execute('acl setuser victim off !!!invalid-rule!!!')
+        then:
+        reply instanceof ErrorReply
+
+        // Victim state must be unchanged
+        def victimAfter = aclUsers.get('victim')
+        victimAfter.isOn()
+        victimAfter.checkPassword('secret')
 
         cleanup:
         localPersist.cleanUp()

@@ -473,6 +473,20 @@ public class U {
         rPubSubList.clear();
     }
 
+    public void copyStateFrom(U source) {
+        this.isOn = source.isOn;
+        this.passwords.clear();
+        this.passwords.addAll(source.passwords);
+        this.rCmdList.clear();
+        this.rCmdList.addAll(source.rCmdList);
+        this.rCmdDisallowList.clear();
+        this.rCmdDisallowList.addAll(source.rCmdDisallowList);
+        this.rKeyList.clear();
+        this.rKeyList.addAll(source.rKeyList);
+        this.rPubSubList.clear();
+        this.rPubSubList.addAll(source.rPubSubList);
+    }
+
     /**
      * Adds command rules to the user.
      *
