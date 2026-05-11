@@ -335,6 +335,73 @@ class UTest extends Specification {
     }
 
     def 'test checkChannels uses OR across rules'() {
+
+        when:
+        def u = new U('rwtest')
+        u.addRCmd(true, RCmd.fromLiteral('+@all'))
+        u.addRKey(true, RKey.fromLiteral('%R~tenant:*'))
+        u.addRKey(false, RKey.fromLiteral('%W~tenant:*'))
+
+        def dataGet = new byte[2][]
+        dataGet[0] = 'get'.bytes
+        dataGet[1] = 'tenant:1'.bytes
+        def slotsGet = [BaseCommand.slot('tenant:1'.bytes, (short) 1)]
+
+        def dataSet = new byte[3][]
+        dataSet[0] = 'set'.bytes
+        dataSet[1] = 'tenant:1'.bytes
+        dataSet[2] = 'value'.bytes
+        def slotsSet = [BaseCommand.slot('tenant:1'.bytes, (short) 1)]
+        then:
+        u.checkCmdAndKey('get', dataGet, slotsGet)
+        u.checkCmdAndKey('set', dataSet, slotsSet)
+    }
+
+    def 'test %R~ key selector only allows read commands'() {
+        given:
+        def u = new U('readonly')
+        u.addRCmd(true, RCmd.fromLiteral('+@all'))
+        u.addRKey(true, RKey.fromLiteral('%R~data:*'))
+
+        def dataGet = new byte[2][]
+        dataGet[0] = 'get'.bytes
+        dataGet[1] = 'data:x'.bytes
+        def slotsGet = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        def dataSet = new byte[3][]
+        dataSet[0] = 'set'.bytes
+        dataSet[1] = 'data:x'.bytes
+        dataSet[2] = 'v'.bytes
+        def slotsSet = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        expect:
+        u.checkCmdAndKey('get', dataGet, slotsGet)
+        !u.checkCmdAndKey('set', dataSet, slotsSet)
+    }
+
+    def 'test %W~ key selector only allows write commands'() {
+        given:
+        def u = new U('writeonly')
+        u.addRCmd(true, RCmd.fromLiteral('+@all'))
+        u.addRKey(true, RKey.fromLiteral('%W~data:*'))
+
+        def dataGet = new byte[2][]
+        dataGet[0] = 'get'.bytes
+        dataGet[1] = 'data:x'.bytes
+        def slotsGet = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        def dataSet = new byte[3][]
+        dataSet[0] = 'set'.bytes
+        dataSet[1] = 'data:x'.bytes
+        dataSet[2] = 'v'.bytes
+        def slotsSet = [BaseCommand.slot('data:x'.bytes, (short) 1)]
+
+        expect:
+        !u.checkCmdAndKey('get', dataGet, slotsGet)
+        u.checkCmdAndKey('set', dataSet, slotsSet)
+    }
+
+    def 'test checkChannels uses OR across rules - original'() {
         given:
         def u = new U('kerry')
         def rPubSub1 = new RPubSub()

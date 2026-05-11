@@ -599,10 +599,10 @@ public class U {
                     continue;
                 }
 
+                boolean isWrite = Category.isWriteCmd(cmd);
                 boolean matched = false;
                 for (var rKey : rKeyList) {
-                    // todo, cmd read / write, need to check
-                    if (rKey.match(slotWithKeyHash.rawKey(), true, true)) {
+                    if (rKey.match(slotWithKeyHash.rawKey(), !isWrite, isWrite)) {
                         matched = true;
                         break;
                     }
