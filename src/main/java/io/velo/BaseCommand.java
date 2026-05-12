@@ -164,13 +164,19 @@ public abstract class BaseCommand {
 
     /**
      * Converts data to a line string.
+     * Arguments containing spaces are quoted with double-quotes.
      *
      * @return the data line string
      */
     protected String dataToLine() {
         var sb = new StringBuilder();
         for (var i = 0; i < data.length; i++) {
-            sb.append(new String(data[i]));
+            var s = new String(data[i]);
+            if (s.contains(" ") || s.contains("\"") || s.contains("\\")) {
+                sb.append('"').append(s.replace("\\", "\\\\").replace("\"", "\\\"")).append('"');
+            } else {
+                sb.append(s);
+            }
             if (i != data.length - 1) {
                 sb.append(" ");
             }
@@ -384,10 +390,11 @@ public abstract class BaseCommand {
 
     @TestOnly
     public Reply execute(String allDataString, DataArrayReplacer replacer) {
-        var dataStrings = allDataString.split(" ");
-        var data = new byte[dataStrings.length][];
-        for (int i = 0; i < dataStrings.length; i++) {
-            var dataString = dataStrings[i];
+        var dataStrings = parseLine(allDataString);
+        var dataStringsArray = dataStrings.toArray(new String[0]);
+        var data = new byte[dataStringsArray.length][];
+        for (int i = 0; i < dataStringsArray.length; i++) {
+            var dataString = dataStringsArray[i];
             switch (dataString) {
                 case BYTES_0_LENGTH_PLACEHOLDER -> {
                     data[i] = new byte[0];
@@ -406,7 +413,7 @@ public abstract class BaseCommand {
             data[i] = dataString.getBytes();
         }
 
-        this.cmd = dataStrings[0];
+        this.cmd = dataStringsArray[0];
         this.data = data;
 
         if (replacer != null) {
@@ -415,6 +422,43 @@ public abstract class BaseCommand {
 
         slotWithKeyHashListParsed = parseSlots(cmd, data, slotNumber);
         return handle();
+    }
+
+    private static List<String> parseLine(String line) {
+        var result = new ArrayList<String>();
+        var sb = new StringBuilder();
+        var inQuotes = false;
+        var i = 0;
+        while (i < line.length()) {
+            var c = line.charAt(i);
+            if (c == '\\' && i + 1 < line.length()) {
+                var next = line.charAt(i + 1);
+                if (next == '"' || next == '\\') {
+                    sb.append(next);
+                    i += 2;
+                    continue;
+                }
+            }
+            if (c == '"') {
+                inQuotes = !inQuotes;
+                i++;
+                continue;
+            }
+            if (c == ' ' && !inQuotes) {
+                if (sb.length() > 0) {
+                    result.add(sb.toString());
+                    sb.setLength(0);
+                }
+                i++;
+                continue;
+            }
+            sb.append(c);
+            i++;
+        }
+        if (sb.length() > 0) {
+            result.add(sb.toString());
+        }
+        return result;
     }
 
     protected final LocalPersist localPersist = LocalPersist.getInstance();

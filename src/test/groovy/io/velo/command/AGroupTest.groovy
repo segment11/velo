@@ -614,4 +614,46 @@ class AGroupTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test dataToLine and execute roundtrip with space-containing password'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def aGroup1 = new AGroup(null, null, null)
+        aGroup1.byPassGetSet = inMemoryGetSet
+        aGroup1.from(BaseCommand.mockAGroup())
+
+        and:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot((short) 0)
+        oneSlot.dynConfig.binlogOn = true
+
+        and:
+        aGroup1.cmd = 'acl'
+        aGroup1.data = ['acl', 'setuser', 'spaceuser', '>my secret'] as String[]
+
+        when:
+        def line = aGroup1.dataToLine()
+        def aGroup2 = new AGroup(null, null, null)
+        aGroup2.byPassGetSet = inMemoryGetSet
+        aGroup2.from(BaseCommand.mockAGroup())
+
+        def reply = aGroup2.execute(line)
+        def user = aclUsers.get('spaceuser')
+        then:
+        reply == OKReply.INSTANCE
+        user != null
+        user.checkPassword('my secret')
+        !user.checkPassword('my')
+        !user.checkPassword('secret')
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }
