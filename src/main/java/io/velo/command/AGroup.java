@@ -230,12 +230,39 @@ public class AGroup extends BaseCommand {
             }
 
             try {
+                // capture users before load to compute deletions
+                var previousUsers = aclUsers.getInner().getUsers();
+                var previousUserNames = previousUsers.stream()
+                        .map(U::getUser)
+                        .collect(java.util.stream.Collectors.toSet());
+
                 aclUsers.loadAclFile();
 
                 // replicate loaded users to replicas
                 var firstOneSlot = localPersist.firstOneSlot();
                 if (firstOneSlot != null && firstOneSlot.getDynConfig().isBinlogOn()) {
                     var users = aclUsers.getInner().getUsers();
+                    var loadedUserNames = users.stream()
+                            .map(U::getUser)
+                            .collect(java.util.stream.Collectors.toSet());
+
+                    // replicate deletions for users removed by the load
+                    for (var prevUser : previousUsers) {
+                        if (!loadedUserNames.contains(prevUser.getUser())
+                                && !prevUser.getUser().equals(U.DEFAULT_USER)) {
+                            var delLine = "acl deluser " + prevUser.getUser();
+                            firstOneSlot.asyncCall(() -> {
+                                try {
+                                    firstOneSlot.getBinlog().append(new XAclUpdate(delLine));
+                                } catch (IOException e) {
+                                    throw new RuntimeException("Append binlog error, acl line=" + delLine, e);
+                                }
+                                return null;
+                            });
+                        }
+                    }
+
+                    // replicate loaded users
                     for (var u : users) {
                         var setuserLine = "acl setuser " + u.literal().substring("user ".length());
                         firstOneSlot.asyncCall(() -> {
