@@ -75,7 +75,7 @@ public class U {
          * @return true if the password is 'nopass', false otherwise.
          */
         @VisibleForTesting
-        boolean isNoPass() {
+        public boolean isNoPass() {
             return NO_PASS.equals(this.passwordEncoded);
         }
 
