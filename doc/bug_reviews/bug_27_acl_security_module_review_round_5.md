@@ -445,7 +445,7 @@ if (ValkeyRawConfSupport.aclPubsubDefault) {
 | 1 - `literal()` double-hashes plain passwords | **FIXED** (commit `55a9d11`) | High |
 | 2 - `dataToLine()` + `split(" ")` breaks space passwords | **FIXED** (commit `fab6d4d`) | High |
 | 3 - `fromLiteral()` missing reset keywords | **FIXED** (commit `04c084b5`) | High |
-| 4 - `ACL SAVE` non-atomic | **CONFIRMED** | High |
+| 4 - `ACL SAVE` non-atomic | **FIXED** (commit `2b26bc27`) | High |
 | 5 - `reset` closure captures mutable static | **CONFIRMED** | Medium |
 
 All 5 findings verified. Ready for fix implementation.
