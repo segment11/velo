@@ -8,6 +8,8 @@ import org.apache.commons.codec.digest.DigestUtils;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -88,11 +90,20 @@ public class U {
                 return true;
             }
 
-            if (encodeType == PasswordEncodedType.plain) {
-                return this.passwordEncoded.equals(passwordRaw);
+            String expected;
+            String actual;
+            if (encodeType == PasswordEncodedType.sha256Hex) {
+                expected = this.passwordEncoded;
+                actual = DigestUtils.sha256Hex(passwordRaw);
             } else {
-                return this.passwordEncoded.equals(DigestUtils.sha256Hex(passwordRaw));
+                expected = this.passwordEncoded;
+                actual = passwordRaw;
             }
+
+            return MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8),
+                actual.getBytes(StandardCharsets.UTF_8)
+            );
         }
 
         /**
