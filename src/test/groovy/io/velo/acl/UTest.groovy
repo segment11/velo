@@ -242,6 +242,29 @@ class UTest extends Specification {
         !restored.checkPassword('mypassword')
     }
 
+    def 'test semanticallyEquals handles sha256Hex to plain direction'() {
+        given:
+        def u = new U('testuser')
+        u.on = true
+        u.resetPassword()
+        u.addPassword U.Password.sha256Hex('mypassword')
+
+        when:
+        def lit = u.literal()
+        then:
+        lit.contains('#' + DigestUtils.sha256Hex('mypassword'))
+
+        when:
+        def restored = U.fromLiteral(lit)
+        then:
+        restored.checkPassword('mypassword')
+
+        when:
+        restored.removePassword(U.Password.plain('mypassword'))
+        then:
+        !restored.checkPassword('mypassword')
+    }
+
     def 'test to replies'() {
         given:
         def u = new U('kerry')
