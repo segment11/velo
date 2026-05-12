@@ -714,4 +714,29 @@ class UTest extends Specification {
         then:
         u.checkPassword('anything')
     }
+
+    def 'test fromLiteral recognizes resetkeys resetchannels resetpass reset'() {
+        when:
+        def u1 = U.fromLiteral('user test on resetkeys ~* +@all')
+        then:
+        u1.rKeyList.size() == 1
+
+        when:
+        def u2 = U.fromLiteral('user test on resetchannels &* +@all')
+        then:
+        u2.rPubSubList.size() == 1
+
+        when:
+        def u3 = U.fromLiteral('user test on resetpass >mypass +@all')
+        then:
+        u3.passwords.size() == 1
+
+        when:
+        def u4 = U.fromLiteral('user test on reset ~* +@all >mypass')
+        then:
+        !u4.isOn()
+        u4.rKeyList.size() == 1
+        u4.rCmdList.size() == 1
+        u4.passwords.size() == 1
+    }
 }

@@ -452,6 +452,18 @@ public class U {
                 u.addRKey(false, RKey.fromLiteral(part));
             } else if (part.startsWith("&")) {
                 u.addRPubSub(false, RPubSub.fromLiteral(part));
+            } else if ("resetkeys".equals(part)) {
+                u.resetKey();
+            } else if ("resetchannels".equals(part)) {
+                u.resetPubSub();
+            } else if ("resetpass".equals(part)) {
+                u.resetPassword();
+            } else if ("reset".equals(part)) {
+                u.setOn(false);
+                u.resetPassword();
+                u.resetCmd();
+                u.resetKey();
+                u.resetPubSub();
             } else if (i == 3) {
                 u.addPassword(Password.plain(part));
             } else {
