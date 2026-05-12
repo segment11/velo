@@ -157,8 +157,16 @@ public class RCmd {
             var parts = str.split("@");
             category = parts[1].equals("*") ? Category.all : Category.valueOf(parts[1]);
         } else {
-            type = str.contains("*") ? Type.all : Type.cmd;
-            cmd = str.substring(1);
+            var cmdPart = str.substring(1);
+            if ("*".equals(cmdPart)) {
+                type = Type.all;
+                cmd = cmdPart;
+            } else if (cmdPart.contains("*")) {
+                throw new IllegalArgumentException("Wildcard command names are not supported: " + str);
+            } else {
+                type = Type.cmd;
+                cmd = cmdPart;
+            }
         }
 
         var rCmd = new RCmd();

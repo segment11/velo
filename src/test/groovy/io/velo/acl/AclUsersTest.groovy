@@ -151,10 +151,10 @@ class AclUsersTest extends Specification {
 
         when:
         aclUsers.replaceUsers(newUsers)
-        def u = aclUsers.get('replaced-user')
+        def replacedU = aclUsers.get('replaced-user')
         then:
-        u != null
-        u.checkPassword('new-pw')
+        replacedU != null
+        replacedU.checkPassword('new-pw')
         aclUsers.get('to-replace') == null
 
         cleanup:
