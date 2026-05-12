@@ -545,3 +545,56 @@ Implemented the reviewer's suggested approach:
 5. **Updated** tests to expect proper deduplication and verify password removal after roundtrip
 
 This approach matches Redis behavior: passwords are stored as `#<hash>` in ACL files, but internally Redis handles equivalence between plain-text and pre-hashed passwords correctly.
+
+---
+
+## Review Feedback - Bug 1 Fix Rework (Round 5)
+
+Reviewer: AI agent 1
+Review date: 2026-05-12
+Reviewed commits: `0cef56f` (initial fix), `55a9d11` (rework with semanticallyEquals), `cbf584b` (docs)
+
+### Summary
+
+Two commits form the fix:
+
+1. `0cef56f` changed `literal()` to output `>password` for plain passwords (wrong approach — diverged from Redis, stored plaintext on disk).
+2. `55a9d11` reworked the fix: reverted `literal()` back to `#<sha256hex>`, added `Password.semanticallyEquals()` for cross-type matching, used it in `addPassword()` and `removePassword()`.
+
+### Strengths
+
+- `literal()` now outputs `#<sha256hex>` for plain passwords — matches Redis 7.2.11 behavior exactly (verified with `~/.proof/bin/redis-server`).
+- `semanticallyEquals()` correctly handles both cross-type directions: `plain→sha256Hex` and `sha256Hex→plain`.
+- `addPassword()` deduplication and `removePassword()` both use `semanticallyEquals()` — password removal works after SAVE/LOAD roundtrip.
+- `equals()` is preserved for strict identity comparison (used in `Password.NO_PASSWORD` checks), while `semanticallyEquals()` is used for operational matching. This is a clean separation.
+- Tests updated to verify `#<sha256hex>` output format and password removal after roundtrip.
+
+### Concerns
+
+1. **Low — some branches in `semanticallyEquals()` are uncovered**
+
+   JaCoCo:
+   - Line 155 (`other == null`): `pc bpc` — 2 of 4 branches missed, `null` case not hit (`nc` on line 156)
+   - Line 164 (`sha256Hex→plain`): `pc bpc` — 2 of 4 branches missed
+   - Line 167 (fallback `return false`): `nc`
+
+   The critical cross-type path (plain→sha256Hex, line 161-162) is covered. The uncovered branches are defensive checks that are unlikely to be hit in normal operation.
+
+2. **Low — `0cef56f` (initial wrong fix) is still in history**
+
+   The initial fix that output `>password` was superseded by `55a9d11`, but both commits remain. This is fine for linear history but could confuse bisect if anyone looks at the intermediate state.
+
+3. **Informational — `semanticallyEquals()` computes SHA-256 on every comparison call**
+
+   For `plain→sha256Hex` comparison, `DigestUtils.sha256Hex()` is called on the plain password every time. For the dedup check in `addPassword()`, this is called for each existing password in the list. In practice, password lists are very short (1-3 entries), so this is not a performance concern.
+
+### Verification
+
+- Tests pass: `./gradlew :cleanTest :test --tests "io.velo.acl.UTest"` — BUILD SUCCESSFUL.
+- JaCoCo: `semanticallyEquals()` line 151 covered, critical branches (same-type at line 158, plain→sha256Hex at line 161-162) fully covered.
+- Redis compatibility verified with `~/.proof/bin/redis-server` 7.2.11: ACL file format matches (`#<sha256hex>` for all passwords).
+
+### Follow-ups
+
+- **Optional**: add a test that exercises `sha256Hex→plain` direction in `semanticallyEquals()` (e.g., add a sha256Hex password, then remove with `Password.plain()`). ✓ Done (commit `ca3acff`)
+- **Post-commit**: none beyond the above.
