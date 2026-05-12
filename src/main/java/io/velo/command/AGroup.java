@@ -12,7 +12,9 @@ import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -326,7 +328,9 @@ public class AGroup extends BaseCommand {
             }
 
             try {
-                FileUtils.writeLines(aclFile, "UTF-8", lines);
+                var tmpFile = new java.io.File(aclFile.getParent(), aclFile.getName() + ".tmp");
+                FileUtils.writeLines(tmpFile, "UTF-8", lines);
+                Files.move(tmpFile.toPath(), aclFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
 
                 appendAclUpdateBinlog();
                 return OKReply.INSTANCE;
