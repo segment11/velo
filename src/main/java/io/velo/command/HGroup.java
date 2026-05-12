@@ -1,7 +1,9 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.net.socket.tcp.TcpSocket;
 import io.velo.*;
+import io.velo.acl.AclUsers;
 import io.velo.persist.KeyLoader;
 import io.velo.persist.Wal;
 import io.velo.reply.*;
@@ -320,16 +322,22 @@ public class HGroup extends BaseCommand {
                     // acl check
                     var u = aclUsers.get(user);
                     if (u == null) {
+                        var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
+                        AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
                         SocketInspector.setResp3(socket, isResp3Old);
                         return ErrorReply.AUTH_FAILED;
                     }
 
                     if (!u.isOn()) {
+                        var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
+                        AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
                         SocketInspector.setResp3(socket, isResp3Old);
                         return ErrorReply.AUTH_FAILED;
                     }
 
                     if (!u.checkPassword(password)) {
+                        var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
+                        AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
                         SocketInspector.setResp3(socket, isResp3Old);
                         return ErrorReply.AUTH_FAILED;
                     }

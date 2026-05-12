@@ -2,6 +2,7 @@ package io.velo;
 
 import io.activej.config.Config;
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.net.socket.tcp.TcpSocket;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.Summary;
 import io.prometheus.client.exporter.common.TextFormat;
@@ -430,14 +431,20 @@ public class RequestHandler {
 
                     var u = aclUsers.get(user);
                     if (u == null) {
+                        var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
+                        AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
                         return ErrorReply.AUTH_FAILED;
                     }
 
                     if (!u.isOn()) {
+                        var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
+                        AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
                         return ErrorReply.AUTH_FAILED;
                     }
 
                     if (!u.checkPassword(passwordRaw)) {
+                        var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
+                        AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
                         return ErrorReply.AUTH_FAILED;
                     }
 
@@ -456,14 +463,20 @@ public class RequestHandler {
                     // acl check
                     var u = aclUsers.get(user);
                     if (u == null) {
+                        var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
+                        AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
                         return ErrorReply.AUTH_FAILED;
                     }
 
                     if (!u.isOn()) {
+                        var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
+                        AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
                         return ErrorReply.AUTH_FAILED;
                     }
 
                     if (!u.checkPassword(passwordRaw)) {
+                        var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
+                        AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
                         return ErrorReply.AUTH_FAILED;
                     }
 
