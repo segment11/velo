@@ -839,4 +839,69 @@ class BaseCommandTest extends Specification {
         cleanup:
         localPersist.cleanUp()
     }
+
+    def 'test dataToLine quotes spaces and special chars'() {
+        given:
+        def data = new byte[4][0]
+        data[0] = 'acl'.bytes
+        data[1] = 'setuser'.bytes
+        data[2] = 'test'.bytes
+        data[3] = '>my secret'.bytes
+        def c = new SubCommand('acl', data, null)
+        c.requestHandler = null
+
+        when:
+        def line = c.dataToLine()
+        then:
+        line == 'acl setuser test ">my secret"'
+
+        when:
+        data = new byte[4][0]
+        data[0] = 'acl'.bytes
+        data[1] = 'setuser'.bytes
+        data[2] = 'test'.bytes
+        data[3] = '>my"pass'.bytes
+        c.data = data
+        line = c.dataToLine()
+        then:
+        line == 'acl setuser test ">my\\"pass"'
+
+        when:
+        data = new byte[4][0]
+        data[0] = 'acl'.bytes
+        data[1] = 'setuser'.bytes
+        data[2] = 'test'.bytes
+        data[3] = '>my\\pass'.bytes
+        c.data = data
+        line = c.dataToLine()
+        then:
+        line == 'acl setuser test ">my\\\\pass"'
+    }
+
+    def 'test execute handles quoted strings via parseLine'() {
+        given:
+        def data = new byte[2][0]
+        data[0] = 'get'.bytes
+        data[1] = 'key'.bytes
+        def c = new SubCommand('get', data, null)
+        c.requestHandler = null
+        c.crossRequestWorker = false
+        c.slotWithKeyHashListParsed = null
+        c.socket = null
+
+        when:
+        def reply = c.execute('acl setuser test ">my secret"')
+        then:
+        reply == null
+
+        when:
+        reply = c.execute('acl setuser test ">my\\"pass"')
+        then:
+        reply == null
+
+        when:
+        reply = c.execute('acl "setuser" test >nospace')
+        then:
+        reply == null
+    }
 }
