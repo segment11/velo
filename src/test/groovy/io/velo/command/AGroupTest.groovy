@@ -11,6 +11,7 @@ import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.reply.*
+import org.apache.commons.codec.digest.DigestUtils
 import spock.lang.Specification
 
 import java.nio.file.Paths
@@ -599,7 +600,7 @@ class AGroupTest extends Specification {
             aclFile.delete()
         }
         aclFile.createNewFile()
-        aclFile.text = 'user default on nopass ~* +@all &*\nuser testuser on #abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab +@read ~*'
+        aclFile.text = 'user default on nopass ~* +@all &*\nuser testuser on #' + DigestUtils.sha256Hex('testuser') + ' +@read ~*'
         ValkeyRawConfSupport.aclFilename = 'acl_test_load.conf'
         def reply = aGroup.execute('acl load')
         then:

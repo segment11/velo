@@ -155,7 +155,7 @@ public class RCmd {
         } else if (str.contains("@")) {
             type = Type.category;
             var parts = str.split("@");
-            category = parts[1].equals("*") ? Category.all : Category.valueOf(parts[1]);
+            category = parts[1].equals("*") ? Category.all : Category.valueOf(parts[1].toLowerCase());
         } else {
             var cmdPart = str.substring(1);
             if ("*".equals(cmdPart)) {

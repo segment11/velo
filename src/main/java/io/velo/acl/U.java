@@ -418,7 +418,11 @@ public class U {
             if (part.startsWith(ADD_PASSWORD_PREFIX)) {
                 u.addPassword(Password.plain(part.substring(1)));
             } else if (part.startsWith(ADD_HASH_PASSWORD_PREFIX)) {
-                u.addPassword(Password.sha256HexEncoded(part.substring(1)));
+                var hash = part.substring(1);
+                if (hash.length() != 64) {
+                    throw new IllegalArgumentException("Invalid sha256 hex password length: " + hash.length());
+                }
+                u.addPassword(Password.sha256HexEncoded(hash));
             } else if (Password.NO_PASS.equals(part)) {
                 u.addPassword(Password.NO_PASSWORD);
             } else if (part.startsWith("+")) {

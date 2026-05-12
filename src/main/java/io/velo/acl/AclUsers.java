@@ -202,7 +202,9 @@ public class AclUsers {
          */
         Inner(long expectThreadId) {
             this.expectThreadId = expectThreadId;
-            uList.add(U.INIT_DEFAULT_U); // Add a default user to the list.
+            var defaultCopy = new U(U.DEFAULT_USER);
+            defaultCopy.copyStateFrom(U.INIT_DEFAULT_U);
+            uList.add(defaultCopy);
         }
 
         final long expectThreadId;

@@ -437,4 +437,27 @@ class AclUsersTest extends Specification {
         AclUsers.getAclLogs(10).length == 0
         AclUsers.getAclLogs(0).length == 0
     }
+
+    def 'test each Inner has its own default user copy not shared singleton'() {
+        given:
+        def aclUsers = AclUsers.instance
+
+        def eventloop1 = Eventloop.builder().withCurrentThread().build()
+        def eventloop2 = Eventloop.builder().withCurrentThread().build()
+        Eventloop[] testEventloopArray = [eventloop1, eventloop2]
+        aclUsers.initBySlotWorkerEventloopArray(testEventloopArray)
+
+        when:
+        def inners = aclUsers.inners
+        def defaultFromInner1 = inners[0].getUList().find { it.getUser() == 'default' }
+        def defaultFromInner2 = inners[1].getUList().find { it.getUser() == 'default' }
+
+        then:
+        defaultFromInner1 != null
+        defaultFromInner2 != null
+        defaultFromInner1.is(defaultFromInner2) == false // should be different objects
+
+        cleanup:
+        aclUsers.initForTest()
+    }
 }

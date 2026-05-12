@@ -94,6 +94,28 @@ class UTest extends Specification {
         uu2.checkPassword('123456')
 
         when:
+        boolean shortHashException = false
+        try {
+            U.fromLiteral('user kerry on #short')
+        } catch (IllegalArgumentException e) {
+            println e.message
+            shortHashException = true
+        }
+        then:
+        shortHashException
+
+        when:
+        boolean longHashException = false
+        try {
+            U.fromLiteral('user kerry on #' + 'a' * 65)
+        } catch (IllegalArgumentException e) {
+            println e.message
+            longHashException = true
+        }
+        then:
+        longHashException
+
+        when:
         def u1 = U.fromLiteral('user kerry on nopass +@all -@dangerous %R~a* ~b* &myChannel*')
         then:
         u1.user == 'kerry'

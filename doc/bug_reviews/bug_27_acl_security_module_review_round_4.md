@@ -397,9 +397,9 @@ Add the same length validation in `U.fromLiteral()`:
 | 1 - `ACL LOAD` replication does not delete removed users from replicas | High | **Fixed** (commits `0564373`, `b043ab6`) | High |
 | 2 - `+set*` treated as "all commands" privilege escalation | High | **Fixed** (commits `ae6dec6`, `ce8fc20`) | High |
 | 3 - Failed AUTH attempts not logged to ACL LOG | Medium-High | **Fixed** (commit `0c73be6`) | High |
-| 4 - `INIT_DEFAULT_U` shared mutable singleton still not fixed | Medium | **Known from Round 3** | High |
-| 5 - Category names are case-sensitive, rejecting `+@ADMIN` | Medium | **New finding** | High |
-| 6 - `U.fromLiteral()` does not validate SHA-256 hash length | Low | **New finding** | High |
+| 4 - `INIT_DEFAULT_U` shared mutable singleton still not fixed | Medium | **Fixed** (defensive copy in Inner constructor) | High |
+| 5 - Category names are case-sensitive, rejecting `+@ADMIN` | Medium | **Fixed** (added `.toLowerCase()` in `RCmd.fromLiteral()`) | High |
+| 6 - `U.fromLiteral()` does not validate SHA-256 hash length | Low | **Fixed** (added 64-char length validation) | High |
 
 ## Suggested Fix Order
 
@@ -591,3 +591,62 @@ Production change: 10 lines changed in `RCmd.java` (lines 160-169). Test change:
 
 - Bug 2 fix: **Complete**
 - JaCoCo coverage: **Verified**
+
+---
+
+## Review Feedback - Bug 3 Fix
+
+Reviewer: AI agent 1
+Review date: 2026-05-12
+Reviewed commit: `0c73be6d217603b52c1bac61837bbc4078e182af` (`fix: log AUTH failures to ACL LOG for brute-force detection`)
+
+### Summary of Fix
+
+The commit adds `AclUsers.recordAclLog("auth", "auth", user, user, clientInfo)` calls at all 9 AUTH failure points across 3 auth paths:
+
+1. **HTTP Basic auth** (`RequestHandler.java:433-447`): 3 failure points (user not found, user disabled, wrong password)
+2. **RESP AUTH** (`RequestHandler.java:465-479`): 3 failure points (same conditions)
+3. **HELLO AUTH** (`HGroup.java:324-340`): 3 failure points (same conditions)
+
+Each call captures the client's remote address via `((TcpSocket) socket).getRemoteAddress().toString()` before returning `ErrorReply.AUTH_FAILED`.
+
+Production change: 21 lines added (13 in `RequestHandler.java`, 8 in `HGroup.java`), 0 test changes.
+
+### Strengths
+
+- All 3 auth failure paths identified in the bug report are covered (HTTP Basic, RESP AUTH, HELLO AUTH).
+- The `recordAclLog` parameters are consistent: `("auth", "auth", user, user, clientInfo)` — reason="auth", context="auth", object=username, username=username.
+- The `(TcpSocket) socket` cast follows the existing pattern from `MultiWorkerServer.java:471`.
+- The placement is correct: log is recorded *before* returning `ErrorReply.AUTH_FAILED`, ensuring the log entry is created even though the method returns immediately after.
+
+### Concerns
+
+1. **Medium — no test verifies that ACL LOG entries are actually recorded after failed AUTH**
+
+   The existing tests (`RequestHandlerTest.'test auth keeps username case'`, `RequestHandlerTest.'test malformed http basic auth returns auth failed'`, `HGroupTest`) verify that `ErrorReply.AUTH_FAILED` is returned, but none check `AclUsers.getAclLog()` or `AclUsers.aclLogCount` to confirm the log entry was recorded. A regression test should:
+   - Send a failed AUTH request
+   - Assert `ErrorReply.AUTH_FAILED` is returned
+   - Call `AclUsers.getAclLog()` and verify it contains an entry with `reason == "auth"` for the attempted username
+
+2. **Low — repeated `var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString()` could be extracted**
+
+   In `RequestHandler`, the same line appears 6 times (3 for HTTP Basic, 3 for RESP AUTH). The `clientInfo` could be computed once before the null/disabled/password checks. This is a minor style concern — the current approach is more defensive (only computes `clientInfo` on failure paths, not on success), which is arguably better for performance.
+
+3. **Informational — `recordAclLog` uses `user` for both `object` and `username` parameters**
+
+   In the existing `MultiWorkerServer.java:473` usage, `object` is the command name and `username` is the user. Here, `object` is set to `user` (the attempted username string). This is a reasonable semantic for auth failures (the "object" being authenticated is the user), but differs from the command/key denial pattern. Not a bug, just noting the convention difference.
+
+### Verification
+
+- Existing tests pass: `./gradlew :cleanTest :test --tests "io.velo.RequestHandlerTest"` — BUILD SUCCESSFUL.
+- Existing tests pass: `./gradlew :cleanTest :test --tests "io.velo.command.HGroupTest"` — BUILD SUCCESSFUL.
+- JaCoCo inspected at `build/reports/jacocoHtml/io.velo/RequestHandler.java.html`:
+  - HTTP Basic auth (lines 433-447): all `fc`, all branches `bfc` — fully covered
+  - RESP AUTH (lines 465-479): all `fc`, all branches `bfc` — fully covered
+- JaCoCo inspected at `build/reports/jacocoHtml/io.velo.command/HGroup.java.html`:
+  - HELLO AUTH (lines 324-340): all `fc` — fully covered
+
+### Follow-ups
+
+- **Pre-commit**: add a test that sends a failed AUTH (wrong password for an existing user), then verifies `AclUsers.getAclLog()` returns an entry with `reason == "auth"` and the correct username.
+- **Post-commit**: none beyond the above.

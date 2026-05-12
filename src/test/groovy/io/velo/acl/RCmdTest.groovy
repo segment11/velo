@@ -169,5 +169,24 @@ class RCmdTest extends Specification {
         }
         then:
         exception
+
+        when:
+        def upperAdmin = RCmd.fromLiteral('+@ADMIN')
+        def upperRead = RCmd.fromLiteral('+@READ')
+        def mixedAdmin = RCmd.fromLiteral('+@AdMiN')
+        def allCategory = RCmd.fromLiteral('+@*')
+        then:
+        upperAdmin.allow
+        upperAdmin.type == RCmd.Type.category
+        upperAdmin.category == Category.admin
+        upperRead.allow
+        upperRead.type == RCmd.Type.category
+        upperRead.category == Category.read
+        mixedAdmin.allow
+        mixedAdmin.type == RCmd.Type.category
+        mixedAdmin.category == Category.admin
+        allCategory.allow
+        allCategory.type == RCmd.Type.category
+        allCategory.category == Category.all
     }
 }

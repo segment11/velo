@@ -87,6 +87,7 @@ class RequestHandlerTest extends Specification {
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
         def requestHandler = new RequestHandler(workerId, netWorkers, slotNumber, new SnowFlake(1, 1), Config.create())
         AclUsers.instance.initForTest()
+        AclUsers.resetAclLogs()
 
         def authData = new byte[3][]
         authData[0] = 'auth'.bytes
@@ -98,16 +99,26 @@ class RequestHandlerTest extends Specification {
         def reply = requestHandler.handle(authRequest, socket)
         then:
         reply == ErrorReply.AUTH_FAILED
+        def logs = AclUsers.getAclLogs(10)
+        logs.length == 1
+        logs[0].reason == "auth"
+        logs[0].object == "CaseUser"
+        logs[0].username == "CaseUser"
 
         when:
         AclUsers.instance.upInsert('CaseUser') { u ->
             u.on = true
             u.password = U.Password.plain('password')
         }
+        AclUsers.resetAclLogs()
         reply = requestHandler.handle(authRequest, socket)
         then:
         reply == OKReply.INSTANCE
         SocketInspector.getAuthUser(socket) == 'CaseUser'
+        AclUsers.getAclLogs(10).length == 0
+
+        cleanup:
+        AclUsers.resetAclLogs()
     }
 
     def 'test handle'() {
