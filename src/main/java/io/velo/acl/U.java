@@ -298,7 +298,7 @@ public class U {
             } else if (pwd.encodeType == PasswordEncodedType.sha256Hex) {
                 sb.append(ADD_HASH_PASSWORD_PREFIX).append(pwd.passwordEncoded).append(" ");
             } else {
-                sb.append(ADD_HASH_PASSWORD_PREFIX).append(DigestUtils.sha256Hex(pwd.passwordEncoded)).append(" ");
+                sb.append(ADD_PASSWORD_PREFIX).append(pwd.passwordEncoded).append(" ");
             }
         }
 

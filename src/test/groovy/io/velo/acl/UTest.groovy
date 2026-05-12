@@ -48,7 +48,7 @@ class UTest extends Specification {
         u.checkPassword('123456')
         !u.checkPassword('1234567')
         u.checkPassword('passwd4')
-        u.literal() == 'user kerry on #8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92 #8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92 #34344e4d60c2b6d639b7bd22e18f2b0b91bc34bf0ac5f9952744435093cfb4e6 +* -set %R~a* &myChannel*'
+        u.literal() == 'user kerry on >123456 #8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92 #34344e4d60c2b6d639b7bd22e18f2b0b91bc34bf0ac5f9952744435093cfb4e6 +* -set %R~a* &myChannel*'
         p1.equals(p1)
         !p1.equals(p11)
         !p1.equals(p2)
@@ -59,7 +59,7 @@ class UTest extends Specification {
         when:
         u.on = false
         then:
-        u.literal() == 'user kerry off #8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92 #8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92 #34344e4d60c2b6d639b7bd22e18f2b0b91bc34bf0ac5f9952744435093cfb4e6 +* -set %R~a* &myChannel*'
+        u.literal() == 'user kerry off >123456 #8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92 #34344e4d60c2b6d639b7bd22e18f2b0b91bc34bf0ac5f9952744435093cfb4e6 +* -set %R~a* &myChannel*'
 
         when:
         u.password = U.Password.sha256Hex('123456')
@@ -204,10 +204,9 @@ class UTest extends Specification {
         when:
         def lit = u.literal()
         then:
-        !lit.contains('>pass1')
-        !lit.contains('>pass2')
-        lit.contains('#' + DigestUtils.sha256Hex('pass1'))
-        lit.contains('#' + DigestUtils.sha256Hex('pass2'))
+        lit.contains('>pass1')
+        lit.contains('>pass2')
+        lit.contains('#' + DigestUtils.sha256Hex('pass3'))
 
         when:
         def restored = U.fromLiteral(lit)
@@ -216,6 +215,29 @@ class UTest extends Specification {
         restored.checkPassword('pass2')
         restored.checkPassword('pass3')
         !restored.checkPassword('wrong')
+    }
+
+    def 'test literal round-trip preserves password removal with <password syntax'() {
+        given:
+        def u = new U('testuser')
+        u.on = true
+        u.resetPassword()
+        u.addPassword U.Password.plain('mypassword')
+
+        when:
+        def lit = u.literal()
+        then:
+        lit.contains('>mypassword')
+
+        when:
+        def restored = U.fromLiteral(lit)
+        then:
+        restored.checkPassword('mypassword')
+
+        when:
+        restored.removePassword(U.Password.plain('mypassword'))
+        then:
+        !restored.checkPassword('mypassword')
     }
 
     def 'test to replies'() {
