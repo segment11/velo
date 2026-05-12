@@ -7,6 +7,8 @@ import io.velo.repl.ReplPair;
 import io.velo.reply.ErrorReply;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Represents the binary log content for ACL user changes in the Velo replication system.
@@ -14,15 +16,24 @@ import java.nio.ByteBuffer;
  * and the slave to apply the corresponding operation during replication.
  */
 public class XAclUpdate implements BinlogContent {
-    private final String line;
+    private final List<String> lines;
 
     /**
-     * Constructs an XAclUpdate with the provided line.
+     * Constructs an XAclUpdate with a single line.
      *
      * @param line the line of this ACL update
      */
     public XAclUpdate(String line) {
-        this.line = line;
+        this.lines = List.of(line);
+    }
+
+    /**
+     * Constructs an XAclUpdate with multiple lines.
+     *
+     * @param lines the list of ACL command lines
+     */
+    public XAclUpdate(ArrayList<String> lines) {
+        this.lines = lines;
     }
 
     /**
@@ -42,8 +53,13 @@ public class XAclUpdate implements BinlogContent {
      */
     @Override
     public int encodedLength() {
-        // 1 byte for type, 4 bytes for encoded length for check
-        return 1 + 4 + 4 + Wal.keyBytes(line).length;
+        // 1 byte for type, 4 bytes for encoded length for check, 4 bytes for number of lines
+        int total = 1 + 4 + 4;
+        for (var line : lines) {
+            total += 4; // line length
+            total += Wal.keyBytes(line).length;
+        }
+        return total;
     }
 
     /**
@@ -53,14 +69,18 @@ public class XAclUpdate implements BinlogContent {
      */
     @Override
     public byte[] encodeWithType() {
-        var lineBytes = Wal.keyBytes(line);
         var bytes = new byte[encodedLength()];
         var buffer = ByteBuffer.wrap(bytes);
 
         buffer.put(type().code());
         buffer.putInt(bytes.length);
-        buffer.putInt(lineBytes.length);
-        buffer.put(lineBytes);
+        buffer.putInt(lines.size());
+
+        for (var line : lines) {
+            var lineBytes = Wal.keyBytes(line);
+            buffer.putInt(lineBytes.length);
+            buffer.put(lineBytes);
+        }
 
         return bytes;
     }
@@ -75,12 +95,17 @@ public class XAclUpdate implements BinlogContent {
     public static XAclUpdate decodeFrom(ByteBuffer buffer) {
         // already read type byte
         var encodedLength = buffer.getInt();
-        var lineLength = buffer.getInt();
-        var lineBytes = new byte[lineLength];
-        buffer.get(lineBytes);
-        var line = Wal.keyString(lineBytes);
+        var lineCount = buffer.getInt();
+        var lines = new ArrayList<String>(lineCount);
 
-        var r = new XAclUpdate(line);
+        for (int i = 0; i < lineCount; i++) {
+            var lineLength = buffer.getInt();
+            var lineBytes = new byte[lineLength];
+            buffer.get(lineBytes);
+            lines.add(Wal.keyString(lineBytes));
+        }
+
+        var r = new XAclUpdate(lines);
         if (encodedLength != r.encodedLength()) {
             throw new IllegalStateException("Invalid encoded length=" + encodedLength);
         }
@@ -98,9 +123,11 @@ public class XAclUpdate implements BinlogContent {
     @Override
     public void apply(short slot, ReplPair replPair) {
         var aGroup = new AGroup("acl", null, null);
-        var reply = aGroup.execute(line);
-        if (reply instanceof ErrorReply e) {
-            throw new RuntimeException("Apply acl update error: " + e.getMessage());
+        for (var line : lines) {
+            var reply = aGroup.execute(line);
+            if (reply instanceof ErrorReply e) {
+                throw new RuntimeException("Apply acl update error: " + e.getMessage());
+            }
         }
     }
 }

@@ -246,34 +246,30 @@ public class AGroup extends BaseCommand {
                             .map(U::getUser)
                             .collect(java.util.stream.Collectors.toSet());
 
+                    var lines = new java.util.ArrayList<String>();
+
                     // replicate deletions for users removed by the load
                     for (var prevUser : previousUsers) {
                         if (!loadedUserNames.contains(prevUser.getUser())
                                 && !prevUser.getUser().equals(U.DEFAULT_USER)) {
-                            var delLine = "acl deluser " + prevUser.getUser();
-                            firstOneSlot.asyncCall(() -> {
-                                try {
-                                    firstOneSlot.getBinlog().append(new XAclUpdate(delLine));
-                                } catch (IOException e) {
-                                    throw new RuntimeException("Append binlog error, acl line=" + delLine, e);
-                                }
-                                return null;
-                            });
+                            lines.add("acl deluser " + prevUser.getUser());
                         }
                     }
 
                     // replicate loaded users
                     for (var u : users) {
                         var setuserLine = "acl setuser " + u.literal().substring("user ".length());
-                        firstOneSlot.asyncCall(() -> {
-                            try {
-                                firstOneSlot.getBinlog().append(new XAclUpdate(setuserLine));
-                            } catch (IOException e) {
-                                throw new RuntimeException("Append binlog error, acl line=" + setuserLine, e);
-                            }
-                            return null;
-                        });
+                        lines.add(setuserLine);
                     }
+
+                    firstOneSlot.asyncCall(() -> {
+                        try {
+                            firstOneSlot.getBinlog().append(new XAclUpdate(lines));
+                        } catch (IOException e) {
+                            throw new RuntimeException("Append binlog error, acl lines=" + lines, e);
+                        }
+                        return null;
+                    });
                 }
 
                 return OKReply.INSTANCE;

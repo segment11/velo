@@ -63,7 +63,7 @@ class XAclUpdateTest extends Specification {
         def xAclUpdate = new XAclUpdate(line)
 
         expect:
-        xAclUpdate.encodedLength() == 1 + 4 + 4 + lineBytes.length
+        xAclUpdate.encodedLength() == 1 + 4 + 4 + 4 + lineBytes.length // type + length + lineCount + lineLength + lineBytes
 
         when:
         def encoded = xAclUpdate.encodeWithType()
@@ -73,6 +73,6 @@ class XAclUpdateTest extends Specification {
 
         then:
         xAclUpdate1.encodedLength() == encoded.length
-        xAclUpdate1.line == line
+        xAclUpdate1.lines[0] == line
     }
 }
