@@ -391,11 +391,23 @@ public class AclUsers {
         }
         var result = new LogRow[size];
         int startIndex = aclLogIndex - aclLogCount;
+        long now = System.currentTimeMillis();
         for (int i = 0; i < size; i++) {
             int bufferIndex = (startIndex + i) % ACL_LOG_MAX_SIZE;
-            result[i] = aclLogBuffer[bufferIndex];
-            if (result[i] != null) {
-                result[i].count = size;
+            var entry = aclLogBuffer[bufferIndex];
+            if (entry != null) {
+                var copy = new LogRow();
+                copy.count = entry.count;
+                copy.reason = entry.reason;
+                copy.context = entry.context;
+                copy.object = entry.object;
+                copy.username = entry.username;
+                copy.ageSeconds = (now - entry.timestampCreated) / 1000.0;
+                copy.clientInfo = entry.clientInfo;
+                copy.entryId = entry.entryId;
+                copy.timestampCreated = entry.timestampCreated;
+                copy.timestampLastUpdated = entry.timestampLastUpdated;
+                result[i] = copy;
             }
         }
         return result;
