@@ -147,6 +147,25 @@ public class U {
             var password = (Password) obj;
             return passwordEncoded.equals(password.passwordEncoded) && encodeType == password.encodeType;
         }
+
+        public boolean semanticallyEquals(Password other) {
+            if (this == other) {
+                return true;
+            }
+            if (other == null || getClass() != other.getClass()) {
+                return false;
+            }
+            if (this.encodeType == other.encodeType) {
+                return this.passwordEncoded.equals(other.passwordEncoded);
+            }
+            if (this.encodeType == PasswordEncodedType.plain && other.encodeType == PasswordEncodedType.sha256Hex) {
+                return DigestUtils.sha256Hex(this.passwordEncoded).equals(other.passwordEncoded);
+            }
+            if (this.encodeType == PasswordEncodedType.sha256Hex && other.encodeType == PasswordEncodedType.plain) {
+                return this.passwordEncoded.equals(DigestUtils.sha256Hex(other.passwordEncoded));
+            }
+            return false;
+        }
     }
 
     /**
@@ -212,7 +231,7 @@ public class U {
             passwords.removeIf(Password::isNoPass);
         }
 
-        if (passwords.stream().anyMatch(p -> p.equals(password))) {
+        if (passwords.stream().anyMatch(p -> p.semanticallyEquals(password))) {
             return;
         }
         passwords.add(password);
@@ -224,7 +243,7 @@ public class U {
      * @param password the password to remove
      */
     public void removePassword(Password password) {
-        passwords.stream().filter(p -> p.equals(password)).findFirst().ifPresent(passwords::remove);
+        passwords.stream().filter(p -> p.semanticallyEquals(password)).findFirst().ifPresent(passwords::remove);
     }
 
     /**
@@ -298,7 +317,7 @@ public class U {
             } else if (pwd.encodeType == PasswordEncodedType.sha256Hex) {
                 sb.append(ADD_HASH_PASSWORD_PREFIX).append(pwd.passwordEncoded).append(" ");
             } else {
-                sb.append(ADD_PASSWORD_PREFIX).append(pwd.passwordEncoded).append(" ");
+                sb.append(ADD_HASH_PASSWORD_PREFIX).append(DigestUtils.sha256Hex(pwd.passwordEncoded)).append(" ");
             }
         }
 
