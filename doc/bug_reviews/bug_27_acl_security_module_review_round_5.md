@@ -203,8 +203,17 @@ When these keywords appear at index 3 (the first argument after `user <name> on/
 **Impact:**
 
 - Manually edited ACL files using these keywords are silently misinterpreted.
-- Redis ACL file compatibility: Redis `ACL SAVE` outputs `resetkeys`/`resetchannels` which Velo cannot parse correctly.
+- Redis ACL file compatibility: Redis accepts all four keywords in ACL files (verified against Redis 7.2.11). Additionally, Redis always writes `resetchannels` in the ACL file output — Velo cannot parse this correctly.
 - Position-dependent behavior makes debugging difficult.
+
+**Redis 7.2.11 verification:**
+
+| Keyword | Redis accepts in ACL file? | Redis writes to ACL file on SAVE? | Effect |
+|---------|---------------------------|----------------------------------|--------|
+| `reset` | Yes — resets all, then applies subsequent rules | No — outputs resulting state only | User `off`, `-@all`, cleared keys/channels/passwords |
+| `resetkeys` | Yes — clears key rules, then applies subsequent `~` rules | No — outputs current key rules only | `~oldkey resetkeys ~newkey` → only `~newkey` kept |
+| `resetpass` | Yes — clears passwords, then applies subsequent `>` rules | No — outputs current passwords only | `>old resetpass >new` → only `#<sha256(new)>` kept |
+| `resetchannels` | Yes — clears channels, then applies subsequent `&` rules | **Yes** — Redis always writes `resetchannels` | Always present in ACL file output |
 
 **Suggested fix:**
 
@@ -435,7 +444,7 @@ if (ValkeyRawConfSupport.aclPubsubDefault) {
 |---------|--------|---------------------|
 | 1 - `literal()` double-hashes plain passwords | **FIXED** (commit `55a9d11`) | High |
 | 2 - `dataToLine()` + `split(" ")` breaks space passwords | **FIXED** (commit `fab6d4d`) | High |
-| 3 - `fromLiteral()` missing reset keywords | **CONFIRMED** | High |
+| 3 - `fromLiteral()` missing reset keywords | **FIXED** (commit `04c084b5`) | High |
 | 4 - `ACL SAVE` non-atomic | **CONFIRMED** | High |
 | 5 - `reset` closure captures mutable static | **CONFIRMED** | Medium |
 
