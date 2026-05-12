@@ -44,7 +44,7 @@ class AclUsersTest extends Specification {
         }
         then:
         aclUsers.get('test').firstPassword != null
-        aclUsers.inner.users.size() > 0
+        aclUsers.inner.UList.size() > 0
 
         when:
         aclUsers.upInsert('test') { u ->
@@ -59,9 +59,9 @@ class AclUsersTest extends Specification {
         aclUsers.get('test') == null
 
         when:
-        List<U> users = []
-        users << new U('test1')
-        aclUsers.replaceUsers(users)
+        List<U> uList = []
+        uList << new U('test1')
+        aclUsers.replaceUsers(uList)
         then:
         aclUsers.get('test1') != null
 
@@ -151,10 +151,10 @@ class AclUsersTest extends Specification {
 
         when:
         aclUsers.replaceUsers(newUsers)
-        def user = aclUsers.get('replaced-user')
+        def u = aclUsers.get('replaced-user')
         then:
-        user != null
-        user.checkPassword('new-pw')
+        u != null
+        u.checkPassword('new-pw')
         aclUsers.get('to-replace') == null
 
         cleanup:

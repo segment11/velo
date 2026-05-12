@@ -5,6 +5,7 @@ import io.velo.persist.Wal;
 import io.velo.repl.BinlogContent;
 import io.velo.repl.ReplPair;
 import io.velo.reply.ErrorReply;
+import org.jetbrains.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -16,7 +17,8 @@ import java.util.List;
  * and the slave to apply the corresponding operation during replication.
  */
 public class XAclUpdate implements BinlogContent {
-    private final List<String> lines;
+    @VisibleForTesting
+    final List<String> lines;
 
     /**
      * Constructs an XAclUpdate with a single line.

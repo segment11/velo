@@ -76,8 +76,8 @@ public class AclUsers {
 
         if (preInitInner != null) {
             for (var inner : inners) {
-                inner.users.clear();
-                inner.users.addAll(preInitInner.users);
+                inner.uList.clear();
+                inner.uList.addAll(preInitInner.uList);
             }
             preInitInner = null;
         }
@@ -93,8 +93,8 @@ public class AclUsers {
         inners[0] = new Inner(Thread.currentThread().threadId());
 
         if (preInitInner != null) {
-            inners[0].users.clear();
-            inners[0].users.addAll(preInitInner.users);
+            inners[0].uList.clear();
+            inners[0].uList.addAll(preInitInner.uList);
             preInitInner = null;
         }
     }
@@ -157,7 +157,7 @@ public class AclUsers {
             return;
         }
 
-        List<U> users = new ArrayList<>();
+        List<U> tmpUList = new ArrayList<>();
         try {
             var lines = FileUtils.readLines(aclFile, "UTF-8");
             for (var line : lines) {
@@ -169,7 +169,7 @@ public class AclUsers {
                 if (u == null) {
                     throw new IllegalArgumentException("parse acl file error: " + line);
                 }
-                users.add(u);
+                tmpUList.add(u);
             }
         } catch (IOException e) {
             log.error("Read acl file error={}", e.getMessage());
@@ -180,12 +180,12 @@ public class AclUsers {
         }
 
         // must include default user
-        if (users.stream().noneMatch(u -> u.getUser().equals(U.INIT_DEFAULT_U.getUser()))) {
+        if (tmpUList.stream().noneMatch(u -> u.getUser().equals(U.INIT_DEFAULT_U.getUser()))) {
             log.error("no default user in acl file");
             throw new IllegalArgumentException("no default user in acl file");
         }
 
-        replaceUsers(users);
+        replaceUsers(tmpUList);
     }
 
     /**
@@ -202,7 +202,7 @@ public class AclUsers {
          */
         Inner(long expectThreadId) {
             this.expectThreadId = expectThreadId;
-            users.add(U.INIT_DEFAULT_U); // Add a default user to the list.
+            uList.add(U.INIT_DEFAULT_U); // Add a default user to the list.
         }
 
         final long expectThreadId;
@@ -210,15 +210,15 @@ public class AclUsers {
         /**
          * List of user objects managed by this inner instance.
          */
-        private final List<U> users = new ArrayList<>();
+        private final List<U> uList = new ArrayList<>();
 
         /**
          * Returns a copy of the current list of users.
          *
          * @return the immutable list of users
          */
-        public List<U> getUsers() {
-            return new ArrayList<>(users);
+        public List<U> getUList() {
+            return new ArrayList<>(uList);
         }
 
         /**
@@ -228,7 +228,7 @@ public class AclUsers {
          * @return the user object if found, otherwise null
          */
         public U get(String user) {
-            return users.stream().filter(u -> u.user.equals(user)).findFirst().orElse(null);
+            return uList.stream().filter(u -> u.user.equals(user)).findFirst().orElse(null);
         }
 
         /**
@@ -240,13 +240,13 @@ public class AclUsers {
          * @param callback the callback to perform the update operation
          */
         public void upInsert(String user, UpdateCallback<U> callback) {
-            var one = users.stream().filter(u1 -> u1.user.equals(user)).findFirst();
+            var one = uList.stream().filter(u1 -> u1.user.equals(user)).findFirst();
             if (one.isPresent()) {
                 callback.doUpdate(one.get());
             } else {
                 var u = new U(user);
                 callback.doUpdate(u);
-                users.add(u);
+                uList.add(u);
             }
         }
 
@@ -257,7 +257,7 @@ public class AclUsers {
          * @return true if the user was successfully deleted, otherwise false
          */
         public boolean delete(String user) {
-            return users.removeIf(u -> u.user.equals(user));
+            return uList.removeIf(u -> u.user.equals(user));
         }
     }
 
@@ -343,18 +343,18 @@ public class AclUsers {
     /**
      * Replaces the list of users in all Inner instances with a new list of users.
      *
-     * @param users the new list of user objects
+     * @param uList the new list of user objects
      */
-    public void replaceUsers(List<U> users) {
+    public void replaceUsers(List<U> uList) {
         var inner = getOwnedInner();
         if (inner != null) {
-            inner.users.clear();
-            inner.users.addAll(users);
+            inner.uList.clear();
+            inner.uList.addAll(uList);
         }
 
         changeUser(inner2 -> {
-            inner2.users.clear();
-            inner2.users.addAll(users);
+            inner2.uList.clear();
+            inner2.uList.addAll(uList);
         });
     }
 

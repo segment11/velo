@@ -214,11 +214,11 @@ public class AGroup extends BaseCommand {
                 return ErrorReply.SYNTAX;
             }
 
-            var users = aclUsers.getInner().getUsers();
+            var uList = aclUsers.getInner().getUList();
 
-            var replies = new Reply[users.size()];
-            for (int i = 0; i < users.size(); i++) {
-                replies[i] = new BulkReply(users.get(i).literal());
+            var replies = new Reply[uList.size()];
+            for (int i = 0; i < uList.size(); i++) {
+                replies[i] = new BulkReply(uList.get(i).literal());
             }
             return new MultiBulkReply(replies);
         } else if ("load".equals(subCmd)) {
@@ -233,33 +233,30 @@ public class AGroup extends BaseCommand {
 
             try {
                 // capture users before load to compute deletions
-                var previousUsers = aclUsers.getInner().getUsers();
-                var previousUserNames = previousUsers.stream()
-                        .map(U::getUser)
-                        .collect(toSet());
+                var previousUList = aclUsers.getInner().getUList();
 
                 aclUsers.loadAclFile();
 
                 // replicate loaded users to replicas
                 var firstOneSlot = localPersist.firstOneSlot();
                 if (firstOneSlot != null && firstOneSlot.getDynConfig().isBinlogOn()) {
-                    var users = aclUsers.getInner().getUsers();
-                    var loadedUserNames = users.stream()
+                    var uList = aclUsers.getInner().getUList();
+                    var loadedUserNames = uList.stream()
                             .map(U::getUser)
                             .collect(toSet());
 
                     var lines = new ArrayList<String>();
 
                     // replicate deletions for users removed by the load
-                    for (var prevUser : previousUsers) {
-                        if (!loadedUserNames.contains(prevUser.getUser())
-                                && !prevUser.getUser().equals(U.DEFAULT_USER)) {
-                            lines.add("acl deluser " + prevUser.getUser());
+                    for (var prevU : previousUList) {
+                        if (!loadedUserNames.contains(prevU.getUser())
+                                && !prevU.getUser().equals(U.DEFAULT_USER)) {
+                            lines.add("acl deluser " + prevU.getUser());
                         }
                     }
 
                     // replicate loaded users
-                    for (var u : users) {
+                    for (var u : uList) {
                         var setuserLine = "acl setuser " + u.literal().substring("user ".length());
                         lines.add(setuserLine);
                     }
@@ -322,9 +319,9 @@ public class AGroup extends BaseCommand {
                 }
             }
 
-            var users = aclUsers.getInner().getUsers();
+            var uList = aclUsers.getInner().getUList();
             var lines = new ArrayList<String>();
-            for (var u : users) {
+            for (var u : uList) {
                 lines.add(u.literal());
             }
 
@@ -421,11 +418,11 @@ public class AGroup extends BaseCommand {
                 return ErrorReply.SYNTAX;
             }
 
-            var users = aclUsers.getInner().getUsers();
+            var uList = aclUsers.getInner().getUList();
 
-            var replies = new Reply[users.size()];
-            for (int i = 0; i < users.size(); i++) {
-                replies[i] = new BulkReply(users.get(i).getUser());
+            var replies = new Reply[uList.size()];
+            for (int i = 0; i < uList.size(); i++) {
+                replies[i] = new BulkReply(uList.get(i).getUser());
             }
             return new MultiBulkReply(replies);
         } else if ("whoami".equals(subCmd)) {

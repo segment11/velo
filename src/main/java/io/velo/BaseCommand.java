@@ -193,8 +193,8 @@ public abstract class BaseCommand {
     public static @Nullable U getAuthU(ITcpSocket socket0) {
         var authUser = SocketInspector.getAuthUser(socket0);
         if (authUser == null) {
-            var defaultUser = aclUsers.get(U.DEFAULT_USER);
-            return defaultUser != null ? defaultUser : U.INIT_DEFAULT_U;
+            var defaultU = aclUsers.get(U.DEFAULT_USER);
+            return defaultU != null ? defaultU : U.INIT_DEFAULT_U;
         }
         return aclUsers.get(authUser);
     }
