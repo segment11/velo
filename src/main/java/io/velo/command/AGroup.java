@@ -343,6 +343,7 @@ public class AGroup extends BaseCommand {
             }
 
             var user = new String(data[2]);
+            var pubsubDefault = ValkeyRawConfSupport.aclPubsubDefault;
 
             try {
                 aclUsers.upInsert(user, u -> {
@@ -359,7 +360,7 @@ public class AGroup extends BaseCommand {
                             temp.resetKey();
                         } else if ("resetchannels".equals(rule)) {
                             temp.resetPubSub();
-                            if (ValkeyRawConfSupport.aclPubsubDefault) {
+                            if (pubsubDefault) {
                                 temp.addRPubSub(false, RPubSub.fromLiteral("&*"));
                             }
                         } else if ("nopass".equals(rule)) {
@@ -390,7 +391,7 @@ public class AGroup extends BaseCommand {
                             temp.resetCmd();
                             temp.resetKey();
                             temp.resetPubSub();
-                            if (ValkeyRawConfSupport.aclPubsubDefault) {
+                            if (pubsubDefault) {
                                 temp.addRPubSub(false, RPubSub.fromLiteral("&*"));
                             }
                         } else if (RCmd.isRCmdLiteral(rule)) {
