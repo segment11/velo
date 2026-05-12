@@ -433,7 +433,7 @@ if (ValkeyRawConfSupport.aclPubsubDefault) {
 
 | Finding | Status | Reviewer Confidence |
 |---------|--------|---------------------|
-| 1 - `literal()` double-hashes plain passwords | **CONFIRMED** | High |
+| 1 - `literal()` double-hashes plain passwords | **FIXED** (commit `55a9d11`) | High |
 | 2 - `dataToLine()` + `split(" ")` breaks space passwords | **CONFIRMED** | High |
 | 3 - `fromLiteral()` missing reset keywords | **CONFIRMED** | High |
 | 4 - `ACL SAVE` non-atomic | **CONFIRMED** | High |
@@ -448,3 +448,100 @@ All 5 findings verified. Ready for fix implementation.
 3. Fix Finding 3 — `fromLiteral()` keyword support for Redis ACL file compatibility.
 4. Fix Finding 4 — atomic ACL SAVE prevents file corruption on crash.
 5. Fix Finding 5 — capture config snapshot in closure (trivial, defensive).
+
+---
+
+## Review Feedback - Bug 1 Fix (Round 5)
+
+Reviewer: AI agent 1
+Review date: 2026-05-12
+Reviewed commit: `0cef56f6b66258db093ef7260f70974b1bc9cbcb` (`fix: U.literal() uses > prefix for plain passwords, not #<sha256hex>`)
+Also reviewed: `ec7667f5e39909f60e29d59a67aded55749b0a22` (`docs: fix incorrect Redis compatibility claim in R5 bug 1`)
+
+### Summary of Fix
+
+The commit changes `U.literal()` line 301 from:
+```java
+sb.append(ADD_HASH_PASSWORD_PREFIX).append(DigestUtils.sha256Hex(pwd.passwordEncoded)).append(" ");
+```
+to:
+```java
+sb.append(ADD_PASSWORD_PREFIX).append(pwd.passwordEncoded).append(" ");
+```
+
+This makes plain passwords serialize as `>mypass` instead of `#<sha256hex("mypass")>`, preserving the `Password.plain` encode type through the `literal()` → `fromLiteral()` roundtrip.
+
+### Redis Behavior Verification
+
+Tested against Redis 7.2.11 (`~/.proof/bin/redis-server`):
+
+| Operation | Redis ACL file / ACL LIST output |
+|-----------|----------------------------------|
+| `ACL SETUSER test on >mypass` then `ACL SAVE` | `#ea71c25a7a602246b4c39824b855678894a96f43bb9b71319c39700a1e045222` |
+| `ACL SETUSER test on >mypass` then `ACL LIST` | `#ea71c25a7a602246b4c39824b855678894a96f43bb9b71319c39700a1e045222` |
+| Edit ACL file with `>filepass`, then load | Loaded OK, normalized to `#5338fa6084cc3095292ae577ea696b4d7bfb51f87653b9ad8546268a74615a15` on next SAVE |
+| `ACL SETUSER test <mypass` after SAVE/LOAD | Password removed successfully |
+
+**Redis normalizes all passwords to `#<sha256hex>` in the ACL file.** It does NOT preserve the `>password` format. Yet password removal (`<mypass`) still works after a roundtrip because Redis's internal representation handles the equivalence correctly.
+
+### Assessment
+
+**The fix took the wrong approach.** The root cause was correctly identified (my Finding 1): `Password.equals()` compares encode type, so `plain` can't match `sha256Hex` after roundtrip. But the fix changed `literal()` to output `>password` instead of fixing the comparison semantics.
+
+**Problems with the fix:**
+
+1. **Medium — ACL file format diverges from Redis.** Redis always outputs `#<sha256hex>` for passwords (both plain and pre-hashed). Velo now outputs `>password` for plain passwords. This makes Velo ACL files incompatible with Redis — a Redis server loading a Velo-generated ACL file will accept `>password` but normalize it to `#<hash>` on the next SAVE, while Velo will keep writing `>password`. Mixed environments will have inconsistent ACL file formats.
+
+2. **Medium — passwords stored in plaintext on disk.** `ACL SAVE` now writes `>mypass` to the ACL file, exposing plaintext passwords. Redis always hashes to SHA-256 before writing. This is a security regression.
+
+3. **Medium — the suggested fix in the review was incorrect.** My original Finding 1 suggested changing `literal()` to output `>password`. This was wrong — I should have verified against Redis first. Agent 2 correctly identified this in commit `ec7667f`.
+
+**Correct approach:**
+
+The fix should revert `literal()` to output `#<sha256hex>` (matching Redis), and instead fix `Password.equals()` / `removePassword()` / `addPassword()` to handle type-equivalent matching:
+
+```java
+// In Password — check semantic equality
+public boolean semanticallyEquals(Password other) {
+    if (this.encodeType == other.encodeType) {
+        return this.passwordEncoded.equals(other.passwordEncoded);
+    }
+    // Cross-type: hash the plain one and compare
+    if (this.encodeType == PasswordEncodedType.plain && other.encodeType == PasswordEncodedType.sha256Hex) {
+        return DigestUtils.sha256Hex(this.passwordEncoded).equals(other.passwordEncoded);
+    }
+    if (this.encodeType == PasswordEncodedType.sha256Hex && other.encodeType == PasswordEncodedType.plain) {
+        return this.passwordEncoded.equals(DigestUtils.sha256Hex(other.passwordEncoded));
+    }
+    return false;
+}
+```
+
+Then use `semanticallyEquals()` in `removePassword()` and the dedup check in `addPassword()`.
+
+### Verification
+
+- Tests pass: `./gradlew :cleanTest :test --tests "io.velo.acl.UTest"` — BUILD SUCCESSFUL.
+- The new test `'test literal round-trip preserves password removal with <password syntax'` verifies the fix works with the `>password` format.
+- However, the test does not verify Redis ACL file compatibility.
+
+### Follow-ups
+
+- **Pre-commit**: revert `literal()` to output `#<sha256hex>` for plain passwords (matching Redis behavior).
+- **Pre-commit**: implement `semanticallyEquals()` in `Password` and use it in `removePassword()` and `addPassword()`.
+- **Pre-commit**: update tests to verify `#<sha256hex>` output format and password removal after roundtrip.
+- **Post-commit**: verify ACL file compatibility with Redis 7.2.11 using `~/.proof/bin/redis-server`.
+
+### Fix Implemented (commit `55a9d11`)
+
+Implemented the reviewer's suggested approach:
+
+1. **Reverted** `literal()` to output `#<sha256hex>` for plain passwords (matching Redis)
+2. **Added** `Password.semanticallyEquals()` method for cross-type comparison:
+   - If same encodeType: compare passwordEncoded directly
+   - If different types: normalize plain to SHA256 hex and compare
+3. **Updated** `removePassword()` to use `semanticallyEquals()` instead of `equals()`
+4. **Updated** `addPassword()` deduplication to use `semanticallyEquals()`
+5. **Updated** tests to expect proper deduplication and verify password removal after roundtrip
+
+This approach matches Redis behavior: passwords are stored as `#<hash>` in ACL files, but internally Redis handles equivalence between plain-text and pre-hashed passwords correctly.
