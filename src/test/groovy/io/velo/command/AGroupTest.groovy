@@ -347,7 +347,7 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl log 1')
         then:
         reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies.length == 0
 
         when:
         reply = aGroup.execute('acl log 0')

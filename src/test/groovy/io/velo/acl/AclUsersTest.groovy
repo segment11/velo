@@ -339,4 +339,102 @@ class AclUsersTest extends Specification {
         cleanup:
         eventloop.breakEventloop()
     }
+
+    def 'test acl log records and retrieves entries'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+        AclUsers.resetAclLogs()
+
+        when:
+        AclUsers.recordAclLog("command", "io-loop", "GET", "testuser", "/127.0.0.1:12345")
+        AclUsers.recordAclLog("key", "io-loop", "SET", "admin", "/127.0.0.1:12346")
+
+        then:
+        def logs = AclUsers.getAclLogs(10)
+        logs.length == 2
+        logs[0].reason == "command"
+        logs[0].object == "GET"
+        logs[0].username == "testuser"
+        logs[1].reason == "key"
+        logs[1].object == "SET"
+        logs[1].username == "admin"
+
+        cleanup:
+        AclUsers.resetAclLogs()
+    }
+
+    def 'test acl log respects count limit'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+        AclUsers.resetAclLogs()
+
+        when:
+        AclUsers.recordAclLog("command", "io-loop", "GET", "user1", "/127.0.0.1:1")
+        AclUsers.recordAclLog("command", "io-loop", "SET", "user2", "/127.0.0.1:2")
+        AclUsers.recordAclLog("command", "io-loop", "DEL", "user3", "/127.0.0.1:3")
+
+        then:
+        def logs2 = AclUsers.getAclLogs(2)
+        logs2.length == 2
+
+        when:
+        def logs1 = AclUsers.getAclLogs(1)
+        then:
+        logs1.length == 1
+
+        cleanup:
+        AclUsers.resetAclLogs()
+    }
+
+    def 'test acl log reset clears all entries'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+        AclUsers.resetAclLogs()
+
+        when:
+        AclUsers.recordAclLog("command", "io-loop", "GET", "user", "/127.0.0.1:1")
+        AclUsers.recordAclLog("key", "io-loop", "SET", "user", "/127.0.0.1:2")
+        then:
+        AclUsers.getAclLogs(10).length == 2
+
+        when:
+        AclUsers.resetAclLogs()
+        then:
+        AclUsers.getAclLogs(10).length == 0
+    }
+
+    def 'test acl log circular buffer behavior'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+        AclUsers.resetAclLogs()
+
+        when:
+        for (int i = 0; i < 130; i++) {
+            AclUsers.recordAclLog("command", "io-loop", "CMD" + i, "user" + i, "/127.0.0.1:" + i)
+        }
+
+        then:
+        def logs = AclUsers.getAclLogs(128)
+        logs.length == 128
+        logs[0].object == "CMD2"
+        logs[127].object == "CMD129"
+
+        cleanup:
+        AclUsers.resetAclLogs()
+    }
+
+    def 'test acl log getAclLogs returns empty when no logs'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+        AclUsers.resetAclLogs()
+
+        expect:
+        AclUsers.getAclLogs(10).length == 0
+        AclUsers.getAclLogs(0).length == 0
+    }
 }

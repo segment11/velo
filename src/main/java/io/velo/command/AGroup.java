@@ -260,7 +260,7 @@ public class AGroup extends BaseCommand {
 
             var countOrReset = new String(data[2]).toLowerCase();
             if ("reset".equals(countOrReset)) {
-                // todo, clear log rows
+                AclUsers.resetAclLogs();
                 return OKReply.INSTANCE;
             } else {
                 int count;
@@ -272,25 +272,13 @@ public class AGroup extends BaseCommand {
 
                 // limit count
                 if (count < 1 || count > 100) {
-                    return new ErrorReply("count must be between 1 and 1000");
+                    return new ErrorReply("count must be between 1 and 100");
                 }
 
-                var topReplies = new Reply[count];
-                for (int i = 0; i < count; i++) {
-                    // todo, get log row
-                    var logRow = new LogRow();
-                    logRow.count = count;
-                    logRow.reason = "reason";
-                    logRow.context = "context";
-                    logRow.object = "object";
-                    logRow.username = "username";
-                    logRow.ageSeconds = 1.0;
-                    logRow.clientInfo = "client-info";
-                    logRow.entryId = 1;
-                    logRow.timestampCreated = 1;
-                    logRow.timestampLastUpdated = 1;
-
-                    var replies = logRow.toReplies();
+                var logRows = AclUsers.getAclLogs(count);
+                var topReplies = new Reply[logRows.length];
+                for (int i = 0; i < logRows.length; i++) {
+                    var replies = logRows[i].toReplies();
                     topReplies[i] = new MultiBulkReply(replies);
                 }
                 return new MultiBulkReply(topReplies);

@@ -467,6 +467,10 @@ public class MultiWorkerServer extends Launcher {
         request.setU(BaseCommand.getAuthU(socket));
         var aclCheckResult = request.isAclCheckOk();
         if (!aclCheckResult.asBoolean()) {
+            var username = request.getU() != null ? request.getU().getUser() : "N/A";
+            var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
+            var reason = aclCheckResult.isKeyFail() ? "key" : "command";
+            AclUsers.recordAclLog(reason, "io-loop", cmd, username, clientInfo);
             return Promise.of(
                     aclCheckResult.isKeyFail() ?
                             ErrorReply.ACL_PERMIT_KEY_LIMIT.buffer()

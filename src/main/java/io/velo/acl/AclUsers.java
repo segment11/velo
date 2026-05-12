@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -355,5 +356,54 @@ public class AclUsers {
             inner2.users.clear();
             inner2.users.addAll(users);
         });
+    }
+
+    private static final int ACL_LOG_MAX_SIZE = 128;
+    private static final LogRow[] aclLogBuffer = new LogRow[ACL_LOG_MAX_SIZE];
+    private static int aclLogIndex = 0;
+    private static int aclLogCount = 0;
+    private static long aclLogEntryIdCounter = 1;
+
+    public static synchronized void recordAclLog(String reason, String context, String object, String username, String clientInfo) {
+        var entry = new LogRow();
+        entry.count = aclLogCount;
+        entry.reason = reason;
+        entry.context = context;
+        entry.object = object;
+        entry.username = username;
+        entry.ageSeconds = 0.0;
+        entry.clientInfo = clientInfo;
+        entry.entryId = aclLogEntryIdCounter++;
+        entry.timestampCreated = System.currentTimeMillis();
+        entry.timestampLastUpdated = entry.timestampCreated;
+
+        aclLogBuffer[aclLogIndex % ACL_LOG_MAX_SIZE] = entry;
+        aclLogIndex++;
+        if (aclLogCount < ACL_LOG_MAX_SIZE) {
+            aclLogCount++;
+        }
+    }
+
+    public static synchronized LogRow[] getAclLogs(int count) {
+        int size = Math.min(count, aclLogCount);
+        if (size == 0) {
+            return new LogRow[0];
+        }
+        var result = new LogRow[size];
+        int startIndex = aclLogIndex - aclLogCount;
+        for (int i = 0; i < size; i++) {
+            int bufferIndex = (startIndex + i) % ACL_LOG_MAX_SIZE;
+            result[i] = aclLogBuffer[bufferIndex];
+            if (result[i] != null) {
+                result[i].count = size;
+            }
+        }
+        return result;
+    }
+
+    public static synchronized void resetAclLogs() {
+        Arrays.fill(aclLogBuffer, null);
+        aclLogIndex = 0;
+        aclLogCount = 0;
     }
 }
