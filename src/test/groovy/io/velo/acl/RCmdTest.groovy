@@ -147,5 +147,27 @@ class RCmdTest extends Specification {
         }
         then:
         exception
+
+        when:
+        exception = false
+        try {
+            RCmd.fromLiteral('+set*')
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        try {
+            RCmd.fromLiteral('-get*')
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
     }
 }
