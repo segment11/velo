@@ -598,3 +598,59 @@ Two commits form the fix:
 
 - **Optional**: add a test that exercises `sha256Hex→plain` direction in `semanticallyEquals()` (e.g., add a sha256Hex password, then remove with `Password.plain()`). ✓ Done (commit `ca3acff`)
 - **Post-commit**: none beyond the above.
+
+---
+
+## Review Feedback - Bug 2 Fix (Round 5)
+
+Reviewer: AI agent 1
+Review date: 2026-05-12
+Reviewed commit: `fab6d4d76f75bffe57fe1e9050db620ffecfc3b7` (`fix: handle space-containing args in dataToLine/execute roundtrip`)
+
+### Summary of Fix
+
+The commit adds quoting/escaping to `dataToLine()` and a corresponding `parseLine()` parser for `execute()`:
+
+1. **`dataToLine()`** (`BaseCommand.java:171-184`): Arguments containing spaces, double-quotes, or backslashes are wrapped in double-quotes with escaping (`\` → `\\`, `"` → `\"`).
+2. **`parseLine()`** (`BaseCommand.java:427-461`): New private static method that tokenizes the line respecting quoted strings and escape sequences.
+3. **`execute()`** (`BaseCommand.java:393`): Replaced `split(" ")` with `parseLine()`.
+
+Production change: 56 lines in `BaseCommand.java`. Test: 42 lines in `AGroupTest.groovy`.
+
+### Strengths
+
+- The approach is sound: quote-escape roundtrip handles the space-containing argument case correctly.
+- `dataToLine()` also escapes `"` and `\` characters, making the encoding unambiguous.
+- `parseLine()` correctly handles: unquoted tokens, quoted tokens, escaped `\"` and `\\`, and trailing tokens after the last space.
+- The test `'test dataToLine and execute roundtrip with space-containing password'` directly verifies the fix: sets password `"my secret"` via `dataToLine()` → `execute()`, then confirms `checkPassword('my secret')` passes and `checkPassword('my')` / `checkPassword('secret')` fail.
+- The fix is backward-compatible: existing binlog entries without quotes are parsed correctly by `parseLine()` (same behavior as old `split(" ")`).
+
+### Concerns
+
+1. **Medium — escape handling in `parseLine()` has zero test coverage (JaCoCo `nc` on lines 434-439)**
+
+   The `\\` and `\"` escape handling paths are never executed. The test only uses a space-containing password, not one with quotes or backslashes. JaCoCo confirms:
+   - Line 434 (`c == '\\'`): `pc bpc` — 3 of 4 branches missed
+   - Lines 435-439: all `nc`
+
+   A test with a password containing `"` or `\` would cover these paths. For example: `>my"pass` or `>my\pass`.
+
+2. **Low — `dataToLine()` escape branches partially covered**
+
+   Line 175: `pc bpc` — 2 of 6 branches missed. The `contains("\"")` and `contains("\\")` conditions are not independently tested. The `contains(" ")` path is covered.
+
+3. **Informational — `parseLine()` is `private static` but `execute()` is `@TestOnly`**
+
+   `parseLine()` is only called from `execute()` which is annotated `@TestOnly`. However, `execute()` is also called from production code in `XAclUpdate.apply()`. This pre-existing `@TestOnly` annotation inconsistency is not introduced by this fix.
+
+### Verification
+
+- Test passes: `./gradlew :cleanTest :test --tests "io.velo.command.AGroupTest.test dataToLine and execute roundtrip with space-containing password"` — BUILD SUCCESSFUL.
+- JaCoCo:
+  - `dataToLine()`: `fc` on lines 172-180, `pc bpc` on line 175 (quoting branch partially covered)
+  - `parseLine()`: `fc` on lines 427-461, quote/space handling `fc bfc`, escape handling `nc` (lines 434-439)
+
+### Follow-ups
+
+- **Pre-commit**: add a test with a password containing `"` or `\` to cover the escape handling branches in both `dataToLine()` and `parseLine()`. ✓ Done (commit `c893697`)
+- **Post-commit**: none beyond the above.
