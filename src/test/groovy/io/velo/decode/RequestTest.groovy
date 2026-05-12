@@ -57,7 +57,7 @@ class RequestTest extends Specification {
         when:
         request.u = null
         then:
-        request.isAclCheckOk()
+        request.isAclCheckOk() == U.CheckCmdAndKeyResult.FALSE_WHEN_CHECK_CMD
 
         when:
         def requestRepl = new Request(null, false, true)

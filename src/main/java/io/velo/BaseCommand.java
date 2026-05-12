@@ -182,11 +182,15 @@ public abstract class BaseCommand {
 
     /**
      * Gets the ACL user object associated with the network socket connection.
+     * For unauthenticated sockets, returns the default user (never null).
+     * For authenticated sockets, returns the user from the ACL registry;
+     * returns null if the authenticated user was deleted from the registry
+     * (e.g. via ACL DELUSER) but the socket still references them.
      *
      * @param socket0 the network socket connection
-     * @return the ACL user, or the default user if not found
+     * @return the ACL user, the default user for unauthenticated sockets, or null if the authenticated user was deleted
      */
-    public static @NotNull U getAuthU(ITcpSocket socket0) {
+    public static @Nullable U getAuthU(ITcpSocket socket0) {
         var authUser = SocketInspector.getAuthUser(socket0);
         if (authUser == null) {
             var defaultUser = aclUsers.get(U.DEFAULT_USER);
@@ -195,7 +199,7 @@ public abstract class BaseCommand {
         return aclUsers.get(authUser);
     }
 
-    protected @NotNull U getAuthU() {
+    protected @Nullable U getAuthU() {
         return getAuthU(socket);
     }
 

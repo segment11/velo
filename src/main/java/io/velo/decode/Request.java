@@ -124,9 +124,8 @@ public class Request {
      * @return the result of the ACL check
      */
     public U.CheckCmdAndKeyResult isAclCheckOk() {
-        // for unit test
         if (u == null) {
-            return U.CheckCmdAndKeyResult.TRUE;
+            return U.CheckCmdAndKeyResult.FALSE_WHEN_CHECK_CMD;
         }
 
         if (RequestHandler.AUTH_COMMAND.equals(cmd())) {

@@ -1795,7 +1795,7 @@ public class SGroup extends BaseCommand {
 
         // check acl
         var u = getAuthU();
-        if (!u.isOn()) {
+        if (u == null || !u.isOn()) {
             return ErrorReply.ACL_PERMIT_LIMIT;
         }
 

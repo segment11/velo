@@ -428,7 +428,7 @@ public class PGroup extends BaseCommand {
         if (socket != null) {
             // check acl
             var u = BaseCommand.getAuthU(socket);
-            if (!u.isOn() || !u.checkChannels(channel)) {
+            if (u == null || !u.isOn() || !u.checkChannels(channel)) {
                 return ErrorReply.ACL_PERMIT_LIMIT;
             }
         }

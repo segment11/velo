@@ -420,6 +420,9 @@ public class AGroup extends BaseCommand {
             }
 
             var u = getAuthU();
+            if (u == null) {
+                return ErrorReply.NO_AUTH;
+            }
             return new BulkReply(u.getUser());
         }
 
