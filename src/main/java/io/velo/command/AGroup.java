@@ -16,6 +16,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+import static java.util.stream.Collectors.toSet;
+
 /**
  * Handles Redis commands starting with letter 'A'.
  * This includes commands like ACL, APPEND, ASKING, etc.
@@ -234,7 +236,7 @@ public class AGroup extends BaseCommand {
                 var previousUsers = aclUsers.getInner().getUsers();
                 var previousUserNames = previousUsers.stream()
                         .map(U::getUser)
-                        .collect(java.util.stream.Collectors.toSet());
+                        .collect(toSet());
 
                 aclUsers.loadAclFile();
 
@@ -244,9 +246,9 @@ public class AGroup extends BaseCommand {
                     var users = aclUsers.getInner().getUsers();
                     var loadedUserNames = users.stream()
                             .map(U::getUser)
-                            .collect(java.util.stream.Collectors.toSet());
+                            .collect(toSet());
 
-                    var lines = new java.util.ArrayList<String>();
+                    var lines = new ArrayList<String>();
 
                     // replicate deletions for users removed by the load
                     for (var prevUser : previousUsers) {

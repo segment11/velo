@@ -4,6 +4,7 @@ import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
@@ -44,7 +45,7 @@ public class BFSerializer {
      * @throws RuntimeException if an IOException occurs during serialization
      */
     public static byte[] toBytes(BloomFilter<CharSequence> filter) {
-        var bos = new java.io.ByteArrayOutputStream();
+        var bos = new ByteArrayOutputStream();
         try {
             filter.writeTo(bos);
             return bos.toByteArray();

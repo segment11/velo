@@ -1,6 +1,5 @@
 package io.velo.tools;
 
-import io.netty.buffer.Unpooled;
 import io.velo.CompressedValue;
 import io.velo.ConfForSlot;
 import io.velo.KeyHash;
@@ -90,11 +89,7 @@ public class IterateKeyBuckets {
             var size = ByteBuffer.wrap(bytes, 8, 2).getShort();
             sumArray[i] += size;
             if (size > 0) {
-                var map = keyWithValueBytesByBucketIndex.get(i);
-                if (map == null) {
-                    map = new java.util.HashMap<>();
-                    keyWithValueBytesByBucketIndex.put(i, map);
-                }
+                var map = keyWithValueBytesByBucketIndex.computeIfAbsent(i, k -> new HashMap<>());
 
 //                System.out.println("size=" + size + ", bucket index=" + i);
                 var keyBucket = new KeyBucket(slot, i, splitIndex, (byte) -1, bytes, null);
