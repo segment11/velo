@@ -71,7 +71,10 @@ This is why command code generally returns reply objects rather than writing dir
 
 ## Special Command Families
 
-- ACL and auth flow live mainly in [`AGroup`](/home/kerry/ws/velo/src/main/java/io/velo/command/AGroup.java).
+- ACL subcommands (`ACL SETUSER`, `ACL LIST`, etc.) live in [`AGroup`](/home/kerry/ws/velo/src/main/java/io/velo/command/AGroup.java).
+  The `AUTH` command itself is handled as a special case in [`RequestHandler`](/home/kerry/ws/velo/src/main/java/io/velo/RequestHandler.java)
+  (not dispatched through any command group). The `HELLO ... AUTH` path lives in [`HGroup`](/home/kerry/ws/velo/src/main/java/io/velo/command/HGroup.java).
+  See [ACL Security Design](/home/kerry/ws/velo/doc/design/10_acl_security_design.md) for the full authentication flow.
 - Bloom filter commands live in [`BGroup`](/home/kerry/ws/velo/src/main/java/io/velo/command/BGroup.java).
 - GEO commands live in [`GGroup`](/home/kerry/ws/velo/src/main/java/io/velo/command/GGroup.java).
 - HyperLogLog commands live in [`PGroup`](/home/kerry/ws/velo/src/main/java/io/velo/command/PGroup.java).
