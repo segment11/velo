@@ -68,7 +68,7 @@ Authentication still works (both `Password.check()` paths produce the same compa
 - After ACL SAVE → LOAD, operators cannot remove passwords using `<password` syntax.
 - Each `>password` / `<password` cycle adds a new password entry instead of toggling it.
 - `ACL LIST` shows accumulated duplicate password hashes.
-- Redis compatibility: Redis stores plain passwords as `><password>` in the ACL file, not as `#<hash>`.
+- Redis compatibility: Redis stores plain passwords as `#<hash>` (SHA256) in the ACL file — same as Velo's `literal()` output. The issue is Velo's internal type system: `Password.plain` becomes `Password.sha256Hex` after roundtrip, breaking `equals()`.
 
 **Suggested fix:**
 
