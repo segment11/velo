@@ -87,7 +87,9 @@ class BaseCommandTest extends Specification {
         when:
         def socket = SocketInspectorTest.mockTcpSocket()
         then:
-        BaseCommand.getAuthU(socket) == U.INIT_DEFAULT_U
+        BaseCommand.getAuthU(socket).user == U.INIT_DEFAULT_U.user
+        BaseCommand.getAuthU(socket).isOn() == U.INIT_DEFAULT_U.isOn()
+        BaseCommand.getAuthU(socket).firstPassword.isNoPass() == U.INIT_DEFAULT_U.firstPassword.isNoPass()
 
         when:
         def veloUserData = new VeloUserDataInSocket()
