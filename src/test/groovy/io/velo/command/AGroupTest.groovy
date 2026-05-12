@@ -523,6 +523,57 @@ class AGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test acl setuser reset clears command permissions'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def aGroup = new AGroup(null, null, null)
+        aGroup.byPassGetSet = inMemoryGetSet
+        aGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.dynConfig.binlogOn = true
+
+        when:
+        aclUsers.upInsert('reset-test') { u ->
+            u.setOn(true)
+            u.addPassword(U.Password.plain('secret'))
+            u.addRCmd(true, RCmd.fromLiteral('+@all'))
+            u.addRKey(true, RKey.fromLiteral('~*'))
+        }
+        then:
+        aclUsers.get('reset-test') != null
+
+        when:
+        def snowFlake = new SnowFlake(1, 1)
+        aGroup.requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) slot, snowFlake, Config.create())
+        def reply = aGroup.execute('acl dryrun reset-test get key')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = aGroup.execute('acl setuser reset-test reset on')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        reply = aGroup.execute('acl dryrun reset-test get key')
+        then:
+        reply == ErrorReply.ACL_PERMIT_LIMIT
+
+        cleanup:
+        aclUsers.delete('reset-test')
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test acl load replicates users to binlog'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

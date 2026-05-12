@@ -373,6 +373,7 @@ public class AGroup extends BaseCommand {
                         } else if ("reset".equals(rule)) {
                             temp.setOn(false);
                             temp.resetPassword();
+                            temp.resetCmd();
                             temp.resetKey();
                             temp.resetPubSub();
                             if (ValkeyRawConfSupport.aclPubsubDefault) {
