@@ -650,3 +650,68 @@ Production change: 21 lines added (13 in `RequestHandler.java`, 8 in `HGroup.jav
 
 - **Pre-commit**: add a test that sends a failed AUTH (wrong password for an existing user), then verifies `AclUsers.getAclLog()` returns an entry with `reason == "auth"` and the correct username.
 - **Post-commit**: none beyond the above.
+
+---
+
+## Review Feedback - Bugs 4, 5, 6 Fix
+
+Reviewer: AI agent 1
+Review date: 2026-05-12
+Reviewed commit: `5922a9189a987730ec7f69888b107d00db9e48ac` (`fix: ACL security module bug fixes (bugs 4, 5, 6 from R4 review)`)
+
+### Summary of Fix
+
+Three production changes in a single commit:
+
+1. **Bug 4** (`AclUsers.java:203-207`): `Inner` constructor now creates a defensive copy of `U.INIT_DEFAULT_U` instead of adding the shared singleton directly. Uses `new U(DEFAULT_USER)` + `copyStateFrom(INIT_DEFAULT_U)`.
+
+2. **Bug 5** (`RCmd.java:158`): Added `.toLowerCase()` to `parts[1]` before `Category.valueOf()`, making category names case-insensitive (`+@ADMIN`, `+@READ`, `+@AdMiN` all work).
+
+3. **Bug 6** (`U.java:421-424`): Added 64-char length validation for `#`-prefixed passwords in `fromLiteral()`, throwing `IllegalArgumentException` if length != 64.
+
+Plus 5 test files changed:
+- `RequestHandlerTest.groovy`: Added bug 3 follow-up test — verifies ACL LOG entries after failed AUTH (addresses the concern from bug 3 review).
+- `AclUsersTest.groovy`: New test `'test each Inner has its own default user copy not shared singleton'`.
+- `RCmdTest.groovy`: New test for `+@ADMIN`, `+@READ`, `+@AdMiN` case-insensitive category parsing.
+- `UTest.groovy`: New test for short (`#short`) and long (65-char) hash rejection in `fromLiteral()`.
+- `AGroupTest.groovy`: Fixed existing test that used a 66-char invalid hash (`#abcdef...ab`), replaced with `DigestUtils.sha256Hex('testuser')`.
+
+Production change: 12 lines changed across 3 files. Test change: 70 lines added across 5 files.
+
+### Strengths
+
+- **Bug 4**: Defensive copy is the correct approach. `copyStateFrom()` copies all mutable fields (passwords, command rules, key rules, pubsub rules) into the new object, breaking the shared reference. The new test correctly verifies `!defaultFromInner1.is(defaultFromInner2)`.
+- **Bug 5**: Minimal one-line fix, exactly as suggested. The new test covers uppercase, lowercase, and mixed case. All category names are now Redis-compatible.
+- **Bug 6**: Matches the validation in `AGroup.java:351-353` exactly. The new test covers both short and long hash cases.
+- **Bug 3 follow-up**: The `RequestHandlerTest` additions address the concern from my bug 3 review — now verifies `AclUsers.getAclLogs()` returns entries with `reason == "auth"` after failed AUTH. Uses `AclUsers.resetAclLogs()` to isolate test state.
+- **AGroupTest fix**: The existing test had a 66-character hash that would now fail the new validation. Correctly replaced with a proper SHA-256 hash.
+
+### Concerns
+
+1. **Medium — all 3 bugs batched in a single commit**
+
+   Per the project workflow: "Do not batch unrelated confirmed bugs into one commit." Each bug should have its own commit with its own test. The commit message lists all 3 fixes, making it harder to bisect or revert individual fixes. The test changes are also interdependent — e.g., `AGroupTest` was fixed because bug 6's validation broke an existing test, but it's in the same commit.
+
+   **Mitigation**: The fixes are small and well-isolated in different files, so the risk of merge conflicts is low. This is acceptable but should be avoided in future.
+
+2. **Low — bug 5 `parts[1].equals("*")` branch still uncovered (`pc bpc` on RCmd.java:158)**
+
+   JaCoCo shows 1 of 2 branches missed — the `true` branch for `+@*` is never tested. This is a pre-existing gap (no test ever uses `+@*`), not introduced by this fix. The `toLowerCase()` path is covered by the new uppercase/mixed-case tests.
+
+3. **Informational — `AGroupTest` hash was 66 chars, not 62 as stated in commit message**
+
+   The commit message says "invalid 62-char hash" but the original string `abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab` is actually 66 characters. The fix is still correct (valid SHA-256 = 64 chars).
+
+### Verification
+
+- All relevant tests pass: `./gradlew :cleanTest :test --tests "io.velo.acl.AclUsersTest" --tests "io.velo.acl.RCmdTest" --tests "io.velo.acl.UTest" --tests "io.velo.RequestHandlerTest" --tests "io.velo.command.AGroupTest"` — BUILD SUCCESSFUL.
+- JaCoCo inspected:
+  - **Bug 4** (`AclUsers.java:204-207`): all `fc` — fully covered. `U.copyStateFrom()` (`U.java:492-503`): all `fc` — fully covered.
+  - **Bug 5** (`RCmd.java:158`): `pc bpc` — `toLowerCase()` branch covered via `+@ADMIN`/`+@READ`/`+@AdMiN` tests; `*` branch pre-existing gap.
+  - **Bug 6** (`U.java:421-425`): `fc bfc` on line 422 (all branches), `fc` on line 423 (throw), `fc` on line 425 (success path) — fully covered.
+
+### Follow-ups
+
+- **Pre-commit (bug 3 follow-up)**: The commit includes the ACL LOG verification test that was requested in bug 3 review — **resolved**.
+- **Pre-commit**: consider adding a test for `+@*` to achieve full branch coverage on `RCmd.java:158` (optional, pre-existing gap).
+- **Post-commit**: none.
