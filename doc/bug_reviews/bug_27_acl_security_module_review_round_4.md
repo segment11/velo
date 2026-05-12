@@ -396,7 +396,7 @@ Add the same length validation in `U.fromLiteral()`:
 |---------|----------|--------|------------|
 | 1 - `ACL LOAD` replication does not delete removed users from replicas | High | **Fixed** (commits `0564373`, `b043ab6`) | High |
 | 2 - `+set*` treated as "all commands" privilege escalation | High | **Fixed** (commits `ae6dec6`, `ce8fc20`) | High |
-| 3 - Failed AUTH attempts not logged to ACL LOG | Medium-High | **New finding** | High |
+| 3 - Failed AUTH attempts not logged to ACL LOG | Medium-High | **Fixed** (commit `0c73be6`) | High |
 | 4 - `INIT_DEFAULT_U` shared mutable singleton still not fixed | Medium | **Known from Round 3** | High |
 | 5 - Category names are case-sensitive, rejecting `+@ADMIN` | Medium | **New finding** | High |
 | 6 - `U.fromLiteral()` does not validate SHA-256 hash length | Low | **New finding** | High |
