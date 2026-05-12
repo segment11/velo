@@ -446,7 +446,7 @@ if (ValkeyRawConfSupport.aclPubsubDefault) {
 | 2 - `dataToLine()` + `split(" ")` breaks space passwords | **FIXED** (commit `fab6d4d`) | High |
 | 3 - `fromLiteral()` missing reset keywords | **FIXED** (commit `04c084b5`) | High |
 | 4 - `ACL SAVE` non-atomic | **FIXED** (commit `2b26bc27`) | High |
-| 5 - `reset` closure captures mutable static | **CONFIRMED** | Medium |
+| 5 - `reset` closure captures mutable static | **FIXED** (commit `5ca8ef09`) | Medium |
 
 All 5 findings verified. Ready for fix implementation.
 
@@ -663,3 +663,57 @@ Production change: 56 lines in `BaseCommand.java`. Test: 42 lines in `AGroupTest
 
 - **Pre-commit**: add a test with a password containing `"` or `\` to cover the escape handling branches in both `dataToLine()` and `parseLine()`. ✓ Done (commit `c893697`)
 - **Post-commit**: none beyond the above.
+
+---
+
+## Review Feedback - Bug 4 Fix (Round 5)
+
+Reviewer: AI agent 1
+Review date: 2026-05-12
+Reviewed commit: `2b26bc27d3d7038f6a1959489d2a5d052ddcd514` (`fix: make ACL SAVE atomic using temp file + atomic rename`)
+
+### Summary of Fix
+
+Replaced direct `FileUtils.writeLines(aclFile, ...)` with write-to-temp-then-atomic-rename:
+
+```java
+var tmpFile = new java.io.File(aclFile.getParent(), aclFile.getName() + ".tmp");
+FileUtils.writeLines(tmpFile, "UTF-8", lines);
+Files.move(tmpFile.toPath(), aclFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+```
+
+Production change: 5 lines changed in `AGroup.java`, no test changes.
+
+### Strengths
+
+- Matches the suggested fix and Redis's atomic file replacement approach exactly.
+- `StandardCopyOption.ATOMIC_MOVE` ensures the rename is atomic on POSIX filesystems.
+- `StandardCopyOption.REPLACE_EXISTING` handles the case where the target file already exists.
+- If the write fails, the original file is untouched. If the process crashes during write, the `.tmp` file remains but the original is intact.
+- The temp file uses `.tmp` suffix — conventional and unlikely to conflict.
+
+### Concerns
+
+1. **Low — no cleanup of stale `.tmp` file on write failure**
+
+   If `FileUtils.writeLines()` succeeds but `Files.move()` throws (e.g., `AtomicMoveNotSupportedException` on non-POSIX filesystems), the `.tmp` file remains. On next SAVE attempt, it will be overwritten, so this is self-healing. But a stale `.tmp` file could confuse operators.
+
+2. **Low — `ATOMIC_MOVE` may throw `AtomicMoveNotSupportedException` on some filesystems**
+
+   `ATOMIC_MOVE` is not guaranteed on all platforms (e.g., some network filesystems). If it throws, the entire SAVE fails with an error. The `catch (IOException)` in the existing code handles this, returning an error reply to the client. A more defensive approach would be to fall back to non-atomic move if `ATOMIC_MOVE` fails.
+
+3. **Informational — `new File(null, name)` works but is surprising**
+
+   Default `aclFilename` is `"acl.conf"` (relative path). `getParent()` returns `null`. `new File(null, "acl.conf.tmp")` creates `File("acl.conf.tmp")` — Java treats null parent as current directory. This is correct but surprising. Verified with test: `javac` confirms `new File(null, "name")` works.
+
+### Verification
+
+- Test passes: `./gradlew :cleanTest :test --tests "io.velo.command.AGroupTest.test acl"` — BUILD SUCCESSFUL.
+- JaCoCo: lines 331-333 all `fc` — fully covered.
+- `new File(null, "acl.conf.tmp")` behavior verified via `javac` test — no NPE, creates file in current directory.
+
+### Follow-ups
+
+- **Optional**: add fallback to non-atomic move if `ATOMIC_MOVE` throws `AtomicMoveNotSupportedException`.
+- **Optional**: add `.tmp` file cleanup logic (delete stale temp file before writing new one).
+- **Post-commit**: none.
