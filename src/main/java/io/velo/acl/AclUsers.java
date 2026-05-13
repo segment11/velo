@@ -15,18 +15,12 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Singleton class managing user access control lists (ACLs) in a multi-threaded environment.
- * Each inner class instance handles ACL operations in the context of a specific thread.
+ * Singleton managing user ACLs in a multi-threaded environment.
  */
 public class AclUsers {
-    // singleton instance
     private static final AclUsers instance = new AclUsers();
 
-    /**
-     * Returns the singleton instance of AclUsers.
-     *
-     * @return the singleton AclUsers instance
-     */
+    /** @return the singleton instance */
     public static AclUsers getInstance() {
         return instance;
     }
@@ -35,8 +29,6 @@ public class AclUsers {
     }
 
     /**
-     * Callback interface for updating user objects within the ACL.
-     *
      * @param <U> the type of user object
      */
     public interface UpdateCallback<U> {
@@ -45,23 +37,17 @@ public class AclUsers {
 
     private static final Logger log = LoggerFactory.getLogger(AclUsers.class);
 
-    /**
-     * Array of event loops, each associated with a network worker thread.
-     */
+    /** Array of event loops, each associated with a network worker thread. */
     @ThreadNeedLocal
     private Eventloop[] slotWorkerEventloopArray;
 
-    /**
-     * Array of inner instances, each corresponding to a specific thread.
-     */
+    /** Array of inner instances, each corresponding to a specific thread. */
     @ThreadNeedLocal
     private Inner[] inners;
 
     private Inner preInitInner;
 
     /**
-     * Initializes the AclUsers instance with event loops associated with slot worker threads.
-     *
      * @param slotWorkerEventloopArray the array of Eventloop instances
      */
     public void initBySlotWorkerEventloopArray(Eventloop[] slotWorkerEventloopArray) {
@@ -84,9 +70,7 @@ public class AclUsers {
         log.info("Acl users init by slot worker eventloop array");
     }
 
-    /**
-     * Initializes the AclUsers instance for testing purposes with a single inner instance.
-     */
+    /** Initializes for testing with a single inner instance. */
     @TestOnly
     public void initForTest() {
         inners = new Inner[1];
@@ -99,17 +83,14 @@ public class AclUsers {
         }
     }
 
+    /** Resets for testing. */
     @TestOnly
     public void resetForTest() {
         inners = null;
         preInitInner = null;
     }
 
-    /**
-     * Returns the Inner instance associated with the current thread.
-     *
-     * @return the Inner instance, or null if no matching instance is found
-     */
+    /** @return the Inner instance for the current thread, or null if not found */
     public Inner getInner() {
         if (inners == null) {
             if (preInitInner == null) {
@@ -148,9 +129,7 @@ public class AclUsers {
         return null;
     }
 
-    /**
-     * Loads the ACL file and replaces the existing user list with the loaded users.
-     */
+    /** Loads the ACL file and replaces the existing user list. */
     public void loadAclFile() {
         var aclFile = Paths.get(ValkeyRawConfSupport.aclFilename).toFile();
         if (!aclFile.exists()) {
@@ -189,15 +168,11 @@ public class AclUsers {
     }
 
     /**
-     * Inner class handling user operations within the context of a specific thread.
-     * Each Inner instance is associated with a specific thread ID.
+     * Inner class handling user operations within a specific thread.
      */
     @ThreadNeedLocal
     public static class Inner {
         /**
-         * Constructs an Inner instance for a given thread ID.
-         * Initializes users list with a default user.
-         *
          * @param expectThreadId the thread ID this inner instance is expected to handle
          */
         Inner(long expectThreadId) {
@@ -209,23 +184,15 @@ public class AclUsers {
 
         final long expectThreadId;
 
-        /**
-         * List of user objects managed by this inner instance.
-         */
+        /** List of user objects managed by this inner instance. */
         private final List<U> uList = new ArrayList<>();
 
-        /**
-         * Returns a copy of the current list of users.
-         *
-         * @return the immutable list of users
-         */
+        /** @return a copy of the current list of users */
         public List<U> getUList() {
             return new ArrayList<>(uList);
         }
 
         /**
-         * Retrieves a user by username.
-         *
          * @param user the username to look up
          * @return the user object if found, otherwise null
          */
@@ -234,10 +201,6 @@ public class AclUsers {
         }
 
         /**
-         * Updates or inserts a user into the list based on the provided username.
-         * If the user already exists, the UpdateCallback is called with the existing user object.
-         * If the user does not exist, a new user is created, the callback is called, and the user is added to the list.
-         *
          * @param user     the username to update or insert
          * @param callback the callback to perform the update operation
          */
@@ -253,10 +216,8 @@ public class AclUsers {
         }
 
         /**
-         * Deletes a user from the list based on the provided username.
-         *
          * @param user the username to delete
-         * @return true if the user was successfully deleted, otherwise false
+         * @return true if the user was deleted
          */
         public boolean delete(String user) {
             return uList.removeIf(u -> u.user.equals(user));
@@ -264,8 +225,6 @@ public class AclUsers {
     }
 
     /**
-     * Retrieves a user by username.
-     *
      * @param user the username to look up
      * @return the user object if found, otherwise null
      */
@@ -274,17 +233,12 @@ public class AclUsers {
         return inner == null ? null : inner.get(user);
     }
 
-    /**
-     * Functional interface for operations to be performed on a specific inner instance.
-     */
+    /** Functional interface for operations on a specific inner instance. */
     private interface DoInTargetEventloop {
         void doSth(Inner inner);
     }
 
     /**
-     * Executes a given operation on the inner instance associated with the current thread.
-     * If the inner instance is not associated with the current thread, the operation is scheduled to run on the target event loop.
-     *
      * @param doInTargetEventloop the operation to perform
      */
     private void changeUser(DoInTargetEventloop doInTargetEventloop) {
@@ -306,8 +260,6 @@ public class AclUsers {
     }
 
     /**
-     * Updates or inserts a user across all Inner instances.
-     *
      * @param user     the username to update or insert
      * @param callback the callback to perform the update operation
      */
@@ -321,10 +273,8 @@ public class AclUsers {
     }
 
     /**
-     * Deletes a user from all Inner instances.
-     *
      * @param user the username to delete
-     * @return true if the user was successfully deleted from any Inner instance, otherwise false
+     * @return true if the user was deleted from any Inner instance
      */
     public boolean delete(String user) {
         var inner = getOwnedInner();
@@ -332,7 +282,6 @@ public class AclUsers {
         if (inner != null) {
             flag = inner.delete(user);
         } else {
-            // non-owner thread: check existence via read fallback, actual delete via eventloop
             flag = getInner().get(user) != null;
         }
 
@@ -343,8 +292,6 @@ public class AclUsers {
     }
 
     /**
-     * Replaces the list of users in all Inner instances with a new list of users.
-     *
      * @param uList the new list of user objects
      */
     public void replaceUsers(List<U> uList) {
@@ -366,6 +313,13 @@ public class AclUsers {
     private static int aclLogCount = 0;
     private static long aclLogEntryIdCounter = 1;
 
+    /**
+     * @param reason    the ACL log reason
+     * @param context   the ACL log context
+     * @param object    the ACL log object
+     * @param username  the username
+     * @param clientInfo the client info
+     */
     public static synchronized void recordAclLog(String reason, String context, String object, String username, String clientInfo) {
         var entry = new LogRow();
         entry.count = aclLogCount;
@@ -386,6 +340,10 @@ public class AclUsers {
         }
     }
 
+    /**
+     * @param count the maximum number of log entries to return
+     * @return array of ACL log entries
+     */
     public static synchronized LogRow[] getAclLogs(int count) {
         int size = Math.min(count, aclLogCount);
         if (size == 0) {
@@ -415,6 +373,7 @@ public class AclUsers {
         return result;
     }
 
+    /** Resets all ACL log entries. */
     public static synchronized void resetAclLogs() {
         Arrays.fill(aclLogBuffer, null);
         aclLogIndex = 0;

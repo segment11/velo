@@ -18,61 +18,38 @@ import static io.velo.acl.U.CheckCmdAndKeyResult.FALSE_WHEN_CHECK_CMD;
 import static io.velo.acl.U.CheckCmdAndKeyResult.FALSE_WHEN_CHECK_KEY;
 
 /**
- * Represents an ACL user in the Velo system.
- * This class encapsulates the properties and behaviors of a user, including:
- * - User status (enabled/disabled)
- * - User passwords
- * - Command and key access rules
- * - Channel subscriptions
+ * ACL user in the Velo system.
  */
 public class U {
-    /**
-     * The default user when no specific user is provided.
-     */
+    /** The default user when no specific user is provided. */
     public static final String DEFAULT_USER = "default";
 
-    /**
-     * Prefix for adding a plain password.
-     */
+    /** Prefix for adding a plain password. */
     public static final String ADD_PASSWORD_PREFIX = ">";
-    /**
-     * Prefix for removing a plain password.
-     */
+    /** Prefix for removing a plain password. */
     public static final String REMOVE_PASSWORD_PREFIX = "<";
-    /**
-     * Prefix for adding a hashed password.
-     */
+    /** Prefix for adding a hashed password. */
     public static final String ADD_HASH_PASSWORD_PREFIX = "#";
-    /**
-     * Prefix for removing a hashed password.
-     */
+    /** Prefix for removing a hashed password. */
     public static final String REMOVE_HASH_PASSWORD_PREFIX = "!";
 
-    /**
-     * Enum representing the encoding type of a password.
-     */
+    /** Enum representing the encoding type of a password. */
     private enum PasswordEncodedType {
         plain, sha256Hex;
     }
 
     /**
-     * Record representing a user's password.
+     * User password record.
      */
     public record Password(String passwordEncoded, PasswordEncodedType encodeType) {
-        /**
-         * Constant representing no password.
-         */
+        /** Sentinel string representing no password. */
         public static final String NO_PASS = "nopass";
 
-        /**
-         * Sentinel Password instance representing no password.
-         */
+        /** Sentinel Password instance representing no password. */
         public static final Password NO_PASSWORD = new Password(NO_PASS, PasswordEncodedType.plain);
 
         /**
-         * Checks if the password is set to 'nopass'.
-         *
-         * @return true if the password is 'nopass', false otherwise.
+         * @return true if password is 'nopass'
          */
         @VisibleForTesting
         public boolean isNoPass() {
@@ -80,10 +57,8 @@ public class U {
         }
 
         /**
-         * Checks if the provided raw password matches this password.
-         *
          * @param passwordRaw the raw password to check
-         * @return true if the provided password matches, false otherwise
+         * @return true if the password matches
          */
         boolean check(String passwordRaw) {
             if (isNoPass()) {
@@ -107,30 +82,24 @@ public class U {
         }
 
         /**
-         * Creates a plain password instance.
-         *
          * @param passwordRaw the raw password
-         * @return the Password instance with the plain encoding type
+         * @return Password with plain encoding
          */
         public static Password plain(String passwordRaw) {
             return new Password(passwordRaw, PasswordEncodedType.plain);
         }
 
         /**
-         * Creates a SHA-256 hashed password instance.
-         *
          * @param passwordRaw the raw password
-         * @return the Password instance with the SHA-256 encoding type
+         * @return Password with SHA-256 hex encoding
          */
         public static Password sha256Hex(String passwordRaw) {
             return new Password(DigestUtils.sha256Hex(passwordRaw), PasswordEncodedType.sha256Hex);
         }
 
         /**
-         * Creates a Password instance from a pre-encoded SHA-256 hash.
-         *
          * @param passwordSha256Hex the pre-encoded SHA-256 hash
-         * @return the Password instance with the SHA-256 encoding type
+         * @return Password with SHA-256 encoding
          */
         public static Password sha256HexEncoded(String passwordSha256Hex) {
             return new Password(passwordSha256Hex, PasswordEncodedType.sha256Hex);
@@ -148,6 +117,10 @@ public class U {
             return passwordEncoded.equals(password.passwordEncoded) && encodeType == password.encodeType;
         }
 
+        /**
+         * @param other the other password
+         * @return true if passwords are semantically equal
+         */
         public boolean semanticallyEquals(Password other) {
             if (this == other) {
                 return true;
@@ -168,60 +141,40 @@ public class U {
         }
     }
 
-    /**
-     * The username.
-     */
+    /** The username. */
     final String user;
 
     /**
-     * Constructs a new user with the given username.
-     *
      * @param user the username
      */
     public U(String user) {
         this.user = user;
     }
 
-    /**
-     * Returns the username.
-     *
-     * @return the username
-     */
+    /** @return the username */
     public String getUser() {
         return user;
     }
 
-    /**
-     * Whether the user is enabled.
-     */
+    /** Whether the user is enabled. */
     private boolean isOn = false;
 
-    /**
-     * Returns whether the user is enabled.
-     *
-     * @return true if the user is enabled, false otherwise.
-     */
+    /** @return true if the user is enabled */
     public boolean isOn() {
         return isOn;
     }
 
     /**
-     * Sets the user's enabled status.
-     *
-     * @param on true to enable the user, false to disable the user
+     * @param on true to enable the user, false to disable
      */
     public void setOn(boolean on) {
         isOn = on;
     }
 
-    /**
-     * List of passwords for the user.
-     */
+    /** List of passwords for the user. */
     private final ArrayList<Password> passwords = new ArrayList<>();
 
     /**
-     * Adds a password to the user.
-     *
      * @param password the password to add
      */
     public void addPassword(Password password) {
@@ -238,29 +191,22 @@ public class U {
     }
 
     /**
-     * Removes a password from the user.
-     *
      * @param password the password to remove
      */
     public void removePassword(Password password) {
         passwords.stream().filter(p -> p.semanticallyEquals(password)).findFirst().ifPresent(passwords::remove);
     }
 
-    /**
-     * Resets (clears) all passwords for the user.
-     */
+    /** Resets (clears) all passwords for the user. */
     public void resetPassword() {
         passwords.clear();
     }
 
     /**
-     * Checks if the provided raw password matches any of the user's passwords.
-     *
      * @param passwordRaw the raw password to check
-     * @return true if the password matches, false otherwise
+     * @return true if the password matches
      */
     public boolean checkPassword(String passwordRaw) {
-        // reset password
         if (passwords.isEmpty()) {
             return false;
         }
@@ -268,8 +214,6 @@ public class U {
     }
 
     /**
-     * Sets the user's password. Clears any existing passwords.
-     *
      * @param password the password to set
      */
     @TestOnly
@@ -278,19 +222,13 @@ public class U {
         passwords.add(password);
     }
 
-    /**
-     * Returns the first password of the user.
-     *
-     * @return the first password, or null if there are no passwords
-     */
+    /** @return the first password, or null if none */
     @TestOnly
     public Password getFirstPassword() {
         return passwords.isEmpty() ? null : passwords.getFirst();
     }
 
-    /**
-     * Default initialized user with 'default' username.
-     */
+    /** Default initialized user with 'default' username. */
     public static final U INIT_DEFAULT_U = new U(DEFAULT_USER);
 
     static {
@@ -301,11 +239,7 @@ public class U {
         INIT_DEFAULT_U.addRPubSub(true, RPubSub.fromLiteral("&*"));
     }
 
-    /**
-     * Returns a string representation of the user in a literal format.
-     *
-     * @return the string representation of the user
-     */
+    /** @return string representation in literal format */
     public String literal() {
         var sb = new StringBuilder();
         sb.append("user ").append(user).append(" ");
@@ -341,11 +275,7 @@ public class U {
         return sb.toString();
     }
 
-    /**
-     * Returns an array of Redis replies representing the user's properties.
-     *
-     * @return the array of Redis replies representing the user's properties
-     */
+    /** @return array of Redis replies representing the user's properties */
     public Reply[] toReplies() {
         var replies = new Reply[10];
         replies[0] = new BulkReply("flags");
@@ -411,8 +341,6 @@ public class U {
     }
 
     /**
-     * Creates a user instance from a literal string representation.
-     *
      * @param str the literal string representation of the user
      * @return the user instance, or null if the string is invalid
      */
@@ -474,51 +402,40 @@ public class U {
         return u;
     }
 
-    /**
-     * List of allowed commands for the user.
-     */
+    /** List of allowed commands for the user. */
     @VisibleForTesting
     final List<RCmd> rCmdList = new ArrayList<>();
-    /**
-     * List of disallowed commands for the user.
-     */
+    /** List of disallowed commands for the user. */
     @VisibleForTesting
     final List<RCmd> rCmdDisallowList = new ArrayList<>();
 
-    /**
-     * List of allowed keys for the user.
-     */
+    /** List of allowed keys for the user. */
     @VisibleForTesting
     final List<RKey> rKeyList = new ArrayList<>();
 
-    /**
-     * List of allowed channels for the user.
-     */
+    /** List of allowed channels for the user. */
     @VisibleForTesting
     final List<RPubSub> rPubSubList = new ArrayList<>();
 
-    /**
-     * Resets the command rules for the user.
-     */
+    /** Resets the command rules for the user. */
     public void resetCmd() {
         rCmdList.clear();
         rCmdDisallowList.clear();
     }
 
-    /**
-     * Resets the key rules for the user.
-     */
+    /** Resets the key rules for the user. */
     public void resetKey() {
         rKeyList.clear();
     }
 
-    /**
-     * Resets the channel rules for the user.
-     */
+    /** Resets the channel rules for the user. */
     public void resetPubSub() {
         rPubSubList.clear();
     }
 
+    /**
+     * @param source the source user to copy state from
+     */
     public void copyStateFrom(U source) {
         this.isOn = source.isOn;
         this.passwords.clear();
@@ -534,8 +451,6 @@ public class U {
     }
 
     /**
-     * Adds command rules to the user.
-     *
      * @param clear if true, clears existing command rules before adding
      * @param rCmd  the command rules to add
      */
@@ -547,8 +462,6 @@ public class U {
     }
 
     /**
-     * Adds disallowed command rules to the user.
-     *
      * @param clear if true, clears existing disallowed command rules before adding
      * @param rCmd  the disallowed command rules to add
      */
@@ -560,8 +473,6 @@ public class U {
     }
 
     /**
-     * Adds key rules to the user.
-     *
      * @param clear if true, clears existing key rules before adding
      * @param rKey  the key rules to add
      */
@@ -573,8 +484,6 @@ public class U {
     }
 
     /**
-     * Adds channel rules to the user.
-     *
      * @param clear   if true, clears existing channel rules before adding
      * @param rPubSub the channel rules to add
      */
@@ -586,8 +495,6 @@ public class U {
     }
 
     /**
-     * Merges rules from another user into this user.
-     *
      * @param another the user whose rules are to be merged
      * @param isReset if true, resets this user's rules before merging
      */
@@ -609,7 +516,7 @@ public class U {
      * Access check result when checking command and key access.
      *
      * @param isOk      whether the result is OK
-     * @param isKeyFail whether the result is due to a key failure; when false means it is due to a command failure
+     * @param isKeyFail whether the result is due to a key failure
      */
     public record CheckCmdAndKeyResult(boolean isOk, boolean isKeyFail) {
         public boolean asBoolean() {
@@ -622,12 +529,10 @@ public class U {
     }
 
     /**
-     * Checks if the user has access to the given command and key.
-     *
      * @param cmd                 the command
      * @param data                the command arguments
      * @param slotWithKeyHashList the keys
-     * @return the CheckCmdAndKeyResult instance representing the access check result
+     * @return the access check result
      */
     public CheckCmdAndKeyResult checkCmdAndKey(String cmd, byte[][] data, ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList) {
         if (rCmdList.isEmpty()) {
@@ -680,10 +585,8 @@ public class U {
     }
 
     /**
-     * Checks if the user has access to the given channels.
-     *
      * @param channels the channels
-     * @return true if the user has access to all the channels, false otherwise
+     * @return true if the user has access to all the channels
      */
     public boolean checkChannels(String... channels) {
         if (rPubSubList.isEmpty()) {

@@ -3,8 +3,7 @@ package io.velo.acl;
 import java.util.*;
 
 /**
- * Enum representing different categories of Redis commands.
- * Each category contains a list of commands that belong to it.
+ * Categories of Redis commands.
  */
 public enum Category {
     all, admin, bitmap, blocking, connection, dangerous,
@@ -13,27 +12,30 @@ public enum Category {
     set, sortedset, slow, stream, string,
     transaction, write;
 
-    /**
-     * A map that associates each category with a list of commands.
-     */
+    /** Map associating each category with its commands. */
     private static final Map<Category, List<String>> CMD_LIST_BY_CATEGORY = new HashMap<>();
 
-    /**
-     * A map that associates each command with a list of categories it belongs to.
-     */
+    /** Map associating each command with its categories. */
     private static final Map<String, List<Category>> CATEGORY_LIST_BY_CMD = new HashMap<>();
 
-    /**
-     * A set containing all write commands.
-     */
+    /** Set of all write commands. */
     private static final HashSet<String> writeCmdSet = new HashSet<>();
 
     private static final HashSet<String> readWriteCmdSet = new HashSet<>();
 
+    /**
+     * @param cmd the command
+     * @return true if the command is read-write
+     */
     public static boolean isReadWriteCmd(String cmd) {
         return readWriteCmdSet.contains(cmd);
     }
 
+    /**
+     * @param cmd  the command
+     * @param data the command arguments
+     * @return true if the command is read-write
+     */
     public static boolean isReadWriteCmd(String cmd, byte[][] data) {
         if (isReadWriteCmd(cmd)) {
             return true;
@@ -51,18 +53,13 @@ public enum Category {
     }
 
     /**
-     * Checks if a given command is a write command.
-     *
      * @param cmd the command to check
-     * @return true if the command is a write command, false otherwise
+     * @return true if the command is a write command
      */
     public static boolean isWriteCmd(String cmd) {
         return writeCmdSet.contains(cmd);
     }
 
-    /**
-     * Static block to initialize command lists and mappings.
-     */
     static {
         List<String> adminCmdList = List.of(
                 "acl",
@@ -922,20 +919,16 @@ public enum Category {
     }
 
     /**
-     * Returns the list of commands for the given category.
-     *
-     * @param category the category for which to fetch commands
-     * @return the list of commands belonging to the specified category
+     * @param category the category
+     * @return the list of commands for the category
      */
     public static List<String> getCmdListByCategory(Category category) {
         return CMD_LIST_BY_CATEGORY.get(category);
     }
 
     /**
-     * Returns the list of categories for the given command.
-     *
-     * @param cmd the command for which to fetch categories
-     * @return the list of categories to which the specified command belongs
+     * @param cmd the command
+     * @return the list of categories for the command
      */
     public static List<Category> getCategoryListByCmd(String cmd) {
         return CATEGORY_LIST_BY_CMD.get(cmd);

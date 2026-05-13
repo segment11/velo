@@ -5,20 +5,31 @@ import io.velo.reply.IntegerReply;
 import io.velo.reply.Reply;
 
 /**
- * For acl log command response
+ * ACL log entry for ACL log command response.
  */
 public class LogRow {
+    /** Log entry count. */
     public int count;
+    /** ACL log reason. */
     public String reason;
+    /** ACL log context. */
     public String context;
+    /** ACL log object. */
     public String object;
+    /** Username. */
     public String username;
+    /** Age in seconds. */
     public double ageSeconds;
+    /** Client information. */
     public String clientInfo;
+    /** Entry ID. */
     public long entryId;
+    /** Timestamp when entry was created. */
     public long timestampCreated;
+    /** Timestamp when entry was last updated. */
     public long timestampLastUpdated;
 
+    /** @return array of Redis replies representing the log entry */
     public Reply[] toReplies() {
         return new Reply[]{
                 new BulkReply("count"),

@@ -4,45 +4,42 @@ import io.velo.persist.KeyLoader;
 import org.jetbrains.annotations.VisibleForTesting;
 
 /**
- * Represents an access control key that defines permissions for reading and/or writing to specific patterns.
+ * Access control key defining permissions for reading and/or writing to patterns.
  */
 public class RKey {
-    /**
-     * The literal prefix used to identify RKey literals.
-     */
+    /** The literal prefix used to identify RKey literals. */
     public static final String LITERAL_PREFIX = "~";
 
-    /**
-     * Enumerates the possible types of permissions an RKey can have.
-     */
+    /** Possible types of permissions. */
     public enum Type {
         read, write, read_write, all
     }
 
-    /**
-     * The type of permission defined by this RKey.
-     */
+    /** The type of permission defined by this RKey. */
     @VisibleForTesting
     Type type;
 
-    /**
-     * The pattern that this RKey applies to.
-     */
+    /** The pattern that this RKey applies to. */
     @VisibleForTesting
     String pattern;
 
     /**
-     * Checks if the given key matches the pattern of this RKey and if the command types (read/write) align with the RKey's permissions.
-     *
      * @param key      the key to check against the pattern
      * @param cmdRead  whether the command is a read operation
      * @param cmdWrite whether the command is a write operation
-     * @return true if the key matches the pattern and the command types align with the RKey's permissions, false otherwise
+     * @return true if the key matches and command types align with permissions
      */
     boolean match(String key, boolean cmdRead, boolean cmdWrite) {
         return match(key, cmdRead, cmdWrite, false);
     }
 
+    /**
+     * @param key       the key to check
+     * @param cmdRead   whether the command is a read
+     * @param cmdWrite  whether the command is a write
+     * @param needsBoth whether both read and write are required
+     * @return true if matched
+     */
     boolean match(String key, boolean cmdRead, boolean cmdWrite, boolean needsBoth) {
         if (type == Type.all) {
             return true;
@@ -55,11 +52,7 @@ public class RKey {
         }
     }
 
-    /**
-     * Returns the literal string representation of this RKey, which can be used to recreate the RKey later.
-     *
-     * @return the literal string representation of this RKey
-     */
+    /** @return the literal string representation */
     String literal() {
         if (type == Type.all) {
             return LITERAL_PREFIX + "*";
@@ -73,10 +66,8 @@ public class RKey {
     }
 
     /**
-     * Determines whether the provided string is a valid RKey literal.
-     *
      * @param str the string to check
-     * @return true if the string is a valid RKey literal, false otherwise
+     * @return true if the string is a valid RKey literal
      */
     public static boolean isRKeyLiteral(String str) {
         return str.startsWith(LITERAL_PREFIX)
@@ -87,11 +78,8 @@ public class RKey {
     }
 
     /**
-     * Creates an RKey instance from its literal string representation.
-     *
      * @param str the literal string representation of the RKey
      * @return the RKey instance created from the literal
-     * @throws IllegalArgumentException if the provided string is not a valid RKey literal
      */
     public static RKey fromLiteral(String str) {
         if ("allkeys".equals(str)) {
