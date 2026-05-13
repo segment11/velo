@@ -39,8 +39,8 @@ class BigStringFilesTest extends Specification {
         isWriteOk
         isWriteOk2
         bigStringFiles1.bigStringFilesCount == 1
-        bigStringFiles1.getBigStringBytes(1L, 0, 1L) == bigString.bytes
         bigStringFiles1.getBigStringBytes(1L, 1, 1L) == null
+        bigStringFiles1.getBigStringBytes(1L, 0, 1L) == bigString.bytes
         bigStringFiles1.getBigStringBytes(1L, 0, 1L, true) == bigString.bytes
         bigStringFiles1.getBigStringBytes(1L, 0, 1L, true) == bigString.bytes
         bigStringFiles1.getBigStringFileIdList(0).size() == 1
@@ -144,6 +144,45 @@ class BigStringFilesTest extends Specification {
         bigStringFiles.getBigStringBytes(2L, 0, 2L) == '2345'.bytes
         bigStringFiles.diskUsage == 4
         bigStringFiles.writeByteLengthTotal == 4
+
+        cleanup:
+        tmpSlotDir.deleteDir()
+    }
+
+    def 'test 3-arg getBigStringBytes seeds LRU after disk read'() {
+        given:
+        def tmpSlotDir = new File('/tmp/tmp-slot-dir-3arg-lru')
+        if (tmpSlotDir.exists()) {
+            tmpSlotDir.deleteDir()
+        }
+        def bigStringFiles = new BigStringFiles(slot, tmpSlotDir)
+        def bytes = 'hello big string'.bytes
+        bigStringFiles.writeBigStringBytes(10L, 0, 100L, bytes)
+        bigStringFiles.clearLRUCache()
+
+        when: '3-arg overload reads from disk'
+        def result = bigStringFiles.getBigStringBytes(10L, 0, 100L)
+        then:
+        result == bytes
+
+        when: 'read again - should be served from LRU (seeded by the 3-arg call above)'
+        bigStringFiles.clearLRUCache()
+        def resultFromCache = bigStringFiles.getBigStringBytes(10L, 0, 100L, true)
+        then:
+        resultFromCache == bytes
+
+        when: '3-arg overload seeds LRU, verify LRU is populated after disk read'
+        bigStringFiles.clearLRUCache()
+        bigStringFiles.readFileCountTotal = 0
+        // first call reads from disk
+        bigStringFiles.getBigStringBytes(10L, 0, 100L)
+        def readCountAfterFirst = bigStringFiles.readFileCountTotal
+        // second call should hit LRU, not disk
+        bigStringFiles.getBigStringBytes(10L, 0, 100L)
+        def readCountAfterSecond = bigStringFiles.readFileCountTotal
+        then:
+        readCountAfterFirst == 1
+        readCountAfterSecond == 1
 
         cleanup:
         tmpSlotDir.deleteDir()

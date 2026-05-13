@@ -153,7 +153,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     }
 
     public byte[] getBigStringBytes(long uuid, int bucketIndex, long keyHash) {
-        return getBigStringBytes(uuid, bucketIndex, keyHash, false);
+        return getBigStringBytes(uuid, bucketIndex, keyHash, true);
     }
 
     /**
