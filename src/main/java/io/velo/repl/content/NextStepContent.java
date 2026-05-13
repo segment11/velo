@@ -4,7 +4,7 @@ import io.activej.bytebuf.ByteBuf;
 import io.velo.repl.ReplContent;
 
 /**
- * Signals end of current operation, ready to accept next input. Single byte with value 0.
+ * Signals end of current operation, ready to accept next input.
  */
 public class NextStepContent implements ReplContent {
     public static final NextStepContent INSTANCE = new NextStepContent();

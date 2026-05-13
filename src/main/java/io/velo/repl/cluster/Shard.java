@@ -2,6 +2,9 @@ package io.velo.repl.cluster;
 
 import java.util.ArrayList;
 
+/**
+ * Represents a shard in the cluster containing nodes and slot ranges.
+ */
 public class Shard {
     // for json
     public MultiSlotRange getMultiSlotRange() {

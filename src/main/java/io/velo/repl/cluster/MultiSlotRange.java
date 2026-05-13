@@ -6,6 +6,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.TreeSet;
 
+/**
+ * Represents multiple slot ranges.
+ */
 public class MultiSlotRange implements Comparable<MultiSlotRange> {
     public ArrayList<SlotRange> getList() {
         return list;

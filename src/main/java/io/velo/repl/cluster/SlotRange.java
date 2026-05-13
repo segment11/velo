@@ -1,5 +1,8 @@
 package io.velo.repl.cluster;
 
+/**
+ * Represents a range of slots.
+ */
 public class SlotRange implements Comparable<SlotRange> {
     // for json
     public int getBegin() {

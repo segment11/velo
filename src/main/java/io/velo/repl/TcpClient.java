@@ -34,12 +34,10 @@ public class TcpClient implements NeedCleanUp {
     private final ReplPair replPair;
 
     /**
-     * Constructs a new TcpClient with the specified parameters.
-     *
-     * @param slot                the slot identifier for this client
-     * @param slotWorkerEventloop the event loop to be used for handling slot operations
-     * @param requestHandler      the request handler for processing incoming requests
-     * @param replPair            the pair of REPLs associated with this client
+     * @param slot                the slot index
+     * @param slotWorkerEventloop the event loop for slot operations
+     * @param requestHandler      the request handler
+     * @param replPair            the REPL pair
      */
     public TcpClient(short slot, Eventloop slotWorkerEventloop, RequestHandler requestHandler, ReplPair replPair) {
         this.slot = slot;
@@ -53,9 +51,7 @@ public class TcpClient implements NeedCleanUp {
     private TcpSocket sock;
 
     /**
-     * Checks if the TCP socket is currently connected and not closed.
-     *
-     * @return true if the socket is connected, false otherwise
+     * @return true if socket is connected
      */
     boolean isSocketConnected() {
         return sock != null && !sock.isClosed();
@@ -67,11 +63,9 @@ public class TcpClient implements NeedCleanUp {
     long notConnectedErrorCount = 0;
 
     /**
-     * Writes a message to the server if the socket is connected.
-     *
-     * @param type    the type of the message to be written
-     * @param content the content of the message to be written
-     * @return true if the write was successful, false otherwise
+     * @param type    the message type
+     * @param content the message content
+     * @return true if write was successful
      */
     boolean write(ReplType type, ReplContent content) {
         if (isSocketConnected()) {
@@ -99,18 +93,14 @@ public class TcpClient implements NeedCleanUp {
     }
 
     /**
-     * Sends a ping message to the server.
-     *
-     * @return true if the ping was sent successfully, false otherwise
+     * @return true if ping was sent successfully
      */
     public boolean ping() {
         return write(ReplType.ping, new Ping(ConfForGlobal.netListenAddresses));
     }
 
     /**
-     * Sends a bye message to the server and logs the event.
-     *
-     * @return true if the bye message was sent successfully, false otherwise
+     * @return true if bye message was sent successfully
      */
     public boolean bye() {
         log.warn("Repl slave send bye to server={}, slot={}", replPair.getHostAndPort(), slot);
@@ -119,12 +109,10 @@ public class TcpClient implements NeedCleanUp {
     }
 
     /**
-     * Attempts to connect to the server at the specified host and port.
-     *
-     * @param host              the hostname or IP address of the server
-     * @param port              the port number on which the server is listening
-     * @param timeout           the timeout for the connection
-     * @param connectedCallback the callback to be called when the connection is established
+     * @param host              the server hostname or IP
+     * @param port              the server port
+     * @param timeout           connection timeout in milliseconds
+     * @param connectedCallback callback when connection is established
      */
     public void connect(String host, int port, long timeout, Callable<ByteBuf> connectedCallback) {
         var socketSettings = SocketSettings.create();

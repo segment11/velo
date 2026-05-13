@@ -6,7 +6,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * An annotation indicating that a field when Velo instance act as a master server.
+ * An annotation indicating that a field is used when Velo instance acts as a master server.
  * For better debugging and code readability.
  */
 @Retention(RetentionPolicy.SOURCE)

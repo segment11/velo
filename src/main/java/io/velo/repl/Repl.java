@@ -63,7 +63,14 @@ public class Repl {
     }
 
     /**
-     * Reply message from bytes in the REPL protocol.
+     * Reply message decoded from bytes in the REPL protocol.
+     *
+     * @param slaveUuid the slave UUID
+     * @param slot      the slot index
+     * @param type      the REPL message type
+     * @param data      the raw data bytes
+     * @param offset    the offset in the data array
+     * @param length    the length of the data
      */
     public record ReplReplyFromBytes(long slaveUuid, short slot, ReplType type, byte[] data,
                                      int offset, int length) implements Reply {
@@ -86,6 +93,11 @@ public class Repl {
 
     /**
      * Reply message in the REPL protocol.
+     *
+     * @param slaveUuid the slave UUID
+     * @param slot      the slot index
+     * @param type      the REPL message type
+     * @param content   the REPL content
      */
     public record ReplReply(long slaveUuid, short slot, ReplType type, ReplContent content) implements Reply {
         @Override

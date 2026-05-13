@@ -14,6 +14,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
+/**
+ * Manages multiple shards in the cluster.
+ */
 public class MultiShard {
     public static final short TO_CLIENT_SLOT_NUMBER = 16384;
 

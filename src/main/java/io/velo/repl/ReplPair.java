@@ -16,8 +16,7 @@ import org.slf4j.LoggerFactory;
 import java.util.LinkedList;
 
 /**
- * Represents a pair of REPL (slave-master-replication) instances, one acting as the master and the other as the slave.
- * This class manages the connection details, UUIDs, timestamps, and other state information for the pair.
+ * Master-slave replication pair for a slot.
  */
 public class ReplPair {
     /**
@@ -43,26 +42,20 @@ public class ReplPair {
     private long connectTimeoutMillis = 5000;
 
     /**
-     * Sets the connect timeout milliseconds.
-     *
-     * @param connectTimeoutMillis the connect timeout milliseconds
+     * @param connectTimeoutMillis connection timeout in milliseconds
      */
     public void setConnectTimeoutMillis(long connectTimeoutMillis) {
         this.connectTimeoutMillis = connectTimeoutMillis;
     }
 
     /**
-     * Gets the slot identifier for this pair.
-     *
-     * @return the slot identifier
+     * @return the slot index
      */
     public short getSlot() {
         return slot;
     }
 
     /**
-     * Gets the hostname or IP address of the server.
-     *
      * @return the hostname or IP address
      */
     public String getHost() {
@@ -70,8 +63,6 @@ public class ReplPair {
     }
 
     /**
-     * Gets the port number on which the server is listening.
-     *
      * @return the port number
      */
     public int getPort() {
@@ -79,9 +70,7 @@ public class ReplPair {
     }
 
     /**
-     * Gets the formatted host and port as a string.
-     *
-     * @return the formatted host and port
+     * @return host:port string
      */
     public String getHostAndPort() {
         return host + ":" + port;
@@ -179,9 +168,7 @@ public class ReplPair {
     }
 
     /**
-     * Checks if this pair acts as the master.
-     *
-     * @return true if this pair is the master, false otherwise.
+     * @return true if this pair acts as master
      */
     public boolean isAsMaster() {
         return asMaster;
@@ -190,8 +177,6 @@ public class ReplPair {
     private long masterUuid;
 
     /**
-     * Gets the UUID of the master.
-     *
      * @return the master UUID
      */
     public long getMasterUuid() {
@@ -199,9 +184,7 @@ public class ReplPair {
     }
 
     /**
-     * Sets the UUID of the master.
-     *
-     * @param masterUuid the master UUID to set
+     * @param masterUuid the master UUID
      */
     public void setMasterUuid(long masterUuid) {
         this.masterUuid = masterUuid;
@@ -210,8 +193,6 @@ public class ReplPair {
     private long slaveUuid;
 
     /**
-     * Gets the UUID of the slave.
-     *
      * @return the slave UUID
      */
     public long getSlaveUuid() {
@@ -224,8 +205,6 @@ public class ReplPair {
     private ConfForSlot.ReplProperties remoteReplProperties;
 
     /**
-     * Gets the remote repl properties.
-     *
      * @return the remote repl properties
      */
     public ConfForSlot.ReplProperties getRemoteReplProperties() {
@@ -233,18 +212,14 @@ public class ReplPair {
     }
 
     /**
-     * Sets the remote repl properties.
-     *
-     * @param remoteReplProperties the remote repl properties to set
+     * @param remoteReplProperties the remote repl properties
      */
     public void setRemoteReplProperties(ConfForSlot.ReplProperties remoteReplProperties) {
         this.remoteReplProperties = remoteReplProperties;
     }
 
     /**
-     * Sets the UUID of the slave.
-     *
-     * @param slaveUuid the slave UUID to set
+     * @param slaveUuid the slave UUID
      */
     public void setSlaveUuid(long slaveUuid) {
         this.slaveUuid = slaveUuid;
@@ -255,18 +230,14 @@ public class ReplPair {
     private long lastPingGetTimestamp;
 
     /**
-     * Gets the timestamp of the last received ping from the master.
-     *
-     * @return the timestamp of the last received ping
+     * @return the last ping timestamp in milliseconds
      */
     public long getLastPingGetTimestamp() {
         return lastPingGetTimestamp;
     }
 
     /**
-     * Sets the timestamp of the last received ping from the master.
-     *
-     * @param lastPingGetTimestamp the timestamp to set
+     * @param lastPingGetTimestamp the last ping timestamp in milliseconds
      */
     public void setLastPingGetTimestamp(long lastPingGetTimestamp) {
         this.lastPingGetTimestamp = lastPingGetTimestamp;
@@ -277,18 +248,14 @@ public class ReplPair {
     private long lastPongGetTimestamp;
 
     /**
-     * Gets the timestamp of the last received pong from the slave.
-     *
-     * @return the timestamp of the last received pong
+     * @return the last pong timestamp in milliseconds
      */
     public long getLastPongGetTimestamp() {
         return lastPongGetTimestamp;
     }
 
     /**
-     * Sets the timestamp of the last received pong from the slave.
-     *
-     * @param lastPongGetTimestamp the timestamp to set
+     * @param lastPongGetTimestamp the last pong timestamp in milliseconds
      */
     public void setLastPongGetTimestamp(long lastPongGetTimestamp) {
         this.lastPongGetTimestamp = lastPongGetTimestamp;
@@ -298,9 +265,7 @@ public class ReplPair {
     private final long[] statsCountForReplType = new long[ReplType.values().length];
 
     /**
-     * Increases the count for a specific type of REPL operation.
-     *
-     * @param type the type of the REPL operation
+     * @param type the REPL operation type
      */
     public void increaseStatsCountForReplType(ReplType type) {
         int i = type.ordinal();
@@ -316,9 +281,7 @@ public class ReplPair {
     }
 
     /**
-     * Gets the string representation of the statistics for all REPL operation types.
-     *
-     * @return the string representation of the statistics
+     * @return statistics string for all REPL operation types
      */
     public String getStatsCountForReplTypeAsString() {
         var sb = new StringBuilder();
@@ -332,18 +295,14 @@ public class ReplPair {
     private long slaveCatchUpLastSeq;
 
     /**
-     * Gets the last sequence number the slave has caught up to.
-     *
-     * @return the last caught-up sequence number for the slave
+     * @return the last catch-up sequence number
      */
     public long getSlaveCatchUpLastSeq() {
         return slaveCatchUpLastSeq;
     }
 
     /**
-     * Sets the last sequence number the slave has caught up to.
-     *
-     * @param slaveCatchUpLastSeq the last caught-up sequence number to set
+     * @param slaveCatchUpLastSeq the last catch-up sequence number
      */
     public void setSlaveCatchUpLastSeq(long slaveCatchUpLastSeq) {
         this.slaveCatchUpLastSeq = slaveCatchUpLastSeq;
@@ -353,9 +312,7 @@ public class ReplPair {
     private long slaveCatchUpLastTimeMillisInMaster;
 
     /**
-     * Gets the last time the slave caught up to in milliseconds in the master.
-     *
-     * @return the last time the slave caught up to in milliseconds in the master
+     * @return the last catch-up time in master in milliseconds
      */
     public long getSlaveCatchUpLastTimeMillisInMaster() {
         return slaveCatchUpLastTimeMillisInMaster;
@@ -365,9 +322,7 @@ public class ReplPair {
     private long slaveCatchUpLastTimeMillisInSlave;
 
     /**
-     * Sets the last time the slave caught up to in milliseconds in the master.
-     *
-     * @param slaveCatchUpLastTimeMillisInMaster the last time the slave caught up to in milliseconds in the master
+     * @param slaveCatchUpLastTimeMillisInMaster the last catch-up time in master in milliseconds
      */
     public void setSlaveCatchUpLastTimeMillis(long slaveCatchUpLastTimeMillisInMaster) {
         this.slaveCatchUpLastTimeMillisInMaster = slaveCatchUpLastTimeMillisInMaster;
@@ -375,9 +330,7 @@ public class ReplPair {
     }
 
     /**
-     * Gets the difference between the last time the slave caught up to in milliseconds in the slave and the master.
-     *
-     * @return the difference between the last time the slave caught up to in milliseconds in the slave and the master
+     * @return the difference between slave and master catch-up times in milliseconds
      */
     public long getSlaveCatchUpLastTimeMillisDiff() {
         return slaveCatchUpLastTimeMillisInSlave - slaveCatchUpLastTimeMillisInMaster;
@@ -388,18 +341,14 @@ public class ReplPair {
     private Binlog.FileIndexAndOffset slaveLastCatchUpBinlogFileIndexAndOffset;
 
     /**
-     * Gets the last binlog file index and offset that the slave has caught up to.
-     *
-     * @return the binlog file index and offset
+     * @return the last catch-up binlog file index and offset
      */
     public Binlog.FileIndexAndOffset getSlaveLastCatchUpBinlogFileIndexAndOffset() {
         return slaveLastCatchUpBinlogFileIndexAndOffset;
     }
 
     /**
-     * Gets the REPL offset of the last binlog file index and offset that the slave has caught up to.
-     *
-     * @return the REPL offset of the last binlog file index and offset
+     * @return the REPL offset of the last catch-up binlog position
      */
     public long getSlaveLastCatchUpBinlogAsReplOffset() {
         if (slaveLastCatchUpBinlogFileIndexAndOffset == null) {
@@ -409,9 +358,7 @@ public class ReplPair {
     }
 
     /**
-     * Sets the last binlog file index and offset that the slave has caught up to.
-     *
-     * @param slaveLastCatchUpBinlogFileIndexAndOffset the binlog file index and offset to set
+     * @param slaveLastCatchUpBinlogFileIndexAndOffset the last catch-up binlog position
      */
     public void setSlaveLastCatchUpBinlogFileIndexAndOffset(Binlog.FileIndexAndOffset slaveLastCatchUpBinlogFileIndexAndOffset) {
         this.slaveLastCatchUpBinlogFileIndexAndOffset = slaveLastCatchUpBinlogFileIndexAndOffset;
@@ -421,18 +368,14 @@ public class ReplPair {
     private Binlog.FileIndexAndOffset masterBinlogCurrentFileIndexAndOffset;
 
     /**
-     * Gets the current binlog file index and offset of the master.
-     *
-     * @return the binlog file index and offset
+     * @return the current master binlog file index and offset
      */
     public Binlog.FileIndexAndOffset getMasterBinlogCurrentFileIndexAndOffset() {
         return masterBinlogCurrentFileIndexAndOffset;
     }
 
     /**
-     * Sets the current binlog file index and offset of the master.
-     *
-     * @param masterBinlogCurrentFileIndexAndOffset the binlog file index and offset to set
+     * @param masterBinlogCurrentFileIndexAndOffset the current master binlog position
      */
     public void setMasterBinlogCurrentFileIndexAndOffset(Binlog.FileIndexAndOffset masterBinlogCurrentFileIndexAndOffset) {
         this.masterBinlogCurrentFileIndexAndOffset = masterBinlogCurrentFileIndexAndOffset;
@@ -443,18 +386,14 @@ public class ReplPair {
     private long fetchedBytesLengthTotal;
 
     /**
-     * Gets the total length of bytes fetched so far.
-     *
-     * @return the total length of bytes fetched
+     * @return total fetched bytes
      */
     public long getFetchedBytesLengthTotal() {
         return fetchedBytesLengthTotal;
     }
 
     /**
-     * Increases the total length of bytes fetched by a specified amount.
-     *
-     * @param fetchedBytesLength the amount of bytes to add to the total
+     * @param fetchedBytesLength bytes to add to total
      */
     public void increaseFetchedBytesLength(int fetchedBytesLength) {
         fetchedBytesLengthTotal += fetchedBytesLength;
@@ -465,18 +404,14 @@ public class ReplPair {
     private boolean isMasterReadonly;
 
     /**
-     * Checks if the master is read-only.
-     *
-     * @return true if the master is read-only, false otherwise.
+     * @return true if master is read-only
      */
     public boolean isMasterReadonly() {
         return isMasterReadonly;
     }
 
     /**
-     * Sets the read-only status of the master.
-     *
-     * @param masterReadonly the read-only status to set
+     * @param masterReadonly read-only flag
      */
     public void setMasterReadonly(boolean masterReadonly) {
         isMasterReadonly = masterReadonly;
@@ -487,18 +422,14 @@ public class ReplPair {
     private boolean isAllCaughtUp;
 
     /**
-     * Checks if the slave has caught up with all changes from the master.
-     *
-     * @return true if the slave is fully caught up, false otherwise.
+     * @return true if slave has caught up with all changes
      */
     public boolean isAllCaughtUp() {
         return isAllCaughtUp;
     }
 
     /**
-     * Sets the caught-up status of the slave.
-     *
-     * @param allCaughtUp the caught-up status to set
+     * @param allCaughtUp caught-up flag
      */
     public void setAllCaughtUp(boolean allCaughtUp) {
         isAllCaughtUp = allCaughtUp;
@@ -508,18 +439,14 @@ public class ReplPair {
     private boolean isMasterCanNotConnect;
 
     /**
-     * Checks if the master is not connected.
-     *
-     * @return true if the master is not connected, false otherwise.
+     * @return true if master cannot be connected
      */
     public boolean isMasterCanNotConnect() {
         return isMasterCanNotConnect;
     }
 
     /**
-     * Sets the connection status of the master.
-     *
-     * @param masterCanNotConnect the connection status to set
+     * @param masterCanNotConnect cannot connect flag
      */
     public void setMasterCanNotConnect(boolean masterCanNotConnect) {
         isMasterCanNotConnect = masterCanNotConnect;
@@ -530,10 +457,8 @@ public class ReplPair {
     private TcpClient tcpClient;
 
     /**
-     * Initializes this pair as a slave.
-     *
-     * @param eventloop      the event loop to be used for handling network operations
-     * @param requestHandler the request handler for processing incoming requests
+     * @param eventloop      the event loop for network operations
+     * @param requestHandler the request handler
      */
     public void initAsSlave(Eventloop eventloop, RequestHandler requestHandler) {
         // for unit test
@@ -556,18 +481,14 @@ public class ReplPair {
     private long disconnectTimeMillis;
 
     /**
-     * Gets the timestamp of the last disconnection.
-     *
-     * @return the disconnection timestamp
+     * @return the last disconnection timestamp in milliseconds
      */
     public long getDisconnectTimeMillis() {
         return disconnectTimeMillis;
     }
 
     /**
-     * Sets the timestamp of the last disconnection.
-     *
-     * @param disconnectTimeMillis the timestamp to set
+     * @param disconnectTimeMillis the disconnection timestamp in milliseconds
      */
     public void setDisconnectTimeMillis(long disconnectTimeMillis) {
         this.disconnectTimeMillis = disconnectTimeMillis;
@@ -577,18 +498,14 @@ public class ReplPair {
     private long lastGetCatchUpResponseMillis;
 
     /**
-     * Gets the timestamp of the last catch-up response.
-     *
-     * @return the catch-up response timestamp
+     * @return the last catch-up response timestamp in milliseconds
      */
     public long getLastGetCatchUpResponseMillis() {
         return lastGetCatchUpResponseMillis;
     }
 
     /**
-     * Sets the timestamp of the last catch-up response.
-     *
-     * @param lastGetCatchUpResponseMillis the timestamp to set
+     * @param lastGetCatchUpResponseMillis the last catch-up response timestamp in milliseconds
      */
     public void setLastGetCatchUpResponseMillis(long lastGetCatchUpResponseMillis) {
         this.lastGetCatchUpResponseMillis = lastGetCatchUpResponseMillis;
@@ -599,9 +516,7 @@ public class ReplPair {
     private final boolean[] linkUpFlagArray = new boolean[3];
 
     /**
-     * Adds a connection status flag to the link-up flag array.
-     *
-     * @param flag the connection status flag to add
+     * @param flag connection status flag
      */
     private void addLinkUpFlag(boolean flag) {
         for (int i = 1; i < linkUpFlagArray.length; i++) {
@@ -611,9 +526,7 @@ public class ReplPair {
     }
 
     /**
-     * Checks if any of the flags in the link-up flag array is true.
-     *
-     * @return true if any flag is true, false otherwise.
+     * @return true if any link-up flag is true
      */
     public boolean isLinkUpAnyOk() {
         for (var flag : linkUpFlagArray) {
@@ -625,9 +538,7 @@ public class ReplPair {
     }
 
     /**
-     * Checks if the connection is link-up based on timestamps and connection status.
-     *
-     * @return true if the connection is link-up, false otherwise.
+     * @return true if connection is link-up
      */
     public boolean isLinkUp() {
         if (asMaster) {
@@ -673,18 +584,14 @@ public class ReplPair {
     boolean isSendBye = false;
 
     /**
-     * Checks if a bye message has been sent.
-     *
-     * @return true if a bye message has been sent, false otherwise.
+     * @return true if bye message has been sent
      */
     public boolean isSendBye() {
         return isSendBye;
     }
 
     /**
-     * Sets the flag indicating if a bye message has been sent.
-     *
-     * @param isSendBye the flag to set
+     * @param isSendBye bye sent flag
      */
     @TestOnly
     public void setSendBye(boolean isSendBye) {
@@ -692,9 +599,7 @@ public class ReplPair {
     }
 
     /**
-     * Sends a bye message to the server
-     *
-     * @return true if the bye message was sent successfully, false otherwise.
+     * @return true if bye message was sent successfully
      */
     public boolean bye() {
         isSendBye = true;
@@ -705,9 +610,7 @@ public class ReplPair {
     }
 
     /**
-     * Sends a ping message to the server, slave do ping
-     *
-     * @return true if the ping was sent successfully, false otherwise.
+     * @return true if ping was sent successfully
      */
     public boolean ping() {
         if (isSendBye) {
@@ -721,11 +624,9 @@ public class ReplPair {
     }
 
     /**
-     * Writes a message to the server.
-     *
-     * @param type    the type of the message to be written
-     * @param content the content of the message to be written
-     * @return true if the write was successful, false otherwise.
+     * @param type    the message type
+     * @param content the message content
+     * @return true if write was successful
      */
     public boolean write(ReplType type, ReplContent content) {
         if (isSendBye) {
@@ -740,7 +641,6 @@ public class ReplPair {
 
     /**
      * Closes the connection to the server.
-     * Run in task runner
      */
     public void close() {
         if (tcpClient != null) {
@@ -751,76 +651,56 @@ public class ReplPair {
         closeSlaveConnectSocket();
     }
 
-    /**
-     * Remove this repl pair self later.
-     * Both master and slave can delay do remove.
-     */
+    /** Timestamp for delayed removal from list. */
     private long putToDelayListToRemoveTimeMillis;
 
     /**
-     * Gets the timestamp to remove this pair from the delay list.
-     * For interval check.
-     *
-     * @return the timestamp to remove this pair
+     * @return timestamp to remove this pair from delay list
      */
     public long getPutToDelayListToRemoveTimeMillis() {
         return putToDelayListToRemoveTimeMillis;
     }
 
     /**
-     * Sets the timestamp to remove this pair from the delay list.
-     *
-     * @param putToDelayListToRemoveTimeMillis the timestamp to set
+     * @param putToDelayListToRemoveTimeMillis timestamp to remove this pair
      */
     public void setPutToDelayListToRemoveTimeMillis(long putToDelayListToRemoveTimeMillis) {
         this.putToDelayListToRemoveTimeMillis = putToDelayListToRemoveTimeMillis;
     }
 
-    /**
-     * Slave need fetch big string files after all catch up.
-     */
+    /** Big string files to fetch after catch-up. */
     @ForSlaveField
     private final LinkedList<BigStringFiles.IdWithKey> toFetchBigStringIdList = new LinkedList<>();
-    /**
-     * Slave doing fetch big string files.
-     */
+    /** Big string files currently being fetched. */
     @ForSlaveField
     private final LinkedList<BigStringFiles.IdWithKey> doFetchingBigStringIdList = new LinkedList<>();
 
     /**
-     * Gets the list of big string file UUIDs to fetch.
-     *
-     * @return the list of big string file UUIDs
+     * @return list of big string files to fetch
      */
     public LinkedList<BigStringFiles.IdWithKey> getToFetchBigStringIdList() {
         return toFetchBigStringIdList;
     }
 
     /**
-     * Gets the list of big string file UUIDs being fetching.
-     *
-     * @return the list of big string file UUIDs
+     * @return list of big string files being fetched
      */
     public LinkedList<BigStringFiles.IdWithKey> getDoFetchingBigStringIdList() {
         return doFetchingBigStringIdList;
     }
 
     /**
-     * Adds a big string file UUID to the list of files to fetch.
-     *
-     * @param uuid        the UUID of the big string file to fetch
+     * @param uuid        the big string file UUID
      * @param bucketIndex the bucket index
-     * @param keyHash     the hash of the key
-     * @param key         the key of the big string file
+     * @param keyHash     the key hash
+     * @param key         the key
      */
     public void addToFetchBigStringId(long uuid, int bucketIndex, long keyHash, String key) {
         toFetchBigStringIdList.add(new BigStringFiles.IdWithKey(uuid, bucketIndex, keyHash, key));
     }
 
     /**
-     * Slave fetch a big string file id, from to fetch, FIFO list.
-     *
-     * @return to fetch big string id, or skip.
+     * @return next big string id to fetch, or null if none
      */
     public BigStringFiles.IdWithKey doingFetchBigStringId() {
         if (toFetchBigStringIdList.isEmpty()) {
@@ -832,9 +712,7 @@ public class ReplPair {
     }
 
     /**
-     * Remove a big string file UUID fetch done.
-     *
-     * @param uuid the UUID of the big string file fetched
+     * @param uuid the UUID of the fetched big string
      */
     public void doneFetchBigStringUuid(long uuid) {
         doFetchingBigStringIdList.removeIf(e -> e.uuid() == uuid);

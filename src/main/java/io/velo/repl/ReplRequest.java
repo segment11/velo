@@ -75,13 +75,11 @@ public class ReplRequest {
     }
 
     /**
-     * Constructs a new ReplRequest.
-     *
-     * @param slaveUuid    the slave's UUID
+     * @param slaveUuid    the slave UUID
      * @param slot         the slot index
      * @param type         the replication type
      * @param data         the data bytes
-     * @param expectLength the expected length of the data bytes
+     * @param expectLength the expected data length
      */
     public ReplRequest(long slaveUuid, short slot, ReplType type, byte[] data, int expectLength) {
         if (expectLength <= 0) {

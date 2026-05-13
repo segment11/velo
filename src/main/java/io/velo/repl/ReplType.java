@@ -6,196 +6,76 @@ package io.velo.repl;
  * it's sent by a slave. It also has a unique byte code.
  */
 public enum ReplType {
-    /**
-     * Represents an error message.
-     * It's after slave all catch up.
-     * It's sent by a master.
-     * code byte value -1.
-     */
+    /** Error message sent by master. */
     error(true, false, (byte) -100),
 
-    /**
-     * Represents a ping message.
-     * It's after slave all catch up.
-     * It's sent by a slave.
-     * code byte value 0.
-     */
+    /** Ping sent by slave to master. */
     ping(true, true, (byte) -1),
 
-    /**
-     * Represents a pong message.
-     * It's after slave all catch up.
-     * It's sent by a master.
-     * code byte value 1.
-     */
+    /** Pong sent by master to slave. */
     pong(true, false, (byte) 1),
 
-    /**
-     * Represents a hello message.
-     * It's after slave all catch up.
-     * It's sent by a slave.
-     * code byte value 2.
-     */
+    /** Hello message sent by slave to master. */
     hello(true, true, (byte) 2),
 
-    /**
-     * Represents a hi message.
-     * It's after slave all catch up.
-     * It's sent by a master.
-     * code byte value 3.
-     */
+    /** Hi message sent by master to slave. */
     hi(true, false, (byte) 3),
 
-    /**
-     * Represents a goodbye message.
-     * It's after slave all catch up.
-     * It's sent by a slave.
-     * code byte value 4.
-     */
+    /** Bye message sent by slave to master. */
     bye(true, true, (byte) 4),
 
-    /**
-     * Represents a goodbye message (variant).
-     * It's after slave all catch up.
-     * It's sent by a master.
-     * code byte value 5.
-     */
+    /** Bye message sent by master to slave. */
     byeBye(true, false, (byte) 5),
 
-    /**
-     * Represents a test message (variant).
-     * It's after slave all catch up.
-     * It's sent by a slave.
-     * code byte value 100.
-     */
+    /** Test message sent by slave to master. */
     test(true, true, (byte) 100),
 
-    /**
-     * Request to master for fetching exists write-ahead log entries.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 19.
-     */
+    /** Request to master for fetching WAL entries (before catch-up). */
     exists_wal(false, true, (byte) 19),
 
-    /**
-     * Request to master for fetching exists chunk segments.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 20.
-     */
+    /** Request to master for fetching chunk segments (before catch-up). */
     exists_chunk_segments(false, true, (byte) 20),
 
-    /**
-     * Request to master for fetching exists big strings.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 21.
-     */
+    /** Request to master for fetching big strings (before catch-up). */
     exists_big_string(false, true, (byte) 21),
 
-    /**
-     * Request to master for fetching exists short strings.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 22.
-     */
+    /** Request to master for fetching short strings (before catch-up). */
     exists_short_string(false, true, (byte) 22),
 
-    /**
-     * Request to master for fetching incremental big strings.
-     * It's after slave all catch up.
-     * It's sent by a slave.
-     * code byte value 41.
-     */
+    /** Request to master for fetching incremental big strings (after catch-up). */
     incremental_big_string(true, true, (byte) 41),
 
-    /**
-     * Request to master for fetching trained dictionaries.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 25.
-     */
+    /** Request to master for fetching dictionaries (before catch-up). */
     exists_dict(false, true, (byte) 25),
 
-    /**
-     * Request to master for fetching exists all done.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 26.
-     */
+    /** Request to master for catch-up complete signal (before catch-up). */
     exists_all_done(false, true, (byte) 26),
 
-    /**
-     * Request to master for fetching incremental binlog.
-     * It's after slave all catch up.
-     * It's sent by a slave.
-     * code byte value 27.
-     */
+    /** Request to master for incremental binlog (after catch-up). */
     catch_up(true, true, (byte) 27),
 
-    /**
-     * Response to slave for fetching exists write-ahead log entries.
-     * It's before slave all catch up.
-     * It's sent by a master.
-     * code byte value 29.
-     */
+    /** Response containing WAL entries from master. */
     s_exists_wal(false, false, (byte) 29),
 
-    /**
-     * Response to slave for fetching exists chunk segments.
-     * It's before slave all catch up.
-     * It's sent by a master.
-     * code byte value 30.
-     */
+    /** Response containing chunk segments from master. */
     s_exists_chunk_segments(false, false, (byte) 30),
 
-    /**
-     * Response to slave for fetching exists big strings.
-     * It's before slave all catch up.
-     * It's sent by a master.
-     * code byte value 31.
-     */
+    /** Response containing big strings from master. */
     s_exists_big_string(false, false, (byte) 31),
 
-    /**
-     * Request to master for fetching exists short strings.
-     * It's before slave all catch up.
-     * It's sent by a slave.
-     * code byte value 32.
-     */
+    /** Response containing short strings from master. */
     s_exists_short_string(false, false, (byte) 32),
 
-    /**
-     * Response to slave for fetching incremental big strings.
-     * It's after slave all catch up.
-     * It's sent by a master.
-     * code byte value 51.
-     */
+    /** Response containing incremental big strings from master. */
     s_incremental_big_string(true, false, (byte) 51),
 
-    /**
-     * Response to slave for fetching exists trained dictionaries.
-     * It's before slave all catch up.
-     * It's sent by a master.
-     * code byte value 35.
-     */
+    /** Response containing dictionaries from master. */
     s_exists_dict(false, false, (byte) 35),
 
-    /**
-     * Response to slave for fetching exists all done.
-     * It's before slave all catch up.
-     * It's sent by a master.
-     * code byte value 36.
-     */
+    /** Response indicating all exists data sent from master. */
     s_exists_all_done(false, false, (byte) 36),
 
-    /**
-     * Response to slave for fetch incremental binlog after all catch up.
-     * It's after slave all catch up.
-     * It's sent by a master.
-     * code byte value 37.
-     */
+    /** Response containing incremental binlog from master (after catch-up). */
     s_catch_up(true, false, (byte) 37),
     ;
 

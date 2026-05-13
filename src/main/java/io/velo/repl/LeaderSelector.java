@@ -22,6 +22,9 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+/**
+ * Leader selector using ZooKeeper for master election.
+ */
 public class LeaderSelector implements NeedCleanUp {
     // singleton
     private LeaderSelector() {

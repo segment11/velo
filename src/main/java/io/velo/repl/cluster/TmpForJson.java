@@ -2,6 +2,9 @@ package io.velo.repl.cluster;
 
 import java.util.ArrayList;
 
+/**
+ * Temporary class for JSON serialization of cluster metadata.
+ */
 public class TmpForJson {
 
     public ArrayList<Shard> getShards() {

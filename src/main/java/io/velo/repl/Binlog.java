@@ -48,13 +48,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         return diskUsage;
     }
 
-    /**
-     * For cache when slave pull, last written segment bytes
-     *
-     * @param bytes     binlog one segment bytes
-     * @param fileIndex file index
-     * @param offset    file offset
-     */
+    /** Cache entry for last written segment bytes. */
     @VisibleForTesting
     record BytesWithFileIndexAndOffset(byte[] bytes, int fileIndex,
                                        long offset) implements Comparable<BytesWithFileIndexAndOffset> {
@@ -77,8 +71,6 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * File index and offset, for one repl pair mark
-     *
      * @param fileIndex file index
      * @param offset    file offset
      */
@@ -120,12 +112,10 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Constructor
-     *
-     * @param slot      slot
-     * @param slotDir   the directory of the slot
-     * @param dynConfig dyn config
-     * @throws IOException when io error
+     * @param slot      the slot index
+     * @param slotDir   the slot directory
+     * @param dynConfig dynamic configuration
+     * @throws IOException if directory creation fails
      */
     public Binlog(short slot, @NotNull File slotDir, @NotNull DynConfig dynConfig) throws IOException {
         this.slot = slot;
@@ -252,9 +242,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         this.clearByteBuffer();
     }
 
-    /**
-     * For padding one complete segment
-     */
+    /** Padding content for completing a segment. */
     @VisibleForTesting
     static class PaddingBinlogContent implements BinlogContent {
         private final byte[] paddingBytes;
@@ -286,19 +274,17 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Move to next segment
+     * Moves to the next segment.
      *
-     * @throws IOException when io error
+     * @throws IOException if an I/O error occurs
      */
     public void moveToNextSegment() throws IOException {
         moveToNextSegment(false);
     }
 
     /**
-     * Move to next segment
-     *
-     * @param forceEvenIfMargin true ignore when current offset is one segment completed
-     * @throws IOException when io error
+     * @param forceEvenIfMargin force move even if at segment boundary
+     * @throws IOException if an I/O error occurs
      */
     public void moveToNextSegment(boolean forceEvenIfMargin) throws IOException {
         var oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;
@@ -329,11 +315,9 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Reopen at target file index and margin offset
-     *
      * @param resetFileIndex target file index
-     * @param marginOffset   target file offset, align to one segment
-     * @throws IOException when io error
+     * @param marginOffset   target file offset aligned to segment
+     * @throws IOException if an I/O error occurs
      */
     public void reopenAtFileIndexAndMarginOffset(int resetFileIndex, long marginOffset) throws IOException {
         if (currentFileIndex == resetFileIndex) {
@@ -725,11 +709,9 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Decode from one segment bytes and apply to slave repl pair
-     *
-     * @param oneSegmentBytes the one segment bytes
-     * @param skipBytesN      the skip bytes number
-     * @return the list of decoded content
+     * @param oneSegmentBytes segment bytes
+     * @param skipBytesN      bytes to skip
+     * @return list of decoded content
      */
     public static ArrayList<BinlogContent> decode(byte[] oneSegmentBytes,
                                                   int skipBytesN) {
@@ -766,11 +748,9 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Analyse one binlog file
-     *
      * @param binlogFile the binlog file
-     * @return the number of decoded content
-     * @throws IOException when read error
+     * @return total content count
+     * @throws IOException if read error
      */
     public static long analyseBinlogFile(@NotNull File binlogFile) throws IOException {
         var binlogOneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength;

@@ -4,6 +4,9 @@ import io.velo.Utils;
 import io.velo.repl.support.JedisCallback;
 import io.velo.repl.support.JedisPoolHolder;
 
+/**
+ * Represents a node in the cluster.
+ */
 public class Node {
     // for json
     public boolean isMaster() {

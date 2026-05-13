@@ -5,8 +5,7 @@ package io.velo.repl;
  */
 public class ReplConsts {
     /**
-     * For publish message after master reset, velo server act as a sentinel server.
-     * Velo now support redis sentinel server, do not need this anymore.
+     * @deprecated Velo now supports Redis sentinel server, this is no longer needed.
      */
     @Deprecated
     public static final String REPL_MASTER_NAME_READONLY_SLAVE_SUFFIX = "/readonly_slave";

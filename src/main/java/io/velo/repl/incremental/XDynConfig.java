@@ -5,6 +5,9 @@ import io.velo.repl.ReplPair;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Dynamic configuration binlog content (not yet implemented).
+ */
 public class XDynConfig implements BinlogContent {
 
     @Override
@@ -14,20 +17,20 @@ public class XDynConfig implements BinlogContent {
 
     @Override
     public int encodedLength() {
-        throw new UnsupportedOperationException("XDynConfig is not implemented yet");
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public byte[] encodeWithType() {
-        throw new UnsupportedOperationException("XDynConfig is not implemented yet");
+        throw new UnsupportedOperationException();
     }
 
     public static XDynConfig decodeFrom(ByteBuffer buffer) {
-        throw new UnsupportedOperationException("XDynConfig is not implemented yet");
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public void apply(short slot, ReplPair replPair) {
-        throw new UnsupportedOperationException("XDynConfig is not implemented yet");
+        throw new UnsupportedOperationException();
     }
 }
