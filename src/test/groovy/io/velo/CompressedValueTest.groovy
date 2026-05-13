@@ -440,4 +440,33 @@ class CompressedValueTest extends Specification {
         cleanup:
         dict.closeCtx()
     }
+
+    def 'test short-form decode preserves caller-provided keyHash'() {
+        given:
+        def keyBytes = 'my-key'.bytes
+        def keyHash = KeyHash.hash(keyBytes)
+
+        when: 'encode as short string (firstByte < 0), decode with caller keyHash'
+        def encodedShort = CompressedValue.encodeAsShortString(100L, 0L, 'hello'.bytes)
+        def cvShort = CompressedValue.decode(encodedShort, keyBytes, keyHash)
+        then:
+        cvShort.seq == 100L
+        cvShort.keyHash == keyHash
+
+        when: 'encode as number, decode with caller keyHash'
+        def cvNumSrc = new CompressedValue()
+        cvNumSrc.seq = 200L
+        cvNumSrc.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_INT
+        cvNumSrc.compressedData = ByteBuffer.allocate(4).putInt(42).array()
+        def encodedNum = cvNumSrc.encodeAsNumber()
+        def cvNum = CompressedValue.decode(encodedNum, keyBytes, keyHash)
+        then:
+        cvNum.numberValue() == 42
+        cvNum.keyHash == keyHash
+
+        when: 'decode with keyHash=0 and null keyBytes — keyHash stays 0'
+        def cvNoHash = CompressedValue.decode(encodedShort, null, 0L)
+        then:
+        cvNoHash.keyHash == 0L
+    }
 }
