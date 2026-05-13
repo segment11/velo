@@ -1602,7 +1602,7 @@ class OneSlotTest extends Specification {
 
         and: 'clear LRU so get must re-read from segment'
         def walGroupIndex = Wal.calcWalGroupIndex(sKey.bucketIndex())
-        oneSlot.kvByWalGroupIndexLRU.get(walGroupIndex).clear()
+        oneSlot.clearKvInLRU(walGroupIndex)
 
         and: 'get the key — should use data marker, not config flag, to detect TIGHT'
         def result2 = oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash())

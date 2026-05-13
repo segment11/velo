@@ -560,6 +560,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private final Map<Integer, LRUMap<String, byte[]>> kvByWalGroupIndexLRU = new HashMap<>();
 
+    @TestOnly
+    void clearKvInLRU(int walGroupIndex) {
+        var map = kvByWalGroupIndexLRU.get(walGroupIndex);
+        if (map != null) {
+            map.clear();
+        }
+    }
+
     public int kvByWalGroupIndexLRUCountTotal() {
         int n = 0;
         for (var lru : kvByWalGroupIndexLRU.values()) {
