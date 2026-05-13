@@ -25,22 +25,16 @@ public interface Reply {
     }
 
     /**
-     * Returns the buffer containing the reply data formatted as HTTP.
-     * By default, it returns null, indicating that HTTP formatting is not supported.
-     *
-     * @return the buffer with the reply data formatted as HTTP, or null if not supported
+     * @return the buffer formatted as HTTP, or null if not supported
      */
     default ByteBuf bufferAsHttp() {
         return null;
     }
 
     /**
-     * Dumps the content of the reply to a StringBuilder for testing purposes.
-     * This method is intended to be used only in test environments.
-     *
-     * @param sb        the StringBuilder to which the reply content will be appended
-     * @param nestCount the nesting level for formatting purposes
-     * @return true if the dump was successful, false otherwise
+     * @param sb        the StringBuilder to append the dump to
+     * @param nestCount the nesting level for formatting
+     * @return true if successful
      */
     @TestOnly
     default boolean dumpForTest(StringBuilder sb, int nestCount) {

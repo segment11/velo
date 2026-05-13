@@ -7,60 +7,39 @@ import org.jetbrains.annotations.TestOnly;
 import java.util.Arrays;
 
 /**
- * Represents a bulk reply in the Redis protocol.
- * A bulk reply is used to send data in a binary-safe format.
+ * Bulk reply in Redis protocol for binary-safe data.
  */
 public class BulkReply implements Reply {
     private byte[] raw;
 
-    /**
-     * Returns the raw bytes of the bulk reply.
-     *
-     * @return the raw bytes
-     */
     public byte[] getRaw() {
         return raw;
     }
 
-    /**
-     * Returns the raw bytes of the bulk reply as a string.
-     *
-     * @return the raw bytes as a string
-     */
     @TestOnly
     public String asString() {
         assert raw != null;
         return new String(raw);
     }
 
-    /**
-     * Default constructor for BulkReply.
-     */
     public BulkReply() {
     }
 
     /**
-     * Constructs a BulkReply with the specified string.
-     *
-     * @param content the string to be converted to bytes
+     * @param content the string content
      */
     public BulkReply(@NotNull String content) {
         this(content.getBytes());
     }
 
     /**
-     * Constructs a BulkReply with the specified raw bytes.
-     *
-     * @param raw the raw bytes of the reply
+     * @param raw the raw bytes
      */
     public BulkReply(byte[] raw) {
         this.raw = raw;
     }
 
     /**
-     * Constructs a BulkReply with the specified long value.
-     * The long value is converted to a string and then to bytes.
-     *
      * @param l the long value
      */
     public BulkReply(long l) {
@@ -68,21 +47,12 @@ public class BulkReply implements Reply {
     }
 
     /**
-     * Constructs a BulkReply with the specified double value.
-     * The double value is converted to a string and then to bytes.
-     *
      * @param d the double value
      */
     public BulkReply(double d) {
         this.raw = String.valueOf(d).getBytes();
     }
 
-    /**
-     * Checks if two BulkReply instances are equal.
-     *
-     * @param obj the object to compare to
-     * @return true if the objects are equal, false otherwise
-     */
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
@@ -112,14 +82,10 @@ public class BulkReply implements Reply {
 
     public static final byte[] CRLF = new byte[]{CR, LF};
 
-    /**
-     * Bytes representing -1 in a bulk reply format.
-     */
+    /** Bytes representing -1 in bulk reply format. */
     public static final byte[] NEG_ONE = convert(-1, false);
 
-    /**
-     * Bytes representing -1 in a bulk reply format with CRLF.
-     */
+    /** Bytes representing -1 in bulk reply format with CRLF. */
     public static final byte[] NEG_ONE_WITH_CRLF = convert(-1, true);
 
     private static final int NUM_MAP_LENGTH = 256;
@@ -179,12 +145,6 @@ public class BulkReply implements Reply {
         return convert(value, withCRLF);
     }
 
-    /**
-     * Returns a ByteBuf representing the bulk reply in the Redis protocol format.
-     * Format: ${size}\r\n{raw}\r\n
-     *
-     * @return the ByteBuf representing the bulk reply
-     */
     @Override
     public ByteBuf buffer() {
         int size = raw != null ? raw.length : -1;
@@ -236,12 +196,6 @@ public class BulkReply implements Reply {
         return buf;
     }
 
-    /**
-     * Returns a ByteBuf wrapping the raw bytes of the bulk reply.
-     * This is used in the context of HTTP responses.
-     *
-     * @return the ByteBuf wrapping the raw bytes
-     */
     @Override
     public ByteBuf bufferAsHttp() {
         assert raw != null;
@@ -249,11 +203,9 @@ public class BulkReply implements Reply {
     }
 
     /**
-     * Dumps the content of the bulk reply to a StringBuilder for testing purposes.
-     *
      * @param sb        the StringBuilder to append the dump to
-     * @param nestCount the nesting level (unused in this implementation)
-     * @return true if the dump was successful
+     * @param nestCount the nesting level (unused)
+     * @return true
      */
     @TestOnly
     @Override

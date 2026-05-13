@@ -5,15 +5,12 @@ import io.velo.Slice;
 import org.jetbrains.annotations.TestOnly;
 
 /**
- * Represents a multi-bulk reply in the RESP (Redis Serialization Protocol) format.
- * A multi-bulk reply is a collection of replies and is used to represent an array of values in RESP.
+ * Multi-bulk reply in RESP format for arrays of values.
  */
 public class MultiBulkReply implements Reply {
     private static final byte[] EMPTY_HTTP_BODY_BYTES = "[]".getBytes();
 
-    /**
-     * Represents a null reply for multi-bulk replies, encoded in RESP3 format.
-     */
+    /** Null reply for multi-bulk in RESP3 format. */
     public static final Reply NULL = new Reply() {
         private static final byte[] RESP3_NULL_ARRAY_BYTES = "*-1\r\n".getBytes();
 
@@ -28,9 +25,7 @@ public class MultiBulkReply implements Reply {
         }
     };
 
-    /**
-     * Represents an empty multi-bulk reply, encoded in RESP2 format.
-     */
+    /** Empty multi-bulk reply in RESP2 format. */
     public static final Reply EMPTY = new Reply() {
         private static final byte[] RESP2_EMPTY_ARRAY_BYTES = "*0\r\n".getBytes();
 
@@ -52,36 +47,30 @@ public class MultiBulkReply implements Reply {
         }
     };
 
-    /**
-     * A special multi-bulk reply used for SCAN command, consisting of a BulkReply.ZERO and an EMPTY reply.
-     */
+    /** SCAN_EMPTY reply for scan with no results. */
     public static final MultiBulkReply SCAN_EMPTY = new MultiBulkReply(new Reply[]{BulkReply.ZERO, EMPTY});
 
-    /**
-     * The marker byte for a multi-bulk reply in RESP format.
-     */
+    /** Marker byte for multi-bulk reply in RESP format. */
     private static final byte MARKER = '*';
     private static final byte MARKER_MAP = '%';
     private static final byte MARKER_SET = '~';
 
-    /**
-     * The replies contained in this multi-bulk reply.
-     */
+    /** The replies contained in this multi-bulk reply. */
     private final Reply[] replies;
 
     private final boolean isMap;
 
     private final boolean isSet;
 
-    /**
-     * Retrieves the replies contained in this multi-bulk reply.
-     *
-     * @return the array of {@link Reply} objects
-     */
     public Reply[] getReplies() {
         return replies;
     }
 
+    /**
+     * @param replies the replies to contain
+     * @param isMap   true if this is a map reply
+     * @param isSet   true if this is a set reply
+     */
     public MultiBulkReply(Reply[] replies, boolean isMap, boolean isSet) {
         this.replies = replies;
         this.isMap = isMap;
@@ -91,20 +80,16 @@ public class MultiBulkReply implements Reply {
     }
 
     /**
-     * Constructs a new MultiBulkReply with the given array of replies.
-     *
-     * @param replies the replies to be contained in this multi-bulk reply
+     * @param replies the replies to contain
      */
     public MultiBulkReply(Reply[] replies) {
         this(replies, false, false);
     }
 
     /**
-     * Dumps the multi-bulk reply to a StringBuilder for testing purposes.
-     *
-     * @param sb        the StringBuilder to append the dump to
-     * @param nestCount the level of nesting for indentation
-     * @return always returns true
+     * @param sb        the StringBuilder to append to
+     * @param nestCount the nesting level
+     * @return true
      */
     @TestOnly
     @Override
@@ -126,11 +111,6 @@ public class MultiBulkReply implements Reply {
         return true;
     }
 
-    /**
-     * Returns a {@link ByteBuf} containing the multi-bulk reply encoded in RESP format.
-     *
-     * @return the {@link ByteBuf} with the encoded multi-bulk reply
-     */
     @Override
     public ByteBuf buffer() {
         var slice = new Slice();
@@ -163,12 +143,6 @@ public class MultiBulkReply implements Reply {
         return ByteBuf.wrap(slice.getArray(), 0, slice.getWriteIndex());
     }
 
-    /**
-     * Returns a {@link ByteBuf} containing the multi-bulk reply encoded in HTTP format.
-     * Current implementation delegates to {@link #buffer()}.
-     *
-     * @return the {@link ByteBuf} with the encoded multi-bulk reply
-     */
     @Override
     public ByteBuf bufferAsHttp() {
         var buf = buffer();

@@ -3,18 +3,13 @@ package io.velo.reply;
 import io.activej.bytebuf.ByteBuf;
 
 /**
- * Represents a boolean response in different protocols.
- * This enum provides two states: TRUE and FALSE.
+ * Boolean reply with TRUE and FALSE states.
  */
 public enum BoolReply implements Reply {
-    /**
-     * Represents a true boolean value.
-     */
+    /** True boolean value. */
     T(true),
 
-    /**
-     * Represents a false boolean value.
-     */
+    /** False boolean value. */
     F(false);
 
     private static final byte BOOL_MARKER = '#';
@@ -27,30 +22,17 @@ public enum BoolReply implements Reply {
     private final boolean value;
 
     /**
-     * Constructs a BoolReply with the given boolean value.
-     *
-     * @param value the boolean value to be represented
+     * @param value the boolean value
      */
     BoolReply(boolean value) {
         this.value = value;
     }
 
-    /**
-     * Returns a ByteBuf representing this boolean value in RESP2 format.
-     *
-     * @return the ByteBuf containing "true" or "false"
-     */
     @Override
     public ByteBuf buffer() {
         return new BulkReply(value ? TRUE_BYTES : FALSE_BYTES).buffer();
     }
 
-    /**
-     * Returns a ByteBuf representing this boolean value in RESP3 format.
-     * The format is either "#t\r\n" for true or "#f\r\n" for false.
-     *
-     * @return the ByteBuf containing the boolean value in RESP3 format
-     */
     @Override
     public ByteBuf bufferAsResp3() {
         // #t\r\n or #f\r\n
