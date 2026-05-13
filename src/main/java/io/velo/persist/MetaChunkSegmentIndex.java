@@ -16,9 +16,7 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 
 /**
- * Manages the chunk segment index and related metadata for a specific slot.
- * This class provides in-memory caching and file storage for metadata, depending on the configuration.
- * It allows retrieval and update of metadata such as the chunk segment index, master UUID, binlog file index, and offset.
+ * Manages chunk segment index and related metadata for a specific slot.
  */
 public class MetaChunkSegmentIndex implements NeedCleanUp {
     private static final String META_CHUNK_SEGMENT_INDEX_FILE = "meta_chunk_segment_index.dat";
@@ -39,12 +37,9 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     private static final Logger log = LoggerFactory.getLogger(MetaChunkSegmentIndex.class);
 
     /**
-     * Constructs a new instance of MetaChunkSegmentIndex.
-     * Initializes the in-memory cache and file storage for metadata based on the provided slot and slot directory.
-     *
-     * @param slot    the slot index
-     * @param slotDir the directory of the slot
-     * @throws IOException If an I/O error occurs during file operations.
+     * @param slot slot index
+     * @param slotDir directory of the slot
+     * @throws IOException If an I/O error occurs during file operations
      */
     public MetaChunkSegmentIndex(short slot, @NotNull File slotDir) throws IOException {
         this.slot = slot;
@@ -73,10 +68,6 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     }
 
     /**
-     * Sets the chunk segment index.
-     * If the configuration is set for pure memory operations, it directly updates the in-memory cache.
-     * Otherwise, it writes the segment index to the file and updates the in-memory cache.
-     *
      * @param segmentIndex the chunk segment index to set
      */
     void set(int segmentIndex) {
@@ -90,36 +81,27 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     }
 
     /**
-     * Sets the master UUID, data fetch flag, binlog file index, and binlog offset.
-     *
-     * @param masterUuid                           the master UUID
-     * @param isExistsDataAllFetched               the flag indicating if all data has been fetched from the master
+     * @param masterUuid the master UUID
+     * @param isExistsDataAllFetched the flag indicating if all data has been fetched from the master
      * @param masterBinlogFileIndexNextTimeToFetch the binlog file index to fetch next time
-     * @param masterBinlogOffsetNextTimeToFetch    the binlog offset to fetch next time
+     * @param masterBinlogOffsetNextTimeToFetch the binlog offset to fetch next time
      */
     public void setMasterBinlogFileIndexAndOffset(long masterUuid, boolean isExistsDataAllFetched,
                                                   int masterBinlogFileIndexNextTimeToFetch, long masterBinlogOffsetNextTimeToFetch) {
         setAll(get(), masterUuid, isExistsDataAllFetched, masterBinlogFileIndexNextTimeToFetch, masterBinlogOffsetNextTimeToFetch);
     }
 
-    /**
-     * Clears the master binlog file index and offset, setting them to their default values.
-     */
     public void clearMasterBinlogFileIndexAndOffset() {
         setMasterBinlogFileIndexAndOffset(0L, false, 0, 0L);
         log.warn("Repl meta chunk segment index clear master binlog file index and offset done, set 0 from the beginning, slot={}", slot);
     }
 
     /**
-     * Sets all the metadata fields: segment index, master UUID, data fetch flag, binlog file index, and binlog offset.
-     * If the configuration is set for pure memory operations, it directly updates the in-memory cache.
-     * Otherwise, it writes the metadata to the file and updates the in-memory cache.
-     *
-     * @param segmentIndex           the chunk segment index
-     * @param masterUuid             the master UUID
+     * @param segmentIndex the chunk segment index
+     * @param masterUuid the master UUID
      * @param isExistsDataAllFetched the flag indicating if all data has been fetched from the master
-     * @param masterBinlogFileIndex  the binlog file index
-     * @param masterBinlogOffset     the binlog offset
+     * @param masterBinlogFileIndex the binlog file index
+     * @param masterBinlogOffset the binlog offset
      */
     @VisibleForTesting
     void setAll(int segmentIndex, long masterUuid, boolean isExistsDataAllFetched,
@@ -142,8 +124,6 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     }
 
     /**
-     * Retrieves the chunk segment index.
-     *
      * @return the chunk segment index
      */
     int get() {
@@ -151,8 +131,6 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     }
 
     /**
-     * Retrieves the master UUID.
-     *
      * @return the master UUID
      */
     public long getMasterUuid() {
@@ -160,8 +138,6 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     }
 
     /**
-     * Checks if all data has been fetched from the master.
-     *
      * @return the flag indicating if all data has been fetched from the master
      */
     public boolean isExistsDataAllFetched() {
@@ -169,19 +145,12 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
     }
 
     /**
-     * Retrieves the master binlog file index and offset.
-     *
      * @return the {@link Binlog.FileIndexAndOffset} object containing the file index and offset
      */
     public Binlog.FileIndexAndOffset getMasterBinlogFileIndexAndOffset() {
         return new Binlog.FileIndexAndOffset(inMemoryCachedByteBuffer.getInt(16), inMemoryCachedByteBuffer.getLong(20));
     }
 
-    /**
-     * Clears all the metadata fields, setting them to their default values.
-     * If the configuration is set for pure memory operations, it directly updates the in-memory cache.
-     * Otherwise, it writes the default values to the file and updates the in-memory cache.
-     */
     @SlaveNeedReplay
     @SlaveReplay
     void clear() {
@@ -189,11 +158,6 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
         System.out.println("Meta chunk segment index clear done, set 0 from the beginning. Clear master binlog file index and offset.");
     }
 
-    /**
-     * Cleans up the resources used by this instance.
-     * If operating in pure memory mode, no action is taken.
-     * Otherwise, it closes the RandomAccessFile.
-     */
     @Override
     public void cleanUp() {
         try {

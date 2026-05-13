@@ -5,7 +5,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Interface for handling the deletion or expiration of a key value pair.
+ * Handles deletion or expiration of a compressed value.
  */
 public interface HandlerWhenCvExpiredOrDeleted {
     void handleWhenCvExpiredOrDeleted(@NotNull String key, @Nullable CompressedValue shortStringCv, @Nullable PersistValueMeta pvm);

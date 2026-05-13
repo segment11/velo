@@ -23,9 +23,6 @@ import static io.velo.CompressedValue.NO_EXPIRE;
 
 /**
  * Write-Ahead Log (WAL) implementation for persistent storage of operation logs.
- * WAL provides in-memory estimation, delayed writes, batch reads, and clearing functionalities.
- * <p>
- * WAL supports separate storage for short and long values and can operate in pure memory mode.
  */
 public class Wal implements InMemoryEstimate {
     public static byte[] keyBytes(String key) {
@@ -36,40 +33,20 @@ public class Wal implements InMemoryEstimate {
         return new String(keyBytes, StandardCharsets.UTF_8);
     }
 
-    /**
-     * Represents a single log entry in the WAL.
-     * Each entry contains metadata about the key-value pair being logged, including sequence number,
-     * bucket index, key hash, expiration time, type, key, encoded value, and whether it's from a merge operation.
-     */
     public record V(long seq, int bucketIndex, long keyHash, long expireAt, int spType,
                     String key, byte[] cvEncoded, boolean isFromMerge) implements Comparable<V> {
         public byte[] keyBytes() {
             return Wal.keyBytes(key);
         }
 
-        /**
-         * Checks if this log entry represents a deletion.
-         *
-         * @return true if this entry is a deletion, false otherwise
-         */
         boolean isRemove() {
             return CompressedValue.isDeleted(cvEncoded);
         }
 
-        /**
-         * Checks if this log entry has expired.
-         *
-         * @return true if this entry has expired, false otherwise
-         */
         boolean isExpired() {
             return expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis();
         }
 
-        /**
-         * Returns a string representation of this log entry.
-         *
-         * @return the string representation of this log entry
-         */
         @Override
         public @NotNull String toString() {
             return "V{" +
@@ -81,23 +58,11 @@ public class Wal implements InMemoryEstimate {
                     '}';
         }
 
-        /**
-         * Calculates the length required to persist this log entry.
-         *
-         * @return the length required to persist this log entry
-         */
         public int persistLength() {
             // include key
             return CompressedValue.KEY_HEADER_LENGTH + keyBytes().length + cvEncoded.length;
         }
 
-        /**
-         * Calculates the length required to persist a log entry with given key and value lengths.
-         *
-         * @param keyLength       the length of the key
-         * @param cvEncodedLength the length of the encoded value
-         * @return the length required to persist the log entry
-         */
         public static int persistLength(int keyLength, int cvEncodedLength) {
             // include key
             return CompressedValue.KEY_HEADER_LENGTH + keyLength + cvEncodedLength;
@@ -119,12 +84,6 @@ public class Wal implements InMemoryEstimate {
             return 4 + vLength;
         }
 
-        /**
-         * Encodes this log entry into a byte array.
-         *
-         * @param isEndAppend0ForBreak whether to add 0 int to the end, for read break
-         * @return the byte array representation of this log entry
-         */
         public byte[] encode(boolean isEndAppend0ForBreak) {
             var keyBytes = keyBytes();
             int vLength = ENCODED_HEADER_LENGTH + keyBytes.length + cvEncoded.length;
@@ -148,13 +107,6 @@ public class Wal implements InMemoryEstimate {
             return bytes;
         }
 
-        /**
-         * Decodes a log entry from a DataInputStream.
-         *
-         * @param is the DataInputStream to read from
-         * @return the decoded log entry
-         * @throws IOException if an I/O error occurs
-         */
         public static V decode(DataInputStream is) throws IOException {
             if (is.available() < 4) {
                 return null;
@@ -201,12 +153,6 @@ public class Wal implements InMemoryEstimate {
             return new V(seq, bucketIndex, keyHash, expireAt, spType, keyString(keyBytes), cvEncoded, false);
         }
 
-        /**
-         * Compares this log entry with another based on their sequence numbers.
-         *
-         * @param o the other log entry to compare with
-         * @return a negative integer, zero, or a positive integer as this object is less than, equal to, or greater than the specified object
-         */
         @Override
         public int compareTo(@NotNull Wal.V o) {
             return Long.compare(this.seq, o.seq);
@@ -222,13 +168,11 @@ public class Wal implements InMemoryEstimate {
     long initMemoryN = 0;
 
     /**
-     * Constructs a new WAL instance.
-     *
-     * @param slot                    the slot identifier
-     * @param groupIndex              the group index
-     * @param walSharedFile           the shared file for long values
+     * @param slot the slot identifier
+     * @param groupIndex the group index
+     * @param walSharedFile the shared file for long values
      * @param walSharedFileShortValue the shared file for short values
-     * @param snowFlake               the SnowFlake instance for generating unique IDs
+     * @param snowFlake the SnowFlake instance for generating unique IDs
      * @throws IOException if an I/O error occurs
      */
     public Wal(short slot, OneSlot oneSlot, int groupIndex,
@@ -248,11 +192,6 @@ public class Wal implements InMemoryEstimate {
         this.fileToWriteIndex = (long) ONE_GROUP_BUFFER_SIZE * (groupIndex + 1);
     }
 
-    /**
-     * Lazily reads data from the WAL file into memory.
-     *
-     * @throws IOException if an I/O error occurs.
-     */
     void lazyReadFromFile() throws IOException {
         var n1 = readWal(walSharedFile, delayToKeyBucketValues, false);
         var n2 = readWal(walSharedFileShortValue, delayToKeyBucketShortValues, true);
@@ -271,8 +210,6 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Estimates the in-memory usage of this WAL instance.
-     *
      * @param sb the StringBuilder to append the memory usage estimate
      * @return the estimated memory usage in bytes
      */
@@ -288,11 +225,6 @@ public class Wal implements InMemoryEstimate {
         return size1 + size2;
     }
 
-    /**
-     * Returns a string representation of this WAL instance.
-     *
-     * @return the string representation of this WAL instance
-     */
     @Override
     public String toString() {
         return "Wal{" +
@@ -345,8 +277,6 @@ public class Wal implements InMemoryEstimate {
     final int groupIndex;
 
     /**
-     * Get the WAL group index.
-     *
      * @return the WAL group index
      */
     public int getGroupIndex() {
@@ -354,8 +284,6 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Calculates the WAL group index for a given bucket index.
-     *
      * @param bucketIndex the bucket index
      * @return the WAL group index
      */
@@ -365,8 +293,6 @@ public class Wal implements InMemoryEstimate {
 
 
     /**
-     * Calculates the total number of WAL groups.
-     *
      * @return the total number of WAL groups
      */
     public static int calcWalGroupNumber() {
@@ -388,8 +314,6 @@ public class Wal implements InMemoryEstimate {
     long lastSeqShortValueAfterPut;
 
     /**
-     * Gets the number of keys in the WAL.
-     *
      * @return the number of keys in the WAL
      */
     public int getKeyCount() {
@@ -397,8 +321,6 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Gets the keys in the WAL. For scan skip when scan key buckets.
-     *
      * @param ltSeq the sequence number to filter keys, for those seq need less than ltSeq
      * @return the keys in the WAL
      */
@@ -420,13 +342,11 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Scans the WAL for keys matching the specified criteria.
-     *
-     * @param skipCount    the number of keys to skip
-     * @param typeAsByte   value type, @see KeyLoader.typeAsByteIgnore
+     * @param skipCount the number of keys to skip
+     * @param typeAsByte value type, @see KeyLoader.typeAsByteIgnore
      * @param matchPattern the pattern to match against keys
-     * @param count        the maximum number of keys to return
-     * @param beginScanSeq the sequence number set when begin scanning from, return key value need >= this sequence number
+     * @param count the maximum number of keys to return
+     * @param beginScanSeq the sequence number set when begin scanning from
      * @return the KeyLoader.ScanCursorWithReturnKeys instance containing the scan results
      */
     public @NotNull KeyLoader.ScanCursorWithReturnKeys scan(final short skipCount,
@@ -646,17 +566,12 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
-    /**
-     * Clears all values include short values of this WAL group. Only used for test.
-     */
     @TestOnly
     public void clear() {
         clear(true);
     }
 
     /**
-     * Clears all values include short values of this WAL group.
-     *
      * @param writeBytes0ToRaf whether to write empty bytes to file. Skip this when pure memory mode.
      */
     @SlaveNeedReplay
@@ -681,9 +596,6 @@ public class Wal implements InMemoryEstimate {
     @VisibleForTesting
     long clearValuesCount = 0;
 
-    /**
-     * Clears all short values of this WAL group after persist.
-     */
     public void clearShortValues() {
         delayToKeyBucketShortValues.clear();
         bigStringFileUuidByKey.clear();
@@ -695,9 +607,6 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
-    /**
-     * Clears all values of this WAL group after persist.
-     */
     public void clearValues() {
         delayToKeyBucketValues.clear();
         resetWal(false);
@@ -709,8 +618,6 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Retrieves the encoded cv bytes for a given key.
-     *
      * @param key the key to retrieve
      * @return the encoded value, or null if not found
      */
@@ -723,8 +630,6 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Retrieves the value for a given key.
-     *
      * @param key the key to retrieve
      * @return the value, or null if not found
      */
@@ -751,11 +656,9 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Removes a key-value pair from the WAL with a delay.
-     *
-     * @param key               the key to remove
-     * @param bucketIndex       the bucket index
-     * @param keyHash           the hash of the key
+     * @param key the key to remove
+     * @param bucketIndex the bucket index
+     * @param keyHash the hash of the key
      * @param lastPersistTimeMs the last persist time in milliseconds
      * @return the result of the removal operation
      */
@@ -767,12 +670,6 @@ public class Wal implements InMemoryEstimate {
         return put(true, key, v, lastPersistTimeMs);
     }
 
-    /**
-     * Checks if a key exists in the WAL.
-     *
-     * @param key the key to check
-     * @return true if the key exists and is not removed, false otherwise
-     */
     @VisibleForTesting
     boolean exists(@NotNull String key) {
         var vShort = delayToKeyBucketShortValues.get(key);
@@ -784,12 +681,6 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
-    /**
-     * Checks if a key exists in the WAL.
-     *
-     * @param key the key to check
-     * @return true if the key exists, false otherwise
-     */
     boolean hasKey(@NotNull String key) {
         return delayToKeyBucketValues.containsKey(key) || delayToKeyBucketShortValues.containsKey(key);
     }
@@ -800,12 +691,9 @@ public class Wal implements InMemoryEstimate {
     long needPersistOffsetTotal = 0;
 
     /**
-     * Puts a log entry into the WAL from a replication source.
-     * Slave catch up master binlog, replay wal, need update write position, be careful.
-     *
-     * @param v            the log entry to put
+     * @param v the log entry to put
      * @param isValueShort whether the value is short
-     * @param offset       the offset to write at
+     * @param offset the offset to write at
      */
     @SlaveReplay
     public void putFromX(@NotNull V v, boolean isValueShort, int offset) {
@@ -849,8 +737,6 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Rewrite to file for one group
-     *
      * @param isValueShort whether the value is short
      * @return the new offset
      */
@@ -883,9 +769,6 @@ public class Wal implements InMemoryEstimate {
 
     private final Debug debug = Debug.getInstance();
 
-    /**
-     * Resets the write position after bulk loading.
-     */
     void resetWritePositionAfterBulkLoad() {
         var targetGroupBeginOffset = ONE_GROUP_BUFFER_SIZE * groupIndex;
 
@@ -921,11 +804,9 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Puts a log entry into the WAL.
-     *
      * @param isValueShort whether the value is short
-     * @param key          the key to put
-     * @param v            the log entry to put
+     * @param key the key to put
+     * @param v the log entry to put
      * @return the result of the put operation
      */
     public PutResult put(boolean isValueShort, @NotNull String key, @NotNull V v) {
@@ -933,11 +814,9 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Puts a log entry into the WAL.
-     *
-     * @param isValueShort      whether the value is short
-     * @param key               the key to put
-     * @param v                 the log entry to put
+     * @param isValueShort whether the value is short
+     * @param key the key to put
+     * @param v the log entry to put
      * @param lastPersistTimeMs the last persist time in milliseconds
      * @return the result of the put operation
      */
@@ -1063,8 +942,6 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Encode to bytes for slave replay.
-     *
      * @return the byte array representation of this WAL group
      * @throws IOException if an I/O error occurs
      */
@@ -1102,8 +979,6 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * Decodes a WAL group from a byte array for slave replay. From master to slave.
-     *
      * @param bytes the byte array to decode
      * @throws IOException if an I/O error occurs
      */

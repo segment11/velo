@@ -23,9 +23,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * This class manages dynamic configuration settings for a Velo slot.
- * It reads and writes configuration from/to a JSON file and triggers callbacks
- * when certain configuration values are updated.
+ * Manages dynamic configuration settings for a Velo slot.
  */
 public class DynConfig {
     private static final Logger log = LoggerFactory.getLogger(DynConfig.class);
@@ -167,8 +165,6 @@ public class DynConfig {
     );
 
     /**
-     * Returns whether the key is supported for external dynamic configuration updates.
-     *
      * @param key the dynamic configuration key
      * @return true if the key can be updated through dynamic configuration commands
      */
@@ -211,8 +207,6 @@ public class DynConfig {
     }
 
     /**
-     * Retrieves the value associated with a given key.
-     *
      * @param key the key whose associated value is to be returned
      * @return the value associated with the specified key, or null if the key is not present
      */
@@ -220,32 +214,21 @@ public class DynConfig {
         return data.get(key);
     }
 
-    /**
-     * Interface for callbacks to be executed after a dynamic configuration update.
-     */
     public interface AfterUpdateCallback {
         /**
-         * Called after a dynamic configuration update.
-         *
-         * @param key   the key that was updated
+         * @param key the key that was updated
          * @param value the new value for the key
          */
         void afterUpdate(@NotNull String key, @NotNull Object value);
     }
 
-    /**
-     * Inner implementation of the AfterUpdateCallback interface.
-     * It handles specific actions for some configuration keys.
-     */
     private static class AfterUpdateCallbackInner implements AfterUpdateCallback {
         private final short currentSlot;
         private final OneSlot oneSlot;
 
         /**
-         * Constructs the AfterUpdateCallbackInner.
-         *
-         * @param currentSlot the slot index corresponding to this dynamic configuration
-         * @param oneSlot     the OneSlot instance associated with this dynamic configuration
+         * @param currentSlot slot index corresponding to this dynamic configuration
+         * @param oneSlot OneSlot instance associated with this dynamic configuration
          */
         public AfterUpdateCallbackInner(short currentSlot, OneSlot oneSlot) {
             this.currentSlot = currentSlot;
@@ -301,8 +284,6 @@ public class DynConfig {
     private final AfterUpdateCallback afterUpdateCallback;
 
     /**
-     * Returns the after-update callback associated with this dynamic configuration.
-     *
      * @return the AfterUpdateCallback instance
      */
     public AfterUpdateCallback getAfterUpdateCallback() {
@@ -310,8 +291,6 @@ public class DynConfig {
     }
 
     /**
-     * Retrieves the Master UUID from the configuration.
-     *
      * @return the Master UUID, or null if not set
      */
     public Long getMasterUuid() {
@@ -320,18 +299,14 @@ public class DynConfig {
     }
 
     /**
-     * Sets the Master UUID in the configuration.
-     *
      * @param masterUuid the UUID to set as the Master
-     * @throws IOException If an error occurs while writing to the configuration file.
+     * @throws IOException If an error occurs while writing to the configuration file
      */
     public void setMasterUuid(long masterUuid) throws IOException {
         update("masterUuid", masterUuid);
     }
 
     /**
-     * Checks if the slot is read-only.
-     *
      * @return true if the slot is read-only, false otherwise
      */
     public boolean isReadonly() {
@@ -340,18 +315,14 @@ public class DynConfig {
     }
 
     /**
-     * Sets the read-only status of the slot.
-     *
      * @param readonly the read-only status to set for the slot
-     * @throws IOException If an error occurs while writing to the configuration file.
+     * @throws IOException If an error occurs while writing to the configuration file
      */
     public void setReadonly(boolean readonly) throws IOException {
         update("readonly", readonly);
     }
 
     /**
-     * Checks if the slot is readable.
-     *
      * @return true if the slot is readable, false otherwise
      */
     public boolean isCanRead() {
@@ -360,18 +331,14 @@ public class DynConfig {
     }
 
     /**
-     * Sets the readability status of the slot.
-     *
      * @param canRead the readability status to set for the slot
-     * @throws IOException If an error occurs while writing to the configuration file.
+     * @throws IOException If an error occurs while writing to the configuration file
      */
     public void setCanRead(boolean canRead) throws IOException {
         update("canRead", canRead);
     }
 
     /**
-     * Checks if the slot is writable.
-     *
      * @return true if the slot is writable, false otherwise
      */
     public boolean isCanWrite() {
@@ -380,19 +347,14 @@ public class DynConfig {
     }
 
     /**
-     * Sets the writability status of the slot.
-     *
      * @param canWrite the writability status to set for the slot
-     * @throws IOException If an error occurs while writing to the configuration file.
+     * @throws IOException If an error occurs while writing to the configuration file
      */
     public void setCanWrite(boolean canWrite) throws IOException {
         update("canWrite", canWrite);
     }
 
     /**
-     * Retrieves the testKey from the configuration.
-     * This is a testing method marked with @TestOnly.
-     *
      * @return the value of testKey, defaulting to 10 if not set
      */
     @TestOnly
@@ -402,11 +364,8 @@ public class DynConfig {
     }
 
     /**
-     * Sets the testKey in the configuration.
-     * This is a testing method marked with @TestOnly.
-     *
      * @param testValueInt the value to set for testKey
-     * @throws IOException If an error occurs while writing to the configuration file.
+     * @throws IOException If an error occurs while writing to the configuration file
      */
     @TestOnly
     public void setTestKey(int testValueInt) throws IOException {
@@ -414,8 +373,6 @@ public class DynConfig {
     }
 
     /**
-     * Checks if the binlog is on.
-     *
      * @return true if the binlog is on, false otherwise
      */
     public boolean isBinlogOn() {
@@ -424,22 +381,18 @@ public class DynConfig {
     }
 
     /**
-     * Sets whether the binlog is on.
-     *
      * @param binlogOn the binlog status to set
-     * @throws IOException If an error occurs while writing to the configuration file.
+     * @throws IOException If an error occurs while writing to the configuration file
      */
     public void setBinlogOn(boolean binlogOn) throws IOException {
         update("binlogOn", binlogOn);
     }
 
     /**
-     * Constructs a DynConfig instance for a specific slot.
-     *
-     * @param slot          the slot index
-     * @param dynConfigFile the JSON file where the dynamic configuration is stored
-     * @param oneSlot       the OneSlot instance associated with this configuration
-     * @throws IOException If an error occurs while reading from or writing to the configuration file.
+     * @param slot slot index
+     * @param dynConfigFile JSON file where the dynamic configuration is stored
+     * @param oneSlot OneSlot instance associated with this configuration
+     * @throws IOException If an error occurs while reading from or writing to the configuration file
      */
     public DynConfig(short slot, @NotNull File dynConfigFile, @NotNull OneSlot oneSlot) throws IOException {
         this.slot = slot;
@@ -486,11 +439,9 @@ public class DynConfig {
     }
 
     /**
-     * Updates a configuration value and writes the updated configuration to the JSON file.
-     *
-     * @param key   the key to update
+     * @param key the key to update
      * @param value the new value for the key
-     * @throws IOException If an error occurs while writing to the configuration file.
+     * @throws IOException If an error occurs while writing to the configuration file
      */
     public void update(@NotNull String key, @NotNull Object value) throws IOException {
         var valueToUpdate = parseAndValidate(key, value);
@@ -503,9 +454,7 @@ public class DynConfig {
     }
 
     /**
-     * Retrieves a configuration value as a long.
-     *
-     * @param key          the key to retrieve
+     * @param key the key to retrieve
      * @param defaultValue the default value to return if the key is not found
      * @return the value associated with the key, or the default value if the key is not found
      */

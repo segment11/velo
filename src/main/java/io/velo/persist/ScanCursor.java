@@ -1,5 +1,8 @@
 package io.velo.persist;
 
+/**
+ * Cursor for scanning keys across WAL groups and buckets.
+ */
 public record ScanCursor(short slot, int walGroupIndex, short walSkipCount, short keyBucketsSkipCount,
                          byte splitIndex) {
     // one wal group can hold max 200 + 200 < 1024 keys.

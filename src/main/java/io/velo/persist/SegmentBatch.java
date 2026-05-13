@@ -16,9 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents a batch of data segments for persistence with compression. Each segment contains a header and a list of key-value pairs.
- * This class is responsible for managing the encoding, compression, splitting, and tight packing of these segments.
- * This is for segment compression mode.
+ * Batch of data segments for persistence with compression (segment compression mode).
  */
 public class SegmentBatch implements InSlotMetricCollector {
     /**
@@ -63,8 +61,6 @@ public class SegmentBatch implements InSlotMetricCollector {
     private static final Logger log = LoggerFactory.getLogger(SegmentBatch.class);
 
     /**
-     * Constructs a new SegmentBatch instance for a specific slot and SnowFlake ID generator.
-     *
      * @param snowFlake the SnowFlake ID generator for segment sequences
      */
     public SegmentBatch(@NotNull SnowFlake snowFlake) {
@@ -78,8 +74,6 @@ public class SegmentBatch implements InSlotMetricCollector {
     }
 
     /**
-     * Collects and returns metrics related to the segment batches.
-     *
      * @return the map containing various metrics about the segment batches
      */
     @Override
@@ -114,10 +108,11 @@ public class SegmentBatch implements InSlotMetricCollector {
     }
 
     /**
-     * Record to hold compressed segment bytes, its index, and sequence number.
-     * When {@code isRaw} is true, {@code compressedBytes} contains the raw (uncompressed)
-     * segment bytes of exactly {@code chunkSegmentLength} and should be written directly
-     * without tight packing.
+     * @param compressedBytes compressed segment bytes
+     * @param tmpSegmentIndex temporary segment index
+     * @param segmentSeq segment sequence number
+     * @param valueBytesLength length of value bytes
+     * @param isRaw true if raw (uncompressed) segment bytes
      */
     @VisibleForTesting
     record SegmentCompressedBytesWithIndex(byte[] compressedBytes, int tmpSegmentIndex, long segmentSeq,
@@ -134,9 +129,6 @@ public class SegmentBatch implements InSlotMetricCollector {
         }
     }
 
-    /**
-     * Record to hold tight segment bytes with its length, index, block number, sequence number, and value bytes length.
-     */
     public record SegmentTightBytesWithLengthAndSegmentIndex(byte[] tightBytesWithLength, int tmpSegmentIndex,
                                                              byte blockNumber, long segmentSeq, int valueBytesLength) {
         @Override
@@ -162,8 +154,6 @@ public class SegmentBatch implements InSlotMetricCollector {
     private static final int HEADER_LENGTH = 8 + 1 + 4 + MAX_BLOCK_NUMBER * (2 + 2);
 
     /**
-     * Calculates the position of metadata for a given sub-block index.
-     *
      * @param subBlockIndex the index of the sub-block
      * @return the position of the sub-block metadata in the segment header
      * @throws IllegalArgumentException if the sub-block index is out of bounds
@@ -177,11 +167,9 @@ public class SegmentBatch implements InSlotMetricCollector {
     }
 
     /**
-     * Tight-packs a list of compressed segments into a single segment.
-     *
      * @param afterTightSegmentIndex the index for the tight segment
-     * @param onceList               the list of compressed segments to be tight-packed
-     * @param returnPvmList          the list to store metadata about the persisted values
+     * @param onceList the list of compressed segments to be tight-packed
+     * @param returnPvmList the list to store metadata about the persisted values
      * @return the record representing the tight-packed segment
      */
     private SegmentTightBytesWithLengthAndSegmentIndex tightSegments(int afterTightSegmentIndex,
@@ -232,9 +220,7 @@ public class SegmentBatch implements InSlotMetricCollector {
     }
 
     /**
-     * Tight-packs multiple segments into minimal segments.
-     *
-     * @param segments      the list of compressed segments to be tight-packed
+     * @param segments the list of compressed segments to be tight-packed
      * @param returnPvmList the list to store metadata about the persisted values
      * @return the list of tight-packed segments
      */
@@ -299,9 +285,7 @@ public class SegmentBatch implements InSlotMetricCollector {
     }
 
     /**
-     * Splits a list of write-ahead log entries into segments and tight-packs them.
-     *
-     * @param list          the list of write-ahead log entries to be split into segments
+     * @param list the list of write-ahead log entries to be split into segments
      * @param returnPvmList the list to store metadata about the persisted values
      * @return the list of tight-packed segments with their byte data, indices, and sequence numbers
      */
@@ -316,9 +300,7 @@ public class SegmentBatch implements InSlotMetricCollector {
     }
 
     /**
-     * Splits a list of write-ahead log entries into segments, compresses them, and tight-packs them.
-     *
-     * @param list          the list of write-ahead log entries to be split into segments
+     * @param list the list of write-ahead log entries to be split into segments
      * @param returnPvmList the list to store metadata about the persisted values
      * @return the list of tight-packed segments
      */
@@ -353,11 +335,9 @@ public class SegmentBatch implements InSlotMetricCollector {
     }
 
     /**
-     * Compresses a list of write-ahead log entries into a single segment.
-     *
-     * @param list            the list of write-ahead log entries to be compressed
+     * @param list the list of write-ahead log entries to be compressed
      * @param tmpSegmentIndex the temporary segment index
-     * @param returnPvmList   the list to store metadata about the persisted values
+     * @param returnPvmList the list to store metadata about the persisted values
      * @return the record representing the compressed segment
      */
     private SegmentCompressedBytesWithIndex compressAsSegment(@NotNull ArrayList<Wal.V> list,
@@ -391,12 +371,10 @@ public class SegmentBatch implements InSlotMetricCollector {
     }
 
     /**
-     * Decompresses a segment from one sub-block.
-     *
-     * @param slot                 the slot index associated with the segment
+     * @param slot the slot index associated with the segment
      * @param tightBytesWithLength the byte array containing the tight-packed segment data
-     * @param pvm                  the metadata about the persisted value
-     * @param chunk                the chunk containing the segment
+     * @param pvm the metadata about the persisted value
+     * @param chunk the chunk containing the segment
      * @return the decompressed segment bytes
      * @throws IllegalStateException if there is an error during decompression
      */

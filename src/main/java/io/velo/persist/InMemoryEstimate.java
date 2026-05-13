@@ -3,7 +3,7 @@ package io.velo.persist;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Interface for estimate memory usage.
+ * Estimates in-memory usage.
  */
 public interface InMemoryEstimate {
     long estimate(@NotNull StringBuilder sb);

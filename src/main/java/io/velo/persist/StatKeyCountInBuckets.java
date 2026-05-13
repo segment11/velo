@@ -15,9 +15,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
- * Manages the count of keys in different buckets within a slot. This class provides in-memory caching and file storage
- * for the key counts, depending on the configuration. It also supports operations to update and retrieve key counts
- * for specific buckets and WAL groups.
+ * Manages the count of keys in different buckets within a slot.
  */
 public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     private static final String STAT_KEY_BUCKET_LAST_UPDATE_COUNT_FILE = "stat_key_count_in_buckets.dat";
@@ -34,8 +32,6 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     private final int[] keyCountInOneWalGroup;
 
     /**
-     * Retrieves the total key count for a specific WAL group.
-     *
      * @param walGroupIndex the index of the WAL group
      * @return the total key count for the specified WAL group
      */
@@ -48,12 +44,9 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     private static final Logger log = LoggerFactory.getLogger(StatKeyCountInBuckets.class);
 
     /**
-     * Constructs a new instance of StatKeyCountInBuckets.
-     * Initializes the in-memory cache and file storage for key counts based on the provided slot and slot directory.
-     *
-     * @param slot    the slot index
-     * @param slotDir the directory of the slot
-     * @throws IOException If an I/O error occurs during file operations.
+     * @param slot slot index
+     * @param slotDir directory of the slot
+     * @throws IOException If an I/O error occurs during file operations
      */
     public StatKeyCountInBuckets(short slot, @NotNull File slotDir) throws IOException {
         this.bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
@@ -87,8 +80,6 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Estimates the capacity used by this instance.
-     *
      * @param sb the StringBuilder to append the estimate details to
      * @return the estimated capacity
      */
@@ -99,11 +90,8 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Updates the key count for a specific WAL group.
-     * Adjusts the total key count cached accordingly.
-     *
      * @param walGroupIndex the index of the WAL group
-     * @param keyCount      the new key count for the WAL group
+     * @param keyCount the new key count for the WAL group
      */
     private void updateKeyCountForTargetWalGroup(int walGroupIndex, int keyCount) {
         var oldKeyCountInOneWalGroup = keyCountInOneWalGroup[walGroupIndex];
@@ -112,12 +100,9 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Sets the key count for a batch of buckets within a specific WAL group.
-     * Updates the in-memory cache and file storage, and adjusts the key count for the WAL group.
-     *
-     * @param walGroupIndex    the index of the WAL group
+     * @param walGroupIndex the index of the WAL group
      * @param beginBucketIndex the index of the first bucket in the batch
-     * @param keyCountArray    the array of key counts for the batch of buckets
+     * @param keyCountArray the array of key counts for the batch of buckets
      */
     void setKeyCountBatch(int walGroupIndex, int beginBucketIndex, short[] keyCountArray) {
         var offset = beginBucketIndex * ONE_LENGTH;
@@ -137,13 +122,10 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Writes bytes to the RandomAccessFile and updates the in-memory cache.
-     * If the configuration is set for pure memory operations, it only updates the in-memory cache.
-     *
-     * @param offset                   the offset in the file to write the bytes
-     * @param tmpBytes                 the bytes to write
+     * @param offset the offset in the file to write the bytes
+     * @param tmpBytes the bytes to write
      * @param inMemoryCachedByteBuffer the in-memory cache to update
-     * @param raf                      the RandomAccessFile to write to
+     * @param raf the RandomAccessFile to write to
      */
     static void writeToRaf(int offset,
                            byte[] tmpBytes,
@@ -159,11 +141,8 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Sets the key count for a specific bucket index in the in-memory cache.
-     * This method is intended for testing purposes.
-     *
      * @param bucketIndex the index of the bucket
-     * @param keyCount    the key count to set
+     * @param keyCount the key count to set
      */
     @TestOnly
     void setKeyCountForBucketIndex(int bucketIndex, short keyCount) {
@@ -172,8 +151,6 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Retrieves the key count for a specific bucket index from the in-memory cache.
-     *
      * @param bucketIndex the index of the bucket
      * @return the key count for the specified bucket
      */
@@ -183,9 +160,6 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Calculates the total key count by summing the key counts in all buckets.
-     * Updates the key count for each WAL group based on the configuration.
-     *
      * @return the total key count
      */
     private long calcKeyCount() {
@@ -209,18 +183,12 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Retrieves the total key count cached.
-     *
      * @return the total key count
      */
     long getKeyCount() {
         return totalKeyCountCached;
     }
 
-    /**
-     * Clears the key counts in memory and on file if not operating in pure memory mode.
-     * Resets the total key count cached to zero.
-     */
     void clear() {
         try {
             var tmpBytes = new byte[allCapacity];
@@ -235,11 +203,6 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
-    /**
-     * Cleans up the resources used by this instance.
-     * If operating in pure memory mode, no action is taken.
-     * Otherwise, it flushes and closes the RandomAccessFile.
-     */
     @Override
     public void cleanUp() {
         try {

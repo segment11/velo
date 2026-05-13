@@ -17,13 +17,10 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Class representing a group of key buckets in a write-ahead log group (WAL).
- * This class manages the key buckets within a specific slot and a specific WAL group.
+ * Manages key buckets within a specific WAL group.
  */
 public class KeyBucketsInOneWalGroup {
     /**
-     * Constructs a KeyBucketsInOneWalGroup instance.
-     *
      * @param slot          the slot index to which the key buckets belong
      * @param walGroupIndex the index of the WAL group
      * @param keyLoader     the KeyLoader instance used to load key data
@@ -33,8 +30,6 @@ public class KeyBucketsInOneWalGroup {
     }
 
     /**
-     * Constructs a KeyBucketsInOneWalGroup instance.
-     *
      * @param slot          the slot index to which the key buckets belong
      * @param walGroupIndex the index of the WAL group
      * @param keyLoader     the KeyLoader instance used to load key data
@@ -123,8 +118,6 @@ public class KeyBucketsInOneWalGroup {
     }
 
     /**
-     * Retrieves the expiration time and sequence number for a given key.
-     *
      * @param bucketIndex the index of the bucket
      * @param key         the key
      * @param keyHash     the hash of the key
@@ -149,8 +142,6 @@ public class KeyBucketsInOneWalGroup {
     }
 
     /**
-     * Retrieves the value, expiration time, and sequence number for a given key.
-     *
      * @param bucketIndex the index of the bucket
      * @param key         the key
      * @param keyHash     the hash of the key
@@ -176,8 +167,6 @@ public class KeyBucketsInOneWalGroup {
     }
 
     /**
-     * Encode the key buckets and returns the updated shared bytes.
-     *
      * @return the updated shared bytes
      */
     byte[][] encodeAfterPutBatch() {
@@ -234,8 +223,6 @@ public class KeyBucketsInOneWalGroup {
     boolean isSplit = false;
 
     /**
-     * Puts a list of PersistValueMeta objects into the target bucket.
-     *
      * @param pvmListThisBucket the list of PersistValueMeta objects
      * @param bucketIndex       the index of the bucket
      */
@@ -378,8 +365,6 @@ public class KeyBucketsInOneWalGroup {
     }
 
     /**
-     * Puts a list of PersistValueMeta objects.
-     *
      * @param pvmList the list of PersistValueMeta objects
      */
     void putAllPvmList(@NotNull ArrayList<PersistValueMeta> pvmList) {
@@ -394,8 +379,6 @@ public class KeyBucketsInOneWalGroup {
     }
 
     /**
-     * Puts a list of Wal.V objects.
-     *
      * @param shortValueList the list of Wal.V objects
      */
     void putAll(@NotNull Collection<Wal.V> shortValueList) {
@@ -407,8 +390,6 @@ public class KeyBucketsInOneWalGroup {
     }
 
     /**
-     * Transfer Wal.V to PersistValueMeta
-     *
      * @param v the Wal.V object
      * @return the PersistValueMeta object
      */

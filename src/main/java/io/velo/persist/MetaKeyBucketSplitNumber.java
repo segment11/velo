@@ -15,9 +15,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
- * Manages the split numbers for key buckets within a specific slot.
- * This class provides in-memory caching and file storage for the split numbers, depending on the configuration.
- * It allows retrieval and update of split numbers for individual buckets or batches of buckets.
+ * Manages split numbers for key buckets within a specific slot.
  */
 public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     private static final String META_KEY_BUCKET_SPLIT_NUMBER_FILE = "meta_key_bucket_split_number.dat";
@@ -32,12 +30,9 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     private static final Logger log = LoggerFactory.getLogger(MetaKeyBucketSplitNumber.class);
 
     /**
-     * Constructs a new instance of MetaKeyBucketSplitNumber.
-     * Initializes the in-memory cache and file storage for the split numbers based on the provided slot and slot directory.
-     *
-     * @param slot    the slot index
-     * @param slotDir the directory of the slot
-     * @throws IOException If an I/O error occurs during file operations.
+     * @param slot slot index
+     * @param slotDir directory of the slot
+     * @throws IOException If an I/O error occurs during file operations
      */
     public MetaKeyBucketSplitNumber(short slot, @NotNull File slotDir) throws IOException {
         this.allCapacity = ConfForSlot.global.confBucket.bucketsPerSlot;
@@ -75,8 +70,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Estimates the size of the in-memory cached bytes and appends it to the provided StringBuilder.
-     *
      * @param sb the StringBuilder to append the estimate to
      * @return the estimated size in bytes
      */
@@ -87,10 +80,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Sets the split number for a specific bucket index.
-     * If operating in pure memory mode, it directly updates the in-memory cache.
-     * Otherwise, it writes the split number to the file and updates the in-memory cache.
-     *
      * @param bucketIndex the index of the bucket
      * @param splitNumber the split number to set
      */
@@ -106,10 +95,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Sets the split numbers for a batch of buckets starting from a specific index.
-     * If operating in pure memory mode, it directly updates the in-memory cache.
-     * Otherwise, it writes the split numbers to the file and updates the in-memory cache.
-     *
      * @param beginBucketIndex the starting index of the batch
      * @param splitNumberArray the array of split numbers to set
      */
@@ -124,10 +109,8 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Retrieves the split numbers for a batch of buckets starting from a specific index.
-     *
      * @param beginBucketIndex the starting index of the batch
-     * @param bucketCount      the number of buckets in the batch
+     * @param bucketCount the number of buckets in the batch
      * @return the array of split numbers for the batch
      */
     byte[] getBatch(int beginBucketIndex, int bucketCount) {
@@ -137,8 +120,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Retrieves the split number for a specific bucket index.
-     *
      * @param bucketIndex the index of the bucket
      * @return the split number for the specified bucket
      */
@@ -147,8 +128,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
     }
 
     /**
-     * Finds the maximum split number among all buckets.
-     *
      * @return the maximum split number
      */
     byte maxSplitNumber() {
@@ -162,11 +141,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
         return max;
     }
 
-    /**
-     * Clears all split numbers, setting them to the initial split number.
-     * If operating in pure memory mode, it directly updates the in-memory cache.
-     * Otherwise, it writes the initial split numbers to the file and updates the in-memory cache.
-     */
     void clear() {
         try {
             var tmpBytes = new byte[allCapacity];
@@ -179,11 +153,6 @@ public class MetaKeyBucketSplitNumber implements InMemoryEstimate, NeedCleanUp {
         }
     }
 
-    /**
-     * Cleans up the resources used by this instance.
-     * If operating in pure memory mode, no action is taken.
-     * Otherwise, it closes the RandomAccessFile.
-     */
     @Override
     public void cleanUp() {
         try {

@@ -48,15 +48,6 @@ import static io.velo.persist.FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE;
 import static io.velo.persist.SegmentBatch2.SEGMENT_HEADER_LENGTH;
 
 public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp, HandlerWhenCvExpiredOrDeleted {
-    /**
-     * Constructor for unit testing only, with specified slot, directory, key loader, and write-ahead log (WAL).
-     *
-     * @param slot      the slot index
-     * @param slotDir   the directory of the slot
-     * @param keyLoader the key loader
-     * @param wal       the write-ahead log
-     * @throws IOException if an I/O error occurs
-     */
     @TestOnly
     public OneSlot(short slot, File slotDir, KeyLoader keyLoader, Wal wal) throws IOException {
         this.slot = slot;
@@ -85,24 +76,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.bigKeyTopK = null;
     }
 
-    /**
-     * Constructor for unit testing only, with specified slot.
-     * only for local persist one slot array
-     *
-     * @param slot the slot index
-     */
     @TestOnly
     public OneSlot(short slot) {
         this(slot, null);
     }
 
-    /**
-     * Constructor for async execution or calls, requiring an event loop.
-     * only for async run/call
-     *
-     * @param slot      the slot index
-     * @param eventloop the event loop
-     */
     @TestOnly
     OneSlot(short slot, Eventloop eventloop) {
         this.slot = slot;
@@ -131,16 +109,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.slotWorkerEventloop = eventloop;
     }
 
-    /**
-     * Main constructor for OneSlot, initializes all necessary components and configurations.
-     *
-     * @param slot          the slot index
-     * @param slotNumber    the slot number
-     * @param snowFlake     the SnowFlake ID generator
-     * @param persistDir    the directory for persistent storage
-     * @param persistConfig the persistent configuration
-     * @throws IOException if an I/O error occurs
-     */
     public OneSlot(short slot, short slotNumber,
                    @NotNull SnowFlake snowFlake,
                    @NotNull File persistDir,
@@ -232,12 +200,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.initTasks();
     }
 
-    /**
-     * Estimates the memory usage of OneSlot and its components.
-     *
-     * @param sb the StringBuilder to append the estimation details
-     * @return the total estimated memory usage in bytes
-     */
     @Override
     public long estimate(@NotNull StringBuilder sb) {
         long size = 0;
@@ -255,11 +217,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return size;
     }
 
-    /**
-     * Initializes the Least Recently Used (LRU) cache for the OneSlot.
-     *
-     * @param doRemoveForStats whether to remove statistics for LRU preparation
-     */
     public void initLRU(boolean doRemoveForStats) {
         int maxSizeForAllWalGroups = ConfForSlot.global.lruKeyAndCompressedValueEncoded.maxSize;
         var maxSizeForEachWalGroup = maxSizeForAllWalGroups / walGroupNumber;
@@ -287,11 +244,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
 
-    /**
-     * Returns the string representation of OneSlot.
-     *
-     * @return the string representation
-     */
     @Override
     public String toString() {
         return "OneSlot{" +
@@ -305,11 +257,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private final long masterUuid;
 
-    /**
-     * Returns the unique master UUID of the OneSlot.
-     *
-     * @return the master UUID
-     */
     public long getMasterUuid() {
         return masterUuid;
     }
@@ -321,11 +268,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return replPairs;
     }
 
-    /**
-     * Checks if the OneSlot is operating as a slave in any replication pairs.
-     *
-     * @return true if operating as a slave, false otherwise
-     */
     public boolean isAsSlave() {
         boolean isAsSlave = false;
         for (var replPair : replPairs) {
@@ -343,11 +285,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return isAsSlave;
     }
 
-    /**
-     * Returns the list of replication pairs where OneSlot is the master.
-     *
-     * @return the list of replication pairs
-     */
     public @NotNull ArrayList<ReplPair> getSlaveReplPairListSelfAsMaster() {
         ArrayList<ReplPair> list = new ArrayList<>();
         for (var replPair : replPairs) {
@@ -365,11 +302,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     final LinkedList<ReplPair> delayNeedCloseReplPairs = new LinkedList<>();
 
-    /**
-     * Adds a replication pair to the delay close list.
-     *
-     * @param replPair the replication pair to add
-     */
     public void addDelayNeedCloseReplPair(@NotNull ReplPair replPair) {
         replPair.setPutToDelayListToRemoveTimeMillis(System.currentTimeMillis());
         delayNeedCloseReplPairs.add(replPair);
@@ -378,24 +310,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @TestOnly
     private boolean doMockWhenCreateReplPairAsSlave = false;
 
-    /**
-     * Sets the mock flag for creating a replication pair as a slave.
-     *
-     * @param doMockWhenCreateReplPairAsSlave the mock flag
-     */
     public void setDoMockWhenCreateReplPairAsSlave(boolean doMockWhenCreateReplPairAsSlave) {
         this.doMockWhenCreateReplPairAsSlave = doMockWhenCreateReplPairAsSlave;
     }
 
 
-    /**
-     * Creates a replication pair as a slave.
-     * todo, both master - master, need change equal and init as master or slave
-     *
-     * @param host the host of the slave
-     * @param port the port of the slave
-     * @return the created replication pair
-     */
     public ReplPair createReplPairAsSlave(@NotNull String host, int port) {
         var replPair = new ReplPair(slot, false, host, port);
         replPair.setSlaveUuid(masterUuid);
@@ -414,11 +333,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return replPair;
     }
 
-    /**
-     * Removes all replication pairs where OneSlot is the slave.
-     *
-     * @return true if a replication pair was removed, false otherwise
-     */
     public boolean removeReplPairAsSlave() {
         boolean isSelfSlave = false;
         for (var replPair : replPairs) {
@@ -439,32 +353,16 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return isSelfSlave;
     }
 
-    /**
-     * Retrieves a replication pair where OneSlot is the master by slave UUID.
-     *
-     * @param slaveUuid the slave UUID
-     * @return the replication pair, or null if not found
-     */
     public @Nullable ReplPair getReplPairAsMaster(long slaveUuid) {
         var list = getReplPairAsMasterList();
         return list.stream().filter(one -> one.getSlaveUuid() == slaveUuid).findFirst().orElse(null);
     }
 
-    /**
-     * Retrieves the first replication pair where OneSlot is the master.
-     *
-     * @return the first replication pair, or null if not found
-     */
     public @Nullable ReplPair getFirstReplPairAsMaster() {
         var list = getReplPairAsMasterList();
         return list.isEmpty() ? null : list.getFirst();
     }
 
-    /**
-     * Retrieves all replication pairs where OneSlot is the master.
-     *
-     * @return the list of replication pairs
-     */
     public @NotNull ArrayList<ReplPair> getReplPairAsMasterList() {
         ArrayList<ReplPair> list = new ArrayList<>();
         for (var replPair : replPairs) {
@@ -481,12 +379,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return list;
     }
 
-    /**
-     * Retrieves a replication pair where OneSlot is the slave by slave UUID.
-     *
-     * @param slaveUuid the slave UUID
-     * @return the replication pair, or null if not found
-     */
     public @Nullable ReplPair getReplPairAsSlave(long slaveUuid) {
         for (var replPair : replPairs) {
             if (replPair.isSendBye()) {
@@ -506,23 +398,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return null;
     }
 
-    /**
-     * Retrieves the only replication pair where OneSlot is the slave.
-     *
-     * @return the replication pair, or null if not found
-     */
     public @Nullable ReplPair getOnlyOneReplPairAsSlave() {
         return getReplPairAsSlave(masterUuid);
     }
 
-    /**
-     * Creates a replication pair as a master if it does not already exist.
-     *
-     * @param slaveUuid the slave UUID
-     * @param host      the host of the master
-     * @param port      the port of the master
-     * @return the created or existing replication pair
-     */
     public @NotNull ReplPair createIfNotExistReplPairAsMaster(long slaveUuid, String host, int port) {
         var replPair = new ReplPair(slot, true, host, port);
         replPair.setSlaveUuid(slaveUuid);
@@ -544,34 +423,18 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return replPair;
     }
 
-    /**
-     * Sets the event loop for slot operations.
-     *
-     * @param slotWorkerEventloop the event loop
-     */
     public void setSlotWorkerEventloop(Eventloop slotWorkerEventloop) {
         this.slotWorkerEventloop = slotWorkerEventloop;
     }
 
     private Eventloop slotWorkerEventloop;
 
-    /**
-     * Sets the request handler for processing requests.
-     *
-     * @param requestHandler the request handler
-     */
     public void setRequestHandler(@NotNull RequestHandler requestHandler) {
         this.requestHandler = requestHandler;
     }
 
     private RequestHandler requestHandler;
 
-    /**
-     * Asynchronously runs a given task.
-     *
-     * @param runnableEx the task to run
-     * @return the promise representing the asynchronous computation
-     */
     public Promise<Void> asyncRun(@NotNull RunnableEx runnableEx) {
         var threadId = Thread.currentThread().threadId();
         if (threadId == threadIdProtectedForSafe) {
@@ -606,11 +469,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return promise;
     }
 
-    /**
-     * Asynchronously executes a given task.
-     *
-     * @param runnable the task to run
-     */
     public void asyncExecute(@NotNull Runnable runnable) {
         var threadId = Thread.currentThread().threadId();
         if (threadId == threadIdProtectedForSafe) {
@@ -625,13 +483,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         slotWorkerEventloop.execute(runnable);
     }
 
-    /**
-     * Asynchronously calls a supplier and returns the result.
-     *
-     * @param supplierEx the supplier to call
-     * @param <T>        the return type of the supplier
-     * @return the promise representing the result of the supplier
-     */
     public <T> Promise<T> asyncCall(@NotNull SupplierEx<T> supplierEx) {
         var threadId = Thread.currentThread().threadId();
         if (threadId == threadIdProtectedForSafe) {
@@ -657,12 +508,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return promise;
     }
 
-    /**
-     * Delays the execution of a task by a specified number of milliseconds.
-     *
-     * @param millis   the delay in milliseconds
-     * @param runnable the task to run
-     */
     public void delayRun(int millis, @NotNull Runnable runnable) {
         // for unit test
         if (slotWorkerEventloop == null) {
@@ -674,13 +519,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     final ArrayList<HandlerWhenCvExpiredOrDeleted> handlersRegisteredList = new ArrayList<>();
 
-    /**
-     * Handles the event when a compressed value (CV) expires or is deleted.
-     *
-     * @param key           the key associated with the CV
-     * @param shortStringCv the compressed value for short strings, nullable
-     * @param pvm           the metadata of the persisted value, nullable
-     */
     @Override
     public void handleWhenCvExpiredOrDeleted(@NotNull String key, @Nullable CompressedValue shortStringCv, @Nullable PersistValueMeta pvm) {
         for (var handler : handlersRegisteredList) {
@@ -692,11 +530,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     private final String slotStr;
     private final short slotNumber;
 
-    /**
-     * Returns the slot index.
-     *
-     * @return the slot index
-     */
     public short slot() {
         return slot;
     }
@@ -705,53 +538,28 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     final SnowFlake snowFlake;
 
-    /**
-     * Returns the SnowFlake ID generator used for generating unique identifiers.
-     *
-     * @return the SnowFlake ID generator
-     */
     public SnowFlake getSnowFlake() {
         return snowFlake;
     }
 
     private final File slotDir;
 
-    /**
-     * Returns the slot directory.
-     *
-     * @return the slot directory
-     */
     public File getSlotDir() {
         return slotDir;
     }
 
     private final BigStringFiles bigStringFiles;
 
-    /**
-     * Returns the BigStringFiles component used for handling large strings.
-     *
-     * @return the BigStringFiles component
-     */
     public BigStringFiles getBigStringFiles() {
         return bigStringFiles;
     }
 
-    /**
-     * Returns the directory for storing big strings.
-     *
-     * @return the big string directory
-     */
     public File getBigStringDir() {
         return bigStringFiles.bigStringDir;
     }
 
     private final Map<Integer, LRUMap<String, byte[]>> kvByWalGroupIndexLRU = new HashMap<>();
 
-    /**
-     * Returns the total count of key-value entries in the LRU cache for all WAL groups.
-     *
-     * @return the total count of key-value entries
-     */
     public int kvByWalGroupIndexLRUCountTotal() {
         int n = 0;
         for (var lru : kvByWalGroupIndexLRU.values()) {
@@ -760,12 +568,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return n;
     }
 
-    /**
-     * Estimates the total in-memory size of the LRU cache.
-     * perf bad, just for test or debug
-     *
-     * @return the total in-memory size in bytes
-     */
     public long inMemorySizeOfLRU() {
         long size = 0;
         for (var lru : kvByWalGroupIndexLRU.values()) {
@@ -777,12 +579,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     int lruClearedCount = 0;
 
-    /**
-     * Returns a random key from the LRU cache of a specified WAL group.
-     *
-     * @param walGroupIndex the WAL group index
-     * @return a random key, or null if the LRU cache is empty
-     */
     public String randomKeyInLRU(int walGroupIndex) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         if (lru == null || lru.isEmpty()) {
@@ -801,12 +597,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return null;
     }
 
-    /**
-     * Clears the key-value entries in the LRU cache of a specified WAL group.
-     *
-     * @param walGroupIndex the WAL group index
-     * @return the count of cleared key-value entries
-     */
     int clearKvInTargetWalGroupIndexLRU(int walGroupIndex) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
         if (lru == null) {
@@ -824,13 +614,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return n;
     }
 
-    /**
-     * Puts a key-value entry into the LRU cache of a specified WAL group.
-     *
-     * @param walGroupIndex the WAL group index
-     * @param key           the key
-     * @param cvEncoded     the compressed value as a byte array
-     */
     @TestOnly
     public void putKvInTargetWalGroupIndexLRU(int walGroupIndex, @NotNull String key, byte[] cvEncoded) {
         var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
@@ -855,23 +638,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private final DynConfig dynConfig;
 
-    /**
-     * Returns the DynConfig component used for dynamic configuration.
-     *
-     * @return the DynConfig component
-     */
     public DynConfig getDynConfig() {
         return dynConfig;
     }
 
-    /**
-     * Updates a configuration key with a given value string.
-     *
-     * @param key         the configuration key
-     * @param valueString the value string
-     * @return true if the update was successful
-     * @throws IOException if an I/O error occurs
-     */
     public boolean updateDynConfig(@NotNull String key, @NotNull String valueString) throws IOException {
         if (key.equals("testKey")) {
             dynConfig.setTestKey(Integer.parseInt(valueString));
@@ -881,40 +651,18 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return true;
     }
 
-    /**
-     * Checks if OneSlot is in read-only mode.
-     *
-     * @return true if in read-only mode, false otherwise
-     */
     public boolean isReadonly() {
         return dynConfig.isReadonly();
     }
 
-    /**
-     * Sets the read-only mode of OneSlot.
-     *
-     * @param readonly the read-only mode
-     * @throws IOException if an I/O error occurs
-     */
     public void setReadonly(boolean readonly) throws IOException {
         dynConfig.setReadonly(readonly);
     }
 
-    /**
-     * Checks if OneSlot can read.
-     *
-     * @return true if it can read, false otherwise
-     */
     public boolean isCanRead() {
         return dynConfig.isCanRead();
     }
 
-    /**
-     * Sets the read capability of OneSlot.
-     *
-     * @param canRead the read capability
-     * @throws IOException if an I/O error occurs
-     */
     public void setCanRead(boolean canRead) throws IOException {
         dynConfig.setCanRead(canRead);
     }
@@ -926,11 +674,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     private long walWriteIndex;
     private long walShortValueWriteIndex;
 
-    /**
-     * Reads WAL data from files asynchronously.
-     *
-     * @return the promise representing the asynchronous computation
-     */
     CompletableFuture<Boolean> walLazyReadFromFile() {
         var waitF = new CompletableFuture<Boolean>();
         // just run once
@@ -952,23 +695,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return waitF;
     }
 
-    /**
-     * Retrieves the WAL for a specified bucket index.
-     *
-     * @param bucketIndex the bucket index
-     * @return the WAL
-     */
     public Wal getWalByBucketIndex(int bucketIndex) {
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         return walArray[walGroupIndex];
     }
 
-    /**
-     * Retrieves the WAL for a specified WAL group index.
-     *
-     * @param walGroupIndex the WAL group index
-     * @return the WAL
-     */
     public Wal getWalByGroupIndex(int walGroupIndex) {
         return walArray[walGroupIndex];
     }
@@ -978,20 +709,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     final KeyLoader keyLoader;
 
-    /**
-     * Returns the key loader used for managing keys.
-     *
-     * @return the key loader
-     */
     public KeyLoader getKeyLoader() {
         return keyLoader;
     }
 
-    /**
-     * Returns the total count of keys stored in WALs.
-     *
-     * @return the total count of keys
-     */
     public long getWalKeyCount() {
         long r = 0;
         for (var wal : walArray) {
@@ -1000,11 +721,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return r;
     }
 
-    /**
-     * Returns the total count of keys stored in OneSlot.
-     *
-     * @return the total count of keys
-     */
     public long getAllKeyCount() {
         // for unit test
         if (keyLoader == null) {
@@ -1015,22 +731,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     Chunk chunk;
 
-    /**
-     * Returns the Chunk component used for managing segments.
-     *
-     * @return the Chunk component
-     */
     public Chunk getChunk() {
         return chunk;
     }
 
     MetaChunkSegmentFlagSeq metaChunkSegmentFlagSeq;
 
-    /**
-     * Returns the MetaChunkSegmentFlagSeq component used for managing segment flags.
-     *
-     * @return the MetaChunkSegmentFlagSeq component
-     */
     public MetaChunkSegmentFlagSeq getMetaChunkSegmentFlagSeq() {
         return metaChunkSegmentFlagSeq;
     }
@@ -1038,40 +744,19 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     MetaChunkSegmentIndex metaChunkSegmentIndex;
 
-    /**
-     * Returns the MetaChunkSegmentIndex component used for managing segment indices.
-     *
-     * @return the MetaChunkSegmentIndex component
-     */
     public MetaChunkSegmentIndex getMetaChunkSegmentIndex() {
         return metaChunkSegmentIndex;
     }
 
-    /**
-     * Returns the write segment index as an integer.
-     *
-     * @return the write segment index
-     */
     @VisibleForTesting
     public int getChunkWriteSegmentIndexInt() {
         return metaChunkSegmentIndex.get();
     }
 
-    /**
-     * Sets the write segment index as an integer.
-     *
-     * @param segmentIndex the write segment index
-     */
     public void setMetaChunkSegmentIndexInt(int segmentIndex) {
         setMetaChunkSegmentIndexInt(segmentIndex, false);
     }
 
-    /**
-     * Sets the write segment index as an integer and optionally updates the chunk segment index.
-     *
-     * @param segmentIndex            the write segment index
-     * @param updateChunkSegmentIndex whether to update the chunk segment index
-     */
     public void setMetaChunkSegmentIndexInt(int segmentIndex, boolean updateChunkSegmentIndex) {
         if (segmentIndex < 0 || segmentIndex > chunk.maxSegmentIndex) {
             throw new IllegalArgumentException("Segment index out of bound, s=" + slot + ", i=" + segmentIndex);
@@ -1083,20 +768,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    /**
-     * Updates the chunk segment index from the metadata.
-     */
     public void updateChunkSegmentIndexFromMeta() {
         chunk.setSegmentIndex(metaChunkSegmentIndex.get());
     }
 
     private Binlog binlog;
 
-    /**
-     * Returns the Binlog component used for logging binary data.
-     *
-     * @return the Binlog component
-     */
     public Binlog getBinlog() {
         return binlog;
     }
@@ -1106,11 +783,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         this.binlog = binlog;
     }
 
-    /**
-     * Appends content to the binlog.
-     *
-     * @param content the binlog content
-     */
     public void appendBinlog(@NotNull BinlogContent content) {
         if (binlog != null) {
             try {
@@ -1123,20 +795,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private BigKeyTopK bigKeyTopK;
 
-    /**
-     * Returns the BigKeyTopK component used for monitoring big keys.
-     *
-     * @return the BigKeyTopK component
-     */
     public BigKeyTopK getBigKeyTopK() {
         return bigKeyTopK;
     }
 
-    /**
-     * Initializes the BigKeyTopK component with the specified maximum size.
-     *
-     * @param k the maximum size
-     */
     void initBigKeyTopK(int k) {
         // may be dyn config init already init big key top k
         if (bigKeyTopK == null) {
@@ -1144,12 +806,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    /**
-     * Monitors a big key by its value length.
-     *
-     * @param key              the key
-     * @param valueBytesLength the length of the value
-     */
     public void monitorBigKeyByValueLength(String key, int valueBytesLength) {
         if (valueBytesLength >= BIG_KEY_LENGTH_CHECK) {
             bigKeyTopK.add(key, valueBytesLength);
@@ -1158,20 +814,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private final TaskChain taskChain = new TaskChain();
 
-    /**
-     * Returns the task chain used for managing tasks.
-     *
-     * @return the task chain
-     */
     public TaskChain getTaskChain() {
         return taskChain;
     }
 
-    /**
-     * Executes scheduled tasks in the task chain.
-     *
-     * @param loopCount the loop count
-     */
     public void doTask(int loopCount) {
         if (MultiWorkerServer.isStopping) {
             return;
@@ -1247,9 +893,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    /**
-     * Delete big string files those are overwritten.
-     */
     int intervalDeleteOverwriteBigStringFiles(int targetBucketIndex) {
         if (!delayToDeleteBigStringFileIds.isEmpty()) {
             var oneId = delayToDeleteBigStringFileIds.removeFirst();
@@ -1303,11 +946,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return count;
     }
 
-    /**
-     * Truncates a chunk file at the specified file descriptor index.
-     *
-     * @param fdIndex the file descriptor index
-     */
     void truncateChunkFile(int fdIndex) {
         // when do task interval unit test
         if (chunk == null) {
@@ -1323,9 +961,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         metaChunkSegmentFlagSeq.canTruncateFdIndex = -1;
     }
 
-    /**
-     * Initializes the tasks to be executed in the task chain.
-     */
     private void initTasks() {
         taskChain.add(new ITask() {
             private long loopCount = 0;
@@ -1411,9 +1046,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         });
     }
 
-    /**
-     * Adds a debug task to the task chain for logging purposes.
-     */
     void debugMode() {
         taskChain.add(new ITask() {
             private long loopCount = 0;
@@ -1446,10 +1078,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         });
     }
 
-    /**
-     * Checks if the current thread ID matches the protected thread ID for safe operations.
-     * All operations in this slot is handle by the same thread.
-     */
     private void checkCurrentThreadId() {
         var threadId = Thread.currentThread().threadId();
         if (threadId != threadIdProtectedForSafe) {
@@ -1457,14 +1085,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    /**
-     * Retrieves the expiration time for a key stored in OneSlot.
-     *
-     * @param key         the key
-     * @param bucketIndex the bucket index
-     * @param keyHash     the key hash
-     * @return the expiration time, or null if the key does not exist or is expired
-     */
     public Long getExpireAt(String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
@@ -1501,11 +1121,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return keyLoader.getExpireAt(bucketIndex, key, keyHash);
     }
 
-    /**
-     * Warms up the OneSlot key buckets by preloading data asynchronously.
-     *
-     * @return the promise representing the number of keys preloaded
-     */
     public CompletableFuture<Integer> warmUp() {
         var waitF = new CompletableFuture<Integer>();
         // just run once
@@ -1527,14 +1142,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public record BufOrCompressedValue(@Nullable ByteBuf buf, @Nullable CompressedValue cv) {
     }
 
-    /**
-     * Retrieves a key-value entry from OneSlot.
-     *
-     * @param key         the key
-     * @param bucketIndex the bucket index
-     * @param keyHash     the key hash
-     * @return the BufOrCompressedValue record containing the key-value entry
-     */
     public BufOrCompressedValue get(String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
@@ -1626,12 +1233,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return new BufOrCompressedValue(null, cv);
     }
 
-    /**
-     * Retrieves only the key bytes from a segment in OneSlot.
-     *
-     * @param pvm the metadata of the persisted value
-     * @return the key bytes as a byte array
-     */
     byte[] getOnlyKeyBytesFromSegment(PersistValueMeta pvm) {
         var segmentBytes = getSegmentBytesBySegmentIndex(pvm.segmentIndex);
         if (segmentBytes == null) {
@@ -1659,14 +1260,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return keyBytes;
     }
 
-    /**
-     * Retrieves the value for a key from the write-ahead log (WAL).
-     *
-     * @param key                the key
-     * @param bucketIndex        the bucket index
-     * @param isExpiredFlagArray an array to store whether the key is expired or deleted
-     * @return the value as a byte array
-     */
     byte[] getFromWal(@NotNull String key, int bucketIndex, boolean[] isExpiredFlagArray) {
         checkCurrentThreadId();
 
@@ -1683,24 +1276,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return v.cvEncoded();
     }
 
-    /**
-     * Retrieves the bytes of a segment by its segment index.
-     *
-     * @param segmentIndex the segment index
-     * @return the segment bytes as a byte array
-     */
     private byte[] getSegmentBytesBySegmentIndex(int segmentIndex) {
         return chunk.readOneSegment(segmentIndex);
     }
 
-    /**
-     * Checks if a key exists in OneSlot.
-     *
-     * @param key         the key
-     * @param bucketIndex the bucket index
-     * @param keyHash     the key hash
-     * @return true if the key exists and is not expired, false otherwise
-     */
     public boolean exists(@NotNull String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
@@ -1721,14 +1300,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return expireAtAndSeq != null && !expireAtAndSeq.isExpired();
     }
 
-    /**
-     * Removes a key from OneSlot.
-     *
-     * @param key         the key
-     * @param bucketIndex the bucket index
-     * @param keyHash     the key hash
-     * @return true if the key was removed, false otherwise
-     */
     public boolean remove(@NotNull String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
@@ -1740,13 +1311,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    /**
-     * Removes a key from OneSlot with a delay.
-     *
-     * @param key         the key
-     * @param bucketIndex the bucket index
-     * @param keyHash     the key hash
-     */
     public void removeDelay(@NotNull String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
@@ -1779,11 +1343,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     long putCountTotal = 0;
 
-    /**
-     * Gets the average TTL (Time To Live) in seconds.
-     *
-     * @return the average TTL in seconds
-     */
     public double getAvgTtlInSecond() {
         if (putCountTotal == 0) {
             return 0;
@@ -1792,38 +1351,14 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return (double) ttlTotalInSecond / putCountTotal;
     }
 
-    /**
-     * Inserts a key-value entry into OneSlot.
-     *
-     * @param key         the key
-     * @param bucketIndex the bucket index
-     * @param cv          the compressed value
-     */
     public void put(@NotNull String key, int bucketIndex, @NotNull CompressedValue cv) {
         put(key, bucketIndex, cv, false, false);
     }
 
-    /**
-     * Inserts a key-value entry into OneSlot.
-     *
-     * @param key            the key
-     * @param bucketIndex    the bucket index
-     * @param cv             the compressed value
-     * @param ignoreReadonly whether to ignore readonly
-     */
     public void put(@NotNull String key, int bucketIndex, @NotNull CompressedValue cv, boolean ignoreReadonly) {
         put(key, bucketIndex, cv, false, ignoreReadonly);
     }
 
-    /**
-     * Inserts a key-value entry into OneSlot.
-     *
-     * @param key            the key
-     * @param bucketIndex    the bucket index
-     * @param cv             the compressed value
-     * @param isFromMerge    is from merge
-     * @param ignoreReadonly whether to ignore readonly
-     */
     public void put(@NotNull String key, int bucketIndex, @NotNull CompressedValue cv, boolean isFromMerge, boolean ignoreReadonly) {
         checkCurrentThreadId();
 
@@ -1974,13 +1509,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private long lastPersistTimeMs = 0L;
 
-    /**
-     * Do persist after Wal do put, need persist a batch of key values.
-     *
-     * @param walGroupIndex the wal group index
-     * @param key           the key
-     * @param putResult     Wal put result
-     */
     public void doPersist(int walGroupIndex, @NotNull String key, @NotNull Wal.PutResult putResult) {
         var targetWal = walArray[walGroupIndex];
         putValueToWal(putResult.isValueShort(), targetWal);
@@ -2000,18 +1528,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    /**
-     * Reset write position after bulk load.
-     */
     public void resetWritePositionAfterBulkLoad() {
         for (var wal : walArray) {
             wal.resetWritePositionAfterBulkLoad();
         }
     }
 
-    /**
-     * Flush OneSlot, clear all data, including WAL, chunk segments, key buckets, big strings, metadata.
-     */
     @SlaveNeedReplay
     @SlaveReplay
     public void flush() {
@@ -2083,11 +1605,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         appendBinlog(xFlush);
     }
 
-    /**
-     * Initialize the file descriptors.
-     *
-     * @throws IOException if an I/O error occurs
-     */
     void initFds() throws IOException {
         this.keyLoader.initFds();
 
@@ -2108,13 +1625,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         updateChunkSegmentIndexFromMeta();
     }
 
-    /**
-     * Check if there is valid data in the specified segment range.
-     *
-     * @param beginSegmentIndex the begin segment index
-     * @param segmentCount      the segment count
-     * @return true if there is valid data in the specified segment range, false otherwise
-     */
     public boolean hasData(int beginSegmentIndex, int segmentCount) {
         final boolean[] hasDataArray = {false};
         metaChunkSegmentFlagSeq.iterateRange(beginSegmentIndex, segmentCount, (segmentIndex, flagByte, seq, walGroupIndex) -> {
@@ -2132,13 +1642,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return hasDataArray[0];
     }
 
-    /**
-     * Read chunk segments from master exists.
-     *
-     * @param beginSegmentIndex the begin segment index
-     * @param segmentCount      the segment count
-     * @return segments bytes
-     */
     byte[] readForMerge(int beginSegmentIndex, int segmentCount) {
         checkCurrentThreadId();
 
@@ -2149,12 +1652,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return chunk.readForMerge(beginSegmentIndex, segmentCount);
     }
 
-    /**
-     * Read chunk segments for replication.
-     *
-     * @param beginSegmentIndex the begin segment index
-     * @return segments bytes
-     */
     public byte[] readForRepl(int beginSegmentIndex) {
         checkCurrentThreadId();
 
@@ -2165,9 +1662,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return chunk.readForRepl(beginSegmentIndex);
     }
 
-    /**
-     * Clean up the OneSlot, when server stops.
-     */
     @Override
     public void cleanUp() {
         checkCurrentThreadId();
@@ -2220,13 +1714,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    /**
-     * Before persist wal, read some segment in same wal group and merge immediately.
-     *
-     * @param segmentIndexList                     the segment index list read
-     * @param cvList                               the cv list read
-     * @param updatedFlagPersistedSegmentIndexList the segment index list need to update flag to merged and persisted
-     */
     @VisibleForTesting
     record BeforePersistWalExtFromMerge(@NotNull ArrayList<Integer> segmentIndexList,
                                         @NotNull ArrayList<SegmentBatch2.CvWithKeyAndSegmentOffset> cvList,
@@ -2237,13 +1724,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    /**
-     * Read some segments before persist wal.
-     * for performance, before persist wal, read some segment in same wal group and merge immediately
-     *
-     * @param walGroupIndex the wal group index
-     * @return a BeforePersistWalExtFromMerge object
-     */
     @VisibleForTesting
     BeforePersistWalExtFromMerge readSomeSegmentsBeforePersistWal(int walGroupIndex) {
         final int[] firstSegmentIndexWithReadSegmentCountArray = metaChunkSegmentFlagSeq.findThoseNeedToMerge(walGroupIndex);
@@ -2290,12 +1770,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     long extCvInvalidCountTotal = 0;
 
-    /**
-     * Put value to wal, after do persist, the latest Wal value is not persisted yet, need put it back
-     *
-     * @param isShortValue is short value
-     * @param targetWal    target wal
-     */
     void putValueToWal(boolean isShortValue, @NotNull Wal targetWal) {
         var walGroupIndex = targetWal.groupIndex;
         if (isShortValue) {
@@ -2374,88 +1848,40 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
-    /**
-     * Rebuild one WAL group's key-bucket index by scanning chunk segments.
-     *
-     * @param walGroupIndex the WAL group index
-     * @param mode          preview or apply
-     * @return rebuild stats
-     */
     public ChunkWalGroupRebuilder.RebuildResult rebuildKeyBucketsFromChunk(int walGroupIndex,
                                                                            ChunkWalGroupRebuilder.Mode mode) {
         return new ChunkWalGroupRebuilder(slot, this).rebuild(walGroupIndex, mode);
     }
 
-    /**
-     * check segment index is valid
-     *
-     * @param segmentIndex the target segment index
-     */
     private void checkSegmentIndex(int segmentIndex) {
         if (segmentIndex < 0 || segmentIndex > chunk.maxSegmentIndex) {
             throw new IllegalStateException("Segment index out of bound, s=" + slot + ", i=" + segmentIndex);
         }
     }
 
-    /**
-     * check begin segment index is valid
-     *
-     * @param beginSegmentIndex the begin segment index
-     * @param segmentCount      the segment count
-     */
     private void checkBeginSegmentIndex(int beginSegmentIndex, int segmentCount) {
         if (beginSegmentIndex < 0 || beginSegmentIndex + segmentCount - 1 > chunk.maxSegmentIndex) {
             throw new IllegalStateException("Begin segment index out of bound, s=" + slot + ", i=" + beginSegmentIndex + ", c=" + segmentCount);
         }
     }
 
-    /**
-     * Gets the merge flag for a segment.
-     *
-     * @param segmentIndex the segment index
-     * @return the segment flag with segment sequence number and wal group index
-     */
     @TestOnly
     SegmentFlag getSegmentMergeFlag(int segmentIndex) {
         checkSegmentIndex(segmentIndex);
         return metaChunkSegmentFlagSeq.getSegmentMergeFlag(segmentIndex);
     }
 
-    /**
-     * Update one segment merge flag.
-     *
-     * @param segmentIndex the segment index
-     * @param flagByte     the flag byte
-     * @param segmentSeq   the segment sequence number
-     */
     @TestOnly
     public void updateSegmentMergeFlag(int segmentIndex, byte flagByte, long segmentSeq) {
         var segmentFlag = getSegmentMergeFlag(segmentIndex);
         setSegmentMergeFlag(segmentIndex, flagByte, segmentSeq, segmentFlag.walGroupIndex());
     }
 
-    /**
-     * Set segment merge flag.
-     *
-     * @param segmentIndex  the segment index
-     * @param flagByte      the flag byte
-     * @param segmentSeq    the segment sequence number
-     * @param walGroupIndex the wal group index
-     */
     public void setSegmentMergeFlag(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex) {
         checkSegmentIndex(segmentIndex);
         metaChunkSegmentFlagSeq.setSegmentMergeFlag(segmentIndex, flagByte, segmentSeq, walGroupIndex);
     }
 
-    /**
-     * Set segment merge flag batch.
-     *
-     * @param beginSegmentIndex the begin segment index
-     * @param segmentCount      the segment count
-     * @param flagByte          the flag byte
-     * @param segmentSeqList    the segment sequence list
-     * @param walGroupIndex     the wal group index
-     */
     public void setSegmentMergeFlagBatch(int beginSegmentIndex,
                                          int segmentCount,
                                          byte flagByte,
@@ -2466,11 +1892,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 flagByte, segmentSeqList, walGroupIndex);
     }
 
-    /**
-     * Reset as master. Do this when master reset.
-     *
-     * @throws IOException if any IO exception occurs
-     */
     @MasterReset
     public void resetAsMaster() throws IOException {
         log.warn("Repl reset as master, slot={}", slot);
@@ -2501,13 +1922,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         log.warn("Repl reset readonly false and can read, slot={}", slot);
     }
 
-    /**
-     * Reset as slave. Do this when master reset.
-     *
-     * @param host master host
-     * @param port master port
-     * @throws IOException if any IO exception occurs
-     */
     @SlaveReset
     public void resetAsSlave(@NotNull String host, int port) throws IOException {
         // clear old as slave catch up binlog info
@@ -2547,18 +1961,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         globalGauge.register();
     }
 
-    /**
-     * Clear metrics collect for global metrics, when first slot changed
-     */
     void clearGlobalMetricsCollect() {
         globalGauge.clearRawGetterList();
     }
 
-    /**
-     * Initializes global metrics collection by registering a raw getter that provides
-     * various global metrics such as uptime, dictionary size, configuration parameters,
-     * memory preparation statistics, and more.
-     */
     void addGlobalMetricsCollect() {
         log.warn("Init global metrics collect, slot={}", slot);
         globalGauge.clearRawGetterList();
@@ -2640,13 +2046,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     // change dyn config or global config, todo
     private static final int BIG_KEY_LENGTH_CHECK = 2048;
 
-    /**
-     * Collects and returns slot-specific metrics in a map.
-     * These metrics include slot-specific statistics like sequence IDs, WAL key counts,
-     * key loader metrics, chunk metrics, binary log offsets, big key statistics, and LRU hit/miss ratios.
-     *
-     * @return a map of metric names to their respective values
-     */
     @Override
     public Map<String, Double> collect() {
         var map = new TreeMap<String, Double>();

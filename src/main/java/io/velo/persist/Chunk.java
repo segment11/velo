@@ -21,8 +21,7 @@ import java.util.*;
 import static io.velo.persist.FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE;
 
 /**
- * Represents a chunk, which is a collection of segments that store data.
- * Each chunk can have multiple file descriptors (FDs) to distribute data across.
+ * A collection of segments that store data, with multiple file descriptors.
  */
 public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedCleanUp {
     private final int segmentNumberPerFd;
@@ -31,17 +30,12 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     final int halfSegmentNumber;
 
     /**
-     * Get the maximum segment index within this chunk.
-     *
      * @return the maximum segment index
      */
     public int getMaxSegmentIndex() {
         return maxSegmentIndex;
     }
 
-    /**
-     * Enumerates types of segments within a chunk.
-     */
     enum SegmentType {
         NORMAL((byte) 0),
         TIGHT((byte) 1);
@@ -61,11 +55,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     // For better latency, segment length = 4096 decompress performance is better
     final int chunkSegmentLength;
 
-    /**
-     * Get a string representation of this chunk, including its slot, segment count, FD count, etc.
-     *
-     * @return the string representation of this chunk
-     */
     @Override
     public String toString() {
         return "Chunk{" +
@@ -105,11 +94,9 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     FdReadWrite[] fdReadWriteArray;
 
     /**
-     * Constructs a new chunk with the given slot, directory, and slot context.
-     *
      * @param slot    the slot index this chunk belongs to
      * @param slotDir the directory of the slot
-     * @param oneSlot the context for the slot, used for various data operations
+     * @param oneSlot the context for the slot
      */
     public Chunk(short slot, @NotNull File slotDir, @NullableOnlyTest OneSlot oneSlot) {
         var confChunk = ConfForSlot.global.confChunk;
@@ -135,12 +122,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         this.segmentBatch2 = new SegmentBatch2(oneSlot.snowFlake);
     }
 
-    /**
-     * Estimate the memory usage of this chunk and append the details to the provided StringBuilder.
-     *
-     * @param sb the StringBuilder to append the memory usage estimate
-     * @return the estimated memory usage in bytes
-     */
     @Override
     public long estimate(@NotNull StringBuilder sb) {
         long size = 0;
@@ -152,11 +133,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         return size;
     }
 
-    /**
-     * Initialize file descriptors for this chunk.
-     *
-     * @throws IOException if an I/O error occurs
-     */
     @VisibleForTesting
     void initFds() throws IOException {
         this.fdLengths = new long[fdPerChunk];
@@ -174,9 +150,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
     }
 
-    /**
-     * Clean up resources used by this chunk.
-     */
     @Override
     public void cleanUp() {
         if (fdReadWriteArray != null) {
@@ -187,12 +160,9 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     /**
-     * Read bytes from the chunk for a merge operation.
-     *
      * @param beginSegmentIndex the starting segment index for the read
      * @param segmentCount      the number of segments to read
      * @return the byte array containing the read segment data
-     * @throws IllegalArgumentException if the requested segment count is too large
      */
     byte[] readForMerge(int beginSegmentIndex, int segmentCount) {
         if (segmentCount > FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_FOR_MERGE) {
@@ -207,8 +177,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     /**
-     * Read bytes from the chunk for a replication operation.
-     *
      * @param beginSegmentIndex the starting segment index for the read
      * @return the byte array containing the read segment data
      */
@@ -221,8 +189,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     /**
-     * Read a single segment from the chunk.
-     *
      * @param targetSegmentIndex the segment index to read
      * @return the byte array containing the read segment data
      */
@@ -231,8 +197,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     /**
-     * Read a single segment from the chunk, with an option to refresh the LRU cache.
-     *
      * @param targetSegmentIndex the segment index to read
      * @param isRefreshLRUCache  whether to refresh the LRU cache
      * @return the byte array containing the read segment data
@@ -245,40 +209,22 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         return fdReadWrite.readOneInner(segmentIndexTargetFd, isRefreshLRUCache);
     }
 
-    // Begin with 0
     private int segmentIndex = 0;
 
-    /**
-     * Get the current segment index.
-     *
-     * @return the current segment index
-     */
     public int getSegmentIndex() {
         return segmentIndex;
     }
 
-    /**
-     * Set the current segment index.
-     *
-     * @param segmentIndex the new segment index
-     */
     public void setSegmentIndex(int segmentIndex) {
         this.segmentIndex = segmentIndex;
     }
 
-    /**
-     * Reset the chunk as if it was just flushed.
-     */
     @SlaveNeedReplay
     @SlaveReplay
     void resetAsFlush() {
         segmentIndex = 0;
     }
 
-    /**
-     * Truncates all chunk fd files and resets their lengths to zero.
-     * Called during flush to reclaim SSD space and reset chunk state.
-     */
     void truncateAll() {
         for (int i = 0; i < fdLengths.length; i++) {
             if (fdLengths[i] != 0L) {
@@ -288,19 +234,12 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
     }
 
-    /**
-     * Calculate the file descriptor index for the current segment index.
-     *
-     * @return the file descriptor index for the current segment index
-     */
     @VisibleForTesting
     int targetFdIndex() {
         return segmentIndex / segmentNumberPerFd;
     }
 
     /**
-     * Calculate the file descriptor index for a given target segment index.
-     *
      * @param targetSegmentIndex the target segment index
      * @return the file descriptor index for the target segment index
      */
@@ -308,19 +247,12 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         return targetSegmentIndex / segmentNumberPerFd;
     }
 
-    /**
-     * Calculate the segment index within the current file descriptor for the current segment index.
-     *
-     * @return the segment index within the current file descriptor
-     */
     @VisibleForTesting
     int targetSegmentIndexTargetFd() {
         return segmentIndex % segmentNumberPerFd;
     }
 
     /**
-     * Calculate the segment index within the current file descriptor for a given target segment index.
-     *
      * @param targetSegmentIndex the target segment index
      * @return the segment index within the current file descriptor
      */
@@ -336,15 +268,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         return flagByte == SEGMENT_FLAG_REUSABLE;
     }
 
-    /**
-     * Records a segment's flag, sequence, and wal group index.
-     */
     public record SegmentFlag(byte flagByte, long segmentSeq, int walGroupIndex) {
-        /**
-         * Get a string representation of this segment flag.
-         *
-         * @return the string representation of this segment flag
-         */
         @Override
         public @NotNull String toString() {
             return "SegmentFlag{" +
@@ -358,11 +282,9 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     int maxOncePersistSegmentSize;
 
     /**
-     * Persist data from a WAL group into this chunk.
-     *
      * @param walGroupIndex                the index of the WAL group being persisted
      * @param list                         the data to persist, in the form of a list of WAL values
-     * @param keyBucketsInOneWalGroupGiven an optional parameter for details about key buckets in the WAL group
+     * @param keyBucketsInOneWalGroupGiven optional parameter for details about key buckets in the WAL group
      */
     public void persist(int walGroupIndex,
                         @NotNull ArrayList<Wal.V> list,
@@ -498,11 +420,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     /**
-     * Moves the segment index to the next position based on the given segment count.
-     * <p>
-     * This method updates the current segment index by adding the provided segment count. If the new index exceeds the maximum allowed index,
-     * it wraps around to 0 or throws an exception if it exceeds the maximum segment index. It handles both single and multiple segment increments.
-     *
      * @param segmentCount the number of segments to move forward
      */
     @VisibleForTesting
@@ -534,12 +451,7 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     /**
-     * Finds the previous segment index while skipping half of the segment range.
-     * <p>
-     * This method calculates a new segment index to merge, considering whether it's a new append operation or not. It adjusts the index
-     * based on the half-segment boundary.
-     *
-     * @param isNewAppend    Whether this is a new append operation.
+     * @param isNewAppend    whether this is a new append operation
      * @param bySegmentIndex the current segment index
      * @return the adjusted segment index for merging
      */
@@ -558,11 +470,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
     }
 
     /**
-     * Writes segments to the chunk, handling both single and batch writes.
-     * <p>
-     * This method writes the provided bytes to the current segment index. It supports writing multiple segments at once and updates the
-     * file descriptor lengths accordingly.
-     *
      * @param bytes        the byte array containing the data to write
      * @param segmentCount the number of segments to write
      */
@@ -588,14 +495,6 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         }
     }
 
-    /**
-     * Collects metrics related to the chunk and returns them as a map.
-     * <p>
-     * This method gathers various metrics about the chunk, such as the current segment index, maximum segment index, and performance statistics.
-     * It also includes metrics from associated components like segment batches and file descriptor read-write objects.
-     *
-     * @return the map containing the collected metrics
-     */
     @Override
     public Map<String, Double> collect() {
         var map = new HashMap<String, Double>();

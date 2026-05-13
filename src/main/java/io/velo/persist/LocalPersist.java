@@ -26,9 +26,7 @@ import java.util.function.Function;
 import static io.activej.config.converter.ConfigConverters.ofBoolean;
 
 /**
- * LocalPersist manages the local storage and operations for the persistence layer.
- * It uses multiple slots to distribute the data and handles various operations like
- * initializing slots, reading from WAL (Write-Ahead Log), and cleaning up resources.
+ * Manages local storage and operations for the persistence layer.
  */
 public class LocalPersist implements NeedCleanUp {
     /**
@@ -61,8 +59,6 @@ public class LocalPersist implements NeedCleanUp {
     private static final LocalPersist instance = new LocalPersist();
 
     /**
-     * Retrieves the singleton instance of LocalPersist.
-     *
      * @return the singleton instance
      */
     public static LocalPersist getInstance() {
@@ -71,18 +67,12 @@ public class LocalPersist implements NeedCleanUp {
 
     private static final Logger log = LoggerFactory.getLogger(LocalPersist.class);
 
-    /**
-     * Private constructor to prevent instantiation from outside the class.
-     * Initializes the LibC library loader for C library.
-     */
     private LocalPersist() {
     }
 
     private OneSlot[] oneSlots;
 
     /**
-     * Retrieves all the slots.
-     *
      * @return the array of OneSlot instances
      */
     public OneSlot[] oneSlots() {
@@ -90,8 +80,6 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Retrieves a specific slot by its index.
-     *
      * @param slot the index of the slot to retrieve
      * @return the OneSlot instance at the specified index
      */
@@ -100,11 +88,9 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Performs an operation in all slots asynchronously.
-     *
      * @param fnApplyOneSlot the function to apply to each slot
-     * @param fn             the function to aggregate the results from all slots
-     * @param <R>            the type of result from fnApplyOneSlot
+     * @param fn the function to aggregate the results from all slots
+     * @param <R> the type of result from fnApplyOneSlot
      * @return the AsyncReply containing the aggregated results
      */
     public <R> AsyncReply doSthInSlots(@NotNull Function<OneSlot, R> fnApplyOneSlot, @NotNull Function<ArrayList<R>, Reply> fn) {
@@ -136,10 +122,7 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Adds a new slot for testing purposes.
-     * This method is intended for test environments only.
-     *
-     * @param slot      the index of the slot to add
+     * @param slot the index of the slot to add
      * @param eventloop the Eventloop instance associated with the new slot
      */
     @TestOnly
@@ -165,9 +148,6 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Adds a new slot for testing purposes without an Eventloop.
-     * This method is intended for test environments only.
-     *
      * @param slot the index of the slot to add
      */
     @TestOnly
@@ -188,12 +168,10 @@ public class LocalPersist implements NeedCleanUp {
     private Config persistConfig;
 
     /**
-     * Initializes the slots with the given parameters.
-     *
-     * @param netWorkers    the number of network workers
-     * @param slotNumber    the number of slots to initialize
-     * @param snowFlakes    the array of SnowFlake instances for generating unique identifiers
-     * @param persistDir    the directory for persistence storage
+     * @param netWorkers the number of network workers
+     * @param slotNumber the number of slots to initialize
+     * @param snowFlakes the array of SnowFlake instances for generating unique identifiers
+     * @param persistDir the directory for persistence storage
      * @param persistConfig the configuration for persistence
      * @throws IOException if an I/O error occurs during initialization
      */
@@ -221,8 +199,6 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Reinitialized slots after MultiShard is loaded or changed.
-     *
      * @throws IOException if an I/O error occurs during reinitialization
      */
     public void initSlotsAgainAfterMultiShardLoadedOrChanged() throws IOException {
@@ -243,8 +219,6 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Performs WAL read asynchronously for each slot.
-     *
      * @return true if all WAL reads were successful, false otherwise
      */
     public boolean walLazyRead() {
@@ -271,8 +245,6 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Performs init check asynchronously for each slot.
-     *
      * @return true if all slot init check ok, false otherwise
      */
     public boolean initCheck() {
@@ -299,8 +271,6 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Perform warm up asynchronously for each slot.
-     *
      * @return true if warm up was successful for all slots, false otherwise
      */
     public boolean warmUp() {
@@ -329,8 +299,6 @@ public class LocalPersist implements NeedCleanUp {
     private boolean isHashSaveMemberTogether;
 
     /**
-     * Checks if hash saving is set to save members together.
-     *
      * @return true if hash saving is set to save members together, false otherwise
      */
     public boolean getIsHashSaveMemberTogether() {
@@ -338,9 +306,6 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Sets the flag for saving members together in hashes.
-     * This method is intended for test environments only.
-     *
      * @param hashSaveMemberTogether the flag value to set
      */
     @TestOnly
@@ -351,18 +316,12 @@ public class LocalPersist implements NeedCleanUp {
     private boolean isDebugMode = false;
 
     /**
-     * Checks if the system is in debug mode.
-     *
      * @return true if in debug mode, false otherwise
      */
     public boolean isDebugMode() {
         return isDebugMode;
     }
 
-    /**
-     * Activates debug mode for the system.
-     * Also activates debug mode for each slot.
-     */
     public void debugMode() {
         isDebugMode = true;
         for (var oneSlot : oneSlots) {
@@ -371,9 +330,7 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Fixes the thread ID for a specific slot.
-     *
-     * @param slot     the index of the slot
+     * @param slot the index of the slot
      * @param threadId the new thread ID to set
      */
     public void fixSlotThreadId(short slot, long threadId) {
@@ -382,8 +339,6 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Retrieves the first slot associated with the current thread.
-     *
      * @return the first OneSlot associated with the current thread
      * @throws IllegalStateException if no slot is associated with the current thread
      */
@@ -397,8 +352,6 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Retrieves the first slot to handle client requests.
-     *
      * @return the first OneSlot to handle client requests, or null if not found
      */
     public @Nullable OneSlot firstOneSlot() {
@@ -458,8 +411,6 @@ public class LocalPersist implements NeedCleanUp {
     private IndexHandlerPool indexHandlerPool;
 
     /**
-     * Retrieves the IndexHandlerPool instance.
-     *
      * @return the IndexHandlerPool instance
      */
     public IndexHandlerPool getIndexHandlerPool() {
@@ -467,8 +418,6 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Starts the IndexHandlerPool.
-     *
      * @throws IOException if an I/O error occurs during startup
      */
     public void startIndexHandlerPool() throws IOException {
@@ -479,8 +428,6 @@ public class LocalPersist implements NeedCleanUp {
     private volatile boolean isAsSlaveFirstSlotFetchedExistsAllDone = false;
 
     /**
-     * Checks if the first slot fetch for a slave is complete.
-     *
      * @return true if the fetch is complete, false otherwise
      */
     public boolean isAsSlaveFirstSlotFetchedExistsAllDone() {
@@ -488,8 +435,6 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Sets the flag indicating whether the first slot fetch for a slave is complete.
-     *
      * @param asSlaveFirstSlotFetchedExistsAllDone the flag value to set
      */
     public void setAsSlaveFirstSlotFetchedExistsAllDone(boolean asSlaveFirstSlotFetchedExistsAllDone) {
@@ -499,8 +444,6 @@ public class LocalPersist implements NeedCleanUp {
     private MultiShard multiShard;
 
     /**
-     * Retrieves the MultiShard instance.
-     *
      * @return the MultiShard instance
      */
     public MultiShard getMultiShard() {
@@ -510,8 +453,6 @@ public class LocalPersist implements NeedCleanUp {
     private SocketInspector socketInspector;
 
     /**
-     * Retrieves the SocketInspector instance.
-     *
      * @return the SocketInspector instance
      */
     public SocketInspector getSocketInspector() {
@@ -519,18 +460,12 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * Sets the SocketInspector instance.
-     *
      * @param socketInspector the SocketInspector instance to set
      */
     public void setSocketInspector(@Nullable SocketInspector socketInspector) {
         this.socketInspector = socketInspector;
     }
 
-    /**
-     * Cleans up resources used by LocalPersist.
-     * Cleans up each slot and the IndexHandlerPool.
-     */
     @Override
     public void cleanUp() {
         for (var oneSlot : oneSlots) {

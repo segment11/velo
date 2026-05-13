@@ -11,6 +11,9 @@ import org.jetbrains.annotations.NotNull;
  * Rebuilds one WAL group's key-bucket index from chunk segments.
  */
 public class ChunkWalGroupRebuilder {
+    /**
+     * Rebuild mode.
+     */
     public enum Mode {
         PREVIEW("preview", false),
         APPLY("apply", true);
