@@ -13,6 +13,11 @@ import io.velo.type.RedisHashKeys;
 import io.velo.type.RedisList;
 import io.velo.type.RedisZSet;
 
+/**
+ * Event listener for RDB visitor events.
+ *
+ * @param lGroup the list command group for list operations
+ */
 public class MyRDBVisitorEventListener implements EventListener {
     private final LGroup lGroup;
     private final HGroup hGroup;
@@ -20,6 +25,9 @@ public class MyRDBVisitorEventListener implements EventListener {
     int updateKeyCount;
     int skipKeyCount;
 
+    /**
+     * @param lGroup the list command group
+     */
     public MyRDBVisitorEventListener(LGroup lGroup) {
         this.lGroup = lGroup;
         this.hGroup = new HGroup(null, null, null);

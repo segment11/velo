@@ -15,6 +15,11 @@ import java.util.regex.Pattern;
  * This includes commands like KEYS.
  */
 public class KGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public KGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

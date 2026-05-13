@@ -20,6 +20,11 @@ import java.util.HashMap;
  * This includes commands like ZADD, ZCARD, ZCOUNT, ZRANGE.
  */
 public class ZGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public ZGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

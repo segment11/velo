@@ -29,6 +29,11 @@ import static io.velo.CompressedValue.NO_EXPIRE;
  * This includes commands like SAVE, SCARD, SDIFF, SET, SINTER.
  */
 public class SGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public SGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

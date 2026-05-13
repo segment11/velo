@@ -12,6 +12,11 @@ import java.util.ArrayList;
  * This class is part of command organization where commands are grouped alphabetically.
  */
 public class UGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public UGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

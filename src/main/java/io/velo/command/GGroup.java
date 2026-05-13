@@ -21,6 +21,11 @@ import static io.velo.CompressedValue.NO_EXPIRE;
  * This includes commands like GET, GETBIT, GETDEL, GETEX, GETRANGE, GETSET, GEO.*, etc.
  */
 public class GGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public GGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

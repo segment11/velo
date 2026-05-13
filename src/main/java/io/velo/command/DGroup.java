@@ -27,6 +27,11 @@ import java.util.stream.Collectors;
  * This includes commands like DEBUG, DEL, DECR, DECRBY, DUMP, etc.
  */
 public class DGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public DGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

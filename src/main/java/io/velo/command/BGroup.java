@@ -21,6 +21,11 @@ import java.util.concurrent.atomic.AtomicLong;
  * This includes commands like BITCOUNT, BF.*, BLPOP, BRPOP, BGSAVE, etc.
  */
 public class BGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public BGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

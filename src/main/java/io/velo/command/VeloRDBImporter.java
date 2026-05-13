@@ -4,6 +4,9 @@ import com.moilioncircle.redis.replicator.util.CRC64;
 import io.netty.buffer.ByteBuf;
 import io.velo.rdb.RDBParser;
 
+/**
+ * Velo implementation of RDB importer.
+ */
 public class VeloRDBImporter implements RDBImporter {
     private final RDBParser parser = new RDBParser();
 

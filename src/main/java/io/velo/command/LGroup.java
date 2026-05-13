@@ -24,6 +24,11 @@ import static io.velo.command.BGroup.MAX_TIMEOUT_SECONDS;
  * This includes commands like LASTSAVE, LINDEX, LLEN, LPOP, LPUSH, LRANGE, LREM, LSET, LTRIM.
  */
 public class LGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public LGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

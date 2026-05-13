@@ -24,6 +24,11 @@ import java.util.Random;
  * This includes commands like HGET, HSET, HMGET, HMSET, HDEL, HEXISTS, HKEYS, HLEN, HGETALL, etc.
  */
 public class HGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public HGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

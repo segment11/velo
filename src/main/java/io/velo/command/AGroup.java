@@ -25,6 +25,11 @@ import static java.util.stream.Collectors.toSet;
  * This includes commands like ACL, APPEND, ASKING, etc.
  */
 public class AGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public AGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

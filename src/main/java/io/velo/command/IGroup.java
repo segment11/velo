@@ -32,6 +32,11 @@ import java.util.HashMap;
  * This includes commands like INCR, INCRBY, INFO, etc.
  */
 public class IGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public IGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

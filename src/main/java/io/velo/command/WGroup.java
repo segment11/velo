@@ -13,6 +13,11 @@ import java.util.ArrayList;
  * This includes commands like WAIT.
  */
 public class WGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public WGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

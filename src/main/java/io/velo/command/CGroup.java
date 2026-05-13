@@ -19,6 +19,11 @@ import java.util.HashMap;
  * This includes commands like CLIENT, CLUSTER, COMMAND, CONFIG, COPY, etc.
  */
 public class CGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public CGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

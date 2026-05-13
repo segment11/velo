@@ -17,6 +17,11 @@ import java.util.ArrayList;
  * This includes commands like FAILOVER, FLUSHDB, FLUSHALL, etc.
  */
 public class FGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public FGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

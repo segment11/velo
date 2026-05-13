@@ -22,6 +22,11 @@ import java.util.function.Consumer;
  * This includes commands like RANDOMKEY, READONLY, RENAME, RPOP, RPUSH, RSET.
  */
 public class RGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public RGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

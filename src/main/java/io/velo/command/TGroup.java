@@ -31,6 +31,11 @@ public class TGroup extends BaseCommand {
     @VisibleForTesting
     static final BulkReply TYPE_STREAM = new BulkReply("stream");
 
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public TGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

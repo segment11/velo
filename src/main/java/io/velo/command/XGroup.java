@@ -41,10 +41,22 @@ import static io.velo.repl.ReplType.*;
  * Handles Velo master-slave replications.
  */
 public class XGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public XGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }
 
+    /**
+     * @param cmd             the command string
+     * @param data            the data array
+     * @param socket          the TCP socket
+     * @param requestHandler  the request handler
+     * @param request         the request
+     */
     public XGroup(String cmd, byte[][] data, ITcpSocket socket, RequestHandler requestHandler, Request request) {
         super(cmd, data, socket);
         super.init(requestHandler);

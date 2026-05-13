@@ -23,6 +23,11 @@ import java.util.stream.Collectors;
  * This includes commands like MANAGE, MGET, MSET, MIGRATE, MOVE.
  */
 public class MGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public MGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

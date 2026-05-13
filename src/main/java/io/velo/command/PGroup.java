@@ -30,6 +30,11 @@ public class PGroup extends BaseCommand {
                 .build();
     }
 
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public PGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }

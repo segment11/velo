@@ -12,6 +12,11 @@ import java.util.ArrayList;
  * Currently used as a placeholder with no specific commands implemented.
  */
 public class JGroup extends BaseCommand {
+    /**
+     * @param cmd    the command string
+     * @param data   the data array
+     * @param socket the TCP socket
+     */
     public JGroup(String cmd, byte[][] data, ITcpSocket socket) {
         super(cmd, data, socket);
     }
