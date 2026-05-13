@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 
 /**
- * Represents a chain of tasks to be executed based on a loop count.
+ * Chain of tasks executed based on loop count.
  */
 public class TaskChain {
     private static final Logger log = LoggerFactory.getLogger(TaskChain.class);
@@ -17,21 +17,13 @@ public class TaskChain {
      */
     private final ArrayList<ITask> list = new ArrayList<>();
 
-    /**
-     * Gets the list of tasks in the chain. This method is visible for testing purposes.
-     *
-     * @return the list of tasks
-     */
+    /** @return the list of tasks in the chain */
     @VisibleForTesting
     public ArrayList<ITask> getList() {
         return list;
     }
 
-    /**
-     * Returns a string representation of the TaskChain, including the size and names of tasks.
-     *
-     * @return a string representation of the TaskChain
-     */
+    /** @return string representation with size and task names */
     @Override
     public String toString() {
         return "TaskChain{" +
@@ -41,7 +33,7 @@ public class TaskChain {
     }
 
     /**
-     * Executes tasks in the chain that should run on the given loop count.
+     * Executes tasks in the chain on the given loop count.
      *
      * @param loopCount the current loop count
      */
@@ -60,9 +52,7 @@ public class TaskChain {
     }
 
     /**
-     * Adds a task to the chain if no task with the same name already exists.
-     *
-     * @param task the task to add
+     * @param task the task to add (skipped if name already exists)
      */
     public void add(ITask task) {
         for (ITask t : list) {
@@ -75,10 +65,8 @@ public class TaskChain {
     }
 
     /**
-     * Removes the task with the specified name from the chain.
-     *
-     * @param name the name of the task to remove
-     * @return the removed task, or null if no task with the specified name was found
+     * @param name the task name to remove
+     * @return the removed task or null if not found
      */
     public ITask remove(String name) {
         var it = list.iterator();

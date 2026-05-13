@@ -1,41 +1,23 @@
 package io.velo.task;
 
 /**
- * Interface representing a task that can be executed.
- * Implementations of this interface should define the logic
- * for a task's name, how to run the task, and how many times
- * the task should loop before executing additional logic.
+ * Task interface for executable units with name and loop control.
  */
 public interface ITask {
-    /**
-     * Returns the name of the task.
-     *
-     * @return the name of the task as a String
-     */
+    /** @return the task name */
     String name();
 
-    /**
-     * Executes the task. This method contains the core logic
-     * that defines what the task does when run.
-     */
+    /** Executes the task logic. */
     void run();
 
     /**
-     * Sets the number of times the task should loop.
-     *
-     * @param loopCount the number of times the task should loop
+     * @param loopCount the number of times the task has looped
      */
     default void setLoopCount(long loopCount) {
     }
 
     /**
-     * Returns the number of times the task should execute
-     * its logic after the loop count is reached.
-     * <p>
-     * By default, this method returns 1, indicating that the task
-     * should execute every loop.
-     *
-     * @return the number of times the task should execute after the loop
+     * @return execution interval (loops between executions), defaults to 1
      */
     default int executeOnceAfterLoopCount() {
         return 1;

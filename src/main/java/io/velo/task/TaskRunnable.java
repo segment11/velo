@@ -8,24 +8,17 @@ import org.jetbrains.annotations.VisibleForTesting;
 import java.util.ArrayList;
 
 /**
- * A Runnable implementation that represents a task for a slot worker.
- * It processes tasks associated with specific slots and runs them in a loop.
+ * Runnable task for slot workers that processes slots in a loop.
  */
 public class TaskRunnable implements Runnable {
-    /**
-     * The ID of the slot worker.
-     */
+    /** The slot worker ID. */
     private final byte slotWorkerId;
 
-    /**
-     * The total number of slot workers.
-     */
+    /** The total number of slot workers. */
     private final byte slotWorkers;
 
     /**
-     * Constructs a TaskRunnable with the specified slot worker ID and total number of slot workers.
-     *
-     * @param slotWorkerId the ID of the slot worker
+     * @param slotWorkerId the slot worker ID
      * @param slotWorkers  the total number of slot workers
      */
     public TaskRunnable(byte slotWorkerId, byte slotWorkers) {
@@ -33,17 +26,14 @@ public class TaskRunnable implements Runnable {
         this.slotWorkers = slotWorkers;
     }
 
-    /**
-     * A list of slots that this task runnable is responsible for.
-     */
+    /** The slots assigned to this worker. */
     @VisibleForTesting
     final ArrayList<OneSlot> oneSlots = new ArrayList<>();
 
     /**
-     * Adds slots to the task runnable based on the worker ID.
-     * Only slots where slot() % netWorkers equals netWorkerId are added to this worker's list.
+     * Assigns slots to this worker based on worker ID.
      *
-     * @param oneSlots the array of slots to be potentially added to this worker's list
+     * @param oneSlots all slots to consider
      */
     public void chargeOneSlots(OneSlot[] oneSlots) {
         for (var oneSlot : oneSlots) {
@@ -56,42 +46,28 @@ public class TaskRunnable implements Runnable {
         }
     }
 
-    /**
-     * The event loop for this slot worker.
-     */
+    /** The Eventloop for this slot worker. */
     private Eventloop slotWorkerEventloop;
 
-    /**
-     * Sets the event loop for this slot worker.
-     *
-     * @param slotWorkerEventloop the event loop to be used
-     */
+    /** @param slotWorkerEventloop the Eventloop for this worker */
     public void setSlotWorkerEventloop(Eventloop slotWorkerEventloop) {
         this.slotWorkerEventloop = slotWorkerEventloop;
     }
 
-    /**
-     * The request handler used by this slot worker.
-     */
+    /** The RequestHandler for this slot worker. */
     private RequestHandler requestHandler;
 
-    /**
-     * Sets the request handler for this slot worker.
-     *
-     * @param requestHandler the request handler to be used
-     */
+    /** @param requestHandler the RequestHandler for this worker */
     public void setRequestHandler(RequestHandler requestHandler) {
         this.requestHandler = requestHandler;
     }
 
-    /**
-     * The number of loops completed by this task runnable.
-     */
+    /** The number of loops completed. */
     private int loopCount = 0;
 
     /**
-     * Runs the tasks of the slots managed by this task runnable in a loop.
-     * If the task runnable is stopped, it does not schedule itself again.
+     * Runs tasks for all assigned slots, reschedules every 10ms.
+     * Delays 1s on first run if server not started.
      */
     @Override
     public void run() {
@@ -101,7 +77,6 @@ public class TaskRunnable implements Runnable {
 
         final long INTERVAL_MS = 10L;
         if (!isStartDone) {
-            // wait 1s if server not started
             slotWorkerEventloop.delay(INTERVAL_MS * 100, this);
             return;
         }
@@ -114,27 +89,18 @@ public class TaskRunnable implements Runnable {
         slotWorkerEventloop.delay(INTERVAL_MS, this);
     }
 
-    /**
-     * A flag indicating whether this task runnable should be stopped.
-     */
     private volatile boolean isStopped = false;
     private volatile boolean isStartDone = false;
 
-    /**
-     * Sets the start done flag for this task runnable.
-     *
-     * @param isStartDone the flag indicating whether the task runnable has started
-     */
+    /** @param isStartDone true if startup is complete */
     public void startDone(boolean isStartDone) {
         this.isStartDone = isStartDone;
     }
 
-    /**
-     * Stops this task runnable by setting the isStopped flag.
-     * It also prints a message indicating that the task delay has stopped.
-     */
+    /** Stops the task and prints a message. */
     public void stop() {
         isStopped = true;
-        System.out.println("Task delay stopped for slot worker eventloop, slot worker id=" + slotWorkerId);
+        System.out.println(
+                "Task delay stopped for slot worker eventloop, slot worker id=" + slotWorkerId);
     }
 }
