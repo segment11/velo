@@ -4,83 +4,52 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
- * A class that provides a compressed representation of an array of longs. This class
- * uses delta encoding and bit manipulation to compress the long values. Each shard
- * or bucket initially stores 64 numbers and if more space is required, additional shards
- * are dynamically added.
- * <p>
- * The compression algorithm is optimized for sequential numbers, where the difference
- * between consecutive numbers is stored rather than the full number, thus saving space.
- * Each long number is stored in a bit-efficient manner, where the most significant
- * bits are used for length and sign information.
- * <p>
- * This class provides methods to add and retrieve numbers as well as to get an iterator
- * that can be used to traverse a subset of the stored numbers.
- * Refer https://developer.aliyun.com/article/785184
+ * Compressed array of longs using delta encoding.
+ * Each shard stores 64 numbers initially, expanding dynamically.
  */
 public class ZippedLongArray {
-    /**
-     * Each shard initially stores this many numbers.
-     */
+    /** Each shard initially stores this many numbers. */
     private static final int SHARD_SIZE = 64;
 
-    /**
-     * This is the number of shards by which the internal storage is expanded when more space is needed.
-     */
+    /** Number of shards added when expansion is needed. */
     private static final int SHARD_EXPAND_COUNT = 128;
 
-    /**
-     * The current number of shards (buckets) allocated.
-     */
+    /** Current number of shards allocated. */
     int shardCount = SHARD_EXPAND_COUNT;
 
-    /**
-     * The total number of long values stored in the array.
-     */
+    /** Total number of long values stored. */
     private int size = 0;
 
-    /**
-     * The current shard index to which new numbers are added.
-     */
+    /** Current shard index for new additions. */
     int shardCursor = 0;
 
-    /**
-     * The position within the current shard where the next number will be added.
-     */
+    /** Position within current shard for next number. */
     private short lastNumPos = 0;
 
-    /**
-     * The two-dimensional array that stores the compressed long values.
-     */
+    /** Two-dimensional array storing compressed long values. */
     private byte[][] shards;
 
     /**
-     * Constructs a ZippedLongArray with an initial capacity based on the count of numbers expected.
-     *
-     * @param count the number of long values that are expected to be stored
+     * @param count expected number of long values to store
      */
     public ZippedLongArray(int count) {
         shardCount = count / SHARD_SIZE + 1;
         shards = new byte[shardCount][];
     }
 
-    /**
-     * Constructs a ZippedLongArray with a default initial capacity.
-     */
+    /** Creates a ZippedLongArray with default initial capacity. */
     public ZippedLongArray() {
         shards = new byte[shardCount][];
     }
 
     /**
-     * Adds a long value to the array. This method will throw an IllegalArgumentException
-     * if the value exceeds the maximum supported value.
-     *
-     * @param value the long value to add to the array
-     * @throws IllegalArgumentException if the provided number is too large to be compressed.
+     * @param value the long value to add
+     * @throws IllegalArgumentException if value exceeds maximum supported
      */
     public void add(long value) {
         if (Math.abs(value) >= 0xf0L << 55) {
-            throw new IllegalArgumentException("Number too large, do not support bigger(equal) than 0xf0L << 55");
+            throw new IllegalArgumentException(
+                "Number too large, do not support bigger(equal) than 0xf0L << 55");
         }
 
         if (shards[shardCursor] == null) {
@@ -119,11 +88,9 @@ public class ZippedLongArray {
     }
 
     /**
-     * Retrieves the long value at the specified index.
-     *
      * @param ix the index of the value to retrieve
      * @return the long value at the specified index
-     * @throws ArrayIndexOutOfBoundsException if the index is out of bounds.
+     * @throws ArrayIndexOutOfBoundsException if index is out of bounds
      */
     public long get(int ix) {
         int i = ix / SHARD_SIZE;
@@ -148,9 +115,6 @@ public class ZippedLongArray {
         return offset + inflate(shards[i], numPos, len);
     }
 
-    /**
-     * Expands the internal storage to accommodate more numbers.
-     */
     private void expandShards() {
         shardCount += SHARD_EXPAND_COUNT;
         var newShards = new byte[shardCount][];
@@ -158,12 +122,6 @@ public class ZippedLongArray {
         shards = newShards;
     }
 
-    /**
-     * Compresses a long value into a byte array for storage.
-     *
-     * @param num the long value to compress
-     * @return the byte array containing the compressed representation of the long
-     */
     private static byte[] deflate(long num) {
         int negative = num < 0 ? 0x01 : 0x00;
         num = (num < 0) ? -num : num;
@@ -184,24 +142,10 @@ public class ZippedLongArray {
         return zipped;
     }
 
-    /**
-     * Decompresses a byte array back into a long value.
-     *
-     * @param bag the byte array containing the compressed data
-     * @return the decompressed long value
-     */
     private static long inflate(byte[] bag) {
         return inflate(bag, 0, bag.length);
     }
 
-    /**
-     * Decompresses a byte array back into a long value, starting at a specific position and using specified length.
-     *
-     * @param shard  the byte array containing the compressed data
-     * @param numPos the starting position in the byte array
-     * @param len    the number of bytes to decompress
-     * @return the decompressed long value
-     */
     private static long inflate(byte[] shard, int numPos, int len) {
         long data = 0;
 
@@ -215,38 +159,28 @@ public class ZippedLongArray {
     }
 
     /**
-     * Gets the total number of bytes used by this ZippedLongArray.
-     *
-     * @return the total number of bytes used, including array references
+     * @return total bytes used including array references
      */
     public long getTotalBytesUsed() {
         long bytes = Arrays.stream(shards).mapToLong(t -> t == null ? 0 : t.length).sum();
         return shards.length * 16L + bytes;
     }
 
-    /**
-     * Returns the total number of long values stored in the array.
-     *
-     * @return the total number of long values
-     */
+    /** @return total number of long values stored */
     public int size() {
         return size;
     }
 
     /**
-     * Gets an iterator that can be used to traverse a subset of the stored numbers.
-     *
      * @param startIndex the starting index of the subset
      * @param count      the number of elements in the subset
-     * @return the ZippedIterator that can be used to traverse the subset
+     * @return iterator for traversing the subset
      */
     public ZippedIterator getIterator(int startIndex, int count) {
         return new ZippedIterator(startIndex, count);
     }
 
-    /**
-     * An iterator for traversing a subset of numbers in the ZippedLongArray.
-     */
+    /** Iterator for traversing a subset of numbers in the ZippedLongArray. */
     public class ZippedIterator {
         private int numPos;
         private int shardIndex;
@@ -254,15 +188,14 @@ public class ZippedLongArray {
         private int count;
 
         /**
-         * Constructs a new ZippedIterator for the specified subset.
-         *
          * @param ix    the starting index of the subset
          * @param count the number of elements in the subset
-         * @throws IndexOutOfBoundsException if the requested subset is out of bounds.
+         * @throws IndexOutOfBoundsException if subset is out of bounds
          */
         private ZippedIterator(int ix, int count) {
             if (ix + count > size) {
-                throw new IndexOutOfBoundsException("end index overflow:" + (ix + count) + " of " + size);
+                throw new IndexOutOfBoundsException(
+                    "end index overflow:" + (ix + count) + " of " + size);
             }
 
             shardIndex = ix / SHARD_SIZE;
@@ -279,16 +212,13 @@ public class ZippedLongArray {
             this.count = count;
         }
 
-        /**
-         * Retrieves the next long value in the subset.
-         *
-         * @return the next long value in the subset
-         */
+        /** @return the next long value in the subset */
         public long nextLong() {
             var shard = shards[shardIndex];
             int len = (0xff & shard[numPos]) >>> 5;
 
-            long data = numPos > 0 ? curOffset + inflate(shard, numPos, len) : inflate(shard, numPos, len);
+            long data = numPos > 0 ? curOffset + inflate(shard, numPos, len)
+                : inflate(shard, numPos, len);
 
             numPos += len;
 
@@ -304,11 +234,7 @@ public class ZippedLongArray {
             return data;
         }
 
-        /**
-         * Checks if there are more elements in the subset.
-         *
-         * @return true if there are more elements, false otherwise.
-         */
+        /** @return true if there are more elements */
         public boolean hasNext() {
             return count > 0;
         }
