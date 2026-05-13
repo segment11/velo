@@ -20,13 +20,12 @@ public class ParquetGroupToValue {
     }
 
     /**
-     * Extracts the value of a field from a Parquet Group based on its type.
+     * Extracts a field value from a Parquet Group by type.
      *
-     * @param group     the Parquet Group object containing the data
-     * @param fieldName the name of the field whose value is to be retrieved
-     * @param fieldType the type of the field
-     * @return the value of the field converted to the corresponding Java type
-     * @throws IllegalArgumentException if the field type is not supported
+     * @param group     the Parquet Group containing the data
+     * @param fieldName the name of the field to retrieve
+     * @param fieldType the Parquet type of the field
+     * @return the field value converted to the corresponding Java type
      */
     public static Object getFieldValue(Group group, String fieldName, Type fieldType) {
         var primitiveTypeName = fieldType.asPrimitiveType().getPrimitiveTypeName();
@@ -46,10 +45,9 @@ public class ParquetGroupToValue {
      * Converts a Parquet Group to a JSON string.
      *
      * @param schema       the schema of the Parquet data
-     * @param objectMapper the ObjectMapper to use for converting the data to JSON
-     * @param group        the Parquet Group object containing the data
-     * @return a JSON string representation of the Parquet Group
-     * @throws JsonProcessingException if an error occurs during the conversion to JSON
+     * @param objectMapper the ObjectMapper for JSON conversion
+     * @param group        the Parquet Group containing the data
+     * @return JSON string representation of the Parquet Group
      */
     public static String toJson(MessageType schema, ObjectMapper objectMapper, Group group) throws JsonProcessingException {
         Map<String, Object> record = new HashMap<>();
@@ -66,7 +64,7 @@ public class ParquetGroupToValue {
      * Converts a Parquet Group to a CSV string.
      *
      * @param schema the schema of the Parquet data
-     * @param group  the Parquet Group object containing the data
+     * @param group  the Parquet Group containing the data
      * @return a CSV string representation of the Parquet Group
      */
     public static String toCsv(MessageType schema, Group group) {
