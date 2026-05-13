@@ -634,8 +634,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     @VisibleForTesting
     long kvLRUHitTotal = 0;
-    private long kvLRUMissTotal = 0;
-    private long kvLRUCvEncodedLengthTotal = 0;
+    @VisibleForTesting
+    long kvLRUMissTotal = 0;
+    @VisibleForTesting
+    long kvLRUCvEncodedLengthTotal = 0;
 
     @VisibleForTesting
     long kvWalHitTotal = 0;
