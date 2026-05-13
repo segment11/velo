@@ -998,6 +998,72 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test kvLRUHitTotal only counts true LRU hits not WAL hits'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def key = 'wal-vs-lru-metric-key'
+        def sKey = BaseCommand.slot(key, slotNumber)
+        def cv = new CompressedValue()
+        cv.keyHash = sKey.keyHash()
+        cv.compressedData = new byte[10]
+        cv.expireAt = CompressedValue.NO_EXPIRE
+
+        when: 'put to WAL, then read - this is a WAL hit, not LRU hit'
+        oneSlot.kvLRUHitTotal = 0
+        oneSlot.kvLRUMissTotal = 0
+        oneSlot.kvLRUCvEncodedLengthTotal = 0
+        oneSlot.kvWalHitTotal = 0
+        oneSlot.kvWalCvEncodedLengthTotal = 0
+        oneSlot.put(key, sKey.bucketIndex(), cv)
+        oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash())
+        then:
+        oneSlot.kvWalHitTotal == 1
+        oneSlot.kvLRUHitTotal == 0
+
+        when: 'second WAL hit via get()'
+        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash())
+        then:
+        oneSlot.kvWalHitTotal == 2
+        oneSlot.kvLRUHitTotal == 0
+
+        when: 'clear WAL, put into LRU manually, then read - true LRU hit'
+        oneSlot.getWalByBucketIndex(sKey.bucketIndex()).clear()
+        oneSlot.kvLRUHitTotal = 0
+        oneSlot.kvLRUMissTotal = 0
+        oneSlot.kvLRUCvEncodedLengthTotal = 0
+        oneSlot.kvWalHitTotal = 0
+        oneSlot.kvWalCvEncodedLengthTotal = 0
+        oneSlot.putKvInTargetWalGroupIndexLRU(Wal.calcWalGroupIndex(sKey.bucketIndex()), key, cv.encode())
+        oneSlot.getExpireAt(key, sKey.bucketIndex(), sKey.keyHash())
+        then:
+        oneSlot.kvLRUHitTotal == 1
+        oneSlot.kvWalHitTotal == 0
+
+        when: 'true LRU hit via get()'
+        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash())
+        then:
+        oneSlot.kvLRUHitTotal == 2
+        oneSlot.kvWalHitTotal == 0
+
+        when: 'verify collect() exports both WAL and LRU metrics'
+        oneSlot.kvWalHitTotal = 5
+        oneSlot.kvWalCvEncodedLengthTotal = 100
+        def metrics = oneSlot.collect()
+        then:
+        metrics['slot_kv_lru_hit_total'] == 2.0
+        metrics['slot_kv_wal_hit_total'] == 5.0
+        metrics['slot_kv_wal_cv_encoded_length_avg'] == 20.0
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test flush clears kv lru cache so post-flush get returns null'() {
         given:
         LocalPersistTest.prepareLocalPersist()

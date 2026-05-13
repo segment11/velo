@@ -846,6 +846,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     private long kvLRUMissTotal = 0;
     private long kvLRUCvEncodedLengthTotal = 0;
 
+    @VisibleForTesting
+    long kvWalHitTotal = 0;
+    @VisibleForTesting
+    long kvWalCvEncodedLengthTotal = 0;
+
     private static final String DYN_CONFIG_FILE_NAME = "dyn-config.json";
 
     private final DynConfig dynConfig;
@@ -1467,8 +1472,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var targetWal = walArray[walGroupIndex];
         var v = targetWal.getV(key);
         if (v != null) {
-            kvLRUHitTotal++;
-            kvLRUCvEncodedLengthTotal += v.cvEncoded().length;
+            kvWalHitTotal++;
+            kvWalCvEncodedLengthTotal += v.cvEncoded().length;
 
             // write batch kv is the newest
             if (CompressedValue.isDeleted(v.cvEncoded())) {
@@ -1536,8 +1541,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var isExpiredFlagArray = new boolean[1];
         var cvEncodedFromWal = getFromWal(key, bucketIndex, isExpiredFlagArray);
         if (cvEncodedFromWal != null) {
-            kvLRUHitTotal++;
-            kvLRUCvEncodedLengthTotal += cvEncodedFromWal.length;
+            kvWalHitTotal++;
+            kvWalCvEncodedLengthTotal += cvEncodedFromWal.length;
 
             // write batch kv is the newest
             if (CompressedValue.isDeleted(cvEncodedFromWal)) {
@@ -2717,6 +2722,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (kvLRUHitTotal > 0) {
             var kvLRUCvEncodedLengthAvg = (double) kvLRUCvEncodedLengthTotal / kvLRUHitTotal;
             map.put("slot_kv_lru_cv_encoded_length_avg", kvLRUCvEncodedLengthAvg);
+        }
+
+        if (kvWalHitTotal > 0) {
+            map.put("slot_kv_wal_hit_total", (double) kvWalHitTotal);
+            var kvWalCvEncodedLengthAvg = (double) kvWalCvEncodedLengthTotal / kvWalHitTotal;
+            map.put("slot_kv_wal_cv_encoded_length_avg", kvWalCvEncodedLengthAvg);
         }
 
         var replPairAsSlave = getOnlyOneReplPairAsSlave();
