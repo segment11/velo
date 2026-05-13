@@ -5,10 +5,8 @@ import io.velo.persist.OneSlot;
 import org.jetbrains.annotations.TestOnly;
 
 /**
- * This interface provides methods to manipulate data in a storage system bypassing
- * the usual get and set mechanisms. It is intended for use in testing scenarios.
- *
- * @see TestOnly
+ * Interface for manipulating data in storage bypassing normal get/set mechanisms.
+ * For testing scenarios only.
  */
 @TestOnly
 public interface ByPassGetSet {
@@ -46,7 +44,7 @@ public interface ByPassGetSet {
      * Retrieves a value from the storage system based on the provided key and bucket index.
      *
      * @param slot        the slot index where the value is stored.
-     * @param key         the key with the value to be retrieved.
+     * @param key the key with the value to be retrieved.
      * @param bucketIndex the index of the bucket in the slot where the value is stored.
      * @param keyHash     the hash of the key.
      * @return the value stored, either as a buffer or a compressed value.
