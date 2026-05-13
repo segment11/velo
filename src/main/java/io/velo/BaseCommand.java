@@ -370,6 +370,11 @@ public abstract class BaseCommand {
      */
     public abstract ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber);
 
+    /**
+     * Handles the command execution.
+     *
+     * @return the reply result
+     */
     public abstract Reply handle();
 
     @TestOnly

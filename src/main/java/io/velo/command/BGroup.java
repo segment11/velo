@@ -30,6 +30,15 @@ public class BGroup extends BaseCommand {
         super(cmd, data, socket);
     }
 
+    /**
+     * Parses slot information from the command.
+     *
+     * @param cmd        the command name
+     * @param data       the command arguments
+     * @param slotNumber current slot number
+     * @return list containing slot with key hash, or empty list
+     */
+    @Override
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
         if ("bitcount".equals(cmd) || "bitfield".equals(cmd) || "bitfield_ro".equals(cmd) ||
@@ -87,6 +96,12 @@ public class BGroup extends BaseCommand {
 
     public static final AtomicLong lastBgSaveMillis = new AtomicLong(0);
 
+    /**
+     * Handles the command and returns the reply.
+     *
+     * @return the reply for this command
+     */
+    @Override
     public Reply handle() {
         if ("bitcount".equals(cmd)) {
             return bitcount();
