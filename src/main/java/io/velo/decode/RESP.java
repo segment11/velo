@@ -11,8 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Locale;
 
 /**
- * A class to decode RESP (Redis Serialization Protocol) messages using Netty's ByteBuf.
- * This implementation is adapted from Camellia Redis Proxy, specifically from the CommandDecoder class.
+ * Decoder for RESP (Redis Serialization Protocol) messages.
  */
 public class RESP {
     private static final byte BYTES_MARKER = '$';
@@ -23,19 +22,10 @@ public class RESP {
     // Maximum length of a positive int in characters
     private static final int POSITIVE_INT_MAX_LENGTH = 10; // length of Integer.MAX_VALUE
 
-    /**
-     * A private static class that implements ByteProcessor to process numeric values from ByteBuf.
-     */
+    /** ByteProcessor that accumulates numeric values from ByteBuf. */
     private static final class NumberProcessor implements ByteProcessor {
         private long result;
 
-        /**
-         * Process a byte to form a number.
-         *
-         * @param value the byte value to process
-         * @return true to continue processing, false to stop
-         * @throws IllegalArgumentException if the byte value is not a digit.
-         */
         @Override
         public boolean process(byte value) {
             if (value < '0' || value > '9') {
@@ -45,18 +35,12 @@ public class RESP {
             return true;
         }
 
-        /**
-         * Get the processed number.
-         *
-         * @return the processed number
-         */
+        /** @return the accumulated number */
         public long content() {
             return result;
         }
 
-        /**
-         * Reset the number processor.
-         */
+        /** Resets the accumulated number to zero. */
         public void reset() {
             result = 0;
         }
@@ -67,11 +51,8 @@ public class RESP {
     private static final Logger log = LoggerFactory.getLogger(RESP.class);
 
     /**
-     * Parse a Redis number from a ByteBuf.
-     *
      * @param in the ByteBuf containing the number
      * @return the parsed integer
-     * @throws IllegalArgumentException if the number is malformed or too large.
      */
     private int parseRedisNumber(ByteBuf in) {
         final int readableBytes = in.readableBytes();
@@ -106,10 +87,8 @@ public class RESP {
     }
 
     /**
-     * Read a line from the ByteBuf until the CR LF sequence.
-     *
      * @param in the ByteBuf to read from
-     * @return the ByteBuf slice containing the read line without the CR LF sequence, or null if a complete line is not available
+     * @return the ByteBuf slice containing the line without CRLF, or null if incomplete
      */
     private ByteBuf readLine(ByteBuf in) {
         // \r\n
@@ -139,11 +118,8 @@ public class RESP {
     BigStringNoMemoryCopy bigStringNoMemoryCopy = new BigStringNoMemoryCopy();
 
     /**
-     * Decode a RESP message from a ByteBuf.
-     *
      * @param bb the ByteBuf containing the RESP message
-     * @return the 2D byte array where each element is a RESP message
-     * @throws IllegalArgumentException if the RESP message format is incorrect.
+     * @return the 2D byte array representing the parsed RESP message
      */
     public byte[][] decode(ByteBuf bb) {
         String cmd = null;

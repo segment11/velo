@@ -1,28 +1,21 @@
 package io.velo.decode;
 
 /**
- * Represents a big string without memory copy. Just use client read buffer.
+ * A big string value that references the client's read buffer without copying.
+ * Used to avoid memory copies for large string values.
  */
 public class BigStringNoMemoryCopy {
-    /**
-     * The index of the resp data array.
-     */
+    /** The index in the RESP data array. */
     public int readBufferInDataIndex;
 
-    /**
-     * The offset of the client read buffer.
-     */
+    /** The offset in the client read buffer. */
     public int offset = 0;
 
-    /**
-     * The length of the string.
-     */
+    /** The length of the string. */
     public int length = 0;
 
     /**
-     * Get a copy of this.
-     *
-     * @return a copy of this.
+     * @return a copy of this object
      */
     public BigStringNoMemoryCopy copy() {
         var copy = new BigStringNoMemoryCopy();
@@ -32,9 +25,7 @@ public class BigStringNoMemoryCopy {
         return copy;
     }
 
-    /**
-     * Reset this.
-     */
+    /** Resets all fields to initial values. */
     public void reset() {
         readBufferInDataIndex = 0;
         offset = 0;

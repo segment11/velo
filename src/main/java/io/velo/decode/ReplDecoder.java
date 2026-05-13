@@ -11,8 +11,7 @@ import org.jetbrains.annotations.VisibleForTesting;
 import java.util.ArrayList;
 
 /**
- * A decoder for incoming requests that can handle velo replication protocols.
- * The decoder reads from a {@link ByteBufs} input and attempts to parse as many complete requests as possible.
+ * Decoder for incoming Velo replication protocol requests.
  */
 public class ReplDecoder implements ByteBufsDecoder<ArrayList<ReplRequest>> {
     // slave tcp client is only one in one slot, one repl pair
@@ -20,10 +19,8 @@ public class ReplDecoder implements ByteBufsDecoder<ArrayList<ReplRequest>> {
     ReplRequest toFullyReadRequest;
 
     /**
-     * Attempts to decode a single request from the provided ByteBufs.
-     *
      * @param bufs the source of bytes to decode
-     * @return a decoded replication data bytes or null if there aren't enough bytes to form a complete request
+     * @return a decoded ReplRequest or null if not enough bytes
      */
     private ReplRequest tryDecodeOne(ByteBufs bufs) {
         var buf = RequestDecoder.fromBufs(bufs);
@@ -71,11 +68,8 @@ public class ReplDecoder implements ByteBufsDecoder<ArrayList<ReplRequest>> {
     }
 
     /**
-     * Attempts to decode multiple requests from the provided ByteBufs until no more complete requests can be formed.
-     *
      * @param bufs the source of bytes to decode
-     * @return a list of decoded repl data bytes
-     * @throws MalformedDataException if the data in ByteBufs is malformed and cannot be decoded
+     * @return a list of decoded ReplRequest objects
      */
     @Override
     public @NotNull ArrayList<ReplRequest> tryDecode(ByteBufs bufs) throws MalformedDataException {

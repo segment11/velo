@@ -8,9 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents an HTTP header and body parser.
- * This class is responsible for parsing HTTP request data, extracting headers,
- * and handling the request body based on the content length.
+ * HTTP header and body parser for incoming requests.
  */
 public class HttpHeaderBody {
     static final byte[] GET = "GET".getBytes();
@@ -21,29 +19,17 @@ public class HttpHeaderBody {
     private static final int HEADER_BUFFER_LENGTH = 4096;
     private static final String HEADER_CONTENT_LENGTH = "Content-Length";
 
-    /**
-     * The HTTP 200 OK header prefix.
-     */
+    /** HTTP 200 OK response header prefix. */
     public static final byte[] HEADER_PREFIX_200 = "HTTP/1.1 200 OK\r\nCache-Control: no-cache, no-store\r\nContent-Type: text/plain\r\nContent-Length: ".getBytes();
-    /**
-     * The HTTP 404 Not Found header prefix.
-     */
+    /** HTTP 404 Not Found response header prefix. */
     public static final byte[] HEADER_PREFIX_404 = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: ".getBytes();
-    /**
-     * The default body for a 404 response.
-     */
+    /** Default body content for 404 responses. */
     public static final byte[] BODY_404 = "404: ".getBytes();
-    /**
-     * The HTTP 500 Internal Server Error header prefix.
-     */
+    /** HTTP 500 Internal Server Error response header prefix. */
     public static final byte[] HEADER_PREFIX_500 = "HTTP/1.1 500 Internal Server Error\r\nCache-Control: no-cache, no-store\r\nContent-Type: text/plain\r\nContent-Length: ".getBytes();
-    /**
-     * The HTTP 401 Unauthorized header.
-     */
+    /** HTTP 401 Unauthorized response header. */
     public static final byte[] HEADER_401 = "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"Access to the staging site\"\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n".getBytes();
-    /**
-     * The suffix for HTTP headers.
-     */
+    /** HTTP header suffix (CRLF CRLF). */
     public static final byte[] HEADER_SUFFIX = "\r\n\r\n".getBytes();
 
     private static final byte r = '\r';
@@ -77,65 +63,39 @@ public class HttpHeaderBody {
 
     private byte[] body;
 
-    /**
-     * Parses the HTTP action of the request.
-     *
-     * @return the action (e.g., "GET", "POST")
-     */
+    /** The parsed HTTP action (e.g., "GET", "POST"). */
     public String action() {
         return action;
     }
 
-    /**
-     * Parses the HTTP request type (method).
-     *
-     * @return the request type (e.g., "GET", "POST")
-     */
+    /** The parsed HTTP request method (e.g., "GET", "POST"). */
     public String requestType() {
         return requestType;
     }
 
-    /**
-     * Parses the HTTP version.
-     *
-     * @return the HTTP version (e.g., "HTTP/1.1")
-     */
+    /** The parsed HTTP version (e.g., "HTTP/1.1"). */
     public String httpVersion() {
         return httpVersion;
     }
 
-    /**
-     * Retrieves the URL from the HTTP request.
-     *
-     * @return the URL of the request
-     */
+    /** The parsed URL from the HTTP request. */
     public String url() {
         return url;
     }
 
-    /**
-     * Checks if the HTTP request is correctly parsed.
-     *
-     * @return true if the request is correctly parsed, false otherwise
-     */
+    /** True if the request has been fully parsed. */
     public boolean isFullyRead() {
         return isFullyRead;
     }
 
-    /**
-     * Retrieves all headers from the HTTP request.
-     *
-     * @return the map of headers and their values
-     */
+    /** All HTTP headers from the request. */
     public Map<String, String> headers() {
         return headers;
     }
 
     /**
-     * Retrieves the value of a specific header.
-     *
-     * @param name the name of the header
-     * @return the value of the header, or null if the header is not found
+     * @param name the header name
+     * @return the header value, or null if not found
      */
     public String header(String name) {
         var exact = headers.get(name);
@@ -152,9 +112,7 @@ public class HttpHeaderBody {
     }
 
     /**
-     * Retrieves the content length from the HTTP request headers.
-     *
-     * @return the content length of the request body
+     * @return the content length from the request headers
      */
     public int contentLength() {
         if (contentLengthCache == -1) {
@@ -175,18 +133,12 @@ public class HttpHeaderBody {
         return contentLengthCache;
     }
 
-    /**
-     * Retrieves the body of the HTTP request.
-     *
-     * @return the body of the request as a byte array
-     */
+    /** The request body as a byte array. */
     public byte[] body() {
         return body;
     }
 
     /**
-     * Feeds byte data into the parser.
-     *
      * @param data the byte data to feed
      */
     public void feed(byte[] data) {
@@ -194,8 +146,6 @@ public class HttpHeaderBody {
     }
 
     /**
-     * Feeds a portion of byte data into the parser.
-     *
      * @param data   the byte data to feed
      * @param count  the number of bytes to feed
      * @param offset the offset in the byte array to start feeding from
@@ -205,8 +155,6 @@ public class HttpHeaderBody {
     }
 
     /**
-     * Feeds a portion of byte data from a ByteBuf into the parser.
-     *
      * @param nettyBuf the ByteBuf containing the byte data
      * @param count    the number of bytes to feed
      * @param offset   the offset in the ByteBuf to start feeding from

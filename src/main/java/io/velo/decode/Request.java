@@ -12,23 +12,16 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Represents a request in the Velo framework, containing command data, HTTP status, REPL status,
- * and other relevant request details.
+ * A request containing command data, HTTP status, REPL status, and other details.
  */
 public class Request {
-    /**
-     * Stores the command data as an array of byte arrays.
-     */
+    /** The command data as an array of byte arrays. */
     private final byte[][] data;
 
-    /**
-     * Indicates whether the request is an HTTP request.
-     */
+    /** True if this is an HTTP request. */
     private final boolean isHttp;
 
-    /**
-     * Indicates whether the request is a REPL (slave-master-replication) request.
-     */
+    /** True if this is a REPL (replication) request. */
     private final boolean isRepl;
 
     private ReplRequest replRequest;
@@ -41,39 +34,25 @@ public class Request {
         this.replRequest = replRequest;
     }
 
-    /**
-     * Retrieves the command data as an array of byte arrays.
-     *
-     * @return the command data
-     */
+    /** The command data as an array of byte arrays. */
     public byte[][] getData() {
         return data;
     }
 
-    /**
-     * Checks if the request is an HTTP request.
-     *
-     * @return true if the request is an HTTP request, false otherwise
-     */
+    /** True if this is an HTTP request. */
     public boolean isHttp() {
         return isHttp;
     }
 
-    /**
-     * Checks if the request is a REPL request.
-     *
-     * @return true if the request is a REPL request, false otherwise
-     */
+    /** True if this is a REPL request. */
     public boolean isRepl() {
         return isRepl;
     }
 
     /**
-     * Constructs a new Request object with the specified command data and request types.
-     *
      * @param data   the command data as an array of byte arrays
-     * @param isHttp true if the request is an HTTP request, false otherwise
-     * @param isRepl true if the request is a REPL request, false otherwise
+     * @param isHttp true if this is an HTTP request
+     * @param isRepl true if this is a REPL request
      */
     public Request(byte[][] data, boolean isHttp, boolean isRepl) {
         this.data = data;
@@ -86,32 +65,20 @@ public class Request {
      */
     BigStringNoMemoryCopy bigStringNoMemoryCopy;
 
-    /**
-     * Get big string no memory copy mark.
-     *
-     * @return the big string no memory copy mark
-     */
+    /** The big string no memory copy mark. */
     public BigStringNoMemoryCopy getBigStringNoMemoryCopy() {
         return bigStringNoMemoryCopy;
     }
 
-    /**
-     * The ACL (Access Control List) utility object for the request.
-     */
+    /** The ACL utility object for the request. */
     private U u;
 
-    /**
-     * Retrieves the ACL utility object for the request.
-     *
-     * @return the ACL utility object
-     */
+    /** @return the ACL utility object */
     public U getU() {
         return u;
     }
 
     /**
-     * Sets the ACL utility object for the request.
-     *
      * @param u the ACL utility object to set
      */
     public void setU(U u) {
@@ -119,9 +86,7 @@ public class Request {
     }
 
     /**
-     * Checks if the ACL (Access Control List) check is okay for the request.
-     *
-     * @return the result of the ACL check
+     * @return the ACL check result
      */
     public U.CheckCmdAndKeyResult isAclCheckOk() {
         if (u == null) {
@@ -138,67 +103,45 @@ public class Request {
         return u.checkCmdAndKey(cmd(), data, slotWithKeyHashList);
     }
 
-    /**
-     * The command of the request.
-     */
+    /** The command of the request. */
     private String cmd;
 
-    /**
-     * The slot number for the request.
-     */
+    /** The slot number for the request. */
     private short slotNumber;
 
-    /**
-     * Retrieves the slot number for the request.
-     *
-     * @return the slot number
-     */
+    /** @return the slot number */
     public short getSlotNumber() {
         return slotNumber;
     }
 
     /**
-     * Sets the slot number for the request.
-     *
      * @param slotNumber the slot number to set
      */
     public void setSlotNumber(short slotNumber) {
         this.slotNumber = slotNumber;
     }
 
-    /**
-     * Indicates if the request is a cross-request worker.
-     */
+    /** True if this is a cross-request worker. */
     private boolean isCrossRequestWorker;
 
-    /**
-     * Checks if the request is a cross-request worker.
-     *
-     * @return true if the request is a cross-request worker, false otherwise
-     */
+    /** @return true if this is a cross-request worker */
     public boolean isCrossRequestWorker() {
         return isCrossRequestWorker;
     }
 
     /**
-     * Sets if the request is a cross-request worker.
-     *
-     * @param crossRequestWorker true if the request is a cross-request worker, false otherwise
+     * @param crossRequestWorker true if this is a cross-request worker
      */
     public void setCrossRequestWorker(boolean crossRequestWorker) {
         isCrossRequestWorker = crossRequestWorker;
     }
 
-    /**
-     * The HTTP headers for the request.
-     */
+    /** The HTTP headers for the request. */
     private Map<String, String> httpHeaders;
 
     /**
-     * Retrieves the value of a specific HTTP header.
-     *
      * @param header the header name
-     * @return the header value, or null if the header does not exist
+     * @return the header value, or null if not found
      */
     public String getHttpHeader(String header) {
         if (httpHeaders == null) {
@@ -219,8 +162,6 @@ public class Request {
     }
 
     /**
-     * Sets the HTTP headers for the request.
-     *
      * @param httpHeaders the HTTP headers as a map
      */
     public void setHttpHeaders(Map<String, String> httpHeaders) {
@@ -228,8 +169,6 @@ public class Request {
     }
 
     /**
-     * Removes a specific HTTP header from the request.
-     *
      * @param header the header name to remove
      */
     @TestOnly
@@ -239,37 +178,25 @@ public class Request {
         }
     }
 
-    /**
-     * The list of slots with key hashes associated with the request.
-     */
+    /** The list of slots with key hashes associated with the request. */
     private ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList;
 
-    /**
-     * Retrieves the list of slots with key hashes associated with the request.
-     *
-     * @return the list of slots with key hashes
-     */
+    /** @return the list of slots with key hashes */
     public ArrayList<BaseCommand.SlotWithKeyHash> getSlotWithKeyHashList() {
         return slotWithKeyHashList;
     }
 
     /**
-     * Sets the list of slots with key hashes for the request.
-     *
      * @param slotWithKeyHashList the list of slots with key hashes
      */
     public void setSlotWithKeyHashList(ArrayList<BaseCommand.SlotWithKeyHash> slotWithKeyHashList) {
         this.slotWithKeyHashList = slotWithKeyHashList;
     }
 
-    /**
-     * Indicates that a slot can be handled by any worker.
-     */
+    /** Indicates that a slot can be handled by any worker. */
     public static final byte SLOT_CAN_HANDLE_BY_ANY_WORKER = -1;
 
     /**
-     * Retrieves the single slot number associated with the request.
-     *
      * @return the single slot number, or -1 if not applicable
      */
     public short getSingleSlot() {
@@ -289,8 +216,6 @@ public class Request {
     public static final String REPL_AS_CMD = "x-repl";
 
     /**
-     * Retrieves the command of the request as a string.
-     *
      * @return the command string
      */
     public String cmd() {
@@ -301,16 +226,10 @@ public class Request {
         if (cmd != null) {
             return cmd;
         }
-        // must be ASCII
         cmd = new String(data[0]).toLowerCase(Locale.ROOT);
         return cmd;
     }
 
-    /**
-     * Provides a string representation of the request, including the command and request properties.
-     *
-     * @return the request as a string
-     */
     @Override
     public String toString() {
         return "Request{" +

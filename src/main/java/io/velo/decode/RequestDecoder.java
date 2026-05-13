@@ -18,8 +18,7 @@ import java.util.Map;
 import java.nio.charset.StandardCharsets;
 
 /**
- * A decoder for incoming requests that can handle both HTTP and RESP (Redis Serialization Protocol) protocols.
- * The decoder reads from a {@link ByteBufs} input and attempts to parse as many complete requests as possible.
+ * Decoder for incoming requests supporting both HTTP and RESP protocols.
  */
 public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
     // in local thread
@@ -69,12 +68,8 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
     private final Logger log = LoggerFactory.getLogger(RequestDecoder.class);
 
     /**
-     * Attempts to decode a single request from the provided ByteBufs.
-     * The method checks for HTTP keywords at the beginning of the buffer, and if not found, treats the input as RESP.
-     *
      * @param bufs the source of bytes to decode
-     * @return a decoded {@link Request} or null if there aren't enough bytes to form a complete request
-     * @throws MalformedDataException if the data in ByteBufs is malformed and cannot be decoded
+     * @return a decoded Request or null if not enough bytes
      */
     private Request tryDecodeOne(ByteBufs bufs) throws MalformedDataException {
         var buf = fromBufs(bufs);
@@ -206,11 +201,8 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
     }
 
     /**
-     * Attempts to decode multiple requests from the provided ByteBufs until no more complete requests can be formed.
-     *
      * @param bufs the source of bytes to decode
-     * @return a list of decoded {@link Request} objects
-     * @throws MalformedDataException if the data in ByteBufs is malformed and cannot be decoded
+     * @return a list of decoded Request objects
      */
     @Override
     public @NotNull ArrayList<Request> tryDecode(ByteBufs bufs) throws MalformedDataException {
