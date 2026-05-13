@@ -9,26 +9,23 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A simple gauge implementation for Prometheus metric collection.
- * This class extends Prometheus's Collector and allows setting metrics values
- * either directly or through user-provided RawGetters.
+ * Prometheus gauge collector with support for raw getters.
  */
 public class SimpleGauge extends Collector {
 
     /**
-     * A record to hold a gauge value along with its label values.
+     * @param value       the gauge value
+     * @param labelValues the label values for this gauge
      */
     public record ValueWithLabelValues(Double value, List<String> labelValues) {
     }
 
     /**
-     * An interface for classes that can provide a map of gauge names to their values and label values.
+     * Provides gauge values on demand.
      */
     public interface RawGetter {
         /**
-         * Returns a map of gauge names to their corresponding values and label values.
-         *
-         * @return a map with gauge names as keys and ValueWithLabelValues as values.
+         * @return a map of gauge names to their values and labels
          */
         Map<String, ValueWithLabelValues> get();
     }
@@ -36,9 +33,7 @@ public class SimpleGauge extends Collector {
     private final ArrayList<RawGetter> rawGetterList = new ArrayList<>();
 
     /**
-     * Returns the list of raw getters. This method is for testing purposes only.
-     *
-     * @return the list of raw getters.
+     * @return the list of raw getters (testing only)
      */
     @TestOnly
     public ArrayList<RawGetter> getRawGetterList() {
@@ -46,17 +41,13 @@ public class SimpleGauge extends Collector {
     }
 
     /**
-     * Adds a RawGetter to the list of raw getters.
-     *
-     * @param rawGetter the RawGetter to add.
+     * @param rawGetter the raw getter to add
      */
     public void addRawGetter(RawGetter rawGetter) {
         rawGetterList.add(rawGetter);
     }
 
-    /**
-     * Clears the list of raw getters.
-     */
+    /** Clears all registered raw getters. */
     public void clearRawGetterList() {
         rawGetterList.clear();
     }
