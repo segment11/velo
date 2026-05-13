@@ -6,19 +6,13 @@ import java.util.Comparator;
 import java.util.PriorityQueue;
 
 /**
- * This class is designed to keep track of the top k biggest keys encountered,
- * based on their byte lengths. It uses a priority queue to efficiently manage
- * and retrieve the largest keys.
+ * Tracks the top k biggest keys by byte length using a priority queue.
  */
 public class BigKeyTopK {
-    /**
-     * The configuration key used to specify the number of top keys to track.
-     */
+    /** The configuration key for the top-k tracking interval. */
     public static final String KEY_IN_DYN_CONFIG = "monitor_big_key_top_k";
 
-    /**
-     * A record representing a key and its byte length.
-     */
+    /** A key and its byte length. */
     public record BigKey(String key, int length) {
         @Override
         public @NotNull String toString() {
@@ -43,33 +37,21 @@ public class BigKeyTopK {
 
     private final int k;
 
-    /**
-     * The priority queue used to store the keys, ordered by their byte length.
-     */
+    /** The priority queue ordered by byte length. */
     private final PriorityQueue<BigKey> queue;
 
-    /**
-     * Returns the priority queue holding the keys.
-     *
-     * @return the priority queue of BigKey objects
-     */
+    /** Returns the priority queue holding the keys. */
     public PriorityQueue<BigKey> getQueue() {
         return queue;
     }
 
-    /**
-     * Returns the number of keys currently held in the priority queue.
-     *
-     * @return the size of the queue
-     */
+    /** Returns the number of keys currently held. */
     public int size() {
         return queue.size();
     }
 
     /**
-     * Counts the number of keys in the queue that have a length greater than or equal to the specified checkLength.
-     *
-     * @param checkLength the minimum length of keys to count
+     * @param checkLength the minimum length threshold
      * @return the number of keys with length >= checkLength
      */
     public int sizeIfBiggerThan(int checkLength) {
@@ -79,8 +61,6 @@ public class BigKeyTopK {
     }
 
     /**
-     * Constructs a BigKeyTopK object with a specified capacity for the priority queue.
-     *
      * @param k the number of top keys to track
      */
     public BigKeyTopK(int k) {
@@ -89,11 +69,8 @@ public class BigKeyTopK {
     }
 
     /**
-     * Adds a key to the priority queue if it is larger than the current smallest key in the queue.
-     * If an identical key already exists in the queue, it is replaced.
-     *
-     * @param key    the key
-     * @param length the length of the key's byte array
+     * @param key    the key to add
+     * @param length the byte length of the key
      */
     public void add(String key, int length) {
         BigKey added = new BigKey(key, length);
