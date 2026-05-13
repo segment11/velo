@@ -468,5 +468,10 @@ class CompressedValueTest extends Specification {
         def cvNoHash = CompressedValue.decode(encodedShort, null, 0L)
         then:
         cvNoHash.keyHash == 0L
+
+        when: 'decode with keyHash=0 but keyBytes provided — short form does NOT recompute, stays 0 (asymmetry with long form)'
+        def cvZeroHash = CompressedValue.decode(encodedShort, keyBytes, 0L)
+        then:
+        cvZeroHash.keyHash == 0L
     }
 }

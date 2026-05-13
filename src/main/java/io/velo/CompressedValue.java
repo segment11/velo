@@ -837,6 +837,7 @@ public class CompressedValue {
             cv.expireAt = nettyBuf.readLong();
             cv.compressedData = new byte[nettyBuf.readableBytes()];
             nettyBuf.readBytes(cv.compressedData);
+            // short form omits keyHash on the wire; trust the caller-provided hash
             cv.keyHash = keyHash;
             return cv;
         }
