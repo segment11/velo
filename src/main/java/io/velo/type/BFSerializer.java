@@ -11,18 +11,14 @@ import java.nio.charset.StandardCharsets;
 import static com.google.common.hash.BloomFilter.readFrom;
 
 /**
- * A utility class for serializing and deserializing Bloom Filters.
- * This class provides methods to convert a Bloom Filter to a byte array and vice versa.
+ * Utility for serializing and deserializing Bloom Filters.
  */
 public class BFSerializer {
     /**
-     * Deserializes a Bloom Filter from a byte array.
-     *
-     * @param bytes  the byte array containing the serialized Bloom Filter
+     * @param bytes  the serialized Bloom Filter bytes
      * @param offset the starting offset in the byte array
-     * @param length the number of bytes to read from the byte array
+     * @param length the number of bytes to read
      * @return the deserialized Bloom Filter
-     * @throws RuntimeException if an IOException occurs during deserialization
      */
     public static BloomFilter<CharSequence> fromBytes(byte[] bytes, int offset, int length) {
         BloomFilter<CharSequence> filter;
@@ -38,11 +34,8 @@ public class BFSerializer {
     }
 
     /**
-     * Serializes a Bloom Filter to a byte array.
-     *
      * @param filter the Bloom Filter to serialize
-     * @return the byte array containing the serialized Bloom Filter
-     * @throws RuntimeException if an IOException occurs during serialization
+     * @return the serialized bytes
      */
     public static byte[] toBytes(BloomFilter<CharSequence> filter) {
         var bos = new ByteArrayOutputStream();

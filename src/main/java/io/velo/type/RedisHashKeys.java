@@ -11,137 +11,96 @@ import java.util.TreeSet;
 import static io.velo.DictMap.TO_COMPRESS_MIN_DATA_LENGTH;
 
 /**
- * A class representing a set of hash keys that can be encoded and decoded with optional compression using Zstandard.
- * This class is designed to handle a sorted set of field names and provides methods for encoding and decoding the data.
+ * Hash keys set with Zstd compression support.
  */
 public class RedisHashKeys {
     /**
-     * The maximum size of the hash. This is set to 4096.
-     * This value can be changed by configuration.
-     * The keys encoded and compressed length should be less than or equal to 4KB, assuming a compression ratio of 0.25, then 16KB.
-     * Assuming a key length of 32, then 16KB / 32 = 512.
+     * Maximum size of the hash (4096).
+     * Encoded and compressed length should be under 4KB.
      */
     public static short HASH_MAX_SIZE = 4096;
 
-    /**
-     * The maximum length of a set member. This is set to 255.
-     */
+    /** Maximum length of a set member. */
     public static short SET_MEMBER_MAX_LENGTH = 255;
 
-    /**
-     * The length of the header in bytes
-     * size short + dict seq int + body length int + crc int
-     */
+    /** Header length: size short + dict seq int + body length int + crc int */
     @VisibleForTesting
     static final int HEADER_LENGTH = 2 + 4 + 4 + 4;
 
     /**
-     * Generates a key for storing the keys of a hash, ensuring all keys are in the same slot.
-     *
      * @param key the base key of the hash
-     * @return the generated key
+     * @return generated key for storing hash keys
      */
-    // may be length > CompressedValue.KEY_MAX_LENGTH
     public static String keysKey(String key) {
-        // add hashtag to make sure all keys in one slot
         return "h_k_{" + key + "}";
     }
 
     /**
-     * Generates a key for storing a field of a hash, ensuring all fields of the same key are in the same slot.
-     *
      * @param key   the base key of the hash
      * @param field the field name
-     * @return the generated key
+     * @return generated key for storing a hash field
      */
-    // may be length > CompressedValue.KEY_MAX_LENGTH
     public static String fieldKey(String key, String field) {
-        // add hashtag to make sure all keys in one slot
-        // add . to make sure same key use the same dict when compress
         return "h_f_" + "{" + key + "}." + field;
     }
 
-    /**
-     * The internal set to store sorted field names.
-     */
     private final TreeSet<String> set = new TreeSet<>();
 
-    /**
-     * Returns the internal sorted set containing field names.
-     *
-     * @return the internal set
-     */
+    /** @return internal sorted set of field names */
     public TreeSet<String> getSet() {
         return set;
     }
 
-    /**
-     * Returns the number of field names in the set.
-     *
-     * @return the size of the set
-     */
+    /** @return number of field names */
     public int size() {
         return set.size();
     }
 
     /**
-     * Checks if the set contains the specified field name.
-     *
      * @param field the field name to check
-     * @return true if the field name is contained in the set, false otherwise
+     * @return true if contained
      */
     public boolean contains(String field) {
         return set.contains(field);
     }
 
     /**
-     * Removes the specified field name from the set.
-     *
      * @param field the field name to remove
-     * @return true if the field name was removed, false otherwise
+     * @return true if removed
      */
     public boolean remove(String field) {
         return set.remove(field);
     }
 
     /**
-     * Adds a field name to the set.
-     *
      * @param field the field name to add
-     * @return true if the field name was added, false if it was already present
+     * @return true if added, false if already present
      */
     public boolean add(String field) {
         return set.add(field);
     }
 
     /**
-     * Encodes the set of field names to a byte array without compression.
-     *
-     * @return the encoded byte array
+     * @return encoded byte array without compression
      */
     public byte[] encodeButDoNotCompress() {
         return encode(null);
     }
 
     /**
-     * Encodes the set of field names to a byte array with compression using the default dictionary.
-     *
-     * @return the encoded and compressed byte array
+     * @return encoded and compressed byte array
      */
     public byte[] encode() {
         return encode(Dict.SELF_ZSTD_DICT);
     }
 
     /**
-     * Encodes the set of field names to a byte array with optional compression using the specified dictionary.
-     *
-     * @param dict the dictionary to use for compression, or null if no compression is desired
-     * @return the encoded byte array, possibly compressed
+     * @param dict compression dictionary or null
+     * @return encoded byte array, possibly compressed
      */
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
         for (var e : set) {
-            // key length use 2 bytes short
             bodyBytesLength += 2 + Wal.keyBytes(e).length;
         }
 
@@ -152,10 +111,8 @@ public class RedisHashKeys {
 
         var buffer = ByteBuffer.allocate(bodyBytesLength + HEADER_LENGTH);
         buffer.putShort((short) size);
-        // tmp no dict seq
         buffer.putInt(0);
         buffer.putInt(bodyBytesLength);
-        // tmp crc
         buffer.putInt(0);
         for (var e : set) {
             var fieldBytes = Wal.keyBytes(e);
@@ -163,7 +120,6 @@ public class RedisHashKeys {
             buffer.put(fieldBytes);
         }
 
-        // crc
         int crc = 0;
         if (bodyBytesLength > 0) {
             var hb = buffer.array();
@@ -173,7 +129,8 @@ public class RedisHashKeys {
 
         var rawBytesWithHeader = buffer.array();
         if (bodyBytesLength > TO_COMPRESS_MIN_DATA_LENGTH && dict != null) {
-            var compressedBytes = RedisHH.compressIfBytesLengthIsLong(dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
+            var compressedBytes = RedisHH.compressIfBytesLengthIsLong(
+                    dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
             if (compressedBytes != null) {
                 return compressedBytes;
             }
@@ -182,10 +139,8 @@ public class RedisHashKeys {
     }
 
     /**
-     * Retrieves the size of the set without decoding the entire byte array.
-     *
-     * @param data the byte array containing the encoded set
-     * @return the size of the set
+     * @param data the encoded byte array
+     * @return size without decoding entire array
      */
     public static int getSizeWithoutDecode(byte[] data) {
         var buffer = ByteBuffer.wrap(data);
@@ -193,21 +148,17 @@ public class RedisHashKeys {
     }
 
     /**
-     * Decodes a byte array to a RedisHashKeys object. Checks the CRC32 by default.
-     *
      * @param data the byte array to decode
-     * @return the RedisHashKeys object
+     * @return decoded RedisHashKeys
      */
     public static RedisHashKeys decode(byte[] data) {
         return decode(data, true);
     }
 
     /**
-     * Decodes a byte array to a RedisHashKeys object with optional CRC32 check.
-     *
      * @param data         the byte array to decode
-     * @param doCheckCrc32 whether to check the CRC32
-     * @return the RedisHashKeys object
+     * @param doCheckCrc32 whether to check CRC32
+     * @return decoded RedisHashKeys
      */
     public static RedisHashKeys decode(byte[] data, boolean doCheckCrc32) {
         var buffer = ByteBuffer.wrap(data);
@@ -217,13 +168,12 @@ public class RedisHashKeys {
         var crc = buffer.getInt();
 
         if (dictSeq > 0) {
-            // decompress first
             buffer = RedisHH.decompressIfUseDict(dictSeq, bodyBytesLength, data);
         }
 
-        // check crc
         if (size > 0 && doCheckCrc32) {
-            int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
+            int crcCompare = KeyHash.hash32Offset(
+                    buffer.array(), buffer.position(), buffer.remaining());
             if (crc != crcCompare) {
                 throw new IllegalStateException("CRC check failed");
             }
@@ -236,7 +186,8 @@ public class RedisHashKeys {
                 throw new IllegalStateException("Length error, length=" + len);
             }
             if (len > buffer.remaining()) {
-                throw new IllegalStateException("Length error, length=" + len + ", exceeds remaining buffer");
+                throw new IllegalStateException(
+                        "Length error, length=" + len + ", exceeds remaining buffer");
             }
 
             var bytes = new byte[len];
@@ -247,25 +198,21 @@ public class RedisHashKeys {
     }
 
     /**
-     * Iterates over the byte array and calls the callback for each element.
+     * Callback for iterating over encoded entries.
      */
     public interface IterateCallback {
         /**
-         * Called for each element.
-         *
          * @param bytes the element bytes
-         * @param index the index of the element
-         * @return true to break, false to continue
+         * @param index the element index
+         * @return true to break iteration
          */
         boolean on(byte[] bytes, int index);
     }
 
     /**
-     * Iterates over the byte array and calls the callback for each element.
-     *
      * @param data         the byte array to iterate
-     * @param doCheckCrc32 whether to check the CRC32
-     * @param callback     the callback to call for each element
+     * @param doCheckCrc32 whether to check CRC32
+     * @param callback     callback for each element
      */
     public static void iterate(byte[] data, boolean doCheckCrc32, IterateCallback callback) {
         var buffer = ByteBuffer.wrap(data);
@@ -275,13 +222,12 @@ public class RedisHashKeys {
         var crc = buffer.getInt();
 
         if (dictSeq > 0) {
-            // decompress first
             buffer = RedisHH.decompressIfUseDict(dictSeq, bodyBytesLength, data);
         }
 
-        // check crc
         if (size > 0 && doCheckCrc32) {
-            int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
+            int crcCompare = KeyHash.hash32Offset(
+                    buffer.array(), buffer.position(), buffer.remaining());
             if (crc != crcCompare) {
                 throw new IllegalStateException("CRC check failed");
             }
@@ -293,7 +239,8 @@ public class RedisHashKeys {
                 throw new IllegalStateException("Length error, length=" + len);
             }
             if (len > buffer.remaining()) {
-                throw new IllegalStateException("Length error, length=" + len + ", exceeds remaining buffer");
+                throw new IllegalStateException(
+                        "Length error, length=" + len + ", exceeds remaining buffer");
             }
 
             var bytes = new byte[len];

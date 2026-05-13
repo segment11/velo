@@ -14,119 +14,81 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
- * A class representing a sorted set (zset) that can be encoded and decoded with optional compression using Zstandard.
- * This class is designed to handle a sorted set of members with associated scores and provides methods for encoding and decoding the data.
+ * Sorted set with Zstd compression support.
  */
 public class RedisZSet {
     /**
-     * The maximum size of the zset. This is set to 4096.
-     * This value can be changed by configuration.
-     * The values encoded and compressed length should be less than or equal to 4KB, assuming a compression ratio of 0.25, then 16KB.
-     * Assuming a value length of 32, then 16KB / 32 = 512.
+     * Maximum zset size (4096).
+     * Encoded and compressed length should be under 4KB.
      */
     public static short ZSET_MAX_SIZE = 4096;
 
-    /**
-     * The maximum length of a zset member. This is set to 255.
-     */
+    /** Maximum length of a zset member. */
     public static short ZSET_MEMBER_MAX_LENGTH = 255;
 
-    /**
-     * The length of the header in bytes
-     * size short + dict seq int + body length int + crc int
-     */
+    /** Header length: size short + dict seq int + body length int + crc int */
     @VisibleForTesting
     static final int HEADER_LENGTH = 2 + 4 + 4 + 4;
 
-    /**
-     * A constant representing the maximum member value for range queries.
-     */
+    /** Maximum member value for range queries. */
     public static final String MEMBER_MAX = "+";
 
-    /**
-     * A constant representing the minimum member value for range queries.
-     */
+    /** Minimum member value for range queries. */
     public static final String MEMBER_MIN = "-";
 
     /**
-     * A class representing a score-value pair in the zset. Each pair has a score and a member.
-     * This class implements the Comparable interface to allow sorting based on score and member.
+     * Score-value pair for sorted set.
      */
     public static class ScoreValue implements Comparable<ScoreValue> {
         private double score;
         private final String member;
 
         /**
-         * Constructs a new instance of ScoreValue with the specified score and member.
-         *
-         * @param score  the score of the pair
-         * @param member the member of the pair
+         * @param score  the score
+         * @param member the member
          */
         public ScoreValue(double score, @NotNull String member) {
             this.score = score;
             this.member = member;
         }
 
-        /**
-         * The initial rank of the score-value pair.
-         */
         private int initRank = 0;
 
-        /**
-         * Returns the initial rank of the score-value pair.
-         *
-         * @return the initial rank
-         */
+        /** @return initial rank */
         public int getInitRank() {
             return initRank;
         }
 
         /**
-         * Sets the initial rank of the score-value pair.
-         *
          * @param initRank the initial rank to set
          */
         public void setInitRank(int initRank) {
             this.initRank = initRank;
         }
 
-        /**
-         * A flag indicating whether the score-value pair is already weighted.
-         */
+        /** Whether already weighted. */
         public boolean isAlreadyWeighted = false;
 
-        /**
-         * Returns the score of the score-value pair.
-         *
-         * @return the score
-         */
+        /** @return the score */
         public double score() {
             return score;
         }
 
         /**
-         * Sets the score of the score-value pair.
-         *
          * @param score the score to set
          */
         public void score(double score) {
             this.score = score;
         }
 
-        /**
-         * Returns the member of the score-value pair.
-         *
-         * @return the member
-         */
+        /** @return the member */
         public String member() {
             return member;
         }
 
         /**
-         * Compares this score-value pair with another based on score and member.
-         *
-         * @param o the other score-value pair to compare with
-         * @return a negative integer, zero, or a positive integer as this object is less than, equal to, or greater than the specified object
+         * @param o the other ScoreValue to compare
+         * @return comparison result
          */
         @Override
         public int compareTo(@NotNull RedisZSet.ScoreValue o) {
@@ -136,11 +98,6 @@ public class RedisZSet {
             return Double.compare(score, o.score);
         }
 
-        /**
-         * Returns a string representation of the score-value pair.
-         *
-         * @return the string representation of the score-value pair
-         */
         @Override
         public String toString() {
             return "ScoreValue{" +
@@ -150,64 +107,43 @@ public class RedisZSet {
         }
 
         /**
-         * Returns the length of the score-value pair in bytes.
-         *
-         * @return the length in bytes
+         * @return length in bytes (8 for score + key bytes length)
          */
         public int length() {
-            // score double + value length short
             return 8 + Wal.keyBytes(member).length;
         }
     }
 
-    /**
-     * The internal set to store score-value pairs in sorted order.
-     */
     private final TreeSet<ScoreValue> set = new TreeSet<>();
 
-    /**
-     * The internal map to store score-value pairs by member.
-     */
     private final TreeMap<String, ScoreValue> memberMap = new TreeMap<>();
 
-    /**
-     * Returns the internal sorted set containing score-value pairs.
-     *
-     * @return the internal sorted set
-     */
-    // need not thread safe
+    /** @return internal sorted set of score-value pairs */
     public TreeSet<ScoreValue> getSet() {
         return set;
     }
 
-    /**
-     * Returns the internal map containing score-value pairs by member.
-     *
-     * @return the internal map
-     */
+    /** @return internal map of members to score-value pairs */
     public TreeMap<String, ScoreValue> getMemberMap() {
         return memberMap;
     }
 
-    /**
-     * A fixed value added or subtracted to adjust the boundaries for range queries.
-     */
     private static final double addFixed = 0.0000000000001;
 
     /**
-     * Retrieves a subset of score-value pairs between the specified scores.
-     *
-     * @param min          the minimum score
-     * @param minInclusive whether the minimum score is inclusive
-     * @param max          the maximum score
-     * @param maxInclusive whether the maximum score is inclusive
-     * @return the navigable set of score-value pairs within the specified range
+     * @param min          minimum score
+     * @param minInclusive whether minimum is inclusive
+     * @param max          maximum score
+     * @param maxInclusive whether maximum is inclusive
+     * @return navigable set of score-value pairs in range
      */
-    public NavigableSet<ScoreValue> between(double min, boolean minInclusive, double max, boolean maxInclusive) {
+    public NavigableSet<ScoreValue> between(double min, boolean minInclusive,
+                                           double max, boolean maxInclusive) {
         double minFixed = min != Double.NEGATIVE_INFINITY ? min - addFixed : Double.NEGATIVE_INFINITY;
         double maxFixed = max != Double.POSITIVE_INFINITY ? max + addFixed : Double.POSITIVE_INFINITY;
 
-        var subSet = set.subSet(new ScoreValue(minFixed, ""), false, new ScoreValue(maxFixed, ""), false);
+        var subSet = set.subSet(new ScoreValue(minFixed, ""), false,
+                new ScoreValue(maxFixed, ""), false);
         var copySet = new TreeSet<>(subSet);
         var itTmp = copySet.iterator();
         while (itTmp.hasNext()) {
@@ -223,15 +159,14 @@ public class RedisZSet {
     }
 
     /**
-     * Retrieves a subset of score-value pairs between the specified members.
-     *
-     * @param min          the minimum member
-     * @param minInclusive whether the minimum member is inclusive
-     * @param max          the maximum member
-     * @param maxInclusive whether the maximum member is inclusive
-     * @return the navigable map of score-value pairs within the specified range
+     * @param min          minimum member
+     * @param minInclusive whether minimum is inclusive
+     * @param max          maximum member
+     * @param maxInclusive whether maximum is inclusive
+     * @return navigable map of score-value pairs in range
      */
-    public NavigableMap<String, ScoreValue> betweenByMember(String min, boolean minInclusive, String max, boolean maxInclusive) {
+    public NavigableMap<String, ScoreValue> betweenByMember(String min, boolean minInclusive,
+                                                           String max, boolean maxInclusive) {
         if (memberMap.isEmpty()) {
             return memberMap;
         }
@@ -245,43 +180,30 @@ public class RedisZSet {
             maxInclusive = true;
         }
         var subMap = memberMap.subMap(min, minInclusive, max, maxInclusive);
-        // copy one
         return new TreeMap<>(subMap);
     }
 
-    /**
-     * Returns the number of score-value pairs in the zset.
-     *
-     * @return the size of the zset
-     */
+    /** @return number of score-value pairs */
     public int size() {
         return memberMap.size();
     }
 
-    /**
-     * Checks if the zset is empty.
-     *
-     * @return true if the zset is empty, false otherwise
-     */
+    /** @return true if empty */
     public boolean isEmpty() {
         return memberMap.isEmpty();
     }
 
     /**
-     * Checks if the zset contains the specified member.
-     *
      * @param member the member to check
-     * @return true if the member is contained in the zset, false otherwise
+     * @return true if contained
      */
     public boolean contains(String member) {
         return memberMap.containsKey(member);
     }
 
     /**
-     * Removes the specified member from the zset.
-     *
      * @param member the member to remove
-     * @return true if the member was removed, false otherwise
+     * @return true if removed
      */
     public boolean remove(String member) {
         var sv = memberMap.get(member);
@@ -292,18 +214,14 @@ public class RedisZSet {
         return set.remove(sv);
     }
 
-    /**
-     * Clears all score-value pairs from the zset.
-     */
+    /** Clears all score-value pairs. */
     public void clear() {
         set.clear();
         memberMap.clear();
     }
 
     /**
-     * Removes and returns the score-value pair with the lowest score.
-     *
-     * @return the score-value pair with the lowest score, or null if the zset is empty
+     * @return score-value pair with lowest score or null if empty
      */
     public ScoreValue pollFirst() {
         var sv = set.pollFirst();
@@ -315,9 +233,7 @@ public class RedisZSet {
     }
 
     /**
-     * Removes and returns the score-value pair with the highest score.
-     *
-     * @return the score-value pair with the highest score, or null if the zset is empty
+     * @return score-value pair with highest score or null if empty
      */
     public ScoreValue pollLast() {
         var sv = set.pollLast();
@@ -329,24 +245,20 @@ public class RedisZSet {
     }
 
     /**
-     * Adds a score-value pair to the zset.
-     *
-     * @param score  the score of the pair
-     * @param member the member of the pair
-     * @return true if the pair was added, false if the pair already exists and overwrite is false
+     * @param score  the score
+     * @param member the member
+     * @return true if added
      */
     public boolean add(double score, String member) {
         return add(score, member, true, false);
     }
 
     /**
-     * Adds a score-value pair to the zset with optional overwrite and weighted flags.
-     *
-     * @param score             the score of the pair
-     * @param member            the member of the pair
-     * @param overwrite         whether to overwrite an existing pair
-     * @param isAlreadyWeighted whether the score is already weighted
-     * @return true if the pair was added, false if the pair already exists and overwrite is false
+     * @param score             the score
+     * @param member            the member
+     * @param overwrite         whether to overwrite existing
+     * @param isAlreadyWeighted whether score is already weighted
+     * @return true if added
      */
     public boolean add(double score, String member, boolean overwrite, boolean isAlreadyWeighted) {
         var svExist = memberMap.get(member);
@@ -372,18 +284,14 @@ public class RedisZSet {
     }
 
     /**
-     * Retrieves the score-value pair for the specified member.
-     *
      * @param member the member to retrieve
-     * @return the score-value pair for the specified member, or null if the member does not exist
+     * @return score-value pair or null if not found
      */
     public ScoreValue get(String member) {
         return memberMap.get(member);
     }
 
-    /**
-     * Prints the score-value pairs in the zset.
-     */
+    /** Prints all score-value pairs. */
     public void print() {
         for (var member : set) {
             System.out.println(member);
@@ -391,33 +299,26 @@ public class RedisZSet {
     }
 
     /**
-     * Encodes the zset to a byte array without compression.
-     *
-     * @return the encoded byte array
+     * @return encoded byte array without compression
      */
     public byte[] encodeButDoNotCompress() {
         return encode(null);
     }
 
     /**
-     * Encodes the zset to a byte array with compression using the default dictionary.
-     *
-     * @return the encoded and compressed byte array
+     * @return encoded and compressed byte array
      */
     public byte[] encode() {
         return encode(Dict.SELF_ZSTD_DICT);
     }
 
     /**
-     * Encodes the zset to a byte array with optional compression using the specified dictionary.
-     *
-     * @param dict the dictionary to use for compression, or null if no compression is desired
-     * @return the encoded byte array, possibly compressed
+     * @param dict compression dictionary or null
+     * @return encoded byte array, possibly compressed
      */
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
         for (var member : set) {
-            // zset value length use 2 bytes
             bodyBytesLength += 2 + member.length();
         }
 
@@ -428,10 +329,8 @@ public class RedisZSet {
 
         var buffer = ByteBuffer.allocate(bodyBytesLength + HEADER_LENGTH);
         buffer.putShort((short) size);
-        // tmp no dict seq
         buffer.putInt(0);
         buffer.putInt(bodyBytesLength);
-        // tmp crc
         buffer.putInt(0);
         for (var e : set) {
             var memberBytes = Wal.keyBytes(e.member());
@@ -440,7 +339,6 @@ public class RedisZSet {
             buffer.put(memberBytes);
         }
 
-        // crc
         int crc = 0;
         if (bodyBytesLength > 0) {
             var hb = buffer.array();
@@ -450,7 +348,8 @@ public class RedisZSet {
 
         var rawBytesWithHeader = buffer.array();
         if (bodyBytesLength > DictMap.TO_COMPRESS_MIN_DATA_LENGTH && dict != null) {
-            var compressedBytes = RedisHH.compressIfBytesLengthIsLong(dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
+            var compressedBytes = RedisHH.compressIfBytesLengthIsLong(
+                    dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
             if (compressedBytes != null) {
                 return compressedBytes;
             }
@@ -459,10 +358,8 @@ public class RedisZSet {
     }
 
     /**
-     * Retrieves the size of the zset without decoding the entire byte array.
-     *
-     * @param data the byte array containing the encoded zset
-     * @return the size of the zset
+     * @param data the encoded byte array
+     * @return size without decoding entire array
      */
     public static int getSizeWithoutDecode(byte[] data) {
         var buffer = ByteBuffer.wrap(data);
@@ -470,21 +367,17 @@ public class RedisZSet {
     }
 
     /**
-     * Decodes a byte array to a RedisZSet object. Checks the CRC32 by default.
-     *
      * @param data the byte array to decode
-     * @return the RedisZSet object
+     * @return decoded RedisZSet
      */
     public static RedisZSet decode(byte[] data) {
         return decode(data, true);
     }
 
     /**
-     * Decodes a byte array to a RedisZSet object with optional CRC32 check.
-     *
      * @param data         the byte array to decode
-     * @param doCheckCrc32 whether to check the CRC32
-     * @return the RedisZSet object
+     * @param doCheckCrc32 whether to check CRC32
+     * @return decoded RedisZSet
      */
     public static RedisZSet decode(byte[] data, boolean doCheckCrc32) {
         var buffer = ByteBuffer.wrap(data);
@@ -494,13 +387,12 @@ public class RedisZSet {
         var crc = buffer.getInt();
 
         if (dictSeq > 0) {
-            // decompress first
             buffer = RedisHH.decompressIfUseDict(dictSeq, bodyBytesLength, data);
         }
 
-        // check crc
         if (size > 0 && doCheckCrc32) {
-            int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
+            int crcCompare = KeyHash.hash32Offset(
+                    buffer.array(), buffer.position(), buffer.remaining());
             if (crc != crcCompare) {
                 throw new IllegalStateException("CRC check failed");
             }
@@ -511,10 +403,12 @@ public class RedisZSet {
         for (int i = 0; i < size; i++) {
             int len = buffer.getShort();
             if (len <= 0) {
-                throw new IllegalStateException("Invalid zset member length: " + len + ", expected > 0");
+                throw new IllegalStateException(
+                        "Invalid zset member length: " + len + ", expected > 0");
             }
             if (len + 8 > buffer.remaining()) {
-                throw new IllegalStateException("Invalid zset member length: " + len + ", exceeds remaining buffer");
+                throw new IllegalStateException(
+                        "Invalid zset member length: " + len + ", exceeds remaining buffer");
             }
             double score = buffer.getDouble();
             var bytes = new byte[len];
@@ -532,26 +426,22 @@ public class RedisZSet {
     }
 
     /**
-     * Iterates over the byte array and calls the callback for each member.
+     * Callback for iterating over encoded members.
      */
     public interface IterateCallback {
         /**
-         * Called for each member.
-         *
          * @param memberBytes the member bytes
          * @param score       the score
          * @param rank        the rank
-         * @return true to break, false to continue
+         * @return true to break iteration
          */
         boolean on(byte[] memberBytes, double score, int rank);
     }
 
     /**
-     * Iterates over the byte array and calls the callback for each member.
-     *
      * @param data         the byte array to iterate
-     * @param doCheckCrc32 whether to check the CRC32
-     * @param callback     the callback to call for each member
+     * @param doCheckCrc32 whether to check CRC32
+     * @param callback     callback for each member
      */
     public static void iterate(byte[] data, boolean doCheckCrc32, IterateCallback callback) {
         var buffer = ByteBuffer.wrap(data);
@@ -561,13 +451,12 @@ public class RedisZSet {
         var crc = buffer.getInt();
 
         if (dictSeq > 0) {
-            // decompress first
             buffer = RedisHH.decompressIfUseDict(dictSeq, bodyBytesLength, data);
         }
 
-        // check crc
         if (size > 0 && doCheckCrc32) {
-            int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
+            int crcCompare = KeyHash.hash32Offset(
+                    buffer.array(), buffer.position(), buffer.remaining());
             if (crc != crcCompare) {
                 throw new IllegalStateException("CRC check failed");
             }
@@ -576,10 +465,12 @@ public class RedisZSet {
         for (int i = 0; i < size; i++) {
             int len = buffer.getShort();
             if (len <= 0) {
-                throw new IllegalStateException("Invalid zset member length: " + len + ", expected > 0");
+                throw new IllegalStateException(
+                        "Invalid zset member length: " + len + ", expected > 0");
             }
             if (len + 8 > buffer.remaining()) {
-                throw new IllegalStateException("Invalid zset member length: " + len + ", exceeds remaining buffer");
+                throw new IllegalStateException(
+                        "Invalid zset member length: " + len + ", exceeds remaining buffer");
             }
             double score = buffer.getDouble();
             var bytes = new byte[len];

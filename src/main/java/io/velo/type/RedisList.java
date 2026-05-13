@@ -11,70 +11,47 @@ import java.util.LinkedList;
 import static io.velo.DictMap.TO_COMPRESS_MIN_DATA_LENGTH;
 
 /**
- * A class representing a list that can be encoded and decoded with optional compression using Zstandard.
- * This class is designed to handle a list of byte arrays and provides methods for encoding and decoding the data.
+ * List with Zstd compression support.
  */
 public class RedisList {
     /**
-     * The maximum size of the list. This is set to Short.MAX_VALUE.
-     * This value can be changed by configuration.
-     * The values encoded and compressed length should be less than or equal to 4KB, assuming a compression ratio of 0.25, then 16KB.
-     * Assuming a value length of 32, then 16KB / 32 = 512.
+     * Maximum list size (Short.MAX_VALUE).
+     * Encoded and compressed length should be under 4KB.
      */
     public static short LIST_MAX_SIZE = Short.MAX_VALUE;
 
-    /**
-     * The length of the header in bytes
-     * size short + dict seq int + body length int + crc int
-     */
+    /** Header length: size short + dict seq int + body length int + crc int */
     @VisibleForTesting
     static final int HEADER_LENGTH = 2 + 4 + 4 + 4;
 
-    /**
-     * The internal list to store byte arrays.
-     */
     private final LinkedList<byte[]> list = new LinkedList<>();
 
-    /**
-     * Returns the internal list containing byte arrays.
-     *
-     * @return the internal list
-     */
+    /** @return internal list of byte arrays */
     public LinkedList<byte[]> getList() {
         return list;
     }
 
-    /**
-     * Returns the number of elements in the list.
-     *
-     * @return the size of the list
-     */
+    /** @return number of elements */
     public int size() {
         return list.size();
     }
 
     /**
-     * Adds an element to the beginning of the list.
-     *
-     * @param e the element to add
+     * @param e the element to add at beginning
      */
     public void addFirst(byte[] e) {
         list.addFirst(e);
     }
 
     /**
-     * Adds an element to the end of the list.
-     *
-     * @param e the element to add
+     * @param e the element to add at end
      */
     public void addLast(byte[] e) {
         list.add(e);
     }
 
     /**
-     * Adds an element at the specified index in the list.
-     *
-     * @param index the index at which to add the element
+     * @param index the index at which to add
      * @param e     the element to add
      */
     public void addAt(int index, byte[] e) {
@@ -82,9 +59,7 @@ public class RedisList {
     }
 
     /**
-     * Sets the element at the specified index in the list.
-     *
-     * @param index the index at which to set the element
+     * @param index the index at which to set
      * @param e     the element to set
      */
     public void setAt(int index, byte[] e) {
@@ -92,10 +67,8 @@ public class RedisList {
     }
 
     /**
-     * Returns the index of the specified element in the list.
-     *
      * @param b the element to search for
-     * @return the index of the element, or -1 if the element is not found
+     * @return index or -1 if not found
      */
     public int indexOf(byte[] b) {
         int i = 0;
@@ -109,61 +82,48 @@ public class RedisList {
     }
 
     /**
-     * Retrieves the element at the specified index.
-     *
-     * @param index the index of the element to retrieve
-     * @return the element at the specified index
+     * @param index the index to retrieve
+     * @return element at index
      */
     public byte[] get(int index) {
         return list.get(index);
     }
 
     /**
-     * Removes and returns the first element from the list.
-     *
-     * @return the first element in the list
+     * @return first element
      */
     public byte[] removeFirst() {
         return list.removeFirst();
     }
 
     /**
-     * Removes and returns the last element from the list.
-     *
-     * @return the last element in the list
+     * @return last element
      */
     public byte[] removeLast() {
         return list.removeLast();
     }
 
     /**
-     * Encodes the list to a byte array without compression.
-     *
-     * @return the encoded byte array
+     * @return encoded byte array without compression
      */
     public byte[] encodeButDoNotCompress() {
         return encode(null);
     }
 
     /**
-     * Encodes the list to a byte array with compression using the default dictionary.
-     *
-     * @return the encoded and compressed byte array
+     * @return encoded and compressed byte array
      */
     public byte[] encode() {
         return encode(Dict.SELF_ZSTD_DICT);
     }
 
     /**
-     * Encodes the list to a byte array with optional compression using the specified dictionary.
-     *
-     * @param dict the dictionary to use for compression, or null if no compression is desired
-     * @return the encoded byte array, possibly compressed
+     * @param dict compression dictionary or null
+     * @return encoded byte array, possibly compressed
      */
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
         for (var e : list) {
-            // list value length use 2 bytes
             bodyBytesLength += 2 + e.length;
         }
 
@@ -174,17 +134,14 @@ public class RedisList {
 
         var buffer = ByteBuffer.allocate(bodyBytesLength + HEADER_LENGTH);
         buffer.putShort((short) size);
-        // tmp no dict seq
         buffer.putInt(0);
         buffer.putInt(bodyBytesLength);
-        // tmp crc
         buffer.putInt(0);
         for (var e : list) {
             buffer.putShort((short) e.length);
             buffer.put(e);
         }
 
-        // crc
         int crc = 0;
         if (bodyBytesLength > 0) {
             var hb = buffer.array();
@@ -194,7 +151,8 @@ public class RedisList {
 
         var rawBytesWithHeader = buffer.array();
         if (bodyBytesLength > TO_COMPRESS_MIN_DATA_LENGTH && dict != null) {
-            var compressedBytes = RedisHH.compressIfBytesLengthIsLong(dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
+            var compressedBytes = RedisHH.compressIfBytesLengthIsLong(
+                    dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
             if (compressedBytes != null) {
                 return compressedBytes;
             }
@@ -203,10 +161,8 @@ public class RedisList {
     }
 
     /**
-     * Retrieves the size of the list without decoding the entire byte array.
-     *
-     * @param data the byte array containing the encoded list
-     * @return the size of the list
+     * @param data the encoded byte array
+     * @return size without decoding entire array
      */
     public static int getSizeWithoutDecode(byte[] data) {
         var buffer = ByteBuffer.wrap(data);
@@ -214,21 +170,17 @@ public class RedisList {
     }
 
     /**
-     * Decodes a byte array to a RedisList object. Checks the CRC32 by default.
-     *
      * @param data the byte array to decode
-     * @return the RedisList object
+     * @return decoded RedisList
      */
     public static RedisList decode(byte[] data) {
         return decode(data, true);
     }
 
     /**
-     * Decodes a byte array to a RedisList object with optional CRC32 check.
-     *
      * @param data         the byte array to decode
-     * @param doCheckCrc32 whether to check the CRC32
-     * @return the RedisList object
+     * @param doCheckCrc32 whether to check CRC32
+     * @return decoded RedisList
      */
     public static RedisList decode(byte[] data, boolean doCheckCrc32) {
         var buffer = ByteBuffer.wrap(data);
@@ -238,13 +190,12 @@ public class RedisList {
         var crc = buffer.getInt();
 
         if (dictSeq > 0) {
-            // decompress first
             buffer = RedisHH.decompressIfUseDict(dictSeq, bodyBytesLength, data);
         }
 
-        // check crc
         if (size > 0 && doCheckCrc32) {
-            int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
+            int crcCompare = KeyHash.hash32Offset(
+                    buffer.array(), buffer.position(), buffer.remaining());
             if (crc != crcCompare) {
                 throw new IllegalStateException("CRC check failed");
             }
@@ -254,10 +205,12 @@ public class RedisList {
         for (int i = 0; i < size; i++) {
             int len = buffer.getShort();
             if (len <= 0) {
-                throw new IllegalStateException("Invalid list entry length: " + len + ", expected > 0");
+                throw new IllegalStateException(
+                        "Invalid list entry length: " + len + ", expected > 0");
             }
             if (len > buffer.remaining()) {
-                throw new IllegalStateException("Invalid list entry length: " + len + ", exceeds remaining buffer");
+                throw new IllegalStateException(
+                        "Invalid list entry length: " + len + ", exceeds remaining buffer");
             }
             var bytes = new byte[len];
             buffer.get(bytes);
@@ -267,25 +220,21 @@ public class RedisList {
     }
 
     /**
-     * Iterates over the byte array and calls the callback for each element.
+     * Callback for iterating over encoded entries.
      */
     public interface IterateCallback {
         /**
-         * Called for each element.
-         *
          * @param bytes the element bytes
-         * @param index the index of the element
-         * @return true to break, false to continue
+         * @param index the element index
+         * @return true to break iteration
          */
         boolean on(byte[] bytes, int index);
     }
 
     /**
-     * Iterates over the byte array and calls the callback for each element.
-     *
      * @param data         the byte array to iterate
-     * @param doCheckCrc32 whether to check the CRC32
-     * @param callback     the callback to call for each element
+     * @param doCheckCrc32 whether to check CRC32
+     * @param callback     callback for each element
      */
     public static void iterate(byte[] data, boolean doCheckCrc32, IterateCallback callback) {
         var buffer = ByteBuffer.wrap(data);
@@ -295,13 +244,12 @@ public class RedisList {
         var crc = buffer.getInt();
 
         if (dictSeq > 0) {
-            // decompress first
             buffer = RedisHH.decompressIfUseDict(dictSeq, bodyBytesLength, data);
         }
 
-        // check crc
         if (size > 0 && doCheckCrc32) {
-            int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
+            int crcCompare = KeyHash.hash32Offset(
+                    buffer.array(), buffer.position(), buffer.remaining());
             if (crc != crcCompare) {
                 throw new IllegalStateException("CRC check failed");
             }
@@ -310,10 +258,12 @@ public class RedisList {
         for (int i = 0; i < size; i++) {
             int len = buffer.getShort();
             if (len <= 0) {
-                throw new IllegalStateException("Invalid list entry length: " + len + ", expected > 0");
+                throw new IllegalStateException(
+                        "Invalid list entry length: " + len + ", expected > 0");
             }
             if (len > buffer.remaining()) {
-                throw new IllegalStateException("Invalid list entry length: " + len + ", exceeds remaining buffer");
+                throw new IllegalStateException(
+                        "Invalid list entry length: " + len + ", exceeds remaining buffer");
             }
             var bytes = new byte[len];
             buffer.get(bytes);

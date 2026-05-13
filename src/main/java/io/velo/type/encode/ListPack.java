@@ -4,7 +4,9 @@ import io.netty.buffer.ByteBuf;
 
 import java.util.function.BiConsumer;
 
-// copy from kvrocks rdb_listpack.cc
+/**
+ * ListPack encoding/decoding implementation (Redis listpack format).
+ */
 public class ListPack {
     private static final int ListPack7BitUIntMask = 0x80;
     private static final int ListPack7BitUInt = 0;
@@ -57,6 +59,10 @@ public class ListPack {
         }
     }
 
+    /**
+     * @param nettyBuf  the buffer to decode
+     * @param consumer  callback for each entry (bytes, index)
+     */
     public static void decode(ByteBuf nettyBuf, BiConsumer<byte[], Integer> consumer) {
         int size = nettyBuf.readableBytes();
         if (size < listPackHeaderSize) {
@@ -68,7 +74,6 @@ public class ListPack {
             throw new IllegalArgumentException("Invalid listpack length");
         }
 
-        // member count
         int len = nettyBuf.readShortLE();
         for (int i = 0; i < len; i++) {
             int valueLen;
@@ -77,56 +82,52 @@ public class ListPack {
 
             int c = nettyBuf.getUnsignedByte(nettyBuf.readerIndex());
 
-            if ((c & ListPack7BitUIntMask) == ListPack7BitUInt) {  // 7bit unsigned int
+            if ((c & ListPack7BitUIntMask) == ListPack7BitUInt) {
                 intValue = c & 0x7F;
                 valueBytes = String.valueOf(intValue).getBytes();
                 nettyBuf.skipBytes(ListPack7BitIntEntrySize);
-            } else if ((c & ListPack6BitStringMask) == ListPack6BitString) {  // 6bit string
+            } else if ((c & ListPack6BitStringMask) == ListPack6BitString) {
                 valueLen = c & 0x3F;
-                // skip the encoding type byte
                 nettyBuf.skipBytes(1);
                 valueBytes = new byte[valueLen];
                 nettyBuf.readBytes(valueBytes);
-                // skip the value bytes and the length of the element
                 nettyBuf.skipBytes(encodeBackLen(valueLen + 1));
-            } else if ((c & ListPack13BitIntMask) == ListPack13BitInt) {  // 13bit int
+            } else if ((c & ListPack13BitIntMask) == ListPack13BitInt) {
                 nettyBuf.skipBytes(1);
                 intValue = ((c & 0x1F) << 8) | nettyBuf.readUnsignedByte();
                 valueBytes = String.valueOf(intValue).getBytes();
                 nettyBuf.skipBytes(1);
-            } else if ((c & ListPack16BitIntMask) == ListPack16BitInt) {  // 16bit int
+            } else if ((c & ListPack16BitIntMask) == ListPack16BitInt) {
                 nettyBuf.skipBytes(1);
                 intValue = nettyBuf.readShortLE();
                 valueBytes = String.valueOf(intValue).getBytes();
                 nettyBuf.skipBytes(1);
-            } else if ((c & ListPack24BitIntMask) == ListPack24BitInt) {  // 24bit int
+            } else if ((c & ListPack24BitIntMask) == ListPack24BitInt) {
                 nettyBuf.skipBytes(1);
                 intValue = nettyBuf.readUnsignedMediumLE();
                 valueBytes = String.valueOf(intValue).getBytes();
                 nettyBuf.skipBytes(1);
-            } else if ((c & ListPack32BitIntMask) == ListPack32BitInt) {  // 32bit int
+            } else if ((c & ListPack32BitIntMask) == ListPack32BitInt) {
                 nettyBuf.skipBytes(1);
                 intValue = nettyBuf.readUnsignedIntLE();
                 valueBytes = String.valueOf(intValue).getBytes();
                 nettyBuf.skipBytes(1);
-            } else if ((c & ListPack64BitIntMask) == ListPack64BitInt) {  // 64bit int
+            } else if ((c & ListPack64BitIntMask) == ListPack64BitInt) {
                 nettyBuf.skipBytes(1);
                 intValue = nettyBuf.readLongLE();
                 valueBytes = String.valueOf(intValue).getBytes();
                 nettyBuf.skipBytes(1);
-            } else if ((c & ListPack12BitStringMask) == ListPack12BitString) {  // 12bit string
+            } else if ((c & ListPack12BitStringMask) == ListPack12BitString) {
                 nettyBuf.skipBytes(1);
                 valueLen = ((c & 0xF) << 8) | nettyBuf.readUnsignedByte();
                 valueBytes = new byte[valueLen];
                 nettyBuf.readBytes(valueBytes);
-                // skip the value bytes and the length of the element
                 nettyBuf.skipBytes(encodeBackLen(valueLen + 2));
-            } else if ((c & ListPack32BitStringMask) == ListPack32BitString) {  // 32bit string
+            } else if ((c & ListPack32BitStringMask) == ListPack32BitString) {
                 nettyBuf.skipBytes(1);
                 valueLen = nettyBuf.readIntLE();
                 valueBytes = new byte[valueLen];
                 nettyBuf.readBytes(valueBytes);
-                // skip the value bytes and the length of the element
                 nettyBuf.skipBytes(encodeBackLen(valueLen + 5));
             } else if (c == ListPackEOF) {
                 break;

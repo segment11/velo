@@ -3,8 +3,7 @@ package io.velo.type;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * A class representing a Redis BitSet that can dynamically expand and perform bit operations.
- * Redis BitSet is Big-Endian. Java BitSet is Little-Endian.
+ * Redis BitSet implementation with dynamic expansion (Big-Endian).
  */
 public class RedisBitSet {
     private byte[] valueBytes;
@@ -12,8 +11,6 @@ public class RedisBitSet {
     private boolean isExpandedWhenInit = false;
 
     /**
-     * Construct a RedisBitSet with given value bytes.
-     *
      * @param valueBytes the value bytes of the RedisBitSet
      */
     public RedisBitSet(byte[] valueBytes) {
@@ -21,21 +18,11 @@ public class RedisBitSet {
         this.isExpandedWhenInit = valueBytes == null;
     }
 
-    /**
-     * Get the value bytes of the RedisBitSet.
-     *
-     * @return the value bytes of the RedisBitSet
-     */
+    /** @return the value bytes */
     public byte[] getValueBytes() {
         return valueBytes;
     }
 
-    /**
-     * Expand the value bytes of the RedisBitSet if needed.
-     *
-     * @param offset the offset of the bit to set
-     * @return true if the value bytes is expanded, false otherwise
-     */
     private boolean expand(int offset) {
         var newByteLength = (offset + 7) / 8 + 1;
         if (newByteLength > valueBytes.length) {
@@ -49,8 +36,6 @@ public class RedisBitSet {
     }
 
     /**
-     * Result of set operation.
-     *
      * @param isExpanded whether the value bytes is expanded
      * @param isChanged  whether the bit is changed
      * @param isOldBit1  whether the old bit is 1
@@ -67,19 +52,15 @@ public class RedisBitSet {
     }
 
     /**
-     * Set the bit at the given offset to the given value.
-     *
      * @param offset the offset of the bit to set
-     * @param isBit1 the value to set, true means 1
+     * @param isBit1 true to set bit to 1, false for 0
      * @return the result of set operation
      */
     public SetResult set(int offset, boolean isBit1) {
         var isExpanded = expand(offset) || isExpandedWhenInit;
 
         var byteIndex = offset / 8;
-        // from left to right
         var bitIndex = offset % 8;
-        // is target bit is 1
         var oldBit = valueBytes[byteIndex] >> (7 - bitIndex) & 1;
         var isChanged = oldBit != (isBit1 ? 1 : 0);
 
@@ -92,21 +73,17 @@ public class RedisBitSet {
     }
 
     /**
-     * Get the bit at the given offset.
-     *
      * @param offset the offset of the bit to get
      * @return true if the bit is 1, false otherwise
      */
     public boolean get(int offset) {
         var byteIndex = offset / 8;
-        // from left to right
         var bitIndex = offset % 8;
 
         if (byteIndex >= valueBytes.length) {
             return false;
         }
 
-        // is target bit is 1
         var oldBit = valueBytes[byteIndex] >> (7 - bitIndex) & 1;
         return oldBit == 1;
     }

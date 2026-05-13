@@ -9,33 +9,24 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 /**
- * A class representing a Bloom Filter that can dynamically expand to accommodate more items.
- * This class manages multiple Bloom Filters and provides methods for encoding and decoding the data.
+ * Bloom Filter implementation with dynamic expansion capability.
  */
 public class RedisBF {
     /**
-     * A class representing a single Bloom Filter along with its capacity and item count.
+     * Single Bloom Filter with capacity and item count.
      */
     static class One {
-        /**
-         * The Bloom Filter instance.
-         */
+        /** The Bloom Filter instance. */
         BloomFilter<CharSequence> filter;
 
-        /**
-         * The number of items inserted into the Bloom Filter.
-         */
+        /** Number of items inserted. */
         int itemInserted;
 
-        /**
-         * The capacity of the Bloom Filter.
-         */
+        /** Capacity of the Bloom Filter. */
         int capacity;
 
         /**
-         * Checks if the Bloom Filter is full (i.e., more than 90% of its capacity is used).
-         *
-         * @return true if the Bloom Filter is full, false otherwise
+         * @return true if more than 90% of capacity is used
          */
         public boolean isFull() {
             if (capacity == 0) {
@@ -45,49 +36,25 @@ public class RedisBF {
         }
     }
 
-    /**
-     * The default capacity for each Bloom Filter.
-     */
+    /** Default capacity for each Bloom Filter. */
     public static final int DEFAULT_CAPACITY = 100;
 
-    /**
-     * The default false positive probability for each Bloom Filter.
-     */
+    /** Default false positive probability. */
     public static final double DEFAULT_FPP = 0.01;
 
-    /**
-     * The default expansion factor for scaling the Bloom Filters.
-     */
+    /** Default expansion factor for scaling. */
     public static final byte DEFAULT_EXPANSION = 2;
 
-    /**
-     * The maximum expansion factor for scaling the Bloom Filters.
-     */
+    /** Maximum expansion factor. */
     public static final byte MAX_EXPANSION = 10;
 
-    /**
-     * The funnel used to convert strings into a format suitable for the Bloom Filter.
-     */
     private static final Funnel<CharSequence> STRING_FUNNEL = Funnels.stringFunnel(StandardCharsets.UTF_8);
 
-    /**
-     * The false positive probability for the Bloom Filters.
-     */
     private double fpp;
-
-    /**
-     * The expansion factor for scaling the Bloom Filters.
-     */
     private byte expansion;
-
-    /**
-     * A flag indicating whether the Bloom Filter is non-scaling.
-     */
     private boolean nonScaling;
 
     /**
-     * Returns the expansion factor for the Bloom Filters.
-     *
      * @return the expansion factor
      */
     public byte getExpansion() {
@@ -95,43 +62,30 @@ public class RedisBF {
     }
 
     /**
-     * Checks if the Bloom Filter is non-scaling.
-     *
-     * @return true if the Bloom Filter is non-scaling, false otherwise
+     * @return true if non-scaling Bloom Filter
      */
     public boolean isNonScaling() {
         return nonScaling;
     }
 
-    /**
-     * The maximum number of Bloom Filters in the list.
-     */
     private static final byte MAX_LIST_SIZE = 4;
 
-    /**
-     * The list of Bloom Filters.
-     */
     private final ArrayList<One> list = new ArrayList<>();
 
-    /**
-     * Private constructor to prevent instantiation without parameters.
-     */
     private RedisBF() {
     }
 
     /**
-     * Constructs a new instance of RedisBF with default settings.
+     * @param initByDefault whether to initialize with defaults
      */
     public RedisBF(boolean initByDefault) {
         this(DEFAULT_CAPACITY, DEFAULT_FPP, DEFAULT_EXPANSION, false);
     }
 
     /**
-     * Constructs a new instance of RedisBF with specified parameters.
-     *
-     * @param initCapacity  the initial capacity for each Bloom Filter
-     * @param initFpp       the false positive probability for each Bloom Filter
-     * @param initExpansion the expansion factor for scaling the Bloom Filters
+     * @param initCapacity  initial capacity for each Bloom Filter
+     * @param initFpp       false positive probability
+     * @param initExpansion expansion factor for scaling
      * @param nonScaling    whether the Bloom Filter is non-scaling
      */
     public RedisBF(int initCapacity, double initFpp, byte initExpansion, boolean nonScaling) {
@@ -142,7 +96,6 @@ public class RedisBF {
         this.expansion = initExpansion;
         this.nonScaling = nonScaling;
 
-        // add first one
         var one = new One();
         one.filter = BloomFilter.create(STRING_FUNNEL, initCapacity, initFpp);
         one.capacity = initCapacity;
@@ -150,36 +103,28 @@ public class RedisBF {
     }
 
     /**
-     * Returns the total number of items inserted across all Bloom Filters.
-     *
-     * @return the total number of items inserted
+     * @return total items inserted across all Bloom Filters
      */
     public int itemInserted() {
         return list.stream().mapToInt(one -> one.itemInserted).sum();
     }
 
     /**
-     * Returns the total capacity across all Bloom Filters.
-     *
-     * @return the total capacity
+     * @return total capacity across all Bloom Filters
      */
     public int capacity() {
         return list.stream().mapToInt(one -> one.capacity).sum();
     }
 
     /**
-     * Returns the number of Bloom Filters in the list.
-     *
-     * @return the size of the list
+     * @return number of Bloom Filters in the list
      */
     public int listSize() {
         return list.size();
     }
 
     /**
-     * Estimates the memory allocated by the Bloom Filters.
-     *
-     * @return the estimated memory allocation in bytes
+     * @return estimated memory allocation in bytes
      */
     public int memoryAllocatedEstimate() {
         long totalBits = 0;
@@ -191,21 +136,16 @@ public class RedisBF {
     }
 
     /**
-     * Checks if an item might be in any of the Bloom Filters.
-     *
      * @param item the item to check
-     * @return true if the item might be in any of the Bloom Filters, false otherwise
+     * @return true if the item might be in any Bloom Filter
      */
     public boolean mightContain(String item) {
         return list.stream().anyMatch(one -> one.filter.mightContain(item));
     }
 
     /**
-     * Adds an item to the Bloom Filters.
-     *
      * @param item the item to add
-     * @return true if the item was added, false if it was already present in any of the Bloom Filters
-     * @throws RuntimeException if the Bloom Filters cannot be expanded or if the list size is too large
+     * @return true if added, false if already present
      */
     public boolean put(String item) {
         for (var one : list) {
@@ -231,7 +171,6 @@ public class RedisBF {
             return true;
         }
 
-        // need expansion
         if (nonScaling) {
             throw new RuntimeException("BF sub filter can not be expanded");
         }
@@ -257,9 +196,7 @@ public class RedisBF {
     }
 
     /**
-     * Encodes the Bloom Filters to a byte array.
-     *
-     * @return the encoded byte array
+     * @return encoded byte array
      */
     public byte[] encode() {
         ArrayList<byte[]> filterBytesList = new ArrayList<>();
@@ -268,13 +205,10 @@ public class RedisBF {
             filterBytesList.add(bytes);
         }
 
-        // 1 byte expansion, 1 byte isNoScaling, 8 byte fpp, 4 bytes for list size
         var length = 1 + 1 + 8 + 4;
         for (int i = 0; i < list.size(); i++) {
             var filterBytes = filterBytesList.get(i);
-            // 4 bytes for bf bytes length, bf bytes
             length += 4 + filterBytes.length;
-            // 4 bytes for item inserted, 4 bytes for capacity
             length += 4 + 4;
         }
 
@@ -298,8 +232,6 @@ public class RedisBF {
     }
 
     /**
-     * Decodes a byte array to a RedisBF object.
-     *
      * @param data the byte array to decode
      * @return the RedisBF object
      */
@@ -315,12 +247,14 @@ public class RedisBF {
         r.fpp = buffer.getDouble();
         var listSize = buffer.getInt();
         if (listSize <= 0 || listSize > MAX_LIST_SIZE) {
-            throw new IllegalStateException("BF list size must be between 1 and " + MAX_LIST_SIZE + ", got: " + listSize);
+            throw new IllegalStateException(
+                    "BF list size must be between 1 and " + MAX_LIST_SIZE + ", got: " + listSize);
         }
         for (int i = 0; i < listSize; i++) {
             var filterBytesLength = buffer.getInt();
             if (filterBytesLength <= 0) {
-                throw new IllegalStateException("Invalid filter bytes length: " + filterBytesLength + ", expected > 0");
+                throw new IllegalStateException(
+                        "Invalid filter bytes length: " + filterBytesLength + ", expected > 0");
             }
             var filterBytes = new byte[filterBytesLength];
             buffer.get(filterBytes);

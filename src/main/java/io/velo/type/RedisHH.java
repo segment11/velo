@@ -14,75 +14,52 @@ import java.util.HashMap;
 import static io.velo.DictMap.TO_COMPRESS_MIN_DATA_LENGTH;
 
 /**
- * A class representing a hash map that can be encoded and decoded with optional compression using Zstd.
- * This class is designed to handle key-value pairs and provides methods for encoding and decoding the data.
+ * Hash map with Zstd compression support.
  */
 public class RedisHH {
-    /**
-     * A prefix used to indicate that a member should not be stored together.
-     */
+    /** Prefix for members that should not be stored together. */
     public static final byte[] PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX = "h_not_hh_".getBytes();
 
-    /**
-     * The length of the header in bytes
-     * size short + dict seq int + body length int + crc int
-     */
+    /** Header length: size short + dict seq int + body length int + crc int */
     @VisibleForTesting
     static final int HEADER_LENGTH = 2 + 4 + 4 + 4;
 
-    /**
-     * The internal map to store key-value pairs.
-     */
     private final HashMap<String, byte[]> map = new HashMap<>();
 
-    /**
-     * The internal map to store expire at.
-     */
     private final HashMap<String, Long> mapExpireAt = new HashMap<>();
 
-    /**
-     * Returns the internal map containing key-value pairs.
-     *
-     * @return the internal map
-     */
+    /** @return internal map of key-value pairs */
     public HashMap<String, byte[]> getMap() {
         return map;
     }
 
-    /**
-     * Returns the number of key-value pairs in the map.
-     *
-     * @return the size of the map
-     */
+    /** @return number of key-value pairs */
     public int size() {
         return map.size();
     }
 
     /**
-     * Adds a key-value pair to the map.
-     *
-     * @param key   the key of the pair
-     * @param value the value of the pair
+     * @param key   the key
+     * @param value the value
      */
     public void put(String key, byte[] value) {
         put(key, value, null);
     }
 
     /**
-     * Adds a key-value pair to the map.
-     *
-     * @param key      the key of the pair
-     * @param value    the value of the pair
-     * @param expireAt the expiration time in milliseconds of the pair
-     * @throws IllegalArgumentException if the key or value length exceeds the maximum allowed length
+     * @param key      the key
+     * @param value    the value
+     * @param expireAt expiration time in milliseconds or null
      */
     public void put(@NotNull String key, byte[] value, @Nullable Long expireAt) {
         var keyBytes = Wal.keyBytes(key);
         if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
-            throw new IllegalArgumentException("Key length too long, key length=" + keyBytes.length);
+            throw new IllegalArgumentException(
+                    "Key length too long, key length=" + keyBytes.length);
         }
         if (value.length > CompressedValue.VALUE_MAX_LENGTH) {
-            throw new IllegalArgumentException("Value length too long, value length=" + value.length);
+            throw new IllegalArgumentException(
+                    "Value length too long, value length=" + value.length);
         }
         map.put(key, value);
 
@@ -92,10 +69,8 @@ public class RedisHH {
     }
 
     /**
-     * Removes a key-value pair from the map by key.
-     *
-     * @param key the key of the pair to remove
-     * @return true if the pair was removed, false otherwise
+     * @param key the key to remove
+     * @return true if removed
      */
     public boolean remove(String key) {
         mapExpireAt.remove(key);
@@ -103,29 +78,23 @@ public class RedisHH {
     }
 
     /**
-     * Adds all key-value pairs from the provided map to the internal map.
-     *
-     * @param map the map containing key-value pairs to add
+     * @param map the map to add
      */
     public void putAll(HashMap<String, byte[]> map) {
         this.map.putAll(map);
     }
 
     /**
-     * Retrieves the value associated with the specified key.
-     *
-     * @param key the key of the pair to retrieve
-     * @return the value associated with the key, or null if the key is not found
+     * @param key the key to retrieve
+     * @return value or null if not found
      */
     public byte[] get(String key) {
         return map.get(key);
     }
 
     /**
-     * Retrieves the expire at milliseconds associated with the specified key.
-     *
-     * @param key the key of the pair to retrieve
-     * @return the expiration time in milliseconds associated with the key, or 0 if the key is not found
+     * @param key the key to retrieve expiration for
+     * @return expiration time in milliseconds or 0 if not found
      */
     public long getExpireAt(String key) {
         var l = mapExpireAt.get(key);
@@ -133,43 +102,34 @@ public class RedisHH {
     }
 
     /**
-     * Puts the expire at milliseconds associated with the specified key.
-     *
-     * @param key      the key of the pair to put
-     * @param expireAt the expiration time in milliseconds to put
+     * @param key      the key
+     * @param expireAt expiration time in milliseconds
      */
     public void putExpireAt(String key, long expireAt) {
         mapExpireAt.put(key, expireAt);
     }
 
     /**
-     * Encodes the map to a byte array without compression.
-     *
-     * @return the encoded byte array
+     * @return encoded byte array without compression
      */
     public byte[] encodeButDoNotCompress() {
         return encode(null);
     }
 
     /**
-     * Encodes the map to a byte array with compression using the default dictionary.
-     *
-     * @return the encoded and compressed byte array
+     * @return encoded and compressed byte array
      */
     public byte[] encode() {
         return encode(Dict.SELF_ZSTD_DICT);
     }
 
     /**
-     * Encodes the map to a byte array with optional compression using the specified dictionary.
-     *
-     * @param dict the dictionary to use for compression, or null if no compression is desired
-     * @return the encoded byte array, possibly compressed
+     * @param dict compression dictionary or null
+     * @return encoded byte array, possibly compressed
      */
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
         for (var entry : map.entrySet()) {
-            // key / value length use 2 bytes, expire at milliseconds use 8 bytes
             var key = entry.getKey();
             var value = entry.getValue();
             bodyBytesLength += 8 + 2 + Wal.keyBytes(key).length + 4 + value.length;
@@ -182,10 +142,8 @@ public class RedisHH {
 
         var buffer = ByteBuffer.allocate(bodyBytesLength + HEADER_LENGTH);
         buffer.putShort((short) size);
-        // tmp no dict seq
         buffer.putInt(0);
         buffer.putInt(bodyBytesLength);
-        // tmp crc
         buffer.putInt(0);
         for (var entry : map.entrySet()) {
             var key = entry.getKey();
@@ -199,7 +157,6 @@ public class RedisHH {
             buffer.put(value);
         }
 
-        // crc
         int crc = 0;
         if (bodyBytesLength > 0) {
             var hb = buffer.array();
@@ -209,7 +166,8 @@ public class RedisHH {
 
         var rawBytesWithHeader = buffer.array();
         if (bodyBytesLength > TO_COMPRESS_MIN_DATA_LENGTH && dict != null) {
-            var compressedBytes = compressIfBytesLengthIsLong(dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
+            var compressedBytes = compressIfBytesLengthIsLong(
+                    dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
             if (compressedBytes != null) {
                 return compressedBytes;
             }
@@ -217,31 +175,31 @@ public class RedisHH {
         return rawBytesWithHeader;
     }
 
-    /**
-     * The preferred compression ratio for compressing data.
-     */
+    /** Preferred compression ratio. */
     @TestOnly
     static double PREFER_COMPRESS_RATIO = 0.9;
 
     /**
-     * Compresses the byte array if the compressed size is within the preferred compression ratio.
-     *
-     * @param dict               the dictionary to use for compression
-     * @param bodyBytesLength    the length of the body bytes
-     * @param rawBytesWithHeader the raw byte array with header
-     * @param size               the size of the map
-     * @param crc                the CRC value
-     * @return the compressed byte array if compression is successful, otherwise null
+     * @param dict               compression dictionary
+     * @param bodyBytesLength    body length
+     * @param rawBytesWithHeader raw bytes with header
+     * @param size               map size
+     * @param crc                CRC value
+     * @return compressed bytes if within ratio, otherwise null
      */
-    static byte[] compressIfBytesLengthIsLong(Dict dict, int bodyBytesLength, byte[] rawBytesWithHeader, short size, int crc) {
+    static byte[] compressIfBytesLengthIsLong(Dict dict, int bodyBytesLength,
+                                            byte[] rawBytesWithHeader, short size, int crc) {
         var dictSeq = dict.getSeq();
 
         var dst = new byte[((int) Zstd.compressBound(bodyBytesLength))];
         int compressedSize;
         if (dict == Dict.SELF_ZSTD_DICT) {
-            compressedSize = (int) Zstd.compressByteArray(dst, 0, dst.length, rawBytesWithHeader, HEADER_LENGTH, bodyBytesLength, Zstd.defaultCompressionLevel());
+            compressedSize = (int) Zstd.compressByteArray(
+                    dst, 0, dst.length, rawBytesWithHeader, HEADER_LENGTH, bodyBytesLength,
+                    Zstd.defaultCompressionLevel());
         } else {
-            compressedSize = dict.compressByteArray(dst, 0, rawBytesWithHeader, HEADER_LENGTH, bodyBytesLength);
+            compressedSize = dict.compressByteArray(
+                    dst, 0, rawBytesWithHeader, HEADER_LENGTH, bodyBytesLength);
         }
 
         if (compressedSize < bodyBytesLength * PREFER_COMPRESS_RATIO) {
@@ -258,21 +216,17 @@ public class RedisHH {
     }
 
     /**
-     * Decodes a byte array to a RedisHH object. Checks the CRC32 by default.
-     *
      * @param data the byte array to decode
-     * @return the RedisHH object
+     * @return decoded RedisHH
      */
     public static RedisHH decode(byte[] data) {
         return decode(data, true);
     }
 
     /**
-     * Decodes a byte array to a RedisHH object with optional CRC32 check.
-     *
      * @param data         the byte array to decode
-     * @param doCheckCrc32 whether to check the CRC32
-     * @return the RedisHH object
+     * @param doCheckCrc32 whether to check CRC32
+     * @return decoded RedisHH
      */
     public static RedisHH decode(byte[] data, boolean doCheckCrc32) {
         var r = new RedisHH();
@@ -287,42 +241,37 @@ public class RedisHH {
     }
 
     /**
-     * An interface for iterating over fields and values in a RedisHH object.
+     * Callback for iterating over fields and values.
      */
     public interface IterateCallback {
         /**
-         * Called for each field and value pair.
-         *
          * @param field      the field name
          * @param valueBytes the value bytes
-         * @param expireAt   the expiration time in milliseconds
-         * @return true to break the iteration, false to continue
+         * @param expireAt   expiration time in milliseconds
+         * @return true to break iteration
          */
         boolean onField(String field, byte[] valueBytes, long expireAt);
     }
 
     /**
-     * Iterates over the fields and values in a RedisHH object.
-     *
-     * @param callback the callback to be called for each field and value pair
+     * @param callback callback for each field-value pair
      */
     public void iterate(IterateCallback callback) {
         for (var entry : map.entrySet()) {
             var field = entry.getKey();
             var valueBytes = entry.getValue();
             var expireAt = mapExpireAt.get(field);
-            if (callback.onField(field, valueBytes, expireAt == null ? CompressedValue.NO_EXPIRE : expireAt)) {
+            if (callback.onField(field, valueBytes,
+                    expireAt == null ? CompressedValue.NO_EXPIRE : expireAt)) {
                 break;
             }
         }
     }
 
     /**
-     * Iterates over the fields and values in a byte array representing a RedisHH object.
-     *
-     * @param data         the byte array containing the encoded map
-     * @param doCheckCrc32 whether to check the CRC32
-     * @param callback     the callback to be called for each field and value pair
+     * @param data         the encoded byte array
+     * @param doCheckCrc32 whether to check CRC32
+     * @param callback     callback for each field-value pair
      */
     public static void iterate(byte[] data, boolean doCheckCrc32, IterateCallback callback) {
         var buffer = ByteBuffer.wrap(data);
@@ -332,13 +281,12 @@ public class RedisHH {
         var crc = buffer.getInt();
 
         if (dictSeq > 0) {
-            // decompress first
             buffer = decompressIfUseDict(dictSeq, bodyBytesLength, data);
         }
 
-        // check crc
         if (size > 0 && doCheckCrc32) {
-            int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
+            int crcCompare = KeyHash.hash32Offset(
+                    buffer.array(), buffer.position(), buffer.remaining());
             if (crc != crcCompare) {
                 throw new IllegalStateException("CRC check failed");
             }
@@ -353,7 +301,6 @@ public class RedisHH {
                 throw new IllegalStateException("Key length error, key length=" + keyLength);
             }
 
-            // skip expired
             if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
                 buffer.position(buffer.position() + keyLength);
                 var valueLength = buffer.getInt();
@@ -379,19 +326,18 @@ public class RedisHH {
     private static final DictMap dictMap = DictMap.getInstance();
 
     /**
-     * Decompresses a byte array using the specified dictionary sequence.
-     *
-     * @param dictSeq         the dictionary sequence
-     * @param bodyBytesLength the length of the body bytes
-     * @param data            the byte array to decompress
-     * @return the decompressed ByteBuffer
-     * @throws IllegalStateException if decompression fails
-     * @throws DictMissingException  if the dictionary is not found
+     * @param dictSeq         dictionary sequence
+     * @param bodyBytesLength body length
+     * @param data            compressed data
+     * @return decompressed ByteBuffer
+     * @throws DictMissingException if dictionary not found
      */
     static ByteBuffer decompressIfUseDict(int dictSeq, int bodyBytesLength, byte[] data) {
         if (dictSeq == Dict.SELF_ZSTD_DICT_SEQ) {
             var bodyBytes = new byte[bodyBytesLength];
-            int decompressedSize = (int) Zstd.decompressByteArray(bodyBytes, 0, bodyBytes.length, data, HEADER_LENGTH, data.length - HEADER_LENGTH);
+            int decompressedSize = (int) Zstd.decompressByteArray(
+                    bodyBytes, 0, bodyBytes.length, data, HEADER_LENGTH,
+                    data.length - HEADER_LENGTH);
             if (decompressedSize <= 0) {
                 throw new IllegalStateException("Decompress error");
             }
@@ -403,7 +349,8 @@ public class RedisHH {
             }
 
             var bodyBytes = new byte[bodyBytesLength];
-            var decompressedSize = dict.decompressByteArray(bodyBytes, 0, data, HEADER_LENGTH, data.length - HEADER_LENGTH);
+            var decompressedSize = dict.decompressByteArray(
+                    bodyBytes, 0, data, HEADER_LENGTH, data.length - HEADER_LENGTH);
             if (decompressedSize <= 0) {
                 throw new IllegalStateException("Decompress error");
             }

@@ -9,46 +9,33 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 
 /**
- * A class representing a collection of geographic points (latitude and longitude) with associated members.
- * This class provides methods to manipulate the collection, calculate distances, and encode/decode the data.
+ * Geographic points collection with distance calculation and encoding.
  */
 public class RedisGeo {
     /**
-     * A record representing a geographic point with latitude and longitude.
+     * Geographic point with longitude and latitude.
      */
     public record P(double lon, double lat) {
     }
 
     /**
-     * An enum representing the units of distance.
+     * Distance units for geographic calculations.
      */
     public enum Unit {
-        /**
-         * Meters
-         */
+        /** Meters */
         M,
-        /**
-         * Kilometers
-         */
+        /** Kilometers */
         KM,
-        /**
-         * Miles
-         */
+        /** Miles */
         MI,
-        /**
-         * Feet
-         */
+        /** Feet */
         FT,
-        /**
-         * Unknown unit
-         */
+        /** Unknown unit */
         UNKNOWN;
 
         /**
-         * Converts a string to the corresponding Unit enum.
-         *
          * @param unitString string representing the unit
-         * @return the corresponding Unit enum, or UNKNOWN if the string does not match any known unit
+         * @return corresponding Unit or UNKNOWN if not found
          */
         public static Unit fromString(@NotNull String unitString) {
             return switch (unitString.toLowerCase()) {
@@ -61,9 +48,7 @@ public class RedisGeo {
         }
 
         /**
-         * Converts distance from this unit to meters.
-         *
-         * @param distance distance in the current unit
+         * @param distance distance in this unit
          * @return distance in meters
          */
         public double toMeters(double distance) {
@@ -77,8 +62,6 @@ public class RedisGeo {
         }
 
         /**
-         * Converts distance from meters to this unit.
-         *
          * @param meters distance in meters
          * @return distance in this unit
          */
@@ -95,101 +78,77 @@ public class RedisGeo {
 
     private final HashMap<String, P> map = new HashMap<>();
 
-    /**
-     * Gets the map of members to their geographic points.
-     *
-     * @return the map of members to their geographic points
-     */
+    /** @return map of members to their geographic points */
     public HashMap<String, P> getMap() {
         return map;
     }
 
-    /**
-     * Returns the number of members in the RedisGeo.
-     *
-     * @return the number of members in the RedisGeo
-     */
+    /** @return number of members */
     public int size() {
         return map.size();
     }
 
-    /**
-     * Checks if the RedisGeo is empty.
-     *
-     * @return true if the RedisGeo is empty, false otherwise
-     */
+    /** @return true if empty */
     public boolean isEmpty() {
         return map.isEmpty();
     }
 
     /**
-     * Checks if a member exists in the RedisGeo.
-     *
      * @param member the member to check
-     * @return true if the member exists, false otherwise
+     * @return true if member exists
      */
     public boolean contains(String member) {
         return map.containsKey(member);
     }
 
     /**
-     * Gets the geographic point for a given member.
-     *
-     * @param member the member whose geographic point is to be retrieved
-     * @return the geographic point for the given member, or null if the member does not exist
+     * @param member the member to retrieve
+     * @return geographic point or null if not found
      */
     public P get(String member) {
         return map.get(member);
     }
 
     /**
-     * Adds a member with its geographic point to the RedisGeo.
-     *
      * @param member    the member to add
-     * @param longitude the longitude of the geographic point
-     * @param latitude  the latitude of the geographic point
+     * @param longitude longitude coordinate
+     * @param latitude  latitude coordinate
      */
     public void add(String member, double longitude, double latitude) {
         if (longitude > GEO_LONG_MAX || longitude < GEO_LONG_MIN) {
-            throw new IllegalArgumentException("Longitude must be between " + GEO_LONG_MIN + " and " + GEO_LONG_MAX);
+            throw new IllegalArgumentException(
+                    "Longitude must be between " + GEO_LONG_MIN + " and " + GEO_LONG_MAX);
         }
         if (latitude > GEO_LAT_MAX || latitude < GEO_LAT_MIN) {
-            throw new IllegalArgumentException("Latitude must be between " + GEO_LAT_MIN + " and " + GEO_LAT_MAX);
+            throw new IllegalArgumentException(
+                    "Latitude must be between " + GEO_LAT_MIN + " and " + GEO_LAT_MAX);
         }
         map.put(member, new P(longitude, latitude));
     }
 
     /**
-     * Removes a member from the RedisGeo.
-     *
      * @param key the member to remove
-     * @return true if the member was present and was removed, false otherwise
+     * @return true if removed
      */
     public boolean remove(String key) {
         return map.remove(key) != null;
     }
 
-    // Earth's radius in meters
-    // same as defined in redis geohash_helper.h EARTH_RADIUS_IN_METERS
     private static final double EARTH_RADIUS = 6372797.560856;
 
     private static final int SCALE_I = 4;
 
     /**
-     * Calculates the distance between two geographic points using the Haversine formula.
-     *
      * @param p0 the first geographic point
      * @param p1 the second geographic point
-     * @return the distance between the two points in meters
+     * @return distance in meters using Haversine formula
      */
     public static double distance(P p0, P p1) {
-        // Convert latitude and longitude from degrees to radians
         double lat1Rad = Math.toRadians(p0.lat);
         double lon1Rad = Math.toRadians(p0.lon);
         double lat2Rad = Math.toRadians(p1.lat);
         double lon2Rad = Math.toRadians(p1.lon);
 
-        // Haversine formula
         double diffLat = lat2Rad - lat1Rad;
         double diffLon = lon2Rad - lon1Rad;
         double a = Math.sin(diffLat / 2) * Math.sin(diffLat / 2) +
@@ -198,44 +157,27 @@ public class RedisGeo {
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
         double r = EARTH_RADIUS * c;
-        // scale to 4 decimal places
         return Math.round(r * Math.pow(10, SCALE_I)) / Math.pow(10, SCALE_I);
     }
 
-    /**
-     * Moves the latitude by a specified distance in meters.
-     *
-     * @param lat              the initial latitude in degrees
-     * @param distanceInMeters the distance to move in meters
-     * @return the new latitude after moving by the specified distance
-     */
     private static double moveLatitude(double lat, double distanceInMeters) {
         return lat + Math.toDegrees(distanceInMeters / EARTH_RADIUS);
     }
 
-    /**
-     * Moves the longitude by a specified distance in meters.
-     *
-     * @param lon              the initial longitude in degrees
-     * @param lat              the latitude at which the longitude is measured
-     * @param distanceInMeters the distance to move in meters
-     * @return the new longitude after moving by the specified distance
-     */
     private static double moveLongitude(double lon, double lat, double distanceInMeters) {
         return lon + Math.toDegrees(distanceInMeters / (EARTH_RADIUS * Math.cos(Math.toRadians(lat))));
     }
 
     /**
-     * Checks if a geographic point is within a bounding box.
-     *
-     * @param p              the geographic point to check
-     * @param centerLon      the longitude of the center of the box
-     * @param centerLat      the latitude of the center of the box
-     * @param widthInMeters  the width of the box in meters
-     * @param heightInMeters the height of the box in meters
-     * @return true if the point is within the box, false otherwise
+     * @param p              geographic point to check
+     * @param centerLon      center longitude
+     * @param centerLat      center latitude
+     * @param widthInMeters  box width
+     * @param heightInMeters box height
+     * @return true if point is within bounding box
      */
-    public static boolean isWithinBox(P p, double centerLon, double centerLat, double widthInMeters, double heightInMeters) {
+    public static boolean isWithinBox(P p, double centerLon, double centerLat,
+                                      double widthInMeters, double heightInMeters) {
         double halfWidth = widthInMeters / 2;
         double halfHeight = heightInMeters / 2;
 
@@ -262,21 +204,20 @@ public class RedisGeo {
     public static final double GEO_LAT_MIN = -85.05112877980659;
 
     /**
-     * Encodes a geographic point into a geohash.
-     *
-     * @param lon_min the minimum longitude of the encoding region
-     * @param lon_max the maximum longitude of the encoding region
-     * @param lat_min the minimum latitude of the encoding region
-     * @param lat_max the maximum latitude of the encoding region
-     * @param lon     the longitude of the point to encode
-     * @param lat     the latitude of the point to encode
-     * @param step    the number of bits to use for encoding
-     * @return the geohash as a long, or 0 if the point is outside the encoding region
+     * @param lon_min minimum longitude of encoding region
+     * @param lon_max maximum longitude of encoding region
+     * @param lat_min minimum latitude of encoding region
+     * @param lat_max maximum latitude of encoding region
+     * @param lon     longitude to encode
+     * @param lat     latitude to encode
+     * @param step    number of bits for encoding
+     * @return geohash as long, or 0 if outside region
      */
     @VisibleForTesting
     static long geohashEncode(double lon_min, double lon_max, double lat_min, double lat_max,
                               double lon, double lat, byte step) {
-        if (lon > GEO_LONG_MAX || lon < GEO_LONG_MIN || lat > GEO_LAT_MAX || lat < GEO_LAT_MIN) {
+        if (lon > GEO_LONG_MAX || lon < GEO_LONG_MIN ||
+                lat > GEO_LAT_MAX || lat < GEO_LAT_MIN) {
             return 0;
         }
 
@@ -305,11 +246,9 @@ public class RedisGeo {
     private static final int[] S = {1, 2, 4, 8, 16};
 
     /**
-     * Interleaves the bits of two 32-bit integers to form a 64-bit integer.
-     *
-     * @param xlo the first 32-bit integer
-     * @param ylo the second 32-bit integer
-     * @return the interleaved 64-bit integer
+     * @param xlo first 32-bit integer
+     * @param ylo second 32-bit integer
+     * @return interleaved 64-bit integer
      */
     private static long interleave64(int xlo, int ylo) {
         long x = xlo;
@@ -334,20 +273,17 @@ public class RedisGeo {
     }
 
     /**
-     * Encodes a geographic point into a geohash store value.
-     *
-     * @param p the geographic point to encode
-     * @return the geohash as a long
+     * @param p geographic point
+     * @return geohash as long
      */
     public static long hashAsStore(P p) {
-        return geohashEncode(GEO_LONG_MIN, GEO_LONG_MAX, GEO_LAT_MIN, GEO_LAT_MAX, p.lon, p.lat, (byte) 26);
+        return geohashEncode(GEO_LONG_MIN, GEO_LONG_MAX, GEO_LAT_MIN, GEO_LAT_MAX,
+                p.lon, p.lat, (byte) 26);
     }
 
     /**
-     * Encodes a geographic point into a geohash string.
-     *
-     * @param p the geographic point to encode
-     * @return the geohash as a byte array
+     * @param p geographic point
+     * @return geohash as byte array
      */
     public static byte[] hash(P p) {
         var l = geohashEncode(-180, 180, -90, 90, p.lon, p.lat, (byte) 26);
@@ -366,23 +302,17 @@ public class RedisGeo {
         return bytes;
     }
 
-    /**
-     * The length of the header in bytes
-     * size short + body length int + crc int
-     */
+    /** Header length: size short + body length int + crc int */
     @VisibleForTesting
     static final int HEADER_LENGTH = 2 + 4 + 4;
 
     /**
-     * Encodes the RedisGeo into a byte array.
-     *
-     * @return the encoded byte array
+     * @return encoded byte array
      */
     public byte[] encode() {
         int bodyBytesLength = 0;
         for (var entry : map.entrySet()) {
             var member = entry.getKey();
-            // longitude and latitude use 8 bytes
             bodyBytesLength += 2 + Wal.keyBytes(member).length + 16;
         }
 
@@ -394,13 +324,13 @@ public class RedisGeo {
         var buffer = ByteBuffer.allocate(bodyBytesLength + HEADER_LENGTH);
         buffer.putShort((short) size);
         buffer.putInt(bodyBytesLength);
-        // tmp crc
         buffer.putInt(0);
         for (var entry : map.entrySet()) {
             var member = entry.getKey();
             var memberBytes = Wal.keyBytes(member);
             if (memberBytes.length > Short.MAX_VALUE) {
-                throw new IllegalStateException("Geo member length " + memberBytes.length + " exceeds Short.MAX_VALUE");
+                throw new IllegalStateException(
+                        "Geo member length " + memberBytes.length + " exceeds Short.MAX_VALUE");
             }
             var p = entry.getValue();
             buffer.putShort((short) memberBytes.length);
@@ -409,7 +339,6 @@ public class RedisGeo {
             buffer.putDouble(p.lat);
         }
 
-        // crc
         int crc = 0;
         if (bodyBytesLength > 0) {
             var hb = buffer.array();
@@ -421,22 +350,17 @@ public class RedisGeo {
     }
 
     /**
-     * Decodes a byte array into a RedisGeo.
-     *
      * @param data the byte array to decode
-     * @return the decoded RedisGeo
+     * @return decoded RedisGeo
      */
     public static RedisGeo decode(byte[] data) {
         return decode(data, true);
     }
 
     /**
-     * Decodes a byte array into a RedisGeo with optional CRC32 checking.
-     *
      * @param data         the byte array to decode
-     * @param doCheckCrc32 whether to perform a CRC32 check on the data
-     * @return the decoded RedisGeo
-     * @throws IllegalStateException if the CRC32 check fails
+     * @param doCheckCrc32 whether to perform CRC32 check
+     * @return decoded RedisGeo
      */
     public static RedisGeo decode(byte[] data, boolean doCheckCrc32) {
         var r = new RedisGeo();
@@ -446,9 +370,9 @@ public class RedisGeo {
         var bodyBytesLength = buffer.getInt();
         var crc = buffer.getInt();
 
-        // check crc
         if (size > 0 && doCheckCrc32) {
-            int crcCompare = KeyHash.hash32Offset(buffer.array(), buffer.position(), buffer.remaining());
+            int crcCompare = KeyHash.hash32Offset(
+                    buffer.array(), buffer.position(), buffer.remaining());
             if (crc != crcCompare) {
                 throw new IllegalStateException("Crc check failed");
             }
@@ -457,20 +381,24 @@ public class RedisGeo {
         for (int i = 0; i < size; i++) {
             int memberLength = buffer.getShort();
             if (memberLength <= 0) {
-                throw new IllegalStateException("Invalid member length: " + memberLength + ", expected > 0");
+                throw new IllegalStateException(
+                        "Invalid member length: " + memberLength + ", expected > 0");
             }
             if (memberLength + 16 > buffer.remaining()) {
-                throw new IllegalStateException("Invalid member length: " + memberLength + ", exceeds remaining buffer");
+                throw new IllegalStateException(
+                        "Invalid member length: " + memberLength + ", exceeds remaining buffer");
             }
             var memberBytes = new byte[memberLength];
             buffer.get(memberBytes);
             var lon = buffer.getDouble();
             var lat = buffer.getDouble();
             if (lon > GEO_LONG_MAX || lon < GEO_LONG_MIN) {
-                throw new IllegalArgumentException("Longitude must be between " + GEO_LONG_MIN + " and " + GEO_LONG_MAX);
+                throw new IllegalArgumentException(
+                        "Longitude must be between " + GEO_LONG_MIN + " and " + GEO_LONG_MAX);
             }
             if (lat > GEO_LAT_MAX || lat < GEO_LAT_MIN) {
-                throw new IllegalArgumentException("Latitude must be between " + GEO_LAT_MIN + " and " + GEO_LAT_MAX);
+                throw new IllegalArgumentException(
+                        "Latitude must be between " + GEO_LAT_MIN + " and " + GEO_LAT_MAX);
             }
             r.map.put(Wal.keyString(memberBytes), new P(lon, lat));
         }
