@@ -696,7 +696,7 @@ public abstract class BaseCommand {
 
             var bigStringBytes = oneSlot.getBigStringFiles().getBigStringBytes(uuid, s.bucketIndex, s.keyHash, true);
             if (bigStringBytes == null) {
-                return null;
+                throw new BigStringFileMissingException("data inconsistency: big string file missing for key=" + key);
             }
 
             cv.setCompressedData(bigStringBytes);

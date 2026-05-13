@@ -12,6 +12,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,9 +50,18 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     long deleteFileCountTotal = 0L;
     long deleteFileCostTotalUs = 0L;
 
+    long bigStringMissingFileTotal = 0L;
+
     private static final String BIG_STRING_DIR_NAME = "big-string";
 
     private LRUMap<Long, byte[]> bigStringBytesByUuidLRU;
+
+    @TestOnly
+    public void clearLRUCache() {
+        if (bigStringBytesByUuidLRU != null) {
+            bigStringBytesByUuidLRU.clear();
+        }
+    }
 
     int bigStringFilesCount = 0;
 
@@ -66,6 +76,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     public Map<String, Double> collect() {
         var map = new HashMap<String, Double>();
         map.put("big_string_files_count", (double) bigStringFilesCount);
+        map.put("big_string_missing_file_total", (double) bigStringMissingFileTotal);
         return map;
     }
 
@@ -204,7 +215,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     private byte[] readBigStringBytes(long uuid, int bucketIndex, long keyHash) {
         var file = new File(bigStringDir, bucketIndex + "/" + uuid + "_" + keyHash);
         if (!file.exists()) {
-            log.warn("Big string file not exists, uuid={}, slot={}", uuid, slot);
+            bigStringMissingFileTotal++;
+            log.error("Big string file not exists, uuid={}, slot={}", uuid, slot);
             return null;
         }
 

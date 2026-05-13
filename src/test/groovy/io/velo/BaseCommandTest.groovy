@@ -312,14 +312,26 @@ class BaseCommandTest extends Specification {
         cvBigString.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
         cvBigString.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
         oneSlot.put(bigStringKey, sBigString.bucketIndex(), cvBigString)
+        c.getCv(sBigString)
         then:
-        c.getCv(sBigString) == null
+        // big-string metadata in WAL but file not written yet
+        thrown(BigStringFileMissingException)
 
         when:
         def bigStringBytes = ('aaaaabbbbbccccc' * 10).bytes
         oneSlot.bigStringFiles.writeBigStringBytes(1234L, sBigString.bucketIndex(), sBigString.keyHash(), bigStringBytes)
         then:
         c.getCv(sBigString).compressedData == bigStringBytes
+
+        when:
+        // simulate external file deletion - data corruption scenario
+        def bigStringFile = new File(oneSlot.bigStringFiles.bigStringDir,
+                sBigString.bucketIndex() + "/" + 1234L + "_" + sBigString.keyHash())
+        bigStringFile.delete()
+        oneSlot.bigStringFiles.clearLRUCache()
+        c.getCv(sBigString)
+        then:
+        thrown(BigStringFileMissingException)
 
         when:
         def cvNumber = new CompressedValue()
