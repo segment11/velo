@@ -29,6 +29,7 @@ public class AclUsers {
     }
 
     /**
+     * Callback interface for ACL user updates.
      * @param <U> the type of user object
      */
     public interface UpdateCallback<U> {
@@ -201,6 +202,7 @@ public class AclUsers {
         }
 
         /**
+         * Updates or inserts a user.
          * @param user     the username to update or insert
          * @param callback the callback to perform the update operation
          */
@@ -262,6 +264,7 @@ public class AclUsers {
     /**
      * @param user     the username to update or insert
      * @param callback the callback to perform the update operation
+     * @throws AclInvalidRuleException if the update callback fails
      */
     public void upInsert(String user, UpdateCallback<U> callback) {
         var inner = getOwnedInner();

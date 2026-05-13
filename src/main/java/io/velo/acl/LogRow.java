@@ -29,7 +29,10 @@ public class LogRow {
     /** Timestamp when entry was last updated. */
     public long timestampLastUpdated;
 
-    /** @return array of Redis replies representing the log entry */
+    /**
+     * Converts this log entry to Redis replies.
+     * @return array of Redis replies representing the log entry
+     */
     public Reply[] toReplies() {
         return new Reply[]{
                 new BulkReply("count"),
