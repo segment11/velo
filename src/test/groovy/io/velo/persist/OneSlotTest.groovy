@@ -1559,4 +1559,62 @@ class OneSlotTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test get reads TIGHT segment correctly after isSegmentUseCompression flipped to false'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and: 'enable segment compression'
+        ConfForSlot.global.confChunk.isSegmentUseCompression = true
+
+        when: 'put a value large enough to go to segment storage (not short value)'
+        def key = 'tight-segment-config-flip-key'
+        def sKey = BaseCommand.slot(key, slotNumber)
+        def cv = new CompressedValue()
+        cv.keyHash = sKey.keyHash()
+        cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        cv.compressedData = new byte[CompressedValue.SP_TYPE_SHORT_STRING_MIN_LEN * 100]
+        cv.expireAt = CompressedValue.NO_EXPIRE
+
+        oneSlot.getWalByBucketIndex(sKey.bucketIndex()).isOnRewrite = false
+        100.times {
+            cv.seq = oneSlot.snowFlake.nextId()
+            oneSlot.put(key, sKey.bucketIndex(), cv)
+        }
+        oneSlot.getWalByBucketIndex(sKey.bucketIndex()).clear()
+
+        then: 'value persisted as PVM (segment), get reads it'
+        def result1 = oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash())
+        result1 != null
+
+        when: 'verify it is a PVM entry'
+        def keyLoader = oneSlot.keyLoader
+        def vx = keyLoader.getValueXByKey(sKey.bucketIndex(), key, sKey.keyHash())
+        then:
+        vx != null
+        PersistValueMeta.isPvm(vx.valueBytes())
+
+        when: 'flip config: compression off, but on-disk segment is TIGHT'
+        ConfForSlot.global.confChunk.isSegmentUseCompression = false
+
+        and: 'clear LRU so get must re-read from segment'
+        def walGroupIndex = Wal.calcWalGroupIndex(sKey.bucketIndex())
+        oneSlot.kvByWalGroupIndexLRU.get(walGroupIndex).clear()
+
+        and: 'get the key — should use data marker, not config flag, to detect TIGHT'
+        def result2 = oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash())
+        then:
+        result2 != null
+        result2.cv() != null
+        result2.cv().seq > 0
+        result2.cv().compressedData.length == CompressedValue.SP_TYPE_SHORT_STRING_MIN_LEN * 100
+
+        cleanup:
+        ConfForSlot.global.confChunk.isSegmentUseCompression = false
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

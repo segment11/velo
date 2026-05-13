@@ -1198,7 +1198,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             throw new IllegalStateException("Load persisted segment bytes error, pvm=" + pvm);
         }
 
-        if (ConfForSlot.global.confChunk.isSegmentUseCompression) {
+        if (SegmentBatch2.isSegmentBytesTight(segmentBytes, 0)) {
             segmentBytes = SegmentBatch.decompressSegmentBytesFromOneSubBlock(slot, segmentBytes, pvm, chunk);
         }
         var nettyBuf = Unpooled.wrappedBuffer(segmentBytes);
