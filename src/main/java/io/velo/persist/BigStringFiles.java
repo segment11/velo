@@ -152,6 +152,16 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         return list;
     }
 
+    /**
+     * Retrieves bytes of big string file by UUID, using the LRU cache.
+     * Reads from LRU if present, otherwise reads from disk and seeds the LRU.
+     * Equivalent to {@link #getBigStringBytes(long, int, long, boolean)} with {@code doLRUCache=true}.
+     *
+     * @param uuid        the UUID of the big string file
+     * @param bucketIndex the bucket index
+     * @param keyHash     the key hash
+     * @return the bytes of the big string file, or null if not found
+     */
     public byte[] getBigStringBytes(long uuid, int bucketIndex, long keyHash) {
         return getBigStringBytes(uuid, bucketIndex, keyHash, true);
     }
@@ -164,13 +174,17 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @return the bytes of the big string file, or null if not found
      */
     public byte[] getBigStringBytes(long uuid, int bucketIndex, long keyHash, boolean doLRUCache) {
+        if (!doLRUCache) {
+            return readBigStringBytes(uuid, bucketIndex, keyHash);
+        }
+
         var bytesCached = bigStringBytesByUuidLRU != null ? bigStringBytesByUuidLRU.get(uuid) : null;
         if (bytesCached != null) {
             return bytesCached;
         }
 
         var bytes = readBigStringBytes(uuid, bucketIndex, keyHash);
-        if (bytes != null && doLRUCache && bigStringBytesByUuidLRU != null) {
+        if (bytes != null && bigStringBytesByUuidLRU != null) {
             bigStringBytesByUuidLRU.put(uuid, bytes);
         }
         return bytes;

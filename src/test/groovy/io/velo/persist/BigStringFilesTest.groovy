@@ -1,6 +1,5 @@
 package io.velo.persist
 
-import io.velo.ConfForGlobal
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
 
@@ -183,6 +182,39 @@ class BigStringFilesTest extends Specification {
         then:
         readCountAfterFirst == 1
         readCountAfterSecond == 1
+
+        cleanup:
+        tmpSlotDir.deleteDir()
+    }
+
+    def 'test 4-arg getBigStringBytes with doLRUCache=false bypasses LRU'() {
+        given:
+        def tmpSlotDir = new File('/tmp/tmp-slot-dir-nocache')
+        if (tmpSlotDir.exists()) {
+            tmpSlotDir.deleteDir()
+        }
+        def bigStringFiles = new BigStringFiles(slot, tmpSlotDir)
+        def bytes = 'data without cache'.bytes
+        bigStringFiles.writeBigStringBytes(20L, 0, 200L, bytes)
+
+        when: 'read with doLRUCache=false — should return data but not seed LRU'
+        bigStringFiles.readFileCountTotal = 0
+        def result = bigStringFiles.getBigStringBytes(20L, 0, 200L, false)
+        then:
+        result == bytes
+        bigStringFiles.readFileCountTotal == 1
+
+        when: 'read again with doLRUCache=true — LRU was not seeded, so reads from disk again'
+        def result2 = bigStringFiles.getBigStringBytes(20L, 0, 200L, true)
+        then:
+        result2 == bytes
+        bigStringFiles.readFileCountTotal == 2
+
+        when: 'read again with doLRUCache=true — now LRU is seeded'
+        def result3 = bigStringFiles.getBigStringBytes(20L, 0, 200L, true)
+        then:
+        result3 == bytes
+        bigStringFiles.readFileCountTotal == 2
 
         cleanup:
         tmpSlotDir.deleteDir()
