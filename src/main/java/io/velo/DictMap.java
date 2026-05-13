@@ -92,13 +92,9 @@ public class DictMap implements NeedCleanUp {
     private final LocalPersist localPersist = LocalPersist.getInstance();
 
     /**
-     * Puts a dictionary into the map with a key prefix or suffix.
-     * If the dictionary's sequence number already exists, a new sequence number is generated.
-     *
      * @param keyPrefixOrSuffix the key prefix or suffix of the dictionary
-     * @param dict              the dictionary to put
+     * @param dict the dictionary to put
      * @return the dictionary that was put into the map
-     * @throws RuntimeException if there is an error writing the dictionary to the file or appending to the binlog
      */
     @SlaveNeedReplay
     @SlaveReplay
@@ -241,10 +237,7 @@ public class DictMap implements NeedCleanUp {
     private File dirFile;
 
     /**
-     * Initializes the dictionary map from a directory file.
-     *
      * @param dirFile the directory file to initialize from
-     * @throws IOException if an I/O error occurs
      */
     public synchronized void initDictMap(File dirFile) throws IOException {
         this.dirFile = dirFile;

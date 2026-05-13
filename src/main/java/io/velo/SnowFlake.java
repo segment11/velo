@@ -95,11 +95,8 @@ public class SnowFlake {
     long lastStamp = -1L;
 
     /**
-     * Constructs a new SnowFlake instance with the specified datacenter ID and machine ID.
-     *
      * @param datacenterId the datacenter ID
-     * @param machineId    the machine ID
-     * @throws IllegalArgumentException if the datacenter ID or machine ID is out of the allowed range
+     * @param machineId the machine ID
      */
     public SnowFlake(long datacenterId, long machineId) {
         if (datacenterId > MAX_DATACENTER_NUM || datacenterId < 0) {

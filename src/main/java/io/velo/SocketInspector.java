@@ -176,10 +176,8 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
-     * For command client info / list
-     *
      * @param socket the client socket
-     * @return the client info reply, refer to <a href="https://redis.io/docs/latest/commands/client-info/">client info</a>
+     * @return the client info reply
      */
     public static String getClientInfo(ITcpSocket socket) {
         var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
@@ -314,9 +312,7 @@ public class SocketInspector implements TcpSocket.Inspector {
         }
 
         /**
-         * Constructs a new ChannelAndIsPattern instance.
-         *
-         * @param channel   the channel
+         * @param channel the channel
          * @param isPattern true if the channel is a pattern, false otherwise
          */
         ChannelAndIsPattern(@NotNull String channel, boolean isPattern) {

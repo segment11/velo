@@ -8,13 +8,6 @@ import java.io.File;
 
 /**
  * Configuration for volume directories assigned to slots in the Velo application.
- * This class manages the mapping of slots to specific volume directories based on configuration settings.
- *
- * <p>Key features:
- * <ul>
- *   <li>Initialization from configuration</li>
- *   <li>Retrieval of volume directory for a specific slot</li>
- * </ul>
  */
 public class ConfVolumeDirsForSlot {
     /**

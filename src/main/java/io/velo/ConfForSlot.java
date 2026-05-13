@@ -12,15 +12,6 @@ import static io.velo.persist.LocalPersist.PAGE_SIZE;
 
 /**
  * Configuration settings for slots in the Velo application.
- * This class provides different configurations based on the estimated number of keys.
- *
- * <p>Key features:
- * <ul>
- *   <li>Configuration for different slot sizes (debugMode, c1m, c10m)</li>
- *   <li>Configuration for buckets, chunks, and write-ahead logs (WAL)</li>
- *   <li>Configuration for least recently used (LRU) caches</li>
- *   <li>Replication configuration</li>
- * </ul>
  */
 public enum ConfForSlot {
     debugMode(100_000),
@@ -63,13 +54,11 @@ public enum ConfForSlot {
     public final ConfLru lruKeyAndCompressedValueEncoded = new ConfLru(100_000);
 
     /**
-     * Replication properties for slave.
-     *
-     * @param bucketsPerSlot          the number of buckets per slot
-     * @param oneChargeBucketNumber   the number of buckets charged in one wal group
-     * @param segmentNumberPerFd      the number of segments per file
-     * @param fdPerChunk              the number of file descriptors per chunk
-     * @param segmentLength           the length of each segment
+     * @param bucketsPerSlot the number of buckets per slot
+     * @param oneChargeBucketNumber the number of buckets charged in one wal group
+     * @param segmentNumberPerFd the number of segments per file
+     * @param fdPerChunk the number of file descriptors per chunk
+     * @param segmentLength the length of each segment
      * @param isSegmentUseCompression whether to use compression for each segment
      */
     public record ReplProperties(int bucketsPerSlot, int oneChargeBucketNumber,
@@ -184,8 +173,6 @@ public enum ConfForSlot {
     public static ConfForSlot global = c1m;
 
     /**
-     * Initializes the configuration based on the estimated number of keys.
-     *
      * @param estimateKeyNumber the estimated number of keys
      */
     ConfForSlot(long estimateKeyNumber) {
@@ -222,12 +209,10 @@ public enum ConfForSlot {
      * Configuration for least recently used (LRU) caches.
      */
     public static class ConfLru {
-        /**
-         * Initializes the LRU cache with the specified maximum size.
-         *
-         * @param maxSize the maximum size of the LRU cache
-         */
-        public ConfLru(int maxSize) {
+    /**
+     * @param maxSize the maximum size of the LRU cache
+     */
+    public ConfLru(int maxSize) {
             this.maxSize = maxSize;
         }
 
@@ -252,9 +237,7 @@ public enum ConfForSlot {
         c10m(KeyBucket.MAX_BUCKETS_PER_SLOT, (byte) 1);
 
         /**
-         * Initializes the bucket configuration with the specified parameters.
-         *
-         * @param bucketsPerSlot     the number of buckets per slot
+         * @param bucketsPerSlot the number of buckets per slot
          * @param initialSplitNumber the initialized split number
          */
         ConfBucket(int bucketsPerSlot, byte initialSplitNumber) {
@@ -321,11 +304,9 @@ public enum ConfForSlot {
         c10m(512 * 1024, (byte) 2, PAGE_SIZE);
 
         /**
-         * Initializes the chunk configuration with the specified parameters.
-         *
          * @param segmentNumberPerFd the number of segments per file descriptor
-         * @param fdPerChunk         the number of file descriptors per chunk
-         * @param segmentLength      the length of each segment
+         * @param fdPerChunk the number of file descriptors per chunk
+         * @param segmentLength the length of each segment
          */
         ConfChunk(int segmentNumberPerFd, byte fdPerChunk, int segmentLength) {
             this.segmentNumberPerFd = segmentNumberPerFd;
@@ -454,10 +435,8 @@ public enum ConfForSlot {
         c10m(32, 200, 200);
 
         /**
-         * Initializes the WAL configuration with the specified parameters.
-         *
          * @param oneChargeBucketNumber the number of buckets to charge at once
-         * @param valueSizeTrigger      the trigger size for values
+         * @param valueSizeTrigger the trigger size for values
          * @param shortValueSizeTrigger the trigger size for short values
          */
         ConfWal(int oneChargeBucketNumber, int valueSizeTrigger, int shortValueSizeTrigger) {

@@ -236,9 +236,7 @@ public class TrainSampleJob {
     private final Debug debug = Debug.getInstance();
 
     /**
-     * Trains dictionaries for the samples in the list.
-     *
-     * @return the result of the training process, including the trained dictionaries and the list of removed sample sequence numbers
+     * @return the result of the training process
      */
     public TrainSampleResult train() {
         trainCount++;

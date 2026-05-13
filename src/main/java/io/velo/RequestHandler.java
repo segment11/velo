@@ -31,7 +31,6 @@ import static io.activej.config.converter.ConfigConverters.ofInteger;
 
 /**
  * Handles requests for the server.
- * Need be thread safe.
  */
 @ThreadNeedLocal
 public class RequestHandler {
@@ -84,13 +83,11 @@ public class RequestHandler {
     }
 
     /**
-     * Constructs a new RequestHandler.
-     *
-     * @param workerId    the worker ID
+     * @param workerId the worker ID
      * @param slotWorkers the number of network workers
-     * @param slotNumber  the slot number
-     * @param snowFlake   the SnowFlake instance
-     * @param config      the configuration object
+     * @param slotNumber the slot number
+     * @param snowFlake the SnowFlake instance
+     * @param config the configuration object
      */
     public RequestHandler(byte workerId, byte slotWorkers, short slotNumber, SnowFlake snowFlake, Config config) {
         this.workerId = workerId;

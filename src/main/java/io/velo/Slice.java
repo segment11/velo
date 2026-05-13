@@ -4,30 +4,6 @@ import java.util.Arrays;
 
 /**
  * A simple auto-growing byte buffer for reading and writing binary data.
- * This class provides a lightweight alternative to Netty's ByteBuf for basic read/write operations.
- *
- * <p>Key features:
- * <ul>
- *   <li>Auto-growing capacity with 2x exponential growth strategy</li>
- *   <li>Big-endian byte order for write operations</li>
- *   <li>Little-endian byte order support for LE variants</li>
- *   <li>Separate read and write indices for sequential access</li>
- * </ul>
- *
- * <p>Usage example:
- * <pre>
- * // Writing data
- * var slice = new Slice();
- * slice.writeInt(12345);
- * slice.writeBytes("hello".getBytes());
- * byte[] result = Arrays.copyOf(slice.getArray(), slice.getWriteIndex());
- *
- * // Reading data
- * var reader = new Slice(result);
- * int value = reader.readInt();
- * byte[] data = new byte[5];
- * reader.readBytes(data);
- * </pre>
  */
 public class Slice {
     /**
@@ -60,10 +36,7 @@ public class Slice {
     }
 
     /**
-     * Constructs a new Slice with the specified initial capacity.
-     *
      * @param initialCapacity the initial capacity in bytes
-     * @throws IllegalArgumentException if initialCapacity is less than or equal to 0
      */
     public Slice(int initialCapacity) {
         if (initialCapacity <= 0) {
@@ -75,11 +48,7 @@ public class Slice {
     }
 
     /**
-     * Constructs a new Slice wrapping the given byte array for reading.
-     * The write index is set to the array length.
-     *
      * @param data the byte array to wrap
-     * @throws IllegalArgumentException if data is null
      */
     public Slice(byte[] data) {
         if (data == null) {
@@ -91,12 +60,9 @@ public class Slice {
     }
 
     /**
-     * Constructs a new Slice with a copy of the specified portion of the given byte array.
-     *
-     * @param data   the source byte array
+     * @param data the source byte array
      * @param offset the starting offset in the source array
      * @param length the number of bytes to copy
-     * @throws IllegalArgumentException if data is null or offset/length are invalid
      */
     public Slice(byte[] data, int offset, int length) {
         if (data == null) {
@@ -138,10 +104,7 @@ public class Slice {
     }
 
     /**
-     * Writes all bytes from the source array to this slice.
-     *
      * @param src the source byte array
-     * @throws IllegalArgumentException if src is null
      */
     public void writeBytes(byte[] src) {
         if (src == null) {
@@ -151,12 +114,9 @@ public class Slice {
     }
 
     /**
-     * Writes bytes from the source array to this slice.
-     *
-     * @param src     the source byte array
+     * @param src the source byte array
      * @param srcIndex the starting index in the source array
-     * @param len     the number of bytes to write
-     * @throws IllegalArgumentException if src is null or indices are invalid
+     * @param len the number of bytes to write
      */
     public void writeBytes(byte[] src, int srcIndex, int len) {
         if (src == null) {
@@ -323,11 +283,7 @@ public class Slice {
     }
 
     /**
-     * Reads bytes into the destination array.
-     *
      * @param dst the destination byte array
-     * @throws ArrayIndexOutOfBoundsException if not enough bytes are readable
-     * @throws IllegalArgumentException       if dst is null
      */
     public void readBytes(byte[] dst) {
         if (dst == null) {

@@ -165,9 +165,8 @@ public class MultiWorkerServer extends Launcher {
     private static final String PID_FILE_NAME = "velo.pid";
 
     /**
-     * Returns the directory file based on the configuration.
-     *
      * @param config the configuration
+     * @param doFileLock whether to do file lock
      * @return the directory file
      */
     static File dirFile(Config config, boolean doFileLock) {
@@ -442,10 +441,8 @@ public class MultiWorkerServer extends Launcher {
     }
 
     /**
-     * Handles a single request from a client socket.
-     *
      * @param request the request to handle
-     * @param socket  the client socket
+     * @param socket the client socket
      * @return a promise of the response as a ByteBuf
      */
     Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
@@ -559,11 +556,9 @@ public class MultiWorkerServer extends Launcher {
     boolean isMockHandle = false;
 
     /**
-     * Gets a promise of the response by handling the request on another event loop.
-     *
-     * @param request         the request to handle
-     * @param socket          the client socket
-     * @param targetHandler   the target request handler
+     * @param request the request to handle
+     * @param socket the client socket
+     * @param targetHandler the target request handler
      * @param targetEventloop the target event loop
      * @return a promise of the response as a ByteBuf
      */
@@ -604,10 +599,8 @@ public class MultiWorkerServer extends Launcher {
     }
 
     /**
-     * Transfers an asynchronous reply to a ByteBuf promise.
-     *
      * @param request the request that generated the reply
-     * @param reply   the asynchronous reply
+     * @param reply the asynchronous reply
      * @param isResp3 true if the reply should be formatted in RESP3, false otherwise
      * @return a promise of the response as a ByteBuf
      */
@@ -630,10 +623,8 @@ public class MultiWorkerServer extends Launcher {
     }
 
     /**
-     * Handles a pipeline of requests from a client socket.
-     *
-     * @param pipeline   the pipeline of requests to handle
-     * @param socket     the client socket
+     * @param pipeline the pipeline of requests to handle
+     * @param socket the client socket
      * @param slotNumber the slot number for the requests
      * @return a promise of the response as a ByteBuf
      */
@@ -712,12 +703,10 @@ public class MultiWorkerServer extends Launcher {
     }
 
     /**
-     * Provides a worker server for handling client connections.
-     *
-     * @param reactor         the reactor for the worker server
+     * @param reactor the reactor for the worker server
      * @param socketInspector the socket inspector for managing socket connections
-     * @param consumer        the consumer for handling incoming sockets
-     * @param config          the configuration
+     * @param consumer the consumer for handling incoming sockets
+     * @param config the configuration
      * @return a worker server
      */
     @Provides
@@ -1212,11 +1201,8 @@ public class MultiWorkerServer extends Launcher {
         boolean skipZookeeperConnectCheck = false;
 
         /**
-         * Provides the configuration for a slot.
-         *
          * @param config the configuration object
          * @return the configuration for the slot
-         * @throws IOException if an I/O error occurs
          */
         @Provides
         ConfForSlot confForSlot(Config config) throws IOException {

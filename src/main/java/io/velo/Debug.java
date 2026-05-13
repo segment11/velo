@@ -1,8 +1,7 @@
 package io.velo;
 
 /**
- * A singleton class that provides debug switches and flags for controlling various debug behaviors in the application.
- * These flags can be toggled to enable or disable specific debug logging and features during development and testing.
+ * Provides debug switches and flags for controlling various debug behaviors.
  */
 public class Debug {
     /**

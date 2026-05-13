@@ -43,15 +43,6 @@ public class ValkeyRawConfSupport {
 
     /**
      * Loads the configuration settings from the Valkey configuration file.
-     * It checks both the default and alternative filenames and reads the settings.
-     * Lines starting with "#" are considered comments and are ignored.
-     * Key-value pairs are expected to be separated by a colon (":").
-     * Supported keys include:
-     * - acl-filename: Sets the filename for the Access Control List (ACL).
-     * - acl-pubsub-default: Sets whether ACLs should apply to Pub/Sub channels by default.
-     * - replica-priority: Sets the priority for replicas.
-     *
-     * @throws IOException If an error occurs while reading the configuration file.
      */
     public static void load() throws IOException {
         var file = Paths.get(VALKEY_CONF_FILENAME).toFile();

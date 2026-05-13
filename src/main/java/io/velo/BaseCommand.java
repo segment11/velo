@@ -31,7 +31,6 @@ import static io.velo.CompressedValue.VALUE_MAX_LENGTH;
 
 /**
  * Abstract base class for handling Velo commands.
- * This class provides core functionalities for parsing command data, handling slots, and interacting with the persistence layer.
  */
 @ThreadNeedLocal
 public abstract class BaseCommand {
@@ -66,9 +65,9 @@ public abstract class BaseCommand {
      * Adds slot-key hash mappings for relevant keys in the command data array.
      *
      * @param slotWithKeyHashList the precomputed slot and hash information
-     * @param data                the data array received from the client including command
-     * @param slotNumber          the total number of slots in the velo running instance
-     * @param isKeyBytes          the predicate to determine which array indices contain keys
+     * @param data the data array received from the client including command
+     * @param slotNumber the total number of slots in the velo running instance
+     * @param isKeyBytes the predicate to determine which array indices contain keys
      */
     protected static void addToSlotWithKeyHashList(ArrayList<SlotWithKeyHash> slotWithKeyHashList,
                                                    byte[][] data, int slotNumber, FromToKeyIndex isKeyBytes) {
@@ -131,11 +130,11 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Resets the command string, data array, and network socket connection. Reuse this object in the same thread.
+     * Resets the command string, data array, and network socket connection.
      *
-     * @param cmd     the command string received from the client
-     * @param data    the data array received from the client including command
-     * @param socket  the TCP socket connection to the client
+     * @param cmd the command string received from the client
+     * @param data the data array received from the client including command
+     * @param socket the TCP socket connection to the client
      * @param request the request object
      */
     public void resetContext(String cmd, byte[][] data, ITcpSocket socket, Request request) {
@@ -148,10 +147,8 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Constructs a BaseCommand instance with the provided command string, data array, and network socket connection.
-     *
-     * @param cmd    the command string received from the client
-     * @param data   the data array received from the client including command
+     * @param cmd the command string received from the client
+     * @param data the data array received from the client including command
      * @param socket the TCP socket connection to the client
      */
     public BaseCommand(String cmd, byte[][] data, ITcpSocket socket) {
@@ -304,8 +301,6 @@ public abstract class BaseCommand {
 
     /**
      * Copies the properties of another BaseCommand object to this object.
-     * When doing unit test, can use this.
-     * When reusing a command method, can use this.
      *
      * @param other the other BaseCommand object to copy properties from
      */
@@ -334,8 +329,6 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Initializes the properties of this BaseCommand object.
-     *
      * @param requestHandler the RequestHandler object associated with this BaseCommand object
      * @return the BaseCommand object itself
      */
@@ -361,10 +354,8 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Parses the slots hash information from the given command and data.
-     *
-     * @param cmd        the command string
-     * @param data       the data array
+     * @param cmd the command string
+     * @param data the data array
      * @param slotNumber the slot number
      * @return the list of SlotWithKeyHash objects representing the parsed slots
      */
@@ -472,13 +463,11 @@ public abstract class BaseCommand {
     protected static final Logger log = LoggerFactory.getLogger(BaseCommand.class);
 
     /**
-     * Represents a key's slot assignment and hash information.
-     *
-     * @param slot         the internal slot index used for sharding
+     * @param slot the internal slot index used for sharding
      * @param toClientSlot the slot index exposed to Redis clients when cluster enabled
-     * @param bucketIndex  the bucket index within the slot
-     * @param keyHash      the main 64-bit hash of the key
-     * @param rawKey       the original key string
+     * @param bucketIndex the bucket index within the slot
+     * @param keyHash the main 64-bit hash of the key
+     * @param rawKey the original key string
      */
     public record SlotWithKeyHash(short slot, short toClientSlot, int bucketIndex,
                                   long keyHash, String rawKey) {
@@ -539,10 +528,8 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Calculates slot assignment and hash information for a key.
-     *
-     * @param keyBytes   the key bytes
-     * @param key        the original key string
+     * @param keyBytes the key bytes
+     * @param key the original key string
      * @param slotNumber the total number of slots in the velo running instance
      * @return the SlotWithKeyHash containing full positioning information
      */
@@ -579,9 +566,7 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Calculates slot assignment and hash information for a key.
-     *
-     * @param key        the key
+     * @param key the key
      * @param slotNumber the total number of slots in the velo running instance
      * @return the SlotWithKeyHash containing full positioning information
      */
@@ -592,9 +577,7 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Calculates slot assignment and hash information for a key.
-     *
-     * @param keyBytes   the key bytes
+     * @param keyBytes the key bytes
      * @param slotNumber the total number of slots in the velo running instance
      * @return the SlotWithKeyHash containing full positioning information
      */
@@ -605,9 +588,7 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Calculates slot assignment by a key hash.
-     *
-     * @param keyHash    the key hash
+     * @param keyHash the key hash
      * @param slotNumber the total number of slots in the velo running instance
      * @return the slot index
      */
@@ -623,10 +604,8 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Calculates slot assignment for a key using instance-configured slot number.
-     *
      * @param key the key
-     * @return the SlotWithKeyHash containing key hash information including slot number, bucket index, and key hash
+     * @return the SlotWithKeyHash containing key hash information
      */
     public SlotWithKeyHash slot(String key) {
         return slot(key, slotNumber);
@@ -784,10 +763,8 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Gets value bytes from a key.
-     *
-     * @param slotWithKeyHash   the precomputed slot and hash information
-     * @param expectTypeString  whether to expect the CompressedValue to be a string type or ignore
+     * @param slotWithKeyHash the precomputed slot and hash information
+     * @param expectTypeString whether to expect the CompressedValue to be a string type or ignore
      * @param expectSpTypeArray the expected CompressedValue special type array
      * @return the value bytes, or null if not found
      */
@@ -806,9 +783,7 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Sets a number value to a key.
-     *
-     * @param value                the number value
+     * @param value the number value
      * @param slotWithKeyHashReuse the precomputed slot and hash information
      */
     public void setNumber(Number value, SlotWithKeyHash slotWithKeyHashReuse) {
@@ -816,11 +791,9 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Sets a number value to a key.
-     *
-     * @param value                the number value
+     * @param value the number value
      * @param slotWithKeyHashReuse the precomputed slot and hash information
-     * @param expireAt             the expiration time
+     * @param expireAt the expiration time
      */
     public void setNumber(Number value, SlotWithKeyHash slotWithKeyHashReuse, long expireAt) {
         if (value instanceof Byte) {
@@ -924,9 +897,7 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Stores a value in the persistence layer.
-     *
-     * @param valueBytes           the value bytes
+     * @param valueBytes the value bytes
      * @param slotWithKeyHashReuse the precomputed slot and hash information
      */
     public void set(byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHashReuse) {
@@ -934,11 +905,9 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Stores a value in the persistence layer.
-     *
-     * @param valueBytes      the value bytes
+     * @param valueBytes the value bytes
      * @param slotWithKeyHash the precomputed slot and hash information
-     * @param spType          the CompressedValue special type
+     * @param spType the CompressedValue special type
      */
     public void set(byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType) {
         set(valueBytes, slotWithKeyHash, spType, CompressedValue.NO_EXPIRE);
@@ -947,12 +916,10 @@ public abstract class BaseCommand {
     private static final int MAX_LONG_VALUE_IN_BYTES_LENGTH = String.valueOf(Long.MAX_VALUE).length();
 
     /**
-     * Stores a value in the persistence layer.
-     *
-     * @param valueBytes      the value bytes
+     * @param valueBytes the value bytes
      * @param slotWithKeyHash the precomputed slot and hash information
-     * @param spType          the CompressedValue special type
-     * @param expireAt        the expiration time
+     * @param spType the CompressedValue special type
+     * @param expireAt the expiration time
      */
     public void set(byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType, long expireAt) {
         var key = slotWithKeyHash.rawKey;
@@ -1120,11 +1087,9 @@ public abstract class BaseCommand {
     }
 
     /**
-     * Stores a CompressedValue to a specific slot's storage.
-     *
-     * @param slot            the target slot number
+     * @param slot the target slot number
      * @param slotWithKeyHash the precomputed slot and hash information
-     * @param cv              the CompressedValue to store
+     * @param cv the CompressedValue to store
      */
     protected void putToOneSlot(short slot, @NotNull SlotWithKeyHash slotWithKeyHash, CompressedValue cv) {
         if (byPassGetSet != null) {

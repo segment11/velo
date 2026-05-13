@@ -379,11 +379,8 @@ public class Dict implements Serializable {
     }
 
     /**
-     * Decodes a dictionary from a data input stream.
-     *
      * @param is the data input stream to read from
      * @return the decoded dictionary with key prefix or suffix
-     * @throws IOException if an I/O error occurs
      */
     public static DictWithKeyPrefixOrSuffix decode(DataInputStream is) throws IOException {
         if (is.available() < 4) {
@@ -444,10 +441,7 @@ public class Dict implements Serializable {
     }
 
     /**
-     * Constructs a new dictionary with the specified dictionary bytes.
-     *
      * @param dictBytes the dictionary bytes
-     * @throws IllegalArgumentException if the dictionary bytes are too long
      */
     public Dict(byte[] dictBytes) {
         if (dictBytes.length > Short.MAX_VALUE) {

@@ -12,15 +12,6 @@ import java.nio.ByteBuffer;
 
 /**
  * Represents a compressed value with metadata for storage and retrieval.
- * Handles compression/decompression, expiration, type tracking, and serialization.
- *
- * <p>Key features:
- * <ul>
- *   <li>Supports multiple numeric types for efficient storage</li>
- *   <li>Handles Zstd compression with optional dictionaries</li>
- *   <li>Tracks expiration time and sequence numbers for versioning</li>
- *   <li>Supports special types for Redis data structures</li>
- * </ul>
  */
 public class CompressedValue {
     /**
@@ -259,10 +250,7 @@ public class CompressedValue {
     }
 
     /**
-     * Encodes numeric values with type-specific serialization.
-     *
      * @return the byte array containing type header, sequence number, and value bytes
-     * @throws IllegalStateException if called on a non-numeric type.
      */
     public byte[] encodeAsNumber() {
         return switch (dictSeqOrSpType) {
@@ -312,11 +300,9 @@ public class CompressedValue {
     }
 
     /**
-     * Static version of encoding a short string value with header information.
-     *
-     * @param seq      the sequence number for version tracking
+     * @param seq the sequence number for version tracking
      * @param expireAt the expiration time in milliseconds
-     * @param data     the string data bytes to encode
+     * @param data the string data bytes to encode
      * @return the encoded byte array with type header, sequence, and data
      */
     public static byte[] encodeAsShortString(long seq, long expireAt, byte[] data) {
@@ -339,10 +325,7 @@ public class CompressedValue {
     }
 
     /**
-     * Extracts the numeric value from the compressed data.
-     *
      * @return the numeric value as an appropriate Number subtype
-     * @throws IllegalStateException if the value is not a numeric type.
      */
     public Number numberValue() {
         return switch (dictSeqOrSpType) {
@@ -606,8 +589,6 @@ public class CompressedValue {
     }
 
     /**
-     * Decompresses the compressed data using the given Zstd dictionary.
-     *
      * @param dict the given Zstd dictionary; {@code null} means use the self-trained dictionary
      * @return the decompressed data
      */
@@ -830,11 +811,9 @@ public class CompressedValue {
     private static final Logger log = LoggerFactory.getLogger(CompressedValue.class);
 
     /**
-     * Decodes from the value bytes.
-     *
      * @param valueBytes the value bytes
-     * @param keyBytes   the key bytes
-     * @param keyHash    the 64-bit key hash
+     * @param keyBytes the key bytes
+     * @param keyHash the 64-bit key hash
      * @return the decoded compressed value
      */
     public static CompressedValue decode(byte[] valueBytes, byte[] keyBytes, long keyHash) {
@@ -843,12 +822,9 @@ public class CompressedValue {
     }
 
     /**
-     * Decodes from the buffer.
-     * No memory copy when iterating over many compressed values.
-     *
      * @param nettyBuf the buffer
      * @param keyBytes the key bytes
-     * @param keyHash  the 64-bit key hash
+     * @param keyHash the 64-bit key hash
      * @return the decoded compressed value
      */
     public static CompressedValue decode(io.netty.buffer.ByteBuf nettyBuf, byte[] keyBytes, long keyHash) {
