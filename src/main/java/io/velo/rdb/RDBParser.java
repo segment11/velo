@@ -15,7 +15,7 @@ import io.velo.type.encode.ListPack;
 import io.velo.type.encode.ZipList;
 
 /**
- * Parse Redis RDB format bytes buffer and dump data to RDB format bytes.
+ * Parses Redis RDB format byte buffers and serializes data to RDB format.
  */
 public class RDBParser {
     // Redis RDB type constants
