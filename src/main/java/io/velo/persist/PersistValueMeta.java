@@ -102,6 +102,7 @@ public class PersistValueMeta {
     /**
      * @param bytes the byte array to decode
      * @return the PersistValueMeta instance represented by the byte array
+     * @throws PersistValueMetaCorruptedException if any decoded field is out of its valid range
      */
     public static PersistValueMeta decode(byte[] bytes) {
         var buf = ByteBuf.wrapForReading(bytes);
@@ -111,6 +112,16 @@ public class PersistValueMeta {
         pvm.subBlockIndex = buf.readByte();
         pvm.segmentIndex = buf.readInt();
         pvm.segmentOffset = buf.readInt();
+
+        if (pvm.subBlockIndex < 0 || pvm.subBlockIndex >= SegmentBatch.MAX_BLOCK_NUMBER) {
+            throw new PersistValueMetaCorruptedException("subBlockIndex out of range: " + pvm.subBlockIndex);
+        }
+        if (pvm.segmentIndex < 0) {
+            throw new PersistValueMetaCorruptedException("segmentIndex negative: " + pvm.segmentIndex);
+        }
+        if (pvm.segmentOffset < 0) {
+            throw new PersistValueMetaCorruptedException("segmentOffset negative: " + pvm.segmentOffset);
+        }
         return pvm;
     }
 }
