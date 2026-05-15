@@ -14,11 +14,26 @@ public class PersistValueMeta {
     static final int ENCODED_LENGTH = 2 + 1 + 1 + 4 + 4;
 
     /**
+     * Discriminates PersistValueMeta bytes from short-form and long-form CompressedValue bytes.
+     * <p>
+     * This check relies on two invariants that must hold for correct discrimination:
+     * <ol>
+     *   <li>PVM always starts with a leading zero short ({@code bytes[0] == 0, bytes[1] == 0}),
+     *       written by {@link #encode()} via {@code buf.writeShort((short) 0)}.</li>
+     *   <li>No short-form CompressedValue encoding is exactly {@link #ENCODED_LENGTH} (12) bytes.
+           Number encodings ({@link CompressedValue#encodeAsNumber()}) are 18-25 bytes.
+     *       Short-string encoding ({@link CompressedValue#encodeAsShortString(long, long, byte[])})
+     *       is {@code 1 + 8 + 8 + data.length}, minimum 17 bytes.
+     *       Long-form encoding ({@link CompressedValue#encodeTo}) is at least
+     *       {@link CompressedValue#VALUE_HEADER_LENGTH} (32) bytes.</li>
+     * </ol>
+     * If a new short-form encoding is added that could be 12 bytes, this discriminator must be updated.
+     *
      * @param bytes the byte array to check
      * @return true if the byte array represents a PersistValueMeta
      */
     public static boolean isPvm(byte[] bytes) {
-        return bytes[0] >= 0 && (bytes.length == ENCODED_LENGTH);
+        return bytes[0] == 0 && bytes[1] == 0 && (bytes.length == ENCODED_LENGTH);
     }
 
     /** Redis type for scan filter. */

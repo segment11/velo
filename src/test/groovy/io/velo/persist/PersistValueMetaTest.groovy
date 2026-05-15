@@ -1,5 +1,6 @@
 package io.velo.persist
 
+import io.velo.CompressedValue
 import spock.lang.Specification
 
 class PersistValueMetaTest extends Specification {
@@ -137,6 +138,80 @@ class PersistValueMetaTest extends Specification {
         decoded.subBlockIndex == 3
         decoded.segmentIndex == 100
         decoded.segmentOffset == 500
+    }
+
+    def 'test is pvm rejects non-zero leading short'() {
+        given:
+        def bytes = new byte[PersistValueMeta.ENCODED_LENGTH]
+        // bytes[0] == 0, bytes[1] == 0 is valid (leading short zero)
+
+        expect:
+        PersistValueMeta.isPvm(bytes)
+
+        when: 'non-zero first byte (but still non-negative)'
+        bytes[0] = 1
+        then:
+        !PersistValueMeta.isPvm(bytes)
+
+        when: 'non-zero second byte'
+        bytes[0] = 0
+        bytes[1] = 1
+        then:
+        !PersistValueMeta.isPvm(bytes)
+    }
+
+    def 'test is pvm rejects all short-form CV encodings as regression guard'() {
+        given:
+        def cv = new CompressedValue()
+        cv.seq = 1L
+        cv.expireAt = CompressedValue.NO_EXPIRE
+
+        when: 'number encoding - byte'
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_BYTE
+        cv.compressedData = new byte[1]
+        then:
+        !PersistValueMeta.isPvm(cv.encodeAsNumber())
+
+        when: 'number encoding - short'
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_SHORT
+        cv.compressedData = new byte[2]
+        then:
+        !PersistValueMeta.isPvm(cv.encodeAsNumber())
+
+        when: 'number encoding - int'
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_INT
+        cv.compressedData = new byte[4]
+        then:
+        !PersistValueMeta.isPvm(cv.encodeAsNumber())
+
+        when: 'number encoding - long'
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_LONG
+        cv.compressedData = new byte[8]
+        then:
+        !PersistValueMeta.isPvm(cv.encodeAsNumber())
+
+        when: 'number encoding - double'
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_DOUBLE
+        cv.compressedData = new byte[8]
+        then:
+        !PersistValueMeta.isPvm(cv.encodeAsNumber())
+
+        when: 'short string encoding - min size (17 bytes)'
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cv.compressedData = new byte[0]
+        then:
+        !PersistValueMeta.isPvm(cv.encodeAsShortString())
+
+        when: 'short string encoding - max short string size'
+        cv.compressedData = new byte[CompressedValue.SP_TYPE_SHORT_STRING_MIN_LEN]
+        then:
+        !PersistValueMeta.isPvm(cv.encodeAsShortString())
+
+        when: 'long-form encode (min 32 bytes)'
+        cv.dictSeqOrSpType = 0
+        cv.compressedData = new byte[1]
+        then:
+        !PersistValueMeta.isPvm(cv.encode())
     }
 
     def 'test some branches'() {
