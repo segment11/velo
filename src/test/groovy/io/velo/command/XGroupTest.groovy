@@ -3537,4 +3537,38 @@ class XGroupTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test as slave handle s incremental big string when master file missing'() {
+        given:
+        def ctx = setupSlaveContext()
+        def localPersist = ctx.localPersist
+        def oneSlot = ctx.oneSlot
+        def replPairAsMaster = ctx.replPairAsMaster
+        def masterUuid = ctx.masterUuid
+        def x = ctx.x
+
+        and:
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+        oneSlot.onlyOneReplPairAsSlave.setRemoteReplProperties(ConfForSlot.global.generateReplProperties())
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+
+        and: 'simulate empty payload from master (no bytes after key = master file missing)'
+        def bigStringUuid = 1L
+        def bigStringKey = 'big-string'
+        def contentBytes = new byte[8 + 4 + bigStringKey.length()]
+        def requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putLong(bigStringUuid)
+        requestBuffer.putInt(bigStringKey.length())
+        requestBuffer.put(bigStringKey.getBytes())
+
+        when:
+        def replRequest = new ReplRequest(replPairAsMaster.slaveUuid, slot, ReplType.s_incremental_big_string, contentBytes, contentBytes.length)
+        ReplReply r = x.handleRepl(replRequest) as ReplReply
+        then:
+        r.isEmpty()
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

@@ -1095,6 +1095,8 @@ public class XGroup extends BaseCommand {
                 bigStringFiles.writeBigStringBytes(uuid, s.bucketIndex(), s.keyHash(), bigStringBytes);
                 log.warn("Repl slave fetch incremental big string done, uuid={}, key={}, slot={}", uuid, key, s.slot());
             });
+        } else {
+            log.warn("Repl slave fetch incremental big string, master file missing, uuid={}, key={}, slot={}", uuid, key, slot);
         }
 
         replPair.doneFetchBigStringUuid(uuid);
