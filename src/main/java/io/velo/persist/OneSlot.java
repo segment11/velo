@@ -1203,6 +1203,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         var pvm = PersistValueMeta.decode(valueBytes);
+        if (pvm.segmentIndex > chunk.getMaxSegmentIndex()) {
+            throw new PersistValueMetaCorruptedException("segmentIndex exceeds max segment index: " + pvm.segmentIndex + ", max=" + chunk.getMaxSegmentIndex());
+        }
         var segmentBytes = getSegmentBytesBySegmentIndex(pvm.segmentIndex);
         if (segmentBytes == null) {
             throw new IllegalStateException("Load persisted segment bytes error, pvm=" + pvm);

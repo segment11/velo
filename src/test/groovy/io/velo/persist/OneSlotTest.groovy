@@ -1617,4 +1617,107 @@ class OneSlotTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test get throws PersistValueMetaCorruptedException when PVM bytes are corrupted in key bucket'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def key = 'corrupt-pvm-test-key'
+        def sKey = BaseCommand.slot(key, slotNumber)
+
+        def cv = new CompressedValue()
+        cv.keyHash = sKey.keyHash()
+        cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        cv.compressedData = new byte[CompressedValue.SP_TYPE_SHORT_STRING_MIN_LEN * 100]
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        100.times {
+            oneSlot.put(key, sKey.bucketIndex(), cv)
+        }
+        oneSlot.getWalByBucketIndex(sKey.bucketIndex()).isOnRewrite = false
+        100.times {
+            oneSlot.put(key, sKey.bucketIndex(), cv)
+        }
+        oneSlot.getWalByBucketIndex(sKey.bucketIndex()).clear()
+
+        and:
+        def keyLoader = oneSlot.keyLoader
+        def vx = keyLoader.getValueXByKey(sKey.bucketIndex(), key, sKey.keyHash())
+        assert vx != null
+        assert PersistValueMeta.isPvm(vx.valueBytes())
+
+        and: 'corrupt subBlockIndex to -1 in the stored PVM bytes'
+        def corruptedBytes = vx.valueBytes()
+        corruptedBytes[3] = (byte) -1
+        keyLoader.putValueByKey(sKey.bucketIndex(), key, sKey.keyHash(), vx.expireAt(), vx.seq(), corruptedBytes)
+
+        and: 'clear LRU so get must read from the key bucket'
+        oneSlot.clearKvInLRU(Wal.calcWalGroupIndex(sKey.bucketIndex()))
+
+        when:
+        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash())
+        then:
+        def e = thrown(PersistValueMetaCorruptedException)
+        e.message.contains('subBlockIndex')
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test get throws PersistValueMetaCorruptedException when segmentIndex exceeds max'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def key = 'corrupt-segment-index-key'
+        def sKey = BaseCommand.slot(key, slotNumber)
+
+        def cv = new CompressedValue()
+        cv.keyHash = sKey.keyHash()
+        cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        cv.compressedData = new byte[CompressedValue.SP_TYPE_SHORT_STRING_MIN_LEN * 100]
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        100.times {
+            oneSlot.put(key, sKey.bucketIndex(), cv)
+        }
+        oneSlot.getWalByBucketIndex(sKey.bucketIndex()).isOnRewrite = false
+        100.times {
+            oneSlot.put(key, sKey.bucketIndex(), cv)
+        }
+        oneSlot.getWalByBucketIndex(sKey.bucketIndex()).clear()
+
+        and:
+        def keyLoader = oneSlot.keyLoader
+        def vx = keyLoader.getValueXByKey(sKey.bucketIndex(), key, sKey.keyHash())
+        assert vx != null
+        assert PersistValueMeta.isPvm(vx.valueBytes())
+
+        and: 'corrupt segmentIndex to Integer.MAX_VALUE (0x7FFFFFFF) in the stored PVM bytes'
+        def corruptedBytes = vx.valueBytes()
+        corruptedBytes[4] = (byte) 0x7F
+        corruptedBytes[5] = (byte) 0xFF
+        corruptedBytes[6] = (byte) 0xFF
+        corruptedBytes[7] = (byte) 0xFF
+        keyLoader.putValueByKey(sKey.bucketIndex(), key, sKey.keyHash(), vx.expireAt(), vx.seq(), corruptedBytes)
+
+        and: 'clear LRU so get must read from the key bucket'
+        oneSlot.clearKvInLRU(Wal.calcWalGroupIndex(sKey.bucketIndex()))
+
+        when:
+        oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash())
+        then:
+        def e = thrown(PersistValueMetaCorruptedException)
+        e.message.contains('segmentIndex')
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

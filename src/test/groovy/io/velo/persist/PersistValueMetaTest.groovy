@@ -38,6 +38,8 @@ class PersistValueMetaTest extends Specification {
         !one.isTargetSegment(10, (byte) 0, 11)
     }
 
+    // encode() layout: short(2) + shortType(1) + subBlockIndex(1) + segmentIndex(4) + segmentOffset(4)
+
     def 'test decode rejects negative subBlockIndex'() {
         given:
         def pvm = new PersistValueMeta()
