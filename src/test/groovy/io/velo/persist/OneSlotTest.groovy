@@ -1720,4 +1720,39 @@ class OneSlotTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test tombstoning unpersisted big string enqueues file for deletion'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def bucketIndex = 0
+        def key = 'kerry-test-big-string-del-before-persist'
+        def s = BaseCommand.slot(key, slotNumber)
+        def keyHash = s.keyHash()
+
+        when: 'put a big-string value that stays in WAL (not yet persisted to key bucket)'
+        def cvBig = new CompressedValue()
+        cvBig.seq = oneSlot.snowFlake.nextId()
+        cvBig.keyHash = keyHash
+        cvBig.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
+        oneSlot.put(key, bucketIndex, cvBig)
+        def bigStringUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+
+        then: 'big-string uuid was recorded in WAL'
+        bigStringUuid != null
+
+        when: 'delete the key before the first persist'
+        oneSlot.delayToDeleteBigStringFileIds.clear()
+        oneSlot.removeDelay(key, bucketIndex, keyHash)
+
+        then: 'the big-string file uuid should be enqueued for deletion'
+        !oneSlot.delayToDeleteBigStringFileIds.isEmpty()
+        oneSlot.delayToDeleteBigStringFileIds.any { it.uuid() == bigStringUuid }
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

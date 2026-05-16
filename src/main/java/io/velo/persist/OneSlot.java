@@ -1329,11 +1329,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
+
+        Long overwrittenBigStringUuid = getCurrentBigStringUuid(targetWal, key, bucketIndex, keyHash);
+
         var putResult = targetWal.removeDelay(key, bucketIndex, keyHash, lastPersistTimeMs);
 
         boolean isBinlogAppended = false;
         if (putResult.needPersist()) {
-            // Already written to WAL file/map, so binlog can be appended before doPersist().
             if (putResult.needPutV() == null) {
                 var xWalV = new XWalV(putResult.v(), putResult.isValueShort());
                 appendBinlog(xWalV);
@@ -1341,6 +1343,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
 
             doPersist(walGroupIndex, key, putResult);
+        }
+
+        if (overwrittenBigStringUuid != null) {
+            var currentBigStringUuid = targetWal.bigStringFileUuidByKey.get(key);
+            if (!overwrittenBigStringUuid.equals(currentBigStringUuid)) {
+                delayToDeleteBigStringFileIds.add(new BigStringFiles.IdWithKey(overwrittenBigStringUuid, bucketIndex, keyHash, key));
+            }
         }
 
         if (!isBinlogAppended) {
