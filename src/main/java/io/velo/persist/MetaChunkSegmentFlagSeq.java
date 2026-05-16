@@ -420,8 +420,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             beginSegmentIndexMoveIndex = next;
         }
 
-        throw new IllegalStateException("Marked persisted segment index buffer is full, wal group index=" + walGroupIndex +
-                ", begin segment index=" + beginSegmentIndex + ", segment count=" + segmentCount);
+        log.warn("Marked persisted segment index buffer is full, soft drop marker, wal group index={}, begin segment index={}, segment count={}, slot={}",
+                walGroupIndex, beginSegmentIndex, segmentCount, slot);
     }
 
     /**

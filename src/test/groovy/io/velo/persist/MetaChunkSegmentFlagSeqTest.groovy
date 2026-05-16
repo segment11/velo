@@ -191,7 +191,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         when:
         one.markPersistedSegmentIndexToTargetWalGroup(0, 100, (short) 1)
         then:
-        thrown(IllegalStateException)
+        noExceptionThrown()
 
         when:
         one.isOverHalfSegmentNumberForFirstReuseLoop = true
@@ -525,6 +525,69 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
 
         then: 'all markers consumed'
         one.findThoseNeedToMerge(0) == MetaChunkSegmentFlagSeq.NOT_FIND_SEGMENT_INDEX_AND_COUNT
+
+        cleanup:
+        slotDirTmp.deleteDir()
+        ConfForSlot.global = ConfForSlot.c1m
+    }
+
+    def 'test marker buffer soft drop when ring is full before half segment reuse loop'() {
+        given:
+        final File slotDirTmp = new File(Consts.persistDir, 'test-slot-tmp')
+        slotDirTmp.mkdirs()
+
+        def one = new MetaChunkSegmentFlagSeq(slot, slotDirTmp)
+        assert !one.isOverHalfSegmentNumberForFirstReuseLoop
+
+        def markPersisted = { int walGroupIndex, int beginSegmentIndex, short segmentCount ->
+            one.markPersistedSegmentIndexToTargetWalGroup(walGroupIndex, beginSegmentIndex, segmentCount)
+            segmentCount.times { i ->
+                one.setSegmentMergeFlag(beginSegmentIndex + i, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, walGroupIndex)
+            }
+        }
+
+        when: 'fill all 100 marker slots for wal group 0'
+        one.clear()
+        100.times { i ->
+            markPersisted(0, i, (short) 1)
+        }
+
+        and: 'the 101st marker should NOT throw IllegalStateException — it should soft drop'
+        one.markPersistedSegmentIndexToTargetWalGroup(0, 100, (short) 1)
+
+        then:
+        noExceptionThrown()
+
+        when: 'the 101st segment is still HAS_DATA but not in the marker ring'
+        one.setSegmentMergeFlag(100, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 0)
+
+        and: 'enable the half segment reuse loop'
+        one.isOverHalfSegmentNumberForFirstReuseLoop = true
+
+        and: 'drain all markers via findThoseNeedToMerge + commit'
+        def drainedCount = 0
+        200.times {
+            def found = one.findThoseNeedToMerge(0)
+            if (found[0] != -1) {
+                one.commitMergedRangeWithMarkerIdx(0, found[0], found[1], found[2])
+                drainedCount++
+            }
+        }
+
+        then: 'all 100 markers in the ring were consumed'
+        drainedCount == 100
+        one.countMarkersForWalGroup(0) == 0
+
+        when: 'mark segments 0-99 as REUSABLE (simulating merge), keeping segment 100 HAS_DATA'
+        one.setSegmentMergeFlagBatch(0, 100, Chunk.SEGMENT_FLAG_REUSABLE, null, 0)
+
+        and: 'reload markers from segment flags — the dropped marker at segment 100 is rediscovered'
+        one.reloadMarkPersistedSegmentIndex()
+
+        then: 'segment 100 marker is now in the ring and discoverable for merge'
+        def result = one.findThoseNeedToMerge(0)
+        result[0] == 100
+        result[1] == 1
 
         cleanup:
         slotDirTmp.deleteDir()
