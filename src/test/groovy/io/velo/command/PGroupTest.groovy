@@ -18,6 +18,17 @@ import java.time.Duration
 class PGroupTest extends Specification {
     def _PGroup = new PGroup(null, null, null)
 
+    static SocketInspector initSocketInspector() {
+        def inspector = new SocketInspector()
+        def eventloop = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        Eventloop[] eventloopArray = [eventloop]
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        return inspector
+    }
+
     final short slot = 0
 
     def 'test parse slot - single key'() {
@@ -148,7 +159,7 @@ class PGroupTest extends Specification {
         reply == OKReply.INSTANCE
 
         when:
-        def socketInspector = new SocketInspector()
+        def socketInspector = initSocketInspector()
         LocalPersist.instance.socketInspector = socketInspector
         data2[0] = 'psubscribe'.bytes
         data2[1] = 'test_channel'.bytes
@@ -398,7 +409,7 @@ class PGroupTest extends Specification {
         pGroup.from(BaseCommand.mockAGroup())
 
         when:
-        def socketInspector = new SocketInspector()
+        def socketInspector = initSocketInspector()
         LocalPersist.instance.socketInspector = socketInspector
         def reply = pGroup.execute('pubsub channels')
         then:

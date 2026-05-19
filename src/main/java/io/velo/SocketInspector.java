@@ -18,9 +18,6 @@ import java.net.InetSocketAddress;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -397,7 +394,7 @@ public class SocketInspector implements TcpSocket.Inspector {
     /**
      * Map of channels to subscribed sockets. Eventloop means the net worker eventloop that owns the socket.
      */
-    private final ConcurrentHashMap<ChannelAndIsPattern, Map<ITcpSocket, Eventloop>> subscribeByChannel = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ChannelAndIsPattern, ConcurrentHashMap<ITcpSocket, Eventloop>> subscribeByChannel = new ConcurrentHashMap<>();
 
     /**
      * Returns a list of all subscribed channels.
@@ -449,7 +446,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      */
     public int subscribe(@NotNull String channel, boolean isPattern, ITcpSocket socket) {
         var one = new ChannelAndIsPattern(channel, isPattern);
-        var sockets = subscribeByChannel.computeIfAbsent(one, k -> Collections.synchronizedMap(new HashMap<>()));
+        var sockets = subscribeByChannel.computeIfAbsent(one, k -> new ConcurrentHashMap<>());
 
         var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
         Eventloop targetEventloop = null;
@@ -481,7 +478,9 @@ public class SocketInspector implements TcpSocket.Inspector {
             }
         }
 
-        sockets.put(socket, targetEventloop);
+        if (targetEventloop != null) {
+            sockets.put(socket, targetEventloop);
+        }
         return sockets.size();
     }
 
@@ -495,7 +494,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      */
     public int unsubscribe(@NotNull String channel, boolean isPattern, ITcpSocket socket) {
         var one = new ChannelAndIsPattern(channel, isPattern);
-        var sockets = subscribeByChannel.computeIfAbsent(one, k -> Collections.synchronizedMap(new HashMap<>()));
+        var sockets = subscribeByChannel.computeIfAbsent(one, k -> new ConcurrentHashMap<>());
         sockets.remove(socket);
         return sockets.size();
     }

@@ -228,6 +228,100 @@ class SocketInspectorTest extends Specification {
         MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = null
     }
 
+    def 'test concurrent subscribe and publish do not throw ConcurrentModificationException'() {
+        given:
+        def inspector = new SocketInspector()
+
+        def netWorkerEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def slotWorkerEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        netWorkerEventloop.keepAlive(true)
+        slotWorkerEventloop.keepAlive(true)
+        Thread.start { netWorkerEventloop.run() }
+        Thread.start { slotWorkerEventloop.run() }
+        Thread.sleep(500)
+
+        Eventloop[] slotWorkerEventloopArray = [slotWorkerEventloop]
+        Eventloop[] netWorkerEventloopArray = [netWorkerEventloop]
+        inspector.initByNetWorkerEventloopArray(slotWorkerEventloopArray, netWorkerEventloopArray)
+
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [netWorkerEventloop.getEventloopThread().threadId()]
+        inspector.connectedClientCountArray = [0]
+
+        def channel = 'concurrent_test'
+        def sockets = []
+        for (int i = 0; i < 20; i++) {
+            def socket = mockTcpSocket(netWorkerEventloop)
+            sockets << socket
+            def connectDone = new java.util.concurrent.CountDownLatch(1)
+            netWorkerEventloop.execute {
+                inspector.onConnect(socket)
+                connectDone.countDown()
+            }
+            connectDone.await(2, java.util.concurrent.TimeUnit.SECONDS)
+        }
+
+        when:
+        def errors = Collections.synchronizedList(new ArrayList<Throwable>())
+        def done = new java.util.concurrent.CountDownLatch(4)
+
+        // Thread 1: subscribe sockets
+        Thread.start {
+            try {
+                for (int i = 0; i < sockets.size(); i++) {
+                    inspector.subscribe(channel, false, sockets[i])
+                }
+            } catch (Throwable t) {
+                errors << t
+            } finally {
+                done.countDown()
+            }
+        }
+
+        // Thread 2: unsubscribe some sockets
+        Thread.start {
+            try {
+                Thread.sleep(50)
+                for (int i = 0; i < sockets.size() / 2; i++) {
+                    inspector.unsubscribe(channel, false, sockets[i])
+                }
+            } catch (Throwable t) {
+                errors << t
+            } finally {
+                done.countDown()
+            }
+        }
+
+        // Thread 3-4: publish repeatedly
+        2.times {
+            Thread.start {
+                try {
+                    100.times {
+                        inspector.publish(channel, new BulkReply('msg'), (s, r) -> { })
+                    }
+                } catch (Throwable t) {
+                    errors << t
+                } finally {
+                    done.countDown()
+                }
+            }
+        }
+
+        done.await(5, java.util.concurrent.TimeUnit.SECONDS)
+
+        then:
+        errors.isEmpty()
+
+        cleanup:
+        netWorkerEventloop.breakEventloop()
+        slotWorkerEventloop.breakEventloop()
+        inspector.clearAll()
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = null
+    }
+
     def 'test subscribe'() {
         given:
         def inspector = new SocketInspector()
