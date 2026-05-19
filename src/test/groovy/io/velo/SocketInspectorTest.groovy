@@ -13,6 +13,7 @@ import spock.lang.Specification
 
 import java.nio.channels.SocketChannel
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicReference
 
 class SocketInspectorTest extends Specification {
     static TcpSocket mockTcpSocket(Eventloop eventloop = null, int port = 46379) {
@@ -152,6 +153,79 @@ class SocketInspectorTest extends Specification {
 
         cleanup:
         inspector.clearAll()
+    }
+
+    def 'test publish dispatches to net worker eventloop not slot worker'() {
+        given:
+        def inspector = new SocketInspector()
+
+        // Simulate distinct net-worker and slot-worker eventloops
+        def netWorkerEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def slotWorkerEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        netWorkerEventloop.keepAlive(true)
+        slotWorkerEventloop.keepAlive(true)
+        Thread.start { netWorkerEventloop.run() }
+        Thread.start { slotWorkerEventloop.run() }
+        Thread.sleep(500)
+
+        // Init with separate arrays: slot workers and net workers are distinct
+        Eventloop[] slotWorkerEventloopArray = [slotWorkerEventloop]
+        Eventloop[] netWorkerEventloopArray = [netWorkerEventloop]
+        inspector.initByNetWorkerEventloopArray(slotWorkerEventloopArray, netWorkerEventloopArray)
+
+        // Create a socket that is "owned" by the net worker eventloop
+        // onConnect sets the netWorkerEventloop in VeloUserDataInSocket
+        def socket = mockTcpSocket(netWorkerEventloop)
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [netWorkerEventloop.getEventloopThread().threadId()]
+        inspector.connectedClientCountArray = [0]
+        // onConnect must run on the net worker eventloop thread (as in production)
+        def connectDone = new java.util.concurrent.CountDownLatch(1)
+        netWorkerEventloop.execute {
+            inspector.onConnect(socket)
+            connectDone.countDown()
+        }
+        connectDone.await(2, java.util.concurrent.TimeUnit.SECONDS)
+
+        // Subscribe is called from the slot worker (simulated by submitting to slot worker eventloop)
+        def channel = 'test_channel'
+        def subscribeDone = new java.util.concurrent.CountDownLatch(1)
+        slotWorkerEventloop.execute {
+            inspector.subscribe(channel, false, socket)
+            subscribeDone.countDown()
+        }
+        subscribeDone.await(2, java.util.concurrent.TimeUnit.SECONDS)
+
+        expect:
+        inspector.subscribeClientCount() == 1
+
+        when:
+        // Publish from the slot worker eventloop
+        // The callback should be dispatched to the NET worker eventloop, NOT the slot worker
+        def callbackThreadRef = new AtomicReference<Thread>()
+        def publishDone = new java.util.concurrent.CountDownLatch(1)
+        slotWorkerEventloop.execute {
+            inspector.publish(channel, new BulkReply('test_message'), (s, r) -> {
+                callbackThreadRef.set(Thread.currentThread())
+                publishDone.countDown()
+            })
+        }
+        publishDone.await(2, java.util.concurrent.TimeUnit.SECONDS)
+
+        then:
+        // The callback must have run on the net worker thread, not the slot worker thread
+        callbackThreadRef.get() != null
+        callbackThreadRef.get().threadId() == netWorkerEventloop.getEventloopThread().threadId()
+        callbackThreadRef.get().threadId() != slotWorkerEventloop.getEventloopThread().threadId()
+
+        cleanup:
+        netWorkerEventloop.breakEventloop()
+        slotWorkerEventloop.breakEventloop()
+        inspector.clearAll()
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = null
     }
 
     def 'test subscribe'() {

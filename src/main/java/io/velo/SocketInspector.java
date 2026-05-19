@@ -18,6 +18,9 @@ import java.net.InetSocketAddress;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -235,6 +238,9 @@ public class SocketInspector implements TcpSocket.Inspector {
     @ThreadNeedLocal
     private Eventloop[] slotWorkerEventloopArray;
 
+    @ThreadNeedLocal(type = "net")
+    private Eventloop[] netWorkerEventloopArray;
+
     /**
      * Array of connected client counts for each network worker.
      */
@@ -288,6 +294,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      */
     public void initByNetWorkerEventloopArray(Eventloop[] slotWorkerEventloopArray, Eventloop[] netWorkerEventloopArray) {
         this.slotWorkerEventloopArray = slotWorkerEventloopArray;
+        this.netWorkerEventloopArray = netWorkerEventloopArray;
 
         this.connectedClientCountArray = new int[netWorkerEventloopArray.length];
         this.netInBytesLengthArray = new long[netWorkerEventloopArray.length + slotWorkerEventloopArray.length];
@@ -388,9 +395,9 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
-     * Map of channels to subscribed sockets. Long means slot eventloop thread id.
+     * Map of channels to subscribed sockets. Eventloop means the net worker eventloop that owns the socket.
      */
-    private final ConcurrentHashMap<ChannelAndIsPattern, ConcurrentHashMap<ITcpSocket, Long>> subscribeByChannel = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ChannelAndIsPattern, Map<ITcpSocket, Eventloop>> subscribeByChannel = new ConcurrentHashMap<>();
 
     /**
      * Returns a list of all subscribed channels.
@@ -442,8 +449,39 @@ public class SocketInspector implements TcpSocket.Inspector {
      */
     public int subscribe(@NotNull String channel, boolean isPattern, ITcpSocket socket) {
         var one = new ChannelAndIsPattern(channel, isPattern);
-        var sockets = subscribeByChannel.computeIfAbsent(one, k -> new ConcurrentHashMap<>());
-        sockets.put(socket, Thread.currentThread().threadId());
+        var sockets = subscribeByChannel.computeIfAbsent(one, k -> Collections.synchronizedMap(new HashMap<>()));
+
+        var veloUserData = (VeloUserDataInSocket) ((TcpSocket) socket).getUserData();
+        Eventloop targetEventloop = null;
+        if (veloUserData != null && veloUserData.netWorkerEventloop != null) {
+            targetEventloop = veloUserData.netWorkerEventloop;
+        }
+        if (targetEventloop == null && netWorkerEventloopArray != null && netWorkerEventloopArray.length > 0) {
+            var currentThreadId = Thread.currentThread().threadId();
+            for (var eventloop : netWorkerEventloopArray) {
+                if (eventloop.getEventloopThread() != null && eventloop.getEventloopThread().threadId() == currentThreadId) {
+                    targetEventloop = eventloop;
+                    break;
+                }
+            }
+            if (targetEventloop == null) {
+                targetEventloop = netWorkerEventloopArray[0];
+            }
+        }
+        if (targetEventloop == null && slotWorkerEventloopArray != null && slotWorkerEventloopArray.length > 0) {
+            var currentThreadId = Thread.currentThread().threadId();
+            for (var eventloop : slotWorkerEventloopArray) {
+                if (eventloop.getEventloopThread() != null && eventloop.getEventloopThread().threadId() == currentThreadId) {
+                    targetEventloop = eventloop;
+                    break;
+                }
+            }
+            if (targetEventloop == null) {
+                targetEventloop = slotWorkerEventloopArray[0];
+            }
+        }
+
+        sockets.put(socket, targetEventloop);
         return sockets.size();
     }
 
@@ -457,7 +495,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      */
     public int unsubscribe(@NotNull String channel, boolean isPattern, ITcpSocket socket) {
         var one = new ChannelAndIsPattern(channel, isPattern);
-        var sockets = subscribeByChannel.computeIfAbsent(one, k -> new ConcurrentHashMap<>());
+        var sockets = subscribeByChannel.computeIfAbsent(one, k -> Collections.synchronizedMap(new HashMap<>()));
         sockets.remove(socket);
         return sockets.size();
     }
@@ -535,16 +573,15 @@ public class SocketInspector implements TcpSocket.Inspector {
 
         for (var map : sockets.entrySet()) {
             var socket = map.getKey();
-            var threadId = map.getValue();
-            if (Thread.currentThread().threadId() == threadId) {
+            var targetEventloop = map.getValue();
+            if (targetEventloop == null) {
+                continue;
+            }
+
+            if (targetEventloop.getEventloopThread() == Thread.currentThread()) {
                 callback.doWithSocket(socket, reply);
             } else {
-                for (var eventloop : slotWorkerEventloopArray) {
-                    assert eventloop.getEventloopThread() != null;
-                    if (eventloop.getEventloopThread().threadId() == threadId) {
-                        eventloop.execute(() -> callback.doWithSocket(socket, reply));
-                    }
-                }
+                targetEventloop.execute(() -> callback.doWithSocket(socket, reply));
             }
         }
         return sockets.size();
@@ -615,6 +652,10 @@ public class SocketInspector implements TcpSocket.Inspector {
 
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
         connectedClientCountArray[threadIndex]++;
+
+        if (netWorkerEventloopArray != null && threadIndex >= 0 && threadIndex < netWorkerEventloopArray.length) {
+            veloUserData.netWorkerEventloop = netWorkerEventloopArray[threadIndex];
+        }
     }
 
     @Override

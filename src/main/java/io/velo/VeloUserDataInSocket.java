@@ -1,5 +1,6 @@
 package io.velo;
 
+import io.activej.eventloop.Eventloop;
 import io.velo.repl.ReplPair;
 
 /**
@@ -215,6 +216,8 @@ public class VeloUserDataInSocket {
      * The ReplPair representing the slave in the TCP client for the socket connection.
      */
     ReplPair replPairAsSlaveInTcpClient = null;
+
+    Eventloop netWorkerEventloop;
 
     /**
      * Constructs a new instance of VeloUserDataInSocket with default values.
