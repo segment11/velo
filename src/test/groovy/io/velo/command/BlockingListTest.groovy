@@ -15,6 +15,7 @@ import spock.lang.Specification
 
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class BlockingListTest extends Specification {
     def 'test blocking client count and key count safe from non-slot-worker thread'() {
@@ -61,7 +62,7 @@ class BlockingListTest extends Specification {
         // Slot worker 2: continuously add/remove
         slotWorker2.execute {
             try {
-                def added = []
+                List<BlockingList.PromiseWithLeftOrRightAndCreatedTime> added = []
                 200.times {
                     def p = new SettablePromise<Reply>()
                     def one = BlockingList.addBlockingListPromiseByKey('key_b', p, null, true)
@@ -106,7 +107,7 @@ class BlockingListTest extends Specification {
             }
         }
 
-        done.await(10, java.util.concurrent.TimeUnit.SECONDS)
+        done.await(10, TimeUnit.SECONDS)
 
         then:
         errors.isEmpty()
