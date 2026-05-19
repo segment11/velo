@@ -9,9 +9,9 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -31,12 +31,12 @@ public class RefreshLoader {
     /**
      * A map to store the last modified timestamp of script files.
      */
-    private static final Map<String, Long> scriptTextLastModified = new HashMap<>();
+    private static final Map<String, Long> scriptTextLastModified = new ConcurrentHashMap<>();
 
     /**
      * A map to cache the content of script files.
      */
-    private static final Map<String, String> scriptTextCached = new HashMap<>();
+    private static final Map<String, String> scriptTextCached = new ConcurrentHashMap<>();
 
     /**
      * @param relativeFilePath the relative file path of the Groovy script
@@ -103,7 +103,7 @@ public class RefreshLoader {
     /**
      * A map to store the last modified timestamp of individual script files.
      */
-    private final Map<String, Long> lastModified = new HashMap<>();
+    private final Map<String, Long> lastModified = new ConcurrentHashMap<>();
 
     private void refreshFile(File file) {
         var l = lastModified.get(file.getAbsolutePath());

@@ -13,8 +13,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Singleton cached Groovy class loader.
@@ -120,8 +120,8 @@ public class CachedGroovyClassLoader {
 
         private static final Logger log = LoggerFactory.getLogger(Loader.class);
 
-        private final Map<String, Long> lastModified = new HashMap<>();
-        private final Map<String, Class<?>> classLoaded = new HashMap<>();
+        private final Map<String, Long> lastModified = new ConcurrentHashMap<>();
+        private final Map<String, Class<?>> classLoaded = new ConcurrentHashMap<>();
 
         private boolean isModified(File f) {
             var l = lastModified.get(f.getAbsolutePath());
@@ -167,9 +167,7 @@ public class CachedGroovyClassLoader {
 
             if (file != null) {
                 if (!isModified(file)) {
-                    synchronized (classLoaded) {
-                        r = classLoaded.get(name);
-                    }
+                    r = classLoaded.get(name);
                     if (r == null) {
                         r = getFromCache(codeSource);
                     }
@@ -184,9 +182,7 @@ public class CachedGroovyClassLoader {
                     log.debug("get from cached - {}", name);
                 }
             } else if (scriptText != null) {
-                synchronized (classLoaded) {
-                    r = classLoaded.get(scriptText);
-                }
+                r = classLoaded.get(scriptText);
                 if (r == null) {
                     r = super.parseClass(codeSource, false);
                     classLoaded.put(scriptText, r);
