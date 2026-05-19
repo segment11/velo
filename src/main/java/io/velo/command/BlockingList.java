@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * For blocking list pop, move
@@ -108,9 +109,16 @@ public class BlockingList {
         final long expectThreadId;
 
         final HashMap<String, List<PromiseWithLeftOrRightAndCreatedTime>> blockingListPromisesByKey = new HashMap<>();
+        final AtomicInteger clientCount = new AtomicInteger(0);
+        final AtomicInteger keyCount = new AtomicInteger(0);
 
         void addOne(String key, PromiseWithLeftOrRightAndCreatedTime one) {
-            blockingListPromisesByKey.computeIfAbsent(key, k -> new LinkedList<>()).add(one);
+            var list = blockingListPromisesByKey.computeIfAbsent(key, k -> new LinkedList<>());
+            if (list.isEmpty()) {
+                keyCount.incrementAndGet();
+            }
+            list.add(one);
+            clientCount.incrementAndGet();
         }
 
         void removeOne(String key, PromiseWithLeftOrRightAndCreatedTime one) {
@@ -118,7 +126,12 @@ public class BlockingList {
             if (list == null) {
                 return;
             }
-            list.remove(one);
+            if (list.remove(one)) {
+                clientCount.decrementAndGet();
+                if (list.isEmpty()) {
+                    keyCount.decrementAndGet();
+                }
+            }
         }
     }
 
@@ -150,9 +163,7 @@ public class BlockingList {
     public static int blockingClientCount() {
         var total = 0;
         for (var inner : inners) {
-            for (var one : inner.blockingListPromisesByKey.values()) {
-                total += one.size();
-            }
+            total += inner.clientCount.get();
         }
         return total;
     }
@@ -165,7 +176,7 @@ public class BlockingList {
     public static int blockingKeyCount() {
         var total = 0;
         for (var inner : inners) {
-            total += inner.blockingListPromisesByKey.size();
+            total += inner.keyCount.get();
         }
         return total;
     }
@@ -192,7 +203,8 @@ public class BlockingList {
      * @return list values exclude sent to blocking clients, null if key is not blocking
      */
     public static byte[][] setReplyIfBlockingListExist(String key, boolean addFirst, byte[][] elementValueBytesArray, BaseCommand baseCommand) {
-        var list = getInner().blockingListPromisesByKey.get(key);
+        var inner = getInner();
+        var list = inner.blockingListPromisesByKey.get(key);
         if (list == null || list.isEmpty()) {
             return null;
         }
@@ -207,6 +219,7 @@ public class BlockingList {
             fromLeftToRight = elementValueBytesArray;
         }
 
+        int removedCount = 0;
         var it = list.iterator();
         int leftI = 0;
         int rightI = 0;
@@ -214,6 +227,7 @@ public class BlockingList {
             var promise = it.next();
             if (promise.settablePromise.isComplete()) {
                 it.remove();
+                removedCount++;
                 continue;
             }
 
@@ -247,6 +261,7 @@ public class BlockingList {
                     promise.settablePromise.set(new MultiBulkReply(replies));
                 }
                 it.remove();
+                removedCount++;
             } else {
                 var index = fromLeftToRight.length - 1 - rightI;
                 if (index < 0) {
@@ -278,6 +293,14 @@ public class BlockingList {
                     promise.settablePromise.set(new MultiBulkReply(replies));
                 }
                 it.remove();
+                removedCount++;
+            }
+        }
+
+        if (removedCount > 0) {
+            inner.clientCount.addAndGet(-removedCount);
+            if (list.isEmpty()) {
+                inner.keyCount.decrementAndGet();
             }
         }
 
@@ -317,9 +340,15 @@ public class BlockingList {
      * @return promise with left or right and created time
      */
     static PromiseWithLeftOrRightAndCreatedTime addBlockingListPromiseByKey(String key, SettablePromise<Reply> promise, ITcpSocket socket,
-                                                                            boolean isLeft, DstKeyAndDstLeftWhenMove xx) {
+                                                                             boolean isLeft, DstKeyAndDstLeftWhenMove xx) {
         var one = new PromiseWithLeftOrRightAndCreatedTime(promise, socket, isLeft, System.currentTimeMillis(), xx);
-        getInner().blockingListPromisesByKey.computeIfAbsent(key, k -> new LinkedList<>()).add(one);
+        var inner = getInner();
+        var list = inner.blockingListPromisesByKey.computeIfAbsent(key, k -> new LinkedList<>());
+        if (list.isEmpty()) {
+            inner.keyCount.incrementAndGet();
+        }
+        list.add(one);
+        inner.clientCount.incrementAndGet();
         return one;
     }
 
@@ -330,11 +359,17 @@ public class BlockingList {
      * @param one promise with left or right and created time
      */
     static void removeBlockingListPromiseByKey(String key, PromiseWithLeftOrRightAndCreatedTime one) {
-        var list = getInner().blockingListPromisesByKey.get(key);
+        var inner = getInner();
+        var list = inner.blockingListPromisesByKey.get(key);
         if (list == null) {
             return;
         }
-        list.remove(one);
+        if (list.remove(one)) {
+            inner.clientCount.decrementAndGet();
+            if (list.isEmpty()) {
+                inner.keyCount.decrementAndGet();
+            }
+        }
     }
 
     /**
@@ -346,8 +381,20 @@ public class BlockingList {
         for (var eventloop : slotWorkerEventloopArray) {
             eventloop.execute(() -> {
                 var inner = getInner();
-                for (var list : inner.blockingListPromisesByKey.values()) {
+                int totalRemoved = 0;
+                var iter = inner.blockingListPromisesByKey.values().iterator();
+                while (iter.hasNext()) {
+                    var list = iter.next();
+                    int before = list.size();
                     list.removeIf(one -> one.socket == socket);
+                    totalRemoved += before - list.size();
+                    if (list.isEmpty()) {
+                        iter.remove();
+                    }
+                }
+                if (totalRemoved > 0) {
+                    inner.clientCount.addAndGet(-totalRemoved);
+                    inner.keyCount.set(inner.blockingListPromisesByKey.size());
                 }
             });
         }
@@ -357,6 +404,8 @@ public class BlockingList {
     static void clearBlockingListPromisesForAllKeys() {
         for (var inner : inners) {
             inner.blockingListPromisesByKey.clear();
+            inner.clientCount.set(0);
+            inner.keyCount.set(0);
         }
     }
 }

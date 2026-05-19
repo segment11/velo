@@ -14,8 +14,109 @@ import io.velo.reply.Reply
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
 
 class BlockingListTest extends Specification {
+    def 'test blocking client count and key count safe from non-slot-worker thread'() {
+        given:
+        def slotWorker1 = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def slotWorker2 = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        slotWorker1.keepAlive(true)
+        slotWorker2.keepAlive(true)
+        Thread.start { slotWorker1.run() }
+        Thread.start { slotWorker2.run() }
+        Thread.sleep(500)
+
+        Eventloop[] eventloopArray = [slotWorker1, slotWorker2]
+        BlockingList.initBySlotWorkerEventloopArray(eventloopArray)
+
+        when:
+        def errors = Collections.synchronizedList(new ArrayList<Throwable>())
+        def done = new CountDownLatch(4)
+
+        // Slot worker 1: continuously add/remove
+        slotWorker1.execute {
+            try {
+                List<BlockingList.PromiseWithLeftOrRightAndCreatedTime> added = []
+                200.times {
+                    def p = new SettablePromise<Reply>()
+                    def one = BlockingList.addBlockingListPromiseByKey('key_a', p, null, true)
+                    added << one
+                    if (added.size() > 10) {
+                        BlockingList.removeBlockingListPromiseByKey('key_a', added.remove(0))
+                    }
+                }
+                added.each { BlockingList.removeBlockingListPromiseByKey('key_a', it) }
+            } catch (Throwable t) {
+                errors << t
+            } finally {
+                done.countDown()
+            }
+        }
+
+        // Slot worker 2: continuously add/remove
+        slotWorker2.execute {
+            try {
+                def added = []
+                200.times {
+                    def p = new SettablePromise<Reply>()
+                    def one = BlockingList.addBlockingListPromiseByKey('key_b', p, null, true)
+                    added << one
+                    if (added.size() > 10) {
+                        BlockingList.removeBlockingListPromiseByKey('key_b', added.remove(0))
+                    }
+                }
+                added.each { BlockingList.removeBlockingListPromiseByKey('key_b', it) }
+            } catch (Throwable t) {
+                errors << t
+            } finally {
+                done.countDown()
+            }
+        }
+
+        // Reader thread 1: read blockingClientCount while workers mutate
+        Thread.start {
+            try {
+                500.times {
+                    def c = BlockingList.blockingClientCount()
+                    assert c >= 0
+                }
+            } catch (Throwable t) {
+                errors << t
+            } finally {
+                done.countDown()
+            }
+        }
+
+        // Reader thread 2: read blockingKeyCount while workers mutate
+        Thread.start {
+            try {
+                500.times {
+                    def c = BlockingList.blockingKeyCount()
+                    assert c >= 0
+                }
+            } catch (Throwable t) {
+                errors << t
+            } finally {
+                done.countDown()
+            }
+        }
+
+        done.await(10, java.util.concurrent.TimeUnit.SECONDS)
+
+        then:
+        errors.isEmpty()
+
+        cleanup:
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        slotWorker1.breakEventloop()
+        slotWorker2.breakEventloop()
+    }
+
     def 'test blocking list promise'() {
         given:
         def eventloopCurrent = Eventloop.builder()
