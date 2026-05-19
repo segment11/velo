@@ -165,7 +165,7 @@ public class MultiWorkerServer extends Launcher {
     private static final String PID_FILE_NAME = "velo.pid";
 
     /**
-     * @param config the configuration
+     * @param config     the configuration
      * @param doFileLock whether to do file lock
      * @return the directory file
      */
@@ -442,7 +442,7 @@ public class MultiWorkerServer extends Launcher {
 
     /**
      * @param request the request to handle
-     * @param socket the client socket
+     * @param socket  the client socket
      * @return a promise of the response as a ByteBuf
      */
     Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket) {
@@ -556,9 +556,9 @@ public class MultiWorkerServer extends Launcher {
     boolean isMockHandle = false;
 
     /**
-     * @param request the request to handle
-     * @param socket the client socket
-     * @param targetHandler the target request handler
+     * @param request         the request to handle
+     * @param socket          the client socket
+     * @param targetHandler   the target request handler
      * @param targetEventloop the target event loop
      * @return a promise of the response as a ByteBuf
      */
@@ -601,7 +601,7 @@ public class MultiWorkerServer extends Launcher {
 
     /**
      * @param request the request that generated the reply
-     * @param reply the asynchronous reply
+     * @param reply   the asynchronous reply
      * @param isResp3 true if the reply should be formatted in RESP3, false otherwise
      * @return a promise of the response as a ByteBuf
      */
@@ -623,9 +623,16 @@ public class MultiWorkerServer extends Launcher {
         });
     }
 
+    private static boolean isConnectionStateCommand(String cmd) {
+        return RequestHandler.AUTH_COMMAND.equals(cmd)
+                || "hello".equals(cmd)
+                || "readonly".equals(cmd)
+                || "readwrite".equals(cmd);
+    }
+
     /**
-     * @param pipeline the pipeline of requests to handle
-     * @param socket the client socket
+     * @param pipeline   the pipeline of requests to handle
+     * @param socket     the client socket
      * @param slotNumber the slot number for the requests
      * @return a promise of the response as a ByteBuf
      */
@@ -645,13 +652,78 @@ public class MultiWorkerServer extends Launcher {
             return handleRequest(pipeline.getFirst(), socket);
         }
 
-        Promise<ByteBuf>[] promiseN = new Promise[pipeline.size()];
-        for (int i = 0; i < pipeline.size(); i++) {
-            var promiseI = handleRequest(pipeline.get(i), socket);
-            promiseN[i] = promiseI;
+        boolean hasConnectionStateCommand = false;
+        for (var request : pipeline) {
+            if (isConnectionStateCommand(request.cmd())) {
+                hasConnectionStateCommand = true;
+                break;
+            }
         }
 
-        return allPipelineByteBuf(promiseN);
+        if (!hasConnectionStateCommand) {
+            Promise<ByteBuf>[] promiseN = new Promise[pipeline.size()];
+            for (int i = 0; i < pipeline.size(); i++) {
+                promiseN[i] = handleRequest(pipeline.get(i), socket);
+            }
+            return allPipelineByteBuf(promiseN);
+        }
+
+        return handlePipelineSegmented(pipeline, socket, 0, new ArrayList<>(pipeline.size()));
+    }
+
+    private Promise<ByteBuf> handlePipelineSegmented(@NotNull ArrayList<Request> pipeline, ITcpSocket socket,
+                                                     int startIndex, ArrayList<Promise<ByteBuf>> collected) {
+        int segStart = startIndex;
+
+        while (segStart < pipeline.size()) {
+            int segEnd = segStart;
+            while (segEnd < pipeline.size() && !isConnectionStateCommand(pipeline.get(segEnd).cmd())) {
+                segEnd++;
+            }
+
+            for (int i = segStart; i < segEnd; i++) {
+                collected.add(handleRequest(pipeline.get(i), socket));
+            }
+
+            if (segEnd < pipeline.size()) {
+                var statePromise = handleRequest(pipeline.get(segEnd), socket);
+                collected.add(statePromise);
+
+                int nextStart = segEnd + 1;
+                if (nextStart < pipeline.size()) {
+                    // await all collected promises including the state command, then continue with updated socket state
+                    return Promises.toList(collected).then(firstResults ->
+                            handlePipelineSegmented(pipeline, socket, nextStart, new ArrayList<>(pipeline.size() - nextStart))
+                                    .map(secondBuf -> combineByteBufs(firstResults, secondBuf)));
+                }
+                break;
+            }
+
+            segStart = segEnd;
+        }
+
+        Promise<ByteBuf>[] array = collected.toArray(new Promise[0]);
+        return allPipelineByteBuf(array);
+    }
+
+    private static ByteBuf combineByteBufs(List<ByteBuf> bufs, ByteBuf tail) {
+        int totalN = tail.readRemaining();
+        for (var buf : bufs) {
+            if (buf != null) {
+                totalN += buf.readRemaining();
+            }
+        }
+        if (totalN == 0) {
+            return ByteBuf.empty();
+        }
+        var multiBuf = ByteBuf.wrapForWriting(new byte[totalN]);
+        for (var buf : bufs) {
+            if (buf != null) {
+                multiBuf.put(buf);
+            }
+        }
+        multiBuf.put(tail);
+        return multiBuf;
     }
 
     /**
@@ -704,10 +776,10 @@ public class MultiWorkerServer extends Launcher {
     }
 
     /**
-     * @param reactor the reactor for the worker server
+     * @param reactor         the reactor for the worker server
      * @param socketInspector the socket inspector for managing socket connections
-     * @param consumer the consumer for handling incoming sockets
-     * @param config the configuration
+     * @param consumer        the consumer for handling incoming sockets
+     * @param config          the configuration
      * @return a worker server
      */
     @Provides
@@ -874,7 +946,8 @@ public class MultiWorkerServer extends Launcher {
     @VisibleForTesting
     long[] netWorkerThreadIds;
 
-    private boolean isReuseNetWorkerEventloop = false;
+    @VisibleForTesting
+    boolean isReuseNetWorkerEventloop = false;
 
     @TestOnly
     // need not thread safe

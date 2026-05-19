@@ -200,6 +200,294 @@ class MultiWorkerServerTest extends Specification {
         }
     }
 
+    def 'test pipeline auth barrier before later commands'() {
+        given:
+        def oldPassword = ConfForGlobal.PASSWORD
+        def oldSocketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector
+        def config = Config.create()
+                .with('doFileLock', "false")
+                .with('slotNumber', '1')
+                .with('slotWorkers', '1')
+                .with('netWorkers', '1')
+                .with("net.listenAddresses", "localhost:7379")
+
+        def netEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        netEventloop.keepAlive(true)
+        def waitLatch1 = new CountDownLatch(1)
+        Thread.start {
+            waitLatch1.countDown()
+            netEventloop.run()
+        }
+        waitLatch1.await()
+
+        def slotEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        slotEventloop.keepAlive(true)
+        def waitLatch2 = new CountDownLatch(1)
+        def slotThreadId = new long[1]
+        Thread.start {
+            slotThreadId[0] = Thread.currentThread().threadId()
+            waitLatch2.countDown()
+            slotEventloop.run()
+        }
+        waitLatch2.await()
+
+        def socket = SocketInspectorTest.mockTcpSocket(netEventloop)
+        Eventloop[] netEventloopArray = [netEventloop]
+        Eventloop[] slotEventloopArray = [slotEventloop]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(netEventloopArray, slotEventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        LocalPersist.instance.fixSlotThreadId((short) 0, slotThreadId[0])
+
+        def m = new MultiWorkerServer()
+        m.configInject = config
+        m.primaryReactor(config)
+        m.netWorkerEventloopArray = netEventloopArray
+        m.slotWorkerEventloopArray = slotEventloopArray
+        m.isReuseNetWorkerEventloop = false
+        m.requestHandlerArray = new RequestHandler[1]
+        m.requestHandlerArray[0] = new RequestHandler((byte) 0, (byte) 1, (short) 1, new SnowFlake(1, 1), config)
+        m.scheduleRunnableArray = new TaskRunnable[1]
+        m.scheduleRunnableArray[0] = new TaskRunnable((byte) 0, (byte) 1)
+        m.socketInspector = inspector
+        m.onStart()
+
+        AclUsers.instance.initForTest()
+        AclUsers.instance.upInsert('default') { u ->
+            u.on = true
+            u.password = U.Password.plain('password')
+        }
+        ConfForGlobal.PASSWORD = 'password'
+
+        def authData = new byte[2][]
+        authData[0] = 'auth'.bytes
+        authData[1] = 'password'.bytes
+        def authRequest = new Request(authData, false, false)
+
+        def pingData = new byte[1][]
+        pingData[0] = 'ping'.bytes
+        def pingRequest = new Request(pingData, false, false)
+
+        ArrayList<Request> pipeline = [authRequest, pingRequest]
+        String responseText = null
+
+        when:
+        def p = m.handlePipeline(pipeline, socket, (short) 1)
+        p.whenResult { reply ->
+            responseText = new String(reply.array())
+        }.result
+
+        then:
+        responseText == '+OK\r\n+PONG\r\n'
+
+        cleanup:
+        ConfForGlobal.PASSWORD = oldPassword
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = oldSocketInspector
+        if (m?.primaryScheduleRunnable != null) {
+            m.onStop()
+        }
+    }
+
+    def 'test pipeline readonly barrier before write commands'() {
+        given:
+        def oldSocketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector
+        def config = Config.create()
+                .with('doFileLock', "false")
+                .with('slotNumber', '1')
+                .with('slotWorkers', '1')
+                .with('netWorkers', '1')
+                .with("net.listenAddresses", "localhost:7379")
+
+        def netEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        netEventloop.keepAlive(true)
+        def waitLatch1 = new CountDownLatch(1)
+        Thread.start {
+            waitLatch1.countDown()
+            netEventloop.run()
+        }
+        waitLatch1.await()
+
+        def slotEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        slotEventloop.keepAlive(true)
+        def waitLatch2 = new CountDownLatch(1)
+        def slotThreadId = new long[1]
+        Thread.start {
+            slotThreadId[0] = Thread.currentThread().threadId()
+            waitLatch2.countDown()
+            slotEventloop.run()
+        }
+        waitLatch2.await()
+
+        def socket = SocketInspectorTest.mockTcpSocket(netEventloop)
+        Eventloop[] netEventloopArray = [netEventloop]
+        Eventloop[] slotEventloopArray = [slotEventloop]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(netEventloopArray, slotEventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        LocalPersist.instance.fixSlotThreadId((short) 0, slotThreadId[0])
+
+        def m = new MultiWorkerServer()
+        m.configInject = config
+        m.primaryReactor(config)
+        m.netWorkerEventloopArray = netEventloopArray
+        m.slotWorkerEventloopArray = slotEventloopArray
+        m.isReuseNetWorkerEventloop = false
+        m.requestHandlerArray = new RequestHandler[1]
+        m.requestHandlerArray[0] = new RequestHandler((byte) 0, (byte) 1, (short) 1, new SnowFlake(1, 1), config)
+        m.scheduleRunnableArray = new TaskRunnable[1]
+        m.scheduleRunnableArray[0] = new TaskRunnable((byte) 0, (byte) 1)
+        m.socketInspector = inspector
+        m.onStart()
+
+        AclUsers.instance.initForTest()
+        ConfForGlobal.PASSWORD = null
+
+        // set socket as authenticated
+        SocketInspector.setAuthUser(socket, 'default')
+
+        // set connection to readonly
+        SocketInspector.setConnectionReadonly(socket, true)
+
+        def setData = new byte[3][]
+        setData[0] = 'set'.bytes
+        setData[1] = 'key'.bytes
+        setData[2] = 'value'.bytes
+        def setRequest = new Request(setData, false, false)
+
+        def readonlyData = new byte[1][]
+        readonlyData[0] = 'readwrite'.bytes
+        def readwriteRequest = new Request(readonlyData, false, false)
+
+        def pingData = new byte[1][]
+        pingData[0] = 'ping'.bytes
+        def pingRequest = new Request(pingData, false, false)
+
+        // pipeline: READWRITE, SET, PING
+        // without barrier, SET might see readonly=true and fail
+        ArrayList<Request> pipeline = [readwriteRequest, setRequest, pingRequest]
+        String responseText = null
+
+        when:
+        def p = m.handlePipeline(pipeline, socket, (short) 1)
+        p.whenResult { reply ->
+            responseText = new String(reply.array())
+        }.result
+
+        then:
+        // READWRITE returns OK, SET should not get READONLY error
+        responseText.contains('+OK')
+        !responseText.contains('READONLY')
+
+        cleanup:
+        ConfForGlobal.PASSWORD = null
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = oldSocketInspector
+        if (m?.primaryScheduleRunnable != null) {
+            m.onStop()
+        }
+    }
+
+    def 'test pipeline connection state command at end'() {
+        given:
+        def oldSocketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector
+        def config = Config.create()
+                .with('doFileLock', "false")
+                .with('slotNumber', '1')
+                .with('slotWorkers', '1')
+                .with('netWorkers', '1')
+                .with("net.listenAddresses", "localhost:7379")
+
+        def netEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        netEventloop.keepAlive(true)
+        def waitLatch1 = new CountDownLatch(1)
+        Thread.start {
+            waitLatch1.countDown()
+            netEventloop.run()
+        }
+        waitLatch1.await()
+
+        def slotEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        slotEventloop.keepAlive(true)
+        def waitLatch2 = new CountDownLatch(1)
+        def slotThreadId = new long[1]
+        Thread.start {
+            slotThreadId[0] = Thread.currentThread().threadId()
+            waitLatch2.countDown()
+            slotEventloop.run()
+        }
+        waitLatch2.await()
+
+        def socket = SocketInspectorTest.mockTcpSocket(netEventloop)
+        Eventloop[] netEventloopArray = [netEventloop]
+        Eventloop[] slotEventloopArray = [slotEventloop]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(netEventloopArray, slotEventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        LocalPersist.instance.fixSlotThreadId((short) 0, slotThreadId[0])
+
+        def m = new MultiWorkerServer()
+        m.configInject = config
+        m.primaryReactor(config)
+        m.netWorkerEventloopArray = netEventloopArray
+        m.slotWorkerEventloopArray = slotEventloopArray
+        m.isReuseNetWorkerEventloop = false
+        m.requestHandlerArray = new RequestHandler[1]
+        m.requestHandlerArray[0] = new RequestHandler((byte) 0, (byte) 1, (short) 1, new SnowFlake(1, 1), config)
+        m.scheduleRunnableArray = new TaskRunnable[1]
+        m.scheduleRunnableArray[0] = new TaskRunnable((byte) 0, (byte) 1)
+        m.socketInspector = inspector
+        m.onStart()
+
+        AclUsers.instance.initForTest()
+        ConfForGlobal.PASSWORD = null
+
+        def pingData = new byte[1][]
+        pingData[0] = 'ping'.bytes
+        def pingRequest = new Request(pingData, false, false)
+
+        def readonlyData = new byte[1][]
+        readonlyData[0] = 'readonly'.bytes
+        def readonlyRequest = new Request(readonlyData, false, false)
+
+        // pipeline: PING, READONLY — state command at end
+        ArrayList<Request> pipeline = [pingRequest, readonlyRequest]
+        String responseText = null
+
+        when:
+        def p = m.handlePipeline(pipeline, socket, (short) 1)
+        p.whenResult { reply ->
+            responseText = new String(reply.array())
+        }.result
+
+        then:
+        responseText.contains('+PONG')
+        responseText.contains('+OK')
+
+        cleanup:
+        ConfForGlobal.PASSWORD = null
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = oldSocketInspector
+        if (m?.primaryScheduleRunnable != null) {
+            m.onStop()
+        }
+    }
+
     def 'test mock inject and handle'() {
         // only for coverage
         given:
