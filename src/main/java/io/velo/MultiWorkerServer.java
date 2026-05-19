@@ -568,16 +568,17 @@ public class MultiWorkerServer extends Launcher {
             return Promise.of(ByteBuf.empty());
         }
 
-        var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
-        var isResp3 = veloUserData.isResp3;
-        var replyMode = veloUserData.replyMode;
-
         var p = Promise.ofFuture(targetEventloop.submit(AsyncComputation.of(() -> targetHandler.handle(request, socket))));
 
         return p.then(reply -> {
             if (reply == null) {
                 return null;
             }
+
+            var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
+            var isResp3 = veloUserData.isResp3;
+            var replyMode = veloUserData.replyMode;
+
             if (replyMode != VeloUserDataInSocket.ReplyMode.on) {
                 return Promise.of(ByteBuf.empty());
             }
