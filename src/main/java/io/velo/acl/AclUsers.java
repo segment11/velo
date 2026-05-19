@@ -55,6 +55,7 @@ public class AclUsers {
         var map = new HashMap<String, U>();
         var defaultCopy = new U(U.DEFAULT_USER);
         defaultCopy.copyStateFrom(U.INIT_DEFAULT_U);
+        defaultCopy.freeze();
         map.put(U.DEFAULT_USER, defaultCopy);
         return Map.copyOf(map);
     }
@@ -163,6 +164,7 @@ public class AclUsers {
             var existing = newMap.get(user);
             var target = existing != null ? existing.deepCopy() : new U(user);
             callback.doUpdate(target);
+            target.freeze();
             newMap.put(user, target);
 
             if (usersRef.compareAndSet(oldMap, Map.copyOf(newMap))) {
@@ -203,12 +205,15 @@ public class AclUsers {
             var oldMap = usersRef.get();
             var newMap = new HashMap<String, U>();
             for (var u : uList) {
-                newMap.put(u.getUser(), u.deepCopy());
+                var copy = u.deepCopy();
+                copy.freeze();
+                newMap.put(u.getUser(), copy);
             }
             // always ensure default user exists
             if (!newMap.containsKey(U.DEFAULT_USER)) {
                 var defaultCopy = new U(U.DEFAULT_USER);
                 defaultCopy.copyStateFrom(U.INIT_DEFAULT_U);
+                defaultCopy.freeze();
                 newMap.put(U.DEFAULT_USER, defaultCopy);
             }
 

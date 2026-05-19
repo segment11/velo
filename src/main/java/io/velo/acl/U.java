@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static io.velo.acl.U.CheckCmdAndKeyResult.FALSE_WHEN_CHECK_CMD;
@@ -168,6 +169,7 @@ public class U {
      * @param on true to enable the user, false to disable
      */
     public void setOn(boolean on) {
+        checkNotFrozen();
         isOn = on;
     }
 
@@ -175,9 +177,28 @@ public class U {
     private final ArrayList<Password> passwords = new ArrayList<>();
 
     /**
+     * Freezes this user's mutable lists into unmodifiable views.
+     * Called before publishing to the global ACL snapshot to prevent
+     * accidental mutation of published objects outside the CAS loop.
+     * Once frozen, any mutator call will throw UnsupportedOperationException.
+     */
+    public void freeze() {
+        this.frozen = true;
+    }
+
+    private boolean frozen = false;
+
+    private void checkNotFrozen() {
+        if (frozen) {
+            throw new IllegalStateException("Cannot mutate a frozen (published) U object: " + user);
+        }
+    }
+
+    /**
      * @param password the password to add
      */
     public void addPassword(Password password) {
+        checkNotFrozen();
         if (password.isNoPass()) {
             passwords.clear();
         } else {
@@ -194,11 +215,13 @@ public class U {
      * @param password the password to remove
      */
     public void removePassword(Password password) {
+        checkNotFrozen();
         passwords.stream().filter(p -> p.semanticallyEquals(password)).findFirst().ifPresent(passwords::remove);
     }
 
     /** Resets (clears) all passwords for the user. */
     public void resetPassword() {
+        checkNotFrozen();
         passwords.clear();
     }
 
@@ -218,6 +241,7 @@ public class U {
      */
     @TestOnly
     public void setPassword(Password password) {
+        checkNotFrozen();
         passwords.clear();
         passwords.add(password);
     }
@@ -419,17 +443,20 @@ public class U {
 
     /** Resets the command rules for the user. */
     public void resetCmd() {
+        checkNotFrozen();
         rCmdList.clear();
         rCmdDisallowList.clear();
     }
 
     /** Resets the key rules for the user. */
     public void resetKey() {
+        checkNotFrozen();
         rKeyList.clear();
     }
 
     /** Resets the channel rules for the user. */
     public void resetPubSub() {
+        checkNotFrozen();
         rPubSubList.clear();
     }
 
@@ -437,6 +464,7 @@ public class U {
      * @param source the source user to copy state from
      */
     public void copyStateFrom(U source) {
+        checkNotFrozen();
         this.isOn = source.isOn;
         this.passwords.clear();
         this.passwords.addAll(source.passwords);
@@ -473,6 +501,7 @@ public class U {
      * @param rCmd  the command rules to add
      */
     public void addRCmd(boolean clear, RCmd... rCmd) {
+        checkNotFrozen();
         if (clear) {
             rCmdList.clear();
         }
@@ -484,6 +513,7 @@ public class U {
      * @param rCmd  the disallowed command rules to add
      */
     public void addRCmdDisallow(boolean clear, RCmd... rCmd) {
+        checkNotFrozen();
         if (clear) {
             rCmdDisallowList.clear();
         }
@@ -495,6 +525,7 @@ public class U {
      * @param rKey  the key rules to add
      */
     public void addRKey(boolean clear, RKey... rKey) {
+        checkNotFrozen();
         if (clear) {
             rKeyList.clear();
         }
@@ -506,6 +537,7 @@ public class U {
      * @param rPubSub the channel rules to add
      */
     public void addRPubSub(boolean clear, RPubSub... rPubSub) {
+        checkNotFrozen();
         if (clear) {
             rPubSubList.clear();
         }
@@ -517,6 +549,7 @@ public class U {
      * @param isReset if true, resets this user's rules before merging
      */
     public void mergeRulesFromAnother(U another, boolean isReset) {
+        checkNotFrozen();
         if (isReset) {
             rCmdList.clear();
             rCmdDisallowList.clear();
