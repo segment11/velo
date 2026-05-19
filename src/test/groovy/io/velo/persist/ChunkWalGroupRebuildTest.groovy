@@ -54,6 +54,18 @@ class ChunkWalGroupRebuildTest extends Specification {
                 CompressedValue.NULL_DICT_SEQ, key, cv.encode(), false)
     }
 
+    private static Wal.V prepareWalGroup0ShortValue(String key, long seq, byte[] valueBytes) {
+        def keyHash = KeyHash.hash(key.bytes)
+        def bucketIndex = KeyHash.bucketIndex(keyHash)
+        assert Wal.calcWalGroupIndex(bucketIndex) == 0
+        def cv = new CompressedValue()
+        cv.seq = seq
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        cv.compressedData = valueBytes
+        new Wal.V(seq, bucketIndex, keyHash, CompressedValue.NO_EXPIRE,
+                CompressedValue.SP_TYPE_SHORT_STRING, key, cv.encodeAsShortString(), false)
+    }
+
     def 'preview scans chunk without mutating key buckets and apply rebuilds from chunk'() {
         given:
         ConfForSlot.global.confBucket.initialSplitNumber = 1
@@ -132,6 +144,46 @@ class ChunkWalGroupRebuildTest extends Specification {
         applied.recordsAfterSeqMerge() == 1
         applied.staleRecords() == 1
         cvList.find { it.key() == key && it.segmentOffset() == pvm.segmentOffset }.cv().seq == 2L
+
+        cleanup:
+        chunk.cleanUp()
+        oneSlot.keyLoader.cleanUp()
+        oneSlot.metaChunkSegmentFlagSeq.clear()
+        oneSlot.metaChunkSegmentFlagSeq.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
+
+    def 'rebuild preserves short values already stored in key buckets'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = 1
+        def chunk = ChunkTest.prepareOne(slot, true)
+        def oneSlot = chunk.oneSlot
+        chunk.initFds()
+
+        and:
+        def valueKey = (0..100000).find { candidate ->
+            def candidateKey = 'rebuild-short-preserve-key:' + candidate
+            Wal.calcWalGroupIndex(KeyHash.bucketIndex(KeyHash.hash(candidateKey.bytes))) == 0
+        }.with { 'rebuild-short-preserve-key:' + it }
+        def value = prepareWalGroup0Value(valueKey, 1L, 'chunk-value'.bytes)
+        def shortValue = (0..100000).find { candidate ->
+            def candidateKey = 'short-key:' + candidate
+            Wal.calcWalGroupIndex(KeyHash.bucketIndex(KeyHash.hash(candidateKey.bytes))) == 0
+        }.with { prepareWalGroup0ShortValue('short-key:' + it, 10L, 'short-value'.bytes) }
+        chunk.segmentIndex = 0
+        chunk.persist(0, [value] as ArrayList<Wal.V>, null)
+        oneSlot.keyLoader.persistShortValueListBatchInOneWalGroup(0, [shortValue])
+        oneSlot.keyLoader.getValueXByKey(shortValue.bucketIndex(), shortValue.key(), shortValue.keyHash()).valueBytes() == shortValue.cvEncoded()
+
+        when:
+        def applied = oneSlot.rebuildKeyBucketsFromChunk(0, ChunkWalGroupRebuilder.Mode.APPLY)
+        def chunkValueAfterApply = oneSlot.keyLoader.getValueXByKey(value.bucketIndex(), value.key(), value.keyHash())
+        def shortValueAfterApply = oneSlot.keyLoader.getValueXByKey(shortValue.bucketIndex(), shortValue.key(), shortValue.keyHash())
+
+        then:
+        applied.applied()
+        PersistValueMeta.isPvm(chunkValueAfterApply.valueBytes())
+        shortValueAfterApply.valueBytes() == shortValue.cvEncoded()
 
         cleanup:
         chunk.cleanUp()

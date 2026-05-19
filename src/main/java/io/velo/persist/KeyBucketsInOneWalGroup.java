@@ -228,6 +228,12 @@ public class KeyBucketsInOneWalGroup {
      */
     @VisibleForTesting
     void putPvmListToTargetBucket(@NotNull List<PersistValueMeta> pvmListThisBucket, Integer bucketIndex) {
+        putPvmListToTargetBucket(pvmListThisBucket, bucketIndex, false);
+    }
+
+    private void putPvmListToTargetBucket(@NotNull List<PersistValueMeta> pvmListThisBucket,
+                                          Integer bucketIndex,
+                                          boolean removeExistingPvm) {
         int relativeBucketIndex = bucketIndex - beginBucketIndex;
         var currentSplitNumber = splitNumberTmp[relativeBucketIndex];
 
@@ -242,6 +248,10 @@ public class KeyBucketsInOneWalGroup {
             }
 
             keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
+                if (removeExistingPvm && PersistValueMeta.isPvm(valueBytes)) {
+                    return;
+                }
+
                 if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
                     cvExpiredOrDeleted(key, valueBytes);
                     return;
@@ -375,6 +385,22 @@ public class KeyBucketsInOneWalGroup {
             var pvmListThisBucket = entry.getValue();
 
             putPvmListToTargetBucket(pvmListThisBucket, bucketIndex);
+        }
+    }
+
+    /**
+     * Replaces persisted-value metadata rebuilt from chunk records while keeping short values
+     * that live only in key buckets.
+     *
+     * @param pvmList the rebuilt list of live PersistValueMeta objects
+     */
+    void replaceAllPvmListPreserveShortValues(@NotNull ArrayList<PersistValueMeta> pvmList) {
+        var pvmListGroupByBucketIndex = pvmList.stream().collect(Collectors.groupingBy(pvm -> pvm.bucketIndex));
+        for (int i = 0; i < oneChargeBucketNumber; i++) {
+            var bucketIndex = beginBucketIndex + i;
+            var pvmListThisBucket = pvmListGroupByBucketIndex.get(bucketIndex);
+
+            putPvmListToTargetBucket(pvmListThisBucket == null ? List.of() : pvmListThisBucket, bucketIndex, true);
         }
     }
 
