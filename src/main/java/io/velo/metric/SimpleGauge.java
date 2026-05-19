@@ -4,9 +4,10 @@ import io.prometheus.client.Collector;
 import org.jetbrains.annotations.TestOnly;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Prometheus gauge collector with support for raw getters.
@@ -30,13 +31,13 @@ public class SimpleGauge extends Collector {
         Map<String, ValueWithLabelValues> get();
     }
 
-    private final ArrayList<RawGetter> rawGetterList = new ArrayList<>();
+    private final CopyOnWriteArrayList<RawGetter> rawGetterList = new CopyOnWriteArrayList<>();
 
     /**
      * @return the list of raw getters (testing only)
      */
     @TestOnly
-    public ArrayList<RawGetter> getRawGetterList() {
+    public List<RawGetter> getRawGetterList() {
         return rawGetterList;
     }
 
@@ -52,7 +53,7 @@ public class SimpleGauge extends Collector {
         rawGetterList.clear();
     }
 
-    private final Map<String, ValueWithLabelValues> gauges = new HashMap<>();
+    private final Map<String, ValueWithLabelValues> gauges = new ConcurrentHashMap<>();
 
     private final List<String> labels;
 
