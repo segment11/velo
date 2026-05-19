@@ -672,7 +672,7 @@ public class MultiWorkerServer extends Launcher {
     }
 
     private Promise<ByteBuf> handlePipelineSegmented(@NotNull ArrayList<Request> pipeline, ITcpSocket socket,
-                                                     int startIndex, ArrayList<Promise<ByteBuf>> collected) {
+                                                      int startIndex, ArrayList<Promise<ByteBuf>> collected) {
         int segStart = startIndex;
 
         while (segStart < pipeline.size()) {
@@ -686,15 +686,35 @@ public class MultiWorkerServer extends Launcher {
             }
 
             if (segEnd < pipeline.size()) {
-                var statePromise = handleRequest(pipeline.get(segEnd), socket);
-                collected.add(statePromise);
-
                 int nextStart = segEnd + 1;
-                if (nextStart < pipeline.size()) {
-                    // await all collected promises including the state command, then continue with updated socket state
-                    return Promises.toList(collected).then(firstResults ->
-                            handlePipelineSegmented(pipeline, socket, nextStart, new ArrayList<>(pipeline.size() - nextStart))
-                                    .map(secondBuf -> combineByteBufs(firstResults, secondBuf)));
+                int collectedBeforeBarrier = collected.size();
+                int barrierIndex = segEnd;
+
+                if (collectedBeforeBarrier > 0) {
+                    // step 1: await previous segment before dispatching the barrier command
+                    Promise<ByteBuf>[] beforeBarrier = collected.toArray(new Promise[0]);
+                    return allPipelineByteBuf(beforeBarrier).then(firstBuf -> {
+                        // step 2: dispatch the barrier command and await it
+                        var statePromise = handleRequest(pipeline.get(barrierIndex), socket);
+                        return statePromise.then(stateBuf -> {
+                            var combined = concatTwoByteBufs(firstBuf, stateBuf);
+                            if (nextStart < pipeline.size()) {
+                                // step 3: continue with later entries
+                                return handlePipelineSegmented(pipeline, socket, nextStart, new ArrayList<>(pipeline.size() - nextStart))
+                                        .map(restBuf -> concatTwoByteBufs(combined, restBuf));
+                            }
+                            return Promise.of(combined);
+                        });
+                    });
+                } else {
+                    // no prior segment, dispatch barrier immediately
+                    var statePromise = handleRequest(pipeline.get(barrierIndex), socket);
+                    if (nextStart < pipeline.size()) {
+                        return statePromise.then(stateBuf ->
+                                handlePipelineSegmented(pipeline, socket, nextStart, new ArrayList<>(pipeline.size() - nextStart))
+                                        .map(restBuf -> concatTwoByteBufs(stateBuf, restBuf)));
+                    }
+                    collected.add(statePromise);
                 }
                 break;
             }
@@ -706,24 +726,21 @@ public class MultiWorkerServer extends Launcher {
         return allPipelineByteBuf(array);
     }
 
-    private static ByteBuf combineByteBufs(List<ByteBuf> bufs, ByteBuf tail) {
-        int totalN = tail.readRemaining();
-        for (var buf : bufs) {
-            if (buf != null) {
-                totalN += buf.readRemaining();
-            }
-        }
-        if (totalN == 0) {
+    private static ByteBuf concatTwoByteBufs(ByteBuf first, ByteBuf second) {
+        int firstLen = first != null ? first.readRemaining() : 0;
+        int secondLen = second != null ? second.readRemaining() : 0;
+        int total = firstLen + secondLen;
+        if (total == 0) {
             return ByteBuf.empty();
         }
-        var multiBuf = ByteBuf.wrapForWriting(new byte[totalN]);
-        for (var buf : bufs) {
-            if (buf != null) {
-                multiBuf.put(buf);
-            }
+        var result = ByteBuf.wrapForWriting(new byte[total]);
+        if (first != null) {
+            result.put(first);
         }
-        multiBuf.put(tail);
-        return multiBuf;
+        if (second != null) {
+            result.put(second);
+        }
+        return result;
     }
 
     /**

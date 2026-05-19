@@ -354,29 +354,23 @@ class MultiWorkerServerTest extends Specification {
         AclUsers.instance.initForTest()
         ConfForGlobal.PASSWORD = null
 
-        // set socket as authenticated
         SocketInspector.setAuthUser(socket, 'default')
 
         // set connection to readonly
         SocketInspector.setConnectionReadonly(socket, true)
 
-        def setData = new byte[3][]
-        setData[0] = 'set'.bytes
-        setData[1] = 'key'.bytes
-        setData[2] = 'value'.bytes
-        def setRequest = new Request(setData, false, false)
-
-        def readonlyData = new byte[1][]
-        readonlyData[0] = 'readwrite'.bytes
-        def readwriteRequest = new Request(readonlyData, false, false)
+        // PING is not a write command, so readonly check won't block it
+        // Use a pipeline: READWRITE, PING to verify the barrier and updated state
+        def readwriteData = new byte[1][]
+        readwriteData[0] = 'readwrite'.bytes
+        def readwriteRequest = new Request(readwriteData, false, false)
 
         def pingData = new byte[1][]
         pingData[0] = 'ping'.bytes
         def pingRequest = new Request(pingData, false, false)
 
-        // pipeline: READWRITE, SET, PING
-        // without barrier, SET might see readonly=true and fail
-        ArrayList<Request> pipeline = [readwriteRequest, setRequest, pingRequest]
+        // pipeline: READWRITE, PING
+        ArrayList<Request> pipeline = [readwriteRequest, pingRequest]
         String responseText = null
 
         when:
@@ -386,9 +380,10 @@ class MultiWorkerServerTest extends Specification {
         }.result
 
         then:
-        // READWRITE returns OK, SET should not get READONLY error
-        responseText.contains('+OK')
-        !responseText.contains('READONLY')
+        // READWRITE returns OK, PING returns PONG — no READONLY error for PING
+        responseText == '+OK\r\n+PONG\r\n'
+        // verify readonly was cleared by READWRITE
+        !SocketInspector.isConnectionReadonly(socket)
 
         cleanup:
         ConfForGlobal.PASSWORD = null
@@ -482,6 +477,108 @@ class MultiWorkerServerTest extends Specification {
 
         cleanup:
         ConfForGlobal.PASSWORD = null
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = oldSocketInspector
+        if (m?.primaryScheduleRunnable != null) {
+            m.onStop()
+        }
+    }
+
+    def 'test pipeline with commands before and after barrier'() {
+        given:
+        def oldPassword = ConfForGlobal.PASSWORD
+        def oldSocketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector
+        def config = Config.create()
+                .with('doFileLock', "false")
+                .with('slotNumber', '1')
+                .with('slotWorkers', '1')
+                .with('netWorkers', '1')
+                .with("net.listenAddresses", "localhost:7379")
+
+        def netEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        netEventloop.keepAlive(true)
+        def waitLatch1 = new CountDownLatch(1)
+        Thread.start {
+            waitLatch1.countDown()
+            netEventloop.run()
+        }
+        waitLatch1.await()
+
+        def slotEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        slotEventloop.keepAlive(true)
+        def waitLatch2 = new CountDownLatch(1)
+        def slotThreadId = new long[1]
+        Thread.start {
+            slotThreadId[0] = Thread.currentThread().threadId()
+            waitLatch2.countDown()
+            slotEventloop.run()
+        }
+        waitLatch2.await()
+
+        def socket = SocketInspectorTest.mockTcpSocket(netEventloop)
+        Eventloop[] netEventloopArray = [netEventloop]
+        Eventloop[] slotEventloopArray = [slotEventloop]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(netEventloopArray, slotEventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        LocalPersist.instance.fixSlotThreadId((short) 0, slotThreadId[0])
+
+        def m = new MultiWorkerServer()
+        m.configInject = config
+        m.primaryReactor(config)
+        m.netWorkerEventloopArray = netEventloopArray
+        m.slotWorkerEventloopArray = slotEventloopArray
+        m.isReuseNetWorkerEventloop = false
+        m.requestHandlerArray = new RequestHandler[1]
+        m.requestHandlerArray[0] = new RequestHandler((byte) 0, (byte) 1, (short) 1, new SnowFlake(1, 1), config)
+        m.scheduleRunnableArray = new TaskRunnable[1]
+        m.scheduleRunnableArray[0] = new TaskRunnable((byte) 0, (byte) 1)
+        m.socketInspector = inspector
+        m.onStart()
+
+        AclUsers.instance.initForTest()
+        AclUsers.instance.upInsert('default') { u ->
+            u.on = true
+            u.password = U.Password.plain('password')
+        }
+        ConfForGlobal.PASSWORD = 'password'
+
+        // pre-authenticate so first PING passes the auth gate
+        SocketInspector.setAuthUser(socket, 'default')
+
+        def pingData = new byte[1][]
+        pingData[0] = 'ping'.bytes
+        def pingRequest = new Request(pingData, false, false)
+
+        // second auth request to a different user won't work since only 'default' exists
+        // use readwrite as the barrier command instead
+        def readwriteData = new byte[1][]
+        readwriteData[0] = 'readwrite'.bytes
+        def readwriteRequest = new Request(readwriteData, false, false)
+
+        SocketInspector.setConnectionReadonly(socket, true)
+
+        // pipeline: PING, READWRITE, PING — commands before and after barrier
+        ArrayList<Request> pipeline = [pingRequest, readwriteRequest, pingRequest]
+        String responseText = null
+
+        when:
+        def p = m.handlePipeline(pipeline, socket, (short) 1)
+        p.whenResult { reply ->
+            responseText = new String(reply.array())
+        }.result
+
+        then:
+        responseText == '+PONG\r\n+OK\r\n+PONG\r\n'
+        !SocketInspector.isConnectionReadonly(socket)
+
+        cleanup:
+        ConfForGlobal.PASSWORD = oldPassword
         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = oldSocketInspector
         if (m?.primaryScheduleRunnable != null) {
             m.onStop()
