@@ -13,6 +13,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Singleton managing user ACLs in a multi-threaded environment.
@@ -47,6 +48,13 @@ public class AclUsers {
     private Inner[] inners;
 
     private Inner preInitInner;
+
+    /**
+     * Immutable ACL snapshot published for net-worker threads.
+     * Updated atomically after each mutation. Each U in the snapshot is a deep copy
+     * with its own rule lists so slot-worker mutations do not affect snapshot readers.
+     */
+    private volatile ConcurrentHashMap<String, U> aclSnapshot = new ConcurrentHashMap<>();
 
     /**
      * @param slotWorkerEventloopArray the array of Eventloop instances
@@ -107,6 +115,50 @@ public class AclUsers {
         }
         // when run in networker thread, return the first inner instance, only for read
         return inners[0];
+    }
+
+    /**
+     * Reads the ACL snapshot for a given user. Safe to call from any thread (net workers, test threads, etc.).
+     * The returned U object is a snapshot copy and is not affected by concurrent mutations.
+     *
+     * @param user the username to look up
+     * @return a snapshot copy of the user, or null if not found
+     */
+    public U getSnapshotUser(String user) {
+        return aclSnapshot.get(user);
+    }
+
+    /**
+     * Rebuilds the ACL snapshot from the current thread's inner and atomically publishes it.
+     * Should be called after each mutation on the thread that owns the inner (slot worker).
+     */
+    private void publishSnapshot() {
+        Inner source;
+        if (inners == null) {
+            source = preInitInner;
+        } else {
+            var currentThreadId = Thread.currentThread().threadId();
+            source = null;
+            for (var inner : inners) {
+                if (inner.expectThreadId == currentThreadId) {
+                    source = inner;
+                    break;
+                }
+            }
+            if (source == null) {
+                source = inners[0];
+            }
+        }
+
+        if (source == null) {
+            return;
+        }
+
+        var newSnapshot = new ConcurrentHashMap<String, U>();
+        for (var u : source.uList) {
+            newSnapshot.put(u.getUser(), u.deepCopy());
+        }
+        aclSnapshot = newSnapshot;
     }
 
     /**
@@ -231,8 +283,12 @@ public class AclUsers {
      * @return the user object if found, otherwise null
      */
     public U get(String user) {
-        var inner = getInner();
-        return inner == null ? null : inner.get(user);
+        var inner = getOwnedInner();
+        if (inner != null) {
+            return inner.get(user);
+        }
+        // non-owner thread (e.g. net worker) reads from the snapshot
+        return aclSnapshot.get(user);
     }
 
     /** Functional interface for operations on a specific inner instance. */
@@ -273,6 +329,7 @@ public class AclUsers {
         }
 
         changeUser(inner2 -> inner2.upInsert(user, callback));
+        publishSnapshot();
     }
 
     /**
@@ -291,6 +348,7 @@ public class AclUsers {
         changeUser(inner2 -> {
             inner2.delete(user);
         });
+        publishSnapshot();
         return flag;
     }
 
@@ -308,6 +366,7 @@ public class AclUsers {
             inner2.uList.clear();
             inner2.uList.addAll(uList);
         });
+        publishSnapshot();
     }
 
     private static final int ACL_LOG_MAX_SIZE = 128;

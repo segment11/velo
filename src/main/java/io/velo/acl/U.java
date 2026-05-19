@@ -451,6 +451,24 @@ public class U {
     }
 
     /**
+     * Creates a deep copy of this user for safe snapshot publication.
+     * The returned copy has its own rule lists so mutations to the original
+     * do not affect the copy.
+     *
+     * @return a deep copy of this user
+     */
+    public U deepCopy() {
+        var copy = new U(this.user);
+        copy.isOn = this.isOn;
+        copy.passwords.addAll(this.passwords);
+        copy.rCmdList.addAll(this.rCmdList);
+        copy.rCmdDisallowList.addAll(this.rCmdDisallowList);
+        copy.rKeyList.addAll(this.rKeyList);
+        copy.rPubSubList.addAll(this.rPubSubList);
+        return copy;
+    }
+
+    /**
      * @param clear if true, clears existing command rules before adding
      * @param rCmd  the command rules to add
      */

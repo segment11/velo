@@ -8,6 +8,8 @@ import spock.lang.Specification
 
 import java.nio.file.Paths
 import java.time.Duration
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 class AclUsersTest extends Specification {
     def 'test all'() {
@@ -436,6 +438,83 @@ class AclUsersTest extends Specification {
         expect:
         AclUsers.getAclLogs(10).length == 0
         AclUsers.getAclLogs(0).length == 0
+    }
+
+    def 'test snapshot published after mutation and readable from non-owner thread'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+
+        aclUsers.upInsert('snap-user') { u ->
+            u.on = true
+            u.password = U.Password.plain('snap-pw')
+        }
+
+        expect:
+        // getSnapshotUser reads the volatile snapshot, not the thread-local inner
+        def snapshotU = aclUsers.getSnapshotUser('snap-user')
+        snapshotU != null
+        snapshotU.checkPassword('snap-pw')
+
+        when:
+        aclUsers.delete('snap-user')
+        then:
+        aclUsers.getSnapshotUser('snap-user') == null
+
+        when:
+        List<U> replacement = [new U('replaced')]
+        replacement[0].password = U.Password.plain('rep-pw')
+        aclUsers.replaceUsers(replacement)
+        then:
+        aclUsers.getSnapshotUser('replaced') != null
+        aclUsers.getSnapshotUser('replaced').checkPassword('rep-pw')
+
+        cleanup:
+        aclUsers.initForTest()
+    }
+
+    def 'test concurrent ACL mutations and snapshot reads do not throw'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+
+        aclUsers.upInsert('concurrent-user') { u ->
+            u.on = true
+            u.password = U.Password.plain('pw1')
+        }
+
+        def readerErrors = Collections.synchronizedList(new ArrayList<Throwable>())
+        def stopFlag = new AtomicBoolean(false)
+        def iterations = 2000
+
+        // reader thread — reads snapshot (simulating net worker)
+        def reader = Thread.start {
+            try {
+                while (!stopFlag.get()) {
+                    aclUsers.getSnapshotUser('concurrent-user')
+                    aclUsers.getSnapshotUser(U.DEFAULT_USER)
+                }
+            } catch (Throwable t) {
+                readerErrors.add(t)
+            }
+        }
+
+        when:
+        // mutations run on the owner thread (test thread)
+        for (int i = 0; i < iterations; i++) {
+            aclUsers.upInsert('concurrent-user') { u ->
+                u.password = U.Password.plain('pw' + (i % 10))
+            }
+        }
+        stopFlag.set(true)
+        reader.join(5000)
+
+        then:
+        readerErrors.isEmpty()
+        aclUsers.getSnapshotUser('concurrent-user') != null
+
+        cleanup:
+        aclUsers.initForTest()
     }
 
     def 'test each Inner has its own default user copy not shared singleton'() {
