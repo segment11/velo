@@ -1,10 +1,10 @@
 package io.velo.acl;
 
 import io.activej.eventloop.Eventloop;
-import io.velo.ThreadNeedLocal;
 import io.velo.ValkeyRawConfSupport;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.TestOnly;
+import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,11 +12,16 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Singleton managing user ACLs in a multi-threaded environment.
+ * Singleton managing user ACLs using a copy-on-write immutable snapshot.
+ * All reads go through a single {@link AtomicReference} to an immutable map.
+ * Writes create a new map and publish it atomically via CAS.
+ * This eliminates the need for per-slot thread-local copies and async propagation.
  */
 public class AclUsers {
     private static final AclUsers instance = new AclUsers();
@@ -39,147 +44,70 @@ public class AclUsers {
 
     private static final Logger log = LoggerFactory.getLogger(AclUsers.class);
 
-    /** Array of event loops, each associated with a network worker thread. */
-    @ThreadNeedLocal
-    private Eventloop[] slotWorkerEventloopArray;
-
-    /** Array of inner instances, each corresponding to a specific thread. */
-    @ThreadNeedLocal
-    private Inner[] inners;
-
-    private Inner preInitInner;
-
     /**
-     * Immutable ACL snapshot published for net-worker threads.
-     * Updated atomically after each mutation. Each U in the snapshot is a deep copy
-     * with its own rule lists so slot-worker mutations do not affect snapshot readers.
+     * Single globally-published immutable ACL snapshot.
+     * Readers (net workers, slot workers, test threads) all read from this reference.
+     * Writers create a new immutable map and CAS-publish it.
      */
-    private volatile ConcurrentHashMap<String, U> aclSnapshot = new ConcurrentHashMap<>();
+    private final AtomicReference<Map<String, U>> usersRef = new AtomicReference<>(initialUsers());
 
-    /**
-     * @param slotWorkerEventloopArray the array of Eventloop instances
-     */
-    public void initBySlotWorkerEventloopArray(Eventloop[] slotWorkerEventloopArray) {
-        this.slotWorkerEventloopArray = slotWorkerEventloopArray;
-
-        inners = new Inner[slotWorkerEventloopArray.length];
-        for (int i = 0; i < slotWorkerEventloopArray.length; i++) {
-            var eventloop = slotWorkerEventloopArray[i];
-            var eventloopThread = eventloop.getEventloopThread();
-            inners[i] = new Inner(eventloopThread != null ? eventloopThread.threadId() : Thread.currentThread().threadId());
-        }
-
-        if (preInitInner != null) {
-            for (var inner : inners) {
-                inner.uList.clear();
-                inner.uList.addAll(preInitInner.uList);
-            }
-            preInitInner = null;
-        }
-        log.info("Acl users init by slot worker eventloop array");
+    private static Map<String, U> initialUsers() {
+        var map = new HashMap<String, U>();
+        var defaultCopy = new U(U.DEFAULT_USER);
+        defaultCopy.copyStateFrom(U.INIT_DEFAULT_U);
+        map.put(U.DEFAULT_USER, defaultCopy);
+        return Map.copyOf(map);
     }
 
-    /** Initializes for testing with a single inner instance. */
-    @TestOnly
-    public void initForTest() {
-        inners = new Inner[1];
-        inners[0] = new Inner(Thread.currentThread().threadId());
-
-        if (preInitInner != null) {
-            inners[0].uList.clear();
-            inners[0].uList.addAll(preInitInner.uList);
-            preInitInner = null;
-        }
-    }
-
-    /** Resets for testing. */
-    @TestOnly
-    public void resetForTest() {
-        inners = null;
-        preInitInner = null;
-    }
-
-    /** @return the Inner instance for the current thread, or null if not found */
+    /** @return the Inner instance for the current thread — deprecated, use getUList() instead */
+    @Deprecated
+    @VisibleForTesting
     public Inner getInner() {
-        if (inners == null) {
-            if (preInitInner == null) {
-                preInitInner = new Inner(Thread.currentThread().threadId());
-            }
-            return preInitInner;
-        }
-        var currentThreadId = Thread.currentThread().threadId();
-        for (var inner : inners) {
-            if (inner.expectThreadId == currentThreadId) {
-                return inner;
-            }
-        }
-        // when run in networker thread, return the first inner instance, only for read
-        return inners[0];
+        return new Inner(usersRef.get());
     }
 
     /**
-     * Reads the ACL snapshot for a given user. Safe to call from any thread (net workers, test threads, etc.).
-     * The returned U object is a snapshot copy and is not affected by concurrent mutations.
+     * @return a copy of the current user list
+     */
+    public List<U> getUList() {
+        return new ArrayList<>(usersRef.get().values());
+    }
+
+    /**
+     * @param user the username to look up
+     * @return the user object if found, otherwise null
+     */
+    public U get(String user) {
+        return usersRef.get().get(user);
+    }
+
+    /**
+     * Reads the ACL snapshot for a given user. Equivalent to {@link #get(String)}.
      *
      * @param user the username to look up
      * @return a snapshot copy of the user, or null if not found
      */
     public U getSnapshotUser(String user) {
-        return aclSnapshot.get(user);
+        return usersRef.get().get(user);
     }
 
     /**
-     * Rebuilds the ACL snapshot from the current thread's inner and atomically publishes it.
-     * Should be called after each mutation on the thread that owns the inner (slot worker).
+     * @param slotWorkerEventloopArray the array of Eventloop instances (kept for API compat, no longer used)
      */
-    private void publishSnapshot() {
-        Inner source;
-        if (inners == null) {
-            source = preInitInner;
-        } else {
-            var currentThreadId = Thread.currentThread().threadId();
-            source = null;
-            for (var inner : inners) {
-                if (inner.expectThreadId == currentThreadId) {
-                    source = inner;
-                    break;
-                }
-            }
-            if (source == null) {
-                source = inners[0];
-            }
-        }
-
-        if (source == null) {
-            return;
-        }
-
-        var newSnapshot = new ConcurrentHashMap<String, U>();
-        for (var u : source.uList) {
-            newSnapshot.put(u.getUser(), u.deepCopy());
-        }
-        aclSnapshot = newSnapshot;
+    public void initBySlotWorkerEventloopArray(Eventloop[] slotWorkerEventloopArray) {
+        log.info("Acl users init by slot worker eventloop array (no-op, using global snapshot)");
     }
 
-    /**
-     * Returns the Inner instance owned by the current thread only (no fallback).
-     * Returns null if no inner is owned by the current thread or if not initialized.
-     * Use this for write operations to avoid mutating another thread's inner.
-     */
-    private Inner getOwnedInner() {
-        if (inners == null) {
-            if (preInitInner == null) {
-                preInitInner = new Inner(Thread.currentThread().threadId());
-            }
-            return preInitInner;
-        }
-        var currentThreadId = Thread.currentThread().threadId();
-        for (var inner : inners) {
-            if (inner.expectThreadId == currentThreadId) {
-                return inner;
-            }
-        }
-        return null;
+    /** Initializes for testing with a fresh default snapshot. */
+    @TestOnly
+    public void initForTest() {
+        usersRef.set(initialUsers());
+    }
+
+    /** Resets for testing. */
+    @TestOnly
+    public void resetForTest() {
+        usersRef.set(initialUsers());
     }
 
     /** Loads the ACL file and replaces the existing user list. */
@@ -221,152 +149,73 @@ public class AclUsers {
     }
 
     /**
-     * Inner class handling user operations within a specific thread.
-     */
-    @ThreadNeedLocal
-    public static class Inner {
-        /**
-         * @param expectThreadId the thread ID this inner instance is expected to handle
-         */
-        Inner(long expectThreadId) {
-            this.expectThreadId = expectThreadId;
-            var defaultCopy = new U(U.DEFAULT_USER);
-            defaultCopy.copyStateFrom(U.INIT_DEFAULT_U);
-            uList.add(defaultCopy);
-        }
-
-        final long expectThreadId;
-
-        /** List of user objects managed by this inner instance. */
-        private final List<U> uList = new ArrayList<>();
-
-        /** @return a copy of the current list of users */
-        public List<U> getUList() {
-            return new ArrayList<>(uList);
-        }
-
-        /**
-         * @param user the username to look up
-         * @return the user object if found, otherwise null
-         */
-        public U get(String user) {
-            return uList.stream().filter(u -> u.user.equals(user)).findFirst().orElse(null);
-        }
-
-        /**
-         * Updates or inserts a user.
-         * @param user     the username to update or insert
-         * @param callback the callback to perform the update operation
-         */
-        public void upInsert(String user, UpdateCallback<U> callback) {
-            var one = uList.stream().filter(u1 -> u1.user.equals(user)).findFirst();
-            if (one.isPresent()) {
-                callback.doUpdate(one.get());
-            } else {
-                var u = new U(user);
-                callback.doUpdate(u);
-                uList.add(u);
-            }
-        }
-
-        /**
-         * @param user the username to delete
-         * @return true if the user was deleted
-         */
-        public boolean delete(String user) {
-            return uList.removeIf(u -> u.user.equals(user));
-        }
-    }
-
-    /**
-     * @param user the username to look up
-     * @return the user object if found, otherwise null
-     */
-    public U get(String user) {
-        var inner = getOwnedInner();
-        if (inner != null) {
-            return inner.get(user);
-        }
-        // non-owner thread (e.g. net worker) reads from the snapshot
-        return aclSnapshot.get(user);
-    }
-
-    /** Functional interface for operations on a specific inner instance. */
-    private interface DoInTargetEventloop {
-        void doSth(Inner inner);
-    }
-
-    /**
-     * @param doInTargetEventloop the operation to perform
-     */
-    private void changeUser(DoInTargetEventloop doInTargetEventloop) {
-        if (inners == null) {
-            return;
-        }
-        var currentThreadId = Thread.currentThread().threadId();
-        for (int i = 0; i < inners.length; i++) {
-            var inner = inners[i];
-            if (inner.expectThreadId == currentThreadId) {
-                // skip current thread's inner; caller already applied the mutation
-                continue;
-            }
-            var targetEventloop = slotWorkerEventloopArray[i];
-            targetEventloop.execute(() -> {
-                doInTargetEventloop.doSth(inner);
-            });
-        }
-    }
-
-    /**
+     * Updates or inserts a user using copy-on-write.
+     *
      * @param user     the username to update or insert
      * @param callback the callback to perform the update operation
      * @throws AclInvalidRuleException if the update callback fails
      */
     public void upInsert(String user, UpdateCallback<U> callback) {
-        var inner = getOwnedInner();
-        if (inner != null) {
-            inner.upInsert(user, callback);
-        }
+        while (true) {
+            var oldMap = usersRef.get();
+            var newMap = new HashMap<String, U>(oldMap);
 
-        changeUser(inner2 -> inner2.upInsert(user, callback));
-        publishSnapshot();
+            var existing = newMap.get(user);
+            var target = existing != null ? existing.deepCopy() : new U(user);
+            callback.doUpdate(target);
+            newMap.put(user, target);
+
+            if (usersRef.compareAndSet(oldMap, Map.copyOf(newMap))) {
+                return;
+            }
+        }
     }
 
     /**
+     * Deletes a user using copy-on-write.
+     *
      * @param user the username to delete
-     * @return true if the user was deleted from any Inner instance
+     * @return true if the user was deleted
      */
     public boolean delete(String user) {
-        var inner = getOwnedInner();
-        boolean flag;
-        if (inner != null) {
-            flag = inner.delete(user);
-        } else {
-            flag = getInner().get(user) != null;
-        }
+        while (true) {
+            var oldMap = usersRef.get();
+            if (!oldMap.containsKey(user)) {
+                return false;
+            }
 
-        changeUser(inner2 -> {
-            inner2.delete(user);
-        });
-        publishSnapshot();
-        return flag;
+            var newMap = new HashMap<String, U>(oldMap);
+            newMap.remove(user);
+
+            if (usersRef.compareAndSet(oldMap, Map.copyOf(newMap))) {
+                return true;
+            }
+        }
     }
 
     /**
+     * Replaces all users using copy-on-write.
+     *
      * @param uList the new list of user objects
      */
     public void replaceUsers(List<U> uList) {
-        var inner = getOwnedInner();
-        if (inner != null) {
-            inner.uList.clear();
-            inner.uList.addAll(uList);
-        }
+        while (true) {
+            var oldMap = usersRef.get();
+            var newMap = new HashMap<String, U>();
+            for (var u : uList) {
+                newMap.put(u.getUser(), u.deepCopy());
+            }
+            // always ensure default user exists
+            if (!newMap.containsKey(U.DEFAULT_USER)) {
+                var defaultCopy = new U(U.DEFAULT_USER);
+                defaultCopy.copyStateFrom(U.INIT_DEFAULT_U);
+                newMap.put(U.DEFAULT_USER, defaultCopy);
+            }
 
-        changeUser(inner2 -> {
-            inner2.uList.clear();
-            inner2.uList.addAll(uList);
-        });
-        publishSnapshot();
+            if (usersRef.compareAndSet(oldMap, Map.copyOf(newMap))) {
+                return;
+            }
+        }
     }
 
     private static final int ACL_LOG_MAX_SIZE = 128;
@@ -440,5 +289,31 @@ public class AclUsers {
         Arrays.fill(aclLogBuffer, null);
         aclLogIndex = 0;
         aclLogCount = 0;
+    }
+
+    /**
+     * Compatibility shim for code that previously accessed Inner.getUList().
+     * Delegates to the global snapshot.
+     */
+    @Deprecated
+    public static class Inner {
+        private final Map<String, U> snapshot;
+
+        Inner(Map<String, U> snapshot) {
+            this.snapshot = snapshot;
+        }
+
+        /** @return a copy of the current user list */
+        public List<U> getUList() {
+            return new ArrayList<>(snapshot.values());
+        }
+
+        /**
+         * @param user the username to look up
+         * @return the user if found, null otherwise
+         */
+        public U get(String user) {
+            return snapshot.get(user);
+        }
     }
 }

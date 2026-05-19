@@ -235,7 +235,7 @@ public class AGroup extends BaseCommand {
                 return ErrorReply.SYNTAX;
             }
 
-            var uList = aclUsers.getInner().getUList();
+            var uList = aclUsers.getUList();
 
             var replies = new Reply[uList.size()];
             for (int i = 0; i < uList.size(); i++) {
@@ -261,7 +261,7 @@ public class AGroup extends BaseCommand {
                 // replicate loaded users to replicas
                 var firstOneSlot = localPersist.firstOneSlot();
                 if (firstOneSlot != null && firstOneSlot.getDynConfig().isBinlogOn()) {
-                    var uList = aclUsers.getInner().getUList();
+                    var uList = aclUsers.getUList();
                     var loadedUserNames = uList.stream()
                             .map(U::getUser)
                             .collect(toSet());
@@ -340,7 +340,7 @@ public class AGroup extends BaseCommand {
                 }
             }
 
-            var uList = aclUsers.getInner().getUList();
+            var uList = aclUsers.getUList();
             var lines = new ArrayList<String>();
             for (var u : uList) {
                 lines.add(u.literal());
@@ -442,7 +442,7 @@ public class AGroup extends BaseCommand {
                 return ErrorReply.SYNTAX;
             }
 
-            var uList = aclUsers.getInner().getUList();
+            var uList = aclUsers.getUList();
 
             var replies = new Reply[uList.size()];
             for (int i = 0; i < uList.size(); i++) {

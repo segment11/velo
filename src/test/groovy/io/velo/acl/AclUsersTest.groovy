@@ -46,7 +46,7 @@ class AclUsersTest extends Specification {
         }
         then:
         aclUsers.get('test').firstPassword != null
-        aclUsers.inner.UList.size() > 0
+        aclUsers.UList.size() > 0
 
         when:
         aclUsers.upInsert('test') { u ->
@@ -517,24 +517,21 @@ class AclUsersTest extends Specification {
         aclUsers.initForTest()
     }
 
-    def 'test each Inner has its own default user copy not shared singleton'() {
+    def 'test getUList returns independent copies'() {
         given:
         def aclUsers = AclUsers.instance
-
-        def eventloop1 = Eventloop.builder().withCurrentThread().build()
-        def eventloop2 = Eventloop.builder().withCurrentThread().build()
-        Eventloop[] testEventloopArray = [eventloop1, eventloop2]
-        aclUsers.initBySlotWorkerEventloopArray(testEventloopArray)
+        aclUsers.initForTest()
 
         when:
-        def inners = aclUsers.inners
-        def defaultFromInner1 = inners[0].getUList().find { it.getUser() == 'default' }
-        def defaultFromInner2 = inners[1].getUList().find { it.getUser() == 'default' }
+        def list1 = aclUsers.UList
+        def list2 = aclUsers.UList
 
         then:
-        defaultFromInner1 != null
-        defaultFromInner2 != null
-        defaultFromInner1.is(defaultFromInner2) == false // should be different objects
+        list1 != null
+        list2 != null
+        list1.size() == list2.size()
+        // each call returns a new mutable copy
+        !list1.is(list2)
 
         cleanup:
         aclUsers.initForTest()
