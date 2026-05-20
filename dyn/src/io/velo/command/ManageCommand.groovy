@@ -948,7 +948,9 @@ class ManageCommand extends BaseCommand {
                 case 'logCmd' -> debug.logCmd = isOn
                 case 'logTrainDict' -> debug.logTrainDict = isOn
                 case 'logRestore' -> debug.logRestore = isOn
-                case 'bulkLoad' -> debug.bulkLoad = isOn
+                case 'bulkLoad' -> {
+                    localPersist.doSthInSlots({ oneSlot -> oneSlot.setBulkLoad(isOn); return null }, { null })
+                }
                 default -> {
                     log.warn 'Manage unknown debug field={}', field
                 }

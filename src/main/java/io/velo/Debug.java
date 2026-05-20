@@ -41,10 +41,4 @@ public class Debug {
      * When {@code true}, restoration operations are logged.
      */
     public boolean logRestore = false;
-
-    /**
-     * Flag to enable or disable bulk load mode.
-     * When {@code true}, the system operates in bulk load mode for optimized data ingestion.
-     */
-    public boolean bulkLoad = false;
 }

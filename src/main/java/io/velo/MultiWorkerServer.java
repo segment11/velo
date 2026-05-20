@@ -1405,7 +1405,6 @@ public class MultiWorkerServer extends Launcher {
             debug.logCmd = config.get(ofBoolean(), "debugLogCmd", false);
             debug.logTrainDict = config.get(ofBoolean(), "debugLogTrainDict", false);
             debug.logRestore = config.get(ofBoolean(), "debugLogRestore", false);
-            debug.bulkLoad = config.get(ofBoolean(), "bulkLoad", false);
 
             // override bucket conf items
             if (config.getChild("bucket.bucketsPerSlot").hasValue()) {
