@@ -521,6 +521,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     @Override
     public void handleWhenCvExpiredOrDeleted(@NotNull String key, @Nullable CompressedValue shortStringCv, @Nullable PersistValueMeta pvm) {
+        if (bigKeyTopK != null) {
+            bigKeyTopK.remove(key);
+        }
         for (var handler : handlersRegisteredList) {
             handler.handleWhenCvExpiredOrDeleted(key, shortStringCv, pvm);
         }
