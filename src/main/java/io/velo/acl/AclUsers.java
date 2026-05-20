@@ -4,7 +4,6 @@ import io.activej.eventloop.Eventloop;
 import io.velo.ValkeyRawConfSupport;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.TestOnly;
-import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,13 +57,6 @@ public class AclUsers {
         defaultCopy.freeze();
         map.put(U.DEFAULT_USER, defaultCopy);
         return Map.copyOf(map);
-    }
-
-    /** @return the Inner instance for the current thread — deprecated, use getUList() instead */
-    @Deprecated
-    @VisibleForTesting
-    public Inner getInner() {
-        return new Inner(usersRef.get());
     }
 
     /**
@@ -296,29 +288,4 @@ public class AclUsers {
         aclLogCount = 0;
     }
 
-    /**
-     * Compatibility shim for code that previously accessed Inner.getUList().
-     * Delegates to the global snapshot.
-     */
-    @Deprecated
-    public static class Inner {
-        private final Map<String, U> snapshot;
-
-        Inner(Map<String, U> snapshot) {
-            this.snapshot = snapshot;
-        }
-
-        /** @return a copy of the current user list */
-        public List<U> getUList() {
-            return new ArrayList<>(snapshot.values());
-        }
-
-        /**
-         * @param user the username to look up
-         * @return the user if found, null otherwise
-         */
-        public U get(String user) {
-            return snapshot.get(user);
-        }
-    }
 }

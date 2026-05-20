@@ -254,7 +254,7 @@ public class AGroup extends BaseCommand {
 
             try {
                 // capture users before load to compute deletions
-                var previousUList = aclUsers.getInner().getUList();
+                var previousUList = aclUsers.getUList();
 
                 aclUsers.loadAclFile();
 
