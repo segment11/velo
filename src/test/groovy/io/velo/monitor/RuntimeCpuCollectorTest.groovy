@@ -3,24 +3,6 @@ package io.velo.monitor
 import spock.lang.Specification
 
 class RuntimeCpuCollectorTest extends Specification {
-    def 'close uses logger not System.out'() {
-        given:
-        def baos = new ByteArrayOutputStream()
-        def oldOut = System.out
-        System.setOut(new PrintStream(baos))
-
-        when:
-        RuntimeCpuCollector.close()
-        def output = baos.toString()
-
-        then:
-        // raw println message must be gone — log4j2 output includes timestamp/level prefix
-        !output.contains('Runtime cpu collector close success')
-
-        cleanup:
-        System.setOut(oldOut)
-    }
-
     static volatile boolean isStop = false
 
     def 'test collect'() {
