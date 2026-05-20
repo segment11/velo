@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -118,43 +119,33 @@ public class TrainSampleJob {
      */
     public static final String KEY_IN_DYN_CONFIG = "dict_key_prefix_or_suffix_groups";
 
-    /**
-     * The list of key prefix or suffix groups.
-     */
-    private static ArrayList<String> keyPrefixOrSuffixGroupList = new ArrayList<>();
+    private static final AtomicReference<List<String>> keyPrefixOrSuffixGroupList =
+            new AtomicReference<>(List.of());
 
-    /**
-     * Returns the list of key prefix or suffix groups.
-     *
-     * @return the list of key prefix or suffix groups
-     */
-    public static ArrayList<String> getKeyPrefixOrSuffixGroupList() {
-        return keyPrefixOrSuffixGroupList;
+    public static List<String> getKeyPrefixOrSuffixGroupList() {
+        return keyPrefixOrSuffixGroupList.get();
     }
 
-    /**
-     * Sets the list of key prefix or suffix groups.
-     *
-     * @param keyPrefixOrSuffixGroupList the list of key prefix or suffix groups
-     */
-    public synchronized static void setKeyPrefixOrSuffixGroupList(ArrayList<String> keyPrefixOrSuffixGroupList) {
-        // longer first
-        keyPrefixOrSuffixGroupList.sort((a, b) -> b.length() - a.length());
-        TrainSampleJob.keyPrefixOrSuffixGroupList = keyPrefixOrSuffixGroupList;
+    public static void setKeyPrefixOrSuffixGroupList(ArrayList<String> list) {
+        list.sort((a, b) -> b.length() - a.length());
+        keyPrefixOrSuffixGroupList.set(List.copyOf(list));
     }
 
-    /**
-     * Adds a key prefix group to the list if it does not already exist.
-     *
-     * @param keyPrefixOrSuffixGroup the key prefix group to add
-     */
-    public synchronized static void addKeyPrefixGroupIfNotExist(String keyPrefixOrSuffixGroup) {
-        if (keyPrefixOrSuffixGroupList.contains(keyPrefixOrSuffixGroup)) {
-            return;
+    public static void addKeyPrefixGroupIfNotExist(String prefix) {
+        while (true) {
+            var current = keyPrefixOrSuffixGroupList.get();
+            for (var existing : current) {
+                if (existing.equals(prefix)) {
+                    return;
+                }
+            }
+            var newList = new ArrayList<>(current);
+            newList.add(prefix);
+            newList.sort((a, b) -> b.length() - a.length());
+            if (keyPrefixOrSuffixGroupList.compareAndSet(current, List.copyOf(newList))) {
+                return;
+            }
         }
-        keyPrefixOrSuffixGroupList.add(keyPrefixOrSuffixGroup);
-        // longer first
-        keyPrefixOrSuffixGroupList.sort((a, b) -> b.length() - a.length());
     }
 
     /**
@@ -209,8 +200,9 @@ public class TrainSampleJob {
      * @return the key prefix or suffix
      */
     public static String keyPrefixOrSuffixGroup(String key) {
-        if (!keyPrefixOrSuffixGroupList.isEmpty()) {
-            for (var keyPrefixOrSuffix : keyPrefixOrSuffixGroupList) {
+        var list = keyPrefixOrSuffixGroupList.get();
+        if (!list.isEmpty()) {
+            for (var keyPrefixOrSuffix : list) {
                 if (key.startsWith(keyPrefixOrSuffix) || key.endsWith(keyPrefixOrSuffix)) {
                     return keyPrefixOrSuffix;
                 }

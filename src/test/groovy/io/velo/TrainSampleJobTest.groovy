@@ -2,6 +2,9 @@ package io.velo
 
 import spock.lang.Specification
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.CopyOnWriteArrayList
+
 class TrainSampleJobTest extends Specification {
 
     def 'test key prefix or suffix'() {
@@ -121,5 +124,48 @@ class TrainSampleJobTest extends Specification {
         result = job.train()
         then:
         result.cacheDict().size() == 1
+    }
+
+    def 'test concurrent add and iterate keyPrefixOrSuffixGroupList does not throw ConcurrentModificationException'() {
+        given:
+        TrainSampleJob.keyPrefixOrSuffixGroupList = []
+        def errors = new CopyOnWriteArrayList<Throwable>()
+        def iterations = 1000
+        def latch = new CountDownLatch(2)
+
+        when:
+        // Thread 1: writer — repeatedly adds prefixes
+        Thread.start {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    TrainSampleJob.addKeyPrefixGroupIfNotExist("prefix_${i % 10}:")
+                }
+            } catch (Throwable t) {
+                errors << t
+            } finally {
+                latch.countDown()
+            }
+        }
+
+        // Thread 2: reader — repeatedly iterates the list
+        Thread.start {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    TrainSampleJob.keyPrefixOrSuffixGroup("key_${i}")
+                }
+            } catch (Throwable t) {
+                errors << t
+            } finally {
+                latch.countDown()
+            }
+        }
+
+        latch.await()
+
+        then:
+        errors.isEmpty()
+
+        cleanup:
+        TrainSampleJob.keyPrefixOrSuffixGroupList = []
     }
 }
