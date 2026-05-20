@@ -10,9 +10,9 @@ import oshi.software.os.OperatingSystem;
 public class RuntimeCpuCollector {
     private static final OperatingSystem os = new SystemInfo().getOperatingSystem();
 
-    /** Closes the collector and prints a success message. */
+    /** Emits a shutdown marker for the runtime CPU collector. */
     public static void close() {
-        System.out.println("Runtime cpu collector close success");
+        System.out.println("Runtime cpu collector closed");
     }
 
     /** @return the current process information */

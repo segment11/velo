@@ -3,6 +3,24 @@ package io.velo.monitor
 import spock.lang.Specification
 
 class RuntimeCpuCollectorTest extends Specification {
+    def 'close emits shutdown marker without misleading success wording'() {
+        given:
+        def baos = new ByteArrayOutputStream()
+        def oldOut = System.out
+        System.setOut(new PrintStream(baos))
+
+        when:
+        RuntimeCpuCollector.close()
+        def output = baos.toString().trim()
+
+        then:
+        output.contains('closed')
+        !output.contains('close success')
+
+        cleanup:
+        System.setOut(oldOut)
+    }
+
     static volatile boolean isStop = false
 
     def 'test collect'() {
