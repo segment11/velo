@@ -1290,6 +1290,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return null;
         }
         if (v.isExpired()) {
+            if (bigKeyTopK != null) {
+                bigKeyTopK.remove(key);
+            }
             isExpiredFlagArray[0] = true;
             return null;
         }
