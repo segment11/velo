@@ -477,4 +477,37 @@ public class LocalPersist implements NeedCleanUp {
             indexHandlerPool.cleanUp();
         }
     }
+
+    /**
+     * Asynchronously cleans up all slot-owned persistence resources by submitting
+     * cleanup work to each slot's owning eventloop thread. This avoids rewriting
+     * {@code threadIdProtectedForSafe} and ensures resources are closed only after
+     * the owning slot worker has drained in-flight work.
+     *
+     * @return a {@link CompletableFuture} that completes when all slot cleanups are done
+     */
+    public CompletableFuture<Void> cleanUpAsync() {
+        Promise<Void>[] promises = new Promise[oneSlots.length];
+        for (int i = 0; i < oneSlots.length; i++) {
+            var oneSlot = oneSlots[i];
+            promises[i] = oneSlot.asyncCall(() -> {
+                oneSlot.cleanUp();
+                return null;
+            });
+        }
+
+        SettablePromise<Void> finalPromise = new SettablePromise<>();
+        Promises.all(promises).whenComplete((r, e) -> {
+            if (e != null) {
+                finalPromise.setException(e);
+            } else {
+                if (indexHandlerPool != null) {
+                    indexHandlerPool.cleanUp();
+                }
+                finalPromise.set(null);
+            }
+        });
+
+        return finalPromise.toCompletableFuture();
+    }
 }

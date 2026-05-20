@@ -76,6 +76,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import static io.activej.config.Config.*;
@@ -1222,8 +1223,8 @@ public class MultiWorkerServer extends Launcher {
             var jedisPoolHolder = JedisPoolHolder.getInstance();
             jedisPoolHolder.cleanUp();
 
-            // close local persist
-            localPersist.cleanUp();
+            // close local persist on each owning slot worker thread
+            localPersist.cleanUpAsync().get(30, TimeUnit.SECONDS);
 
             var dictMap = DictMap.getInstance();
             dictMap.cleanUp();

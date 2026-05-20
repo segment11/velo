@@ -10,7 +10,9 @@ import io.velo.reply.IntegerReply
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 class LocalPersistTest extends Specification {
     static void prepareLocalPersist(byte netWorkers = 1, short slotNumber = 1) {
@@ -219,5 +221,36 @@ class LocalPersistTest extends Specification {
         cleanup:
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         localPersist.cleanUp()
+    }
+
+    def 'test cleanUp runs on slot worker thread not caller thread'() {
+        given:
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+        Thread.sleep(100)
+
+        def localPersist = LocalPersist.instance
+        localPersist.addOneSlot((short) 0, eventloop)
+        def oneSlot = localPersist.oneSlot((short) 0)
+
+        def callerThreadId = Thread.currentThread().threadId()
+
+        when:
+        // cleanUpAsync submits cleanup to each slot's owning eventloop thread
+        // should NOT rewrite threadIdProtectedForSafe
+        localPersist.cleanUpAsync().toCompletableFuture().get(5, TimeUnit.SECONDS)
+
+        then:
+        // If cleanUp ran on the slot worker thread, it should succeed without rewriting threadIdProtectedForSafe
+        // If it ran on the caller thread, checkCurrentThreadId() would throw
+        noExceptionThrown()
+
+        cleanup:
+        eventloop.breakEventloop()
     }
 }
