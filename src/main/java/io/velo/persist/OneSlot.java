@@ -810,8 +810,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     void initBigKeyTopK(int k) {
-        // may be dyn config init already init big key top k
-        if (bigKeyTopK == null) {
+        if (bigKeyTopK == null || bigKeyTopK.getK() != k) {
             bigKeyTopK = new BigKeyTopK(k);
         }
     }

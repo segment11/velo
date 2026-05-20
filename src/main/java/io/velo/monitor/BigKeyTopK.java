@@ -42,6 +42,11 @@ public class BigKeyTopK {
 
     private final int k;
 
+    /** Returns the configured capacity. */
+    public int getK() {
+        return k;
+    }
+
     /** The priority queue ordered by byte length. */
     private final PriorityQueue<BigKey> queue;
 

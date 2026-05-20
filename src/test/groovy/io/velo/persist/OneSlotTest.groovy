@@ -124,6 +124,14 @@ class OneSlotTest extends Specification {
         oneSlot.bigKeyTopK != null
         oneSlot.bigKeyTopK.size() == 1
 
+        when: 'runtime DynConfig update to k=20 should recreate the tracker'
+        oneSlot.initBigKeyTopK(20)
+        for (i in 0..<20) {
+            oneSlot.monitorBigKeyByValueLength('big:' + i, 4096 + i)
+        }
+        then:
+        oneSlot.bigKeyTopK.size() == 20
+
         when:
         oneSlot.handleWhenCvExpiredOrDeleted('', null, null)
         oneSlot.handlersRegisteredList << new HandlerWhenCvExpiredOrDeleted() {
