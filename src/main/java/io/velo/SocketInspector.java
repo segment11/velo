@@ -19,6 +19,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Inspects and manages TCP sockets for a Velo server.
@@ -589,7 +590,14 @@ public class SocketInspector implements TcpSocket.Inspector {
     /**
      * Maximum number of connections allowed.
      */
-    private int maxConnections = 1000;
+    private volatile int maxConnections = 1000;
+
+    /**
+     * Atomic counter for connection admission across net workers.
+     * Incremented on connect, decremented on disconnect.
+     * Replaces the non-atomic check-then-act of socketMap.size() >= maxConnections.
+     */
+    final AtomicInteger connectionCount = new AtomicInteger(0);
 
     /**
      * Returns the maximum number of connections allowed.
@@ -605,7 +613,7 @@ public class SocketInspector implements TcpSocket.Inspector {
      *
      * @param maxConnections the maximum number of connections to set
      */
-    public synchronized void setMaxConnections(int maxConnections) {
+    public void setMaxConnections(int maxConnections) {
         if (maxConnections <= 0) {
             throw new IllegalArgumentException("maxConnections must be > 0, given: " + maxConnections);
         }
@@ -616,6 +624,24 @@ public class SocketInspector implements TcpSocket.Inspector {
      * Configuration key for maximum connections in dynamic configuration.
      */
     public static final String MAX_CONNECTIONS_KEY_IN_DYN_CONFIG = "max_connections";
+
+    /**
+     * Atomically reserves a connection slot using compare-and-swap.
+     * If the current count is at or above the limit, returns false (admission denied).
+     *
+     * @return true if a connection slot was reserved, false if the limit was reached
+     */
+    private boolean tryReserveConnection() {
+        while (true) {
+            int current = connectionCount.get();
+            if (current >= maxConnections) {
+                return false;
+            }
+            if (connectionCount.compareAndSet(current, current + 1)) {
+                return true;
+            }
+        }
+    }
 
     /**
      * Called when a socket connects.
@@ -639,7 +665,7 @@ public class SocketInspector implements TcpSocket.Inspector {
             return;
         }
 
-        if (socketMap.size() >= maxConnections) {
+        if (!tryReserveConnection()) {
             log.warn("Inspector max connections reached={}, close the socket", maxConnections);
             socket.close();
             return;
@@ -736,7 +762,10 @@ public class SocketInspector implements TcpSocket.Inspector {
         }
 
         log.debug("Inspector on disconnect, remote address={}", remoteAddress);
-        socketMap.remove(remoteAddress);
+        var removed = socketMap.remove(remoteAddress);
+        if (removed != null) {
+            connectionCount.decrementAndGet();
+        }
 
         // remove from subscribe by channel
         subscribeByChannel.forEach((channel, sockets) -> sockets.remove(socket));

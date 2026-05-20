@@ -13,6 +13,9 @@ import spock.lang.Specification
 
 import java.nio.channels.SocketChannel
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 class SocketInspectorTest extends Specification {
@@ -441,6 +444,86 @@ class SocketInspectorTest extends Specification {
         Thread.sleep(1000)
         eventloop.breakEventloop()
         eventloop2.breakEventloop()
+        inspector.clearAll()
+    }
+
+    def 'test max connections atomic admission'() {
+        given:
+        def inspector = new SocketInspector()
+        inspector.setMaxConnections(3)
+
+        and:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        BlockingList.initBySlotWorkerEventloopArray(eventloopArray)
+
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        inspector.connectedClientCountArray = [0]
+
+        expect:
+        inspector.maxConnections == 3
+
+        when:
+        def s1 = mockTcpSocket(eventloopCurrent, 46380)
+        def s2 = mockTcpSocket(eventloopCurrent, 46381)
+        def s3 = mockTcpSocket(eventloopCurrent, 46382)
+        inspector.onConnect(s1)
+        inspector.onConnect(s2)
+        inspector.onConnect(s3)
+
+        then:
+        inspector.socketMap.size() == 3
+        inspector.connectionCount.get() == 3
+
+        when:
+        def s4 = mockTcpSocket(eventloopCurrent, 46383)
+        inspector.onConnect(s4)
+
+        then:
+        inspector.socketMap.size() == 3
+        inspector.connectionCount.get() == 3
+
+        when:
+        inspector.onDisconnect(s2)
+
+        then:
+        inspector.socketMap.size() == 2
+        inspector.connectionCount.get() == 2
+
+        when:
+        def s5 = mockTcpSocket(eventloopCurrent, 46384)
+        inspector.onConnect(s5)
+
+        then:
+        inspector.socketMap.size() == 3
+        inspector.connectionCount.get() == 3
+
+        cleanup:
+        inspector.clearAll()
+    }
+
+    def 'test setMaxConnections is visible across threads'() {
+        given:
+        def inspector = new SocketInspector()
+        inspector.setMaxConnections(100)
+        def seen = new AtomicReference<Integer>()
+        def latch = new CountDownLatch(1)
+
+        when:
+        Thread.start {
+            inspector.setMaxConnections(42)
+            latch.countDown()
+        }
+        latch.await(5, TimeUnit.SECONDS)
+
+        then:
+        inspector.maxConnections == 42
+
+        cleanup:
         inspector.clearAll()
     }
 }
