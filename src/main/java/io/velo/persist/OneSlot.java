@@ -1199,6 +1199,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         var expireAt = valueBytesWithExpireAtAndSeq.expireAt();
         if (expireAt != CompressedValue.NO_EXPIRE && expireAt < System.currentTimeMillis()) {
+            if (bigKeyTopK != null) {
+                bigKeyTopK.remove(key);
+            }
             return null;
         }
 
@@ -1320,7 +1323,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, key, keyHash);
-        return expireAtAndSeq != null && !expireAtAndSeq.isExpired();
+        if (expireAtAndSeq != null && expireAtAndSeq.isExpired()) {
+            if (bigKeyTopK != null) {
+                bigKeyTopK.remove(key);
+            }
+            return false;
+        }
+        return expireAtAndSeq != null;
     }
 
     public boolean remove(@NotNull String key, int bucketIndex, long keyHash) {
