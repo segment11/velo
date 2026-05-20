@@ -33,6 +33,11 @@ public class BigKeyTopK {
             BigKey that = (BigKey) obj;
             return key.equals(that.key);
         }
+
+        @Override
+        public int hashCode() {
+            return key.hashCode();
+        }
     }
 
     private final int k;

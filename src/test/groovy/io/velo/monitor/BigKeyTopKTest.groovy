@@ -35,4 +35,29 @@ class BigKeyTopKTest extends Specification {
         then:
         topK.sizeIfBiggerThan(8) == 2
     }
+
+    def 'BigKey equals and hashCode contract - equal objects must have same hash code'() {
+        given:
+        def a = new BigKeyTopK.BigKey('foo', 10)
+        def b = new BigKeyTopK.BigKey('foo', 20)
+
+        expect:
+        a.equals(b)
+        a.hashCode() == b.hashCode()
+    }
+
+    def 'BigKey works correctly in HashSet'() {
+        given:
+        def set = new HashSet<BigKeyTopK.BigKey>()
+        def a = new BigKeyTopK.BigKey('foo', 10)
+        def b = new BigKeyTopK.BigKey('foo', 20)
+
+        when:
+        set.add(a)
+        def contained = set.contains(b)
+
+        then:
+        contained
+        set.size() == 1
+    }
 }
