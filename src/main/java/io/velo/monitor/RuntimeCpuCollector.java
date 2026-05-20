@@ -1,5 +1,7 @@
 package io.velo.monitor;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import oshi.SystemInfo;
 import oshi.software.os.OSProcess;
 import oshi.software.os.OperatingSystem;
@@ -8,11 +10,13 @@ import oshi.software.os.OperatingSystem;
  * Collects runtime CPU process information using OSHI.
  */
 public class RuntimeCpuCollector {
+    private static final Logger log = LoggerFactory.getLogger(RuntimeCpuCollector.class);
+
     private static final OperatingSystem os = new SystemInfo().getOperatingSystem();
 
-    /** Closes the collector and prints a success message. */
+    /** Closes the collector. */
     public static void close() {
-        System.out.println("Runtime cpu collector close success");
+        log.info("Runtime cpu collector closed");
     }
 
     /** @return the current process information */
