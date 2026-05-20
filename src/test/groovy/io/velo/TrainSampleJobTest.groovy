@@ -4,6 +4,7 @@ import spock.lang.Specification
 
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.TimeUnit
 
 class TrainSampleJobTest extends Specification {
 
@@ -160,7 +161,7 @@ class TrainSampleJobTest extends Specification {
             }
         }
 
-        latch.await()
+        latch.await(10, TimeUnit.SECONDS)
 
         then:
         errors.isEmpty()

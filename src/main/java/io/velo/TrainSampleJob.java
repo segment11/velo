@@ -126,7 +126,7 @@ public class TrainSampleJob {
         return keyPrefixOrSuffixGroupList.get();
     }
 
-    public static void setKeyPrefixOrSuffixGroupList(ArrayList<String> list) {
+    public static void setKeyPrefixOrSuffixGroupList(List<String> list) {
         list.sort((a, b) -> b.length() - a.length());
         keyPrefixOrSuffixGroupList.set(List.copyOf(list));
     }
