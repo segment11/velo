@@ -242,13 +242,13 @@ public class IGroup extends BaseCommand {
             }
         }
 
-        var debug = Debug.getInstance();
-        debug.bulkLoad = true;
         log.warn("Ingest start, set bulk load to true");
 
         int finalKeyFieldIndex = keyFieldIndex;
         MessageType finalSchema = schema;
         return localPersist.doSthInSlots(oneSlot -> {
+            oneSlot.setBulkLoad(true);
+
             // put number + skip number
             int[] r = new int[2];
 
@@ -375,8 +375,7 @@ public class IGroup extends BaseCommand {
                 replies[i] = new BulkReply(str);
             }
 
-            debug.bulkLoad = false;
-            log.warn("Ingest end, set bulk load to false");
+            log.warn("Ingest end, bulk load flags reset by each slot");
 
             return new MultiBulkReply(replies);
         });
@@ -426,11 +425,11 @@ public class IGroup extends BaseCommand {
             }
         }
 
-        var debug = Debug.getInstance();
-        debug.bulkLoad = true;
         log.warn("Ingest sst start, set bulk load to true");
 
         return localPersist.doSthInSlots(oneSlot -> {
+            oneSlot.setBulkLoad(true);
+
             // put number + skip number
             int[] r = new int[2];
             try {
@@ -465,8 +464,7 @@ public class IGroup extends BaseCommand {
                 replies[i] = new BulkReply(str);
             }
 
-            debug.bulkLoad = false;
-            log.warn("Ingest sst end, set bulk load to false");
+            log.warn("Ingest sst end, bulk load flags reset by each slot");
 
             return new MultiBulkReply(replies);
         });

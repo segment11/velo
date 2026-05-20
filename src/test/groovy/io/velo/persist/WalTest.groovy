@@ -813,4 +813,60 @@ class WalTest extends Specification {
         wal.clear(false)
     }
 
+    def 'test per-wal bulkLoad flag controls WAL skip and is reset by resetWritePositionAfterBulkLoad'() {
+        given:
+        ConfForSlot.global = ConfForSlot.debugMode
+
+        def file = new File(Consts.slotDir, 'test-bulk-load.wal')
+        def fileShortValue = new File(Consts.slotDir, 'test-bulk-load-short-value.wal')
+        if (file.exists()) file.delete()
+        if (fileShortValue.exists()) fileShortValue.delete()
+        FileUtils.touch(file)
+        FileUtils.touch(fileShortValue)
+
+        def raf = new RandomAccessFile(file, 'rw')
+        def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
+        def snowFlake = new SnowFlake(1, 1)
+        def oneSlot = new OneSlot(slot)
+        def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+        wal.lazyReadFromFile()
+
+        def v = Mock.prepareValueList(1)[0]
+
+        expect:
+        !wal.bulkLoad
+
+        when:
+        wal.bulkLoad = true
+        wal.put(false, v.key(), v)
+
+        then:
+        // bulk load skips WAL file write, so file length should not grow beyond initial
+        def lenAfterBulkPut = raf.length()
+        wal.delayToKeyBucketValues.containsKey(v.key())
+
+        when:
+        wal.bulkLoad = false
+        wal.put(false, v.key(), v)
+
+        then:
+        // normal put should write to WAL file
+        raf.length() >= lenAfterBulkPut
+
+        when:
+        wal.bulkLoad = true
+        wal.delayToKeyBucketValues.put(v.key(), v)
+        wal.writePosition = v.encodeLength()
+        wal.resetWritePositionAfterBulkLoad()
+
+        then:
+        !wal.bulkLoad
+
+        cleanup:
+        wal.clear()
+        wal.clear(false)
+        file.delete()
+        fileShortValue.delete()
+    }
+
 }

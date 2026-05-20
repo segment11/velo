@@ -306,6 +306,15 @@ public class Wal implements InMemoryEstimate {
     HashMap<String, V> delayToKeyBucketValues;
     HashMap<String, V> delayToKeyBucketShortValues;
 
+    /**
+     * Per-Wal bulk-load flag. When true, {@link #put} skips the WAL file write
+     * and the value is only kept in the delay-to-key-bucket maps.
+     * Set to true before ingest, reset to false by {@link #resetWritePositionAfterBulkLoad()}.
+     * This replaces the global {@code Debug.bulkLoad} flag so that normal writes
+     * to slots that have finished their ingest are not affected.
+     */
+    public volatile boolean bulkLoad = false;
+
     HashMap<String, Long> bigStringFileUuidByKey = new HashMap<>();
 
     final long fileToWriteIndex;
@@ -801,6 +810,8 @@ public class Wal implements InMemoryEstimate {
             }
             writePositionShortValue = offset;
         }
+
+        bulkLoad = false;
     }
 
     /**
@@ -852,7 +863,7 @@ public class Wal implements InMemoryEstimate {
         }
 
         // bulk load need not wal write
-        if (!debug.bulkLoad) {
+        if (!bulkLoad) {
             putVToFile(v, isValueShort, offset, targetGroupBeginOffset);
         }
         if (isValueShort) {

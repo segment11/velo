@@ -1550,6 +1550,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
     }
 
+    public void setBulkLoad(boolean bulkLoad) {
+        for (var wal : walArray) {
+            wal.bulkLoad = bulkLoad;
+        }
+    }
+
     public void resetWritePositionAfterBulkLoad() {
         for (var wal : walArray) {
             wal.resetWritePositionAfterBulkLoad();
