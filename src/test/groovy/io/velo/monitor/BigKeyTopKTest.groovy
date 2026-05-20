@@ -60,4 +60,28 @@ class BigKeyTopKTest extends Specification {
         contained
         set.size() == 1
     }
+
+    def 'remove evicts a tracked key'() {
+        given:
+        def topK = new BigKeyTopK(5)
+        topK.add('a', 3000)
+        topK.add('b', 4000)
+        topK.add('c', 5000)
+
+        expect:
+        topK.size() == 3
+
+        when:
+        topK.remove('b')
+
+        then:
+        topK.size() == 2
+        topK.queue.stream().noneMatch { it.key() == 'b' }
+
+        when:
+        topK.remove('nonexistent')
+
+        then:
+        topK.size() == 2
+    }
 }

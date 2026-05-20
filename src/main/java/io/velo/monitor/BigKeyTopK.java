@@ -101,4 +101,11 @@ public class BigKeyTopK {
             queue.add(added);
         }
     }
+
+    /**
+     * @param key the key to remove from tracking
+     */
+    public void remove(String key) {
+        queue.removeIf(one -> one.key().equals(key));
+    }
 }

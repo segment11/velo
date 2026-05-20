@@ -1083,6 +1083,10 @@ public abstract class BaseCommand {
             indexHandlerPool.getKeyAnalysisHandler().addKey(key, valueLengthHigh24WithShortTypeLow8);
         }
 
+        if (slotWithKeyHash != null && byPassGetSet == null) {
+            localPersist.oneSlot(slotWithKeyHash.slot).monitorBigKeyByValueLength(slotWithKeyHash.rawKey, valueBytes.length);
+        }
+
         SocketInspector.updateLastSetSeq(socket, seq, slot);
     }
 

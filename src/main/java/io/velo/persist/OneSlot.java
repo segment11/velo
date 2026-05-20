@@ -1326,6 +1326,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     public void removeDelay(@NotNull String key, int bucketIndex, long keyHash) {
         checkCurrentThreadId();
 
+        if (bigKeyTopK != null) {
+            bigKeyTopK.remove(key);
+        }
+
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
 
