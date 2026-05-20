@@ -526,4 +526,50 @@ class SocketInspectorTest extends Specification {
         cleanup:
         inspector.clearAll()
     }
+
+    def 'test clearAll resets connectionCount'() {
+        given:
+        def inspector = new SocketInspector()
+        inspector.setMaxConnections(5)
+
+        and:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        BlockingList.initBySlotWorkerEventloopArray(eventloopArray)
+
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()]
+        inspector.connectedClientCountArray = [0]
+
+        when:
+        def s1 = mockTcpSocket(eventloopCurrent, 46390)
+        def s2 = mockTcpSocket(eventloopCurrent, 46391)
+        inspector.onConnect(s1)
+        inspector.onConnect(s2)
+
+        then:
+        inspector.connectionCount.get() == 2
+        inspector.socketMap.size() == 2
+
+        when:
+        inspector.clearAll()
+
+        then:
+        inspector.connectionCount.get() == 0
+        inspector.socketMap.size() == 0
+
+        when:
+        def s3 = mockTcpSocket(eventloopCurrent, 46392)
+        inspector.onConnect(s3)
+
+        then:
+        inspector.connectionCount.get() == 1
+        inspector.socketMap.size() == 1
+
+        cleanup:
+        inspector.clearAll()
+    }
 }

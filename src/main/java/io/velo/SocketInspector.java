@@ -786,5 +786,6 @@ public class SocketInspector implements TcpSocket.Inspector {
         subscribeByChannel.clear();
 
         socketMap.clear();
+        connectionCount.set(0);
     }
 }
