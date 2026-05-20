@@ -816,8 +816,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     public void monitorBigKeyByValueLength(String key, int valueBytesLength) {
+        if (bigKeyTopK == null) {
+            return;
+        }
         if (valueBytesLength >= BIG_KEY_LENGTH_CHECK) {
             bigKeyTopK.add(key, valueBytesLength);
+        } else {
+            bigKeyTopK.remove(key);
         }
     }
 
@@ -1630,6 +1635,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         if (this.binlog != null) {
             this.binlog.truncateAll();
+        }
+
+        if (bigKeyTopK != null) {
+            bigKeyTopK = new BigKeyTopK(bigKeyTopK.getK());
         }
 
         var xFlush = new XFlush();

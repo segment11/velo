@@ -968,6 +968,11 @@ public abstract class BaseCommand {
             oneSlot.appendBinlog(xBigStrings);
 
             oneSlot.put(key, slotWithKeyHash.bucketIndex, cvAsBigString);
+
+            if (byPassGetSet == null) {
+                oneSlot.monitorBigKeyByValueLength(slotWithKeyHash.rawKey, bigStringNoMemoryCopy.length);
+            }
+
             return;
         }
 
