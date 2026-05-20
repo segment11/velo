@@ -161,9 +161,10 @@ class TrainSampleJobTest extends Specification {
             }
         }
 
-        latch.await(10, TimeUnit.SECONDS)
+        def completed = latch.await(10, TimeUnit.SECONDS)
 
         then:
+        completed
         errors.isEmpty()
 
         cleanup:

@@ -127,8 +127,9 @@ public class TrainSampleJob {
     }
 
     public static void setKeyPrefixOrSuffixGroupList(List<String> list) {
-        list.sort((a, b) -> b.length() - a.length());
-        keyPrefixOrSuffixGroupList.set(List.copyOf(list));
+        var newList = new ArrayList<>(list);
+        newList.sort((a, b) -> b.length() - a.length());
+        keyPrefixOrSuffixGroupList.set(List.copyOf(newList));
     }
 
     public static void addKeyPrefixGroupIfNotExist(String prefix) {
