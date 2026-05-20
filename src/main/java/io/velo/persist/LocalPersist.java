@@ -466,6 +466,13 @@ public class LocalPersist implements NeedCleanUp {
         this.socketInspector = socketInspector;
     }
 
+    /**
+     * Synchronous cleanup that rewrites thread ownership guards.
+     * Use {@link #cleanUpAsync()} for production shutdown, which runs cleanup
+     * on each slot's owning eventloop thread.
+     * This method is kept for test cleanup where no eventloop is running.
+     */
+    @Deprecated
     @Override
     public void cleanUp() {
         for (var oneSlot : oneSlots) {

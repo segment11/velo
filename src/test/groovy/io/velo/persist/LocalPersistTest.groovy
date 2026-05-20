@@ -10,9 +10,7 @@ import io.velo.reply.IntegerReply
 import spock.lang.Specification
 
 import java.time.Duration
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
 
 class LocalPersistTest extends Specification {
     static void prepareLocalPersist(byte netWorkers = 1, short slotNumber = 1) {
@@ -236,9 +234,6 @@ class LocalPersistTest extends Specification {
 
         def localPersist = LocalPersist.instance
         localPersist.addOneSlot((short) 0, eventloop)
-        def oneSlot = localPersist.oneSlot((short) 0)
-
-        def callerThreadId = Thread.currentThread().threadId()
 
         when:
         // cleanUpAsync submits cleanup to each slot's owning eventloop thread
