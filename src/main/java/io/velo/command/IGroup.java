@@ -3,7 +3,6 @@ package io.velo.command;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.velo.BaseCommand;
-import io.velo.Debug;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.ingest.ParquetGroupToValue;
