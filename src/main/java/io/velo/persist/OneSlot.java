@@ -2010,7 +2010,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * Metrics collected here are shared across all slots.
      */
     @VisibleForTesting
-    final static SimpleGauge globalGauge = new SimpleGauge("global", "Global metrics.");
+    final static SimpleGauge globalGauge = new SimpleGauge("global", "Global metrics.", "slot");
 
     static {
         globalGauge.register();

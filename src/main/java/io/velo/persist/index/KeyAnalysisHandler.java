@@ -345,7 +345,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     }
 
     @VisibleForTesting
-    final static SimpleGauge keyAnalysisGauge = new SimpleGauge("keys", "Key analysis metrics.");
+    final static SimpleGauge keyAnalysisGauge = new SimpleGauge("keys", "Key analysis metrics.", "slot");
 
     static {
         keyAnalysisGauge.register();

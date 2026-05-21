@@ -85,4 +85,44 @@ class SimpleGaugeTest extends Specification {
         then:
         g.rawGetterList.size() == 0
     }
+
+    def 'samples include label names from constructor'() {
+        given:
+        def g = new SimpleGauge('global', 'Global metrics.', 'slot')
+        g.register()
+        g.addRawGetter {
+            Map<String, SimpleGauge.ValueWithLabelValues> map = new HashMap<>()
+            map.put('global_up_time', new SimpleGauge.ValueWithLabelValues(100.0, ['-1']))
+            map
+        }
+
+        when:
+        def mfsList = g.collect()
+        def sample = mfsList[0].samples.find { it.name == 'global_up_time' }
+
+        then:
+        sample != null
+        sample.labelNames == ['slot']
+        sample.labelValues == ['-1']
+    }
+
+    def 'samples without label names lose label values'() {
+        given:
+        def g = new SimpleGauge('no_labels', 'No labels gauge.')
+        g.register()
+        g.addRawGetter {
+            Map<String, SimpleGauge.ValueWithLabelValues> map = new HashMap<>()
+            map.put('metric_x', new SimpleGauge.ValueWithLabelValues(42.0, ['-1']))
+            map
+        }
+
+        when:
+        def mfsList = g.collect()
+        def sample = mfsList[0].samples.find { it.name == 'metric_x' }
+
+        then:
+        sample != null
+        sample.labelNames == []
+        sample.labelValues == ['-1']
+    }
 }
