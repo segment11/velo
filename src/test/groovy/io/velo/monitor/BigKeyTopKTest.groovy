@@ -84,4 +84,21 @@ class BigKeyTopKTest extends Specification {
         then:
         topK.size() == 2
     }
+
+    def 'snapshotDescending returns keys sorted largest first'() {
+        given:
+        def topK = new BigKeyTopK(5)
+        topK.add('a', 3000)
+        topK.add('b', 5000)
+        topK.add('c', 4000)
+
+        when:
+        def snapshot = topK.snapshotDescending()
+
+        then:
+        snapshot.size() == 3
+        snapshot[0].key() == 'b'
+        snapshot[1].key() == 'c'
+        snapshot[2].key() == 'a'
+    }
 }

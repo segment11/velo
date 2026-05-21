@@ -174,8 +174,7 @@ class ManageCommand extends BaseCommand {
             }
             return new BulkReply(sb.toString().bytes)
         } else if (subSubCmd == 'view-big-key-top-k') {
-            def queue = oneSlot.bigKeyTopK.queue
-            def str = queue.collect {
+            def str = oneSlot.bigKeyTopK.snapshotDescending().collect {
                 it.key() + ': ' + it.length()
             }.join(', ')
             return new BulkReply(str.bytes)

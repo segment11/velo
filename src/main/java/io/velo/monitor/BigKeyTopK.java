@@ -3,6 +3,7 @@ package io.velo.monitor;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.PriorityQueue;
 
 /**
@@ -107,5 +108,14 @@ public class BigKeyTopK {
      */
     public void remove(String key) {
         queue.removeIf(one -> one.key().equals(key));
+    }
+
+    /**
+     * @return a snapshot of tracked keys sorted by length descending
+     */
+    public List<BigKey> snapshotDescending() {
+        return queue.stream()
+                .sorted(Comparator.comparingInt(BigKey::length).reversed())
+                .toList();
     }
 }
