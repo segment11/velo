@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -340,8 +341,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     }
 
     public CompletableFuture<Map<String, Integer>> getTopKPrefixCounts() {
-        // use a copy one
-        return eventloop.submit(AsyncComputation.of(() -> new HashMap<>(innerTask.topKPrefixCounts)));
+        return eventloop.submit(AsyncComputation.of(() -> new LinkedHashMap<>(innerTask.topKPrefixCounts)));
     }
 
     @VisibleForTesting

@@ -98,6 +98,17 @@ class KeyAnalysisTaskTest extends Specification {
         then:
         keyAnalysisTask2.topKPrefixCounts.size() > 0
 
+        when: 'sortMapByValues returns descending order — highest count first'
+        def map = new HashMap<String, Integer>()
+        map.put('low', 1)
+        map.put('mid', 50)
+        map.put('high', 100)
+        def sorted = KeyAnalysisTask.sortMapByValues(map)
+        then:
+        sorted[0].key == 'high'
+        sorted[1].key == 'mid'
+        sorted[2].key == 'low'
+
         cleanup:
         keyAnalysisHandler.flushdb()
         Thread.sleep(1000)

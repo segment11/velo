@@ -101,7 +101,7 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
     private byte[] lastIterateKeyBytes = null;
 
-    final Map<String, Integer> topKPrefixCounts = new HashMap<>();
+    final Map<String, Integer> topKPrefixCounts = new LinkedHashMap<>();
 
     @TestOnly
     public void addTopKPrefixCount(String prefix, int count) {
@@ -209,8 +209,7 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
     public static <V extends Comparable<? super V>> List<Map.Entry<String, V>> sortMapByValues(Map<String, V> map) {
         List<Map.Entry<String, V>> sortedEntries = new ArrayList<>(map.entrySet());
         sortedEntries.sort((a, b) -> {
-            int compareValue = a.getValue().compareTo(b.getValue());
-            // key length bigger first
+            int compareValue = b.getValue().compareTo(a.getValue());
             return compareValue == 0 ? b.getKey().length() - a.getKey().length() : compareValue;
         });
         return sortedEntries;
