@@ -1323,13 +1323,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, key, keyHash);
-        if (expireAtAndSeq != null && expireAtAndSeq.isExpired()) {
+        if (expireAtAndSeq == null) {
             if (bigKeyTopK != null) {
                 bigKeyTopK.remove(key);
             }
             return false;
         }
-        return expireAtAndSeq != null;
+        return !expireAtAndSeq.isExpired();
     }
 
     public boolean remove(@NotNull String key, int bucketIndex, long keyHash) {
