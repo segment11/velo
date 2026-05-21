@@ -103,6 +103,9 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
     final Map<String, Integer> topKPrefixCounts = new LinkedHashMap<>();
 
+    @VisibleForTesting
+    int maxTmpSaveTopKSize = 1000;
+
     @TestOnly
     public void addTopKPrefixCount(String prefix, int count) {
         topKPrefixCounts.put(prefix, count);
@@ -148,8 +151,6 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
         // for performance
         final int maxDoLogCountInOneBatch = 100;
-        // cost little memory
-        final int maxTmpSaveTopKSize = 1000;
 
         var sb = new StringBuilder();
         int innerLoopCount = 0;
@@ -159,10 +160,16 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
                     sb.append(entry.getKey()).append(":").append(entry.getValue()).append("\n");
                 }
 
-                if (topKPrefixCounts.size() < maxTmpSaveTopKSize) {
-                    topKPrefixCounts.put(entry.getKey(), entry.getValue());
-                }
+                topKPrefixCounts.put(entry.getKey(), entry.getValue());
                 innerLoopCount++;
+            }
+        }
+
+        if (topKPrefixCounts.size() > maxTmpSaveTopKSize) {
+            var all = sortMapByValues(topKPrefixCounts);
+            topKPrefixCounts.clear();
+            for (int i = 0; i < maxTmpSaveTopKSize && i < all.size(); i++) {
+                topKPrefixCounts.put(all.get(i).getKey(), all.get(i).getValue());
             }
         }
         log.info("Key analysis task one batch iterate from {} to {}, iterate count={}, tmp save top k size={}, counts group by prefix:\n{}",

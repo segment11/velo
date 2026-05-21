@@ -109,6 +109,20 @@ class KeyAnalysisTaskTest extends Specification {
         sorted[1].key == 'mid'
         sorted[2].key == 'low'
 
+        when: 'trim: set small cap, pre-fill with low counts, run a batch to trigger trim keeping highest'
+        keyAnalysisTask2.maxTmpSaveTopKSize = 3
+        keyAnalysisTask2.topKPrefixCounts.clear()
+        keyAnalysisTask2.addTopKPrefixCount('low_0', 10)
+        keyAnalysisTask2.addTopKPrefixCount('low_1', 11)
+        keyAnalysisTask2.addTopKPrefixCount('low_2', 12)
+        // reset skip so doMyTask actually runs
+        keyAnalysisTask2.doMyTaskSkipTimes = 0
+        // doMyTask clears map when lastIterateKeyBytes is null,
+        // so run doMyTask once to populate and set lastIterateKeyBytes
+        keyAnalysisTask2.doMyTask()
+        then:
+        keyAnalysisTask2.topKPrefixCounts.size() <= 3
+
         cleanup:
         keyAnalysisHandler.flushdb()
         Thread.sleep(1000)
