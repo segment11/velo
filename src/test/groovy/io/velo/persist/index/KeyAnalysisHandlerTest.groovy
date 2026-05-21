@@ -10,6 +10,55 @@ import java.nio.ByteBuffer
 import java.time.Duration
 
 class KeyAnalysisHandlerTest extends Specification {
+    def 'test addCount only increments for new keys'() {
+        given:
+        def keyDir = new File(Consts.persistDir, 'keys-for-analysis')
+        if (!keyDir.exists()) {
+            keyDir.mkdirs()
+        }
+
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+
+        // 100% sampling, small budget
+        ConfForGlobal.keyAnalysisNumberPercent = 100
+        ConfForGlobal.estimateKeyNumber = 5
+        def keyAnalysisHandler = new KeyAnalysisHandler(keyDir, eventloop, Config.create())
+
+        when: 'write the same key 10 times'
+        int valueLen = 10 << 8
+        10.times {
+            keyAnalysisHandler.addKey('hot:key', valueLen)
+            Thread.sleep(20)
+        }
+        Thread.sleep(500)
+
+        and: 'write a different new key'
+        keyAnalysisHandler.addKey('new:key', valueLen)
+        Thread.sleep(500)
+
+        and:
+        def metrics = KeyAnalysisHandler.keyAnalysisGauge.collect()
+        def samples = metrics[0].samples
+
+        then: 'addCount should be 2 (2 unique keys), not 11 (10 rewrites + 1 new)'
+        samples.find { it.name == 'key_analysis_add_count' }.value == 2
+        !keyAnalysisHandler.isKeyAnalysisNumberFull
+
+        cleanup:
+        keyAnalysisHandler.flushdb()
+        Thread.sleep(1000)
+        keyAnalysisHandler.cleanUp()
+        Thread.sleep(1000)
+        KeyAnalysisHandler.keyAnalysisGauge.clearRawGetterList()
+        eventloop.breakEventloop()
+    }
+
     def 'test all'() {
         given:
         def keyDir = new File(Consts.persistDir, 'keys-for-analysis')

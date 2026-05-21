@@ -143,10 +143,19 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         var bytes = new byte[4];
         ByteBuffer.wrap(bytes).putInt(valueLengthHigh24WithShortTypeLow8);
         eventloop.submit(() -> {
-            db.put(Wal.keyBytes(key), bytes);
+            var keyBytes = Wal.keyBytes(key);
+            var oldValueBytes = db.get(keyBytes);
 
-            addCount++;
-            addValueLengthTotal += (valueLengthHigh24WithShortTypeLow8 >> 8);
+            db.put(keyBytes, bytes);
+
+            var newValueLength = valueLengthHigh24WithShortTypeLow8 >> 8;
+            if (oldValueBytes != null) {
+                var oldValueLength = ByteBuffer.wrap(oldValueBytes).getInt() >> 8;
+                addValueLengthTotal += (newValueLength - oldValueLength);
+            } else {
+                addCount++;
+                addValueLengthTotal += newValueLength;
+            }
 
             if (addCount >= keyAnalysisNumberTotal) {
                 isKeyAnalysisNumberFull = true;
