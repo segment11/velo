@@ -106,6 +106,16 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         log.warn("Key analysis db created, keysDir={}", keysDir.getAbsolutePath());
 
         this.addCount = db.getLongProperty("rocksdb.estimate-num-keys");
+
+        long total = 0;
+        var iter = db.newIterator();
+        iter.seekToFirst();
+        while (iter.isValid()) {
+            var valueBytes = iter.value();
+            total += ByteBuffer.wrap(valueBytes).getInt() >> 8;
+            iter.next();
+        }
+        this.addValueLengthTotal = total;
     }
 
     public KeyAnalysisHandler(File keysDir, Eventloop eventloop, Config persistConfig) throws RocksDBException {

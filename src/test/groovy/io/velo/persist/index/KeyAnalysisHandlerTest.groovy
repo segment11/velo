@@ -50,12 +50,32 @@ class KeyAnalysisHandlerTest extends Specification {
         samples.find { it.name == 'key_analysis_add_count' }.value == 2
         !keyAnalysisHandler.isKeyAnalysisNumberFull
 
-        cleanup:
-        keyAnalysisHandler.flushdb()
-        Thread.sleep(1000)
+        when: 'close and reopen DB to verify addValueLengthTotal is restored'
+        def addValueLengthTotalBefore = keyAnalysisHandler.addValueLengthTotal
         keyAnalysisHandler.cleanUp()
+        Thread.sleep(500)
+
+        def eventloop2 = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop2.keepAlive(true)
+        Thread.start {
+            eventloop2.run()
+        }
+        def handler2 = new KeyAnalysisHandler(keyDir, eventloop2, Config.create())
+
+        then:
+        handler2.addCount == 2
+        handler2.addValueLengthTotal == addValueLengthTotalBefore
+        handler2.addValueLengthTotal == 20 // 2 keys * 10 bytes each
+
+        cleanup:
+        handler2.flushdb()
+        Thread.sleep(1000)
+        handler2.cleanUp()
         Thread.sleep(1000)
         KeyAnalysisHandler.keyAnalysisGauge.clearRawGetterList()
+        eventloop2.breakEventloop()
         eventloop.breakEventloop()
     }
 
