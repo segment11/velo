@@ -625,6 +625,7 @@ class ManageCommandTest extends Specification {
         def reply = manage.manageInOneSlot()
         then:
         reply instanceof BulkReply
+        !((BulkReply) reply).asString().contains('",}')
 
         when:
         data5[3] = 'view-big-key-top-k'.bytes

@@ -170,7 +170,7 @@ class ManageCommand extends BaseCommand {
             // prometheus format
             def sb = new StringBuilder()
             all.each { k, v ->
-                sb << k << '{slot="' << slot << '",} ' << v << '\n'
+                sb << k << '{slot="' << slot << '"} ' << v << '\n'
             }
             return new BulkReply(sb.toString().bytes)
         } else if (subSubCmd == 'view-big-key-top-k') {
