@@ -226,6 +226,7 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 ### Testing Guidelines
 
 - Follow TDD for every feature, bug fix, refactor, and behavior change: write the test first, run it and verify it fails for the expected reason, then implement the minimal code to make it pass
+- Exception: for simple feature code removals where the behavior is only deleting unused, obsolete, or unwanted code paths, a strict red/green TDD cycle is not required. Remove the related code and rerun the relevant existing tests.
 - For stronger regression tests and branch-focused coverage, refer to `doc/write_better_test_cases_for_ai_agents.md`
 - Write comprehensive tests for new functionality
 - Use Spock's data-driven testing for multiple scenarios
@@ -263,6 +264,7 @@ After bugs are confirmed in the review doc, fix them in this order and do not ba
 
 Notes:
 - Do not start production code for a bug fix before the failing test exists.
+- Exception: for simple code removals where the fix is only deleting unused, obsolete, or unwanted code paths, a new failing test is not required before editing. Remove the related code and rerun the relevant existing tests.
 - Do not claim a bug is fixed from a green test alone; JaCoCo confirmation is also required.
 - If multiple bugs touch the same area, still keep review, test intent, and commits separated bug by bug unless the user explicitly asks for batching.
 

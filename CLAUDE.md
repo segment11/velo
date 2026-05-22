@@ -148,6 +148,7 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 - Refer to `src/test/groovy/GroovyStyleRefer.groovy` for Groovy style patterns
 - Commands follow the alphabetical group pattern — add new commands to the appropriate letter group
 - Follow TDD for every feature, bug fix, refactor, and behavior change: write the test first, verify it fails for the expected reason, then write the minimal code to pass
+- Exception: for simple feature code removals where the behavior is only deleting unused, obsolete, or unwanted code paths, a strict red/green TDD cycle is not required. Remove the related code and rerun the relevant existing tests.
 - After running relevant tests for a change, inspect the JaCoCo HTML report under `build/reports/jacocoHtml/` and confirm the changed code lines or branches were actually executed
 
 ## Development Workflow
@@ -215,6 +216,7 @@ Once bugs are confirmed in the review doc, execute fixes in this sequence:
 
 Rules:
 - No production code before the failing test for that bug exists.
+- Exception: for simple code removals where the fix is only deleting unused, obsolete, or unwanted code paths, a new failing test is not required before editing. Remove the related code and rerun the relevant existing tests.
 - A passing test is not enough; JaCoCo confirmation is required before claiming the fix is complete.
 - Keep commits scoped to one bug fix unless the user explicitly requests batching.
 
