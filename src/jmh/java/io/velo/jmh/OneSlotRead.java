@@ -48,7 +48,6 @@ public class OneSlotRead {
 
         var localPersist = LocalPersist.getInstance();
 
-        RequestHandler.initMultiShardShadows((byte) slotWorkers);
 
         var snowFlakes = new SnowFlake[slotWorkers];
         for (int i = 0; i < slotWorkers; i++) {

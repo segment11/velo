@@ -69,7 +69,6 @@ public class BenchmarkLocalPersistGet {
         }
 
         ConfForGlobal.netListenAddresses = "127.0.0.1:7379";
-        RequestHandler.initMultiShardShadows(slotWorkers);
 
         if (persistDir.exists()) {
             FileUtils.deleteDirectory(persistDir);
