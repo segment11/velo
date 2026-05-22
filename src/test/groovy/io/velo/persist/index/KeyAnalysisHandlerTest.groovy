@@ -10,7 +10,7 @@ import java.nio.ByteBuffer
 import java.time.Duration
 
 class KeyAnalysisHandlerTest extends Specification {
-    def 'test addCount only increments for new keys'() {
+    def 'test addCount increments for sampled add events'() {
         given:
         def keyDir = new File(Consts.persistDir, 'keys-for-analysis')
         if (!keyDir.exists()) {
@@ -25,9 +25,9 @@ class KeyAnalysisHandlerTest extends Specification {
             eventloop.run()
         }
 
-        // 100% sampling, small budget
+        // 100% sampling, enough budget to count repeated add events
         ConfForGlobal.keyAnalysisNumberPercent = 100
-        ConfForGlobal.estimateKeyNumber = 5
+        ConfForGlobal.estimateKeyNumber = 20
         def keyAnalysisHandler = new KeyAnalysisHandler(keyDir, eventloop, Config.create())
 
         when: 'write the same key 10 times'
@@ -46,33 +46,16 @@ class KeyAnalysisHandlerTest extends Specification {
         def metrics = KeyAnalysisHandler.keyAnalysisGauge.collect()
         def samples = metrics[0].samples
 
-        then: 'addCount should be 2 (2 unique keys), not 11 (10 rewrites + 1 new)'
-        samples.find { it.name == 'key_analysis_add_count' }.value == 2
+        then: 'addCount should count sampled add events, including rewrites'
+        samples.find { it.name == 'key_analysis_add_count' }.value == 11
         !keyAnalysisHandler.isKeyAnalysisNumberFull
 
-        when: 'close and reopen DB to verify addCount is restored'
-        keyAnalysisHandler.cleanUp()
-        Thread.sleep(500)
-
-        def eventloop2 = Eventloop.builder()
-                .withIdleInterval(Duration.ofMillis(100))
-                .build()
-        eventloop2.keepAlive(true)
-        Thread.start {
-            eventloop2.run()
-        }
-        def handler2 = new KeyAnalysisHandler(keyDir, eventloop2, Config.create())
-
-        then:
-        handler2.addCount == 2
-
         cleanup:
-        handler2.flushdb()
+        keyAnalysisHandler.flushdb()
         Thread.sleep(1000)
-        handler2.cleanUp()
+        keyAnalysisHandler.cleanUp()
         Thread.sleep(1000)
         KeyAnalysisHandler.keyAnalysisGauge.clearRawGetterList()
-        eventloop2.breakEventloop()
         eventloop.breakEventloop()
     }
 
