@@ -149,6 +149,12 @@ class KeyAnalysisHandlerTest extends Specification {
         samples.find { it.name == 'key_analysis_all_key_count' }.value == 8
 
         when:
+        def isAnalysisEnd = keyAnalysisHandler.innerTask.doMyTask()
+        then:
+        isAnalysisEnd
+        keyAnalysisHandler.innerTask.doMyTaskSkipTimes > 0
+
+        when:
         int iterateKeyCount = 0
         def f = keyAnalysisHandler.iterateKeys(null, 10, true, { bb, valueLength ->
             println new String(bb) + ': ' + valueLength

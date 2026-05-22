@@ -237,16 +237,20 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     public CompletableFuture<Void> iterateKeys(byte[] beginKeyBytes, int batchSize, boolean isIncludeBeginKey, @NotNull BiConsumer<byte[], Integer> consumer) {
         return eventloop.submit(() -> {
             var iterator = db.newIterator();
-            seekIterator(beginKeyBytes, iterator, isIncludeBeginKey);
+            try {
+                seekIterator(beginKeyBytes, iterator, isIncludeBeginKey);
 
-            int count = 0;
-            while (iterator.isValid() && count < batchSize) {
-                var keyBytes = iterator.key();
-                var valueBytes = iterator.value();
-                var valueLengthAsInt = ByteBuffer.wrap(valueBytes).getInt();
-                consumer.accept(keyBytes, valueLengthAsInt);
-                iterator.next();
-                count++;
+                int count = 0;
+                while (iterator.isValid() && count < batchSize) {
+                    var keyBytes = iterator.key();
+                    var valueBytes = iterator.value();
+                    var valueLengthAsInt = ByteBuffer.wrap(valueBytes).getInt();
+                    consumer.accept(keyBytes, valueLengthAsInt);
+                    iterator.next();
+                    count++;
+                }
+            } finally {
+                iterator.close();
             }
         });
     }
@@ -258,35 +262,39 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         return eventloop.submit(AsyncComputation.of(() -> {
             var result = new ArrayList<String>();
             var iterator = db.newIterator();
-            seekIterator(beginKeyBytes, iterator, false);
+            try {
+                seekIterator(beginKeyBytes, iterator, false);
 
-            while (iterator.isValid() && result.size() < expectedCount) {
-                boolean isKeyMatch = true;
-                boolean isValueMatch = true;
+                while (iterator.isValid() && result.size() < expectedCount) {
+                    boolean isKeyMatch = true;
+                    boolean isValueMatch = true;
 
-                var keyBytes = iterator.key();
-                var key = Wal.keyString(keyBytes);
+                    var keyBytes = iterator.key();
+                    var key = Wal.keyString(keyBytes);
 
-                if (keyFilter != null) {
-                    isKeyMatch = keyFilter.test(key);
-                }
-
-                if (isKeyMatch) {
-                    if (valueBytesAsIntFilter != null) {
-                        var valueBytes = iterator.value();
-                        var valueLengthAsInt = ByteBuffer.wrap(valueBytes).getInt();
-                        isValueMatch = valueBytesAsIntFilter.test(valueLengthAsInt);
+                    if (keyFilter != null) {
+                        isKeyMatch = keyFilter.test(key);
                     }
+
+                    if (isKeyMatch) {
+                        if (valueBytesAsIntFilter != null) {
+                            var valueBytes = iterator.value();
+                            var valueLengthAsInt = ByteBuffer.wrap(valueBytes).getInt();
+                            isValueMatch = valueBytesAsIntFilter.test(valueLengthAsInt);
+                        }
+                    }
+
+                    if (isKeyMatch && isValueMatch) {
+                        result.add(key);
+                    }
+
+                    iterator.next();
                 }
 
-                if (isKeyMatch && isValueMatch) {
-                    result.add(key);
-                }
-
-                iterator.next();
+                return result;
+            } finally {
+                iterator.close();
             }
-
-            return result;
         }));
     }
 
@@ -294,22 +302,26 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         return eventloop.submit(AsyncComputation.of(() -> {
             var result = new ArrayList<String>();
             var iterator = db.newIterator();
-            iterator.seek(Wal.keyBytes(prefix));
+            try {
+                iterator.seek(Wal.keyBytes(prefix));
 
-            while (iterator.isValid() && result.size() < maxCount) {
-                var keyBytes = iterator.key();
-                var key = Wal.keyString(keyBytes);
-                if (key.startsWith(prefix)) {
-                    if (pattern.matcher(key).matches()) {
-                        result.add(key);
+                while (iterator.isValid() && result.size() < maxCount) {
+                    var keyBytes = iterator.key();
+                    var key = Wal.keyString(keyBytes);
+                    if (key.startsWith(prefix)) {
+                        if (pattern.matcher(key).matches()) {
+                            result.add(key);
+                        }
+                    } else {
+                        break;
                     }
-                } else {
-                    break;
+                    iterator.next();
                 }
-                iterator.next();
-            }
 
-            return result;
+                return result;
+            } finally {
+                iterator.close();
+            }
         }));
     }
 

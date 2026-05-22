@@ -197,20 +197,24 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
         }
 
         var iterator = db.newIterator();
-        if (lastIterateKeyBytes != null) {
-            iterator.seek(lastIterateKeyBytes);
-            if (!iterator.isValid()) {
+        try {
+            if (lastIterateKeyBytes != null) {
+                iterator.seek(lastIterateKeyBytes);
+                if (!iterator.isValid()) {
+                    iterator.seekToFirst();
+                    log.warn("Key analysis task iterator seek to {} failed, seek to first again.", new String(lastIterateKeyBytes));
+                    topKPrefixCounts.clear();
+                }
+            } else {
                 iterator.seekToFirst();
-                log.warn("Key analysis task iterator seek to {} failed, seek to first again.", new String(lastIterateKeyBytes));
+                log.warn("Key analysis task iterator seek to first again.");
                 topKPrefixCounts.clear();
             }
-        } else {
-            iterator.seekToFirst();
-            log.warn("Key analysis task iterator seek to first again.");
-            topKPrefixCounts.clear();
-        }
 
-        return iterateAndDoAnalysis(iterator, null);
+            return iterateAndDoAnalysis(iterator, null);
+        } finally {
+            iterator.close();
+        }
     }
 
     public static <V extends Comparable<? super V>> List<Map.Entry<String, V>> sortMapByValues(Map<String, V> map) {
