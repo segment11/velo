@@ -10,6 +10,43 @@ import java.nio.ByteBuffer
 import java.time.Duration
 
 class KeyAnalysisHandlerTest extends Specification {
+    def 'test cleanUp unregisters metrics collector'() {
+        given:
+        KeyAnalysisHandler.keyAnalysisGauge.clearRawGetterList()
+        def keyDir = new File(Consts.persistDir, 'keys-for-analysis')
+        if (!keyDir.exists()) {
+            keyDir.mkdirs()
+        }
+
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+
+        def keyAnalysisHandler = new KeyAnalysisHandler(keyDir, eventloop, Config.create())
+        boolean cleaned = false
+
+        expect:
+        KeyAnalysisHandler.keyAnalysisGauge.rawGetterList.size() == 1
+
+        when:
+        keyAnalysisHandler.cleanUp()
+        cleaned = true
+
+        then:
+        KeyAnalysisHandler.keyAnalysisGauge.rawGetterList.size() == 0
+
+        cleanup:
+        if (keyAnalysisHandler != null && !cleaned) {
+            keyAnalysisHandler.cleanUp()
+        }
+        KeyAnalysisHandler.keyAnalysisGauge.clearRawGetterList()
+        eventloop.breakEventloop()
+    }
+
     def 'test addCount increments for sampled add events'() {
         given:
         def keyDir = new File(Consts.persistDir, 'keys-for-analysis')

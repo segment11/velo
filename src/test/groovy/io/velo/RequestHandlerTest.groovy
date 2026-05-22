@@ -29,6 +29,28 @@ class RequestHandlerTest extends Specification {
     final byte netWorkers = 1
     final short slotNumber = 1
 
+    def 'test stop unregisters metrics collectors'() {
+        given:
+        RequestHandler.requestHandlerGauge.clearRawGetterList()
+        CompressStats.compressStatsGauge.clearRawGetterList()
+        def requestHandler = new RequestHandler(workerId, netWorkers, slotNumber, new SnowFlake(1, 1), Config.create())
+
+        expect:
+        RequestHandler.requestHandlerGauge.rawGetterList.size() == 1
+        CompressStats.compressStatsGauge.rawGetterList.size() == 1
+
+        when:
+        requestHandler.stop()
+
+        then:
+        RequestHandler.requestHandlerGauge.rawGetterList.size() == 0
+        CompressStats.compressStatsGauge.rawGetterList.size() == 0
+
+        cleanup:
+        RequestHandler.requestHandlerGauge.clearRawGetterList()
+        CompressStats.compressStatsGauge.clearRawGetterList()
+    }
+
     def 'test malformed http basic auth returns auth failed'() {
         given:
         def oldPassword = ConfForGlobal.PASSWORD

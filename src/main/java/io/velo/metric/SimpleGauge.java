@@ -44,8 +44,9 @@ public class SimpleGauge extends Collector {
     /**
      * @param rawGetter the raw getter to add
      */
-    public void addRawGetter(RawGetter rawGetter) {
+    public Runnable addRawGetter(RawGetter rawGetter) {
         rawGetterList.add(rawGetter);
+        return () -> rawGetterList.remove(rawGetter);
     }
 
     /** Clears all registered raw getters. */

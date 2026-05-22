@@ -58,6 +58,8 @@ public class RequestHandler {
 
     final CompressStats compressStats;
 
+    private Runnable metricsUnregister;
+
     final TrainSampleJob trainSampleJob;
     final List<TrainSampleJob.TrainSampleKV> sampleToTrainList = new CopyOnWriteArrayList<>();
 
@@ -69,6 +71,10 @@ public class RequestHandler {
     void stop() {
         System.out.println("Worker " + workerId + " stopped callback");
         isStopped = true;
+        if (metricsUnregister != null) {
+            metricsUnregister.run();
+        }
+        compressStats.cleanUp();
     }
 
     @Override
@@ -593,7 +599,7 @@ public class RequestHandler {
     }
 
     private void initMetricsCollect() {
-        requestHandlerGauge.addRawGetter(() -> {
+        metricsUnregister = requestHandlerGauge.addRawGetter(() -> {
             var labelValues = List.of(workerIdStr);
 
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();

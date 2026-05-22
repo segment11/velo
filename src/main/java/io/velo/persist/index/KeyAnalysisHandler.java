@@ -48,6 +48,8 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     // null when do unit test
     private KeyAnalysisTask innerTask;
 
+    private Runnable metricsUnregister;
+
     @TestOnly
     public KeyAnalysisTask getInnerTask() {
         return innerTask;
@@ -349,7 +351,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
     private void initMetricsCollect() {
         // only first slot show global metrics
-        keyAnalysisGauge.addRawGetter(() -> {
+        metricsUnregister = keyAnalysisGauge.addRawGetter(() -> {
             var labelValues = List.of("-1");
 
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
@@ -367,6 +369,9 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     public void cleanUp() {
         isStopped = true;
         System.out.println("Key analysis handler scheduler stopped");
+        if (metricsUnregister != null) {
+            metricsUnregister.run();
+        }
 
         db.close();
         System.out.println("Close key analysis db");

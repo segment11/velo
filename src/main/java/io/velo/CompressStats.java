@@ -11,6 +11,7 @@ import java.util.List;
  * Tracks various metrics related to compression and decompression processes.
  */
 public class CompressStats {
+    private final Runnable metricsUnregister;
     /**
      * Total count of raw data items processed.
      */
@@ -53,7 +54,7 @@ public class CompressStats {
      * @param prefix the prefix used for metric labels
      */
     public CompressStats(String name, String prefix) {
-        compressStatsGauge.addRawGetter(() -> {
+        metricsUnregister = compressStatsGauge.addRawGetter(() -> {
             var labelValues = List.of(name);
 
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
@@ -78,6 +79,10 @@ public class CompressStats {
 
             return map;
         });
+    }
+
+    public void cleanUp() {
+        metricsUnregister.run();
     }
 
     /**
