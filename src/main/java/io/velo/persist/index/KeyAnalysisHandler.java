@@ -59,7 +59,6 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
     long addLoopCount = 0;
     long addCount = 0;
-    long addValueLengthTotal = 0;
 
     volatile boolean isKeyAnalysisNumberFull = false;
 
@@ -106,16 +105,6 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         log.warn("Key analysis db created, keysDir={}", keysDir.getAbsolutePath());
 
         this.addCount = db.getLongProperty("rocksdb.estimate-num-keys");
-
-        long total = 0;
-        var iter = db.newIterator();
-        iter.seekToFirst();
-        while (iter.isValid()) {
-            var valueBytes = iter.value();
-            total += ByteBuffer.wrap(valueBytes).getInt() >> 8;
-            iter.next();
-        }
-        this.addValueLengthTotal = total;
     }
 
     public KeyAnalysisHandler(File keysDir, Eventloop eventloop, Config persistConfig) throws RocksDBException {
@@ -158,13 +147,8 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
             db.put(keyBytes, bytes);
 
-            var newValueLength = valueLengthHigh24WithShortTypeLow8 >> 8;
-            if (oldValueBytes != null) {
-                var oldValueLength = ByteBuffer.wrap(oldValueBytes).getInt() >> 8;
-                addValueLengthTotal += (newValueLength - oldValueLength);
-            } else {
+            if (oldValueBytes == null) {
                 addCount++;
-                addValueLengthTotal += newValueLength;
             }
 
             if (addCount >= keyAnalysisNumberTotal) {
@@ -227,7 +211,6 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         this.innerTask = new KeyAnalysisTask(this, db, this.innerTask);
 
         addCount = 0;
-        addValueLengthTotal = 0;
 
         isKeyAnalysisNumberFull = false;
     }
@@ -380,9 +363,6 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
             map.put("key_analysis_add_count", new SimpleGauge.ValueWithLabelValues((double) addCount, labelValues));
             if (addCount > 0) {
                 map.put("key_analysis_all_key_count", new SimpleGauge.ValueWithLabelValues((double) allKeyCount(), labelValues));
-
-                var addValueLengthAvg = (double) addValueLengthTotal / addCount;
-                map.put("key_analysis_add_value_length_avg", new SimpleGauge.ValueWithLabelValues(addValueLengthAvg, labelValues));
             }
 
             return map;

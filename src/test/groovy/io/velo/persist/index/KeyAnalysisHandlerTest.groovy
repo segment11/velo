@@ -50,8 +50,7 @@ class KeyAnalysisHandlerTest extends Specification {
         samples.find { it.name == 'key_analysis_add_count' }.value == 2
         !keyAnalysisHandler.isKeyAnalysisNumberFull
 
-        when: 'close and reopen DB to verify addValueLengthTotal is restored'
-        def addValueLengthTotalBefore = keyAnalysisHandler.addValueLengthTotal
+        when: 'close and reopen DB to verify addCount is restored'
         keyAnalysisHandler.cleanUp()
         Thread.sleep(500)
 
@@ -66,8 +65,6 @@ class KeyAnalysisHandlerTest extends Specification {
 
         then:
         handler2.addCount == 2
-        handler2.addValueLengthTotal == addValueLengthTotalBefore
-        handler2.addValueLengthTotal == 20 // 2 keys * 10 bytes each
 
         cleanup:
         handler2.flushdb()
@@ -127,7 +124,7 @@ class KeyAnalysisHandlerTest extends Specification {
         def metrics = KeyAnalysisHandler.keyAnalysisGauge.collect()
         def samples = metrics[0].samples
         then:
-        samples.size() == 3
+        samples.size() == 2
         samples.find { it.name == 'key_analysis_add_count' }.value == 10
         samples.find { it.name == 'key_analysis_all_key_count' }.value == 8
 
