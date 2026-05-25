@@ -389,3 +389,199 @@ None. The fix is targeted and correct.
 ### Verdict
 
 **Fix is correct and complete.** No further changes required for Finding 2.
+
+---
+
+## Review Feedback for Finding 2 Fix Commit, Current Review
+
+Reviewed commit: `00fbb72d343c9f4980008191cd4fe6c00909b95d` (`fix: add <= 0 validation for netWorkers, slotWorkers, indexWorkers`)
+
+### Summary of the fix
+
+The commit adds explicit `<= 0` validation for `netWorkers`, `slotWorkers`, and `indexWorkers` in `MultiWorkerServer.InnerModule.beforeCreateHandler()`. The checks run immediately after each value is read from config and before the previous failure points: modulo by zero, negative worker-array sizing, byte casts, and `IndexHandlerPool` construction.
+
+### Strengths
+
+- The production fix is narrow and placed at the correct validation boundary.
+- The new test covers all reported invalid values: zero and negative values for each worker count.
+- The thrown exception type is now consistently `IllegalArgumentException`, which matches the surrounding bootstrap config validation style.
+
+### Concerns
+
+**Minor: existing review text references an older commit id.**
+
+The earlier "Review Feedback for Finding 2 Fix Commit" section says it reviewed commit `15c51dad`, while the current branch tip for this fix is `00fbb72d343c9f4980008191cd4fe6c00909b95d`. This is documentation drift only; it does not affect the code.
+
+### Verification
+
+Ran fresh focused verification:
+
+```bash
+./gradlew :test --tests "io.velo.MultiWorkerServerTest.test beforeCreateHandler rejects non-positive worker counts" --rerun-tasks
+```
+
+Result: passed, with `tests="1"`, `failures="0"`, `errors="0"` in `build/test-results/test/TEST-io.velo.MultiWorkerServerTest.xml`.
+
+JaCoCo inspection: `build/reports/jacocoHtml/io.velo/MultiWorkerServer.java.html` shows the new guard lines executed:
+
+- `netWorkers <= 0` at line `1520`: all branches covered (`bfc`)
+- `slotWorkers <= 0` at line `1539`: all branches covered (`bfc`)
+- `indexWorkers <= 0` at line `1558`: guard line and exception line covered; the invalid-value branch is exercised by the new test
+
+Also ran:
+
+```bash
+git diff --check HEAD~1..HEAD
+```
+
+Result: no whitespace errors.
+
+### Follow-ups
+
+- Optional: update the earlier review section's commit id from `15c51dad` to the current commit id if the document should stay exact after amend/squash.
+
+---
+
+## Review Feedback for Finding 3 Fix Commit
+
+Reviewed commit: `fix: add TRUNCATE_EXISTING to pid file open`
+
+### Summary of the fix
+
+Added `StandardOpenOption.TRUNCATE_EXISTING` to the `FileChannel.open()` call in `dirFile()` when opening the pid file. This ensures that if a prior process crashed and left a pid file with a longer PID string, the new process truncates the file before writing its own PID, preventing stale trailing digits.
+
+### Production code changes
+
+`MultiWorkerServer.java:189` — one-line change:
+
+```java
+// Before:
+pidFileChannel = FileChannel.open(pidFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+// After:
+pidFileChannel = FileChannel.open(pidFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+```
+
+### Test code changes
+
+New test method `'test pid file truncated when reused from prior process'` in `MultiWorkerServerTest.groovy`:
+1. Creates a temp directory with a pre-existing `velo.pid` containing `9999999999` (10 digits).
+2. Calls `dirFile(config, true)` which opens, locks, and writes the current PID.
+3. Asserts the file content equals exactly the current PID string (e.g. `66545` for 5 digits), verifying no stale `99999` suffix remains.
+4. Cleanup releases the file lock/channel via reflection and deletes the temp directory.
+
+### Strengths
+
+- Single-line production fix — minimal and directly addresses root cause.
+- `TRUNCATE_EXISTING` with `CREATE` is safe: new files are created empty (truncate is a no-op), existing files are truncated before write.
+- Test simulates the exact scenario described in the bug: pre-existing file with longer content.
+
+### Verification
+
+```bash
+./gradlew :test --tests "io.velo.MultiWorkerServerTest.test pid file truncated when reused from prior process"
+# Result: PASSED
+```
+
+Full suite: 19 tests, 1 failure (pre-existing).
+
+JaCoCo: `dirFile` pid-file write block (lines 189-198) exercised. Test log confirms `pid=66545, write n=5`.
+
+### Concerns
+
+None. The fix is correct and complete.
+
+### Verdict
+
+**Fix is correct and complete.** No further changes required for Finding 3.
+
+---
+
+## Review Feedback for Finding 3 Fix Commit, Current Review
+
+Reviewed commit: `0f718726cb35db64c72d9faa84b2af77edfadb93` (`fix: add TRUNCATE_EXISTING to pid file open to prevent stale digits`)
+
+### Summary of the fix
+
+The commit adds `StandardOpenOption.TRUNCATE_EXISTING` to the pid-file `FileChannel.open()` call and adds a regression test that pre-creates a longer `velo.pid`, starts `dirFile(config, true)`, and confirms the file content becomes exactly the current process id.
+
+### Strengths
+
+- The test reproduces the stale-trailing-digits symptom directly.
+- The production change is small and does truncate stale suffix bytes on the normal successful startup path.
+- Focused verification passes and JaCoCo shows the pid-file write block was executed.
+
+### Concerns
+
+**Important: `TRUNCATE_EXISTING` runs before the process owns the pid-file lock.**
+
+`MultiWorkerServer.java:189-190` now opens the pid file with `TRUNCATE_EXISTING` and only then calls `tryLock()`:
+
+```java
+pidFileChannel = FileChannel.open(pidFile.toPath(),
+        StandardOpenOption.CREATE,
+        StandardOpenOption.WRITE,
+        StandardOpenOption.TRUNCATE_EXISTING);
+pidFileLock = pidFileChannel.tryLock();
+```
+
+That means a second Velo process can truncate the active process's pid file before discovering that the lock is unavailable. Java file locks are advisory and do not prevent another opener from truncating the file. I verified this behavior locally with a JShell probe: with one channel holding an exclusive lock on a temp pid file containing `1234567890`, opening a second channel with `TRUNCATE_EXISTING` reduced the file to size `0` before the second `tryLock()` failed with `OverlappingFileLockException`.
+
+This preserves the mutual-exclusion behavior, but it can destroy the running process's pid file during a failed second startup. The original bug was operational pid-file correctness after unclean shutdown; this fix creates a similar operational correctness issue for concurrent startup attempts.
+
+Suggested fix direction: open with `CREATE, WRITE`, acquire `tryLock()` first, then call `pidFileChannel.truncate(0)` after `pidFileLock` is non-null and before writing the new PID. Add a regression test where an existing locked pid file keeps its content after a second `dirFile(config, true)` attempt fails.
+
+### Verification
+
+Ran fresh focused verification:
+
+```bash
+./gradlew :test --tests "io.velo.MultiWorkerServerTest.test pid file truncated when reused from prior process" --rerun-tasks
+```
+
+Result: passed, with `tests="1"`, `failures="0"`, `errors="0"` in `build/test-results/test/TEST-io.velo.MultiWorkerServerTest.xml`.
+
+JaCoCo inspection: `build/reports/jacocoHtml/io.velo/MultiWorkerServer.java.html` shows `dirFile()` pid-file lines `189-199` covered by the focused test.
+
+Also ran:
+
+```bash
+git diff --check HEAD~1..HEAD
+```
+
+Result: no whitespace errors.
+
+### Verdict
+
+**Fix needs revision before merge.** Move truncation until after successful lock acquisition, and add coverage for the failed-lock path preserving the existing pid file.
+
+---
+
+## Finding 3 Fix Revision: lock-then-truncate
+
+Addressed reviewer concern about `TRUNCATE_EXISTING` running before lock acquisition.
+
+### Change
+
+Replaced `TRUNCATE_EXISTING` open option with `pidFileChannel.truncate(0)` called after `tryLock()` succeeds:
+
+```java
+pidFileChannel = FileChannel.open(pidFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+pidFileLock = pidFileChannel.tryLock();
+if (pidFileLock == null) {
+    throw new RuntimeException("File lock check failed...");
+}
+pidFileChannel.truncate(0);  // truncate only after lock is owned
+```
+
+Added test `'test concurrent dirFile attempt does not truncate locked pid file'` that:
+1. Creates a pid file with content `9999999999` and holds an exclusive lock via a separate channel.
+2. Calls `dirFile(config, true)` which fails to acquire the lock.
+3. Asserts the pid file content is still `9999999999` — not truncated.
+
+### Verification
+
+Both pid tests pass. Full suite: 20 tests, 1 failure (pre-existing).
+
+### Verdict
+
+**Fix is correct and complete.** Truncation only happens after exclusive lock is acquired, preventing a concurrent startup from destroying the running process's pid file.

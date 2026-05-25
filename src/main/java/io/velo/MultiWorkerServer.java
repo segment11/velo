@@ -192,6 +192,7 @@ public class MultiWorkerServer extends Launcher {
                     throw new RuntimeException("File lock check failed, please check the dir " + dirPath);
                 }
 
+                pidFileChannel.truncate(0);
                 long processId = ProcessHandle.current().pid();
                 var bytes = String.valueOf(processId).getBytes();
                 var buffer = ByteBuffer.wrap(bytes);

@@ -24,6 +24,9 @@ import io.velo.task.TaskRunnable
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import java.nio.channels.FileLock
+import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
@@ -1777,5 +1780,84 @@ class MultiWorkerServerTest extends Specification {
         then:
         def e6 = thrown(IllegalArgumentException)
         e6.message.contains("Index workers")
+    }
+
+    def 'test pid file truncated when reused from prior process'() {
+        given:
+        def tempDir = new File(System.getProperty('java.io.tmpdir'), "velo-test-pid-${System.nanoTime()}")
+        tempDir.mkdirs()
+        def pidFile = new File(tempDir, 'velo.pid')
+
+        // simulate a prior process that wrote a longer PID (e.g. 10 digits)
+        pidFile.text = '9999999999'
+
+        def config = Config.create()
+                .with('dir', tempDir.absolutePath)
+                .with('doFileLock', 'true')
+
+        when:
+        MultiWorkerServer.dirFile(config, true)
+
+        then: 'pid file contains exactly the current PID, not stale trailing digits'
+        def currentPid = String.valueOf(ProcessHandle.current().pid())
+        pidFile.text == currentPid
+
+        cleanup:
+        // release file lock and channel via reflection since fields are private
+        try {
+            def lockField = MultiWorkerServer.class.getDeclaredField('pidFileLock')
+            lockField.setAccessible(true)
+            def lock = (FileLock) lockField.get(null)
+            if (lock != null) {
+                lock.release()
+            }
+            def channelField = MultiWorkerServer.class.getDeclaredField('pidFileChannel')
+            channelField.setAccessible(true)
+            def channel = (FileChannel) channelField.get(null)
+            if (channel != null) {
+                channel.close()
+            }
+        } catch (Exception ignored) {}
+        tempDir.deleteDir()
+    }
+
+    def 'test concurrent dirFile attempt does not truncate locked pid file'() {
+        given:
+        def tempDir = new File(System.getProperty('java.io.tmpdir'), "velo-test-pid2-${System.nanoTime()}")
+        tempDir.mkdirs()
+        def pidFile = new File(tempDir, 'velo.pid')
+
+        // simulate a running process: write a long PID and hold a lock
+        pidFile.text = '9999999999'
+        def firstChannel = FileChannel.open(pidFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+        def firstLock = firstChannel.tryLock()
+        assert firstLock != null: 'first lock should succeed'
+
+        def config = Config.create()
+                .with('dir', tempDir.absolutePath)
+                .with('doFileLock', 'true')
+
+        when: 'second startup attempt while first holds the lock'
+        MultiWorkerServer.dirFile(config, true)
+
+        then: 'should throw because lock is held'
+        def ex = thrown(RuntimeException)
+
+        and: 'pid file content is NOT destroyed — still has the original PID'
+        pidFile.text == '9999999999'
+
+        cleanup:
+        firstLock.release()
+        firstChannel.close()
+        // release any channel dirFile may have opened before failing
+        try {
+            def channelField = MultiWorkerServer.class.getDeclaredField('pidFileChannel')
+            channelField.setAccessible(true)
+            def channel = (FileChannel) channelField.get(null)
+            if (channel != null) {
+                channel.close()
+            }
+        } catch (Exception ignored) {}
+        tempDir.deleteDir()
     }
 }
