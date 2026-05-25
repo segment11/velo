@@ -4,8 +4,24 @@ import io.activej.eventloop.Eventloop
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicInteger
 
 class PrimaryTaskRunnableTest extends Specification {
+    def 'test stopped runnable does not execute task callback'() {
+        given:
+        def callCount = new AtomicInteger()
+        def primaryTaskRunnable = new PrimaryTaskRunnable((i) -> {
+            callCount.incrementAndGet()
+        })
+
+        when:
+        primaryTaskRunnable.stop()
+        primaryTaskRunnable.run()
+
+        then:
+        callCount.get() == 0
+    }
+
     def 'test run'() {
         given:
         def primaryTaskRunnable = new PrimaryTaskRunnable((i) -> {

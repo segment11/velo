@@ -29,6 +29,10 @@ public class PrimaryTaskRunnable implements Runnable {
     /** Executes the task, increments loop count, and reschedules after 1s. */
     @Override
     public void run() {
+        if (isStopped) {
+            return;
+        }
+
         task.accept(loopCount);
         loopCount++;
 
