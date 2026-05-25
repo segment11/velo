@@ -1090,7 +1090,7 @@ class MultiWorkerServerTest extends Specification {
         then:
         exception
 
-        when:
+        when: 'indexWorkers > cpu number should still be rejected'
         exception = false
         def config55 = Config.create()
                 .with("indexWorkers", (cpuNumber + 1).toString())
@@ -1709,5 +1709,73 @@ class MultiWorkerServerTest extends Specification {
             System.clearProperty('io.activej.reactor.net.ServerSocketSettings.receiveBufferSize')
         }
         tempFile.delete()
+    }
+
+    def 'test beforeCreateHandler rejects non-positive worker counts'() {
+        given:
+        def m1 = new MultiWorkerServer.InnerModule()
+        def c = ConfForSlot.global
+        def snowFlakes1 = new SnowFlake[1]
+        snowFlakes1[0] = new SnowFlake(1, 1)
+
+        when: 'netWorkers=0 should be rejected'
+        def configNetZero = Config.create()
+                .with("slotNumber", "1")
+                .with("netWorkers", "0")
+        m1.beforeCreateHandler(c, snowFlakes1, configNetZero)
+        then:
+        def e1 = thrown(IllegalArgumentException)
+        e1.message.contains("Net workers")
+
+        when: 'netWorkers=-1 should be rejected'
+        def configNetNeg = Config.create()
+                .with("slotNumber", "1")
+                .with("netWorkers", "-1")
+        m1.beforeCreateHandler(c, snowFlakes1, configNetNeg)
+        then:
+        def e2 = thrown(IllegalArgumentException)
+        e2.message.contains("Net workers")
+
+        when: 'slotWorkers=0 should be rejected'
+        def configSlotZero = Config.create()
+                .with("slotNumber", "1")
+                .with("netWorkers", "1")
+                .with("slotWorkers", "0")
+        m1.beforeCreateHandler(c, snowFlakes1, configSlotZero)
+        then:
+        def e3 = thrown(IllegalArgumentException)
+        e3.message.contains("Slot workers")
+
+        when: 'slotWorkers=-1 should be rejected'
+        def configSlotNeg = Config.create()
+                .with("slotNumber", "1")
+                .with("netWorkers", "1")
+                .with("slotWorkers", "-1")
+        m1.beforeCreateHandler(c, snowFlakes1, configSlotNeg)
+        then:
+        def e4 = thrown(IllegalArgumentException)
+        e4.message.contains("Slot workers")
+
+        when: 'indexWorkers=0 should be rejected'
+        def configIdxZero = Config.create()
+                .with("slotNumber", "1")
+                .with("netWorkers", "1")
+                .with("slotWorkers", "1")
+                .with("indexWorkers", "0")
+        m1.beforeCreateHandler(c, snowFlakes1, configIdxZero)
+        then:
+        def e5 = thrown(IllegalArgumentException)
+        e5.message.contains("Index workers")
+
+        when: 'indexWorkers=-1 should be rejected'
+        def configIdxNeg = Config.create()
+                .with("slotNumber", "1")
+                .with("netWorkers", "1")
+                .with("slotWorkers", "1")
+                .with("indexWorkers", "-1")
+        m1.beforeCreateHandler(c, snowFlakes1, configIdxNeg)
+        then:
+        def e6 = thrown(IllegalArgumentException)
+        e6.message.contains("Index workers")
     }
 }

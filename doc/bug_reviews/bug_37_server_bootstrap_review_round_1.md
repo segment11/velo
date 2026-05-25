@@ -331,3 +331,61 @@ All 16 existing `MultiWorkerServerTest` tests pass. The 1 failure (`test mock in
 ### Verdict
 
 **Fix is correct and complete.** No further changes required for Finding 1.
+
+---
+
+## Review Feedback for Finding 2 Fix Commit
+
+Reviewed commit: `15c51dad` (`fix: add <= 0 validation for netWorkers, slotWorkers, indexWorkers`)
+
+### Summary of the fix
+
+Added `<= 0` checks for all three worker counts (`netWorkers`, `slotWorkers`, `indexWorkers`) in `beforeCreateHandler()`, placed immediately after reading each value from config and before any modulo/cast/side effects. Each check throws `IllegalArgumentException` with a descriptive message.
+
+### Production code changes
+
+`MultiWorkerServer.java` — three new validation blocks inserted at lines 1519-1521 (`netWorkers`), 1538-1540 (`slotWorkers`), 1554-1556 (`indexWorkers`):
+
+```java
+if (netWorkers <= 0) {
+    throw new IllegalArgumentException("Net workers should be greater than 0");
+}
+// same pattern for slotWorkers and indexWorkers
+```
+
+### Test code changes
+
+New test method `'test beforeCreateHandler rejects non-positive worker counts'` in `MultiWorkerServerTest.groovy` covering all 6 cases:
+- `netWorkers=0` → `IllegalArgumentException`
+- `netWorkers=-1` → `IllegalArgumentException`
+- `slotWorkers=0` → `IllegalArgumentException`
+- `slotWorkers=-1` → `IllegalArgumentException`
+- `indexWorkers=0` → `IllegalArgumentException`
+- `indexWorkers=-1` → `IllegalArgumentException`
+
+Each assertion verifies the exception message contains the relevant worker name.
+
+### Strengths
+
+- Fix is minimal — only adds the missing guard, no refactoring or restructuring.
+- Guards are placed before any arithmetic or cast, preventing `ArithmeticException` and `ArrayIndexOutOfBoundsException` from leaking through.
+- Test is a clean, isolated Spock method using `thrown()` instead of try-catch, following the project's preferred pattern for expected exceptions.
+
+### Verification
+
+```bash
+./gradlew :test --tests "io.velo.MultiWorkerServerTest.test beforeCreateHandler rejects non-positive worker counts"
+# Result: PASSED
+```
+
+Full suite: 18 tests, 1 failure (pre-existing `test mock inject and handle` — `TimeoutException`).
+
+JaCoCo: `beforeCreateHandler` at 44% branch coverage. All 6 new `<= 0` branches are hit by the new test.
+
+### Concerns
+
+None. The fix is targeted and correct.
+
+### Verdict
+
+**Fix is correct and complete.** No further changes required for Finding 2.

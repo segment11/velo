@@ -1517,6 +1517,9 @@ public class MultiWorkerServer extends Launcher {
 
             var cpuNumber = Runtime.getRuntime().availableProcessors();
             int netWorkers = config.get(ofInteger(), "netWorkers", 1);
+            if (netWorkers <= 0) {
+                throw new IllegalArgumentException("Net workers should be greater than 0");
+            }
             if (netWorkers > MAX_NET_WORKERS) {
                 throw new IllegalArgumentException("Net workers too large, net workers should be less than " + MAX_NET_WORKERS);
             }
@@ -1533,6 +1536,9 @@ public class MultiWorkerServer extends Launcher {
             log.warn("Global config, netWorkers={}", ConfForGlobal.netWorkers);
 
             int slotWorkers = config.get(ofInteger(), "slotWorkers", 1);
+            if (slotWorkers <= 0) {
+                throw new IllegalArgumentException("Slot workers should be greater than 0");
+            }
             if (slotWorkers > MAX_SLOT_WORKERS) {
                 throw new IllegalArgumentException("Slot workers too large, slot workers should be less than " + MAX_SLOT_WORKERS);
             }
@@ -1549,6 +1555,9 @@ public class MultiWorkerServer extends Launcher {
             log.warn("Global config, slotWorkers={}", ConfForGlobal.slotWorkers);
 
             int indexWorkers = config.get(ofInteger(), "indexWorkers", 1);
+            if (indexWorkers <= 0) {
+                throw new IllegalArgumentException("Index workers should be greater than 0");
+            }
             if (indexWorkers > MAX_INDEX_WORKERS) {
                 throw new IllegalArgumentException("Index workers too large, index workers should be less than " + MAX_INDEX_WORKERS);
             }
