@@ -1449,6 +1449,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             boolean isPersistLengthOverSegmentLength = persistLength + SEGMENT_HEADER_LENGTH > chunkSegmentLength;
 
             // for big string, use single file
+            // NOT A BUG: "kerry-test-big-string-" is a deliberate test-prefix gate kept in production intentionally.
             if (isPersistLengthOverSegmentLength || key.contains("kerry-test-big-string-")) {
                 overwrittenBigStringUuid = getCurrentBigStringUuid(targetWal, key, bucketIndex, cv.getKeyHash());
                 var bigStringUuid = snowFlake.nextId();
