@@ -1650,4 +1650,64 @@ class MultiWorkerServerTest extends Specification {
         then:
         ConfForSlot.global.confBucket.initialSplitNumber == (byte) 9
     }
+
+    def 'test prepareConfig respects MAIN_ARGS for socket settings'() {
+        given:
+        def tempFile = File.createTempFile('velo-test-socket-', '.properties')
+        tempFile.deleteOnExit()
+        tempFile.text = '''
+            ApplicationSettings.SocketSettings.sendBufferSize=222222
+            ApplicationSettings.SocketSettings.receiveBufferSize=222222
+            ApplicationSettings.ServerSocketSettings.backlog=333333
+            ApplicationSettings.ServerSocketSettings.receiveBufferSize=333333
+            '''.stripIndent()
+
+        def oldMainArgs = MultiWorkerServer.MAIN_ARGS
+        def oldSendBuf = System.getProperty('io.activej.reactor.net.SocketSettings.sendBufferSize')
+        def oldRecvBuf = System.getProperty('io.activej.reactor.net.SocketSettings.receiveBufferSize')
+        def oldBacklog = System.getProperty('io.activej.reactor.net.ServerSocketSettings.backlog')
+        def oldSsRecvBuf = System.getProperty('io.activej.reactor.net.ServerSocketSettings.receiveBufferSize')
+
+        when: 'prepareConfig with MAIN_ARGS null ignores custom file'
+        MultiWorkerServer.MAIN_ARGS = null
+        MultiWorkerServer.prepareConfig()
+        def sendBufBeforeMainArgs = System.getProperty('io.activej.reactor.net.SocketSettings.sendBufferSize')
+
+        then: 'socket settings come from default config, not our custom file'
+        sendBufBeforeMainArgs != '222222'
+
+        when: 'prepareConfig with MAIN_ARGS set to custom file'
+        MultiWorkerServer.MAIN_ARGS = [tempFile.absolutePath] as String[]
+        MultiWorkerServer.prepareConfig()
+
+        then: 'socket settings come from our custom file'
+        System.getProperty('io.activej.reactor.net.SocketSettings.sendBufferSize') == '222222'
+        System.getProperty('io.activej.reactor.net.SocketSettings.receiveBufferSize') == '222222'
+        System.getProperty('io.activej.reactor.net.ServerSocketSettings.backlog') == '333333'
+        System.getProperty('io.activej.reactor.net.ServerSocketSettings.receiveBufferSize') == '333333'
+
+        cleanup:
+        MultiWorkerServer.MAIN_ARGS = oldMainArgs
+        if (oldSendBuf != null) {
+            System.setProperty('io.activej.reactor.net.SocketSettings.sendBufferSize', oldSendBuf)
+        } else {
+            System.clearProperty('io.activej.reactor.net.SocketSettings.sendBufferSize')
+        }
+        if (oldRecvBuf != null) {
+            System.setProperty('io.activej.reactor.net.SocketSettings.receiveBufferSize', oldRecvBuf)
+        } else {
+            System.clearProperty('io.activej.reactor.net.SocketSettings.receiveBufferSize')
+        }
+        if (oldBacklog != null) {
+            System.setProperty('io.activej.reactor.net.ServerSocketSettings.backlog', oldBacklog)
+        } else {
+            System.clearProperty('io.activej.reactor.net.ServerSocketSettings.backlog')
+        }
+        if (oldSsRecvBuf != null) {
+            System.setProperty('io.activej.reactor.net.ServerSocketSettings.receiveBufferSize', oldSsRecvBuf)
+        } else {
+            System.clearProperty('io.activej.reactor.net.ServerSocketSettings.receiveBufferSize')
+        }
+        tempFile.delete()
+    }
 }

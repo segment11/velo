@@ -812,7 +812,7 @@ public class MultiWorkerServer extends Launcher {
 
     static String[] MAIN_ARGS;
 
-    private static void prepareConfig() {
+    static void prepareConfig() {
         var configFilePath = configFilePath();
         var config = Config.create()
                 .overrideWith(ofProperties(configFilePath, true));
@@ -827,10 +827,6 @@ public class MultiWorkerServer extends Launcher {
         var map1 = serverSocketSettings.toMap();
         log.warn("Reset server socket settings={}", map1);
         map1.forEach((k, v) -> System.setProperty("io.activej.reactor.net.ServerSocketSettings." + k, v));
-    }
-
-    static {
-        prepareConfig();
     }
 
     private static String configFilePath() {
@@ -1644,6 +1640,7 @@ public class MultiWorkerServer extends Launcher {
 
     public static void main(String[] args) throws Exception {
         MAIN_ARGS = args;
+        prepareConfig();
         Launcher launcher = new MultiWorkerServer();
         launcher.launch(args);
     }
