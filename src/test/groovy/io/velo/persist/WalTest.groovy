@@ -5,6 +5,7 @@ import org.apache.commons.io.FileUtils
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
+import java.util.Arrays
 
 class WalTest extends Specification {
     final short slot = 0
@@ -865,6 +866,85 @@ class WalTest extends Specification {
         cleanup:
         wal.clear()
         wal.clear(false)
+        file.delete()
+        fileShortValue.delete()
+    }
+
+    def 'put after rewriteOneGroup uses correct offset - stale offset causes data loss on reload'() {
+        given:
+        def originalGroupBufferSize = Wal.ONE_GROUP_BUFFER_SIZE
+        ConfForSlot.global = ConfForSlot.debugMode
+
+        def file = new File(Consts.slotDir, 'test-rewrite-offset.wal')
+        def fileShortValue = new File(Consts.slotDir, 'test-rewrite-offset-short-value.wal')
+        if (file.exists()) file.delete()
+        if (fileShortValue.exists()) fileShortValue.delete()
+        FileUtils.touch(file)
+        FileUtils.touch(fileShortValue)
+
+        def raf = new RandomAccessFile(file, 'rw')
+        def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
+        def snowFlake = new SnowFlake(1, 1)
+        def oneSlot = new OneSlot(slot)
+
+        def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+        wal.lazyReadFromFile()
+
+        // small buffer: each entry with 40-byte value ≈ 120 bytes encoded (with key "filler" 6 chars)
+        // put same key repeatedly to fill file position, but map has only 1 entry
+        // rewriteOneGroup compacts to 1 entry (~120 bytes) + 4 delimiter = ~124 bytes
+        // then the overflow entry fits easily
+        Wal.ONE_GROUP_BUFFER_SIZE = 500
+
+        when: 'fill WAL file by putting the same key many times (map keeps only last)'
+        def fillerKey = 'filler'
+        def fillerKeyHash = KeyHash.hash(fillerKey.bytes)
+        for (int i = 0; i < 6; i++) {
+            def cv = new CompressedValue()
+            cv.seq = (long) (i + 1)
+            cv.keyHash = fillerKeyHash
+            cv.compressedData = new byte[40]
+            Arrays.fill(cv.compressedData, (byte) 'f')
+            def v = new Wal.V(cv.seq, 0, fillerKeyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                    fillerKey, cv.encode(), false)
+            wal.put(true, fillerKey, v)
+        }
+
+        and: 'put another entry that overflows, triggering rewriteOneGroup'
+        def overflowKey = 'overflow-key-that-is-longer'
+        def overflowKeyHash = KeyHash.hash(overflowKey.bytes)
+        def overflowCv = new CompressedValue()
+        overflowCv.seq = 100L
+        overflowCv.keyHash = overflowKeyHash
+        overflowCv.compressedData = new byte[40]
+        Arrays.fill(overflowCv.compressedData, (byte) 'x')
+        def overflowV = new Wal.V(100L, 0, overflowKeyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                overflowKey, overflowCv.encode(), false)
+
+        def result = wal.put(true, overflowKey, overflowV)
+        def positionAfterOverflow = wal.writePositionShortValue
+        println "position after overflow put: ${positionAfterOverflow}, map size: ${wal.delayToKeyBucketShortValues.size()}"
+
+        then: 'put did not request persist (rewrite succeeded and entry fits)'
+        !result.needPersist()
+
+        when: 'reload WAL from file and verify all entries are readable'
+        def walReloaded = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
+        walReloaded.lazyReadFromFile()
+
+        then: 'both keys are recovered from file after reload'
+        walReloaded.delayToKeyBucketShortValues.size() == 2
+        walReloaded.delayToKeyBucketShortValues.containsKey(fillerKey)
+        walReloaded.delayToKeyBucketShortValues.containsKey(overflowKey)
+        walReloaded.get(overflowKey) == overflowCv.encode()
+        walReloaded.get(fillerKey) != null
+
+        cleanup:
+        Wal.ONE_GROUP_BUFFER_SIZE = originalGroupBufferSize
+        wal.clear()
+        wal.clear(false)
+        raf.close()
+        rafShortValue.close()
         file.delete()
         fileShortValue.delete()
     }

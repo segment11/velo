@@ -848,6 +848,7 @@ public class Wal implements InMemoryEstimate {
                 }
 
                 needPersist = false;
+                offset = newOffset;
             }
 
             if (needPersist) {
