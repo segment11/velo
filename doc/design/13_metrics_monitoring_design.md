@@ -63,6 +63,29 @@ The metrics surface is broader than request counters alone. It includes:
 
 This breadth is the main reason the metrics surface should be documented separately from the pure architecture docs.
 
+## Compression Dashboard Metrics
+
+Compression dashboards should use the compression ratio metric as the primary signal. In Prometheus output this is
+exported by `CompressStats` as `*_compression_ratio` (for example `net_compression_ratio`), where the value is:
+
+```text
+compressed_total_length / total_input_length
+```
+
+Supporting compression gauges (emitted when `totalInputLength > 0`):
+
+- `*_total_input_length` — bytes entering compression accounting (all input, compressed or not).
+- `*_raw_count` — number of items handled without compression.
+
+Compression-only gauges (emitted when `compressedCount > 0`):
+
+- `*_compressed_count` — number of items that were compressed.
+- `*_compressed_total_length` — bytes produced by successful compression.
+- `*_compressed_cost_time_total_ms` — total compression time in milliseconds.
+- `*_compressed_cost_time_avg_us` — average per-item compression time in microseconds.
+
+The key dashboard item remains `*_compression_ratio`.
+
 ## Related Documents
 
 - [Persistence](/home/kerry/ws/velo/doc/design/02_persist_layer_design.md)

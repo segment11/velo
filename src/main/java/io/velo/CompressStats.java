@@ -71,8 +71,6 @@ public class CompressStats {
             if (totalInputLength > 0) {
                 map.put(prefix + "raw_count", new SimpleGauge.ValueWithLabelValues((double) rawCount, labelValues));
                 map.put(prefix + "total_input_length", new SimpleGauge.ValueWithLabelValues((double) totalInputLength, labelValues));
-                // backward-compatible alias (pre-rename metric name)
-                map.put(prefix + "raw_total_length", new SimpleGauge.ValueWithLabelValues((double) totalInputLength, labelValues));
             }
 
             if (compressedCount > 0) {
