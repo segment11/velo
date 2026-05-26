@@ -936,7 +936,7 @@ public abstract class BaseCommand {
 
             if (bigStringNoMemoryCopy.length <= ConfForGlobal.bigStringNoCompressMinSize) {
                 // can do compress
-                compressStats.rawTotalLength += bigStringNoMemoryCopy.length;
+                compressStats.totalInputLength += bigStringNoMemoryCopy.length;
                 var beginT = System.nanoTime();
                 var cr = CompressedValue.compress(valueBytes, bigStringNoMemoryCopy.offset, bigStringNoMemoryCopy.length, Dict.SELF_ZSTD_DICT);
                 var costT = (System.nanoTime() - beginT) / 1000;
@@ -999,7 +999,7 @@ public abstract class BaseCommand {
             }
         }
 
-        compressStats.rawTotalLength += valueBytes.length;
+        compressStats.totalInputLength += valueBytes.length;
 
         var preferDoCompress = valueBytes.length >= DictMap.TO_COMPRESS_MIN_DATA_LENGTH && valueBytes.length <= ConfForGlobal.bigStringNoCompressMinSize;
         var preferDoCompressUseSelfDict = valueBytes.length >= DictMap.TO_COMPRESS_USE_SELF_DICT_MIN_DATA_LENGTH;

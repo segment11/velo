@@ -221,7 +221,7 @@ public class PGroup extends BaseCommand {
         putToOneSlot(s.slot(), s, cv);
 
         // stats
-        compressStats.rawTotalLength += encoded.length;
+        compressStats.totalInputLength += encoded.length;
         compressStats.compressedCount++;
         compressStats.compressedTotalLength += compressed.length;
         compressStats.compressedCostTimeTotalUs += costT;

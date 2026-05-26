@@ -746,7 +746,7 @@ class BaseCommandTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
-    def 'test compressStats rawTotalLength not double counted for numeric set'() {
+    def 'test compressStats totalInputLength not double counted for numeric set'() {
         given:
         def snowFlake = new SnowFlake(1, 1)
 
@@ -765,18 +765,18 @@ class BaseCommandTest extends Specification {
         def sKey = BaseCommand.slot(key, slotNumber)
 
         when:
-        def beforeRawTotalLength = c.compressStats.rawTotalLength
+        def beforeTotalInputLength = c.compressStats.totalInputLength
         // 12345 as long → fits in short (SP_TYPE_NUM_SHORT, 2 bytes)
         c.set('12345'.bytes, sKey, 0, CompressedValue.NO_EXPIRE)
-        def afterRawTotalLength = c.compressStats.rawTotalLength
+        def afterTotalInputLength = c.compressStats.totalInputLength
 
         then:
-        // Bug 5: rawTotalLength should increment exactly once for the stored form.
+        // Bug 5: totalInputLength should increment exactly once for the stored form.
         // '12345' stores as SP_TYPE_NUM_SHORT (2 bytes), not the original 5-byte string.
-        afterRawTotalLength - beforeRawTotalLength == 2
+        afterTotalInputLength - beforeTotalInputLength == 2
     }
 
-    def 'test compressStats rawTotalLength not double counted for non-numeric set'() {
+    def 'test compressStats totalInputLength not double counted for non-numeric set'() {
         given:
         def snowFlake = new SnowFlake(1, 1)
 
@@ -795,13 +795,13 @@ class BaseCommandTest extends Specification {
         def sKey = BaseCommand.slot(key, slotNumber)
 
         when:
-        def beforeRawTotalLength = c.compressStats.rawTotalLength
+        def beforeTotalInputLength = c.compressStats.totalInputLength
         c.set('hello'.bytes, sKey, 0, CompressedValue.NO_EXPIRE)
-        def afterRawTotalLength = c.compressStats.rawTotalLength
+        def afterTotalInputLength = c.compressStats.totalInputLength
 
         then:
-        // Non-numeric value: rawTotalLength should increment by the value length (5).
-        afterRawTotalLength - beforeRawTotalLength == 5
+        // Non-numeric value: totalInputLength should increment by the value length (5).
+        afterTotalInputLength - beforeTotalInputLength == 5
     }
 
     def 'test compressStats rawCount incremented when training is disabled'() {

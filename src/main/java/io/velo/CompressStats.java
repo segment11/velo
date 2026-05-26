@@ -9,23 +9,31 @@ import java.util.List;
 /**
  * Represents compression statistics for monitoring and analysis.
  * Tracks various metrics related to compression and decompression processes.
+ *
+ * <p>Field semantics:
+ * <ul>
+ *   <li>{@code rawCount} — count of items handled but NOT compressed
+ *   <li>{@code compressedCount} — count of items that were compressed
+ *   <li>{@code totalInputLength} — total bytes of all input (compressed + non-compressed)
+ *   <li>{@code compressedTotalLength} — total bytes of compressed output
+ * </ul>
  */
 public class CompressStats {
     private final Runnable metricsUnregister;
     /**
-     * Total count of raw data items processed.
+     * Count of items handled but NOT compressed.
      */
     public long rawCount = 0;
 
     /**
-     * Total count of compressed data items processed.
+     * Count of items that were compressed.
      */
     public long compressedCount = 0;
 
     /**
-     * Total length of raw data in bytes.
+     * Total bytes of all input data (compressed + non-compressed).
      */
-    public long rawTotalLength = 0;
+    public long totalInputLength = 0;
 
     /**
      * Total length of compressed data in bytes.
@@ -65,9 +73,9 @@ public class CompressStats {
                 double costTAvg = (double) compressedCostTimeTotalUs / compressedCount;
                 map.put(prefix + "compressed_cost_time_avg_us", new SimpleGauge.ValueWithLabelValues(costTAvg, labelValues));
 
-                map.put(prefix + "raw_total_length", new SimpleGauge.ValueWithLabelValues((double) rawTotalLength, labelValues));
+                map.put(prefix + "total_input_length", new SimpleGauge.ValueWithLabelValues((double) totalInputLength, labelValues));
                 map.put(prefix + "compressed_total_length", new SimpleGauge.ValueWithLabelValues((double) compressedTotalLength, labelValues));
-                map.put(prefix + "compression_ratio", new SimpleGauge.ValueWithLabelValues((double) compressedTotalLength / rawTotalLength, labelValues));
+                map.put(prefix + "compression_ratio", new SimpleGauge.ValueWithLabelValues((double) compressedTotalLength / totalInputLength, labelValues));
             }
 
             if (decompressedCount > 0) {

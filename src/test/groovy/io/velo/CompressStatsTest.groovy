@@ -18,7 +18,7 @@ class CompressStatsTest extends Specification {
         when:
         compressStats.rawCount = 2
         compressStats.compressedCount = 1
-        compressStats.rawTotalLength = 100
+        compressStats.totalInputLength = 100
         compressStats.decompressedCount = 0
         mfsList = compressStats.compressStatsGauge.collect()
         then:
