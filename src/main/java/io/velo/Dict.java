@@ -1,5 +1,6 @@
 package io.velo;
 
+import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdCompressCtx;
 import com.github.luben.zstd.ZstdDecompressCtx;
 import org.jetbrains.annotations.NotNull;
@@ -205,6 +206,9 @@ public class Dict implements Serializable {
      * @return the compressed byte array
      */
     public byte[] compressByteArray(byte[] src) {
+        if (this == SELF_ZSTD_DICT) {
+            return Zstd.compress(src);
+        }
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
         var r = ctxCompressArray[threadIndex].compress(src);
         compressedCountTotal.add(1);
@@ -224,6 +228,9 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination array
      */
     public int compressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
+        if (this == SELF_ZSTD_DICT) {
+            return (int) Zstd.compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length, Zstd.defaultCompressionLevel());
+        }
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
         var n = ctxCompressArray[threadIndex].compressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
         compressedCountTotal.add(1);
@@ -243,6 +250,9 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination array
      */
     public int decompressByteArray(byte[] dst, int dstOffset, byte[] src, int srcOffset, int length) {
+        if (this == SELF_ZSTD_DICT) {
+            return (int) Zstd.decompressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
+        }
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
         return decompressCtxArray[threadIndex].decompressByteArray(dst, dstOffset, dst.length - dstOffset, src, srcOffset, length);
     }
@@ -259,6 +269,9 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination buffer
      */
     public int compressByteBuffer(ByteBuffer dstBuffer, int dstOffset, int dstSize, ByteBuffer srcBuffer, int srcOffset, int length) {
+        if (this == SELF_ZSTD_DICT) {
+            return (int) Zstd.compressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length, Zstd.defaultCompressionLevel());
+        }
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
         var n = ctxCompressArray[threadIndex].compressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
         compressedCountTotal.add(1);
@@ -279,6 +292,9 @@ public class Dict implements Serializable {
      * @return the number of bytes written to the destination buffer
      */
     public int decompressByteBuffer(ByteBuffer dstBuffer, int dstOffset, int dstSize, ByteBuffer srcBuffer, int srcOffset, int length) {
+        if (this == SELF_ZSTD_DICT) {
+            return (int) Zstd.decompressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
+        }
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getSlotThreadLocalIndexByCurrentThread();
         return decompressCtxArray[threadIndex].decompressDirectByteBuffer(dstBuffer, dstOffset, dstSize, srcBuffer, srcOffset, length);
     }

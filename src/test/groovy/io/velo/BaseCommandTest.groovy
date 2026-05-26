@@ -892,6 +892,36 @@ class BaseCommandTest extends Specification {
         c.compressStats.rawCount == 1
     }
 
+    def 'test regular Dict without initCtx fails with NPE'() {
+        given:
+        // A regular Dict that never had initCtx() called — should fail loudly.
+        def dict = new Dict()
+        dict.dictBytes = new byte[128]
+        def data = ('a' * 100).bytes
+        def compressed = new byte[(int) com.github.luben.zstd.Zstd.compressBound(data.length)]
+
+        when:
+        dict.compressByteArray(compressed, 0, data, 0, data.length)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def 'test SELF_ZSTD_DICT compressByteArray safe to call directly'() {
+        given:
+        // Bug 4: SELF_ZSTD_DICT has a 1-byte dummy dict; direct compress calls could fail.
+        // After fix, direct calls should use plain Zstd (no dict).
+        def data = ('a' * 100).bytes
+        def compressed = new byte[(int) com.github.luben.zstd.Zstd.compressBound(data.length)]
+
+        when:
+        // Direct compressByteArray on SELF_ZSTD_DICT
+        int n = Dict.SELF_ZSTD_DICT.compressByteArray(compressed, 0, data, 0, data.length)
+
+        then:
+        n > 0
+    }
+
     def 'test train dict'() {
         given:
         def snowFlake = new SnowFlake(1, 1)
