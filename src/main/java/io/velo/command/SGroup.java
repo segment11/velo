@@ -529,19 +529,21 @@ public class SGroup extends BaseCommand {
         boolean isReturnExist = false;
         for (int i = 3; i < dd.length; i++) {
             var arg = new String(dd[i]);
-            isNx = "nx".equalsIgnoreCase(arg);
-            isXx = "xx".equalsIgnoreCase(arg);
-            if (isNx || isXx) {
+
+            if ("nx".equalsIgnoreCase(arg)) {
+                isNx = true;
                 continue;
             }
-
-            isKeepTtl = "keepttl".equalsIgnoreCase(arg);
-            if (isKeepTtl) {
+            if ("xx".equalsIgnoreCase(arg)) {
+                isXx = true;
                 continue;
             }
-
-            isReturnExist = "get".equalsIgnoreCase(arg);
-            if (isReturnExist) {
+            if ("keepttl".equalsIgnoreCase(arg)) {
+                isKeepTtl = true;
+                continue;
+            }
+            if ("get".equalsIgnoreCase(arg)) {
+                isReturnExist = true;
                 continue;
             }
 

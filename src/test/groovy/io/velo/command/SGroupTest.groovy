@@ -543,6 +543,51 @@ sunionstore
         reply == ErrorReply.VALUE_TOO_LONG
     }
 
+    def 'test set nx get and xx get preserve flags'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def sGroup = new SGroup(null, null, null)
+        sGroup.byPassGetSet = inMemoryGetSet
+        sGroup.from(BaseCommand.mockAGroup())
+
+        when: 'set a key first'
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = sGroup.execute('set a oldvalue')
+        def slotWithKeyHash = sGroup.slotWithKeyHashListParsed[0]
+        then:
+        reply == OKReply.INSTANCE
+
+        when: 'SET a newvalue NX GET on existing key - NX should prevent write and return nil'
+        reply = sGroup.execute('set a newvalue nx get')
+        then:
+        reply == NilReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+                .cv().compressedData == 'oldvalue'.bytes
+
+        when: 'remove key, SET a value XX GET on non-existing key - XX should prevent write and return nil'
+        inMemoryGetSet.remove(slot, 'a')
+        reply = sGroup.execute('set a newvalue xx get')
+        then:
+        reply == NilReply.INSTANCE
+
+        when: 'SET a value with TTL, then SET with KEEPTTL GET - should preserve TTL'
+        inMemoryGetSet.remove(slot, 'a')
+        reply = sGroup.execute('set a value ex 100')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        def savedExpireAt = inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+                .cv().expireAt
+        reply = sGroup.execute('set a newvalue keepttl get')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).raw == 'value'.bytes
+        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+                .cv().expireAt == savedExpireAt
+    }
+
     def 'test setbit'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
