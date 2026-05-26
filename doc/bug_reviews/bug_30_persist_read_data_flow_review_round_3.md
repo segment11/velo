@@ -526,8 +526,8 @@ collisions.
 
 ## Reviewer Summary
 
-| Finding | Severity | Reviewer status | Notes |
-|---------|----------|-----------------|-------|
-| 1 - `PersistValueMeta.decode` lacks bounds validation | Low-Medium | **Confirmed** | Invalid PVM bytes can reach segment/file/sub-block indexing before clear validation |
-| 2 - Empty big-string transfer marks fetch complete without writing a file | Medium | **Confirmed with impact refinement** | Core bug is real; permanence depends on whether later metadata cleanup is replayed |
-| 3 - `isPvm` discriminator relies on undocumented encoding invariants | Low | **Confirmed as defensive** | No current runtime bug, but needs documentation and regression coverage |
+| Finding | Severity | Reviewer status | Fix status | Notes |
+|---------|----------|-----------------|------------|-------|
+| 1 - `PersistValueMeta.decode` lacks bounds validation | Low-Medium | **Confirmed** | **Fixed** (`4261a5e8`, `8f8929cf`) | `decode()` validates subBlockIndex/segmentIndex/segmentOffset; consumer site guards upper bound |
+| 2 - Empty big-string transfer marks fetch complete without writing a file | Medium | **Confirmed with impact refinement** | **Partially fixed** (`7013a0ab`) | Master-side filtering narrows the window; slave-side still acks empty fetch — dangling metadata possible if file deleted between exists-check and transfer |
+| 3 - `isPvm` discriminator relies on undocumented encoding invariants | Low | **Confirmed as defensive** | **Fixed** (`1cc64a6c`) | Tightened `isPvm()` to require leading zero short; JavaDoc documents encoding invariants; cross-format regression test added |
