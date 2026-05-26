@@ -835,6 +835,34 @@ class BaseCommandTest extends Specification {
         ConfForGlobal.isOnDynTrainDictForCompression = true
     }
 
+    def 'test compressStats compressedTotalLength not polluted by uncompressed values'() {
+        given:
+        def snowFlake = new SnowFlake(1, 1)
+        def data3 = new byte[3][0]
+        data3[0] = 'set'.bytes
+        data3[1] = 'key-ct'.bytes
+        data3[2] = 'short'.bytes
+
+        def c = new SubCommand('set', data3, null)
+        def inMemoryGetSet = new InMemoryGetSet()
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, snowFlake, Config.create())
+        c.init(requestHandler, new Request(data3, false, false))
+        c.byPassGetSet = inMemoryGetSet
+
+        def key = 'key-ct'
+        def sKey = BaseCommand.slot(key, slotNumber)
+
+        when:
+        def before = c.compressStats.compressedTotalLength
+        // 'short' (5 bytes < TO_COMPRESS_MIN_DATA_LENGTH=64) — no compression
+        c.set('short'.bytes, sKey, 0, CompressedValue.NO_EXPIRE)
+        def after = c.compressStats.compressedTotalLength
+
+        then:
+        // Bug 1: compressedTotalLength should NOT include uncompressed data.
+        after == before
+    }
+
     def 'test train dict'() {
         given:
         def snowFlake = new SnowFlake(1, 1)

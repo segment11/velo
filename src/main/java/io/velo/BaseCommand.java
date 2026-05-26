@@ -1078,7 +1078,6 @@ public abstract class BaseCommand {
 
             // stats — tracked unconditionally, not gated behind the training flag
             compressStats.rawCount++;
-            compressStats.compressedTotalLength += valueBytes.length;
         }
 
         var indexHandlerPool = localPersist.getIndexHandlerPool();
