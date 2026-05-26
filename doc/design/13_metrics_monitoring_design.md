@@ -86,6 +86,12 @@ Compression-only gauges (emitted when `compressedCount > 0`):
 
 The key dashboard item remains `*_compression_ratio`.
 
+Decompression gauges (emitted when `decompressedCount > 0`):
+
+- `*_decompressed_count` — number of items that were decompressed.
+- `*_decompressed_cost_time_total_ms` — total decompression time in milliseconds.
+- `*_decompressed_cost_time_avg_ns` — average per-item decompression time in nanoseconds.
+
 ## Related Documents
 
 - [Persistence](/home/kerry/ws/velo/doc/design/02_persist_layer_design.md)
