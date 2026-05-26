@@ -66,14 +66,20 @@ public class CompressStats {
             var labelValues = List.of(name);
 
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
-            if (compressedCount > 0) {
+
+            // raw_count and total_input_length track all input — emit whenever there is any data
+            if (totalInputLength > 0) {
                 map.put(prefix + "raw_count", new SimpleGauge.ValueWithLabelValues((double) rawCount, labelValues));
+                map.put(prefix + "total_input_length", new SimpleGauge.ValueWithLabelValues((double) totalInputLength, labelValues));
+                // backward-compatible alias (pre-rename metric name)
+                map.put(prefix + "raw_total_length", new SimpleGauge.ValueWithLabelValues((double) totalInputLength, labelValues));
+            }
+
+            if (compressedCount > 0) {
                 map.put(prefix + "compressed_count", new SimpleGauge.ValueWithLabelValues((double) compressedCount, labelValues));
                 map.put(prefix + "compressed_cost_time_total_ms", new SimpleGauge.ValueWithLabelValues((double) compressedCostTimeTotalUs / 1000, labelValues));
                 double costTAvg = (double) compressedCostTimeTotalUs / compressedCount;
                 map.put(prefix + "compressed_cost_time_avg_us", new SimpleGauge.ValueWithLabelValues(costTAvg, labelValues));
-
-                map.put(prefix + "total_input_length", new SimpleGauge.ValueWithLabelValues((double) totalInputLength, labelValues));
                 map.put(prefix + "compressed_total_length", new SimpleGauge.ValueWithLabelValues((double) compressedTotalLength, labelValues));
                 map.put(prefix + "compression_ratio", new SimpleGauge.ValueWithLabelValues((double) compressedTotalLength / totalInputLength, labelValues));
             }
