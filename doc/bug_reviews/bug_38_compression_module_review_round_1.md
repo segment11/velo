@@ -338,3 +338,13 @@ explicit about which singleton gets special treatment.
 All 5 bugs are fixed with TDD, JaCoCo verification, and separate commits. The `CompressStats` metric semantics are
 now internally consistent. No regression in the existing `test set` test suite. The `Dict` fix is properly scoped
 to `SELF_ZSTD_DICT` only.
+
+### Follow-up rename (`5b0208ce`)
+
+Renamed `rawTotalLength` → `totalInputLength` because the `raw` prefix collided with `rawCount`'s semantics
+(`rawCount` = non-compressed only, but `rawTotalLength` = all input). The new name makes the "all input" meaning
+explicit. Also updated:
+- `CompressStats` class JavaDoc to document all four field semantics inline
+- `rawCount` JavaDoc: "Total count of raw data items processed" → "Count of items handled but NOT compressed"
+- Prometheus metric `raw_total_length` → `total_input_length` (breaking change for dashboards)
+- All 5 call sites and 2 test methods updated

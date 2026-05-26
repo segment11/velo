@@ -73,6 +73,10 @@ Compression statistics are exported by:
 - [`DictMap`](/home/kerry/ws/velo/src/main/java/io/velo/DictMap.java)
 - persistence-layer collectors such as `Chunk`, `FdReadWrite`, and `SegmentBatch`
 
+For request-level compression, the primary dashboard metric is `*_compression_ratio` (for example
+`net_compression_ratio`), computed as compressed output bytes divided by total input bytes (exported as
+`*_total_input_length`). See the monitoring design doc for the full metric catalog.
+
 ## Related Documents
 
 - [Type System](/home/kerry/ws/velo/doc/design/03_type_system_design.md)
