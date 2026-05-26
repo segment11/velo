@@ -286,9 +286,7 @@ class MGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            reply == IntegerReply.REPLY_1
-        }.result
+        (reply as AsyncReply).settablePromise.toCompletableFuture().get() == IntegerReply.REPLY_1
 
         when:
         valA = mGroup.get(mGroup.slotWithKeyHashListParsed[0])
@@ -309,9 +307,7 @@ class MGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            reply == IntegerReply.REPLY_0
-        }.result
+        (reply as AsyncReply).settablePromise.toCompletableFuture().get() == IntegerReply.REPLY_0
 
         when:
         def data4 = new byte[4][]
