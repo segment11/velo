@@ -863,7 +863,7 @@ class BaseCommandTest extends Specification {
         after == before
     }
 
-    def 'test compressStats rawCount incremented in compression branch'() {
+    def 'test compressStats rawCount not incremented for compressed values'() {
         given:
         def snowFlake = new SnowFlake(1, 1)
         // Must be >= TO_COMPRESS_USE_SELF_DICT_MIN_DATA_LENGTH (256) to use SELF_ZSTD_DICT
@@ -887,9 +887,9 @@ class BaseCommandTest extends Specification {
         c.set(compressibleValue, sKey, 0, CompressedValue.NO_EXPIRE)
 
         then:
-        // Bug 2: rawCount should increment even for compressed values.
-        // All 'a's compress well, so Zstd should produce a compressed output.
-        c.compressStats.rawCount == 1
+        // rawCount tracks non-compressed values only; should stay 0 for compressed values.
+        c.compressStats.rawCount == 0
+        c.compressStats.compressedCount == 1
     }
 
     def 'test regular Dict without initCtx fails with NPE'() {

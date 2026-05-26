@@ -942,7 +942,6 @@ public abstract class BaseCommand {
                 var costT = (System.nanoTime() - beginT) / 1000;
 
                 // stats
-                compressStats.rawCount++;
                 compressStats.compressedCount++;
                 compressStats.compressedTotalLength += cr.data().length;
                 compressStats.compressedCostTimeTotalUs += costT;
@@ -1036,7 +1035,6 @@ public abstract class BaseCommand {
             putToOneSlot(slot, slotWithKeyHash, cv);
 
             // stats
-            compressStats.rawCount++;
             compressStats.compressedCount++;
             compressStats.compressedTotalLength += cv.getCompressedLength();
             compressStats.compressedCostTimeTotalUs += costT;
