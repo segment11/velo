@@ -746,6 +746,64 @@ class BaseCommandTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test compressStats rawTotalLength not double counted for numeric set'() {
+        given:
+        def snowFlake = new SnowFlake(1, 1)
+
+        def data3 = new byte[3][0]
+        data3[0] = 'set'.bytes
+        data3[1] = 'key-num'.bytes
+        data3[2] = '12345'.bytes
+
+        def c = new SubCommand('set', data3, null)
+        def inMemoryGetSet = new InMemoryGetSet()
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, snowFlake, Config.create())
+        c.init(requestHandler, new Request(data3, false, false))
+        c.byPassGetSet = inMemoryGetSet
+
+        def key = 'key-num'
+        def sKey = BaseCommand.slot(key, slotNumber)
+
+        when:
+        def beforeRawTotalLength = c.compressStats.rawTotalLength
+        // 12345 as long → fits in short (SP_TYPE_NUM_SHORT, 2 bytes)
+        c.set('12345'.bytes, sKey, 0, CompressedValue.NO_EXPIRE)
+        def afterRawTotalLength = c.compressStats.rawTotalLength
+
+        then:
+        // Bug 5: rawTotalLength should increment exactly once for the stored form.
+        // '12345' stores as SP_TYPE_NUM_SHORT (2 bytes), not the original 5-byte string.
+        afterRawTotalLength - beforeRawTotalLength == 2
+    }
+
+    def 'test compressStats rawTotalLength not double counted for non-numeric set'() {
+        given:
+        def snowFlake = new SnowFlake(1, 1)
+
+        def data3 = new byte[3][0]
+        data3[0] = 'set'.bytes
+        data3[1] = 'key-str'.bytes
+        data3[2] = 'hello'.bytes
+
+        def c = new SubCommand('set', data3, null)
+        def inMemoryGetSet = new InMemoryGetSet()
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, snowFlake, Config.create())
+        c.init(requestHandler, new Request(data3, false, false))
+        c.byPassGetSet = inMemoryGetSet
+
+        def key = 'key-str'
+        def sKey = BaseCommand.slot(key, slotNumber)
+
+        when:
+        def beforeRawTotalLength = c.compressStats.rawTotalLength
+        c.set('hello'.bytes, sKey, 0, CompressedValue.NO_EXPIRE)
+        def afterRawTotalLength = c.compressStats.rawTotalLength
+
+        then:
+        // Non-numeric value: rawTotalLength should increment by the value length (5).
+        afterRawTotalLength - beforeRawTotalLength == 5
+    }
+
     def 'test train dict'() {
         given:
         def snowFlake = new SnowFlake(1, 1)

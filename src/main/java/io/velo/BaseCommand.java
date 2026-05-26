@@ -976,8 +976,6 @@ public abstract class BaseCommand {
             return;
         }
 
-        compressStats.rawTotalLength += valueBytes.length;
-
         // prefer store as a number type
         boolean isTypeNumber = CompressedValue.isTypeNumber(spType);
         if (valueBytes.length <= MAX_LONG_VALUE_IN_BYTES_LENGTH && !isTypeNumber) {
@@ -1000,6 +998,8 @@ public abstract class BaseCommand {
             } catch (NumberFormatException ignore) {
             }
         }
+
+        compressStats.rawTotalLength += valueBytes.length;
 
         var preferDoCompress = valueBytes.length >= DictMap.TO_COMPRESS_MIN_DATA_LENGTH && valueBytes.length <= ConfForGlobal.bigStringNoCompressMinSize;
         var preferDoCompressUseSelfDict = valueBytes.length >= DictMap.TO_COMPRESS_USE_SELF_DICT_MIN_DATA_LENGTH;
