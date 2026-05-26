@@ -804,6 +804,37 @@ class BaseCommandTest extends Specification {
         afterRawTotalLength - beforeRawTotalLength == 5
     }
 
+    def 'test compressStats rawCount incremented when training is disabled'() {
+        given:
+        // Bug 3: stats should not be gated behind training flag
+        ConfForGlobal.isOnDynTrainDictForCompression = false
+
+        def snowFlake = new SnowFlake(1, 1)
+        def data3 = new byte[3][0]
+        data3[0] = 'set'.bytes
+        data3[1] = 'key-dt'.bytes
+        data3[2] = 'hello'.bytes
+
+        def c = new SubCommand('set', data3, null)
+        def inMemoryGetSet = new InMemoryGetSet()
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, snowFlake, Config.create())
+        c.init(requestHandler, new Request(data3, false, false))
+        c.byPassGetSet = inMemoryGetSet
+
+        def key = 'key-dt'
+        def sKey = BaseCommand.slot(key, slotNumber)
+
+        when:
+        c.set('hello'.bytes, sKey, 0, CompressedValue.NO_EXPIRE)
+
+        then:
+        // With training disabled, rawCount should still increment.
+        c.compressStats.rawCount == 1
+
+        cleanup:
+        ConfForGlobal.isOnDynTrainDictForCompression = true
+    }
+
     def 'test train dict'() {
         given:
         def snowFlake = new SnowFlake(1, 1)

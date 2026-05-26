@@ -1074,11 +1074,11 @@ public abstract class BaseCommand {
                     trainSampleJob.resetSampleToTrainList(sampleToTrainList);
                     handleTrainSampleResult(trainSampleJob.train());
                 }
-
-                // stats
-                compressStats.rawCount++;
-                compressStats.compressedTotalLength += valueBytes.length;
             }
+
+            // stats — tracked unconditionally, not gated behind the training flag
+            compressStats.rawCount++;
+            compressStats.compressedTotalLength += valueBytes.length;
         }
 
         var indexHandlerPool = localPersist.getIndexHandlerPool();
