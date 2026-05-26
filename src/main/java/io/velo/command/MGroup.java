@@ -16,6 +16,7 @@ import redis.clients.jedis.params.RestoreParams;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -317,19 +318,29 @@ public class MGroup extends BaseCommand {
                 return;
             }
 
+            List<Promise<Void>> writePromises = new ArrayList<>();
             for (var entry : groupBySlot.entrySet()) {
                 var slot = entry.getKey();
                 var subList = entry.getValue();
 
                 var oneSlot = localPersist.oneSlot(slot);
-                oneSlot.asyncExecute(() -> {
+                Promise<Void> p = oneSlot.asyncCall(() -> {
                     for (var one : subList) {
                         set(one.valueBytes, one.slotWithKeyHash);
                     }
+                    return null;
                 });
+                writePromises.add(p);
             }
 
-            finalPromise.set(IntegerReply.REPLY_1);
+            Promises.all(writePromises).whenComplete((writeResult, writeEx) -> {
+                if (writeEx != null) {
+                    log.error("msetnx write error={}", writeEx.getMessage());
+                    finalPromise.setException(writeEx);
+                    return;
+                }
+                finalPromise.set(IntegerReply.REPLY_1);
+            });
         });
 
         return asyncReply;
