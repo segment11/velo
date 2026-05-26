@@ -746,6 +746,49 @@ class BaseCommandTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test compressStats totalInputLength and rawCount tracked for big-string non-compression'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.setReadonly(false)
+
+        // Force non-compression path: bigStringNoMemoryCopy.length > bigStringNoCompressMinSize
+        ConfForGlobal.bigStringNoCompressMinSize = 10
+
+        def snowFlake = new SnowFlake(1, 1)
+        def data3 = new byte[3][0]
+        data3[0] = 'set'.bytes
+        data3[1] = 'key-bs-nc'.bytes
+        data3[2] = ('x' * 100).bytes
+
+        def c = new SubCommand('set', data3, null)
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, snowFlake, Config.create())
+        c.init(requestHandler, new Request(data3, false, false))
+        c.byPassGetSet = null
+
+        def key = 'key-bs-nc'
+        def sKey = BaseCommand.slot(key, slotNumber)
+
+        when:
+        c.bigStringNoMemoryCopy = new BigStringNoMemoryCopy()
+        c.bigStringNoMemoryCopy.offset = 0
+        c.bigStringNoMemoryCopy.length = 100
+        def bigValueBytes = ('x' * 100).bytes
+        c.set(bigValueBytes, sKey, 0, CompressedValue.NO_EXPIRE)
+
+        then:
+        // Bug 6: totalInputLength and rawCount should be tracked
+        c.compressStats.totalInputLength == 100
+        c.compressStats.rawCount == 1
+
+        cleanup:
+        ConfForGlobal.bigStringNoCompressMinSize = 1024 * 256
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test compressStats totalInputLength not double counted for numeric set'() {
         given:
         def snowFlake = new SnowFlake(1, 1)

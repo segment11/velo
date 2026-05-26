@@ -954,6 +954,8 @@ public abstract class BaseCommand {
                 cvAsBigString.setCompressedDataAsBigString(bigStringUuid, cr.isCompressed() ? Dict.SELF_ZSTD_DICT_SEQ : CompressedValue.NULL_DICT_SEQ);
             } else {
                 // do not compress
+                compressStats.totalInputLength += bigStringNoMemoryCopy.length;
+                compressStats.rawCount++;
                 var isWriteOk = oneSlot.getBigStringFiles().writeBigStringBytes(bigStringUuid, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash,
                         valueBytes, bigStringNoMemoryCopy.offset, bigStringNoMemoryCopy.length);
                 if (!isWriteOk) {
