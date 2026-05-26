@@ -585,3 +585,49 @@ Both pid tests pass. Full suite: 20 tests, 1 failure (pre-existing).
 ### Verdict
 
 **Fix is correct and complete.** Truncation only happens after exclusive lock is acquired, preventing a concurrent startup from destroying the running process's pid file.
+
+---
+
+## Review Feedback for Finding 3 Fix Commit, Revision Review
+
+Reviewed commit: `ef51f70e4a281678eb531c784284e86add953596` (`fix: add TRUNCATE_EXISTING to pid file open to prevent stale digits`)
+
+### Summary of the fix
+
+The current revision removes the unsafe `TRUNCATE_EXISTING` open option and instead calls `pidFileChannel.truncate(0)` only after `tryLock()` succeeds. It also keeps the stale-suffix regression test and adds a locked-file regression test that verifies a failed concurrent startup attempt does not destroy the existing pid file content.
+
+### Strengths
+
+- The truncation now happens at the right point in the lifecycle: after this process owns the pid-file lock and before writing the new PID.
+- The tests cover both relevant cases: successful reuse of a stale pid file and failed concurrent startup while another channel holds the lock.
+- The implementation is still small and localized to `dirFile()`.
+
+### Concerns
+
+None blocking. The commit message still mentions `TRUNCATE_EXISTING`, but the code correctly uses explicit post-lock truncation. That is commit-history wording only.
+
+### Verification
+
+Ran fresh focused verification:
+
+```bash
+./gradlew :test --tests "io.velo.MultiWorkerServerTest.test pid file truncated when reused from prior process" --tests "io.velo.MultiWorkerServerTest.test concurrent dirFile attempt does not truncate locked pid file" --rerun-tasks
+```
+
+Result: passed, with `tests="2"`, `failures="0"`, `errors="0"` in `build/test-results/test/TEST-io.velo.MultiWorkerServerTest.xml`.
+
+JaCoCo inspection: `build/reports/jacocoHtml/io.velo/MultiWorkerServer.java.html` shows the pid-file open, `tryLock()`, post-lock `truncate(0)`, PID write, and catch/rethrow lines `189-204` covered by the focused tests.
+
+Also ran:
+
+```bash
+git diff --check HEAD~1..HEAD
+```
+
+Result: no whitespace errors.
+
+### Verdict
+
+**Fix is correct and complete.** The previous lock-order regression is addressed.
+
+---
