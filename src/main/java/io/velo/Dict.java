@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -399,11 +400,12 @@ public class Dict implements Serializable {
      * @return the decoded dictionary with key prefix or suffix
      */
     public static DictWithKeyPrefixOrSuffix decode(DataInputStream is) throws IOException {
-        if (is.available() < 4) {
+        int vLength;
+        try {
+            vLength = is.readInt();
+        } catch (EOFException e) {
             return null;
         }
-
-        var vLength = is.readInt();
         if (vLength == 0) {
             return null;
         }
