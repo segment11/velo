@@ -863,6 +863,35 @@ class BaseCommandTest extends Specification {
         after == before
     }
 
+    def 'test compressStats rawCount incremented in compression branch'() {
+        given:
+        def snowFlake = new SnowFlake(1, 1)
+        // Must be >= TO_COMPRESS_USE_SELF_DICT_MIN_DATA_LENGTH (256) to use SELF_ZSTD_DICT
+        def compressibleValue = ('a' * 300).bytes
+
+        def data3 = new byte[3][0]
+        data3[0] = 'set'.bytes
+        data3[1] = 'key-cc'.bytes
+        data3[2] = compressibleValue
+
+        def c = new SubCommand('set', data3, null)
+        def inMemoryGetSet = new InMemoryGetSet()
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, snowFlake, Config.create())
+        c.init(requestHandler, new Request(data3, false, false))
+        c.byPassGetSet = inMemoryGetSet
+
+        def key = 'key-cc'
+        def sKey = BaseCommand.slot(key, slotNumber)
+
+        when:
+        c.set(compressibleValue, sKey, 0, CompressedValue.NO_EXPIRE)
+
+        then:
+        // Bug 2: rawCount should increment even for compressed values.
+        // All 'a's compress well, so Zstd should produce a compressed output.
+        c.compressStats.rawCount == 1
+    }
+
     def 'test train dict'() {
         given:
         def snowFlake = new SnowFlake(1, 1)
