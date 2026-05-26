@@ -538,6 +538,7 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
 
         def one = new MetaChunkSegmentFlagSeq(slot, slotDirTmp)
         assert !one.isOverHalfSegmentNumberForFirstReuseLoop
+        assert one.markerSoftDropCountTotal == 0
 
         def markPersisted = { int walGroupIndex, int beginSegmentIndex, short segmentCount ->
             one.markPersistedSegmentIndexToTargetWalGroup(walGroupIndex, beginSegmentIndex, segmentCount)
@@ -557,6 +558,8 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
 
         then:
         noExceptionThrown()
+        one.markerSoftDropCountTotal == 1
+        one.countMarkersForWalGroup(0) == 100
 
         when: 'the 101st segment is still HAS_DATA but not in the marker ring'
         one.setSegmentMergeFlag(100, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 0)
@@ -592,5 +595,27 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         cleanup:
         slotDirTmp.deleteDir()
         ConfForSlot.global = ConfForSlot.c1m
+    }
+
+    def 'test c10m marker budget stays below marker ring capacity'() {
+        given:
+        def originalGlobal = ConfForSlot.global
+        ConfForSlot.global = ConfForSlot.c10m
+
+        when:
+        def walGroupCount = Wal.calcWalGroupNumber()
+        def keysPerWalGroup = 10_000_000d / walGroupCount
+        def markersAt150ValuesPerPersist = keysPerWalGroup / 150d
+        def markersAtValueSizeTrigger = keysPerWalGroup / ConfForSlot.global.confWal.valueSizeTrigger
+
+        then:
+        walGroupCount == 8192
+        Math.abs(keysPerWalGroup - 1220.703125d) < 0.000001d
+        markersAt150ValuesPerPersist < 9d
+        markersAtValueSizeTrigger < 7d
+        markersAt150ValuesPerPersist * 10 < 100d
+
+        cleanup:
+        ConfForSlot.global = originalGlobal
     }
 }

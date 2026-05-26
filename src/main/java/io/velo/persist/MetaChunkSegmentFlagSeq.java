@@ -303,10 +303,13 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         return 10;
     }
 
-    // 10m keys, 16384 wal groups, one wal group ~= 600 keys, 1 persist batch maybe 150 keys, 4 batch may persist all keys in a loop
+    // c10m: 10m keys / (262144 buckets / 32 buckets per WAL group) ~= 1220 keys per WAL group.
+    // With 150-200 values per persist, one WAL group normally needs about 6-9 markers.
+    // 100 marker slots gives more than 10x headroom; soft-drop is defensive for skew or tiny configs.
     private static final int MARK_BEGIN_SEGMENT_INDEX_COUNT = 100;
     private final long[][] beginSegmentIndexGroupByWalGroupIndex;
     private final int[] beginSegmentIndexMoveIndexGroupByWalGroupIndex;
+    long markerSoftDropCountTotal;
 
     /**
      * @return the number of marked segments
@@ -420,6 +423,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
             beginSegmentIndexMoveIndex = next;
         }
 
+        markerSoftDropCountTotal++;
         log.warn("Marked persisted segment index buffer is full, soft drop marker, wal group index={}, begin segment index={}, segment count={}, slot={}",
                 walGroupIndex, beginSegmentIndex, segmentCount, slot);
     }

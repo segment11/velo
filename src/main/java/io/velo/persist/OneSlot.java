@@ -2131,6 +2131,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             map.putAll(chunk.collect());
         }
 
+        if (metaChunkSegmentFlagSeq != null) {
+            map.put("segment_marker_soft_drop_count_total",
+                    (double) metaChunkSegmentFlagSeq.markerSoftDropCountTotal);
+        }
+
         if (bigStringFiles != null) {
             map.putAll(bigStringFiles.collect());
             map.put("big_string_files_disk_usage", (double) bigStringFiles.diskUsage);

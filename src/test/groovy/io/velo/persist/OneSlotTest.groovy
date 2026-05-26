@@ -1061,11 +1061,13 @@ class OneSlotTest extends Specification {
         when: 'verify collect() exports both WAL and LRU metrics'
         oneSlot.kvWalHitTotal = 5
         oneSlot.kvWalCvEncodedLengthTotal = 100
+        oneSlot.metaChunkSegmentFlagSeq.markerSoftDropCountTotal = 2
         def metrics = oneSlot.collect()
         then:
         metrics['slot_kv_lru_hit_total'] == 2.0
         metrics['slot_kv_wal_hit_total'] == 5.0
         metrics['slot_kv_wal_cv_encoded_length_avg'] == 20.0
+        metrics['segment_marker_soft_drop_count_total'] == 2.0
 
         cleanup:
         localPersist.cleanUp()
