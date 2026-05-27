@@ -512,9 +512,32 @@ sunionstore
         when:
         reply = sGroup.execute('set a value pxat -1')
         then:
-        reply == OKReply.INSTANCE
-        inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
-                .cv().expireAt == CompressedValue.NO_EXPIRE
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = sGroup.execute('set a value pxat 0')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = sGroup.execute('set a value ex -1')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = sGroup.execute('set a value ex 0')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = sGroup.execute('set a value px -1')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = sGroup.execute('set a value exat -1')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('set a value pxat a')

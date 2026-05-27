@@ -566,6 +566,9 @@ public class SGroup extends BaseCommand {
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
             }
+            if (value <= 0) {
+                return ErrorReply.INVALID_INTEGER;
+            }
             if (isEx) {
                 ex = value;
             } else if (isPx) {
