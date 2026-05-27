@@ -1346,6 +1346,11 @@ httl
         reply = hGroup.execute('hscan a 0 match field match')
         then:
         reply == ErrorReply.SYNTAX
+
+        when:
+        reply = hGroup.execute('hscan a badcursor match field count 10')
+        then:
+        reply == ErrorReply.NOT_INTEGER
     }
 
     def 'test hsetnx'() {

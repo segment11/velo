@@ -1403,7 +1403,12 @@ public class HGroup extends BaseCommand {
 
         var cursorBytes = data[2];
         var cursor = new String(cursorBytes);
-        var cursorLong = Long.parseLong(cursor);
+        long cursorLong;
+        try {
+            cursorLong = Long.parseLong(cursor);
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
 
         String matchPattern = null;
         int count = 10;
