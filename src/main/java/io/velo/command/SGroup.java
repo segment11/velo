@@ -600,6 +600,13 @@ public class SGroup extends BaseCommand {
             cv = getCv(slotWithKeyHash);
             boolean isOldExist = cv != null && !cv.isExpired();
             if (isNx && isOldExist) {
+                if (isReturnExist) {
+                    if (!cv.isTypeString()) {
+                        log.debug("Key {} is not string type", Wal.keyString(keyBytes));
+                        return ErrorReply.NOT_STRING;
+                    }
+                    return new BulkReply(getValueBytesByCv(cv, slotWithKeyHash));
+                }
                 return NilReply.INSTANCE;
             }
             if (isXx && !isOldExist) {

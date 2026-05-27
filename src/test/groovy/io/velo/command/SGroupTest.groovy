@@ -558,10 +558,11 @@ sunionstore
         then:
         reply == OKReply.INSTANCE
 
-        when: 'SET a newvalue NX GET on existing key - NX should prevent write and return nil'
+        when: 'SET a newvalue NX GET on existing key - NX prevents write but GET returns old value'
         reply = sGroup.execute('set a newvalue nx get')
         then:
-        reply == NilReply.INSTANCE
+        reply instanceof BulkReply
+        (reply as BulkReply).raw == 'oldvalue'.bytes
         inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().compressedData == 'oldvalue'.bytes
 
@@ -586,6 +587,15 @@ sunionstore
         (reply as BulkReply).raw == 'value'.bytes
         inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt == savedExpireAt
+
+        when: 'NX GET on existing non-string key returns NOT_STRING error'
+        inMemoryGetSet.remove(slot, 'a')
+        def cvNotString = Mock.prepareCompressedValueList(1)[0]
+        cvNotString.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        inMemoryGetSet.put(slot, 'a', 0, cvNotString)
+        reply = sGroup.execute('set a newvalue nx get')
+        then:
+        reply == ErrorReply.NOT_STRING
     }
 
     def 'test setbit'() {
