@@ -822,7 +822,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         if (bigKeyTopK == null) {
             return;
         }
-        if (valueBytesLength >= BIG_KEY_LENGTH_CHECK) {
+        if (valueBytesLength >= ConfForGlobal.bigKeyLengthCheckMinSize) {
             bigKeyTopK.add(key, valueBytesLength);
         } else {
             bigKeyTopK.remove(key);
@@ -2099,9 +2099,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         });
     }
 
-    // change dyn config or global config, todo
-    private static final int BIG_KEY_LENGTH_CHECK = 2048;
-
     @Override
     public Map<String, Double> collect() {
         var map = new TreeMap<String, Double>();
@@ -2168,7 +2165,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         if (bigKeyTopK != null) {
-            map.put("big_key_count", (double) bigKeyTopK.sizeIfBiggerThan(BIG_KEY_LENGTH_CHECK));
+            map.put("big_key_count", (double) bigKeyTopK.sizeIfBiggerThan(ConfForGlobal.bigKeyLengthCheckMinSize));
         }
 
         var hitMissTotal = kvLRUHitTotal + kvLRUMissTotal;

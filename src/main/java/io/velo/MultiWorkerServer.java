@@ -1365,6 +1365,9 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.bigStringNoCompressMinSize = config.get(ofInteger(), "bigStringNoCompressMinSize", 1024 * 256);
             log.warn("Global config, bigStringNoCompressMinSize={}", ConfForGlobal.bigStringNoCompressMinSize);
 
+            ConfForGlobal.bigKeyLengthCheckMinSize = config.get(ofInteger(), "bigKeyLengthCheckMinSize", 2048);
+            log.warn("Global config, bigKeyLengthCheckMinSize={}", ConfForGlobal.bigKeyLengthCheckMinSize);
+
             ConfForGlobal.initDynConfigItems.clear();
             var dynConfig = config.getChild("dynConfig");
             if (dynConfig != null) {

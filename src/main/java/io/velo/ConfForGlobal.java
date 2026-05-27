@@ -185,6 +185,11 @@ public class ConfForGlobal {
     public static int bigStringNoCompressMinSize = 1024 * 256;
 
     /**
+     * Minimum value length to be considered a big key for monitoring (default is 2048 bytes).
+     */
+    public static int bigKeyLengthCheckMinSize = 2048;
+
+    /**
      * Initial dynamic configuration items.
      */
     public static final HashMap<String, String> initDynConfigItems = new HashMap<>();
