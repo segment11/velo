@@ -309,3 +309,112 @@ Adjust `SGroup.set(...)` so conditional failure with `GET` returns the previous 
 ### JaCoCo verification
 
 All changed lines (600-631) are fully covered (fc).
+
+---
+
+## Review Feedback (AI agent 2 Post-Commit Review - Bug 5 Follow-up)
+
+**Reviewer**: AI agent 2  
+**Date**: 2026-05-27  
+**Reviewed commit**: `2723f4b3` - `fix: SET NX GET returns old value per Redis semantics`
+
+### Summary
+Reviewed the follow-up Bug 5 fix commit. The implementation now handles the `SET ... NX GET` existing-key path before returning `NilReply`: when `NX` prevents the write and `GET` is requested, it returns the previous string value; if the previous value is not a string, it returns `ErrorReply.NOT_STRING`.
+
+### Strengths
+- Preserves Redis-compatible `GET` semantics for `NX` conflicts without overwriting the existing value.
+- Adds regression coverage for the old-value return path and for the non-string existing-value error path.
+- Keeps the change localized to `SGroup.set()` and the existing `SGroupTest` command coverage.
+
+### Concerns
+No blocking issues found. The only residual coverage gap observed in the surrounding block is the pre-existing short-circuit branch for expired old values on line 601, which is not part of this follow-up behavior.
+
+### Verification
+- `./gradlew :cleanTest :test --tests "io.velo.command.SGroupTest.test set nx get and xx get preserve flags"` - passed.
+- `./gradlew :cleanTest :test --tests "io.velo.command.SGroupTest"` - passed.
+- JaCoCo HTML after the full `SGroupTest` run shows the changed Bug 5 follow-up lines covered: `SGroup.java` lines 602-610 are fully covered, including all branches on lines 602, 603, and 604.
+
+### Follow-ups
+No required follow-up before accepting this commit.
+
+---
+
+## Review Feedback (AI agent 2 Post-Commit Review - Bug 6)
+
+**Reviewer**: AI agent 2  
+**Date**: 2026-05-27  
+**Reviewed commit**: `b2248528` - `fix: reject unknown SET option tokens with syntax error`
+
+### Summary
+Reviewed the Bug 6 fix commit. The implementation changes the SET option parser so an unrecognized option token falls through to `ErrorReply.SYNTAX` instead of being ignored. The regression test now expects `SET a value zz` to return a syntax error.
+
+### Strengths
+- Fixes the confirmed protocol-compatibility issue directly at the parser fallthrough.
+- Keeps valid option parsing unchanged for `NX`, `XX`, `KEEPTTL`, `GET`, and expiration options.
+- Updates the existing SET syntax test rather than adding a separate duplicate case.
+
+### Concerns
+No blocking issues found. The fix covers unknown option tokens, but duplicate/conflicting known options remain accepted; that behavior is outside Bug 6 and should be handled separately if strict Redis parity is required.
+
+### Verification
+- `./gradlew :cleanTest :test --tests "io.velo.command.SGroupTest.test set"` - passed.
+- `./gradlew :cleanTest :test --tests "io.velo.command.SGroupTest"` - passed.
+- JaCoCo HTML after the full `SGroupTest` run shows `SGroup.java` lines 555-557 fully covered, including all branches on lines 555 and 556 and execution of the new `ErrorReply.SYNTAX` return on line 557.
+
+### Follow-ups
+No required follow-up before accepting this commit.
+
+---
+
+## Review Feedback (AI agent 2 Post-Commit Review - Bug 7)
+
+**Reviewer**: AI agent 2  
+**Date**: 2026-05-27  
+**Reviewed commit**: `002edcba` - `fix: reject invalid non-positive SET expiration values`
+
+### Summary
+Reviewed the Bug 7 fix commit. The SET parser now rejects expiration option values `<= 0` with `ErrorReply.INVALID_INTEGER` after successful integer parsing and before any write. The regression coverage was updated from accepting `PXAT -1` as persistent to rejecting invalid negative and zero values across SET expiration options.
+
+### Strengths
+- Fixes the sentinel collision where `PXAT -1` became `CompressedValue.NO_EXPIRE` and produced a persistent write.
+- Applies one common validation path before assigning `EX`, `PX`, `EXAT`, or `PXAT`, reducing the chance that one expiration option drifts from the others.
+- Keeps non-integer handling separate as `ErrorReply.NOT_INTEGER`.
+- Local Redis compatibility checks confirmed `SET ... EX 0`, `PX 0`, `EXAT 0`, and `PXAT 0` all return invalid-expire errors, while positive past `EXAT/PXAT` timestamps are accepted.
+
+### Concerns
+No blocking issues found. The tests cover the new shared validation branch and representative invalid values; they do not enumerate every zero/negative combination (`PX 0`, `EXAT 0`, etc.), but the production code uses a single shared `value <= 0` check before option-specific assignment.
+
+### Verification
+- `./gradlew :cleanTest :test --tests "io.velo.command.SGroupTest.test set"` - passed.
+- `./gradlew :cleanTest :test --tests "io.velo.command.SGroupTest"` - passed.
+- JaCoCo HTML after the full `SGroupTest` run shows `SGroup.java` lines 565-570 fully covered, including both branches of the new `value <= 0` check on line 569 and execution of the new `ErrorReply.INVALID_INTEGER` return on line 570.
+
+### Follow-ups
+No required follow-up before accepting this commit.
+
+---
+
+## Review Feedback (AI agent 2 Post-Commit Review - Bug 8)
+
+**Reviewer**: AI agent 2  
+**Date**: 2026-05-27  
+**Reviewed commit**: `63841f54` - `fix: GETRANGE returns empty string for missing key instead of nil`
+
+### Summary
+Reviewed the Bug 8 fix commit. `GGroup.getrange()` now returns the existing empty bulk reply for a missing key instead of `NilReply.INSTANCE`, matching Redis `GETRANGE` behavior for nonexistent keys.
+
+### Strengths
+- Fixes the confirmed protocol mismatch with a minimal localized change.
+- Reuses the existing `BLANK_REPLY` constant already used for invalid ranges.
+- Updates the existing `getrange` regression test to assert an empty `BulkReply` instead of nil.
+
+### Concerns
+No blocking issues found.
+
+### Verification
+- `./gradlew :cleanTest :test --tests "io.velo.command.GGroupTest.test getrange"` - passed.
+- `./gradlew :cleanTest :test --tests "io.velo.command.GGroupTest"` - passed.
+- JaCoCo HTML after the full `GGroupTest` run shows `GGroup.java` lines 263-266 covered, including both branches of the missing-key check on line 265 and execution of the new `BLANK_REPLY` return on line 266.
+
+### Follow-ups
+No required follow-up before accepting this commit.
