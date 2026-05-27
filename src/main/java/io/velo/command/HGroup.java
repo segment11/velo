@@ -225,12 +225,12 @@ public class HGroup extends BaseCommand {
             didMigration = true;
             var fieldKey = RedisHashKeys.fieldKey(key, field);
             var sFieldKey = slot(fieldKey);
-            var fieldCv = getCv(sFieldKey);
-            if (fieldCv == null) {
+            var expireAt = getExpireAt(sFieldKey);
+            if (expireAt == null) {
                 toRemove.add(field);
             } else {
-                if (fieldCv.getExpireAt() != CompressedValue.NO_EXPIRE) {
-                    rhk.putCachedExpireAt(field, fieldCv.getExpireAt());
+                if (expireAt != CompressedValue.NO_EXPIRE) {
+                    rhk.putCachedExpireAt(field, expireAt);
                 }
             }
         }
