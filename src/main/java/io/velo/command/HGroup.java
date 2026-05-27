@@ -46,10 +46,10 @@ public class HGroup extends BaseCommand {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
         if ("hdel".equals(cmd) || "hexists".equals(cmd) || "hget".equals(cmd) || "hgetall".equals(cmd) ||
-                "hincrby".equals(cmd) || "hincrbyfloat".equals(cmd) || "hkeys".equals(cmd) || "hlen".equals(cmd) ||
-                "hmget".equals(cmd) || "hmset".equals(cmd) || "hrandfield".equals(cmd) || "hscan".equals(cmd) ||
-                "hset".equals(cmd) || "hsetnx".equals(cmd) ||
-                "hstrlen".equals(cmd) || "hvals".equals(cmd)) {
+                "hgetdel".equals(cmd) || "hgetex".equals(cmd) || "hincrby".equals(cmd) || "hincrbyfloat".equals(cmd) ||
+                "hkeys".equals(cmd) || "hlen".equals(cmd) || "hmget".equals(cmd) || "hmset".equals(cmd) ||
+                "hrandfield".equals(cmd) || "hscan".equals(cmd) || "hset".equals(cmd) || "hsetex".equals(cmd) ||
+                "hsetnx".equals(cmd) || "hstrlen".equals(cmd) || "hvals".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
@@ -182,8 +182,16 @@ public class HGroup extends BaseCommand {
             return hvals();
         }
 
-        if ("hgetdel".equals(cmd) || "hgetex".equals(cmd) || "hsetex".equals(cmd)) {
-            return ErrorReply.NOT_SUPPORT;
+        if ("hgetdel".equals(cmd)) {
+            return hgetdel();
+        }
+
+        if ("hgetex".equals(cmd)) {
+            return hgetex();
+        }
+
+        if ("hsetex".equals(cmd)) {
+            return hsetex();
         }
 
         return NilReply.INSTANCE;
@@ -1679,5 +1687,426 @@ public class HGroup extends BaseCommand {
             replies[i++] = new BulkReply(entry.getValue());
         }
         return new MultiBulkReply(replies);
+    }
+
+    private Reply hgetdel() {
+        if (data.length < 4) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        if (!"fields".equalsIgnoreCase(new String(data[2]))) {
+            return ErrorReply.SYNTAX;
+        }
+
+        int numFields;
+        try {
+            numFields = Integer.parseInt(new String(data[3]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+
+        if (data.length < 4 + numFields) {
+            return ErrorReply.SYNTAX;
+        }
+
+        ArrayList<String> fields = new ArrayList<>();
+        for (int i = 0; i < numFields; i++) {
+            var fieldBytes = data[4 + i];
+            if (fieldBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+            fields.add(new String(fieldBytes));
+        }
+
+        if (isUseHH(keyBytes)) {
+            return hgetdel2(fields);
+        }
+
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var key = slotWithKeyHash.rawKey();
+        var rhk = getRedisHashKeys(key);
+        if (rhk == null) {
+            var replies = new Reply[numFields];
+            for (int i = 0; i < numFields; i++) {
+                replies[i] = NilReply.INSTANCE;
+            }
+            return new MultiBulkReply(replies);
+        }
+
+        var replies = new Reply[numFields];
+        boolean anyRemoved = false;
+        for (int i = 0; i < numFields; i++) {
+            var field = fields.get(i);
+            var fieldKey = RedisHashKeys.fieldKey(key, field);
+            var sFieldKey = slot(fieldKey);
+            var fieldCv = getCv(sFieldKey);
+            if (fieldCv == null) {
+                replies[i] = NilReply.INSTANCE;
+            } else {
+                replies[i] = new BulkReply(getValueBytesByCv(fieldCv, sFieldKey));
+            }
+
+            if (rhk.remove(field)) {
+                anyRemoved = true;
+                removeDelay(sFieldKey);
+            }
+        }
+
+        if (anyRemoved) {
+            saveRedisHashKeys(rhk, key);
+        }
+
+        return new MultiBulkReply(replies);
+    }
+
+    private Reply hgetdel2(ArrayList<String> fields) {
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var rhh = getRedisHH(slotWithKeyHash);
+        if (rhh == null) {
+            var replies = new Reply[fields.size()];
+            for (int i = 0; i < fields.size(); i++) {
+                replies[i] = NilReply.INSTANCE;
+            }
+            return new MultiBulkReply(replies);
+        }
+
+        var replies = new Reply[fields.size()];
+        for (int i = 0; i < fields.size(); i++) {
+            var field = fields.get(i);
+            var value = rhh.get(field);
+            replies[i] = value == null ? NilReply.INSTANCE : new BulkReply(value);
+            rhh.remove(field);
+        }
+
+        saveRedisHH(rhh, slotWithKeyHash);
+        return new MultiBulkReply(replies);
+    }
+
+    private Reply hgetex() {
+        if (data.length < 4) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        long expireAt = CompressedValue.NO_EXPIRE;
+        boolean hasExpireOption = false;
+        int fieldsIndex = 2;
+
+        var optionOrFields = new String(data[fieldsIndex]);
+        if (!"fields".equalsIgnoreCase(optionOrFields)) {
+            hasExpireOption = true;
+            if ("ex".equalsIgnoreCase(optionOrFields)) {
+                try {
+                    long seconds = Long.parseLong(new String(data[fieldsIndex + 1]));
+                    expireAt = System.currentTimeMillis() + seconds * 1000;
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+                fieldsIndex += 2;
+            } else if ("px".equalsIgnoreCase(optionOrFields)) {
+                try {
+                    long ms = Long.parseLong(new String(data[fieldsIndex + 1]));
+                    expireAt = System.currentTimeMillis() + ms;
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+                fieldsIndex += 2;
+            } else if ("exat".equalsIgnoreCase(optionOrFields)) {
+                try {
+                    long unixSec = Long.parseLong(new String(data[fieldsIndex + 1]));
+                    expireAt = unixSec * 1000;
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+                fieldsIndex += 2;
+            } else if ("pxat".equalsIgnoreCase(optionOrFields)) {
+                try {
+                    expireAt = Long.parseLong(new String(data[fieldsIndex + 1]));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+                fieldsIndex += 2;
+            } else if ("persist".equalsIgnoreCase(optionOrFields)) {
+                fieldsIndex += 1;
+            } else {
+                return ErrorReply.SYNTAX;
+            }
+
+            if (data.length <= fieldsIndex || !"fields".equalsIgnoreCase(new String(data[fieldsIndex]))) {
+                return ErrorReply.SYNTAX;
+            }
+            fieldsIndex++;
+        }
+
+        if (data.length <= fieldsIndex) {
+            return ErrorReply.SYNTAX;
+        }
+
+        int numFields;
+        try {
+            numFields = Integer.parseInt(new String(data[fieldsIndex]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        fieldsIndex++;
+
+        if (data.length < fieldsIndex + numFields) {
+            return ErrorReply.SYNTAX;
+        }
+
+        ArrayList<String> fieldList = new ArrayList<>();
+        for (int i = 0; i < numFields; i++) {
+            var fieldBytes = data[fieldsIndex + i];
+            if (fieldBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+            fieldList.add(new String(fieldBytes));
+        }
+
+        if (isUseHH(keyBytes)) {
+            return hgetex2(fieldList, expireAt, hasExpireOption);
+        }
+
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var key = slotWithKeyHash.rawKey();
+        var rhk = getRedisHashKeys(key);
+        if (rhk == null) {
+            var replies = new Reply[numFields];
+            for (int i = 0; i < numFields; i++) {
+                replies[i] = NilReply.INSTANCE;
+            }
+            return new MultiBulkReply(replies);
+        }
+
+        var replies = new Reply[numFields];
+        boolean ttlCacheModified = false;
+        for (int i = 0; i < numFields; i++) {
+            var field = fieldList.get(i);
+            var fieldKey = RedisHashKeys.fieldKey(key, field);
+            var sFieldKey = slot(fieldKey);
+            var fieldCv = getCv(sFieldKey);
+            if (fieldCv == null) {
+                replies[i] = NilReply.INSTANCE;
+            } else {
+                replies[i] = new BulkReply(getValueBytesByCv(fieldCv, sFieldKey));
+            }
+
+            if (hasExpireOption) {
+                fieldCv.setSeq(snowFlake.nextId());
+                fieldCv.setExpireAt(expireAt);
+                setCv(fieldCv, sFieldKey);
+                rhk.putCachedExpireAt(field, expireAt);
+                ttlCacheModified = true;
+            }
+        }
+
+        if (ttlCacheModified) {
+            saveRedisHashKeys(rhk, key);
+        }
+
+        return new MultiBulkReply(replies);
+    }
+
+    private Reply hgetex2(ArrayList<String> fields, long expireAt, boolean hasExpireOption) {
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var rhh = getRedisHH(slotWithKeyHash);
+        if (rhh == null) {
+            var replies = new Reply[fields.size()];
+            for (int i = 0; i < fields.size(); i++) {
+                replies[i] = NilReply.INSTANCE;
+            }
+            return new MultiBulkReply(replies);
+        }
+
+        var replies = new Reply[fields.size()];
+        for (int i = 0; i < fields.size(); i++) {
+            var field = fields.get(i);
+            var value = rhh.get(field);
+            replies[i] = value == null ? NilReply.INSTANCE : new BulkReply(value);
+        }
+
+        if (hasExpireOption) {
+            for (var field : fields) {
+                rhh.putExpireAt(field, expireAt);
+            }
+            saveRedisHH(rhh, slotWithKeyHash);
+        }
+
+        return new MultiBulkReply(replies);
+    }
+
+    private Reply hsetex() {
+        if (data.length < 5) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        boolean fnx = false;
+        boolean fxx = false;
+        int idx = 2;
+
+        var option = new String(data[idx]);
+        if ("fnx".equalsIgnoreCase(option)) {
+            fnx = true;
+            idx++;
+        } else if ("fxx".equalsIgnoreCase(option)) {
+            fxx = true;
+            idx++;
+        }
+
+        long expireAt = CompressedValue.NO_EXPIRE;
+        boolean hasExpireOption = false;
+        boolean keepttl = false;
+
+        var expOption = new String(data[idx]);
+        if ("ex".equalsIgnoreCase(expOption)) {
+            try {
+                long seconds = Long.parseLong(new String(data[idx + 1]));
+                expireAt = System.currentTimeMillis() + seconds * 1000;
+                hasExpireOption = true;
+            } catch (NumberFormatException e) {
+                return ErrorReply.NOT_INTEGER;
+            }
+            idx += 2;
+        } else if ("px".equalsIgnoreCase(expOption)) {
+            try {
+                long ms = Long.parseLong(new String(data[idx + 1]));
+                expireAt = System.currentTimeMillis() + ms;
+                hasExpireOption = true;
+            } catch (NumberFormatException e) {
+                return ErrorReply.NOT_INTEGER;
+            }
+            idx += 2;
+        } else if ("exat".equalsIgnoreCase(expOption)) {
+            try {
+                long unixSec = Long.parseLong(new String(data[idx + 1]));
+                expireAt = unixSec * 1000;
+                hasExpireOption = true;
+            } catch (NumberFormatException e) {
+                return ErrorReply.NOT_INTEGER;
+            }
+            idx += 2;
+        } else if ("pxat".equalsIgnoreCase(expOption)) {
+            try {
+                expireAt = Long.parseLong(new String(data[idx + 1]));
+                hasExpireOption = true;
+            } catch (NumberFormatException e) {
+                return ErrorReply.NOT_INTEGER;
+            }
+            idx += 2;
+        } else if ("keepttl".equalsIgnoreCase(expOption)) {
+            keepttl = true;
+            idx++;
+        }
+
+        if (data.length <= idx || !"fields".equalsIgnoreCase(new String(data[idx]))) {
+            return ErrorReply.SYNTAX;
+        }
+        idx++;
+
+        if (data.length <= idx) {
+            return ErrorReply.SYNTAX;
+        }
+
+        int numFields;
+        try {
+            numFields = Integer.parseInt(new String(data[idx]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        idx++;
+
+        if (data.length < idx + numFields * 2) {
+            return ErrorReply.SYNTAX;
+        }
+
+        LinkedHashMap<String, byte[]> fieldValues = new LinkedHashMap<>();
+        for (int i = 0; i < numFields; i++) {
+            var fieldBytes = data[idx++];
+            var valueBytes = data[idx++];
+            if (fieldBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+            fieldValues.put(new String(fieldBytes), valueBytes);
+        }
+
+        if (isUseHH(keyBytes)) {
+            return hsetex2(fieldValues, fnx, fxx, expireAt, hasExpireOption, keepttl);
+        }
+
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var key = slotWithKeyHash.rawKey();
+        var rhk = getRedisHashKeys(key);
+        if (rhk == null) {
+            rhk = new RedisHashKeys();
+        }
+
+        int setCount = 0;
+        for (var entry : fieldValues.entrySet()) {
+            var field = entry.getKey();
+            var value = entry.getValue();
+
+            if (fnx && rhk.contains(field)) {
+                continue;
+            }
+            if (fxx && !rhk.contains(field)) {
+                continue;
+            }
+
+            var fieldKey = RedisHashKeys.fieldKey(key, field);
+            var sFieldKey = slot(fieldKey);
+
+            long fieldExpireAt = keepttl ? CompressedValue.NO_EXPIRE : expireAt;
+            set(value, sFieldKey, CompressedValue.NULL_DICT_SEQ, fieldExpireAt);
+
+            rhk.add(field);
+            rhk.putCachedExpireAt(field, fieldExpireAt);
+            setCount++;
+        }
+
+        saveRedisHashKeys(rhk, key);
+        return new IntegerReply(setCount > 0 ? 1 : 0);
+    }
+
+    private Reply hsetex2(LinkedHashMap<String, byte[]> fieldValues, boolean fnx, boolean fxx,
+                          long expireAt, boolean hasExpireOption, boolean keepttl) {
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var rhh = getRedisHH(slotWithKeyHash);
+        if (rhh == null) {
+            rhh = new RedisHH();
+        }
+
+        int setCount = 0;
+        for (var entry : fieldValues.entrySet()) {
+            var field = entry.getKey();
+            var value = entry.getValue();
+
+            if (fnx && rhh.get(field) != null) {
+                continue;
+            }
+            if (fxx && rhh.get(field) == null) {
+                continue;
+            }
+
+            long fieldExpireAt = keepttl ? CompressedValue.NO_EXPIRE : expireAt;
+            rhh.put(field, value, fieldExpireAt);
+            setCount++;
+        }
+
+        saveRedisHH(rhh, slotWithKeyHash);
+        return new IntegerReply(setCount > 0 ? 1 : 0);
     }
 }

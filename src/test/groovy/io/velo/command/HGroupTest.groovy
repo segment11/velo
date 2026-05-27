@@ -1353,27 +1353,131 @@ httl
         reply == ErrorReply.NOT_INTEGER
     }
 
-    def 'test unsupported redis 8 hash commands return not supported'() {
+    def 'test hgetdel returns values and deletes fields'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
         def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
+        LocalPersist.instance.hashSaveMemberTogether = false
+
+        // Set up hash with fields
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhk = new RedisHashKeys()
+        rhk.add('field1')
+        rhk.add('field2')
+        rhk.add('field3')
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cvKeys.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+
+        def cvField1 = Mock.prepareCompressedValueList(1)[0]
+        cvField1.compressedData = 'value1'.bytes
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field1'), 0, cvField1)
+
+        def cvField2 = Mock.prepareCompressedValueList(1)[0]
+        cvField2.compressedData = 'value2'.bytes
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field2'), 0, cvField2)
 
         when:
-        def reply = hGroup.execute('hgetdel a field')
+        def reply = hGroup.execute('hgetdel hashA FIELDS 2 field1 field2')
         then:
-        reply == ErrorReply.NOT_SUPPORT
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
+        new String(((reply as MultiBulkReply).replies[1] as BulkReply).raw) == 'value2'
+
+        // Verify fields were deleted
+        def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
+        !savedRHK.contains('field1')
+        !savedRHK.contains('field2')
+        savedRHK.contains('field3')
+    }
+
+    def 'test hgetdel with non-existent fields returns nil'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+        LocalPersist.instance.hashSaveMemberTogether = false
+
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhk = new RedisHashKeys()
+        rhk.add('field1')
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cvKeys.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+
+        def cvField1 = Mock.prepareCompressedValueList(1)[0]
+        cvField1.compressedData = 'value1'.bytes
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field1'), 0, cvField1)
 
         when:
-        reply = hGroup.execute('hgetex a field')
+        def reply = hGroup.execute('hgetdel hashA FIELDS 2 field1 field2')
         then:
-        reply == ErrorReply.NOT_SUPPORT
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
+        (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
+    }
+
+    def 'test hgetex returns values'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+        LocalPersist.instance.hashSaveMemberTogether = false
+
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhk = new RedisHashKeys()
+        rhk.add('field1')
+        rhk.add('field2')
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cvKeys.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+
+        def cvField1 = Mock.prepareCompressedValueList(1)[0]
+        cvField1.compressedData = 'value1'.bytes
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field1'), 0, cvField1)
+
+        def cvField2 = Mock.prepareCompressedValueList(1)[0]
+        cvField2.compressedData = 'value2'.bytes
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field2'), 0, cvField2)
 
         when:
-        reply = hGroup.execute('hsetex a field value')
+        def reply = hGroup.execute('hgetex hashA FIELDS 2 field1 field2')
         then:
-        reply == ErrorReply.NOT_SUPPORT
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
+        new String(((reply as MultiBulkReply).replies[1] as BulkReply).raw) == 'value2'
+    }
+
+    def 'test hsetex sets fields with values'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+        LocalPersist.instance.hashSaveMemberTogether = false
+
+        when:
+        def reply = hGroup.execute('hsetex hashA FIELDS 2 field1 value1 field2 value2')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        // Verify fields were set
+        def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
+        savedRHK.contains('field1')
+        savedRHK.contains('field2')
+
+        def field1Cv = inMemoryGetSet.getBuf(slot, RedisHashKeys.fieldKey('hashA', 'field1'), 0, 0)
+        new String(field1Cv.cv().getCompressedData()) == 'value1'
     }
 
     def 'test hsetnx'() {
