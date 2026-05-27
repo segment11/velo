@@ -218,8 +218,10 @@ public class HGroup extends BaseCommand {
             return;
         }
 
+        boolean didMigration = false;
         var toRemove = new ArrayList<String>();
         for (var field : rhk.getSet()) {
+            didMigration = true;
             var fieldKey = RedisHashKeys.fieldKey(key, field);
             var sFieldKey = slot(fieldKey);
             var fieldCv = getCv(sFieldKey);
@@ -236,7 +238,7 @@ public class HGroup extends BaseCommand {
             rhk.remove(field);
         }
 
-        if (!toRemove.isEmpty() || rhk.hasTtlMetaEncoded()) {
+        if (didMigration) {
             saveRedisHashKeys(rhk, key);
         }
     }
@@ -998,6 +1000,12 @@ public class HGroup extends BaseCommand {
         var key = slotWithKeyHash.rawKey();
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
+
+        var rhk = getRedisHashKeys(key);
+        if (rhk != null && rhk.hasTtlMetaEncoded()) {
+            rhk.putCachedExpireAt(field, CompressedValue.NO_EXPIRE);
+            saveRedisHashKeys(rhk, key);
+        }
 
         byte[][] dd = {null, Wal.keyBytes(fieldKey)};
         var dGroup = new DGroup(cmd, dd, socket);
