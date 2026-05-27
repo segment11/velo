@@ -231,10 +231,10 @@ The severity of Low is appropriate; this only affects clients that distinguish n
 
 | Bug | Command | File | Severity | Status |
 |-----|---------|------|----------|--------|
-| 5 | SET | SGroup.java | **High** | Confirmed |
-| 6 | SET | SGroup.java / SGroupTest.groovy | **Medium** | Confirmed |
-| 7 | SET | SGroup.java / SGroupTest.groovy | **Medium** | Confirmed (root cause corrected) |
-| 8 | GETRANGE | GGroup.java / GGroupTest.groovy | **Low** | Confirmed |
+| 5 | SET | SGroup.java | **High** | Fixed (`3f89056d`, `2723f4b3`) |
+| 6 | SET | SGroup.java / SGroupTest.groovy | **Medium** | Fixed (`b2248528`) |
+| 7 | SET | SGroup.java / SGroupTest.groovy | **Medium** | Fixed (`002edcba`) |
+| 8 | GETRANGE | GGroup.java / GGroupTest.groovy | **Low** | Fixed (`63841f54`) |
 
 ---
 
