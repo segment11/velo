@@ -1001,16 +1001,32 @@ public class HGroup extends BaseCommand {
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
 
+        var rhk = getRedisHashKeys(key);
+        long oldCachedExpireAt = CompressedValue.NO_EXPIRE;
+        if (rhk != null && rhk.hasTtlMetaEncoded()) {
+            oldCachedExpireAt = rhk.getCachedExpireAt(field);
+        }
+
         byte[][] dd = {null, Wal.keyBytes(fieldKey)};
         var dGroup = new DGroup(cmd, dd, socket);
         dGroup.from(this);
         dGroup.setSlotWithKeyHashListParsed(dGroup.parseSlots("decr", dd, slotNumber));
 
+        Reply reply;
         if (isFloat) {
-            return dGroup.decrBy(0, -byFloat);
+            reply = dGroup.decrBy(0, -byFloat);
         } else {
-            return dGroup.decrBy(-by, 0);
+            reply = dGroup.decrBy(-by, 0);
         }
+
+        if (reply instanceof IntegerReply || reply instanceof DoubleReply) {
+            if (oldCachedExpireAt != CompressedValue.NO_EXPIRE && rhk != null && rhk.hasTtlMetaEncoded()) {
+                rhk.putCachedExpireAt(field, CompressedValue.NO_EXPIRE);
+                saveRedisHashKeys(rhk, key);
+            }
+        }
+
+        return reply;
     }
 
     private Reply hincrby2(byte[] fieldBytes, int by, double byFloat, boolean isByFloat) {
