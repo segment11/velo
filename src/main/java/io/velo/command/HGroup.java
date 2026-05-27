@@ -1801,10 +1801,11 @@ public class HGroup extends BaseCommand {
         boolean hasExpireOption = false;
         int fieldsIndex = 2;
 
-        var optionOrFields = new String(data[fieldsIndex]);
-        if (!"fields".equalsIgnoreCase(optionOrFields)) {
+        if ("fields".equalsIgnoreCase(new String(data[fieldsIndex]))) {
+            fieldsIndex++;
+        } else {
             hasExpireOption = true;
-            if ("ex".equalsIgnoreCase(optionOrFields)) {
+            if ("ex".equalsIgnoreCase(new String(data[fieldsIndex]))) {
                 try {
                     long seconds = Long.parseLong(new String(data[fieldsIndex + 1]));
                     expireAt = System.currentTimeMillis() + seconds * 1000;
@@ -1812,7 +1813,7 @@ public class HGroup extends BaseCommand {
                     return ErrorReply.NOT_INTEGER;
                 }
                 fieldsIndex += 2;
-            } else if ("px".equalsIgnoreCase(optionOrFields)) {
+            } else if ("px".equalsIgnoreCase(new String(data[fieldsIndex]))) {
                 try {
                     long ms = Long.parseLong(new String(data[fieldsIndex + 1]));
                     expireAt = System.currentTimeMillis() + ms;
@@ -1820,7 +1821,7 @@ public class HGroup extends BaseCommand {
                     return ErrorReply.NOT_INTEGER;
                 }
                 fieldsIndex += 2;
-            } else if ("exat".equalsIgnoreCase(optionOrFields)) {
+            } else if ("exat".equalsIgnoreCase(new String(data[fieldsIndex]))) {
                 try {
                     long unixSec = Long.parseLong(new String(data[fieldsIndex + 1]));
                     expireAt = unixSec * 1000;
@@ -1828,14 +1829,14 @@ public class HGroup extends BaseCommand {
                     return ErrorReply.NOT_INTEGER;
                 }
                 fieldsIndex += 2;
-            } else if ("pxat".equalsIgnoreCase(optionOrFields)) {
+            } else if ("pxat".equalsIgnoreCase(new String(data[fieldsIndex]))) {
                 try {
                     expireAt = Long.parseLong(new String(data[fieldsIndex + 1]));
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_INTEGER;
                 }
                 fieldsIndex += 2;
-            } else if ("persist".equalsIgnoreCase(optionOrFields)) {
+            } else if ("persist".equalsIgnoreCase(new String(data[fieldsIndex]))) {
                 fieldsIndex += 1;
             } else {
                 return ErrorReply.SYNTAX;
@@ -1900,7 +1901,7 @@ public class HGroup extends BaseCommand {
                 replies[i] = new BulkReply(getValueBytesByCv(fieldCv, sFieldKey));
             }
 
-            if (hasExpireOption) {
+            if (hasExpireOption && fieldCv != null) {
                 fieldCv.setSeq(snowFlake.nextId());
                 fieldCv.setExpireAt(expireAt);
                 setCv(fieldCv, sFieldKey);
