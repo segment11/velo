@@ -260,7 +260,8 @@ class GGroupTest extends Specification {
         when:
         def reply = gGroup.execute('getrange a 0 1')
         then:
-        reply == NilReply.INSTANCE
+        reply instanceof BulkReply
+        (reply as BulkReply).raw.length == 0
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]

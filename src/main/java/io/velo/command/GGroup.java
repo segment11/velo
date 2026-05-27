@@ -263,7 +263,7 @@ public class GGroup extends BaseCommand {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var valueBytes = get(slotWithKeyHash);
         if (valueBytes == null) {
-            return NilReply.INSTANCE;
+            return BLANK_REPLY;
         }
 
         var startEnd = IndexStartEndReset.reset(start, end, valueBytes.length);
