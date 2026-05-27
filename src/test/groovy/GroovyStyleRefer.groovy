@@ -176,3 +176,22 @@ println person3?.name
 if (person3 != null) {
     println person3.name
 }
+
+// use simplify assert, or in when/then Specification test methods
+/*
+when:
+def a = true
+then:
+a
+
+do not
+then:
+a == null
+ */
+
+// do not use full package class in code line, use import
+import com.google.common.base.Strings
+// prefer
+def padded = Strings.padStart('abc', 16, ' ' as char)
+// do not
+def padded2 = com.google.common.base.Strings.padStart('abc', 16, ' ' as char)
