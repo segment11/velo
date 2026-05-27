@@ -1989,4 +1989,73 @@ httl
         def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
         savedRHK.getCachedExpireAt('field0') == CompressedValue.NO_EXPIRE
     }
+
+    def 'test hincrby clears cached ttl after successful increment'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        // Set up hash with 1 field that has cached TTL
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhk = new RedisHashKeys()
+        rhk.add('field0')
+        rhk.putCachedExpireAt('field0', System.currentTimeMillis() + 3600000)
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def encoded = rhk.encodeButDoNotCompress()
+        cvKeys.compressedData = encoded
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+
+        // Set up numeric field CV
+        def cvField0 = Mock.prepareCompressedValueList(1)[0]
+        cvField0.compressedData = '5'.bytes
+        cvField0.setExpireAt(System.currentTimeMillis() + 3600000)
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field0'), 0, cvField0)
+
+        when:
+        def reply = hGroup.execute('hincrby hashA field0 3')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 8
+
+        // Verify cached TTL was cleared (CV was written with NO_EXPIRE)
+        def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
+        savedRHK.getCachedExpireAt('field0') == CompressedValue.NO_EXPIRE
+    }
+
+    def 'test hincrby on non-numeric value does not clear cached ttl'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        // Set up hash with 1 field that has cached TTL
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhk = new RedisHashKeys()
+        rhk.add('field0')
+        rhk.putCachedExpireAt('field0', System.currentTimeMillis() + 3600000)
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def encoded = rhk.encodeButDoNotCompress()
+        cvKeys.compressedData = encoded
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+
+        // Set up non-numeric field CV
+        def cvField0 = Mock.prepareCompressedValueList(1)[0]
+        cvField0.compressedData = 'notanumber'.bytes
+        cvField0.setExpireAt(System.currentTimeMillis() + 3600000)
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field0'), 0, cvField0)
+
+        when:
+        def reply = hGroup.execute('hincrby hashA field0 3')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        // Verify cached TTL was NOT cleared (operation failed)
+        def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
+        savedRHK.getCachedExpireAt('field0') > System.currentTimeMillis()
+    }
 }
