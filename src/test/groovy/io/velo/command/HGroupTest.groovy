@@ -1436,7 +1436,7 @@ httl
         when:
         def reply = hGroup.execute('hgetdel hashA FIELDS -1')
         then:
-        reply instanceof ErrorReply
+        reply == ErrorReply.NOT_INTEGER
     }
 
     def 'test hgetex with negative numfields returns error'() {
@@ -1449,7 +1449,7 @@ httl
         when:
         def reply = hGroup.execute('hgetex hashA FIELDS -1')
         then:
-        reply instanceof ErrorReply
+        reply == ErrorReply.NOT_INTEGER
     }
 
     def 'test hsetex with negative numfields returns error'() {
@@ -1460,9 +1460,48 @@ httl
         hGroup.from(BaseCommand.mockAGroup())
 
         when:
-        def reply = hGroup.execute('hsetex hashA FIELDS -1')
+        def reply = hGroup.execute('hsetex hashA FIELDS -1 extra')
         then:
-        reply instanceof ErrorReply
+        reply == ErrorReply.NOT_INTEGER
+    }
+
+    def 'test hgetdel with trailing args returns syntax error'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = hGroup.execute('hgetdel hashA FIELDS 1 field extra')
+        then:
+        reply == ErrorReply.SYNTAX
+    }
+
+    def 'test hgetex with trailing args returns syntax error'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = hGroup.execute('hgetex hashA FIELDS 1 field extra')
+        then:
+        reply == ErrorReply.SYNTAX
+    }
+
+    def 'test hsetex with trailing args returns syntax error'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = hGroup.execute('hsetex hashA FIELDS 1 field value extra')
+        then:
+        reply == ErrorReply.SYNTAX
     }
 
     def 'test hgetex returns values'() {
