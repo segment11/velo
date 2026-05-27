@@ -265,6 +265,7 @@ class RedisHashKeysTest extends Specification {
 
         when:
         def live = rhk.liveFieldsByCache(500L)
+        def live2 = rhk.liveFieldsByCache()
         then:
         live.containsAll(['field1', 'field3']) // all live at 500ms
 
