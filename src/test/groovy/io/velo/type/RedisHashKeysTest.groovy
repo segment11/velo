@@ -61,7 +61,6 @@ class RedisHashKeysTest extends Specification {
         rhk2.contains('field2')
         rhk2.size() == 2
         RedisHashKeys.getSizeWithoutDecode(encoded) == 2
-        RedisHashKeys.hasTtlMetaSection(encoded)
     }
 
     def 'decode crc32 not match'() {
@@ -294,7 +293,7 @@ class RedisHashKeysTest extends Specification {
         rhk.liveFieldsByCache() == ['field1', 'field2']
     }
 
-    def 'test old format decode without ttl meta'() {
+    def 'test decode requires ttl meta section'() {
         given:
         // Manually construct old format bytes (no TTL section)
         // Format: header(14) + field entries (no TTL section)
@@ -335,12 +334,11 @@ class RedisHashKeysTest extends Specification {
         // oldFormatBytes should be 14 + fieldBodyLen bytes with correct CRC
 
         when:
-        def decoded = RedisHashKeys.decode(oldFormatBytes, false)
+        RedisHashKeys.decode(oldFormatBytes, false)
 
         then:
-        decoded.size() == 2
-        !RedisHashKeys.hasTtlMetaSection(oldFormatBytes)
-        decoded.getCachedExpireAt('field1') == CompressedValue.NO_EXPIRE
+        def e = thrown(IllegalStateException)
+        e.message.contains('TTL metadata section missing')
     }
 
     def 'test new format with empty ttl section round-trip'() {
@@ -355,7 +353,6 @@ class RedisHashKeysTest extends Specification {
 
         then:
         decoded.size() == 2
-        RedisHashKeys.hasTtlMetaSection(encoded)
         decoded.getCachedExpireAt('field1') == CompressedValue.NO_EXPIRE
         decoded.getCachedExpireAt('field2') == CompressedValue.NO_EXPIRE
     }
@@ -376,7 +373,6 @@ class RedisHashKeysTest extends Specification {
 
         then:
         decoded.size() == 3
-        RedisHashKeys.hasTtlMetaSection(encoded)
         decoded.getCachedExpireAt('field1') == 1000L
         decoded.getCachedExpireAt('field2') == 2000L
         decoded.getCachedExpireAt('field3') == CompressedValue.NO_EXPIRE

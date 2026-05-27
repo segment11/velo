@@ -193,12 +193,7 @@ public class HGroup extends BaseCommand {
             return null;
         }
 
-        var decoded = RedisHashKeys.decodeWithTtlMetaSection(keysValueBytes, true);
-        var rhk = decoded.redisHashKeys();
-        if (!decoded.hasTtlMetaSection()) {
-            migrateHashKeysTtlCache(key, rhk);
-        }
-        return rhk;
+        return RedisHashKeys.decode(keysValueBytes);
     }
 
     void saveRedisHashKeys(RedisHashKeys rhk, String key) {
@@ -216,32 +211,6 @@ public class HGroup extends BaseCommand {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
         set(rhk.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_HASH);
-    }
-
-    private void migrateHashKeysTtlCache(String key, RedisHashKeys rhk) {
-        boolean didMigration = false;
-        var toRemove = new ArrayList<String>();
-        for (var field : rhk.getSet()) {
-            didMigration = true;
-            var fieldKey = RedisHashKeys.fieldKey(key, field);
-            var sFieldKey = slot(fieldKey);
-            var expireAt = getExpireAt(sFieldKey);
-            if (expireAt == null) {
-                toRemove.add(field);
-            } else {
-                if (expireAt != CompressedValue.NO_EXPIRE) {
-                    rhk.putCachedExpireAt(field, expireAt);
-                }
-            }
-        }
-
-        for (var field : toRemove) {
-            rhk.remove(field);
-        }
-
-        if (didMigration) {
-            saveRedisHashKeys(rhk, key);
-        }
     }
 
     private RedisHH getRedisHH(SlotWithKeyHash slotWithKeyHash) {

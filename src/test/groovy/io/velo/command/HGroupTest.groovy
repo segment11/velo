@@ -2,7 +2,6 @@ package io.velo.command
 
 import io.velo.BaseCommand
 import io.velo.CompressedValue
-import io.velo.KeyHash
 import io.velo.SocketInspectorTest
 import io.velo.acl.AclUsers
 import io.velo.acl.U
@@ -2060,72 +2059,4 @@ httl
         savedRHK.getCachedExpireAt('field0') > System.currentTimeMillis()
     }
 
-    def 'test aggregate read migrates old hash keys to mandatory ttl meta format'() {
-        given:
-        LocalPersist.instance.hashSaveMemberTogether = false
-        def inMemoryGetSet = new InMemoryGetSet()
-        def hGroup = new HGroup(null, null, null)
-        hGroup.byPassGetSet = inMemoryGetSet
-        hGroup.from(BaseCommand.mockAGroup())
-
-        def field0Bytes = 'field0'.bytes
-        def field1Bytes = 'field1'.bytes
-        def field2Bytes = 'field2'.bytes
-        def fieldBodyLen = (2 + field0Bytes.length) + (2 + field1Bytes.length) + (2 + field2Bytes.length)
-        def baos = new ByteArrayOutputStream()
-        def dos = new DataOutputStream(baos)
-        dos.writeShort(3)
-        dos.writeInt(0)
-        dos.writeInt(fieldBodyLen)
-        dos.writeInt(0)
-        dos.writeShort(field0Bytes.length)
-        dos.write(field0Bytes)
-        dos.writeShort(field1Bytes.length)
-        dos.write(field1Bytes)
-        dos.writeShort(field2Bytes.length)
-        dos.write(field2Bytes)
-        def oldBytesWithPlaceholderCrc = baos.toByteArray()
-        def crc = KeyHash.hash32Offset(oldBytesWithPlaceholderCrc, RedisHashKeys.HEADER_LENGTH, fieldBodyLen)
-        baos.reset()
-        dos = new DataOutputStream(baos)
-        dos.writeShort(3)
-        dos.writeInt(0)
-        dos.writeInt(fieldBodyLen)
-        dos.writeInt(crc)
-        dos.writeShort(field0Bytes.length)
-        dos.write(field0Bytes)
-        dos.writeShort(field1Bytes.length)
-        dos.write(field1Bytes)
-        dos.writeShort(field2Bytes.length)
-        dos.write(field2Bytes)
-
-        def cvKeys = Mock.prepareCompressedValueList(1)[0]
-        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
-        cvKeys.compressedData = baos.toByteArray()
-        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
-
-        def futureExpireAt = System.currentTimeMillis() + 3600000
-        def cvField0 = Mock.prepareCompressedValueList(1)[0]
-        cvField0.compressedData = 'v0'.bytes
-        cvField0.setExpireAt(CompressedValue.NO_EXPIRE)
-        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field0'), 0, cvField0)
-
-        def cvField1 = Mock.prepareCompressedValueList(1)[0]
-        cvField1.compressedData = 'v1'.bytes
-        cvField1.setExpireAt(futureExpireAt)
-        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field1'), 0, cvField1)
-
-        when:
-        def reply = hGroup.execute('hkeys hashA')
-
-        then:
-        reply instanceof MultiBulkReply
-        def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
-        def savedBytes = keysCv.cv().getCompressedData()
-        RedisHashKeys.hasTtlMetaSection(savedBytes)
-        def savedRHK = RedisHashKeys.decode(savedBytes, false)
-        savedRHK.getCachedExpireAt('field0') == CompressedValue.NO_EXPIRE
-        savedRHK.getCachedExpireAt('field1') == futureExpireAt
-        !savedRHK.contains('field2')
-    }
 }

@@ -883,3 +883,22 @@ JaCoCo inspection:
 - `HGroup.migrateHashKeysTtlCache(...)` is covered for live no-expire fields, live expiring fields, and stale missing fields.
 - `HGroup.hincrby(...)` cache-clear body remains covered.
 - `RedisHashKeys.decodeWithTtlMetaSection(...)` is covered for old-format values, new-format empty TTL sections, and new-format TTL entries.
+
+### Simplification Update
+
+After dropping old encoded-data compatibility, the implementation was simplified:
+
+- Removed `RedisHashKeys.DecodeResult`, `decodeWithTtlMetaSection(...)`, and `hasTtlMetaSection(...)`.
+- `RedisHashKeys.decode(...)` now requires the TTL metadata section and throws `IllegalStateException("TTL metadata section missing")` when it is absent.
+- Removed `HGroup.migrateHashKeysTtlCache(...)`; `HGroup.getRedisHashKeys(...)` now calls `RedisHashKeys.decode(...)` directly.
+- Removed the old-format aggregate migration test and changed the RedisHashKeys old-format test to assert decode failure.
+
+Verification:
+
+- `./gradlew :test --tests "io.velo.type.RedisHashKeysTest.test decode requires ttl meta section" --rerun-tasks`: failed before production changes because decode still accepted old-format bytes.
+- `./gradlew :test --tests "io.velo.type.RedisHashKeysTest" --tests "io.velo.command.HGroupTest" --rerun-tasks`: passed after simplification.
+
+JaCoCo inspection:
+
+- `RedisHashKeys.decode(...)` missing TTL metadata branch is covered.
+- `HGroup.getRedisHashKeys(...)` direct decode path is covered.
