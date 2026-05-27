@@ -1001,12 +1001,6 @@ public class HGroup extends BaseCommand {
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
 
-        var rhk = getRedisHashKeys(key);
-        if (rhk != null && rhk.hasTtlMetaEncoded()) {
-            rhk.putCachedExpireAt(field, CompressedValue.NO_EXPIRE);
-            saveRedisHashKeys(rhk, key);
-        }
-
         byte[][] dd = {null, Wal.keyBytes(fieldKey)};
         var dGroup = new DGroup(cmd, dd, socket);
         dGroup.from(this);
