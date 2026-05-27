@@ -1518,6 +1518,39 @@ httl
         (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
     }
 
+    def 'test hgetex with expiry and mixed existing and missing fields'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+        LocalPersist.instance.hashSaveMemberTogether = false
+
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhk = new RedisHashKeys()
+        rhk.add('field1')
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cvKeys.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+
+        def cvField1 = Mock.prepareCompressedValueList(1)[0]
+        cvField1.compressedData = 'value1'.bytes
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field1'), 0, cvField1)
+
+        when:
+        def reply = hGroup.execute('hgetex hashA EX 3600 FIELDS 2 field1 nonexistent')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
+        (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
+
+        and:
+        def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
+        savedRHK.getCachedExpireAt('field1') > System.currentTimeMillis()
+    }
+
     def 'test hsetex sets fields with values'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
