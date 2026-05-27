@@ -61,6 +61,7 @@ class RedisHashKeysTest extends Specification {
         rhk2.contains('field2')
         rhk2.size() == 2
         RedisHashKeys.getSizeWithoutDecode(encoded) == 2
+        RedisHashKeys.hasTtlMetaSection(encoded)
     }
 
     def 'decode crc32 not match'() {
@@ -242,14 +243,12 @@ class RedisHashKeysTest extends Specification {
         rhk.add('field3')
 
         expect:
-        !rhk.hasTtlMetaEncoded()
         rhk.getCachedExpireAt('field1') == CompressedValue.NO_EXPIRE
 
         when:
         rhk.putCachedExpireAt('field1', 1000L)
         then:
         rhk.getCachedExpireAt('field1') == 1000L
-        rhk.hasTtlMetaEncoded()
 
         when:
         rhk.putCachedExpireAt('field2', 2000L)
@@ -265,7 +264,6 @@ class RedisHashKeysTest extends Specification {
 
         when:
         def live = rhk.liveFieldsByCache(500L)
-        def live2 = rhk.liveFieldsByCache()
         then:
         live.containsAll(['field1', 'field3']) // all live at 500ms
 
@@ -278,13 +276,22 @@ class RedisHashKeysTest extends Specification {
         rhk.clearCachedExpireAt('field1')
         then:
         rhk.getCachedExpireAt('field1') == CompressedValue.NO_EXPIRE
-        rhk.hasTtlMetaEncoded() // still true, has field2 entry
 
         when:
         rhk.putCachedExpireAt('field1', CompressedValue.NO_EXPIRE)
         then:
         rhk.getCachedExpireAt('field1') == CompressedValue.NO_EXPIRE
-        rhk.hasTtlMetaEncoded() // field2 still has TTL
+        rhk.getCachedExpireAt('field2') == 2000L
+    }
+
+    def 'test liveFieldsByCache no-arg returns no-expire fields'() {
+        given:
+        def rhk = new RedisHashKeys()
+        rhk.add('field1')
+        rhk.add('field2')
+
+        expect:
+        rhk.liveFieldsByCache() == ['field1', 'field2']
     }
 
     def 'test old format decode without ttl meta'() {
@@ -332,7 +339,7 @@ class RedisHashKeysTest extends Specification {
 
         then:
         decoded.size() == 2
-        !decoded.hasTtlMetaEncoded()
+        !RedisHashKeys.hasTtlMetaSection(oldFormatBytes)
         decoded.getCachedExpireAt('field1') == CompressedValue.NO_EXPIRE
     }
 
@@ -348,7 +355,7 @@ class RedisHashKeysTest extends Specification {
 
         then:
         decoded.size() == 2
-        decoded.hasTtlMetaEncoded()
+        RedisHashKeys.hasTtlMetaSection(encoded)
         decoded.getCachedExpireAt('field1') == CompressedValue.NO_EXPIRE
         decoded.getCachedExpireAt('field2') == CompressedValue.NO_EXPIRE
     }
@@ -369,7 +376,7 @@ class RedisHashKeysTest extends Specification {
 
         then:
         decoded.size() == 3
-        decoded.hasTtlMetaEncoded()
+        RedisHashKeys.hasTtlMetaSection(encoded)
         decoded.getCachedExpireAt('field1') == 1000L
         decoded.getCachedExpireAt('field2') == 2000L
         decoded.getCachedExpireAt('field3') == CompressedValue.NO_EXPIRE

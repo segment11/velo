@@ -193,7 +193,12 @@ public class HGroup extends BaseCommand {
             return null;
         }
 
-        return RedisHashKeys.decode(keysValueBytes);
+        var decoded = RedisHashKeys.decodeWithTtlMetaSection(keysValueBytes, true);
+        var rhk = decoded.redisHashKeys();
+        if (!decoded.hasTtlMetaSection()) {
+            migrateHashKeysTtlCache(key, rhk);
+        }
+        return rhk;
     }
 
     void saveRedisHashKeys(RedisHashKeys rhk, String key) {
@@ -213,11 +218,7 @@ public class HGroup extends BaseCommand {
         set(rhk.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_HASH);
     }
 
-    private void ensureHashKeysTtlCacheCurrent(String key, RedisHashKeys rhk) {
-        if (rhk.hasTtlMetaEncoded()) {
-            return;
-        }
-
+    private void migrateHashKeysTtlCache(String key, RedisHashKeys rhk) {
         boolean didMigration = false;
         var toRemove = new ArrayList<String>();
         for (var field : rhk.getSet()) {
@@ -920,8 +921,6 @@ public class HGroup extends BaseCommand {
             return MultiBulkReply.EMPTY;
         }
 
-        ensureHashKeysTtlCacheCurrent(key, rhk);
-
         var liveFields = rhk.liveFieldsByCache();
         if (liveFields.isEmpty()) {
             return MultiBulkReply.EMPTY;
@@ -1003,7 +1002,7 @@ public class HGroup extends BaseCommand {
 
         var rhk = getRedisHashKeys(key);
         long oldCachedExpireAt = CompressedValue.NO_EXPIRE;
-        if (rhk != null && rhk.hasTtlMetaEncoded()) {
+        if (rhk != null) {
             oldCachedExpireAt = rhk.getCachedExpireAt(field);
         }
 
@@ -1020,7 +1019,7 @@ public class HGroup extends BaseCommand {
         }
 
         if (reply instanceof IntegerReply || reply instanceof DoubleReply) {
-            if (oldCachedExpireAt != CompressedValue.NO_EXPIRE && rhk != null && rhk.hasTtlMetaEncoded()) {
+            if (oldCachedExpireAt != CompressedValue.NO_EXPIRE && rhk != null) {
                 rhk.putCachedExpireAt(field, CompressedValue.NO_EXPIRE);
                 saveRedisHashKeys(rhk, key);
             }
@@ -1110,8 +1109,6 @@ public class HGroup extends BaseCommand {
         if (rhk == null) {
             return onlyReturnSize ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
         }
-
-        ensureHashKeysTtlCacheCurrent(key, rhk);
 
         var liveFields = rhk.liveFieldsByCache();
 
@@ -1336,8 +1333,6 @@ public class HGroup extends BaseCommand {
             return withValues ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
         }
 
-        ensureHashKeysTtlCacheCurrent(key, rhk);
-
         var liveFields = rhk.liveFieldsByCache();
         if (liveFields.isEmpty()) {
             return withValues ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
@@ -1491,8 +1486,6 @@ public class HGroup extends BaseCommand {
         if (rhk == null || rhk.size() == 0) {
             return MultiBulkReply.SCAN_EMPTY;
         }
-
-        ensureHashKeysTtlCacheCurrent(key, rhk);
 
         var liveFields = rhk.liveFieldsByCache();
         if (liveFields.isEmpty()) {
@@ -1674,8 +1667,6 @@ public class HGroup extends BaseCommand {
         if (rhk == null) {
             return MultiBulkReply.EMPTY;
         }
-
-        ensureHashKeysTtlCacheCurrent(key, rhk);
 
         var liveFields = rhk.liveFieldsByCache();
         if (liveFields.isEmpty()) {

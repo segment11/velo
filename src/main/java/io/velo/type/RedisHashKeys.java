@@ -17,6 +17,9 @@ import static io.velo.DictMap.TO_COMPRESS_MIN_DATA_LENGTH;
  * Hash keys set with Zstd compression support.
  */
 public class RedisHashKeys {
+    public record DecodeResult(RedisHashKeys redisHashKeys, boolean hasTtlMetaSection) {
+    }
+
     /**
      * Maximum size of the hash (4096).
      * Encoded and compressed length should be under 4KB.
@@ -42,11 +45,6 @@ public class RedisHashKeys {
 
     private final TreeSet<String> set = new TreeSet<>();
     private final HashMap<String, Long> expireAtByField = new HashMap<>();
-    private boolean ttlMetaEncoded = false;
-
-    public boolean hasTtlMetaEncoded() {
-        return ttlMetaEncoded;
-    }
 
     public long getCachedExpireAt(String field) {
         var expireAt = expireAtByField.get(field);
@@ -58,7 +56,6 @@ public class RedisHashKeys {
             expireAtByField.remove(field);
         } else {
             expireAtByField.put(field, expireAt);
-            ttlMetaEncoded = true;
         }
     }
 
@@ -241,6 +238,14 @@ public class RedisHashKeys {
     }
 
     /**
+     * @param data the encoded byte array
+     * @return true if the encoded value contains the mandatory TTL metadata section
+     */
+    public static boolean hasTtlMetaSection(byte[] data) {
+        return decodeWithTtlMetaSection(data, false).hasTtlMetaSection();
+    }
+
+    /**
      * @param data the byte array to decode
      * @return decoded RedisHashKeys
      */
@@ -254,6 +259,15 @@ public class RedisHashKeys {
      * @return decoded RedisHashKeys
      */
     public static RedisHashKeys decode(byte[] data, boolean doCheckCrc32) {
+        return decodeWithTtlMetaSection(data, doCheckCrc32).redisHashKeys();
+    }
+
+    /**
+     * @param data         the byte array to decode
+     * @param doCheckCrc32 whether to check CRC32
+     * @return decoded RedisHashKeys plus whether the encoded bytes contained the TTL metadata section
+     */
+    public static DecodeResult decodeWithTtlMetaSection(byte[] data, boolean doCheckCrc32) {
         var buffer = ByteBuffer.wrap(data);
         var size = buffer.getShort();
         var dictSeq = buffer.getInt();
@@ -288,10 +302,12 @@ public class RedisHashKeys {
             r.set.add(Wal.keyString(bytes));
         }
 
+        boolean hasTtlMetaSection = false;
         // Parse TTL metadata section if present
         if (buffer.hasRemaining()) {
             int marker = buffer.getInt();
             if (marker == TTL_META_MARKER) {
+                hasTtlMetaSection = true;
                 int expireCount = buffer.getShort();
                 for (int i = 0; i < expireCount; i++) {
                     int fieldLen = buffer.getShort();
@@ -306,13 +322,12 @@ public class RedisHashKeys {
                         r.expireAtByField.put(field, expireAt);
                     }
                 }
-                r.ttlMetaEncoded = true;
+            } else {
+                throw new IllegalStateException("TTL metadata marker error: " + marker);
             }
-        } else {
-            r.ttlMetaEncoded = false;
         }
 
-        return r;
+        return new DecodeResult(r, hasTtlMetaSection);
     }
 
     /**
