@@ -554,7 +554,7 @@ public class SGroup extends BaseCommand {
 
             isExpireAtSet = isEx || isPx || isExAt || isPxAt;
             if (!isExpireAtSet) {
-                continue;
+                return ErrorReply.SYNTAX;
             }
 
             if (dd.length <= i + 1) {

@@ -522,10 +522,9 @@ sunionstore
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        // skip syntax check
         reply = sGroup.execute('set a value zz')
         then:
-        reply == OKReply.INSTANCE
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = sGroup.execute('set a value ex')
