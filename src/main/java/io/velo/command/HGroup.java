@@ -182,6 +182,10 @@ public class HGroup extends BaseCommand {
             return hvals();
         }
 
+        if ("hgetdel".equals(cmd) || "hgetex".equals(cmd) || "hsetex".equals(cmd)) {
+            return ErrorReply.NOT_SUPPORT;
+        }
+
         return NilReply.INSTANCE;
     }
 

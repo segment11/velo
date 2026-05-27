@@ -1353,6 +1353,29 @@ httl
         reply == ErrorReply.NOT_INTEGER
     }
 
+    def 'test unsupported redis 8 hash commands return not supported'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = hGroup.execute('hgetdel a field')
+        then:
+        reply == ErrorReply.NOT_SUPPORT
+
+        when:
+        reply = hGroup.execute('hgetex a field')
+        then:
+        reply == ErrorReply.NOT_SUPPORT
+
+        when:
+        reply = hGroup.execute('hsetex a field value')
+        then:
+        reply == ErrorReply.NOT_SUPPORT
+    }
+
     def 'test hsetnx'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
