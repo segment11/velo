@@ -917,7 +917,7 @@ httl
         reply = hGroup.execute('hset a field value field0 value0')
         then:
         reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 2
+        (reply as IntegerReply).integer == 0
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -934,7 +934,7 @@ httl
         reply = hGroup.execute('hset a field value field0 value0')
         then:
         reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 2
+        (reply as IntegerReply).integer == 0
 
         // get and compare
         when:
@@ -984,6 +984,53 @@ httl
         reply = hGroup.execute('hmset a field _0')
         then:
         reply == ErrorReply.SYNTAX
+    }
+
+    def 'test hset returns newly added field count'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def reply
+
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        LocalPersist.instance.hashSaveMemberTogether = false
+
+        when:
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def rhk = new RedisHashKeys()
+        cvKeys.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+        reply = hGroup.execute('hset hashA field1 val1')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when:
+        reply = hGroup.execute('hset hashA field1 val2')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+
+        when:
+        reply = hGroup.execute('hset hashA field1 val3 field2 val4')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when:
+        reply = hGroup.execute('hset hashA field1 val5 field2 val6 field3 val7')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when:
+        reply = hGroup.execute('hset hashA field1 val8 field2 val9 field3 val10 field4 val11')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
     }
 
     def 'test hrandfield'() {
@@ -1778,5 +1825,168 @@ httl
         reply = hGroup.execute('hexpire a 10 fields 1 >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+    }
+
+    def 'test hexpire writes cache and persists to cv storage'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        // Set up hash with 2 fields
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhk = new RedisHashKeys()
+        rhk.add('field0')
+        rhk.add('field1')
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def encoded = rhk.encodeButDoNotCompress()
+        cvKeys.compressedData = encoded
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+
+        def cvField0 = Mock.prepareCompressedValueList(1)[0]
+        cvField0.compressedData = 'val0'.bytes
+        cvField0.setExpireAt(CompressedValue.NO_EXPIRE)
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field0'), 0, cvField0)
+
+        def cvField1 = Mock.prepareCompressedValueList(1)[0]
+        cvField1.compressedData = 'val1'.bytes
+        cvField1.setExpireAt(CompressedValue.NO_EXPIRE)
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field1'), 0, cvField1)
+
+        when:
+        def reply = hGroup.execute('hexpire hashA 100 fields 1 field0')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
+
+        // Verify CV storage was updated
+        def savedCvField0 = inMemoryGetSet.getBuf(slot, RedisHashKeys.fieldKey('hashA', 'field0'), 0, 0)
+        savedCvField0.cv().getExpireAt() > System.currentTimeMillis()
+
+        // Verify cache was updated
+        def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
+        savedRHK.getCachedExpireAt('field0') > System.currentTimeMillis()
+        savedRHK.getCachedExpireAt('field1') == CompressedValue.NO_EXPIRE
+    }
+
+    def 'test hpersist clears cache and cv storage'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        // Set up hash with 2 fields, field0 has TTL
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhk = new RedisHashKeys()
+        rhk.add('field0')
+        rhk.add('field1')
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def encoded = rhk.encodeButDoNotCompress()
+        cvKeys.compressedData = encoded
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+
+        def futureExpireAt = System.currentTimeMillis() + 3600000
+        def cvField0 = Mock.prepareCompressedValueList(1)[0]
+        cvField0.compressedData = 'val0'.bytes
+        cvField0.setExpireAt(futureExpireAt)
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field0'), 0, cvField0)
+
+        def cvField1 = Mock.prepareCompressedValueList(1)[0]
+        cvField1.compressedData = 'val1'.bytes
+        cvField1.setExpireAt(CompressedValue.NO_EXPIRE)
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field1'), 0, cvField1)
+
+        when:
+        def reply = hGroup.execute('hpersist hashA fields 1 field0')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
+
+        // Verify CV storage was updated
+        def savedCvField0 = inMemoryGetSet.getBuf(slot, RedisHashKeys.fieldKey('hashA', 'field0'), 0, 0)
+        savedCvField0.cv().getExpireAt() == CompressedValue.NO_EXPIRE
+
+        // Verify cache was updated
+        def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
+        savedRHK.getCachedExpireAt('field0') == CompressedValue.NO_EXPIRE
+        savedRHK.getCachedExpireAt('field1') == CompressedValue.NO_EXPIRE
+    }
+
+    def 'test hdel removes field and its cached ttl'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        // Set up hash with 2 fields
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhk = new RedisHashKeys()
+        rhk.add('field0')
+        rhk.add('field1')
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def encoded = rhk.encodeButDoNotCompress()
+        cvKeys.compressedData = encoded
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+
+        def cvField0 = Mock.prepareCompressedValueList(1)[0]
+        cvField0.compressedData = 'val0'.bytes
+        cvField0.setExpireAt(System.currentTimeMillis() + 3600000)
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field0'), 0, cvField0)
+
+        def cvField1 = Mock.prepareCompressedValueList(1)[0]
+        cvField1.compressedData = 'val1'.bytes
+        cvField1.setExpireAt(CompressedValue.NO_EXPIRE)
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field1'), 0, cvField1)
+
+        when:
+        def reply = hGroup.execute('hdel hashA field0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        // Verify field was deleted from cache
+        def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
+        savedRHK.getCachedExpireAt('field0') == CompressedValue.NO_EXPIRE // removed from cache
+        savedRHK.getCachedExpireAt('field1') == CompressedValue.NO_EXPIRE
+    }
+
+    def 'test hset clears cached ttl for the field'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        // Set up hash with 1 field that has TTL
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhk = new RedisHashKeys()
+        rhk.add('field0')
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def encoded = rhk.encodeButDoNotCompress()
+        cvKeys.compressedData = encoded
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+
+        def futureExpireAt = System.currentTimeMillis() + 3600000
+        def cvField0 = Mock.prepareCompressedValueList(1)[0]
+        cvField0.compressedData = 'val0'.bytes
+        cvField0.setExpireAt(futureExpireAt)
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field0'), 0, cvField0)
+
+        when:
+        def reply = hGroup.execute('hset hashA field0 newval')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0 // field existed, not newly added
+
+        // Verify cached TTL was cleared
+        def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
+        savedRHK.getCachedExpireAt('field0') == CompressedValue.NO_EXPIRE
     }
 }

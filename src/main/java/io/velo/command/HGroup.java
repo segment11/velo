@@ -542,6 +542,7 @@ public class HGroup extends BaseCommand {
             return new MultiBulkReply(replies);
         }
 
+        boolean ttlCacheModified = false;
         var replies = new Reply[numFields];
         for (int i = 0; i < numFields; i++) {
             var field = fields.get(i);
@@ -571,6 +572,8 @@ public class HGroup extends BaseCommand {
                 fieldCv.setSeq(snowFlake.nextId());
                 fieldCv.setExpireAt(CompressedValue.NO_EXPIRE);
                 setCv(fieldCv, fieldSlotWithKeyHash);
+                rhk.putCachedExpireAt(field, CompressedValue.NO_EXPIRE);
+                ttlCacheModified = true;
 
                 replies[i] = IntegerReply.REPLY_1;
             } else if (isTtl) {
@@ -580,6 +583,10 @@ public class HGroup extends BaseCommand {
                 // get expire time
                 replies[i] = isMilliseconds ? new IntegerReply(fieldExpireAt) : new IntegerReply(fieldExpireAt / 1000);
             }
+        }
+
+        if (ttlCacheModified) {
+            saveRedisHashKeys(rhk, key);
         }
 
         return new MultiBulkReply(replies);
@@ -732,6 +739,7 @@ public class HGroup extends BaseCommand {
             return new MultiBulkReply(replies);
         }
 
+        boolean ttlCacheModified = false;
         var replies = new Reply[numFields];
         for (int i = 0; i < numFields; i++) {
             var field = fields.get(i);
@@ -760,8 +768,14 @@ public class HGroup extends BaseCommand {
             fieldCv.setSeq(snowFlake.nextId());
             fieldCv.setExpireAt(expireAt);
             setCv(fieldCv, fieldSlotWithKeyHash);
+            rhk.putCachedExpireAt(field, expireAt);
+            ttlCacheModified = true;
 
             replies[i] = IntegerReply.REPLY_1;
+        }
+
+        if (ttlCacheModified) {
+            saveRedisHashKeys(rhk, key);
         }
 
         return new MultiBulkReply(replies);
@@ -1214,6 +1228,7 @@ public class HGroup extends BaseCommand {
             rhk = new RedisHashKeys();
         }
 
+        int newFieldsCount = 0;
         for (var entry : fieldValues.entrySet()) {
             if (rhk.size() >= RedisHashKeys.HASH_MAX_SIZE) {
                 return ErrorReply.HASH_SIZE_TO_LONG;
@@ -1224,13 +1239,16 @@ public class HGroup extends BaseCommand {
             var fieldValueBytes = entry.getValue();
             var slotWithKeyHashThisField = slot(fieldKey);
             set(fieldValueBytes, slotWithKeyHashThisField);
+            rhk.putCachedExpireAt(field, CompressedValue.NO_EXPIRE);
 
-            rhk.add(field);
+            if (rhk.add(field)) {
+                newFieldsCount++;
+            }
         }
 
         saveRedisHashKeys(rhk, key);
         if (isHset) {
-            return new IntegerReply(fieldValues.size());
+            return new IntegerReply(newFieldsCount);
         } else {
             return OKReply.INSTANCE;
         }
@@ -1243,17 +1261,22 @@ public class HGroup extends BaseCommand {
             rhh = new RedisHH();
         }
 
+        int newFieldsCount = 0;
         for (var entry : fieldValues.entrySet()) {
             if (rhh.size() >= RedisHashKeys.HASH_MAX_SIZE) {
                 return ErrorReply.HASH_SIZE_TO_LONG;
             }
 
+            var isNew = rhh.get(entry.getKey()) == null;
             rhh.put(entry.getKey(), entry.getValue());
+            if (isNew) {
+                newFieldsCount++;
+            }
         }
 
         saveRedisHH(rhh, slotWithKeyHash);
         if (isHset) {
-            return new IntegerReply(fieldValues.size());
+            return new IntegerReply(newFieldsCount);
         } else {
             return OKReply.INSTANCE;
         }
