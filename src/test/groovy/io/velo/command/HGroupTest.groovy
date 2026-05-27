@@ -1426,6 +1426,45 @@ httl
         (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
     }
 
+    def 'test hgetdel with negative numfields returns error'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = hGroup.execute('hgetdel hashA FIELDS -1')
+        then:
+        reply instanceof ErrorReply
+    }
+
+    def 'test hgetex with negative numfields returns error'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = hGroup.execute('hgetex hashA FIELDS -1')
+        then:
+        reply instanceof ErrorReply
+    }
+
+    def 'test hsetex with negative numfields returns error'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = hGroup.execute('hsetex hashA FIELDS -1')
+        then:
+        reply instanceof ErrorReply
+    }
+
     def 'test hgetex returns values'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

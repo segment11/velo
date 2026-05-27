@@ -1714,7 +1714,7 @@ public class HGroup extends BaseCommand {
             return ErrorReply.NOT_INTEGER;
         }
 
-        if (data.length < 4 + numFields) {
+        if (data.length != 4 + numFields) {
             return ErrorReply.SYNTAX;
         }
 
@@ -1868,7 +1868,7 @@ public class HGroup extends BaseCommand {
             return ErrorReply.NOT_INTEGER;
         }
 
-        if (data.length < fieldsIndex + numFields) {
+        if (data.length != fieldsIndex + numFields) {
             return ErrorReply.SYNTAX;
         }
 
@@ -2042,7 +2042,7 @@ public class HGroup extends BaseCommand {
             return ErrorReply.NOT_INTEGER;
         }
 
-        if (data.length < idx + numFields * 2) {
+        if (data.length != idx + numFields * 2) {
             return ErrorReply.SYNTAX;
         }
 
