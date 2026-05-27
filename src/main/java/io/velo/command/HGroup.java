@@ -213,6 +213,34 @@ public class HGroup extends BaseCommand {
         set(rhk.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_HASH);
     }
 
+    private void ensureHashKeysTtlCacheCurrent(String key, RedisHashKeys rhk) {
+        if (rhk.hasTtlMetaEncoded()) {
+            return;
+        }
+
+        var toRemove = new ArrayList<String>();
+        for (var field : rhk.getSet()) {
+            var fieldKey = RedisHashKeys.fieldKey(key, field);
+            var sFieldKey = slot(fieldKey);
+            var fieldCv = getCv(sFieldKey);
+            if (fieldCv == null) {
+                toRemove.add(field);
+            } else {
+                if (fieldCv.getExpireAt() != CompressedValue.NO_EXPIRE) {
+                    rhk.putCachedExpireAt(field, fieldCv.getExpireAt());
+                }
+            }
+        }
+
+        for (var field : toRemove) {
+            rhk.remove(field);
+        }
+
+        if (!toRemove.isEmpty() || rhk.hasTtlMetaEncoded()) {
+            saveRedisHashKeys(rhk, key);
+        }
+    }
+
     private RedisHH getRedisHH(SlotWithKeyHash slotWithKeyHash) {
         var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_HH);
         if (encodedBytes == null) {
@@ -876,14 +904,16 @@ public class HGroup extends BaseCommand {
             return MultiBulkReply.EMPTY;
         }
 
-        var set = rhk.getSet();
-        if (set.isEmpty()) {
+        ensureHashKeysTtlCacheCurrent(key, rhk);
+
+        var liveFields = rhk.liveFieldsByCache();
+        if (liveFields.isEmpty()) {
             return MultiBulkReply.EMPTY;
         }
 
-        var replies = new Reply[set.size() * 2];
+        var replies = new Reply[liveFields.size() * 2];
         int i = 0;
-        for (var field : set) {
+        for (var field : liveFields) {
             var fieldKey = RedisHashKeys.fieldKey(key, field);
             var sFieldKey = slot(fieldKey);
             var fieldCv = getCv(sFieldKey);
@@ -1043,27 +1073,27 @@ public class HGroup extends BaseCommand {
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var key = slotWithKeyHash.rawKey();
-        var keysKey = RedisHashKeys.keysKey(key);
 
-        var keysValueBytes = get(slot(keysKey));
-        if (keysValueBytes == null) {
+        var rhk = getRedisHashKeys(key);
+        if (rhk == null) {
             return onlyReturnSize ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
         }
 
+        ensureHashKeysTtlCacheCurrent(key, rhk);
+
+        var liveFields = rhk.liveFieldsByCache();
+
         if (onlyReturnSize) {
-            var size = RedisHashKeys.getSizeWithoutDecode(keysValueBytes);
-            return new IntegerReply(size);
+            return new IntegerReply(liveFields.size());
         }
 
-        var rhk = RedisHashKeys.decode(keysValueBytes);
-        var set = rhk.getSet();
-        if (set.isEmpty()) {
+        if (liveFields.isEmpty()) {
             return MultiBulkReply.EMPTY;
         }
 
-        var replies = new Reply[set.size()];
+        var replies = new Reply[liveFields.size()];
         int i = 0;
-        for (var field : set) {
+        for (var field : liveFields) {
             replies[i++] = new BulkReply(field);
         }
         return new MultiBulkReply(replies);
@@ -1265,12 +1295,14 @@ public class HGroup extends BaseCommand {
             return withValues ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
         }
 
-        var set = rhk.getSet();
-        if (set.isEmpty()) {
+        ensureHashKeysTtlCacheCurrent(key, rhk);
+
+        var liveFields = rhk.liveFieldsByCache();
+        if (liveFields.isEmpty()) {
             return withValues ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
         }
 
-        int size = set.size();
+        int size = liveFields.size();
         if (count > size) {
             count = size;
         }
@@ -1281,7 +1313,7 @@ public class HGroup extends BaseCommand {
         var replies = new Reply[withValues ? absCount * 2 : absCount];
         int i = 0;
         int j = 0;
-        for (var field : set) {
+        for (var field : liveFields) {
             if (indexes.contains(j)) {
                 replies[i++] = new BulkReply(field);
                 if (withValues) {
@@ -1419,12 +1451,18 @@ public class HGroup extends BaseCommand {
             return MultiBulkReply.SCAN_EMPTY;
         }
 
+        ensureHashKeysTtlCacheCurrent(key, rhk);
+
+        var liveFields = rhk.liveFieldsByCache();
+        if (liveFields.isEmpty()) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
         int skipCount = (int) cursorLong;
 
-        var set = rhk.getSet();
         ArrayList<String> matchFields = new ArrayList<>();
         int loopCount = 0;
-        for (var field : set) {
+        for (var field : liveFields) {
             loopCount++;
             if (!KeyLoader.isKeyMatch(field, matchPattern)) {
                 continue;
@@ -1451,7 +1489,7 @@ public class HGroup extends BaseCommand {
             replies[i++] = new BulkReply(field);
         }
 
-        var isEnd = loopCount == set.size();
+        var isEnd = loopCount == liveFields.size();
         var nextCursor = String.valueOf(isEnd ? 0 : skipCount + matchFields.size());
         // always end
         return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor), new MultiBulkReply(replies)});
@@ -1596,14 +1634,16 @@ public class HGroup extends BaseCommand {
             return MultiBulkReply.EMPTY;
         }
 
-        var set = rhk.getSet();
-        if (set.isEmpty()) {
+        ensureHashKeysTtlCacheCurrent(key, rhk);
+
+        var liveFields = rhk.liveFieldsByCache();
+        if (liveFields.isEmpty()) {
             return MultiBulkReply.EMPTY;
         }
 
-        var replies = new Reply[set.size()];
+        var replies = new Reply[liveFields.size()];
         int i = 0;
-        for (var field : set) {
+        for (var field : liveFields) {
             var fieldKey = RedisHashKeys.fieldKey(key, field);
             var fieldValueBytes = get(slot(fieldKey));
             replies[i++] = fieldValueBytes == null ? NilReply.INSTANCE : new BulkReply(fieldValueBytes);
