@@ -53,8 +53,20 @@ public class LGroup extends BaseCommand {
         }
 
         if ("lmpop".equals(cmd)) {
-            if (data.length < 3) {
+            if (data.length < 4) {
                 return slotWithKeyHashList;
+            }
+            int numKeys;
+            try {
+                numKeys = Integer.parseInt(new String(data[1]));
+            } catch (NumberFormatException e) {
+                return slotWithKeyHashList;
+            }
+            if (numKeys <= 0 || data.length < 2 + numKeys + 1) {
+                return slotWithKeyHashList;
+            }
+            for (int i = 0; i < numKeys; i++) {
+                slotWithKeyHashList.add(slot(data[2 + i], slotNumber));
             }
             return slotWithKeyHashList;
         }
@@ -134,7 +146,7 @@ public class LGroup extends BaseCommand {
         }
 
         if ("lmpop".equals(cmd)) {
-            return ErrorReply.NOT_SUPPORT;
+            return lmpop();
         }
 
         if ("load-rdb".equals(cmd)) {
@@ -462,6 +474,91 @@ public class LGroup extends BaseCommand {
         var arr = new Reply[replies.size()];
         replies.toArray(arr);
         return new MultiBulkReply(arr);
+    }
+
+    private Reply lmpop() {
+        if (data.length < 4) {
+            return ErrorReply.FORMAT;
+        }
+
+        int numKeys;
+        try {
+            numKeys = Integer.parseInt(new String(data[1]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        if (numKeys <= 0) {
+            return ErrorReply.RANGE_OUT_OF_INDEX;
+        }
+        if (data.length < 2 + numKeys + 1) {
+            return ErrorReply.FORMAT;
+        }
+
+        boolean isLeft;
+        var direction = new String(data[2 + numKeys]).toLowerCase();
+        if ("left".equals(direction)) {
+            isLeft = true;
+        } else if ("right".equals(direction)) {
+            isLeft = false;
+        } else {
+            return ErrorReply.SYNTAX;
+        }
+
+        int count = 1;
+        if (data.length > 3 + numKeys) {
+            if (data.length == 3 + numKeys + 2 && "count".equalsIgnoreCase(new String(data[3 + numKeys]))) {
+                try {
+                    count = Integer.parseInt(new String(data[4 + numKeys]));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+                if (count < 0) {
+                    return ErrorReply.RANGE_OUT_OF_INDEX;
+                }
+            } else {
+                return ErrorReply.SYNTAX;
+            }
+        }
+
+        for (int i = 0; i < numKeys; i++) {
+            if (data[2 + i].length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+        }
+
+        for (int i = 0; i < numKeys; i++) {
+            var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+            var cv = getCv(slotWithKeyHash);
+            if (cv == null || !cv.isList()) {
+                continue;
+            }
+            var rl = getRedisList(slotWithKeyHash);
+            if (rl == null || rl.size() == 0) {
+                continue;
+            }
+
+            var keyBytes = data[2 + i];
+
+            if (count == 0) {
+                var keyReply = new BulkReply(keyBytes);
+                var arr = new Reply[]{keyReply, new MultiBulkReply(new Reply[0])};
+                return new MultiBulkReply(arr);
+            }
+
+            int min = Math.min(count, rl.size());
+            var valueReplies = new Reply[min];
+            for (int j = 0; j < min; j++) {
+                valueReplies[j] = new BulkReply(isLeft ? rl.removeFirst() : rl.removeLast());
+            }
+
+            saveRedisList(rl, slotWithKeyHash, dictMap);
+
+            var keyReply = new BulkReply(keyBytes);
+            var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
+            return new MultiBulkReply(arr);
+        }
+
+        return NilReply.INSTANCE;
     }
 
     private Reply lpos() {

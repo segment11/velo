@@ -92,7 +92,6 @@ class LGroupTest extends Specification {
         'lset'     | ErrorReply.FORMAT
         'ltrim'    | ErrorReply.FORMAT
         'load-rdb' | ErrorReply.FORMAT
-        'lmpop 1 mylist LEFT COUNT 1' | ErrorReply.NOT_SUPPORT
         'zzz'      | NilReply.INSTANCE
     }
 
@@ -1169,5 +1168,166 @@ port ${tmpPort}
         }
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+    }
+
+    def 'test lmpop'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def lGroup = new LGroup(null, null, null)
+        lGroup.byPassGetSet = inMemoryGetSet
+        lGroup.from(BaseCommand.mockAGroup())
+
+        when: 'format error - too few args'
+        def reply = lGroup.execute('lmpop')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'format error - missing direction'
+        reply = lGroup.execute('lmpop 1 mylist')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'numkeys not integer'
+        reply = lGroup.execute('lmpop abc mylist LEFT')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'numkeys zero'
+        reply = lGroup.execute('lmpop 0 mylist LEFT')
+        then:
+        reply == ErrorReply.RANGE_OUT_OF_INDEX
+
+        when: 'wrong direction'
+        reply = lGroup.execute('lmpop 1 mylist UP')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'count not integer'
+        reply = lGroup.execute('lmpop 1 mylist LEFT COUNT abc')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'count negative'
+        reply = lGroup.execute('lmpop 1 mylist LEFT COUNT -1')
+        then:
+        reply == ErrorReply.RANGE_OUT_OF_INDEX
+
+        when: 'syntax error - extra args'
+        reply = lGroup.execute('lmpop 1 mylist LEFT COUNT 1 extra')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'key too long'
+        reply = lGroup.execute('lmpop 1 >key LEFT')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'all keys missing'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        reply = lGroup.execute('lmpop 2 a b LEFT')
+        then:
+        reply == NilReply.INSTANCE
+
+        when: 'single key, pop left, default count 1'
+        inMemoryGetSet.remove(slot, 'mylist')
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rl = new RedisList()
+        rl.addLast('one'.bytes)
+        rl.addLast('two'.bytes)
+        rl.addLast('three'.bytes)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'mylist', 0, cv)
+        reply = lGroup.execute('lmpop 1 mylist LEFT')
+        def mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        mb.replies.length == 2
+        (mb.replies[0] as BulkReply).raw == 'mylist'.bytes
+        (mb.replies[1] as MultiBulkReply).replies.length == 1
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'one'.bytes
+
+        when: 'single key, pop right'
+        reply = lGroup.execute('lmpop 1 mylist RIGHT')
+        mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        (mb.replies[1] as MultiBulkReply).replies.length == 1
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'three'.bytes
+
+        when: 'single key, COUNT 2 (only 1 element left)'
+        reply = lGroup.execute('lmpop 1 mylist LEFT COUNT 2')
+        mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        (mb.replies[1] as MultiBulkReply).replies.length == 1
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'two'.bytes
+
+        when: 'list now empty, key removed'
+        reply = lGroup.execute('lmpop 1 mylist LEFT')
+        then:
+        reply == NilReply.INSTANCE
+
+        when: 'first key empty, second key has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvB = Mock.prepareCompressedValueList(1)[0]
+        cvB.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlB = new RedisList()
+        rlB.addLast('x'.bytes)
+        rlB.addLast('y'.bytes)
+        cvB.compressedData = rlB.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvB)
+        reply = lGroup.execute('lmpop 2 a b LEFT COUNT 3')
+        mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        (mb.replies[0] as BulkReply).raw == 'b'.bytes
+        (mb.replies[1] as MultiBulkReply).replies.length == 2
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'x'.bytes
+        ((mb.replies[1] as MultiBulkReply).replies[1] as BulkReply).raw == 'y'.bytes
+
+        when: 'count 0 returns empty array for values'
+        inMemoryGetSet.remove(slot, 'c')
+        def cvC = Mock.prepareCompressedValueList(1)[0]
+        cvC.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlC = new RedisList()
+        rlC.addLast('z'.bytes)
+        cvC.compressedData = rlC.encode()
+        inMemoryGetSet.put(slot, 'c', 0, cvC)
+        reply = lGroup.execute('lmpop 1 c LEFT COUNT 0')
+        mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        (mb.replies[0] as BulkReply).raw == 'c'.bytes
+        (mb.replies[1] as MultiBulkReply).replies.length == 0
+
+        when: 'wrong type key'
+        inMemoryGetSet.remove(slot, 'notlist')
+        def cvWrong = new CompressedValue()
+        cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvWrong.compressedData = 'hello'.bytes
+        inMemoryGetSet.put(slot, 'notlist', 0, cvWrong)
+        reply = lGroup.execute('lmpop 1 notlist LEFT')
+        then:
+        reply == NilReply.INSTANCE
+
+        when: 'count larger than list size'
+        inMemoryGetSet.remove(slot, 'small')
+        def cvSmall = Mock.prepareCompressedValueList(1)[0]
+        cvSmall.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlSmall = new RedisList()
+        rlSmall.addLast('v'.bytes)
+        cvSmall.compressedData = rlSmall.encode()
+        inMemoryGetSet.put(slot, 'small', 0, cvSmall)
+        reply = lGroup.execute('lmpop 1 small LEFT COUNT 100')
+        mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        (mb.replies[1] as MultiBulkReply).replies.length == 1
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'v'.bytes
+        // list deleted after popping last element
+        lGroup.getCv(lGroup.slotWithKeyHashListParsed.getFirst()) == null
     }
 }

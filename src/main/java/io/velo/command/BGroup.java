@@ -78,8 +78,20 @@ public class BGroup extends BaseCommand {
         }
 
         if ("blmpop".equals(cmd)) {
-            if (data.length < 4) {
+            if (data.length < 5) {
                 return slotWithKeyHashList;
+            }
+            int numKeys;
+            try {
+                numKeys = Integer.parseInt(new String(data[2]));
+            } catch (NumberFormatException e) {
+                return slotWithKeyHashList;
+            }
+            if (numKeys <= 0 || data.length < 3 + numKeys + 1) {
+                return slotWithKeyHashList;
+            }
+            for (int i = 0; i < numKeys; i++) {
+                slotWithKeyHashList.add(slot(data[3 + i], slotNumber));
             }
             return slotWithKeyHashList;
         }
@@ -157,7 +169,7 @@ public class BGroup extends BaseCommand {
         }
 
         if ("blmpop".equals(cmd)) {
-            return ErrorReply.NOT_SUPPORT;
+            return blmpop();
         }
 
         return NilReply.INSTANCE;
@@ -923,5 +935,126 @@ public class BGroup extends BaseCommand {
         replies[0] = new BulkReply(firstKeyBytes);
         replies[1] = new BulkReply(valueBytes);
         return new MultiBulkReply(replies);
+    }
+
+    private Reply blmpop() {
+        if (data.length < 5) {
+            return ErrorReply.FORMAT;
+        }
+
+        double timeoutSeconds;
+        try {
+            timeoutSeconds = Double.parseDouble(new String(data[1]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
+            return new ErrorReply("timeout is not a float or out of range");
+        }
+
+        int numKeys;
+        try {
+            numKeys = Integer.parseInt(new String(data[2]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        if (numKeys <= 0) {
+            return ErrorReply.RANGE_OUT_OF_INDEX;
+        }
+        if (data.length < 3 + numKeys + 1) {
+            return ErrorReply.FORMAT;
+        }
+
+        boolean isLeft;
+        var direction = new String(data[3 + numKeys]).toLowerCase();
+        if ("left".equals(direction)) {
+            isLeft = true;
+        } else if ("right".equals(direction)) {
+            isLeft = false;
+        } else {
+            return ErrorReply.SYNTAX;
+        }
+
+        int count = 1;
+        if (data.length > 4 + numKeys) {
+            if (data.length == 4 + numKeys + 2 && "count".equalsIgnoreCase(new String(data[4 + numKeys]))) {
+                try {
+                    count = Integer.parseInt(new String(data[5 + numKeys]));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+                if (count < 0) {
+                    return ErrorReply.RANGE_OUT_OF_INDEX;
+                }
+            } else {
+                return ErrorReply.SYNTAX;
+            }
+        }
+
+        ArrayList<String> keys = new ArrayList<>();
+        for (int i = 0; i < numKeys; i++) {
+            if (data[3 + i].length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+            keys.add(Wal.keyString(data[3 + i]));
+        }
+
+        // try immediate pop from first non-empty list
+        for (int i = 0; i < numKeys; i++) {
+            var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+            var cv = getCv(slotWithKeyHash);
+            if (cv == null || !cv.isList()) {
+                continue;
+            }
+            var rl = LGroup.getRedisList(slotWithKeyHash, this);
+            if (rl == null || rl.size() == 0) {
+                continue;
+            }
+
+            var keyBytes = data[3 + i];
+
+            if (count == 0) {
+                var keyReply = new BulkReply(keyBytes);
+                var arr = new Reply[]{keyReply, new MultiBulkReply(new Reply[0])};
+                return new MultiBulkReply(arr);
+            }
+
+            int min = Math.min(count, rl.size());
+            var valueReplies = new Reply[min];
+            for (int j = 0; j < min; j++) {
+                valueReplies[j] = new BulkReply(isLeft ? rl.removeFirst() : rl.removeLast());
+            }
+            LGroup.saveRedisList(rl, slotWithKeyHash, this, dictMap);
+
+            var keyReply = new BulkReply(keyBytes);
+            var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
+            return new MultiBulkReply(arr);
+        }
+
+        // all lists empty or missing — block
+        boolean isBlockIndefinitely = timeoutSeconds == 0.0;
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
+        for (var key : keys) {
+            BlockingList.addOne(key, one);
+        }
+
+        if (!isBlockIndefinitely) {
+            long timeoutMillis = (long) (timeoutSeconds * 1000);
+            var reactor = Reactor.getCurrentReactor();
+            reactor.delay(timeoutMillis, () -> {
+                if (!finalPromise.isComplete()) {
+                    finalPromise.set(NilReply.INSTANCE);
+                    for (var key : keys) {
+                        BlockingList.removeOne(key, one);
+                    }
+                }
+            });
+        }
+
+        return asyncReply;
     }
 }

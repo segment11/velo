@@ -99,7 +99,6 @@ class BGroupTest extends Specification {
         input       | expected
         'bf.xxx'    | ErrorReply.SYNTAX
         'bgsave'    | OKReply.INSTANCE
-        'blmpop 0 1 mylist LEFT COUNT 1' | ErrorReply.NOT_SUPPORT
         'zzz'       | NilReply.INSTANCE
     }
 
@@ -882,6 +881,134 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('blpop >key 0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+
+        cleanup:
+        localPersist.cleanUp()
+    }
+
+    def 'test blmpop'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when: 'format error - too few args'
+        def reply = bGroup.execute('blmpop')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'timeout not number'
+        reply = bGroup.execute('blmpop abc 1 mylist LEFT')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'negative timeout'
+        reply = bGroup.execute('blmpop -1 1 mylist LEFT')
+        then:
+        reply instanceof ErrorReply
+
+        when: 'numkeys not integer'
+        reply = bGroup.execute('blmpop 0 abc 1 mylist LEFT')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'numkeys zero'
+        reply = bGroup.execute('blmpop 1 0 mylist LEFT')
+        then:
+        reply == ErrorReply.RANGE_OUT_OF_INDEX
+
+        when: 'wrong direction'
+        reply = bGroup.execute('blmpop 1 1 mylist UP')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'count not integer'
+        reply = bGroup.execute('blmpop 1 1 mylist LEFT COUNT abc')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'key too long'
+        reply = bGroup.execute('blmpop 1 1 >key LEFT')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'immediate pop from non-empty list'
+        inMemoryGetSet.remove(slot, 'mylist')
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rl = new RedisList()
+        rl.addLast('a'.bytes)
+        rl.addLast('b'.bytes)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'mylist', 0, cv)
+        reply = bGroup.execute('blmpop 1 1 mylist LEFT COUNT 1')
+        def mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        mb.replies.length == 2
+        (mb.replies[0] as BulkReply).raw == 'mylist'.bytes
+        (mb.replies[1] as MultiBulkReply).replies.length == 1
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'a'.bytes
+
+        when: 'right pop'
+        reply = bGroup.execute('blmpop 1 1 mylist RIGHT')
+        mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'b'.bytes
+
+        when: 'all keys empty — block with timeout'
+        inMemoryGetSet.remove(slot, 'x')
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        reply = bGroup.execute('blmpop 1 1 x LEFT')
+        Thread.sleep(2000)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == NilReply.INSTANCE
+        }.result
+
+        when: 'first key empty, second key has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvB = Mock.prepareCompressedValueList(1)[0]
+        cvB.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlB = new RedisList()
+        rlB.addLast('x'.bytes)
+        cvB.compressedData = rlB.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvB)
+        reply = bGroup.execute('blmpop 1 2 a b LEFT COUNT 3')
+        mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        (mb.replies[0] as BulkReply).raw == 'b'.bytes
+        (mb.replies[1] as MultiBulkReply).replies.length == 1
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'x'.bytes
+
+        when: 'count 0'
+        inMemoryGetSet.remove(slot, 'c')
+        def cvC = Mock.prepareCompressedValueList(1)[0]
+        cvC.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlC = new RedisList()
+        rlC.addLast('z'.bytes)
+        cvC.compressedData = rlC.encode()
+        inMemoryGetSet.put(slot, 'c', 0, cvC)
+        reply = bGroup.execute('blmpop 1 1 c LEFT COUNT 0')
+        mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        (mb.replies[0] as BulkReply).raw == 'c'.bytes
+        (mb.replies[1] as MultiBulkReply).replies.length == 0
 
         cleanup:
         localPersist.cleanUp()
