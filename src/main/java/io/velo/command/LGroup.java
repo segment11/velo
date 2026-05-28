@@ -377,8 +377,8 @@ public class LGroup extends BaseCommand {
                 return ErrorReply.NOT_INTEGER;
             }
 
-            if (timeoutSeconds < 0) {
-                return new ErrorReply("timeout is negative");
+            if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
+                return new ErrorReply("timeout is not a float or out of range");
             }
 
             return rGroup.moveBlock(srcSlotWithKeyHash, dstSlotWithKeyHash, isSrcLeft, isDstLeft, timeoutSeconds);

@@ -859,6 +859,18 @@ class BGroupTest extends Specification {
         reply instanceof ErrorReply
 
         when:
+        // NaN should be rejected
+        reply = bGroup.execute('blpop a nan')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        // Infinity should be rejected
+        reply = bGroup.execute('blpop a inf')
+        then:
+        reply instanceof ErrorReply
+
+        when:
         // fractional timeout should be accepted
         inMemoryGetSet.remove(slot, 'a')
         reply = bGroup.execute('blpop a 0.5')

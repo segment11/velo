@@ -387,6 +387,20 @@ class LGroupTest extends Specification {
         reply == ErrorReply.NOT_INTEGER
 
         when:
+        // negative timeout should be rejected
+        lGroup.data[5] = '-1'.bytes
+        reply = lGroup.lmove(true)
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        // NaN should be rejected
+        lGroup.data[5] = 'nan'.bytes
+        reply = lGroup.lmove(true)
+        then:
+        reply instanceof ErrorReply
+
+        when:
         lGroup.data[5] = '3601'.bytes
         def eventloopCurrent = Eventloop.builder()
                 .withCurrentThread()

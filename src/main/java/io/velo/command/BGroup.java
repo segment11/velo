@@ -804,8 +804,8 @@ public class BGroup extends BaseCommand {
             return ErrorReply.NOT_INTEGER;
         }
 
-        if (timeoutSeconds < 0) {
-            return new ErrorReply("timeout is negative");
+        if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
+            return new ErrorReply("timeout is not a float or out of range");
         }
 
         boolean isBlockIndefinitely = timeoutSeconds == 0.0;
