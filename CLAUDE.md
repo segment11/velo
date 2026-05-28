@@ -174,6 +174,7 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 ### Testing Guidelines
 
 - For stronger regression tests and branch-focused coverage, refer to `doc/write_better_test_cases_for_ai_agents.md`
+- For Redis command tests specifically, refer to `doc/how_to_write_high_coverage_test_cases_for_commands.md`; keep all cases for one command in one `def 'test <command>'()` method
 - Write comprehensive tests for new functionality
 - Use Spock's data-driven testing for multiple scenarios
 - Test edge cases and error conditions

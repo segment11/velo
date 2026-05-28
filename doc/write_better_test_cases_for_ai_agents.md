@@ -17,6 +17,10 @@ This repo expects a higher bar:
 - relevant tests only
 - JaCoCo confirmation for touched lines or branches
 
+For Redis command tests, also read `doc/how_to_write_high_coverage_test_cases_for_commands.md`. It defines the command-test
+structure rule: one command should have one `def 'test <command>'()` method containing all of that command's `when` /
+`then` cases.
+
 ## Non-Negotiable Rules
 
 1. Do not write production code before a failing test exists.

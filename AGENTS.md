@@ -228,6 +228,7 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 - Follow TDD for every feature, bug fix, refactor, and behavior change: write the test first, run it and verify it fails for the expected reason, then implement the minimal code to make it pass
 - Exception: for simple feature code removals where the behavior is only deleting unused, obsolete, or unwanted code paths, a strict red/green TDD cycle is not required. Remove the related code and rerun the relevant existing tests.
 - For stronger regression tests and branch-focused coverage, refer to `doc/write_better_test_cases_for_ai_agents.md`
+- For Redis command tests specifically, refer to `doc/how_to_write_high_coverage_test_cases_for_commands.md`; keep all cases for one command in one `def 'test <command>'()` method
 - Write comprehensive tests for new functionality
 - Use Spock's data-driven testing for multiple scenarios
 - Test edge cases and error conditions
