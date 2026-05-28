@@ -202,7 +202,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('linsert a before b c')
         then:
         reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        (reply as IntegerReply).integer == -1
 
         when:
         reply = lGroup.execute('linsert a xxx b c')
@@ -223,6 +223,34 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('linsert a before b >value')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
+
+        when:
+        rl = new RedisList()
+        rl.addFirst('x'.bytes)
+        rl.addLast('y'.bytes)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = lGroup.execute('linsert a before missing z')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == -1
+
+        when:
+        def rlCheck = LGroup.getRedisList(lGroup.slotWithKeyHashListParsed.getFirst(), lGroup)
+        then:
+        rlCheck != null
+        rlCheck.size() == 2
+
+        when:
+        rl = new RedisList()
+        rl.addFirst('x'.bytes)
+        rl.addLast('y'.bytes)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = lGroup.execute('linsert a after missing z')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == -1
     }
 
     def 'test llen'() {

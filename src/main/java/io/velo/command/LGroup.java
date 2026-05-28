@@ -219,8 +219,7 @@ public class LGroup extends BaseCommand {
             // find pivot index
             int pivotIndex = rl.indexOf(pivotBytes);
             if (pivotIndex == -1) {
-                // -1 or size ? todo
-                return new IntegerReply(rl.size());
+                return new IntegerReply(-1);
             }
 
             // only one
