@@ -1370,9 +1370,44 @@ httl
         reply == ErrorReply.NOT_INTEGER
 
         when:
+        reply = hGroup.execute('hgetdel hashA FIELDS abc field1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
         reply = hGroup.execute('hgetdel hashA FIELDS 1 field extra')
         then:
         reply == ErrorReply.SYNTAX
+
+        when:
+        reply = hGroup.execute('hgetdel >key FIELDS 1 field1')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        reply = hGroup.execute('hgetdel hashA')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = hGroup.execute('hgetdel hashA notfields 1 field1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        def tooLongField = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        Arrays.fill(tooLongField, (byte) 'a')
+        reply = hGroup.execute('hgetdel hashA FIELDS 1 ' + new String(tooLongField))
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        reply = hGroup.execute('hgetdel hashA FIELDS 2 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
+        (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when:
         def cvKeys = Mock.prepareCompressedValueList(1)[0]
@@ -1655,9 +1690,7 @@ httl
         reply == ErrorReply.SYNTAX
 
         when: 'test key too long'
-        def tooLongKey = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
-        Arrays.fill(tooLongKey, (byte) 'a')
-        reply = hGroup.execute('hgetex ' + new String(tooLongKey) + ' FIELDS 1 field1')
+        reply = hGroup.execute('hgetex >key FIELDS 1 field1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
@@ -1684,6 +1717,16 @@ httl
         reply = hGroup.execute('hgetex hashA')
         then:
         reply == ErrorReply.FORMAT
+
+        when: 'test numFields invalid integer'
+        reply = hGroup.execute('hgetex hashA FIELDS abc')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'test key too long'
+        reply = hGroup.execute('hgetex >key FIELDS 1 field1')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
 
         when: 'test format error - fields count mismatch'
         reply = hGroup.execute('hgetex hashA FIELDS 2 field1')
