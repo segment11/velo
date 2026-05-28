@@ -34,12 +34,6 @@ public class RedisHashKeys {
     @VisibleForTesting
     static final int HEADER_LENGTH = 2 + 4 + 4 + 4;
 
-    /**
-     * TTL metadata marker: ASCII "RHKT"
-     */
-    @VisibleForTesting
-    static final int TTL_META_MARKER = 0x52484B54;
-
     private final TreeSet<String> set = new TreeSet<>();
     private final HashMap<String, Long> expireAtByField = new HashMap<>();
 
@@ -158,8 +152,9 @@ public class RedisHashKeys {
      */
     public byte[] encode(Dict dict) {
         int bodyBytesLength = 0;
-        for (var e : set) {
-            bodyBytesLength += 2 + Wal.keyBytes(e).length;
+        for (var field : set) {
+            var expireAt = expireAtByField.get(field);
+            bodyBytesLength += 8 + 2 + Wal.keyBytes(field).length; // expireAt + fieldLen + fieldBytes
         }
 
         int size = set.size();
@@ -167,57 +162,30 @@ public class RedisHashKeys {
             throw new IllegalStateException("HashKeys size " + size + " exceeds Short.MAX_VALUE");
         }
 
-        // TTL metadata section: marker(4) + expireCount(2) + sum of (fieldLen(2) + fieldBytes + expireAt(8))
-        int ttlEntries = 0;
-        int ttlSectionLength = 0;
-        if (size > 0) {
-            for (var field : set) {
-                var expireAt = expireAtByField.get(field);
-                if (expireAt != null && expireAt != CompressedValue.NO_EXPIRE) {
-                    ttlSectionLength += 2 + Wal.keyBytes(field).length + 8;
-                    ttlEntries++;
-                }
-            }
-        }
-        int ttlMetaSectionLength = 4 + 2 + ttlSectionLength; // marker + count + entries
-
-        int totalBodyLength = bodyBytesLength + ttlMetaSectionLength;
-
-        var buffer = ByteBuffer.allocate(totalBodyLength + HEADER_LENGTH);
+        var buffer = ByteBuffer.allocate(bodyBytesLength + HEADER_LENGTH);
         buffer.putShort((short) size);
         buffer.putInt(0);
-        buffer.putInt(totalBodyLength);
+        buffer.putInt(bodyBytesLength);
         buffer.putInt(0);
-        for (var e : set) {
-            var fieldBytes = Wal.keyBytes(e);
+        for (var field : set) {
+            var expireAt = expireAtByField.get(field);
+            buffer.putLong(expireAt == null ? CompressedValue.NO_EXPIRE : expireAt);
+            var fieldBytes = Wal.keyBytes(field);
             buffer.putShort((short) fieldBytes.length);
             buffer.put(fieldBytes);
         }
 
-        // Write TTL metadata section
-        buffer.putInt(TTL_META_MARKER);
-        buffer.putShort((short) ttlEntries);
-        for (var field : set) {
-            var expireAt = expireAtByField.get(field);
-            if (expireAt != null && expireAt != CompressedValue.NO_EXPIRE) {
-                var fieldBytes = Wal.keyBytes(field);
-                buffer.putShort((short) fieldBytes.length);
-                buffer.put(fieldBytes);
-                buffer.putLong(expireAt);
-            }
-        }
-
         int crc = 0;
-        if (totalBodyLength > 0) {
+        if (bodyBytesLength > 0) {
             var hb = buffer.array();
             crc = KeyHash.hash32Offset(hb, HEADER_LENGTH, hb.length - HEADER_LENGTH);
             buffer.putInt(HEADER_LENGTH - 4, crc);
         }
 
         var rawBytesWithHeader = buffer.array();
-        if (totalBodyLength > TO_COMPRESS_MIN_DATA_LENGTH && dict != null) {
+        if (bodyBytesLength > TO_COMPRESS_MIN_DATA_LENGTH && dict != null) {
             var compressedBytes = RedisHH.compressIfBytesLengthIsLong(
-                    dict, totalBodyLength, rawBytesWithHeader, (short) size, crc);
+                    dict, bodyBytesLength, rawBytesWithHeader, (short) size, crc);
             if (compressedBytes != null) {
                 return compressedBytes;
             }
@@ -268,6 +236,8 @@ public class RedisHashKeys {
 
         var r = new RedisHashKeys();
         for (int i = 0; i < size; i++) {
+            long expireAt = buffer.getLong();
+
             int len = buffer.getShort();
             if (len <= 0) {
                 throw new IllegalStateException("Length error, length=" + len);
@@ -279,29 +249,9 @@ public class RedisHashKeys {
 
             var bytes = new byte[len];
             buffer.get(bytes);
-            r.set.add(Wal.keyString(bytes));
-        }
-
-        if (!buffer.hasRemaining()) {
-            throw new IllegalStateException("TTL metadata section missing");
-        }
-
-        int marker = buffer.getInt();
-        if (marker != TTL_META_MARKER) {
-            throw new IllegalStateException("TTL metadata marker error: " + marker);
-        }
-
-        int expireCount = buffer.getShort();
-        for (int i = 0; i < expireCount; i++) {
-            int fieldLen = buffer.getShort();
-            if (fieldLen <= 0 || fieldLen > buffer.remaining() - 8) {
-                throw new IllegalStateException("TTL field length error: " + fieldLen);
-            }
-            var fieldBytes = new byte[fieldLen];
-            buffer.get(fieldBytes);
-            long expireAt = buffer.getLong();
-            String field = Wal.keyString(fieldBytes);
-            if (r.set.contains(field)) {
+            String field = Wal.keyString(bytes);
+            r.set.add(field);
+            if (expireAt != CompressedValue.NO_EXPIRE) {
                 r.expireAtByField.put(field, expireAt);
             }
         }
@@ -314,11 +264,12 @@ public class RedisHashKeys {
      */
     public interface IterateCallback {
         /**
-         * @param bytes the element bytes
-         * @param index the element index
+         * @param bytes    the element bytes
+         * @param index    the element index
+         * @param expireAt expiration time in milliseconds
          * @return true to break iteration
          */
-        boolean on(byte[] bytes, int index);
+        boolean on(byte[] bytes, int index, long expireAt);
     }
 
     /**
@@ -346,6 +297,8 @@ public class RedisHashKeys {
         }
 
         for (int i = 0; i < size; i++) {
+            var expireAt = buffer.getLong();
+
             int len = buffer.getShort();
             if (len <= 0) {
                 throw new IllegalStateException("Length error, length=" + len);
@@ -357,7 +310,7 @@ public class RedisHashKeys {
 
             var bytes = new byte[len];
             buffer.get(bytes);
-            var isBreak = callback.on(bytes, i);
+            var isBreak = callback.on(bytes, i, expireAt);
             if (isBreak) {
                 break;
             }

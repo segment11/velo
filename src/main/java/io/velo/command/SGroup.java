@@ -1246,7 +1246,7 @@ public class SGroup extends BaseCommand {
         }
 
         final var isMemberArray = new boolean[1];
-        RedisHashKeys.iterate(encodedBytes, true, (bytes, i) -> {
+        RedisHashKeys.iterate(encodedBytes, true, (bytes, i, expireAt) -> {
             if (Arrays.equals(memberBytes, bytes)) {
                 isMemberArray[0] = true;
                 return true;
@@ -1280,7 +1280,7 @@ public class SGroup extends BaseCommand {
         }
 
         var replies = new Reply[size];
-        RedisHashKeys.iterate(encodedBytes, true, (bytes, i) -> {
+        RedisHashKeys.iterate(encodedBytes, true, (bytes, i, expireAt) -> {
             replies[i] = new BulkReply(bytes);
             return false;
         });

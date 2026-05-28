@@ -110,7 +110,8 @@ class RedisHashKeysTest extends Specification {
         rhk.add('field2')
         def encoded = rhk.encode()
         def buffer = ByteBuffer.wrap(encoded)
-        buffer.putShort(RedisHashKeys.HEADER_LENGTH, (short) 0)
+        // New format: after header(14), first field starts with expireAt(8), then fieldLen at offset 22
+        buffer.putShort(RedisHashKeys.HEADER_LENGTH + 8, (short) 0)
         boolean exception = false
         try {
             RedisHashKeys.decode(encoded, false)
@@ -131,7 +132,7 @@ class RedisHashKeysTest extends Specification {
         rhk.add('field2')
         def encoded = rhk.encode()
         List<String> list = []
-        RedisHashKeys.iterate(encoded, false) { bytes, i ->
+        RedisHashKeys.iterate(encoded, false) { bytes, i, expireAt ->
             list << new String(bytes)
             return false
         }
@@ -140,7 +141,7 @@ class RedisHashKeysTest extends Specification {
 
         when:
         list.clear()
-        RedisHashKeys.iterate(encoded, true) { bytes, i ->
+        RedisHashKeys.iterate(encoded, true) { bytes, i, expireAt ->
             list << new String(bytes)
             if ('field1' == new String(bytes)) {
                 return true
@@ -177,8 +178,8 @@ class RedisHashKeysTest extends Specification {
         def encoded4 = rhk4.encode()
         then:
         // uuid length is 36
-        // TTL section adds: marker(4) + expireCount(2) = 6 bytes
-        encoded4.length == RedisHashKeys.HEADER_LENGTH + 5 * (2 + 36) + 6
+        // New format per field: expireAt(8) + fieldLen(2) + fieldBytes(36) = 46 bytes
+        encoded4.length == RedisHashKeys.HEADER_LENGTH + 5 * (8 + 2 + 36)
     }
 
     def 'test encode throws when size exceeds Short.MAX_VALUE'() {
@@ -208,7 +209,8 @@ class RedisHashKeysTest extends Specification {
         rhk.add('field1')
         def encoded = rhk.encode()
         def buffer = ByteBuffer.wrap(encoded)
-        buffer.putShort(RedisHashKeys.HEADER_LENGTH, (short) 10000)
+        // New format: after header comes expireAt(8), then fieldLen at offset 14+8=22
+        buffer.putShort(RedisHashKeys.HEADER_LENGTH + 8, (short) 10000)
 
         when:
         RedisHashKeys.decode(encoded, false)
@@ -224,10 +226,11 @@ class RedisHashKeysTest extends Specification {
         rhk.add('field1')
         def encoded = rhk.encode()
         def buffer = ByteBuffer.wrap(encoded)
-        buffer.putShort(RedisHashKeys.HEADER_LENGTH, (short) 10000)
+        // New format: after header comes expireAt(8), then fieldLen at offset 14+8=22
+        buffer.putShort(RedisHashKeys.HEADER_LENGTH + 8, (short) 10000)
 
         when:
-        RedisHashKeys.iterate(encoded, false) { bytes, i -> false }
+        RedisHashKeys.iterate(encoded, false) { bytes, i, expireAt -> false }
 
         then:
         def e = thrown(IllegalStateException)
@@ -293,52 +296,21 @@ class RedisHashKeysTest extends Specification {
         rhk.liveFieldsByCache() == ['field1', 'field2']
     }
 
-    def 'test decode requires ttl meta section'() {
+    def 'test decode with ttl round-trip'() {
         given:
-        // Manually construct old format bytes (no TTL section)
-        // Format: header(14) + field entries (no TTL section)
-        def field1Bytes = 'field1'.bytes
-        def field2Bytes = 'field2'.bytes
-        def fieldBodyLen = (2 + field1Bytes.length) + (2 + field2Bytes.length) // len+bytes for each field
-
-        def baos = new ByteArrayOutputStream()
-        def dos = new DataOutputStream(baos)
-        dos.writeShort(2) // size
-        dos.writeInt(0) // dictSeq = 0 (no compression)
-        dos.writeInt(fieldBodyLen) // body length = just field entries
-        // CRC placeholder - will be computed over body (after header)
-        dos.writeInt(0)
-        dos.writeShort(field1Bytes.length)
-        dos.write(field1Bytes)
-        dos.writeShort(field2Bytes.length)
-        dos.write(field2Bytes)
-        def headerAndBody = baos.toByteArray()
-        // headerAndBody = [size(2) + dictSeq(4) + bodyLen(4) + crc(4)] + [field entries]
-        // = 14 bytes header + fieldBodyLen bytes body
-
-        // Compute CRC over body (bytes 14 to end, which is field entries only)
-        def crc = KeyHash.hash32Offset(headerAndBody, 14, fieldBodyLen)
-
-        // Build final bytes: header with correct CRC + body
-        def dos2 = new DataOutputStream(baos)
-        baos.reset()
-        dos2.writeShort(2) // size
-        dos2.writeInt(0) // dictSeq
-        dos2.writeInt(fieldBodyLen) // body length
-        dos2.writeInt(crc) // correct CRC
-        dos2.writeShort(field1Bytes.length)
-        dos2.write(field1Bytes)
-        dos2.writeShort(field2Bytes.length)
-        dos2.write(field2Bytes)
-        def oldFormatBytes = baos.toByteArray()
-        // oldFormatBytes should be 14 + fieldBodyLen bytes with correct CRC
+        def rhk = new RedisHashKeys()
+        rhk.add('field1')
+        rhk.add('field2')
+        rhk.putCachedExpireAt('field1', 1000L)
 
         when:
-        RedisHashKeys.decode(oldFormatBytes, false)
+        def encoded = rhk.encode()
+        def decoded = RedisHashKeys.decode(encoded)
 
         then:
-        def e = thrown(IllegalStateException)
-        e.message.contains('TTL metadata section missing')
+        decoded.size() == 2
+        decoded.getCachedExpireAt('field1') == 1000L
+        decoded.getCachedExpireAt('field2') == CompressedValue.NO_EXPIRE
     }
 
     def 'test new format with empty ttl section round-trip'() {
