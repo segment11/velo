@@ -1430,6 +1430,35 @@ httl
         (reply as MultiBulkReply).replies.length == 2
         new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
         (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashA')
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
+        cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        def rhh = new RedisHH()
+        rhh.put('field1', 'value1'.bytes)
+        rhh.put('field2', 'value2'.bytes)
+        rhh.put('field3', 'value3'.bytes)
+        cvRhh.compressedData = rhh.encode()
+        inMemoryGetSet.put(slot, 'hashA', 0, cvRhh)
+
+        reply = hGroup.execute('hgetdel hashA FIELDS 2 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
+        new String(((reply as MultiBulkReply).replies[1] as BulkReply).raw) == 'value2'
+
+        and:
+        def rhhCv = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
+        def savedRhh = RedisHH.decode(rhhCv.cv().getCompressedData())
+        savedRhh.get('field1') == null
+        savedRhh.get('field2') == null
+        savedRhh.get('field3') != null
+
+        cleanup:
+        LocalPersist.instance.hashSaveMemberTogether = false
     }
 
     def 'test hgetex'() {
@@ -1506,6 +1535,224 @@ httl
         def keysCv2 = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
         def savedRHK2 = RedisHashKeys.decode(keysCv2.cv().getCompressedData(), false)
         savedRHK2.getCachedExpireAt('field1') > System.currentTimeMillis()
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashA')
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
+        cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        def rhh = new RedisHH()
+        rhh.put('field1', 'value1'.bytes)
+        rhh.put('field2', 'value2'.bytes)
+        cvRhh.compressedData = rhh.encode()
+        inMemoryGetSet.put(slot, 'hashA', 0, cvRhh)
+
+        reply = hGroup.execute('hgetex hashA FIELDS 2 field1 field2')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
+        new String(((reply as MultiBulkReply).replies[1] as BulkReply).raw) == 'value2'
+
+        when:
+        reply = hGroup.execute('hgetex hashA EX 3600 FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
+
+        and:
+        def rhhCv = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
+        def savedRhh = RedisHH.decode(rhhCv.cv().getCompressedData())
+        savedRhh.mapExpireAt.get('field1') > System.currentTimeMillis()
+
+        cleanup:
+        LocalPersist.instance.hashSaveMemberTogether = false
+    }
+
+    def 'test hgetex with various expire options'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+        LocalPersist.instance.hashSaveMemberTogether = false
+
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhk = new RedisHashKeys()
+        rhk.add('field1')
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cvKeys.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashA'), 0, cvKeys)
+
+        def cvField1 = Mock.prepareCompressedValueList(1)[0]
+        cvField1.compressedData = 'value1'.bytes
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashA', 'field1'), 0, cvField1)
+
+        when: 'test PX option (milliseconds)'
+        def reply = hGroup.execute('hgetex hashA PX 3600000 FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        def keysCvPx = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRhkPx = RedisHashKeys.decode(keysCvPx.cv().getCompressedData(), false)
+        savedRhkPx.getCachedExpireAt('field1') > System.currentTimeMillis() + 3600000 - 10000
+
+        when: 'test PXAT option (unix timestamp in milliseconds)'
+        def pxatTime = System.currentTimeMillis() + 3600000
+        reply = hGroup.execute('hgetex hashA PXAT ' + pxatTime + ' FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        def keysCvPxat = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRhkPxat = RedisHashKeys.decode(keysCvPxat.cv().getCompressedData(), false)
+        savedRhkPxat.getCachedExpireAt('field1') == pxatTime
+
+        when: 'test EXAT option (unix timestamp in seconds)'
+        def exatTime = ((System.currentTimeMillis() / 1000) as long) + 3600
+        reply = hGroup.execute('hgetex hashA EXAT ' + exatTime + ' FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        def keysCvExat = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRhkExat = RedisHashKeys.decode(keysCvExat.cv().getCompressedData(), false)
+        savedRhkExat.getCachedExpireAt('field1') == exatTime * 1000
+
+        when: 'test PERSIST option (remove expiry)'
+        reply = hGroup.execute('hgetex hashA PERSIST FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        def keysCvPersist = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
+        def savedRhkPersist = RedisHashKeys.decode(keysCvPersist.cv().getCompressedData(), false)
+        !savedRhkPersist.getSet().contains('field1') || savedRhkPersist.getCachedExpireAt('field1') == CompressedValue.NO_EXPIRE
+
+        when: 'test invalid EX value (non-integer)'
+        reply = hGroup.execute('hgetex hashA EX abc FIELDS 1 field1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'test invalid PX value (non-integer)'
+        reply = hGroup.execute('hgetex hashA PX abc FIELDS 1 field1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'test invalid EXAT value (non-integer)'
+        reply = hGroup.execute('hgetex hashA EXAT abc FIELDS 1 field1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'test invalid PXAT value (non-integer)'
+        reply = hGroup.execute('hgetex hashA PXAT abc FIELDS 1 field1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'test invalid expire option'
+        reply = hGroup.execute('hgetex hashA XX 3600 FIELDS 1 field1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'test missing FIELDS keyword after expire option'
+        reply = hGroup.execute('hgetex hashA EX 3600 1 field1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'test key too long'
+        def tooLongKey = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        Arrays.fill(tooLongKey, (byte) 'a')
+        reply = hGroup.execute('hgetex ' + new String(tooLongKey) + ' FIELDS 1 field1')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        cleanup:
+        LocalPersist.instance.hashSaveMemberTogether = false
+    }
+
+    def 'test hgetex error cases'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+        LocalPersist.instance.hashSaveMemberTogether = false
+
+        when: 'test rhk is null (key does not exist)'
+        def reply = hGroup.execute('hgetex nonexistent FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
+
+        when: 'test format error - not enough args'
+        reply = hGroup.execute('hgetex hashA')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'test format error - fields count mismatch'
+        reply = hGroup.execute('hgetex hashA FIELDS 2 field1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        cleanup:
+        LocalPersist.instance.hashSaveMemberTogether = false
+    }
+
+    def 'test hgetex2 with various expire options'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+        LocalPersist.instance.hashSaveMemberTogether = true
+
+        def cvRhh = Mock.prepareCompressedValueList(1)[0]
+        cvRhh.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        def rhh = new RedisHH()
+        rhh.put('field1', 'value1'.bytes)
+        cvRhh.compressedData = rhh.encode()
+        inMemoryGetSet.put(slot, 'hashA', 0, cvRhh)
+
+        when: 'test PX option for HH mode'
+        def reply = hGroup.execute('hgetex hashA PX 3600000 FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        def rhhCvPx = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
+        def savedRhhPx = RedisHH.decode(rhhCvPx.cv().getCompressedData())
+        savedRhhPx.mapExpireAt.get('field1') > System.currentTimeMillis() + 3600000 - 10000
+
+        when: 'test PXAT option for HH mode'
+        def pxatTime = System.currentTimeMillis() + 3600000
+        reply = hGroup.execute('hgetex hashA PXAT ' + pxatTime + ' FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        def rhhCvPxat = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
+        def savedRhhPxat = RedisHH.decode(rhhCvPxat.cv().getCompressedData())
+        savedRhhPxat.mapExpireAt.get('field1') == pxatTime
+
+        when: 'test EXAT option for HH mode'
+        def exatTime = ((System.currentTimeMillis() / 1000) as long) + 3600
+        reply = hGroup.execute('hgetex hashA EXAT ' + exatTime + ' FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        def rhhCvExat = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
+        def savedRhhExat = RedisHH.decode(rhhCvExat.cv().getCompressedData())
+        savedRhhExat.mapExpireAt.get('field1') == exatTime * 1000
+
+        when: 'test PERSIST option for HH mode'
+        reply = hGroup.execute('hgetex hashA PERSIST FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        def rhhCvPersist = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
+        def savedRhhPersist = RedisHH.decode(rhhCvPersist.cv().getCompressedData())
+        !savedRhhPersist.mapExpireAt.containsKey('field1') // NO_EXPIRE not stored in map
+
+        when: 'test HH mode with null rhh (key does not exist)'
+        inMemoryGetSet.remove(slot, 'hashA')
+        reply = hGroup.execute('hgetex hashA EX 3600 FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
+
+        cleanup:
+        LocalPersist.instance.hashSaveMemberTogether = false
     }
 
     def 'test hsetex'() {
@@ -1530,6 +1777,22 @@ httl
 
         def field1Cv = inMemoryGetSet.getBuf(slot, RedisHashKeys.fieldKey('hashA', 'field1'), 0, 0)
         new String(field1Cv.cv().getCompressedData()) == 'value1'
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashA')
+        reply = hGroup.execute('hsetex hashA FIELDS 2 field1 value1 field2 value2')
+        then:
+        (reply as IntegerReply).integer == 1
+
+        and:
+        def rhhCv = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
+        def savedRhh = RedisHH.decode(rhhCv.cv().getCompressedData())
+        savedRhh.get('field1') != null
+        savedRhh.get('field2') != null
+
+        cleanup:
+        LocalPersist.instance.hashSaveMemberTogether = false
     }
 
     def 'test hsetnx'() {
