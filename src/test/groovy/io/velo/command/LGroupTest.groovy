@@ -525,8 +525,9 @@ class LGroupTest extends Specification {
         when:
         reply = lGroup.execute('lpos a a rank -1 count 1 maxlen 0')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        ((IntegerReply) (reply as MultiBulkReply).replies[0]).integer == 0
 
         when:
         rl.removeFirst()
@@ -540,20 +541,22 @@ class LGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = lGroup.execute('lpos a 5 rank -1 count 1 maxlen 0')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 15
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        ((IntegerReply) (reply as MultiBulkReply).replies[0]).integer == 15
 
         when:
         reply = lGroup.execute('lpos a 5 rank 2 count 1 maxlen 0')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 15
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        ((IntegerReply) (reply as MultiBulkReply).replies[0]).integer == 15
 
         when:
         // maxlen
         reply = lGroup.execute('lpos a 5 rank 2 count 1 maxlen 10')
         then:
-        reply == NilReply.INSTANCE
+        reply == MultiBulkReply.EMPTY
 
         when:
         reply = lGroup.execute('lpos a 5 rank 2 count 2 maxlen 10')
@@ -635,6 +638,37 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lpos a >value count -1')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
+
+        when:
+        // bug 2 regression: explicit COUNT 1 on non-empty list, value not found -> empty array
+        rl = new RedisList()
+        rl.addFirst('x'.bytes)
+        rl.addLast('y'.bytes)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = lGroup.execute('lpos a missing COUNT 1')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        // without COUNT, value not found -> nil
+        reply = lGroup.execute('lpos a missing')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        // bug 2 regression: non-existent key with COUNT 1 -> empty array
+        inMemoryGetSet.remove(slot, 'missing')
+        reply = lGroup.execute('lpos missing value COUNT 1')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        // non-existent key without COUNT -> nil
+        inMemoryGetSet.remove(slot, 'missing')
+        reply = lGroup.execute('lpos missing value')
+        then:
+        reply == NilReply.INSTANCE
     }
 
     def 'test lpush'() {

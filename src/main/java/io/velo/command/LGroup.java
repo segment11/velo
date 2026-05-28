@@ -471,6 +471,7 @@ public class LGroup extends BaseCommand {
 
         int rank = 1;
         int count = 1;
+        boolean countProvided = false;
         // max compare times
         int maxlen = 0;
         for (int i = 3; i < data.length; i++) {
@@ -498,6 +499,7 @@ public class LGroup extends BaseCommand {
                     if (count < 0) {
                         return ErrorReply.INVALID_INTEGER;
                     }
+                    countProvided = true;
                 }
                 case "maxlen" -> {
                     if (i + 1 >= data.length) {
@@ -518,7 +520,7 @@ public class LGroup extends BaseCommand {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rl = getRedisList(slotWithKeyHash);
         if (rl == null) {
-            return NilReply.INSTANCE;
+            return countProvided ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
         }
 
         var list = rl.getList();
@@ -557,16 +559,16 @@ public class LGroup extends BaseCommand {
         }
 
         if (posList.isEmpty()) {
-            if (count == 1) {
-                return NilReply.INSTANCE;
-            } else {
+            if (countProvided) {
                 return MultiBulkReply.EMPTY;
+            } else {
+                return NilReply.INSTANCE;
             }
         }
 
         int maxIndex = rl.size() - 1;
 
-        if (count == 1) {
+        if (!countProvided) {
             var pos = posList.getFirst();
             if (isReverse) {
                 return new IntegerReply(maxIndex - pos);
