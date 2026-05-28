@@ -17,8 +17,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 
-import static io.velo.command.BGroup.MAX_TIMEOUT_SECONDS;
-
 /**
  * Handles Redis commands starting with letter 'L'.
  * This includes commands like LASTSAVE, LINDEX, LLEN, LPOP, LPUSH, LRANGE, LREM, LSET, LTRIM.
@@ -372,15 +370,15 @@ public class LGroup extends BaseCommand {
 
         if (isBlock) {
             var timeoutBytes = data[5];
-            int timeoutSeconds;
+            double timeoutSeconds;
             try {
-                timeoutSeconds = Integer.parseInt(new String(timeoutBytes));
+                timeoutSeconds = Double.parseDouble(new String(timeoutBytes));
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
             }
 
-            if (timeoutSeconds > MAX_TIMEOUT_SECONDS) {
-                return new ErrorReply("timeout must be <= " + MAX_TIMEOUT_SECONDS);
+            if (timeoutSeconds < 0) {
+                return new ErrorReply("timeout is negative");
             }
 
             return rGroup.moveBlock(srcSlotWithKeyHash, dstSlotWithKeyHash, isSrcLeft, isDstLeft, timeoutSeconds);

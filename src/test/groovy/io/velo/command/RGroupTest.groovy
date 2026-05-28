@@ -567,7 +567,9 @@ class RGroupTest extends Specification {
                 s2,
                 true, true, 0)
         then:
-        reply == NilReply.INSTANCE
+        // timeout 0 = block indefinitely
+        reply instanceof AsyncReply
+        !(reply as AsyncReply).settablePromise.isComplete()
 
         when:
         def eventloopCurrent = Eventloop.builder()
@@ -597,7 +599,9 @@ class RGroupTest extends Specification {
                 s2,
                 true, true, 0)
         then:
-        reply == NilReply.INSTANCE
+        // timeout 0 = block indefinitely (empty list)
+        reply instanceof AsyncReply
+        !(reply as AsyncReply).settablePromise.isComplete()
 
         when:
         reply = rGroup.moveBlock(

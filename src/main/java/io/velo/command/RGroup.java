@@ -518,7 +518,7 @@ public class RGroup extends BaseCommand {
         return asyncReply;
     }
 
-    private AsyncReply doBlockWhenMove(String srcKey, boolean srcLeft, int timeoutSeconds,
+    private AsyncReply doBlockWhenMove(String srcKey, boolean srcLeft, double timeoutSeconds,
                                        SlotWithKeyHash dstSlotWithKeyHash, boolean dstLeft) {
         var xx = new BlockingList.DstKeyAndDstLeftWhenMove(dstSlotWithKeyHash, dstLeft);
 
@@ -527,29 +527,25 @@ public class RGroup extends BaseCommand {
 
         var one = BlockingList.addBlockingListPromiseByKey(srcKey, finalPromise, socket, srcLeft, xx);
 
-        var reactor = Reactor.getCurrentReactor();
-        reactor.delay(timeoutSeconds * 1000L, () -> {
-            if (!finalPromise.isComplete()) {
-                finalPromise.set(NilReply.INSTANCE);
-                // remove form blocking list
-                BlockingList.removeBlockingListPromiseByKey(srcKey, one);
-            }
-        });
+        if (timeoutSeconds > 0) {
+            long timeoutMillis = (long) (timeoutSeconds * 1000);
+            var reactor = Reactor.getCurrentReactor();
+            reactor.delay(timeoutMillis, () -> {
+                if (!finalPromise.isComplete()) {
+                    finalPromise.set(NilReply.INSTANCE);
+                    BlockingList.removeBlockingListPromiseByKey(srcKey, one);
+                }
+            });
+        }
 
         return asyncReply;
     }
 
     Reply moveBlock(SlotWithKeyHash srcSlotWithKeyHash, SlotWithKeyHash dstSlotWithKeyHash,
-                    boolean srcLeft, boolean dstLeft, int timeoutSeconds) {
-        boolean isNoWait = timeoutSeconds <= 0;
-
+                    boolean srcLeft, boolean dstLeft, double timeoutSeconds) {
         var cvSrc = getCv(srcSlotWithKeyHash);
         if (cvSrc == null) {
-            if (isNoWait) {
-                return NilReply.INSTANCE;
-            } else {
-                return doBlockWhenMove(srcSlotWithKeyHash.rawKey(), srcLeft, timeoutSeconds, dstSlotWithKeyHash, dstLeft);
-            }
+            return doBlockWhenMove(srcSlotWithKeyHash.rawKey(), srcLeft, timeoutSeconds, dstSlotWithKeyHash, dstLeft);
         }
 
         if (!cvSrc.isList()) {
@@ -561,11 +557,7 @@ public class RGroup extends BaseCommand {
 
         var size = rlSrc.size();
         if (size == 0) {
-            if (isNoWait) {
-                return NilReply.INSTANCE;
-            } else {
-                return doBlockWhenMove(srcSlotWithKeyHash.rawKey(), srcLeft, timeoutSeconds, dstSlotWithKeyHash, dstLeft);
-            }
+            return doBlockWhenMove(srcSlotWithKeyHash.rawKey(), srcLeft, timeoutSeconds, dstSlotWithKeyHash, dstLeft);
         }
 
         var memberValueBytes = srcLeft ? rlSrc.removeFirst() : rlSrc.removeLast();

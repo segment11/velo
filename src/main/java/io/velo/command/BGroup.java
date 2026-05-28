@@ -782,9 +782,6 @@ public class BGroup extends BaseCommand {
     }
 
 
-    // max 1 hour check
-    static final int MAX_TIMEOUT_SECONDS = 3600;
-
     private Reply blpop(boolean isLeft) {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
@@ -800,18 +797,18 @@ public class BGroup extends BaseCommand {
         }
 
         var timeoutBytes = data[data.length - 1];
-        int timeoutSeconds;
+        double timeoutSeconds;
         try {
-            timeoutSeconds = Integer.parseInt(new String(timeoutBytes));
+            timeoutSeconds = Double.parseDouble(new String(timeoutBytes));
         } catch (NumberFormatException e) {
             return ErrorReply.NOT_INTEGER;
         }
 
-        if (timeoutSeconds > MAX_TIMEOUT_SECONDS) {
-            return new ErrorReply("timeout must be <= " + MAX_TIMEOUT_SECONDS);
+        if (timeoutSeconds < 0) {
+            return new ErrorReply("timeout is negative");
         }
 
-        boolean isNoWait = timeoutSeconds <= 0;
+        boolean isBlockIndefinitely = timeoutSeconds == 0.0;
 
         var firstKeyBytes = data[1];
         var firstSlotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -864,19 +861,17 @@ public class BGroup extends BaseCommand {
                 }
 
                 if (!isSet) {
-                    if (isNoWait) {
-                        finalPromise.set(NilReply.INSTANCE);
-                    } else {
-                        var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
-                        for (var key : keys) {
-                            BlockingList.addOne(key, one);
-                        }
+                    var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
+                    for (var key : keys) {
+                        BlockingList.addOne(key, one);
+                    }
 
+                    if (!isBlockIndefinitely) {
+                        long timeoutMillis = (long) (timeoutSeconds * 1000);
                         var reactor = Reactor.getCurrentReactor();
-                        reactor.delay(timeoutSeconds * 1000, () -> {
+                        reactor.delay(timeoutMillis, () -> {
                             if (!finalPromise.isComplete()) {
                                 finalPromise.set(NilReply.INSTANCE);
-                                // remove form blocking list
                                 for (var key : keys) {
                                     BlockingList.removeOne(key, one);
                                 }
@@ -889,27 +884,25 @@ public class BGroup extends BaseCommand {
             }
 
             // only one key
-            if (isNoWait) {
-                return NilReply.INSTANCE;
-            } else {
-                SettablePromise<Reply> finalPromise = new SettablePromise<>();
-                var asyncReply = new AsyncReply(finalPromise);
+            SettablePromise<Reply> finalPromise = new SettablePromise<>();
+            var asyncReply = new AsyncReply(finalPromise);
 
-                var firstKey = keys.getFirst();
-                var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
-                BlockingList.addOne(firstKey, one);
+            var firstKey = keys.getFirst();
+            var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
+            BlockingList.addOne(firstKey, one);
 
+            if (!isBlockIndefinitely) {
+                long timeoutMillis = (long) (timeoutSeconds * 1000);
                 var reactor = Reactor.getCurrentReactor();
-                reactor.delay(timeoutSeconds * 1000, () -> {
+                reactor.delay(timeoutMillis, () -> {
                     if (!finalPromise.isComplete()) {
                         finalPromise.set(NilReply.INSTANCE);
-                        // remove form blocking list
                         BlockingList.removeOne(firstKey, one);
                     }
                 });
-
-                return asyncReply;
             }
+
+            return asyncReply;
         }
 
         var valueBytes = isLeft ? rl.removeFirst() : rl.removeLast();

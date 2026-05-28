@@ -1,5 +1,6 @@
 package io.velo.command
 
+import io.activej.eventloop.Eventloop
 import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.CompressedValue
@@ -15,6 +16,8 @@ import io.velo.reply.*
 import io.velo.type.RedisList
 import redis.clients.jedis.Jedis
 import spock.lang.Specification
+
+import java.time.Duration
 
 class LGroupTest extends Specification {
     final short slot = 0
@@ -373,7 +376,9 @@ class LGroupTest extends Specification {
         lGroup.execute('lmove a b left left 0')
         reply = lGroup.lmove(true)
         then:
-        reply == NilReply.INSTANCE
+        // timeout 0 = block indefinitely
+        reply instanceof AsyncReply
+        !(reply as AsyncReply).settablePromise.isComplete()
 
         when:
         lGroup.data[5] = 'a'.bytes
@@ -383,9 +388,21 @@ class LGroupTest extends Specification {
 
         when:
         lGroup.data[5] = '3601'.bytes
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         reply = lGroup.lmove(true)
+        eventloopCurrent.breakEventloop()
         then:
-        reply instanceof ErrorReply
+        // no MAX_TIMEOUT_SECONDS cap, should block
+        reply instanceof AsyncReply
+
+        cleanup:
+        localPersist.cleanUp()
     }
 
     def 'test lpop'() {

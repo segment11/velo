@@ -112,8 +112,25 @@ class BGroupTest extends Specification {
         bGroup.from(BaseCommand.mockAGroup())
         bGroup.slotWithKeyHashListParsed = _BGroup.parseSlots('brpoplpush', data4, 1)
 
-        expect:
-        bGroup.handle() instanceof ErrorReply
+        and:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+
+        when:
+        def reply = bGroup.handle()
+        eventloopCurrent.breakEventloop()
+        then:
+        // no MAX_TIMEOUT_SECONDS cap, large timeout should be accepted as blocking
+        reply instanceof AsyncReply
+
+        cleanup:
+        localPersist.cleanUp()
     }
 
     def 'test bitcount'() {
@@ -748,7 +765,9 @@ class BGroupTest extends Specification {
         inMemoryGetSet.remove(slot, 'a')
         def reply = bGroup.execute('blpop a 0')
         then:
-        reply == NilReply.INSTANCE
+        // timeout 0 = block indefinitely
+        reply instanceof AsyncReply
+        !(reply as AsyncReply).settablePromise.isComplete()
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -758,7 +777,9 @@ class BGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = bGroup.execute('blpop a 0')
         then:
-        reply == NilReply.INSTANCE
+        // timeout 0 = block indefinitely (empty list)
+        reply instanceof AsyncReply
+        !(reply as AsyncReply).settablePromise.isComplete()
 
         when:
         rl.addFirst('a'.bytes)
@@ -791,10 +812,9 @@ class BGroupTest extends Specification {
         inMemoryGetSet.remove(slot, 'b')
         reply = bGroup.execute('blpop a b 0')
         then:
+        // timeout 0 = block indefinitely, promise stays pending
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        !(reply as AsyncReply).settablePromise.isComplete()
 
         when:
         rl.addFirst('b'.bytes)
@@ -813,10 +833,9 @@ class BGroupTest extends Specification {
         inMemoryGetSet.remove(slot, 'b')
         reply = bGroup.execute('blpop a b 0')
         then:
+        // timeout 0 = block indefinitely, promise stays pending
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        !(reply as AsyncReply).settablePromise.isComplete()
 
         when:
         reply = bGroup.execute('blpop a b 1')
@@ -834,9 +853,17 @@ class BGroupTest extends Specification {
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        reply = bGroup.execute('blpop a 3601')
+        // negative timeout should be rejected
+        reply = bGroup.execute('blpop a -1')
         then:
         reply instanceof ErrorReply
+
+        when:
+        // fractional timeout should be accepted
+        inMemoryGetSet.remove(slot, 'a')
+        reply = bGroup.execute('blpop a 0.5')
+        then:
+        reply instanceof AsyncReply
 
         when:
         reply = bGroup.execute('blpop >key 0')
