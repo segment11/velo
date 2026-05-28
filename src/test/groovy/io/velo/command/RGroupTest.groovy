@@ -508,6 +508,45 @@ class RGroupTest extends Specification {
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
+        when:
+        // bug 4 regression: wrong-type dest should not lose source element
+        inMemoryGetSet.remove(slot, 'src')
+        inMemoryGetSet.remove(slot, 'dst')
+        def cvSrc = Mock.prepareCompressedValueList(1)[0]
+        cvSrc.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlSrc = new RedisList()
+        rlSrc.addFirst('a'.bytes)
+        cvSrc.compressedData = rlSrc.encode()
+        inMemoryGetSet.put(slot, 'src', 0, cvSrc)
+        // dst is a string, not a list
+        def cvDst = new CompressedValue()
+        cvDst.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvDst.compressedData = 'not-list'.bytes
+        inMemoryGetSet.put(slot, 'dst', 0, cvDst)
+        rGroup.crossRequestWorker = false
+        reply = rGroup.execute('rpoplpush src dst')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+        // source must still contain [a]
+        def rlSrcAfter = LGroup.getRedisList(rGroup.slotWithKeyHashListParsed.getFirst(), rGroup)
+        rlSrcAfter != null
+        rlSrcAfter.size() == 1
+
+        when:
+        // bug 4 regression: moving last element should delete source key
+        inMemoryGetSet.remove(slot, 'src2')
+        inMemoryGetSet.remove(slot, 'dst2')
+        def cvSrc2 = Mock.prepareCompressedValueList(1)[0]
+        cvSrc2.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlSrc2 = new RedisList()
+        rlSrc2.addFirst('x'.bytes)
+        cvSrc2.compressedData = rlSrc2.encode()
+        inMemoryGetSet.put(slot, 'src2', 0, cvSrc2)
+        rGroup.execute('rpoplpush src2 dst2')
+        then:
+        // source key should be removed (empty list deleted)
+        rGroup.getCv(rGroup.slotWithKeyHashListParsed.getFirst()) == null
+
         cleanup:
         eventloop.breakEventloop()
     }

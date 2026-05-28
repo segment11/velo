@@ -498,9 +498,21 @@ public class RGroup extends BaseCommand {
             return NilReply.INSTANCE;
         }
 
+        // validate destination type before mutating source
+        if (!srcSlotWithKeyHash.rawKey().equals(dstSlotWithKeyHash.rawKey())) {
+            var cvDst = getCv(dstSlotWithKeyHash);
+            if (cvDst != null && !cvDst.isList()) {
+                return ErrorReply.WRONG_TYPE;
+            }
+        }
+
         var memberValueBytes = srcLeft ? rlSrc.removeFirst() : rlSrc.removeLast();
-        // save after remove
-        set(rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
+        // save after remove, auto-delete empty list
+        if (rlSrc.size() == 0) {
+            removeDelay(srcSlotWithKeyHash);
+        } else {
+            set(rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
+        }
 
         if (!isCrossRequestWorker) {
             final Reply[] finalReplyArray = {null};
@@ -561,8 +573,12 @@ public class RGroup extends BaseCommand {
         }
 
         var memberValueBytes = srcLeft ? rlSrc.removeFirst() : rlSrc.removeLast();
-        // save after remove
-        set(rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
+        // save after remove, auto-delete empty list
+        if (rlSrc.size() == 0) {
+            removeDelay(srcSlotWithKeyHash);
+        } else {
+            set(rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
+        }
 
         if (!isCrossRequestWorker) {
             final Reply[] finalReplyArray = {null};
