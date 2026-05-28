@@ -1492,6 +1492,14 @@ httl
         savedRhh.get('field2') == null
         savedRhh.get('field3') != null
 
+        when: 'test HH mode rhh is null (key does not exist)'
+        inMemoryGetSet.remove(slot, 'hashA')
+        reply = hGroup.execute('hgetdel hashA FIELDS 1 field1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
+
         cleanup:
         LocalPersist.instance.hashSaveMemberTogether = false
     }
