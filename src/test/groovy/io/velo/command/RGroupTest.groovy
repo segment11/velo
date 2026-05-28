@@ -668,6 +668,29 @@ class RGroupTest extends Specification {
         (reply as BulkReply).raw == '1'.bytes
 
         when:
+        // bug 4 regression: moveBlock wrong-type dest should not lose source element
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'dst-wrong')
+        def cvSrcBlock = Mock.prepareCompressedValueList(1)[0]
+        cvSrcBlock.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlSrcBlock = new RedisList()
+        rlSrcBlock.addFirst('z'.bytes)
+        cvSrcBlock.compressedData = rlSrcBlock.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvSrcBlock)
+        def cvDstWrong = new CompressedValue()
+        cvDstWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvDstWrong.compressedData = 'not-list'.bytes
+        def sDstWrong = BaseCommand.slot('dst-wrong', 1)
+        inMemoryGetSet.put(slot, 'dst-wrong', 0, cvDstWrong)
+        rGroup.crossRequestWorker = false
+        reply = rGroup.moveBlock(s1, sDstWrong, true, true, 1.0)
+        then:
+        reply == ErrorReply.WRONG_TYPE
+        def rlSrcBlockAfter = LGroup.getRedisList(s1, rGroup)
+        rlSrcBlockAfter != null
+        rlSrcBlockAfter.size() == 1
+
+        when:
         localPersist.cleanUp()
         LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
         localPersist.fixSlotThreadId(s1.slot(), Thread.currentThread().threadId())

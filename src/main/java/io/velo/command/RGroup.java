@@ -572,6 +572,14 @@ public class RGroup extends BaseCommand {
             return doBlockWhenMove(srcSlotWithKeyHash.rawKey(), srcLeft, timeoutSeconds, dstSlotWithKeyHash, dstLeft);
         }
 
+        // validate destination type before mutating source
+        if (!srcSlotWithKeyHash.rawKey().equals(dstSlotWithKeyHash.rawKey())) {
+            var cvDst = getCv(dstSlotWithKeyHash);
+            if (cvDst != null && !cvDst.isList()) {
+                return ErrorReply.WRONG_TYPE;
+            }
+        }
+
         var memberValueBytes = srcLeft ? rlSrc.removeFirst() : rlSrc.removeLast();
         // save after remove, auto-delete empty list
         if (rlSrc.size() == 0) {
