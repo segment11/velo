@@ -395,7 +395,7 @@ class LGroupTest extends Specification {
 
         when:
         // NaN should be rejected
-        lGroup.data[5] = 'nan'.bytes
+        lGroup.data[5] = 'NaN'.bytes
         reply = lGroup.lmove(true)
         then:
         reply instanceof ErrorReply

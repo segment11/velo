@@ -860,13 +860,13 @@ class BGroupTest extends Specification {
 
         when:
         // NaN should be rejected
-        reply = bGroup.execute('blpop a nan')
+        reply = bGroup.execute('blpop a NaN')
         then:
         reply instanceof ErrorReply
 
         when:
         // Infinity should be rejected
-        reply = bGroup.execute('blpop a inf')
+        reply = bGroup.execute('blpop a Infinity')
         then:
         reply instanceof ErrorReply
 
