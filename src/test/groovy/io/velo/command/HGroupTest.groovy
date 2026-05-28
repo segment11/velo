@@ -1741,6 +1741,139 @@ httl
         savedRhh.get('field1') != null
         savedRhh.get('field2') != null
 
+        when: 'test format error - not enough args'
+        reply = hGroup.execute('hsetex hashA')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'test key too long'
+        reply = hGroup.execute('hsetex >key FIELDS 2 field1 value1 field2 value2')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'test fnx option - field does not exist so should set'
+        reply = hGroup.execute('hsetex hashA fnx FIELDS 1 newfield newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'test fxx option - field exists so should set'
+        reply = hGroup.execute('hsetex hashA fxx FIELDS 1 field1 newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'test EX option invalid integer'
+        reply = hGroup.execute('hsetex hashA EX abc FIELDS 1 field1 value1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'test PX option invalid integer'
+        reply = hGroup.execute('hsetex hashA PX abc FIELDS 1 field1 value1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'test EXAT option invalid integer'
+        reply = hGroup.execute('hsetex hashA EXAT abc FIELDS 1 field1 value1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'test PXAT option invalid integer'
+        reply = hGroup.execute('hsetex hashA PXAT abc FIELDS 1 field1 value1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'test syntax error - missing fields keyword'
+        reply = hGroup.execute('hsetex hashA EX 3600 1 field1 value1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'test syntax error - numFields not integer'
+        reply = hGroup.execute('hsetex hashA FIELDS abc field1 value1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'test syntax error - numFields negative'
+        reply = hGroup.execute('hsetex hashA FIELDS -1 field1 value1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'test syntax error - field count mismatch'
+        reply = hGroup.execute('hsetex hashA FIELDS 2 field1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'test field too long'
+        def tooLongField = new byte[CompressedValue.KEY_MAX_LENGTH + 1]
+        Arrays.fill(tooLongField, (byte) 'a')
+        reply = hGroup.execute('hsetex hashA FIELDS 1 ' + new String(tooLongField) + ' value1')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'test keepttl option'
+        reply = hGroup.execute('hsetex hashA keepttl FIELDS 1 field1 newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'test normal mode with EX option'
+        reply = hGroup.execute('hsetex hashA EX 3600 FIELDS 1 field1 newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'test normal mode with PX option'
+        reply = hGroup.execute('hsetex hashA PX 3600000 FIELDS 1 field1 newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'test normal mode with PXAT option'
+        def pxatTime = System.currentTimeMillis() + 3600000
+        reply = hGroup.execute('hsetex hashA PXAT ' + pxatTime + ' FIELDS 1 field1 newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'test normal mode with EXAT option'
+        def exatTime = ((System.currentTimeMillis() / 1000) as long) + 3600
+        reply = hGroup.execute('hsetex hashA EXAT ' + exatTime + ' FIELDS 1 field1 newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'test HH mode with EX option'
+        reply = hGroup.execute('hsetex hashA EX 3600 FIELDS 1 field1 newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'test HH mode with PX option'
+        reply = hGroup.execute('hsetex hashA PX 3600000 FIELDS 1 field1 newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'test HH mode with PXAT option'
+        pxatTime = System.currentTimeMillis() + 3600000
+        reply = hGroup.execute('hsetex hashA PXAT ' + pxatTime + ' FIELDS 1 field1 newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'test HH mode with EXAT option'
+        exatTime = ((System.currentTimeMillis() / 1000) as long) + 3600
+        reply = hGroup.execute('hsetex hashA EXAT ' + exatTime + ' FIELDS 1 field1 newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'test HH mode with keepttl option'
+        reply = hGroup.execute('hsetex hashA keepttl FIELDS 1 field1 newvalue')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
         cleanup:
         LocalPersist.instance.hashSaveMemberTogether = false
     }
