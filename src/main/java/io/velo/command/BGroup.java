@@ -77,6 +77,13 @@ public class BGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("blmpop".equals(cmd)) {
+            if (data.length < 4) {
+                return slotWithKeyHashList;
+            }
+            return slotWithKeyHashList;
+        }
+
         if ("blpop".equals(cmd) || "brpop".equals(cmd)) {
             if (data.length < 3) {
                 return slotWithKeyHashList;
@@ -147,6 +154,10 @@ public class BGroup extends BaseCommand {
             var lGroup = new LGroup(null, dd, socket);
             lGroup.from(this);
             return lGroup.lmove(true);
+        }
+
+        if ("blmpop".equals(cmd)) {
+            return ErrorReply.NOT_SUPPORT;
         }
 
         return NilReply.INSTANCE;

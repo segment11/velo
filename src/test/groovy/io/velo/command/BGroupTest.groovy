@@ -99,6 +99,7 @@ class BGroupTest extends Specification {
         input       | expected
         'bf.xxx'    | ErrorReply.SYNTAX
         'bgsave'    | OKReply.INSTANCE
+        'blmpop 0 1 mylist LEFT COUNT 1' | ErrorReply.NOT_SUPPORT
         'zzz'       | NilReply.INSTANCE
     }
 

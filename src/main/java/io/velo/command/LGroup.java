@@ -52,6 +52,13 @@ public class LGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("lmpop".equals(cmd)) {
+            if (data.length < 3) {
+                return slotWithKeyHashList;
+            }
+            return slotWithKeyHashList;
+        }
+
         if ("lindex".equals(cmd) || "linsert".equals(cmd)
                 || "llen".equals(cmd) || "lpop".equals(cmd) || "lpos".equals(cmd)
                 || "lpush".equals(cmd) || "lpushx".equals(cmd)
@@ -124,6 +131,10 @@ public class LGroup extends BaseCommand {
 
         if ("ltrim".equals(cmd)) {
             return ltrim();
+        }
+
+        if ("lmpop".equals(cmd)) {
+            return ErrorReply.NOT_SUPPORT;
         }
 
         if ("load-rdb".equals(cmd)) {

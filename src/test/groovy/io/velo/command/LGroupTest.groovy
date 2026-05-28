@@ -92,6 +92,7 @@ class LGroupTest extends Specification {
         'lset'     | ErrorReply.FORMAT
         'ltrim'    | ErrorReply.FORMAT
         'load-rdb' | ErrorReply.FORMAT
+        'lmpop 1 mylist LEFT COUNT 1' | ErrorReply.NOT_SUPPORT
         'zzz'      | NilReply.INSTANCE
     }
 
