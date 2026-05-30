@@ -121,6 +121,8 @@
 - [√] HEXPIRETIME
 - [√] HGET
 - [√] HGETALL
+- [√] HGETDEL
+- [√] HGETEX
 - [√] HINCRBY
 - [√] HINCRBYFLOAT
 - [√] HKEYS
@@ -135,6 +137,7 @@
 - [√] HRANDFIELD
 - [√] HSET
 - [√] HSETNX
+- [√] HSETEX
 - [√] HSTRLEN
 - [√] HTTL
 - [√] HVALS
