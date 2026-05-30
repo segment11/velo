@@ -2063,6 +2063,11 @@ sunionstore
         (reply as MultiBulkReply).replies.length == 10
 
         when:
+        reply = sGroup.execute('spop a -1')
+        then:
+        reply == ErrorReply.VALUE_NOT_POSITIVE
+
+        when:
         reply = sGroup.execute('srandmember a -5')
         then:
         reply instanceof MultiBulkReply

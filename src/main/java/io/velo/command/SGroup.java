@@ -1727,6 +1727,10 @@ public class SGroup extends BaseCommand {
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
             }
+
+            if (doPop && count < 0) {
+                return ErrorReply.VALUE_NOT_POSITIVE;
+            }
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
