@@ -2340,6 +2340,22 @@ zunionstore
         !storedRz.contains('c')
         !storedRz.contains('e')
 
+        when: 'ZRANGESTORE BYSCORE REV LIMIT 0 2 — no skip, store e,d'
+        zGroup.execute('zrange a 5 (1 byscore rev limit 0 2')
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData, zGroup.slotNumber)
+        def replyBs2 = zGroup.zrange(zGroup.data, dstKey)
+        then:
+        replyBs2 instanceof IntegerReply
+        (replyBs2 as IntegerReply).integer == 2
+
+        when: 'verify BYSCORE stored e,d'
+        def storedCvBs2 = inMemoryGetSet.getBuf(slot, dstKey, 0, 0L)
+        def storedRzBs2 = RedisZSet.decode(storedCvBs2.cv().compressedData)
+        then:
+        storedRzBs2.contains('e')
+        storedRzBs2.contains('d')
+        !storedRzBs2.contains('c')
+
         when: 'ZRANGESTORE BYLEX REV LIMIT 1 2 — skip e, store d,c'
         zGroup.execute('zrange a + - bylex rev limit 1 2')
         zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData, zGroup.slotNumber)
