@@ -4,6 +4,7 @@ import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.activej.inject.binding.OptionalDependency
 import io.velo.acl.AclUsers
+import io.velo.acl.RCmd
 import io.velo.acl.U
 import io.velo.decode.Request
 import io.velo.persist.Consts
@@ -29,6 +30,7 @@ import java.nio.channels.FileLock
 import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 class MultiWorkerServerTest extends Specification {
@@ -39,6 +41,180 @@ class MultiWorkerServerTest extends Specification {
     final short slotNumber = 2
     final byte slotWorkers = 2
     final byte netWorkers = 2
+
+    def 'test shutdown command requests server stop when acl permits'() {
+        given:
+        def oldPassword = ConfForGlobal.PASSWORD
+        def oldSocketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector
+        def config = Config.create()
+                .with('doFileLock', "false")
+                .with('slotNumber', '1')
+                .with('slotWorkers', '1')
+                .with('netWorkers', '1')
+                .with("net.listenAddresses", "localhost:7379")
+        def eventloopCurrent = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloopCurrent.keepAlive(true)
+        def waitLatch = new CountDownLatch(1)
+        Thread.start {
+            waitLatch.countDown()
+            eventloopCurrent.run()
+        }
+        waitLatch.await()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        LocalPersist.instance.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+
+        def m = new MultiWorkerServer()
+        m.configInject = config
+        m.primaryReactor(config)
+        m.netWorkerEventloopArray = eventloopArray
+        m.requestHandlerArray = new RequestHandler[1]
+        m.requestHandlerArray[0] = new RequestHandler((byte) 0, (byte) 1, (short) 1, new SnowFlake(1, 1), config)
+        m.scheduleRunnableArray = new TaskRunnable[1]
+        m.scheduleRunnableArray[0] = new TaskRunnable((byte) 0, (byte) 1)
+        m.socketInspector = inspector
+        m.onStart()
+
+        AclUsers.instance.initForTest()
+        ConfForGlobal.PASSWORD = null
+        def shutdownLatch = new CountDownLatch(1)
+        m.shutdownHandler = { shutdownLatch.countDown() }
+
+        def badData = new byte[2][]
+        badData[0] = 'shutdown'.bytes
+        badData[1] = 'later'.bytes
+        def badRequest = new Request(badData, false, false)
+        def duplicateSaveData = new byte[3][]
+        duplicateSaveData[0] = 'shutdown'.bytes
+        duplicateSaveData[1] = 'save'.bytes
+        duplicateSaveData[2] = 'nosave'.bytes
+        def duplicateSaveRequest = new Request(duplicateSaveData, false, false)
+        def goodData = new byte[3][]
+        goodData[0] = 'shutdown'.bytes
+        goodData[1] = 'nosave'.bytes
+        goodData[2] = 'now'.bytes
+        def goodRequest = new Request(goodData, false, false)
+        def pingData = new byte[1][]
+        pingData[0] = 'ping'.bytes
+        def pingRequest = new Request(pingData, false, false)
+        String pingResponseText = null
+        String badResponseText = null
+        String duplicateSaveResponseText = null
+        String responseText = null
+
+        when:
+        def pingP = m.handleRequest(pingRequest, socket)
+        pingP.whenResult { reply ->
+            pingResponseText = new String(reply.array())
+        }.result
+        def badP = m.handleRequest(badRequest, socket)
+        badP.whenResult { reply ->
+            badResponseText = new String(reply.array())
+        }.result
+        def duplicateSaveP = m.handleRequest(duplicateSaveRequest, socket)
+        duplicateSaveP.whenResult { reply ->
+            duplicateSaveResponseText = new String(reply.array())
+        }.result
+        def shutdownNotRequestedForBadOption = shutdownLatch.await(150, TimeUnit.MILLISECONDS)
+        def p = m.handleRequest(goodRequest, socket)
+        p.whenResult { reply ->
+            responseText = new String(reply.array())
+        }.result
+
+        then:
+        pingResponseText == '+PONG\r\n'
+        badResponseText == '-ERR format\r\n'
+        duplicateSaveResponseText == '-ERR format\r\n'
+        !shutdownNotRequestedForBadOption
+        responseText == '+OK\r\n'
+        shutdownLatch.await(1, TimeUnit.SECONDS)
+
+        cleanup:
+        ConfForGlobal.PASSWORD = oldPassword
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = oldSocketInspector
+        if (m?.primaryScheduleRunnable != null) {
+            m.onStop()
+        }
+    }
+
+    def 'test shutdown command is blocked by acl dangerous disallow'() {
+        given:
+        def oldPassword = ConfForGlobal.PASSWORD
+        def oldSocketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector
+        def config = Config.create()
+                .with('doFileLock', "false")
+                .with('slotNumber', '1')
+                .with('slotWorkers', '1')
+                .with('netWorkers', '1')
+                .with("net.listenAddresses", "localhost:7379")
+        def eventloopCurrent = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloopCurrent.keepAlive(true)
+        def waitLatch = new CountDownLatch(1)
+        Thread.start {
+            waitLatch.countDown()
+            eventloopCurrent.run()
+        }
+        waitLatch.await()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        LocalPersist.instance.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+
+        def m = new MultiWorkerServer()
+        m.configInject = config
+        m.primaryReactor(config)
+        m.netWorkerEventloopArray = eventloopArray
+        m.requestHandlerArray = new RequestHandler[1]
+        m.requestHandlerArray[0] = new RequestHandler((byte) 0, (byte) 1, (short) 1, new SnowFlake(1, 1), config)
+        m.scheduleRunnableArray = new TaskRunnable[1]
+        m.scheduleRunnableArray[0] = new TaskRunnable((byte) 0, (byte) 1)
+        m.socketInspector = inspector
+        m.onStart()
+
+        AclUsers.instance.initForTest()
+        AclUsers.instance.upInsert('default') { u ->
+            u.addRCmd(true, RCmd.fromLiteral('+@all'))
+            u.addRCmdDisallow(true, RCmd.fromLiteral('-@dangerous'))
+        }
+        ConfForGlobal.PASSWORD = null
+        def shutdownLatch = new CountDownLatch(1)
+        m.shutdownHandler = { shutdownLatch.countDown() }
+
+        def data = new byte[1][]
+        data[0] = 'shutdown'.bytes
+        def request = new Request(data, false, false)
+        String responseText = null
+
+        when:
+        def p = m.handleRequest(request, socket)
+        p.whenResult { reply ->
+            responseText = new String(reply.array())
+        }.result
+
+        then:
+        responseText == '-ERR user acl permit limit !NOPERM!\r\n'
+        !shutdownLatch.await(100, TimeUnit.MILLISECONDS)
+
+        cleanup:
+        ConfForGlobal.PASSWORD = oldPassword
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = oldSocketInspector
+        if (m?.primaryScheduleRunnable != null) {
+            m.onStop()
+        }
+    }
 
     def 'test fast auth gate keeps quit available'() {
         given:

@@ -74,6 +74,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -427,6 +428,53 @@ public class MultiWorkerServer extends Launcher {
         return null;
     }
 
+    private static final String SHUTDOWN_COMMAND = "shutdown";
+    @VisibleForTesting
+    Runnable shutdownHandler = this::shutdown;
+
+    private Promise<ByteBuf> handleShutdown(Request request) {
+        if (!isShutdownArgsValid(request.getData())) {
+            return Promise.of(ErrorReply.FORMAT.buffer());
+        }
+
+        requestShutdownAfterReply();
+        return Promise.of(OKReply.INSTANCE.buffer());
+    }
+
+    private static boolean isShutdownArgsValid(byte[][] data) {
+        boolean hasSaveOption = false;
+        for (int i = 1; i < data.length; i++) {
+            var option = new String(data[i]).toLowerCase(Locale.ROOT);
+            switch (option) {
+                case "save", "nosave" -> {
+                    if (hasSaveOption) {
+                        return false;
+                    }
+                    hasSaveOption = true;
+                }
+                case "now", "force" -> {
+                }
+                default -> {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private void requestShutdownAfterReply() {
+        var thread = new Thread(() -> {
+            try {
+                TimeUnit.MILLISECONDS.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            shutdownHandler.run();
+        }, "shutdown-command");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
     private Promise<ByteBuf> handleQuit(ITcpSocket socket) {
         ((TcpSocket) socket).getReactor().submit(socket::close);
         return Promise.of(OKReply.INSTANCE.buffer());
@@ -475,6 +523,10 @@ public class MultiWorkerServer extends Launcher {
                             ErrorReply.ACL_PERMIT_KEY_LIMIT.buffer()
                             : ErrorReply.ACL_PERMIT_LIMIT.buffer()
             );
+        }
+
+        if (cmd.equals(SHUTDOWN_COMMAND)) {
+            return handleShutdown(request);
         }
 
         var r = handleFast(request, socket);
