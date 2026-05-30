@@ -1474,7 +1474,7 @@ public class ZGroup extends BaseCommand {
                     return ErrorReply.NOT_INTEGER;
                 }
 
-                hasLimit = count != 0 || offset != 0;
+                hasLimit = true;
                 i += 2;
             } else if ("withscores".equals(tmp)) {
                 withScores = true;
@@ -1603,8 +1603,14 @@ public class ZGroup extends BaseCommand {
         }
 
         int size = rz.size();
-        if (count <= 0) {
-            count = size;
+        if (hasLimit) {
+            if (count <= 0) {
+                return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+            }
+        } else {
+            if (count <= 0) {
+                count = size;
+            }
         }
 
         if (byIndex) {

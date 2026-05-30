@@ -1727,8 +1727,7 @@ zunionstore
         inMemoryGetSet.put('a', cv)
         reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 0 withscores')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 4
+        reply == MultiBulkReply.EMPTY
 
         when:
         // limit count
@@ -1748,19 +1747,18 @@ zunionstore
         // limit count
         reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 0 0 byscore')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 2
+        reply == MultiBulkReply.EMPTY
 
         when:
-        // limit offset
-        reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 1 0 byscore')
+        // limit offset with count > 0
+        reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 1 1 byscore')
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
 
         when:
-        // limit offset
-        reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 3 0 byscore')
+        // limit offset beyond range
+        reply = zGroup.execute('zrange a (1 (4 byscore byscore limit 3 1 byscore')
         then:
         reply == MultiBulkReply.EMPTY
 
@@ -1776,17 +1774,15 @@ zunionstore
         when:
         reply = zGroup.execute('zrange a (4 (1 byscore rev limit 0 0 byscore')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 2
+        reply == MultiBulkReply.EMPTY
 
         when:
-        zGroup.execute('zrange a (1 (4 byscore byscore limit 0 0 byscore')
+        zGroup.execute('zrange a (1 (4 byscore byscore limit 0 2 byscore')
         zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
         reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 2
-        inMemoryGetSet.getBuf(slot, dstKey, 0, 0L) != null
 
         when:
         zGroup.execute('zrange a (1 (5 byscore byscore limit 0 2 byscore')
@@ -1857,28 +1853,24 @@ zunionstore
         when:
         reply = zGroup.execute('zrange a 0 1 byindex byindex limit 0 0 byindex')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 2
+        reply == MultiBulkReply.EMPTY
 
         when:
         zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
         reply = zGroup.zrange(zGroup.data, dstKey)
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 2
+        reply == IntegerReply.REPLY_0
 
         when:
         reply = zGroup.execute('zrange a -3 -1 byindex byindex limit 0 0 byindex')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 3
+        reply == MultiBulkReply.EMPTY
 
         when:
         zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
         reply = zGroup.zrange(zGroup.data, dstKey)
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 3
+        reply == IntegerReply.REPLY_0
 
         when:
         reply = zGroup.execute('zrange a 1 0 byindex byindex limit 0 0 byindex')
@@ -1937,8 +1929,7 @@ zunionstore
         when:
         reply = zGroup.execute('zrange a 3 6 byindex byindex limit 0 0 withscores')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 8
+        reply == MultiBulkReply.EMPTY
 
         when:
         reply = zGroup.execute('zrange a 3 6 byindex rev limit 0 2 byindex')
@@ -1974,15 +1965,13 @@ zunionstore
         when:
         reply = zGroup.execute('zrange a - + bylex bylex limit 0 0 bylex')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 10
+        reply == MultiBulkReply.EMPTY
 
         when:
         zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
         reply = zGroup.zrange(zGroup.data, dstKey)
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 10
+        reply == IntegerReply.REPLY_0
 
         when:
         reply = zGroup.execute('zrange a ( + bylex bylex limit 0 0 bylex')
@@ -1997,15 +1986,13 @@ zunionstore
         when:
         reply = zGroup.execute('zrange a [member1 [member4 bylex bylex limit 0 0 bylex')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 4
+        reply == MultiBulkReply.EMPTY
 
         when:
         zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
         reply = zGroup.zrange(zGroup.data, dstKey)
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 4
+        reply == IntegerReply.REPLY_0
 
         when:
         reply = zGroup.execute('zrange a [member10 [member11 bylex bylex limit 0 0 bylex')
@@ -2040,8 +2027,7 @@ zunionstore
         when:
         reply = zGroup.execute('zrange a [member1 [member8 bylex bylex limit 0 0 withscores')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 16
+        reply == MultiBulkReply.EMPTY
 
         when:
         reply = zGroup.execute('zrange a [member1 [member8 bylex bylex limit 10 2 bylex')
@@ -2108,6 +2094,62 @@ zunionstore
         reply = zGroup.execute('zrange >key 1 a byindex byindex limit 0 0 withscores')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+    }
+
+    def 'test zrange limit 0 0 returns empty'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def zGroup = new ZGroup(null, null, null)
+        zGroup.byPassGetSet = inMemoryGetSet
+        zGroup.from(BaseCommand.mockAGroup())
+
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rz = new RedisZSet()
+        10.times {
+            rz.add(it as double, 'member' + it)
+        }
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+
+        when: 'BYSCORE LIMIT 0 0 should return empty'
+        def reply = zGroup.execute('zrange a -inf +inf byscore limit 0 0')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when: 'BYINDEX LIMIT 0 0 should return empty'
+        reply = zGroup.execute('zrange a 0 -1 limit 0 0')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when: 'BYLEX LIMIT 0 0 should return empty'
+        reply = zGroup.execute('zrange a - + bylex limit 0 0')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when: 'BYSCORE LIMIT 0 3 should return 3 members'
+        reply = zGroup.execute('zrange a -inf +inf byscore limit 0 3')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 3
+
+        when: 'BYSCORE LIMIT 2 0 should return empty (count=0)'
+        reply = zGroup.execute('zrange a -inf +inf byscore limit 2 0')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when: 'no LIMIT, BYINDEX returns all members'
+        reply = zGroup.execute('zrange a 0 -1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 10
+
+        when: 'no LIMIT, BYSCORE returns all members'
+        reply = zGroup.execute('zrange a -inf +inf byscore')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 10
     }
 
     def 'test zrangebylex'() {
