@@ -1874,8 +1874,8 @@ public class SGroup extends BaseCommand {
                     } catch (NumberFormatException e) {
                         return ErrorReply.NOT_INTEGER;
                     }
-                    if (count < 0) {
-                        return ErrorReply.INVALID_INTEGER;
+                    if (count <= 0) {
+                        return ErrorReply.SYNTAX;
                     }
                     i++;
                 } else {

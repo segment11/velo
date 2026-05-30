@@ -2194,6 +2194,41 @@ sunionstore
         reply = sGroup.execute('sscan >key 0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        reply = sGroup.execute('sscan a')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = sGroup.execute('sscan a 0 match')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = sGroup.execute('sscan a 0 count')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = sGroup.execute('sscan a 0 count notanumber')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = sGroup.execute('sscan a 0 count -1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = sGroup.execute('sscan a 0 unknownoption')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = sGroup.execute('sscan a 0 count 0')
+        then:
+        reply == ErrorReply.SYNTAX
     }
 
     def 'test srem'() {
