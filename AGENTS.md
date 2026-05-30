@@ -67,6 +67,13 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
 - Fork every: 1 test (isolated test execution)
 - Standard streams are shown during test execution
 - Test coverage is generated automatically after unit tests; JaCoCo HTML files are under `build/reports/jacocoHtml/`
+- Use `scripts/jacoco_cover.py` to quickly check line coverage for a class and line range instead of parsing HTML manually:
+  ```bash
+  python3 scripts/jacoco_cover.py <fully.qualified.ClassName> <startLine> <endLine>
+  python3 scripts/jacoco_cover.py io.velo.command.SGroup 1102 1230           # summary only
+  python3 scripts/jacoco_cover.py io.velo.command.SGroup 1102 1230 --src      # with source text
+  python3 scripts/jacoco_cover.py io.velo.command.SGroup 1102 1230 --dir /path # custom project root
+  ```
 
 ## Code Style Guidelines
 
