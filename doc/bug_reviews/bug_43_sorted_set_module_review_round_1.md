@@ -122,7 +122,7 @@ if (byLex) {
 
 Root cause and impact:
 
-Redis 7.2 supports reverse lexicographic ranges through `ZREVRANGEBYLEX` and the `REV` form of `ZRANGE ... BYLEX`. Velo parses `REV`, but the lex-range validation still rejects reversed endpoints whenever `minLex > maxLex`. That means requests that should return descending lex results can be cut off before the set is even queried. The `RedisZSet.betweenByMember()` API already returns a sorted `NavigableMap`, so this appears to be a command-layer validation issue rather than a storage limitation.
+Redis 7.2 supports reverse lexicographic ranges through `ZREVRANGEBYLEX` and the `REV` form of `ZRANGE ... BYLEX`. The follow-up commit adds sentinel-aware endpoint normalization and uses the reversed iterator for both read and store paths, which matches Redis 7.2 behavior for the validated cases.
 
 ## Finding 3: `ZRANGESTORE` likely stores the wrong members for `REV` and `LIMIT`
 
@@ -181,7 +181,11 @@ if (hasLimit) {
 
 Root cause and impact:
 
-The code uses one iterator for the read path, but the store path reconstructs the destination from the original ascending `subMap` / `subSet` view instead of the already-trimmed reverse view. If Redis 7.2 semantics are followed, `ZRANGESTORE ... REV LIMIT offset count` should persist exactly the slice that the read path would return. Here, the destination appears to be built from the wrong ordering context, so a reverse query can store the wrong subset even if the read reply looks correct.
+Redis uses a single-pass approach for ZRANGESTORE (verified in Redis source `t_zset.c:genericZrangebyscoreCommand`): iterate in the requested direction (descending if REV), skip `offset` entries, then emit up to `limit` entries — both the reply and the stored set come from the same pass.
+
+Velo's BYLEX and BYSCORE paths used a two-pass approach: (1) skip via iterator with `it.remove()`, (2) iterate the trimmed collection separately for store/read. This caused wrong members to be stored when REV+LIMIT was used because the store iterated in ascending order over the trimmed collection instead of in the original direction.
+
+The fix refactors both BYLEX and BYSCORE to single-pass, mirroring the BYINDEX pattern and the Redis source: one iterator, skip offset, then add to `dstRz` and `replies` in the same loop.
 
 ## Finding 4: Several Redis 7.2 sorted-set commands are absent and fall through to `NilReply`
 
@@ -312,6 +316,28 @@ Review notes:
 - The original zero-count bug is resolved.
 - The follow-up semantic concerns from the first review are also resolved by this commit.
 - Finding 1 can be treated as closed.
+
+## Review Feedback - AI Agent 2
+
+Reviewed commit: `fcf36f06af45198e246f155a9657ce017418d336`
+
+Addressed status:
+
+- Finding 2 is fully addressed in this commit.
+
+Verification:
+
+- `ZGroup.java` now recognizes `+` and `-` sentinels on the BYLEX boundaries and performs a reverse-aware swap when needed.
+- The read path now uses `subMap.descendingMap().entrySet().iterator()` for reverse lex queries.
+- The store path uses the same reverse iterator, so `ZRANGESTORE` stays aligned with the read reply.
+- The new Spock test covers `ZREVRANGEBYLEX` and `ZRANGE ... REV BYLEX` cases, including sentinel boundaries and empty cases.
+- Redis 7.2 spot checks matched the new behavior for `ZREVRANGEBYLEX` and `ZRANGE ... REV BYLEX`.
+
+Review notes:
+
+- The original reverse-lex restriction is resolved.
+- The read and store paths are now consistent for the validated reverse lex cases.
+- Finding 2 can be treated as closed.
 Date: 2026-05-30
 
 ### Finding 1: `ZRANGE ... LIMIT 0 0` is treated as unbounded instead of empty
@@ -351,7 +377,7 @@ The fix should mirror the BYSCORE REV swap: when `isReverse && byLex` and `minLe
 
 ### Finding 3: `ZRANGESTORE` likely stores the wrong members for `REV` and `LIMIT`
 
-Status: **Confirmed**
+Status: **Fixed**
 
 Severity: High
 
@@ -397,7 +423,7 @@ These are missing features rather than bugs. Returning `NilReply` is arguably wo
 |---------|---------|--------|
 | 1. LIMIT 0 0 unbounded | **Fixed** | Fix `hasLimit` gate + count normalization |
 | 2. REV BYLEX over-restricted | **Fixed** | Add min/max swap + sentinel-aware comparison for REV BYLEX |
-| 3. ZRANGESTORE REV+LIMIT wrong members | **Confirmed** (BYLEX, BYSCORE) | Fix store path to use same iterator direction |
+| 3. ZRANGESTORE REV+LIMIT wrong members | **Fixed** | Refactor BYLEX/BYSCORE to single-pass (like BYINDEX) |
 | 4. Missing Redis 7.2 commands | **Confirmed** (feature gap) | Implement ZSCAN; ZMPOP/BZ* are lower priority |
 
 ---

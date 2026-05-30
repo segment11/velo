@@ -2300,6 +2300,55 @@ zunionstore
         reply == MultiBulkReply.EMPTY
     }
 
+    def 'test zrangestore rev limit'() {
+        given:
+        def dstKey = 'dst'
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def zGroup = new ZGroup(null, null, null)
+        zGroup.byPassGetSet = inMemoryGetSet
+        zGroup.from(BaseCommand.mockAGroup())
+
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rz = new RedisZSet()
+        rz.add(1.0, 'a')
+        rz.add(2.0, 'b')
+        rz.add(3.0, 'c')
+        rz.add(4.0, 'd')
+        rz.add(5.0, 'e')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+
+        def tmpData = new byte[5][]
+        tmpData[1] = dstKey.getBytes()
+        tmpData[2] = 'a'.getBytes()
+
+        when: 'ZRANGESTORE BYSCORE REV LIMIT 1 1 — range 5 (1, skip e, store d'
+        zGroup.execute('zrange a 5 (1 byscore rev limit 1 1')
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData, zGroup.slotNumber)
+        def reply = zGroup.zrange(zGroup.data, dstKey)
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'verify stored member is d (not c)'
+        def storedCv = inMemoryGetSet.getBuf(slot, dstKey, 0, 0L)
+        def storedRz = RedisZSet.decode(storedCv.cv().compressedData)
+        then:
+        storedRz.contains('d')
+        !storedRz.contains('c')
+        !storedRz.contains('e')
+
+        when: 'ZRANGESTORE BYLEX REV LIMIT 1 2 — skip e, store d,c'
+        zGroup.execute('zrange a + - bylex rev limit 1 2')
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData, zGroup.slotNumber)
+        def reply2 = zGroup.zrange(zGroup.data, dstKey)
+        then:
+        reply2 instanceof IntegerReply
+        (reply2 as IntegerReply).integer == 2
+    }
+
     def 'test zrank'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

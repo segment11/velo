@@ -1725,30 +1725,31 @@ public class ZGroup extends BaseCommand {
                 return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
             }
 
+            var dstRz = new RedisZSet();
+            var replies = hasLimit ? new Reply[Math.min(subMap.size(), count) * (withScores ? 2 : 1)] :
+                    new Reply[subMap.size() * (withScores ? 2 : 1)];
             var it = isReverse ? subMap.descendingMap().entrySet().iterator() : subMap.entrySet().iterator();
-            if (hasLimit) {
-                int skip = offset;
-                while (skip > 0 && it.hasNext()) {
-                    it.next();
-                    it.remove();
+            int skip = offset;
+            int i = 0;
+            while (it.hasNext()) {
+                var entry = it.next();
+                if (hasLimit && skip > 0) {
                     skip--;
+                    continue;
+                }
+                if (doStore) {
+                    dstRz.add(entry.getValue().score(), entry.getKey());
+                }
+                replies[i++] = new BulkReply(entry.getKey());
+                if (withScores) {
+                    replies[i++] = new BulkReply(entry.getValue().score());
+                }
+                if (i >= replies.length) {
+                    break;
                 }
             }
 
             if (doStore) {
-                var dstRz = new RedisZSet();
-                int storedCount = 0;
-                // subMap can be empty
-            var it2 = isReverse ? subMap.descendingMap().entrySet().iterator() : subMap.entrySet().iterator();
-                while (it2.hasNext()) {
-                    if (storedCount >= count) {
-                        break;
-                    }
-                    var entry = it2.next();
-                    dstRz.add(entry.getValue().score(), entry.getKey());
-                    storedCount++;
-                }
-
                 var dstSlotWithKeyHash = slotWithKeyHashListParsed.getLast();
                 if (!isCrossRequestWorker) {
                     saveRedisZSet(dstRz, dstSlotWithKeyHash);
@@ -1760,24 +1761,10 @@ public class ZGroup extends BaseCommand {
                 return dstRz.isEmpty() ? IntegerReply.REPLY_0 : new IntegerReply(dstRz.size());
             }
 
-            if (subMap.isEmpty()) {
+            if (i == 0) {
                 return MultiBulkReply.EMPTY;
-            }
-
-            var replies = hasLimit ? new Reply[Math.min(subMap.size(), count) * (withScores ? 2 : 1)] :
-                    new Reply[subMap.size() * (withScores ? 2 : 1)];
-            var it2 = isReverse ? subMap.descendingMap().entrySet().iterator() : subMap.entrySet().iterator();
-            int i = 0;
-            while (it2.hasNext()) {
-                var entry = it2.next();
-                replies[i++] = new BulkReply(entry.getKey());
-                if (withScores) {
-                    replies[i++] = new BulkReply(entry.getValue().score());
-                }
-                // exceed count
-                if (i >= replies.length) {
-                    break;
-                }
+            } else if (i < replies.length) {
+                replies = Arrays.copyOf(replies, i);
             }
             return new MultiBulkReply(replies);
         } else {
@@ -1787,30 +1774,31 @@ public class ZGroup extends BaseCommand {
                 return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
             }
 
+            var dstRz = new RedisZSet();
+            var replies = hasLimit ? new Reply[Math.min(subSet.size(), count) * (withScores ? 2 : 1)] :
+                    new Reply[subSet.size() * (withScores ? 2 : 1)];
             var it = isReverse ? subSet.descendingSet().iterator() : subSet.iterator();
-            if (hasLimit) {
-                int skip = offset;
-                while (skip > 0 && it.hasNext()) {
-                    it.next();
-                    it.remove();
+            int skip = offset;
+            int i = 0;
+            while (it.hasNext()) {
+                var entry = it.next();
+                if (hasLimit && skip > 0) {
                     skip--;
+                    continue;
+                }
+                if (doStore) {
+                    dstRz.add(entry.score(), entry.member());
+                }
+                replies[i++] = new BulkReply(entry.member());
+                if (withScores) {
+                    replies[i++] = new BulkReply(entry.score());
+                }
+                if (i >= replies.length) {
+                    break;
                 }
             }
 
             if (doStore) {
-                var dstRz = new RedisZSet();
-                int storedCount = 0;
-                // subSet can be empty
-                var it2 = subSet.iterator();
-                while (it2.hasNext()) {
-                    if (storedCount >= count) {
-                        break;
-                    }
-                    var entry = it2.next();
-                    dstRz.add(entry.score(), entry.member());
-                    storedCount++;
-                }
-
                 var dstSlotWithKeyHash = slotWithKeyHashListParsed.getLast();
                 if (!isCrossRequestWorker) {
                     saveRedisZSet(dstRz, dstSlotWithKeyHash);
@@ -1822,24 +1810,10 @@ public class ZGroup extends BaseCommand {
                 return dstRz.isEmpty() ? IntegerReply.REPLY_0 : new IntegerReply(dstRz.size());
             }
 
-            if (subSet.isEmpty()) {
+            if (i == 0) {
                 return MultiBulkReply.EMPTY;
-            }
-
-            var replies = hasLimit ? new Reply[Math.min(subSet.size(), count) * (withScores ? 2 : 1)] :
-                    new Reply[subSet.size() * (withScores ? 2 : 1)];
-            var it2 = isReverse ? subSet.descendingSet().iterator() : subSet.iterator();
-            int i = 0;
-            while (it2.hasNext()) {
-                var entry = it2.next();
-                replies[i++] = new BulkReply(entry.member());
-                if (withScores) {
-                    replies[i++] = new BulkReply(entry.score());
-                }
-                // exceed count
-                if (i >= replies.length) {
-                    break;
-                }
+            } else if (i < replies.length) {
+                replies = Arrays.copyOf(replies, i);
             }
             return new MultiBulkReply(replies);
         }
