@@ -62,7 +62,11 @@ sunionstore
 
         when:
         LocalPersist.instance.addOneSlotForTest2(slot)
-        def sSintercardList = _SGroup.parseSlots('sintercard', data4, slotNumber)
+        def dataSintercard = new byte[4][]
+        dataSintercard[1] = '2'.bytes
+        dataSintercard[2] = 'a'.bytes
+        dataSintercard[3] = 'b'.bytes
+        def sSintercardList = _SGroup.parseSlots('sintercard', dataSintercard, slotNumber)
         def sSmoveList = _SGroup.parseSlots('smove', data4, slotNumber)
         def sScanList = _SGroup.parseSlots('scan', data4, slotNumber)
         def sList = _SGroup.parseSlots('sxxx', data4, slotNumber)
@@ -71,6 +75,17 @@ sunionstore
         sSmoveList.size() == 2
         sScanList.size() == 0
         sList.size() == 0
+
+        when:
+        def data6 = new byte[6][]
+        data6[1] = '2'.bytes
+        data6[2] = 'a'.bytes
+        data6[3] = 'b'.bytes
+        data6[4] = 'limit'.bytes
+        data6[5] = '1'.bytes
+        def sSintercardWithLimit = _SGroup.parseSlots('sintercard', data6, slotNumber)
+        then:
+        sSintercardWithLimit.size() == 2
 
         when:
         def sDiffList = _SGroup.parseSlots('sdiff', data1, slotNumber)
@@ -1392,6 +1407,61 @@ sunionstore
         (reply as IntegerReply).integer == 1
 
         when:
+        reply = sGroup.execute('sintercard 1 a')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when:
+        reply = sGroup.execute('sintercard 1 a limit 0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when:
+        rhkA.add('2')
+        rhkA.add('3')
+        cvA.compressedData = rhkA.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvA)
+        reply = sGroup.execute('sintercard 1 a limit 2')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 2
+
+        when:
+        reply = sGroup.execute('sintercard 0 a')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = sGroup.execute('sintercard 2 a')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        reply = sGroup.execute('sintercard 2 a b LIMIT 1')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when:
+        reply = sGroup.execute('sintercard 2 a b limit -1')
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        def cvC = Mock.prepareCompressedValueList(1)[0]
+        cvC.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def rhkC = new RedisHashKeys()
+        rhkC.add('1')
+        cvC.compressedData = rhkC.encode()
+        inMemoryGetSet.put(slot, 'c', 0, cvC)
+        reply = sGroup.execute('sintercard 3 a b c limit 2')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when:
         def eventloop = Eventloop.builder()
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
@@ -1466,7 +1536,7 @@ sunionstore
         when:
         reply = sGroup.execute('sintercard 1 a b limit 0')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = sGroup.execute('sintercard 2 a b limit a')

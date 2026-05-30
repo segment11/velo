@@ -76,7 +76,18 @@ public class SGroup extends BaseCommand {
             if (data.length < 3) {
                 return slotWithKeyHashList;
             }
-            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin2);
+            int numkeys;
+            try {
+                numkeys = Integer.parseInt(new String(data[1]));
+            } catch (NumberFormatException e) {
+                return slotWithKeyHashList;
+            }
+            if (numkeys < 1) {
+                return slotWithKeyHashList;
+            }
+            for (int i = 2; i < Math.min(numkeys + 2, data.length); i++) {
+                slotWithKeyHashList.add(slot(data[i], slotNumber));
+            }
             return slotWithKeyHashList;
         }
 
@@ -1112,8 +1123,13 @@ public class SGroup extends BaseCommand {
             return ErrorReply.NOT_INTEGER;
         }
 
-        if (numkeys < 2) {
+        if (numkeys < 1) {
             return ErrorReply.INVALID_INTEGER;
+        }
+
+        int remainingArgsForLimit = data.length - (numkeys + 2);
+        if (remainingArgsForLimit < 0) {
+            return ErrorReply.SYNTAX;
         }
 
         ArrayList<SlotWithKeyHash> list = new ArrayList<>(numkeys);
@@ -1130,13 +1146,13 @@ public class SGroup extends BaseCommand {
 
         int limit = 0;
         // limit
-        if (data.length > numkeys + 2) {
-            if (data.length != numkeys + 4) {
+        if (remainingArgsForLimit > 0) {
+            if (remainingArgsForLimit != 2) {
                 return ErrorReply.SYNTAX;
             }
 
             var limitFlagBytes = data[numkeys + 2];
-            if (!"limit".equals(new String(limitFlagBytes))) {
+            if (!"limit".equalsIgnoreCase(new String(limitFlagBytes))) {
                 return ErrorReply.SYNTAX;
             }
 
@@ -1145,6 +1161,10 @@ public class SGroup extends BaseCommand {
                 limit = Integer.parseInt(new String(limitBytes));
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
+            }
+
+            if (limit < 0) {
+                return ErrorReply.SYNTAX;
             }
         }
 
@@ -1157,6 +1177,12 @@ public class SGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
+        if (list.size() == 1) {
+            int size = rhk.size();
+            int min = limit != 0 ? Math.min(size, limit) : size;
+            return min == 0 ? IntegerReply.REPLY_0 : new IntegerReply(min);
+        }
+
         var set = rhk.getSet();
         if (!isCrossRequestWorker) {
             for (int i = 1; i < list.size(); i++) {
@@ -1166,9 +1192,6 @@ public class SGroup extends BaseCommand {
                 if (otherRhk != null) {
                     set.retainAll(otherRhk.getSet());
                     if (set.isEmpty()) {
-                        break;
-                    }
-                    if (limit != 0 && set.size() >= limit) {
                         break;
                     }
                 } else {
@@ -1192,7 +1215,6 @@ public class SGroup extends BaseCommand {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        // need not wait all, can optimize
         int finalLimit = limit;
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
@@ -1206,9 +1228,6 @@ public class SGroup extends BaseCommand {
                 if (otherRhk != null) {
                     set.retainAll(otherRhk.getSet());
                     if (set.isEmpty()) {
-                        break;
-                    }
-                    if (finalLimit != 0 && set.size() >= finalLimit) {
                         break;
                     }
                 } else {
