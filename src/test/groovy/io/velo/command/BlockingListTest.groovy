@@ -327,4 +327,93 @@ class BlockingListTest extends Specification {
         cleanup:
         localPersist.cleanUp()
     }
+
+    def 'test blmpop wake-up returns nested array'() {
+        given:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        Thread.sleep(100)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        BlockingList.initBySlotWorkerEventloopArray(eventloopArray)
+
+        when: 'BLMPOP COUNT 1 wake-up returns [key, [value]]'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        def promise1 = new SettablePromise<Reply>()
+        def one1 = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(promise1, null, true, System.currentTimeMillis(), null, 1)
+        BlockingList.addOne('mylist', one1)
+        def elements1 = new byte[1][]
+        elements1[0] = 'hello'.bytes
+        BlockingList.setReplyRPushIfBlockingListExist('mylist', elements1)
+        then:
+        promise1.isComplete()
+        def result1 = promise1.getResult() as MultiBulkReply
+        result1.replies.length == 2
+        (result1.replies[0] as BulkReply).raw == 'mylist'.bytes
+        result1.replies[1] instanceof MultiBulkReply
+        def inner1 = result1.replies[1] as MultiBulkReply
+        inner1.replies.length == 1
+        (inner1.replies[0] as BulkReply).raw == 'hello'.bytes
+
+        when: 'BLMPOP COUNT 2 wake-up collects 2 elements'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        def promise2 = new SettablePromise<Reply>()
+        def one2 = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(promise2, null, true, System.currentTimeMillis(), null, 2)
+        BlockingList.addOne('mylist2', one2)
+        def elements2 = new byte[3][]
+        elements2[0] = 'a'.bytes
+        elements2[1] = 'b'.bytes
+        elements2[2] = 'c'.bytes
+        def remaining = BlockingList.setReplyRPushIfBlockingListExist('mylist2', elements2)
+        then:
+        promise2.isComplete()
+        def result2 = promise2.getResult() as MultiBulkReply
+        result2.replies.length == 2
+        (result2.replies[0] as BulkReply).raw == 'mylist2'.bytes
+        def inner2 = result2.replies[1] as MultiBulkReply
+        inner2.replies.length == 2
+        (inner2.replies[0] as BulkReply).raw == 'a'.bytes
+        (inner2.replies[1] as BulkReply).raw == 'b'.bytes
+        // 'c' was not consumed
+        remaining.length == 1
+
+        when: 'BLMPOP COUNT 3 but only 2 elements available'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        def promise3 = new SettablePromise<Reply>()
+        def one3 = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(promise3, null, true, System.currentTimeMillis(), null, 3)
+        BlockingList.addOne('mylist3', one3)
+        def elements3 = new byte[2][]
+        elements3[0] = 'x'.bytes
+        elements3[1] = 'y'.bytes
+        BlockingList.setReplyRPushIfBlockingListExist('mylist3', elements3)
+        then:
+        promise3.isComplete()
+        def result3 = promise3.getResult() as MultiBulkReply
+        def inner3 = result3.replies[1] as MultiBulkReply
+        inner3.replies.length == 2
+        (inner3.replies[0] as BulkReply).raw == 'x'.bytes
+        (inner3.replies[1] as BulkReply).raw == 'y'.bytes
+
+        when: 'right pop with COUNT 2'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        def promise4 = new SettablePromise<Reply>()
+        def one4 = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(promise4, null, false, System.currentTimeMillis(), null, 2)
+        BlockingList.addOne('mylist4', one4)
+        def elements4 = new byte[3][]
+        elements4[0] = 'p'.bytes
+        elements4[1] = 'q'.bytes
+        elements4[2] = 'r'.bytes
+        BlockingList.setReplyRPushIfBlockingListExist('mylist4', elements4)
+        then:
+        promise4.isComplete()
+        def result4 = promise4.getResult() as MultiBulkReply
+        def inner4 = result4.replies[1] as MultiBulkReply
+        inner4.replies.length == 2
+        (inner4.replies[0] as BulkReply).raw == 'r'.bytes
+        (inner4.replies[1] as BulkReply).raw == 'q'.bytes
+
+        cleanup:
+        BlockingList.clearBlockingListPromisesForAllKeys()
+    }
 }

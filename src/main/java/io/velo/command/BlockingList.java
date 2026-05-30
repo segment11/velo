@@ -45,7 +45,7 @@ public class BlockingList {
      * @param isLeft          is left or right
      * @param createdTime     created time for timeout
      * @param xx              parameter when do move
-     * @param mpopCount       number of elements to pop for BLMPOP, defaults to 1
+     * @param mpopCount       number of elements to pop for BLMPOP, 0 means BLPOP/BRPOP (single-element reply)
      */
     public record PromiseWithLeftOrRightAndCreatedTime(SettablePromise<Reply> settablePromise,
                                                        ITcpSocket socket,
@@ -58,7 +58,7 @@ public class BlockingList {
                                                     boolean isLeft,
                                                     long createdTime,
                                                     DstKeyAndDstLeftWhenMove xx) {
-            this(settablePromise, socket, isLeft, createdTime, xx, 1);
+            this(settablePromise, socket, isLeft, createdTime, xx, 0);
         }
     }
 
@@ -264,7 +264,7 @@ public class BlockingList {
                     var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
                     rGroup.from(baseCommand);
                     dstOneSlot.asyncExecute(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, leftValueBytes, promise.settablePromise::set));
-                } else if (promise.mpopCount > 1) {
+                } else if (promise.mpopCount > 0) {
                     // BLMPOP wake-up: collect up to mpopCount values
                     var valueReplies = new ArrayList<Reply>();
                     valueReplies.add(new BulkReply(leftValueBytes));
@@ -313,7 +313,7 @@ public class BlockingList {
                     var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
                     rGroup.from(baseCommand);
                     dstOneSlot.asyncExecute(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, rightValueBytes, promise.settablePromise::set));
-                } else if (promise.mpopCount > 1) {
+                } else if (promise.mpopCount > 0) {
                     var valueReplies = new ArrayList<Reply>();
                     valueReplies.add(new BulkReply(rightValueBytes));
                     int collected = 1;

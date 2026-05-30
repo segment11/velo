@@ -157,6 +157,8 @@
 - [√] LPOS
 - [√] LPUSH
 - [√] LPUSHX
+- [√] LMPOP
+- [√] BLMPOP
 - [√] LRANGE
 - [√] LREM
 - [√] LSET

@@ -1309,5 +1309,15 @@ port ${tmpPort}
         ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'v'.bytes
         // list deleted after popping last element
         lGroup.getCv(lGroup.slotWithKeyHashListParsed.getFirst()) == null
+
+        when: 'wrong type key returns WRONGTYPE'
+        inMemoryGetSet.remove(slot, 'notlist')
+        def cvWrong = new CompressedValue()
+        cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvWrong.compressedData = 'hello'.bytes
+        inMemoryGetSet.put(slot, 'notlist', 0, cvWrong)
+        reply = lGroup.execute('lmpop 1 notlist LEFT')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 }

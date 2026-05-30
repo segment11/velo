@@ -933,6 +933,11 @@ class BGroupTest extends Specification {
         then:
         reply == ErrorReply.NOT_INTEGER
 
+        when: 'count zero rejected'
+        reply = bGroup.execute('blmpop 1 1 mylist LEFT COUNT 0')
+        then:
+        reply instanceof ErrorReply
+
         when: 'wrong type key returns WRONGTYPE'
         inMemoryGetSet.remove(slot, 'notlist')
         def cvWrong = new CompressedValue()

@@ -1034,7 +1034,7 @@ public class BGroup extends BaseCommand {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
+        var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null, count);
         for (var key : keys) {
             BlockingList.addOne(key, one);
         }
