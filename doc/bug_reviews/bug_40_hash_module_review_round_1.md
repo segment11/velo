@@ -902,3 +902,48 @@ JaCoCo inspection:
 
 - `RedisHashKeys.decode(...)` missing TTL metadata branch is covered.
 - `HGroup.getRedisHashKeys(...)` direct decode path is covered.
+
+---
+
+## Finding 4 Support Matrix Addressed-Commit Review Feedback (AI agent 2, 2026-05-30)
+
+Commit reviewed: `80a8a5b0 doc: add HGETDEL, HGETEX, HSETEX to redis command support`
+
+### Summary
+
+No blocking issues found in this documentation-only addressed commit. The support matrix now lists the Redis 8 hash
+commands from Finding 4:
+
+- `HGETDEL`
+- `HGETEX`
+- `HSETEX`
+
+### Verification
+
+- Reviewed the commit diff: only `doc/redis_command_support.md` changed.
+- Confirmed the support matrix includes the three commands under the hash section.
+- Confirmed command dispatch and implementation exist in `src/main/java/io/velo/command/HGroup.java`.
+- Confirmed focused tests exist in `src/test/groovy/io/velo/command/HGroupTest.groovy`.
+- Ran focused tests:
+  - `./gradlew :test --tests "io.velo.command.HGroupTest.test hgetdel" --tests "io.velo.command.HGroupTest.test hgetex" --tests "io.velo.command.HGroupTest.test hsetex" --rerun-tasks`
+- Result: `BUILD SUCCESSFUL`, `13 actionable tasks: 13 executed`
+- JaCoCo HTML checks:
+  - `HGroup.java:114` dispatch to `hgetdel()` is covered.
+  - `HGroup.java:118` dispatch to `hgetex()` is covered.
+  - `HGroup.java:178` dispatch to `hsetex()` is covered.
+  - `HGroup.java:943-1042` `hgetdel()` / `hgetdel2(...)` paths are covered.
+  - `HGroup.java:1045-1204` `hgetex()` / `hgetex2(...)` paths are covered.
+  - `HGroup.java:1545-1712` `hsetex()` / `hsetex2(...)` paths are covered.
+
+### Findings
+
+No blocking issues found.
+
+### Strengths
+
+- The documentation now matches the implemented hash command surface.
+- The focused command tests pass after the support-matrix update.
+
+### Follow-ups
+
+- None required for this commit.

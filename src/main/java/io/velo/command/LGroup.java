@@ -513,7 +513,7 @@ public class LGroup extends BaseCommand {
                     return ErrorReply.NOT_INTEGER;
                 }
                 if (count <= 0) {
-                    return new ErrorReply("ERR count should be greater than 0");
+                    return new ErrorReply("count should be greater than 0");
                 }
             } else {
                 return ErrorReply.SYNTAX;
