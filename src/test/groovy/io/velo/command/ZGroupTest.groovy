@@ -1849,93 +1849,51 @@ zunionstore
         then:
         reply == IntegerReply.REPLY_0
 
-        // by index
+        // by index + limit is syntax error (Redis only allows LIMIT with BYSCORE/BYLEX)
         when:
         reply = zGroup.execute('zrange a 0 1 byindex byindex limit 0 0 byindex')
         then:
-        reply == MultiBulkReply.EMPTY
-
-        when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
-        reply = zGroup.zrange(zGroup.data, dstKey)
-        then:
-        reply == IntegerReply.REPLY_0
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = zGroup.execute('zrange a -3 -1 byindex byindex limit 0 0 byindex')
         then:
-        reply == MultiBulkReply.EMPTY
-
-        when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
-        reply = zGroup.zrange(zGroup.data, dstKey)
-        then:
-        reply == IntegerReply.REPLY_0
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = zGroup.execute('zrange a 1 0 byindex byindex limit 0 0 byindex')
         then:
-        reply == MultiBulkReply.EMPTY
-
-        when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
-        reply = zGroup.zrange(zGroup.data, dstKey)
-        then:
-        reply == IntegerReply.REPLY_0
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = zGroup.execute('zrange a 3 6 byindex byindex limit 0 2 byindex')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 2
-
-        when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
-        reply = zGroup.zrange(zGroup.data, dstKey)
-        then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 2
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = zGroup.execute('zrange a 3 6 byindex byindex limit 1 2 byindex')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 2
-
-        when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
-        reply = zGroup.zrange(zGroup.data, dstKey)
-        then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 2
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = zGroup.execute('zrange a 3 6 byindex byindex limit 4 2 byindex')
         then:
-        reply == MultiBulkReply.EMPTY
-
-        when:
-        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zrangestore', tmpData5, zGroup.slotNumber)
-        reply = zGroup.zrange(zGroup.data, dstKey)
-        then:
-        reply == IntegerReply.REPLY_0
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = zGroup.execute('zrange a 3 6 byindex byindex limit 0 2 withscores')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 4
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = zGroup.execute('zrange a 3 6 byindex byindex limit 0 0 withscores')
         then:
-        reply == MultiBulkReply.EMPTY
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = zGroup.execute('zrange a 3 6 byindex rev limit 0 2 byindex')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 2
+        reply == ErrorReply.SYNTAX
 
         // bylex
         when:
@@ -2083,12 +2041,12 @@ zunionstore
         when:
         reply = zGroup.execute('zrange a a member4 byindex byindex limit 0 0 withscores')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = zGroup.execute('zrange a 1 a byindex byindex limit 0 0 withscores')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = zGroup.execute('zrange >key 1 a byindex byindex limit 0 0 withscores')
@@ -2118,15 +2076,21 @@ zunionstore
         then:
         reply == MultiBulkReply.EMPTY
 
-        when: 'BYINDEX LIMIT 0 0 should return empty'
-        reply = zGroup.execute('zrange a 0 -1 limit 0 0')
-        then:
-        reply == MultiBulkReply.EMPTY
-
         when: 'BYLEX LIMIT 0 0 should return empty'
         reply = zGroup.execute('zrange a - + bylex limit 0 0')
         then:
         reply == MultiBulkReply.EMPTY
+
+        when: 'BYINDEX with LIMIT should be syntax error (Redis only allows LIMIT with BYSCORE/BYLEX)'
+        reply = zGroup.execute('zrange a 0 -1 limit 0 0')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'BYSCORE LIMIT 0 -1 should return all members (negative count = no limit)'
+        reply = zGroup.execute('zrange a -inf +inf byscore limit 0 -1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 10
 
         when: 'BYSCORE LIMIT 0 3 should return 3 members'
         reply = zGroup.execute('zrange a -inf +inf byscore limit 0 3')
@@ -2209,7 +2173,7 @@ zunionstore
         inMemoryGetSet.remove(slot, 'a')
         def reply = zGroup.execute('zrangestore dst a 1 4 limit 0 0')
         then:
-        reply == IntegerReply.REPLY_0
+        reply == ErrorReply.SYNTAX
     }
 
     def 'test zrevrange'() {

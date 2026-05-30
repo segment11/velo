@@ -1485,6 +1485,10 @@ public class ZGroup extends BaseCommand {
             }
         }
 
+        if (hasLimit && !byScore && !byLex) {
+            return ErrorReply.SYNTAX;
+        }
+
         String minLex = null;
         String maxLex = null;
         boolean minInclusive = true;
@@ -1604,8 +1608,11 @@ public class ZGroup extends BaseCommand {
 
         int size = rz.size();
         if (hasLimit) {
-            if (count <= 0) {
+            if (count == 0) {
                 return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+            }
+            if (count < 0) {
+                count = size;
             }
         } else {
             if (count <= 0) {
