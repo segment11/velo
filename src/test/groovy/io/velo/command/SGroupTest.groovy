@@ -1676,7 +1676,10 @@ sunionstore
         inMemoryGetSet.remove(slot, 'a')
         def reply = sGroup.execute('smismember a 1 2')
         then:
-        reply == MultiBulkReply.EMPTY
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_0
+        (reply as MultiBulkReply).replies[1] == IntegerReply.REPLY_0
 
         when:
         def cvList = Mock.prepareCompressedValueList(1)
@@ -1699,7 +1702,10 @@ sunionstore
         inMemoryGetSet.put(slot, 'a', 0, cvA)
         reply = sGroup.execute('smismember a 1 2')
         then:
-        reply == MultiBulkReply.EMPTY
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_0
+        (reply as MultiBulkReply).replies[1] == IntegerReply.REPLY_0
 
         when:
         reply = sGroup.execute('smismember a >key 2')

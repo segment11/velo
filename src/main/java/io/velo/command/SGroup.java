@@ -1327,16 +1327,10 @@ public class SGroup extends BaseCommand {
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rhk = getRedisSet(slotWithKeyHash);
-        if (rhk == null) {
-            return MultiBulkReply.EMPTY;
-        }
-        if (rhk.size() == 0) {
-            return MultiBulkReply.EMPTY;
-        }
 
         var replies = new Reply[memberBytesArr.length];
         for (int i = 0; i < memberBytesArr.length; i++) {
-            var isMember = rhk.contains(new String(memberBytesArr[i]));
+            var isMember = rhk != null && rhk.contains(new String(memberBytesArr[i]));
             replies[i] = isMember ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
         }
         return new MultiBulkReply(replies);
