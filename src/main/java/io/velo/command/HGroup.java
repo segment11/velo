@@ -1912,7 +1912,7 @@ public class HGroup extends BaseCommand {
             return MultiBulkReply.SCAN_EMPTY;
         }
 
-        int skipCount = (int) cursorLong;
+        long skipCount = cursorLong;
 
         ArrayList<String> matchFields = new ArrayList<>();
         int loopCount = 0;
@@ -1944,7 +1944,7 @@ public class HGroup extends BaseCommand {
         }
 
         var isEnd = loopCount == liveFields.size();
-        var nextCursor = String.valueOf(isEnd ? 0 : skipCount + matchFields.size());
+        var nextCursor = String.valueOf(isEnd ? 0L : cursorLong + matchFields.size());
         // always end
         return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor), new MultiBulkReply(replies)});
     }
@@ -1956,7 +1956,7 @@ public class HGroup extends BaseCommand {
             return MultiBulkReply.SCAN_EMPTY;
         }
 
-        int skipCount = (int) cursorLong;
+        long skipCount = cursorLong;
 
         ArrayList<String> matchFields = new ArrayList<>();
         int loopCount = 0;
@@ -1992,7 +1992,7 @@ public class HGroup extends BaseCommand {
         }
 
         var isEnd = loopCount == rhh.size();
-        var nextCursor = String.valueOf(isEnd ? 0 : skipCount + matchFields.size());
+        var nextCursor = String.valueOf(isEnd ? 0L : cursorLong + matchFields.size());
         return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor), new MultiBulkReply(replies)});
     }
 
