@@ -55,7 +55,8 @@ public class SGroup extends BaseCommand {
                 "sadd".equals(cmd) || "scard".equals(cmd) ||
                 "sismember".equals(cmd) || "smembers".equals(cmd) || "smismember".equals(cmd) ||
                 "sort".equals(cmd) || "sort_ro".equals(cmd) ||
-                "spop".equals(cmd) || "srandmember".equals(cmd) || "srem".equals(cmd)) {
+                "spop".equals(cmd) || "srandmember".equals(cmd) || "srem".equals(cmd) ||
+                "sscan".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
@@ -234,6 +235,10 @@ public class SGroup extends BaseCommand {
 
         if ("srem".equals(cmd)) {
             return srem();
+        }
+
+        if ("sscan".equals(cmd)) {
+            return sscan();
         }
 
         if ("subscribe".equals(cmd)) {
@@ -1829,6 +1834,96 @@ public class SGroup extends BaseCommand {
 
         saveRedisSet(rhk, slotWithKeyHash);
         return new IntegerReply(removed);
+    }
+
+    private Reply sscan() {
+        if (data.length < 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        var cursorBytes = data[2];
+        long cursorLong;
+        try {
+            cursorLong = Long.parseLong(new String(cursorBytes));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+
+        String matchPattern = null;
+        int count = 10;
+        if (data.length > 3) {
+            for (int i = 3; i < data.length; i++) {
+                var tmp = new String(data[i]).toLowerCase();
+                if ("match".equals(tmp)) {
+                    if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    matchPattern = new String(data[i + 1]);
+                    i++;
+                } else if ("count".equals(tmp)) {
+                    if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    try {
+                        count = Integer.parseInt(new String(data[i + 1]));
+                    } catch (NumberFormatException e) {
+                        return ErrorReply.NOT_INTEGER;
+                    }
+                    if (count < 0) {
+                        return ErrorReply.INVALID_INTEGER;
+                    }
+                    i++;
+                } else {
+                    return ErrorReply.SYNTAX;
+                }
+            }
+        }
+
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var rhk = getRedisSet(slotWithKeyHash);
+        if (rhk == null || rhk.size() == 0) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
+        var set = rhk.getSet();
+        long skipCount = cursorLong;
+
+        ArrayList<String> matchMembers = new ArrayList<>();
+        int loopCount = 0;
+        for (var member : set) {
+            loopCount++;
+            if (!KeyLoader.isKeyMatch(member, matchPattern)) {
+                continue;
+            }
+
+            if (skipCount > 0) {
+                skipCount--;
+                continue;
+            }
+
+            matchMembers.add(member);
+            if (matchMembers.size() >= count) {
+                break;
+            }
+        }
+
+        if (matchMembers.isEmpty()) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
+        var replies = new Reply[matchMembers.size()];
+        for (int i = 0; i < matchMembers.size(); i++) {
+            replies[i] = new BulkReply(matchMembers.get(i));
+        }
+
+        var isEnd = loopCount == set.size();
+        var nextCursor = String.valueOf(isEnd ? 0L : cursorLong + matchMembers.size());
+        return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor), new MultiBulkReply(replies)});
     }
 
     Reply subscribe(boolean isPattern) {

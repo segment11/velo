@@ -2097,6 +2097,105 @@ sunionstore
         reply == ErrorReply.KEY_TOO_LONG
     }
 
+    def 'test sscan'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def sGroup = new SGroup(null, null, null)
+        sGroup.byPassGetSet = inMemoryGetSet
+        sGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = sGroup.execute('sscan a 0')
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when:
+        def cvList = Mock.prepareCompressedValueList(1)
+        def cvA = cvList[0]
+        cvA.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def rhkA = new RedisHashKeys()
+        cvA.compressedData = rhkA.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvA)
+        reply = sGroup.execute('sscan a 0')
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when:
+        rhkA.add('x')
+        rhkA.add('y')
+        rhkA.add('z')
+        cvA.compressedData = rhkA.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvA)
+        reply = sGroup.execute('sscan a 0')
+        then:
+        reply instanceof MultiBulkReply
+        def scanReply = reply as MultiBulkReply
+        scanReply.replies.length == 2
+        scanReply.replies[0] == BulkReply.ZERO
+        (scanReply.replies[1] as MultiBulkReply).replies.length == 3
+
+        when:
+        reply = sGroup.execute('sscan a 0 count 2')
+        then:
+        reply instanceof MultiBulkReply
+        def scanReply2 = reply as MultiBulkReply
+        scanReply2.replies.length == 2
+
+        when:
+        rhkA.add('m')
+        rhkA.add('n')
+        cvA.compressedData = rhkA.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvA)
+        def allMembers = [] as Set
+        def nextCursor = '0'
+        int pageCount = 0
+        while (true) {
+            reply = sGroup.execute("sscan a $nextCursor count 2")
+            assert reply instanceof MultiBulkReply
+            def page = reply as MultiBulkReply
+            nextCursor = new String((page.replies[0] as BulkReply).raw)
+            def members = (page.replies[1] as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+            allMembers.addAll(members)
+            pageCount++
+            if (nextCursor == '0') break
+            if (pageCount > 20) assert false: 'infinite loop in sscan pagination'
+        }
+        then:
+        allMembers.size() == rhkA.size()
+        allMembers.toSet().size() == allMembers.size()
+        pageCount >= 3
+
+        when:
+        rhkA.remove('m')
+        rhkA.remove('n')
+        cvA.compressedData = rhkA.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvA)
+        reply = sGroup.execute('sscan a 0 match x*')
+        then:
+        reply instanceof MultiBulkReply
+        def scanReply3 = reply as MultiBulkReply
+        scanReply3.replies.length == 2
+        (scanReply3.replies[1] as MultiBulkReply).replies.length == 1
+        ((scanReply3.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'x'.bytes
+
+        when:
+        reply = sGroup.execute('sscan a 0 match nomatch*')
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when:
+        reply = sGroup.execute('sscan a notanumber')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = sGroup.execute('sscan >key 0')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+    }
+
     def 'test srem'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
