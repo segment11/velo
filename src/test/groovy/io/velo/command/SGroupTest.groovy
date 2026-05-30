@@ -1266,6 +1266,20 @@ sunionstore
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
         sGroup.crossRequestWorker = true
+        reply = sGroup.sdiffstore(false, false)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        def sdDiffAsyncResult = (reply as AsyncReply).settablePromise.getResult()
+        sdDiffAsyncResult instanceof IntegerReply
+        (sdDiffAsyncResult as IntegerReply).integer == 2
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result instanceof IntegerReply && (result as IntegerReply).integer == 2
+        }.result
+
+        when:
         reply = sGroup.sdiffstore(true, false)
         eventloopCurrent.run()
         then:

@@ -1098,8 +1098,8 @@ public class SGroup extends BaseCommand {
             var set = rhk.getSet();
 
             ArrayList<RedisHashKeys> otherRhkList = new ArrayList<>(list.size() - 1);
-            for (var promise : promises) {
-                otherRhkList.add(promise.getResult());
+            for (int i = 1; i < promises.size(); i++) {
+                otherRhkList.add(promises.get(i).getResult());
             }
             operateSet(set, otherRhkList, isInter, isUnion);
 
