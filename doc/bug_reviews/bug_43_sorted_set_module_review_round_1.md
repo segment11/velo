@@ -126,7 +126,7 @@ Redis 7.2 supports reverse lexicographic ranges through `ZREVRANGEBYLEX` and the
 
 ## Finding 3: `ZRANGESTORE` likely stores the wrong members for `REV` and `LIMIT`
 
-Status: **Confirmed**
+Status: **Fixed**
 
 Severity: High
 
@@ -181,11 +181,9 @@ if (hasLimit) {
 
 Root cause and impact:
 
-Redis uses a single-pass approach for ZRANGESTORE (verified in Redis source `t_zset.c:genericZrangebyscoreCommand`): iterate in the requested direction (descending if REV), skip `offset` entries, then emit up to `limit` entries — both the reply and the stored set come from the same pass.
+Redis uses a single-pass approach for `ZRANGESTORE` (verified in Redis source `src/t_zset.c` in `zrangeGenericCommand`, `genericZrangebyscoreCommand`, and `genericZrangebylexCommand`): iterate in the requested direction, skip `offset` entries, then emit up to `limit` entries. The same pass drives both the reply and the destination object.
 
-Velo's BYLEX and BYSCORE paths used a two-pass approach: (1) skip via iterator with `it.remove()`, (2) iterate the trimmed collection separately for store/read. This caused wrong members to be stored when REV+LIMIT was used because the store iterated in ascending order over the trimmed collection instead of in the original direction.
-
-The fix refactors both BYLEX and BYSCORE to single-pass, mirroring the BYINDEX pattern and the Redis source: one iterator, skip offset, then add to `dstRz` and `replies` in the same loop.
+Velo's prior BYLEX and BYSCORE store paths reconstructed the destination from a separate ascending iteration over the trimmed view. That could diverge from the requested reverse order when `REV + LIMIT` was used. The current fix mirrors Redis more closely by using the same reverse-aware iterator for both read and store paths.
 
 ## Finding 4: Several Redis 7.2 sorted-set commands are absent and fall through to `NilReply`
 
@@ -338,6 +336,34 @@ Review notes:
 - The original reverse-lex restriction is resolved.
 - The read and store paths are now consistent for the validated reverse lex cases.
 - Finding 2 can be treated as closed.
+
+## Review Feedback - AI Agent 1
+
+Reviewed changes: current worktree diff for `src/main/java/io/velo/command/ZGroup.java` and `src/test/groovy/io/velo/command/ZGroupTest.groovy`
+
+Summary:
+
+- The store-path root cause is now aligned with Redis 7.2 source: a single reverse-aware pass drives both reply emission and destination storage.
+- The BYSCORE `ZRANGESTORE ... REV LIMIT` case is validated against Redis output and matches.
+- The BYLEX store test is directionally correct, but the current test data uses mixed scores, which Redis documents as unspecified for lex range behavior.
+
+Strengths:
+
+- The code now uses one iterator for both read and store paths in BYLEX and BYSCORE, matching Redis’ `zrangeGenericCommand` flow.
+- The new `test zrangestore rev limit` covers the store-path case that previously regressed.
+- Redis 7.2 spot checks for `ZRANGESTORE` BYSCORE reverse limit matched the stored members.
+
+Concerns:
+
+- The BYLEX assertion in `test zrangestore rev limit` uses members with different scores. Redis docs say lex range behavior is unspecified unless all members have the same score, so that test is not a strict compatibility proof.
+
+Pre-commit follow-ups:
+
+- If you want a stronger Redis-equivalence test, change the BYLEX store case to use same-score members.
+
+Post-commit follow-ups:
+
+- Re-run the `zrangestore rev limit` test after adjusting the BYLEX fixture if you want the test to prove Redis-compatible lex semantics rather than just exercising the code path.
 Date: 2026-05-30
 
 ### Finding 1: `ZRANGE ... LIMIT 0 0` is treated as unbounded instead of empty
