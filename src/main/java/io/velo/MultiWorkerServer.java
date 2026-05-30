@@ -78,6 +78,7 @@ import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 import static io.activej.config.Config.*;
@@ -429,15 +430,19 @@ public class MultiWorkerServer extends Launcher {
     }
 
     private static final String SHUTDOWN_COMMAND = "shutdown";
+    private final AtomicBoolean shutdownRequested = new AtomicBoolean();
+
     @VisibleForTesting
-    Runnable shutdownHandler = this::shutdown;
+    volatile Runnable shutdownHandler = this::shutdown;
 
     private Promise<ByteBuf> handleShutdown(Request request) {
         if (!isShutdownArgsValid(request.getData())) {
             return Promise.of(ErrorReply.FORMAT.buffer());
         }
 
-        requestShutdownAfterReply();
+        if (shutdownRequested.compareAndSet(false, true)) {
+            requestShutdownAfterReply();
+        }
         return Promise.of(OKReply.INSTANCE.buffer());
     }
 

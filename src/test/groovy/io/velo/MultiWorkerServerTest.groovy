@@ -31,6 +31,7 @@ import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 class MultiWorkerServerTest extends Specification {
@@ -84,8 +85,18 @@ class MultiWorkerServerTest extends Specification {
 
         AclUsers.instance.initForTest()
         ConfForGlobal.PASSWORD = null
-        def shutdownLatch = new CountDownLatch(1)
-        m.shutdownHandler = { shutdownLatch.countDown() }
+        def firstShutdownLatch = new CountDownLatch(1)
+        def duplicateShutdownLatch = new CountDownLatch(1)
+        def shutdownCount = new AtomicInteger()
+        m.shutdownHandler = {
+            def count = shutdownCount.incrementAndGet()
+            if (count == 1) {
+                firstShutdownLatch.countDown()
+            }
+            if (count == 2) {
+                duplicateShutdownLatch.countDown()
+            }
+        }
 
         def badData = new byte[2][]
         badData[0] = 'shutdown'.bytes
@@ -101,6 +112,11 @@ class MultiWorkerServerTest extends Specification {
         goodData[1] = 'nosave'.bytes
         goodData[2] = 'now'.bytes
         def goodRequest = new Request(goodData, false, false)
+        def secondGoodData = new byte[3][]
+        secondGoodData[0] = 'shutdown'.bytes
+        secondGoodData[1] = 'nosave'.bytes
+        secondGoodData[2] = 'force'.bytes
+        def secondGoodRequest = new Request(secondGoodData, false, false)
         def pingData = new byte[1][]
         pingData[0] = 'ping'.bytes
         def pingRequest = new Request(pingData, false, false)
@@ -108,6 +124,7 @@ class MultiWorkerServerTest extends Specification {
         String badResponseText = null
         String duplicateSaveResponseText = null
         String responseText = null
+        String secondResponseText = null
 
         when:
         def pingP = m.handleRequest(pingRequest, socket)
@@ -122,10 +139,14 @@ class MultiWorkerServerTest extends Specification {
         duplicateSaveP.whenResult { reply ->
             duplicateSaveResponseText = new String(reply.array())
         }.result
-        def shutdownNotRequestedForBadOption = shutdownLatch.await(150, TimeUnit.MILLISECONDS)
+        def shutdownNotRequestedForBadOption = firstShutdownLatch.await(150, TimeUnit.MILLISECONDS)
         def p = m.handleRequest(goodRequest, socket)
         p.whenResult { reply ->
             responseText = new String(reply.array())
+        }.result
+        def p2 = m.handleRequest(secondGoodRequest, socket)
+        p2.whenResult { reply ->
+            secondResponseText = new String(reply.array())
         }.result
 
         then:
@@ -134,7 +155,10 @@ class MultiWorkerServerTest extends Specification {
         duplicateSaveResponseText == '-ERR format\r\n'
         !shutdownNotRequestedForBadOption
         responseText == '+OK\r\n'
-        shutdownLatch.await(1, TimeUnit.SECONDS)
+        secondResponseText == '+OK\r\n'
+        firstShutdownLatch.await(1, TimeUnit.SECONDS)
+        !duplicateShutdownLatch.await(300, TimeUnit.MILLISECONDS)
+        shutdownCount.get() == 1
 
         cleanup:
         ConfForGlobal.PASSWORD = oldPassword
