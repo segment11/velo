@@ -1207,10 +1207,15 @@ port ${tmpPort}
         then:
         reply == ErrorReply.NOT_INTEGER
 
+        when: 'count zero rejected'
+        reply = lGroup.execute('lmpop 1 mylist LEFT COUNT 0')
+        then:
+        reply instanceof ErrorReply
+
         when: 'count negative'
         reply = lGroup.execute('lmpop 1 mylist LEFT COUNT -1')
         then:
-        reply == ErrorReply.RANGE_OUT_OF_INDEX
+        reply instanceof ErrorReply
 
         when: 'syntax error - extra args'
         reply = lGroup.execute('lmpop 1 mylist LEFT COUNT 1 extra')
@@ -1287,31 +1292,6 @@ port ${tmpPort}
         (mb.replies[1] as MultiBulkReply).replies.length == 2
         ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'x'.bytes
         ((mb.replies[1] as MultiBulkReply).replies[1] as BulkReply).raw == 'y'.bytes
-
-        when: 'count 0 returns empty array for values'
-        inMemoryGetSet.remove(slot, 'c')
-        def cvC = Mock.prepareCompressedValueList(1)[0]
-        cvC.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
-        def rlC = new RedisList()
-        rlC.addLast('z'.bytes)
-        cvC.compressedData = rlC.encode()
-        inMemoryGetSet.put(slot, 'c', 0, cvC)
-        reply = lGroup.execute('lmpop 1 c LEFT COUNT 0')
-        mb = reply as MultiBulkReply
-        then:
-        reply instanceof MultiBulkReply
-        (mb.replies[0] as BulkReply).raw == 'c'.bytes
-        (mb.replies[1] as MultiBulkReply).replies.length == 0
-
-        when: 'wrong type key'
-        inMemoryGetSet.remove(slot, 'notlist')
-        def cvWrong = new CompressedValue()
-        cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
-        cvWrong.compressedData = 'hello'.bytes
-        inMemoryGetSet.put(slot, 'notlist', 0, cvWrong)
-        reply = lGroup.execute('lmpop 1 notlist LEFT')
-        then:
-        reply == NilReply.INSTANCE
 
         when: 'count larger than list size'
         inMemoryGetSet.remove(slot, 'small')

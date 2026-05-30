@@ -983,8 +983,8 @@ public class BGroup extends BaseCommand {
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_INTEGER;
                 }
-                if (count < 0) {
-                    return ErrorReply.RANGE_OUT_OF_INDEX;
+                if (count <= 0) {
+                    return new ErrorReply("ERR count should be greater than 0");
                 }
             } else {
                 return ErrorReply.SYNTAX;
@@ -1003,8 +1003,11 @@ public class BGroup extends BaseCommand {
         for (int i = 0; i < numKeys; i++) {
             var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
             var cv = getCv(slotWithKeyHash);
-            if (cv == null || !cv.isList()) {
+            if (cv == null) {
                 continue;
+            }
+            if (!cv.isList()) {
+                return ErrorReply.WRONG_TYPE;
             }
             var rl = LGroup.getRedisList(slotWithKeyHash, this);
             if (rl == null || rl.size() == 0) {
@@ -1012,12 +1015,6 @@ public class BGroup extends BaseCommand {
             }
 
             var keyBytes = data[3 + i];
-
-            if (count == 0) {
-                var keyReply = new BulkReply(keyBytes);
-                var arr = new Reply[]{keyReply, new MultiBulkReply(new Reply[0])};
-                return new MultiBulkReply(arr);
-            }
 
             int min = Math.min(count, rl.size());
             var valueReplies = new Reply[min];

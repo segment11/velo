@@ -13,6 +13,7 @@ import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -32,8 +33,8 @@ public class BlockingList {
      * @param dstSlotWithKeyHash destination key slot and hash value
      * @param dstLeft            destination list, is left or right
      */
-    record DstKeyAndDstLeftWhenMove(BaseCommand.SlotWithKeyHash dstSlotWithKeyHash,
-                                    boolean dstLeft) {
+    public record DstKeyAndDstLeftWhenMove(BaseCommand.SlotWithKeyHash dstSlotWithKeyHash,
+                                           boolean dstLeft) {
     }
 
     /**
@@ -44,12 +45,21 @@ public class BlockingList {
      * @param isLeft          is left or right
      * @param createdTime     created time for timeout
      * @param xx              parameter when do move
+     * @param mpopCount       number of elements to pop for BLMPOP, defaults to 1
      */
     public record PromiseWithLeftOrRightAndCreatedTime(SettablePromise<Reply> settablePromise,
                                                        ITcpSocket socket,
                                                        boolean isLeft,
                                                        long createdTime,
-                                                       DstKeyAndDstLeftWhenMove xx) {
+                                                       DstKeyAndDstLeftWhenMove xx,
+                                                       int mpopCount) {
+        public PromiseWithLeftOrRightAndCreatedTime(SettablePromise<Reply> settablePromise,
+                                                    ITcpSocket socket,
+                                                    boolean isLeft,
+                                                    long createdTime,
+                                                    DstKeyAndDstLeftWhenMove xx) {
+            this(settablePromise, socket, isLeft, createdTime, xx, 1);
+        }
     }
 
     private static final Logger log = LoggerFactory.getLogger(BlockingList.class);
@@ -254,6 +264,23 @@ public class BlockingList {
                     var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
                     rGroup.from(baseCommand);
                     dstOneSlot.asyncExecute(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, leftValueBytes, promise.settablePromise::set));
+                } else if (promise.mpopCount > 1) {
+                    // BLMPOP wake-up: collect up to mpopCount values
+                    var valueReplies = new ArrayList<Reply>();
+                    valueReplies.add(new BulkReply(leftValueBytes));
+                    int collected = 1;
+                    while (collected < promise.mpopCount && leftI < fromLeftToRight.length) {
+                        var nextBytes = fromLeftToRight[leftI];
+                        if (nextBytes == null) break;
+                        fromLeftToRight[leftI] = null;
+                        leftI++;
+                        valueReplies.add(new BulkReply(nextBytes));
+                        collected++;
+                    }
+                    var outer = new Reply[2];
+                    outer[0] = new BulkReply(key);
+                    outer[1] = new MultiBulkReply(valueReplies.toArray(new Reply[0]));
+                    promise.settablePromise.set(new MultiBulkReply(outer));
                 } else {
                     var replies = new Reply[2];
                     replies[0] = new BulkReply(key);
@@ -286,6 +313,24 @@ public class BlockingList {
                     var rGroup = new RGroup(null, baseCommand.getData(), baseCommand.getSocket());
                     rGroup.from(baseCommand);
                     dstOneSlot.asyncExecute(() -> rGroup.moveDstCallback(xx.dstSlotWithKeyHash, xx.dstLeft, rightValueBytes, promise.settablePromise::set));
+                } else if (promise.mpopCount > 1) {
+                    var valueReplies = new ArrayList<Reply>();
+                    valueReplies.add(new BulkReply(rightValueBytes));
+                    int collected = 1;
+                    while (collected < promise.mpopCount) {
+                        var nextIndex = fromLeftToRight.length - 1 - rightI;
+                        if (nextIndex < 0) break;
+                        var nextBytes = fromLeftToRight[nextIndex];
+                        if (nextBytes == null) break;
+                        fromLeftToRight[nextIndex] = null;
+                        rightI++;
+                        valueReplies.add(new BulkReply(nextBytes));
+                        collected++;
+                    }
+                    var outer = new Reply[2];
+                    outer[0] = new BulkReply(key);
+                    outer[1] = new MultiBulkReply(valueReplies.toArray(new Reply[0]));
+                    promise.settablePromise.set(new MultiBulkReply(outer));
                 } else {
                     var replies = new Reply[2];
                     replies[0] = new BulkReply(key);
@@ -340,7 +385,7 @@ public class BlockingList {
      * @return promise with left or right and created time
      */
     static PromiseWithLeftOrRightAndCreatedTime addBlockingListPromiseByKey(String key, SettablePromise<Reply> promise, ITcpSocket socket,
-                                                                             boolean isLeft, DstKeyAndDstLeftWhenMove xx) {
+                                                                            boolean isLeft, DstKeyAndDstLeftWhenMove xx) {
         var one = new PromiseWithLeftOrRightAndCreatedTime(promise, socket, isLeft, System.currentTimeMillis(), xx);
         var inner = getInner();
         var list = inner.blockingListPromisesByKey.computeIfAbsent(key, k -> new LinkedList<>());

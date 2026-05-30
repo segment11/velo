@@ -933,6 +933,16 @@ class BGroupTest extends Specification {
         then:
         reply == ErrorReply.NOT_INTEGER
 
+        when: 'wrong type key returns WRONGTYPE'
+        inMemoryGetSet.remove(slot, 'notlist')
+        def cvWrong = new CompressedValue()
+        cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvWrong.compressedData = 'hello'.bytes
+        inMemoryGetSet.put(slot, 'notlist', 0, cvWrong)
+        reply = bGroup.execute('blmpop 1 1 notlist LEFT')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+
         when: 'key too long'
         reply = bGroup.execute('blmpop 1 1 >key LEFT')
         then:
@@ -994,21 +1004,6 @@ class BGroupTest extends Specification {
         (mb.replies[0] as BulkReply).raw == 'b'.bytes
         (mb.replies[1] as MultiBulkReply).replies.length == 1
         ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'x'.bytes
-
-        when: 'count 0'
-        inMemoryGetSet.remove(slot, 'c')
-        def cvC = Mock.prepareCompressedValueList(1)[0]
-        cvC.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
-        def rlC = new RedisList()
-        rlC.addLast('z'.bytes)
-        cvC.compressedData = rlC.encode()
-        inMemoryGetSet.put(slot, 'c', 0, cvC)
-        reply = bGroup.execute('blmpop 1 1 c LEFT COUNT 0')
-        mb = reply as MultiBulkReply
-        then:
-        reply instanceof MultiBulkReply
-        (mb.replies[0] as BulkReply).raw == 'c'.bytes
-        (mb.replies[1] as MultiBulkReply).replies.length == 0
 
         cleanup:
         localPersist.cleanUp()
