@@ -1554,7 +1554,7 @@ zunionstore
         when:
         reply = zGroup.execute('zpopmax a 0')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == ErrorReply.VALUE_NOT_POSITIVE
 
         when:
         reply = zGroup.execute('zpopmax a a')

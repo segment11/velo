@@ -1302,7 +1302,7 @@ public class ZGroup extends BaseCommand {
                 return ErrorReply.NOT_INTEGER;
             }
             if (count <= 0) {
-                return ErrorReply.INVALID_INTEGER;
+                return ErrorReply.VALUE_NOT_POSITIVE;
             }
         }
 

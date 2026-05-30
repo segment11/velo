@@ -579,7 +579,7 @@ public class GGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(new String(dd[i + 1]));
                     if (count <= 0) {
-                        return ErrorReply.INVALID_INTEGER;
+                        return ErrorReply.VALUE_NOT_POSITIVE;
                     }
                     i++;
                 } catch (NumberFormatException e) {
