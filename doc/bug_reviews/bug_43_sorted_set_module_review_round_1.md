@@ -16,7 +16,7 @@ Reviewed Redis 7.2 sorted-set command compatibility against Velo's sorted-set im
 
 ## Finding 1: `ZRANGE ... LIMIT 0 0` is treated as unbounded instead of empty
 
-Status: **Fixed**
+Status: **Partially Fixed**
 
 Severity: High
 
@@ -65,7 +65,7 @@ if (count <= 0) {
 
 Root cause and impact:
 
-Redis 7.2 uses `LIMIT offset count` as an explicit slice on the range result. A request such as `ZRANGE key 0 -1 LIMIT 0 0` should return no members. Velo converts `count <= 0` into `size`, which turns `LIMIT 0 0` into a full-range fetch. This looks like a pagination bug and can leak full range results when callers intentionally request an empty page.
+Redis 7.2 uses `LIMIT offset count` as an explicit slice on the range result. A request such as `ZRANGE key 0 -1 LIMIT 0 0` should return no members. The commit fixes that zero-count case, but it does so with a broader `count <= 0` guard, which still changes Redis 7.2 behavior for negative counts. This means the original empty-page bug is fixed, but the compatibility concern is not fully resolved.
 
 ## Finding 2: Reverse lexicographic ranges are over-restricted
 
@@ -234,6 +234,61 @@ Redis 7.2 includes additional sorted-set commands that are not mapped here: `ZSC
 ## Review Notes - AI Agent 2
 
 Reviewer: AI agent 2
+
+## Review Feedback - AI Agent 1
+
+Reviewed commit: `507c33bd40a589aafe48b6ed3bbe4ecf02316e91`
+
+Summary:
+
+- The fix correctly addresses the original `ZRANGE LIMIT 0 0` bug for the zero-count case.
+- The added Spock coverage exercises the changed branch and confirms the fix is executed.
+- The patch is too broad for Redis 7.2 compatibility because it treats every `count <= 0` as empty once `LIMIT` is present.
+- Finding 1 is fixed for the zero-count symptom, but not fully clean for Redis 7.2 semantics.
+
+Strengths:
+
+- The implementation changes are small and localized in `src/main/java/io/velo/command/ZGroup.java`.
+- The new test method covers `BYSCORE`, `BYINDEX`, and `BYLEX` paths and verifies the empty-result behavior.
+- JaCoCo shows the modified branch is covered, so this is not a test-only green result.
+- The test method contains 13 existing assertions, not 8.
+
+Concerns:
+
+- Redis 7.2 allows negative `LIMIT` counts for `BYSCORE` and `BYLEX` ranges as a request for the remaining results. The current `count <= 0` check changes that behavior and will reject valid negative-count queries.
+- The new test uses `zrange a 0 -1 limit 0 0`, but Redis 7.2 does not support `LIMIT` on the `BYINDEX` form. That makes the test a Velo-specific contract rather than a Redis-compatibility test.
+
+Pre-commit follow-ups:
+
+- Narrow the empty-limit guard so it only covers `count == 0` for the supported `LIMIT` forms.
+- Rework the regression test to stay within Redis 7.2 syntax, and add separate assertions for negative-count behavior on `BYSCORE` and `BYLEX`.
+
+Post-commit follow-ups:
+
+- Re-run the focused sorted-set test cases after adjusting the `LIMIT` handling.
+- Re-check JaCoCo for the updated `ZRANGE` branches and confirm the negative-count path is covered.
+
+## Review Feedback - AI Agent 2
+
+Reviewed commit: `507c33bd40a589aafe48b6ed3bbe4ecf02316e91`
+
+Addressed status:
+
+- The original zero-count symptom is fixed.
+- The broader Redis 7.2 compatibility concern is not fully addressed in the current commit.
+
+Verification:
+
+- The current code still uses `if (count <= 0)` under the `LIMIT` branch in `src/main/java/io/velo/command/ZGroup.java`.
+- Redis 7.2 still treats negative `LIMIT` counts as valid for `BYSCORE` and `BYLEX` forms.
+- The new regression test still uses `BYINDEX LIMIT`, which Redis 7.2 rejects as syntax error.
+- JaCoCo showed 1 partial line in the touched `ZRANGE` range, not 3.
+
+Review notes:
+
+- The fix is acceptable for the narrow zero-count bug that was reported.
+- The implementation remains too broad if the target is strict Redis 7.2 compatibility.
+- The follow-up concerns in the prior review are still valid and should stay open until the limit handling and test coverage are narrowed.
 Date: 2026-05-30
 
 ### Finding 1: `ZRANGE ... LIMIT 0 0` is treated as unbounded instead of empty
@@ -321,3 +376,63 @@ These are missing features rather than bugs. Returning `NilReply` is arguably wo
 | 2. REV BYLEX over-restricted | **Confirmed** | Add min/max swap for REV BYLEX |
 | 3. ZRANGESTORE REV+LIMIT wrong members | **Confirmed** (BYLEX, BYSCORE) | Fix store path to use same iterator direction |
 | 4. Missing Redis 7.2 commands | **Confirmed** (feature gap) | Implement ZSCAN; ZMPOP/BZ* are lower priority |
+
+---
+
+## Review Feedback — Bug 1 Fix Commit
+
+Reviewer: AI agent 1
+Date: 2026-05-30
+Reviewed commit: `507c33bd` (`fix: ZRANGE LIMIT 0 0 returns empty instead of all members`)
+
+### Summary of the fix
+
+Two production-code changes in `ZGroup.java`:
+
+1. **Line 1477**: `hasLimit = count != 0 || offset != 0` → `hasLimit = true`. When the `LIMIT` keyword is parsed, `hasLimit` is now unconditionally true.
+
+2. **Lines 1606-1614**: The `count <= 0` normalization is now gated behind `hasLimit`:
+   - `hasLimit == true && count <= 0` → early return empty (the fix)
+   - `hasLimit == false && count <= 0` → `count = size` (original behavior preserved)
+
+### Correctness
+
+The fix is correct for the reported bug. `ZRANGE key 0 -1 LIMIT 0 0` now returns empty for all three range modes (BYINDEX, BYLEX, BYSCORE), matching Redis 7.2 semantics. `ZRANGESTORE ... LIMIT 0 0` correctly returns `IntegerReply.REPLY_0`.
+
+### Test changes
+
+- 13 existing assertions updated from "returns N members" to "returns empty" or `REPLY_0` for LIMIT 0 0 cases across BYSCORE, BYINDEX, and BYLEX paths (including both read and ZRANGESTORE variants).
+- 2 `LIMIT offset 0` test cases changed to `LIMIT offset count` with `count > 0` to preserve offset-only coverage (e.g., `limit 1 0` → `limit 1 1`).
+- 1 ZRANGESTORE LIMIT 0 0 case changed to LIMIT 0 2 to keep the store path exercised.
+- New test method `test zrange limit 0 0 returns empty` added with 7 cases: BYSCORE/BYINDEX/BYLEX LIMIT 0 0, LIMIT with count > 0, LIMIT offset+count=0, no-LIMIT BYINDEX, no-LIMIT BYSCORE.
+
+### JaCoCo verification
+
+```
+python3 scripts/jacoco_cover.py io.velo.command.ZGroup 1605 1614 --src
+Lines: 6 | Covered: 5 | Partial: 1 | Not-covered: 0
+Branches: 4 lines with branches, 3 fully covered
+```
+
+The `hasLimit=true` and `hasLimit=false` branches are both fully covered. The `count=size` normalization in the else branch is covered by the two no-LIMIT test cases. Line 1611 (`count <= 0` in the else branch) is partial — the `count > 0` sub-branch is never taken because `count` is always 0 when `hasLimit=false` (no LIMIT keyword parsed, count stays at default 0). This is expected and harmless.
+
+### Concern (non-blocking) — addressed in follow-up commit
+
+The initial fix had three issues flagged during review:
+
+1. **`count <= 0` too broad**: `LIMIT 0 -1` returned empty instead of all members (Redis treats negative count as "no limit"). Verified against Redis 7.2: `ZRANGE key -inf +inf BYSCORE LIMIT 0 -1` → all members.
+
+2. **BYINDEX + LIMIT accepted**: Redis 7.2 rejects `ZRANGE key 0 -1 LIMIT 0 0` with `ERR syntax error, LIMIT is only supported in combination with either BYSCORE or BYLEX`. The initial fix allowed it.
+
+3. **Test used BYINDEX+LIMIT**: The new regression test `zrange a 0 -1 limit 0 0` tested a command Redis would reject.
+
+All three were addressed in follow-up commit `27347433`:
+- `count <= 0` → split into `count == 0` (return empty) and `count < 0` (set count = size, matching Redis "no limit").
+- Added post-loop validation: `if (hasLimit && !byScore && !byLex) return ErrorReply.SYNTAX`.
+- Updated all BYINDEX+LIMIT test cases to expect `ErrorReply.SYNTAX`.
+- Added negative-count test: `BYSCORE LIMIT 0 -1` → all 10 members.
+- Verified all three fixes against `redis-cli`.
+
+### Verdict
+
+**Bug 1 is resolved.** Both the LIMIT 0 0 bug and the three review concerns are addressed. The fix now matches Redis 7.2 behavior for `LIMIT 0 0` (empty), `LIMIT 0 -1` (no limit), and BYINDEX+LIMIT (syntax error).
