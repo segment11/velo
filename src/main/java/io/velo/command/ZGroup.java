@@ -1498,6 +1498,9 @@ public class ZGroup extends BaseCommand {
             if (minBytes[0] == '-') {
                 minLex = RedisZSet.MEMBER_MIN;
                 minInclusive = false;
+            } else if (minBytes[0] == '+') {
+                minLex = RedisZSet.MEMBER_MAX;
+                minInclusive = false;
             } else {
                 if (minBytes[0] != '(' && minBytes[0] != '[') {
                     return ErrorReply.SYNTAX;
@@ -1513,6 +1516,9 @@ public class ZGroup extends BaseCommand {
             if (maxBytes[0] == '+') {
                 maxLex = RedisZSet.MEMBER_MAX;
                 maxInclusive = false;
+            } else if (maxBytes[0] == '-') {
+                maxLex = RedisZSet.MEMBER_MIN;
+                maxInclusive = false;
             } else {
                 if (maxBytes[0] != '(' && maxBytes[0] != '[') {
                     return ErrorReply.SYNTAX;
@@ -1526,10 +1532,40 @@ public class ZGroup extends BaseCommand {
                 }
             }
 
-            int compareMinMax = minLex.compareTo(maxLex);
-            // case - (a
-            if (compareMinMax > 0 && !RedisZSet.MEMBER_MIN.equals(minLex)) {
-                return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+            boolean minIsSentinelMin = RedisZSet.MEMBER_MIN.equals(minLex);
+            boolean minIsSentinelMax = RedisZSet.MEMBER_MAX.equals(minLex);
+            boolean maxIsSentinelMin = RedisZSet.MEMBER_MIN.equals(maxLex);
+            boolean maxIsSentinelMax = RedisZSet.MEMBER_MAX.equals(maxLex);
+
+            boolean minBeforeMax;
+            if (minIsSentinelMin) {
+                minBeforeMax = true;
+            } else if (minIsSentinelMax) {
+                minBeforeMax = false;
+            } else if (maxIsSentinelMax) {
+                minBeforeMax = true;
+            } else if (maxIsSentinelMin) {
+                minBeforeMax = false;
+            } else {
+                minBeforeMax = minLex.compareTo(maxLex) <= 0;
+            }
+
+            if (isReverse) {
+                if (!minBeforeMax) {
+                    String tmpLex = minLex;
+                    minLex = maxLex;
+                    maxLex = tmpLex;
+
+                    boolean tmpInc = minInclusive;
+                    minInclusive = maxInclusive;
+                    maxInclusive = tmpInc;
+                } else {
+                    return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+                }
+            } else {
+                if (!minBeforeMax && !minIsSentinelMin) {
+                    return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+                }
             }
         }
 
@@ -1703,7 +1739,7 @@ public class ZGroup extends BaseCommand {
                 var dstRz = new RedisZSet();
                 int storedCount = 0;
                 // subMap can be empty
-                var it2 = subMap.entrySet().iterator();
+            var it2 = isReverse ? subMap.descendingMap().entrySet().iterator() : subMap.entrySet().iterator();
                 while (it2.hasNext()) {
                     if (storedCount >= count) {
                         break;
@@ -1730,7 +1766,7 @@ public class ZGroup extends BaseCommand {
 
             var replies = hasLimit ? new Reply[Math.min(subMap.size(), count) * (withScores ? 2 : 1)] :
                     new Reply[subMap.size() * (withScores ? 2 : 1)];
-            var it2 = subMap.entrySet().iterator();
+            var it2 = isReverse ? subMap.descendingMap().entrySet().iterator() : subMap.entrySet().iterator();
             int i = 0;
             while (it2.hasNext()) {
                 var entry = it2.next();

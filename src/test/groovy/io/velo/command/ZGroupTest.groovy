@@ -2206,6 +2206,85 @@ zunionstore
         reply == MultiBulkReply.EMPTY
     }
 
+    def 'test zrevrangebylex with data'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def zGroup = new ZGroup(null, null, null)
+        zGroup.byPassGetSet = inMemoryGetSet
+        zGroup.from(BaseCommand.mockAGroup())
+
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rz = new RedisZSet()
+        rz.add(1.0, 'a')
+        rz.add(2.0, 'b')
+        rz.add(3.0, 'c')
+        rz.add(4.0, 'd')
+        rz.add(5.0, 'e')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+
+        when: 'ZREVRANGEBYLEX + - returns all members reversed'
+        def reply = zGroup.execute('zrevrangebylex a + -')
+        then:
+        reply instanceof MultiBulkReply
+        def members1 = (reply as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        members1 == ['e', 'd', 'c', 'b', 'a']
+
+        when: 'ZRANGE + - REV BYLEX returns all members reversed'
+        def reply2 = zGroup.execute('zrange a + - rev bylex')
+        then:
+        reply2 instanceof MultiBulkReply
+        def members2 = (reply2 as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        members2 == ['e', 'd', 'c', 'b', 'a']
+
+        when: 'ZREVRANGEBYLEX [d [b returns d,c,b'
+        def reply3 = zGroup.execute('zrevrangebylex a [d [b')
+        then:
+        reply3 instanceof MultiBulkReply
+        def members3 = (reply3 as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        members3 == ['d', 'c', 'b']
+
+        when: 'ZRANGE [d [b REV BYLEX returns d,c,b'
+        def reply4 = zGroup.execute('zrange a [d [b rev bylex')
+        then:
+        reply4 instanceof MultiBulkReply
+        def members4 = (reply4 as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        members4 == ['d', 'c', 'b']
+
+        when: 'ZRANGE [b [d REV BYLEX returns empty (min<max in REV)'
+        def reply5 = zGroup.execute('zrange a [b [d rev bylex')
+        then:
+        reply5 == MultiBulkReply.EMPTY
+
+        when: 'ZREVRANGEBYLEX + (c returns e,d (exclusive c)'
+        def reply6 = zGroup.execute('zrevrangebylex a + (c')
+        then:
+        reply6 instanceof MultiBulkReply
+        def members6 = (reply6 as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        members6 == ['e', 'd']
+
+        when: 'ZREVRANGEBYLEX [b + returns empty (b < +, wrong direction)'
+        def reply7 = zGroup.execute('zrevrangebylex a [b +')
+        then:
+        reply7 == MultiBulkReply.EMPTY
+
+        when: 'ZREVRANGEBYLEX + [b returns e,d,c,b (+ > b, correct direction)'
+        def reply8 = zGroup.execute('zrevrangebylex a + [b')
+        then:
+        reply8 instanceof MultiBulkReply
+        def members8 = (reply8 as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        members8 == ['e', 'd', 'c', 'b']
+
+        when: 'ZREVRANGEBYLEX [d - returns d,c,b,a (from d down to -)'
+        def reply9 = zGroup.execute('zrevrangebylex a [d -')
+        then:
+        reply9 instanceof MultiBulkReply
+        def members9 = (reply9 as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        members9 == ['d', 'c', 'b', 'a']
+    }
+
     def 'test zrevrangebyscore'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
