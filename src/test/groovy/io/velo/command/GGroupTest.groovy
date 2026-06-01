@@ -740,6 +740,18 @@ class GGroupTest extends Specification {
         then:
         reply instanceof IntegerReply
 
+        when:
+        // Bug 4: duplicate ASC DESC should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 100 km asc desc')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 4: duplicate ASC ASC should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 100 km asc asc')
+        then:
+        reply == ErrorReply.SYNTAX
+
         cleanup:
         eventloop.breakEventloop()
     }

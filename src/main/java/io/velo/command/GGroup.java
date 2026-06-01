@@ -558,6 +558,7 @@ public class GGroup extends BaseCommand {
         var outputUnit = RedisGeo.Unit.M;
 
         boolean isDesc = false;
+        boolean hasOrder = false;
         int count = -1;
         boolean isWithDist = false;
         boolean isWithHash = false;
@@ -573,9 +574,16 @@ public class GGroup extends BaseCommand {
         for (int i = 2; i < dd.length; i++) {
             var arg = new String(dd[i]);
             if ("asc".equalsIgnoreCase(arg)) {
-                isDesc = false;
+                if (hasOrder) {
+                    return ErrorReply.SYNTAX;
+                }
+                hasOrder = true;
             } else if ("desc".equalsIgnoreCase(arg)) {
+                if (hasOrder) {
+                    return ErrorReply.SYNTAX;
+                }
                 isDesc = true;
+                hasOrder = true;
             } else if ("count".equalsIgnoreCase(arg)) {
                 if (i + 1 >= dd.length) {
                     return ErrorReply.SYNTAX;
