@@ -42,6 +42,33 @@ public class ZGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
+        if ("bzmpop".equals(cmd)) {
+            if (data.length < 5) {
+                return slotWithKeyHashList;
+            }
+            int numKeys;
+            try {
+                numKeys = Integer.parseInt(new String(data[2]));
+            } catch (NumberFormatException e) {
+                return slotWithKeyHashList;
+            }
+            if (numKeys <= 0 || data.length < 3 + numKeys + 1) {
+                return slotWithKeyHashList;
+            }
+            for (int i = 0; i < numKeys; i++) {
+                slotWithKeyHashList.add(slot(data[3 + i], slotNumber));
+            }
+            return slotWithKeyHashList;
+        }
+
+        if ("bzpopmax".equals(cmd) || "bzpopmin".equals(cmd)) {
+            if (data.length < 2) {
+                return slotWithKeyHashList;
+            }
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
+            return slotWithKeyHashList;
+        }
+
         if ("zadd".equals(cmd) || "zcard".equals(cmd) || "zcount".equals(cmd)
                 || "zincrby".equals(cmd)
                 || "zlexcount".equals(cmd) || "zmscore".equals(cmd)
@@ -128,23 +155,6 @@ public class ZGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
-        if ("zrangestore".equals(cmd)) {
-            if (data.length < 5) {
-                return slotWithKeyHashList;
-            }
-
-            // dst first, src last
-            var dstKeyBytes = data[1];
-            var srcKeyBytes = data[2];
-            var s1 = slot(srcKeyBytes, slotNumber);
-            var s2 = slot(dstKeyBytes, slotNumber);
-            // add s1 first, important!!!
-            // so can reuse zrange method
-            slotWithKeyHashList.add(s1);
-            slotWithKeyHashList.add(s2);
-            return slotWithKeyHashList;
-        }
-
         if ("zmpop".equals(cmd)) {
             if (data.length < 4) {
                 return slotWithKeyHashList;
@@ -164,6 +174,23 @@ public class ZGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("zrangestore".equals(cmd)) {
+            if (data.length < 5) {
+                return slotWithKeyHashList;
+            }
+
+            // dst first, src last
+            var dstKeyBytes = data[1];
+            var srcKeyBytes = data[2];
+            var s1 = slot(srcKeyBytes, slotNumber);
+            var s2 = slot(dstKeyBytes, slotNumber);
+            // add s1 first, important!!!
+            // so can reuse zrange method
+            slotWithKeyHashList.add(s1);
+            slotWithKeyHashList.add(s2);
+            return slotWithKeyHashList;
+        }
+
         return slotWithKeyHashList;
     }
 
@@ -176,6 +203,10 @@ public class ZGroup extends BaseCommand {
     public Reply handle() {
         // sorted set group
         // like set group in SGroup
+        if ("bzmpop".equals(cmd) || "bzpopmax".equals(cmd) || "bzpopmin".equals(cmd)) {
+            return ErrorReply.NOT_SUPPORT;
+        }
+
         if ("zadd".equals(cmd)) {
             return zadd();
         }
@@ -218,6 +249,10 @@ public class ZGroup extends BaseCommand {
 
         if ("zmscore".equals(cmd)) {
             return zmscore();
+        }
+
+        if ("zmpop".equals(cmd)) {
+            return zmpop();
         }
 
         if ("zpopmax".equals(cmd)) {
@@ -369,10 +404,6 @@ public class ZGroup extends BaseCommand {
 
         if ("zscan".equals(cmd)) {
             return zscan();
-        }
-
-        if ("zmpop".equals(cmd)) {
-            return zmpop();
         }
 
         if ("zunion".equals(cmd)) {
