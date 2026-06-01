@@ -589,6 +589,9 @@ public class GGroup extends BaseCommand {
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_INTEGER;
                 }
+                if (i + 1 < dd.length && "any".equalsIgnoreCase(new String(dd[i + 1]))) {
+                    i++;
+                }
             } else if ("storedist".equalsIgnoreCase(arg)) {
                 if (!isStoreMode) {
                     return ErrorReply.SYNTAX;

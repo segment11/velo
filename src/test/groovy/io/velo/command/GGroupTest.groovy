@@ -728,6 +728,18 @@ class GGroupTest extends Specification {
         then:
         reply == ErrorReply.SYNTAX
 
+        when:
+        // Bug 3: COUNT n ANY should be accepted
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 100 km count 2 any')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        // Bug 3: COUNT n ANY should be accepted in store mode
+        reply = gGroup.execute('geosearchstore zzz xxx fromlonlat 15 37 byradius 100 km count 2 any')
+        then:
+        reply instanceof IntegerReply
+
         cleanup:
         eventloop.breakEventloop()
     }
