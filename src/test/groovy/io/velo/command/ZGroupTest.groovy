@@ -3059,5 +3059,97 @@ zunionstore
         reply = zGroup.execute('zmpop 1 mylist MIN')
         then:
         reply == ErrorReply.WRONG_TYPE
+
+        when: 'cross-slot - all keys missing'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+        LocalPersist.instance.addOneSlot(slot, eventloop)
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        zGroup.crossRequestWorker = true
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == NilReply.INSTANCE
+        }.result
+
+        when: 'cross-slot - first key has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvX = Mock.prepareCompressedValueList(1)[0]
+        cvX.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzX = new RedisZSet()
+        rzX.add(1.0, 'one')
+        rzX.add(2.0, 'two')
+        cvX.compressedData = rzX.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvX)
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result instanceof MultiBulkReply
+            def mb2 = result as MultiBulkReply
+            mb2.replies.length == 2
+            (mb2.replies[0] as BulkReply).raw == 'a'.bytes
+            def vr = mb2.replies[1] as MultiBulkReply
+            vr.replies.length == 2
+            (vr.replies[0] as BulkReply).raw == 'one'.bytes
+            (vr.replies[1] as BulkReply).raw == '1.0'.bytes
+        }.result
+
+        when: 'cross-slot - first empty, second key has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvY = Mock.prepareCompressedValueList(1)[0]
+        cvY.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzY = new RedisZSet()
+        rzY.add(10.0, 'x')
+        rzY.add(20.0, 'y')
+        rzY.add(30.0, 'z')
+        cvY.compressedData = rzY.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvY)
+        reply = zGroup.execute('zmpop 2 a b MAX COUNT 2')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result instanceof MultiBulkReply
+            def mb3 = result as MultiBulkReply
+            mb3.replies.length == 2
+            (mb3.replies[0] as BulkReply).raw == 'b'.bytes
+            def vr2 = mb3.replies[1] as MultiBulkReply
+            vr2.replies.length == 4
+            (vr2.replies[0] as BulkReply).raw == 'z'.bytes
+            (vr2.replies[1] as BulkReply).raw == '30.0'.bytes
+            (vr2.replies[2] as BulkReply).raw == 'y'.bytes
+            (vr2.replies[3] as BulkReply).raw == '20.0'.bytes
+        }.result
+
+        when: 'cross-slot - wrong type'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvBad = Mock.prepareCompressedValueList(1)[0]
+        cvBad.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvBad.compressedData = new byte[0]
+        inMemoryGetSet.put(slot, 'a', 0, cvBad)
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == ErrorReply.WRONG_TYPE
+        }.result
     }
 }
