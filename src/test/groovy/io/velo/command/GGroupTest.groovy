@@ -551,7 +551,7 @@ class GGroupTest extends Specification {
 
         when:
         // only return member
-        reply = gGroup.execute('geosearch xxx frommember mmm bybox 100 100 asc count 1')
+        reply = gGroup.execute('geosearch xxx frommember mmm bybox 100 100 m asc count 1')
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
@@ -613,6 +613,11 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('geosearch xxx byradius a')
         then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geosearch xxx byradius a km')
+        then:
         reply == ErrorReply.NOT_FLOAT
 
         when:
@@ -667,6 +672,121 @@ class GGroupTest extends Specification {
         gGroup.saveRedisGeo(dstRg, sss)
         then:
         inMemoryGetSet.getBuf(slot, 'yyy', sss.bucketIndex(), sss.keyHash()) == null
+
+        when:
+        // Bug 1: STOREDIST should be accepted in store mode
+        gGroup.crossRequestWorker = false
+        reply = gGroup.execute('geosearchstore zzz xxx fromlonlat 15 37 bybox 400 400 km STOREDIST')
+        then:
+        reply instanceof IntegerReply
+
+        when:
+        // Bug 1: STOREDIST should be rejected in read mode (GEOSEARCH)
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 400 400 km STOREDIST')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 1: WITHDIST should be rejected in store mode
+        reply = gGroup.execute('geosearchstore zzz xxx fromlonlat 15 37 bybox 400 400 km WITHDIST')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 1: WITHHASH should be rejected in store mode
+        reply = gGroup.execute('geosearchstore zzz xxx fromlonlat 15 37 bybox 400 400 km WITHHASH')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 1: WITHCOORD should be rejected in store mode
+        reply = gGroup.execute('geosearchstore zzz xxx fromlonlat 15 37 bybox 400 400 km WITHCOORD')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 2: BYRADIUS without unit should be syntax error
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 100')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 2: BYBOX without unit should be syntax error
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 10 10')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 2: BYRADIUS with unknown unit should be syntax error
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 100 xyz')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 2: BYBOX with unknown unit should be syntax error
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 10 10 xyz')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 3: COUNT n ANY should be accepted
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 100 km count 2 any')
+        then:
+        reply instanceof MultiBulkReply
+
+        when:
+        // Bug 3: COUNT n ANY should be accepted in store mode
+        reply = gGroup.execute('geosearchstore zzz xxx fromlonlat 15 37 byradius 100 km count 2 any')
+        then:
+        reply instanceof IntegerReply
+
+        when:
+        // Bug 4: duplicate ASC DESC should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 100 km asc desc')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 4: duplicate ASC ASC should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 100 km asc asc')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 5: FROMLONLAT invalid longitude should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 181 37 byradius 100 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // Bug 5: FROMLONLAT invalid latitude should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 90 byradius 100 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // Bug 5: BYRADIUS zero should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 0 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // Bug 5: BYRADIUS negative should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius -1 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // Bug 5: BYBOX zero width should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 0 10 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // Bug 5: BYBOX negative height should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 10 -1 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
 
         cleanup:
         eventloop.breakEventloop()

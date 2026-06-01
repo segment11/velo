@@ -7,6 +7,7 @@ import io.velo.CompressedValue;
 import io.velo.reply.*;
 import io.velo.type.RedisBitSet;
 import io.velo.type.RedisGeo;
+import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
@@ -557,21 +558,32 @@ public class GGroup extends BaseCommand {
         var outputUnit = RedisGeo.Unit.M;
 
         boolean isDesc = false;
+        boolean hasOrder = false;
         int count = -1;
         boolean isWithDist = false;
         boolean isWithHash = false;
         boolean isWithCoord = false;
+        boolean isStoreDist = false;
         boolean hasCenterSource = false;
         boolean hasFromLonLat = false;
         boolean hasByRadius = false;
         boolean hasByBox = false;
 
+        var isStoreMode = dstKeyBytes != null;
+
         for (int i = 2; i < dd.length; i++) {
             var arg = new String(dd[i]);
             if ("asc".equalsIgnoreCase(arg)) {
-                isDesc = false;
+                if (hasOrder) {
+                    return ErrorReply.SYNTAX;
+                }
+                hasOrder = true;
             } else if ("desc".equalsIgnoreCase(arg)) {
+                if (hasOrder) {
+                    return ErrorReply.SYNTAX;
+                }
                 isDesc = true;
+                hasOrder = true;
             } else if ("count".equalsIgnoreCase(arg)) {
                 if (i + 1 >= dd.length) {
                     return ErrorReply.SYNTAX;
@@ -585,6 +597,29 @@ public class GGroup extends BaseCommand {
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_INTEGER;
                 }
+                if (i + 1 < dd.length && "any".equalsIgnoreCase(new String(dd[i + 1]))) {
+                    i++;
+                }
+            } else if ("storedist".equalsIgnoreCase(arg)) {
+                if (!isStoreMode) {
+                    return ErrorReply.SYNTAX;
+                }
+                isStoreDist = true;
+            } else if ("withdist".equalsIgnoreCase(arg)) {
+                if (isStoreMode) {
+                    return ErrorReply.SYNTAX;
+                }
+                isWithDist = true;
+            } else if ("withhash".equalsIgnoreCase(arg)) {
+                if (isStoreMode) {
+                    return ErrorReply.SYNTAX;
+                }
+                isWithHash = true;
+            } else if ("withcoord".equalsIgnoreCase(arg)) {
+                if (isStoreMode) {
+                    return ErrorReply.SYNTAX;
+                }
+                isWithCoord = true;
             } else if ("fromlonlat".equalsIgnoreCase(arg)) {
                 if (i + 2 >= dd.length) {
                     return ErrorReply.SYNTAX;
@@ -595,6 +630,10 @@ public class GGroup extends BaseCommand {
                 try {
                     fromLon = Double.parseDouble(new String(dd[i + 1]));
                     fromLat = Double.parseDouble(new String(dd[i + 2]));
+                    if (fromLon > RedisGeo.GEO_LONG_MAX || fromLon < RedisGeo.GEO_LONG_MIN ||
+                        fromLat > RedisGeo.GEO_LAT_MAX || fromLat < RedisGeo.GEO_LAT_MIN) {
+                        return ErrorReply.NOT_FLOAT;
+                    }
                     i += 2;
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_FLOAT;
@@ -612,7 +651,7 @@ public class GGroup extends BaseCommand {
                 i++;
                 hasCenterSource = true;
             } else if ("byradius".equalsIgnoreCase(arg)) {
-                if (i + 1 >= dd.length) {
+                if (i + 2 >= dd.length) {
                     return ErrorReply.SYNTAX;
                 }
                 if (hasByRadius || hasByBox) {
@@ -620,23 +659,27 @@ public class GGroup extends BaseCommand {
                 }
                 try {
                     byRadius = Double.parseDouble(new String(dd[i + 1]));
+                    if (byRadius <= 0 || Double.isInfinite(byRadius) || Double.isNaN(byRadius)) {
+                        return ErrorReply.NOT_FLOAT;
+                    }
                     i++;
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_FLOAT;
                 }
 
-                // maybe has unit
-                if (dd.length > i + 1) {
-                    var unitString = new String(dd[i + 1]);
-                    byRadiusUnit = RedisGeo.Unit.fromString(unitString);
-                    if (byRadiusUnit != RedisGeo.Unit.UNKNOWN) {
-                        byRadius = byRadiusUnit.toMeters(byRadius);
-                        i++;
-                    }
+                if (i + 1 >= dd.length) {
+                    return ErrorReply.SYNTAX;
                 }
+                var unitString = new String(dd[i + 1]);
+                byRadiusUnit = RedisGeo.Unit.fromString(unitString);
+                if (byRadiusUnit == RedisGeo.Unit.UNKNOWN) {
+                    return ErrorReply.SYNTAX;
+                }
+                byRadius = byRadiusUnit.toMeters(byRadius);
+                i++;
                 hasByRadius = true;
             } else if ("bybox".equalsIgnoreCase(arg)) {
-                if (i + 2 >= dd.length) {
+                if (i + 3 >= dd.length) {
                     return ErrorReply.SYNTAX;
                 }
                 if (hasByRadius || hasByBox) {
@@ -645,28 +688,27 @@ public class GGroup extends BaseCommand {
                 try {
                     byBoxWidth = Double.parseDouble(new String(dd[i + 1]));
                     byBoxHeight = Double.parseDouble(new String(dd[i + 2]));
+                    if (byBoxWidth <= 0 || Double.isInfinite(byBoxWidth) || Double.isNaN(byBoxWidth) ||
+                        byBoxHeight <= 0 || Double.isInfinite(byBoxHeight) || Double.isNaN(byBoxHeight)) {
+                        return ErrorReply.NOT_FLOAT;
+                    }
                     i += 2;
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_FLOAT;
                 }
 
-                // maybe has unit
-                if (dd.length > i + 1) {
-                    var unitString = new String(dd[i + 1]);
-                    byBoxUnit = RedisGeo.Unit.fromString(unitString);
-                    if (byBoxUnit != RedisGeo.Unit.UNKNOWN) {
-                        byBoxWidth = byBoxUnit.toMeters(byBoxWidth);
-                        byBoxHeight = byBoxUnit.toMeters(byBoxHeight);
-                        i++;
-                    }
+                if (i + 1 >= dd.length) {
+                    return ErrorReply.SYNTAX;
                 }
+                var unitString = new String(dd[i + 1]);
+                byBoxUnit = RedisGeo.Unit.fromString(unitString);
+                if (byBoxUnit == RedisGeo.Unit.UNKNOWN) {
+                    return ErrorReply.SYNTAX;
+                }
+                byBoxWidth = byBoxUnit.toMeters(byBoxWidth);
+                byBoxHeight = byBoxUnit.toMeters(byBoxHeight);
+                i++;
                 hasByBox = true;
-            } else if ("withdist".equalsIgnoreCase(arg)) {
-                isWithDist = true;
-            } else if ("withhash".equalsIgnoreCase(arg)) {
-                isWithHash = true;
-            } else if ("withcoord".equalsIgnoreCase(arg)) {
-                isWithCoord = true;
             } else {
                 return ErrorReply.SYNTAX;
             }
@@ -740,6 +782,36 @@ public class GGroup extends BaseCommand {
         }
 
         if (isNeedStoreToDstKey) {
+            if (isStoreDist) {
+                var dstRz = new RedisZSet();
+                for (var result : resultList) {
+                    dstRz.add(outputUnit.fromMeters(result.distance()), result.member());
+                }
+                if (!isCrossRequestWorker) {
+                    ZGroup.saveRedisZSet(dstRz, dstS, this, dictMap);
+                    return new IntegerReply(dstRz.size());
+                } else {
+                    var dstOneSlot = localPersist.oneSlot(dstS.slot());
+
+                    SettablePromise<Reply> finalPromise = new SettablePromise<>();
+                    var asyncReply = new AsyncReply(finalPromise);
+
+                    var p = dstOneSlot.asyncRun(() -> {
+                        ZGroup.saveRedisZSet(dstRz, dstS, this, dictMap);
+                    });
+
+                    p.whenComplete((v, t) -> {
+                        if (t != null) {
+                            finalPromise.setException(t);
+                        } else {
+                            finalPromise.set(new IntegerReply(dstRz.size()));
+                        }
+                    });
+
+                    return asyncReply;
+                }
+            }
+
             var dstRg = new RedisGeo();
             for (var result : resultList) {
                 // not sorted, todo
