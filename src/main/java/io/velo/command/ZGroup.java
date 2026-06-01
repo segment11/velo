@@ -2321,14 +2321,23 @@ public class ZGroup extends BaseCommand {
         }
 
         // cross-slot path
-        record IndexAndCv(int index, CompressedValue cv) {}
-        ArrayList<Promise<IndexAndCv>> cvPromises = new ArrayList<>(numKeys);
+        record IndexAndRz(int index, RedisZSet rz, boolean isWrongType) {}
+        ArrayList<Promise<IndexAndRz>> rzPromises = new ArrayList<>(numKeys);
         for (int i = 0; i < numKeys; i++) {
             var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
             var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
             int finalI = i;
-            var p = oneSlot.asyncCall(() -> new IndexAndCv(finalI, getCv(slotWithKeyHash)));
-            cvPromises.add(p);
+            var p = oneSlot.asyncCall(() -> {
+                var cv = getCv(slotWithKeyHash);
+                if (cv == null) {
+                    return new IndexAndRz(finalI, null, false);
+                }
+                if (!cv.isZSet()) {
+                    return new IndexAndRz(finalI, null, true);
+                }
+                return new IndexAndRz(finalI, getRedisZSet(slotWithKeyHash), false);
+            });
+            rzPromises.add(p);
         }
 
         boolean finalIsMin = isMin;
@@ -2337,36 +2346,34 @@ public class ZGroup extends BaseCommand {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        Promises.all(cvPromises).whenComplete((r, e) -> {
+        Promises.all(rzPromises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("zmpop error={}", e.getMessage());
                 finalPromise.setException(e);
                 return;
             }
 
-            var cvResults = new CompressedValue[numKeys];
-            for (var p : cvPromises) {
+            var rzResults = new IndexAndRz[numKeys];
+            for (var p : rzPromises) {
                 var result = p.getResult();
-                cvResults[result.index()] = result.cv();
+                rzResults[result.index()] = result;
             }
 
-            int firstNonEmptyIndex = -1;
             for (int i = 0; i < numKeys; i++) {
-                var cv = cvResults[i];
-                if (cv == null) {
+                var item = rzResults[i];
+                if (item.rz() == null) {
+                    if (item.isWrongType()) {
+                        finalPromise.set(ErrorReply.WRONG_TYPE);
+                        return;
+                    }
                     continue;
                 }
-                if (!cv.isZSet()) {
-                    finalPromise.set(ErrorReply.WRONG_TYPE);
-                    return;
-                }
-                var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
-                var rz = getRedisZSet(slotWithKeyHash);
-                if (rz == null || rz.isEmpty()) {
+                if (item.rz().isEmpty()) {
                     continue;
                 }
 
-                firstNonEmptyIndex = i;
+                var rz = item.rz();
+                var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
 
                 int min = Math.min(finalCount, rz.size());
                 var valueReplies = new Reply[min * 2];

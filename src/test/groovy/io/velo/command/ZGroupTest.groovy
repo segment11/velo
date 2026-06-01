@@ -3078,11 +3078,10 @@ zunionstore
         zGroup.crossRequestWorker = true
         reply = zGroup.execute('zmpop 2 a b MIN')
         eventloopCurrent.run()
+        def asyncResult = (reply as AsyncReply).settablePromise.getResult()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        asyncResult == NilReply.INSTANCE
 
         when: 'cross-slot - first key has data'
         inMemoryGetSet.remove(slot, 'a')
@@ -3096,18 +3095,17 @@ zunionstore
         inMemoryGetSet.put(slot, 'a', 0, cvX)
         reply = zGroup.execute('zmpop 2 a b MIN')
         eventloopCurrent.run()
+        asyncResult = (reply as AsyncReply).settablePromise.getResult()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof MultiBulkReply
-            def mb2 = result as MultiBulkReply
-            mb2.replies.length == 2
-            (mb2.replies[0] as BulkReply).raw == 'a'.bytes
-            def vr = mb2.replies[1] as MultiBulkReply
-            vr.replies.length == 2
-            (vr.replies[0] as BulkReply).raw == 'one'.bytes
-            (vr.replies[1] as BulkReply).raw == '1.0'.bytes
-        }.result
+        asyncResult instanceof MultiBulkReply
+        def mbCs = asyncResult as MultiBulkReply
+        mbCs.replies.length == 2
+        (mbCs.replies[0] as BulkReply).raw == 'a'.bytes
+        def vrCs = mbCs.replies[1] as MultiBulkReply
+        vrCs.replies.length == 2
+        (vrCs.replies[0] as BulkReply).raw == 'one'.bytes
+        (vrCs.replies[1] as BulkReply).raw == '1.0'.bytes
 
         when: 'cross-slot - first empty, second key has data'
         inMemoryGetSet.remove(slot, 'a')
@@ -3122,20 +3120,46 @@ zunionstore
         inMemoryGetSet.put(slot, 'b', 0, cvY)
         reply = zGroup.execute('zmpop 2 a b MAX COUNT 2')
         eventloopCurrent.run()
+        asyncResult = (reply as AsyncReply).settablePromise.getResult()
+        def mbCs2 = asyncResult as MultiBulkReply
+        def vrCs2 = mbCs2.replies[1] as MultiBulkReply
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof MultiBulkReply
-            def mb3 = result as MultiBulkReply
-            mb3.replies.length == 2
-            (mb3.replies[0] as BulkReply).raw == 'b'.bytes
-            def vr2 = mb3.replies[1] as MultiBulkReply
-            vr2.replies.length == 4
-            (vr2.replies[0] as BulkReply).raw == 'z'.bytes
-            (vr2.replies[1] as BulkReply).raw == '30.0'.bytes
-            (vr2.replies[2] as BulkReply).raw == 'y'.bytes
-            (vr2.replies[3] as BulkReply).raw == '20.0'.bytes
-        }.result
+        asyncResult instanceof MultiBulkReply
+        mbCs2.replies.length == 2
+        (mbCs2.replies[0] as BulkReply).raw == 'b'.bytes
+        vrCs2.replies.length == 4
+        (vrCs2.replies[0] as BulkReply).raw == 'z'.bytes
+        (vrCs2.replies[1] as BulkReply).raw == '30.0'.bytes
+        (vrCs2.replies[2] as BulkReply).raw == 'y'.bytes
+        (vrCs2.replies[3] as BulkReply).raw == '20.0'.bytes
+
+        when: 'cross-slot - first key empty zset, second key has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvEmpty = Mock.prepareCompressedValueList(1)[0]
+        cvEmpty.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzEmpty = new RedisZSet()
+        cvEmpty.compressedData = rzEmpty.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvEmpty)
+        def cvY2 = Mock.prepareCompressedValueList(1)[0]
+        cvY2.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzY2 = new RedisZSet()
+        rzY2.add(5.0, 'm')
+        cvY2.compressedData = rzY2.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvY2)
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        eventloopCurrent.run()
+        asyncResult = (reply as AsyncReply).settablePromise.getResult()
+        def mbCs3 = asyncResult as MultiBulkReply
+        def vrCs3 = mbCs3.replies[1] as MultiBulkReply
+        then:
+        reply instanceof AsyncReply
+        asyncResult instanceof MultiBulkReply
+        (mbCs3.replies[0] as BulkReply).raw == 'b'.bytes
+        vrCs3.replies.length == 2
+        (vrCs3.replies[0] as BulkReply).raw == 'm'.bytes
+        (vrCs3.replies[1] as BulkReply).raw == '5.0'.bytes
 
         when: 'cross-slot - wrong type'
         inMemoryGetSet.remove(slot, 'a')
@@ -3146,10 +3170,9 @@ zunionstore
         inMemoryGetSet.put(slot, 'a', 0, cvBad)
         reply = zGroup.execute('zmpop 2 a b MIN')
         eventloopCurrent.run()
+        asyncResult = (reply as AsyncReply).settablePromise.getResult()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == ErrorReply.WRONG_TYPE
-        }.result
+        asyncResult == ErrorReply.WRONG_TYPE
     }
 }
