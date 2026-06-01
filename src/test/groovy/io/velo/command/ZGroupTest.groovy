@@ -39,6 +39,7 @@ zrevrangebylex
 zrevrangebyscore
 zrevrank
 zscore
+zscan
 '''.readLines().collect { it.trim() }.findAll { it }
 
     def multiKeyCmdList2 = '''
@@ -80,10 +81,35 @@ zunionstore
             _ZGroup.parseSlots(it, data1, slotNumber)
         }
         then:
-        sListList1.size() == 22
+        sListList1.size() == singleKeyCmdList1.size()
         sListList1.every { it.size() == 1 }
-        sListList11.size() == 22
+        sListList11.size() == singleKeyCmdList1.size()
         sListList11.every { it.size() == 0 }
+
+        when:
+        def dataBzPop = new byte[3][]
+        dataBzPop[1] = 'a'.bytes
+        dataBzPop[2] = '1.0'.bytes
+        def sBzPopMax = _ZGroup.parseSlots('bzpopmax', dataBzPop, slotNumber)
+        def sBzPopMin = _ZGroup.parseSlots('bzpopmin', dataBzPop, slotNumber)
+        def dataBzMpop = new byte[5][]
+        dataBzMpop[1] = '1.0'.bytes
+        dataBzMpop[2] = '1'.bytes
+        dataBzMpop[3] = 'a'.bytes
+        dataBzMpop[4] = 'min'.bytes
+        def sBzMpop = _ZGroup.parseSlots('bzmpop', dataBzMpop, slotNumber)
+        def sBzMpopInvalid = _ZGroup.parseSlots('bzmpop', data4, slotNumber)
+        dataBzMpop[2] = 'x'.bytes
+        def sBzMpopBadNumKeys = _ZGroup.parseSlots('bzmpop', dataBzMpop, slotNumber)
+        dataBzMpop[2] = '0'.bytes
+        def sBzMpopZeroNumKeys = _ZGroup.parseSlots('bzmpop', dataBzMpop, slotNumber)
+        then:
+        sBzPopMax.size() == 1
+        sBzPopMin.size() == 1
+        sBzMpop.size() == 1
+        sBzMpopInvalid.size() == 0
+        sBzMpopBadNumKeys.size() == 0
+        sBzMpopZeroNumKeys.size() == 0
 
         when:
         def sListList2 = multiKeyCmdList2.collect {
@@ -2758,5 +2784,465 @@ zunionstore
         reply = zGroup.execute('zscore >key member0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+    }
+
+    def 'test zmpop'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def zGroup = new ZGroup(null, null, null)
+        zGroup.byPassGetSet = inMemoryGetSet
+        zGroup.from(BaseCommand.mockAGroup())
+
+        when: 'format error - too few args'
+        def reply = zGroup.execute('zmpop')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'format error - missing direction'
+        reply = zGroup.execute('zmpop 1 myzset')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'numkeys not integer'
+        reply = zGroup.execute('zmpop abc myzset MIN')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'numkeys zero'
+        reply = zGroup.execute('zmpop 0 myzset MIN')
+        then:
+        reply == ErrorReply.RANGE_OUT_OF_INDEX
+
+        when: 'wrong direction'
+        reply = zGroup.execute('zmpop 1 myzset UP')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'count not integer'
+        reply = zGroup.execute('zmpop 1 myzset MIN COUNT abc')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'count zero rejected'
+        reply = zGroup.execute('zmpop 1 myzset MIN COUNT 0')
+        then:
+        reply == ErrorReply.VALUE_NOT_POSITIVE
+
+        when: 'count negative'
+        reply = zGroup.execute('zmpop 1 myzset MIN COUNT -1')
+        then:
+        reply == ErrorReply.VALUE_NOT_POSITIVE
+
+        when: 'syntax error - extra args'
+        reply = zGroup.execute('zmpop 1 myzset MIN COUNT 1 extra')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'syntax error - bad option'
+        reply = zGroup.execute('zmpop 1 myzset MIN BADOPTION 5')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'key too long'
+        reply = zGroup.execute('zmpop 1 >key MIN')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'all keys missing'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        then:
+        reply == NilReply.INSTANCE
+
+        when: 'single key, pop MIN, default count 1'
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rz = new RedisZSet()
+        rz.add(1.0, 'one')
+        rz.add(2.0, 'two')
+        rz.add(3.0, 'three')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put(slot, 'myzset', 0, cv)
+        reply = zGroup.execute('zmpop 1 myzset MIN')
+        def mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        mb.replies.length == 2
+        (mb.replies[0] as BulkReply).raw == 'myzset'.bytes
+        def valuesReply = mb.replies[1] as MultiBulkReply
+        valuesReply.replies.length == 2
+        (valuesReply.replies[0] as BulkReply).raw == 'one'.bytes
+        (valuesReply.replies[1] as BulkReply).raw == '1.0'.bytes
+
+        when: 'single key, pop MAX'
+        reply = zGroup.execute('zmpop 1 myzset MAX')
+        mb = reply as MultiBulkReply
+        def valuesReply2 = mb.replies[1] as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        valuesReply2.replies.length == 2
+        (valuesReply2.replies[0] as BulkReply).raw == 'three'.bytes
+        (valuesReply2.replies[1] as BulkReply).raw == '3.0'.bytes
+
+        when: 'single key, COUNT 2 (only 1 element left)'
+        reply = zGroup.execute('zmpop 1 myzset MIN COUNT 2')
+        mb = reply as MultiBulkReply
+        def valuesReply3 = mb.replies[1] as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        valuesReply3.replies.length == 2
+        (valuesReply3.replies[0] as BulkReply).raw == 'two'.bytes
+        (valuesReply3.replies[1] as BulkReply).raw == '2.0'.bytes
+
+        when: 'zset now empty, key removed'
+        reply = zGroup.execute('zmpop 1 myzset MIN')
+        then:
+        reply == NilReply.INSTANCE
+
+        when: 'first key empty, second key has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvB = Mock.prepareCompressedValueList(1)[0]
+        cvB.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzB = new RedisZSet()
+        rzB.add(10.0, 'x')
+        rzB.add(20.0, 'y')
+        cvB.compressedData = rzB.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvB)
+        reply = zGroup.execute('zmpop 2 a b MIN COUNT 3')
+        mb = reply as MultiBulkReply
+        def valuesReply4 = mb.replies[1] as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        (mb.replies[0] as BulkReply).raw == 'b'.bytes
+        valuesReply4.replies.length == 4
+        (valuesReply4.replies[0] as BulkReply).raw == 'x'.bytes
+        (valuesReply4.replies[1] as BulkReply).raw == '10.0'.bytes
+        (valuesReply4.replies[2] as BulkReply).raw == 'y'.bytes
+        (valuesReply4.replies[3] as BulkReply).raw == '20.0'.bytes
+
+        when: 'wrong type - key is not a zset'
+        inMemoryGetSet.remove(slot, 'mylist')
+        def cvL = Mock.prepareCompressedValueList(1)[0]
+        cvL.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvL.compressedData = new byte[0]
+        inMemoryGetSet.put(slot, 'mylist', 0, cvL)
+        reply = zGroup.execute('zmpop 1 mylist MIN')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+
+        when: 'format error - numkeys claims more keys than provided'
+        reply = zGroup.execute('zmpop 3 a b MIN')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'same-slot - first key empty zset skipped, second has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvEmptySlot = Mock.prepareCompressedValueList(1)[0]
+        cvEmptySlot.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzEmptySlot = new RedisZSet()
+        cvEmptySlot.compressedData = rzEmptySlot.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvEmptySlot)
+        def cvBSlot = Mock.prepareCompressedValueList(1)[0]
+        cvBSlot.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzBSlot = new RedisZSet()
+        rzBSlot.add(7.0, 'seven')
+        cvBSlot.compressedData = rzBSlot.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvBSlot)
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        then:
+        reply instanceof MultiBulkReply
+        def mbSlot = reply as MultiBulkReply
+        (mbSlot.replies[0] as BulkReply).raw == 'b'.bytes
+        def vrSlot = mbSlot.replies[1] as MultiBulkReply
+        vrSlot.replies.length == 2
+        (vrSlot.replies[0] as BulkReply).raw == 'seven'.bytes
+        (vrSlot.replies[1] as BulkReply).raw == '7.0'.bytes
+
+        when: 'cross-slot - all keys missing'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+        LocalPersist.instance.addOneSlot(slot, eventloop)
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        zGroup.crossRequestWorker = true
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        eventloopCurrent.run()
+        def asyncResult = (reply as AsyncReply).settablePromise.getResult()
+        then:
+        reply instanceof AsyncReply
+        asyncResult == NilReply.INSTANCE
+
+        when: 'cross-slot - first key has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvX = Mock.prepareCompressedValueList(1)[0]
+        cvX.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzX = new RedisZSet()
+        rzX.add(1.0, 'one')
+        rzX.add(2.0, 'two')
+        cvX.compressedData = rzX.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvX)
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        eventloopCurrent.run()
+        asyncResult = (reply as AsyncReply).settablePromise.getResult()
+        then:
+        reply instanceof AsyncReply
+        asyncResult instanceof MultiBulkReply
+        def mbCs = asyncResult as MultiBulkReply
+        mbCs.replies.length == 2
+        (mbCs.replies[0] as BulkReply).raw == 'a'.bytes
+        def vrCs = mbCs.replies[1] as MultiBulkReply
+        vrCs.replies.length == 2
+        (vrCs.replies[0] as BulkReply).raw == 'one'.bytes
+        (vrCs.replies[1] as BulkReply).raw == '1.0'.bytes
+
+        when: 'cross-slot - first empty, second key has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvY = Mock.prepareCompressedValueList(1)[0]
+        cvY.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzY = new RedisZSet()
+        rzY.add(10.0, 'x')
+        rzY.add(20.0, 'y')
+        rzY.add(30.0, 'z')
+        cvY.compressedData = rzY.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvY)
+        reply = zGroup.execute('zmpop 2 a b MAX COUNT 2')
+        eventloopCurrent.run()
+        asyncResult = (reply as AsyncReply).settablePromise.getResult()
+        def mbCs2 = asyncResult as MultiBulkReply
+        def vrCs2 = mbCs2.replies[1] as MultiBulkReply
+        then:
+        reply instanceof AsyncReply
+        asyncResult instanceof MultiBulkReply
+        mbCs2.replies.length == 2
+        (mbCs2.replies[0] as BulkReply).raw == 'b'.bytes
+        vrCs2.replies.length == 4
+        (vrCs2.replies[0] as BulkReply).raw == 'z'.bytes
+        (vrCs2.replies[1] as BulkReply).raw == '30.0'.bytes
+        (vrCs2.replies[2] as BulkReply).raw == 'y'.bytes
+        (vrCs2.replies[3] as BulkReply).raw == '20.0'.bytes
+
+        when: 'cross-slot - first key empty zset, second key has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvEmpty = Mock.prepareCompressedValueList(1)[0]
+        cvEmpty.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzEmpty = new RedisZSet()
+        cvEmpty.compressedData = rzEmpty.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvEmpty)
+        def cvY2 = Mock.prepareCompressedValueList(1)[0]
+        cvY2.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzY2 = new RedisZSet()
+        rzY2.add(5.0, 'm')
+        cvY2.compressedData = rzY2.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvY2)
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        eventloopCurrent.run()
+        asyncResult = (reply as AsyncReply).settablePromise.getResult()
+        def mbCs3 = asyncResult as MultiBulkReply
+        def vrCs3 = mbCs3.replies[1] as MultiBulkReply
+        then:
+        reply instanceof AsyncReply
+        asyncResult instanceof MultiBulkReply
+        (mbCs3.replies[0] as BulkReply).raw == 'b'.bytes
+        vrCs3.replies.length == 2
+        (vrCs3.replies[0] as BulkReply).raw == 'm'.bytes
+        (vrCs3.replies[1] as BulkReply).raw == '5.0'.bytes
+
+        when: 'cross-slot - wrong type'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvBad = Mock.prepareCompressedValueList(1)[0]
+        cvBad.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvBad.compressedData = new byte[0]
+        inMemoryGetSet.put(slot, 'a', 0, cvBad)
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        eventloopCurrent.run()
+        asyncResult = (reply as AsyncReply).settablePromise.getResult()
+        then:
+        reply instanceof AsyncReply
+        asyncResult == ErrorReply.WRONG_TYPE
+    }
+
+    def 'test zscan'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def zGroup = new ZGroup(null, null, null)
+        zGroup.byPassGetSet = inMemoryGetSet
+        zGroup.from(BaseCommand.mockAGroup())
+
+        when: // key does not exist
+        inMemoryGetSet.remove(slot, 'a')
+        def reply = zGroup.execute('zscan a 0')
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when: // key exists but zset is empty
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rz = new RedisZSet()
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zscan a 0')
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when: // zset with 3 members, scan all at once
+        rz.add(1.0, 'x')
+        rz.add(2.0, 'y')
+        rz.add(3.0, 'z')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zscan a 0')
+        then:
+        reply instanceof MultiBulkReply
+        def scanReply = reply as MultiBulkReply
+        scanReply.replies.length == 2
+        scanReply.replies[0] == BulkReply.ZERO
+        // members with scores: x 1.0 y 2.0 z 3.0
+        def membersReply = scanReply.replies[1] as MultiBulkReply
+        membersReply.replies.length == 6
+        new String((membersReply.replies[0] as BulkReply).raw) == 'x'
+        new String((membersReply.replies[1] as BulkReply).raw) == '1.0'
+        new String((membersReply.replies[2] as BulkReply).raw) == 'y'
+        new String((membersReply.replies[3] as BulkReply).raw) == '2.0'
+        new String((membersReply.replies[4] as BulkReply).raw) == 'z'
+        new String((membersReply.replies[5] as BulkReply).raw) == '3.0'
+
+        when: // COUNT 2 (partial page)
+        reply = zGroup.execute('zscan a 0 count 2')
+        then:
+        reply instanceof MultiBulkReply
+        def scanReply2 = reply as MultiBulkReply
+        scanReply2.replies.length == 2
+        // next cursor should not be 0 (not at end yet)
+        def nextCursor2 = new String((scanReply2.replies[0] as BulkReply).raw)
+        nextCursor2 != '0'
+        def membersReply2 = scanReply2.replies[1] as MultiBulkReply
+        // 2 members with scores = 4 elements
+        membersReply2.replies.length == 4
+        new String((membersReply2.replies[0] as BulkReply).raw) == 'x'
+        new String((membersReply2.replies[1] as BulkReply).raw) == '1.0'
+        new String((membersReply2.replies[2] as BulkReply).raw) == 'y'
+        new String((membersReply2.replies[3] as BulkReply).raw) == '2.0'
+
+        when: // multi-page pagination loop
+        rz.add(4.0, 'm')
+        rz.add(5.0, 'n')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        def allPairs = []
+        def nextCursor = '0'
+        int pageCount = 0
+        while (true) {
+            reply = zGroup.execute("zscan a $nextCursor count 2")
+            assert reply instanceof MultiBulkReply
+            def page = reply as MultiBulkReply
+            nextCursor = new String((page.replies[0] as BulkReply).raw)
+            def pageMembers = (page.replies[1] as MultiBulkReply).replies
+            for (int i = 0; i < pageMembers.length; i += 2) {
+                allPairs.add(new String((pageMembers[i] as BulkReply).raw))
+            }
+            pageCount++
+            if (nextCursor == '0') break
+            if (pageCount > 20) assert false: 'infinite loop in zscan pagination'
+        }
+        then:
+        allPairs.size() == rz.size()
+        allPairs.toSet().size() == allPairs.size()
+        pageCount >= 3
+
+        when: // MATCH x*
+        rz.remove('m')
+        rz.remove('n')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zscan a 0 match x*')
+        then: // only 'x' matches
+        reply instanceof MultiBulkReply
+        def scanReply3 = reply as MultiBulkReply
+        (scanReply3.replies[1] as MultiBulkReply).replies.length == 2
+        new String(((scanReply3.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw) == 'x'
+        new String(((scanReply3.replies[1] as MultiBulkReply).replies[1] as BulkReply).raw) == '1.0'
+
+        when: // MATCH with no results
+        reply = zGroup.execute('zscan a 0 match nomatch*')
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        when: // error: missing cursor
+        reply = zGroup.execute('zscan a')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: // error: cursor not a number
+        reply = zGroup.execute('zscan a notanumber')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: // error: key too long
+        reply = zGroup.execute('zscan >key 0')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when: // error: match without pattern
+        reply = zGroup.execute('zscan a 0 match')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: // error: count without value
+        reply = zGroup.execute('zscan a 0 count')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: // error: count not a number
+        reply = zGroup.execute('zscan a 0 count notanumber')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: // error: count <= 0
+        reply = zGroup.execute('zscan a 0 count -1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: // error: count 0
+        reply = zGroup.execute('zscan a 0 count 0')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: // error: unknown option
+        reply = zGroup.execute('zscan a 0 unknownoption')
+        then:
+        reply == ErrorReply.SYNTAX
+    }
+
+    def 'test blocking sorted set pops not supported'() {
+        given:
+        def zGroup = new ZGroup(null, null, null)
+        zGroup.from(BaseCommand.mockAGroup())
+
+        expect:
+        zGroup.execute(command) == ErrorReply.NOT_SUPPORT
+
+        where:
+        command << [
+                'bzmpop 1.0 1 a MIN',
+                'bzpopmax a 1.0',
+                'bzpopmin a 1.0',
+        ]
     }
 }

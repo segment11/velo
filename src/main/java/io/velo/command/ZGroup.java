@@ -5,6 +5,7 @@ import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.*;
+import io.velo.persist.KeyLoader;
 import io.velo.reply.*;
 import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.TestOnly;
@@ -41,6 +42,33 @@ public class ZGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
+        if ("bzmpop".equals(cmd)) {
+            if (data.length < 5) {
+                return slotWithKeyHashList;
+            }
+            int numKeys;
+            try {
+                numKeys = Integer.parseInt(new String(data[2]));
+            } catch (NumberFormatException e) {
+                return slotWithKeyHashList;
+            }
+            if (numKeys <= 0 || data.length < 3 + numKeys + 1) {
+                return slotWithKeyHashList;
+            }
+            for (int i = 0; i < numKeys; i++) {
+                slotWithKeyHashList.add(slot(data[3 + i], slotNumber));
+            }
+            return slotWithKeyHashList;
+        }
+
+        if ("bzpopmax".equals(cmd) || "bzpopmin".equals(cmd)) {
+            if (data.length < 2) {
+                return slotWithKeyHashList;
+            }
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
+            return slotWithKeyHashList;
+        }
+
         if ("zadd".equals(cmd) || "zcard".equals(cmd) || "zcount".equals(cmd)
                 || "zincrby".equals(cmd)
                 || "zlexcount".equals(cmd) || "zmscore".equals(cmd)
@@ -50,7 +78,7 @@ public class ZGroup extends BaseCommand {
                 || "zrank".equals(cmd)
                 || "zrem".equals(cmd) || "zremrangebylex".equals(cmd) || "zremrangebyrank".equals(cmd) || "zremrangebyscore".equals(cmd)
                 || "zrevrange".equals(cmd) || "zrevrangebylex".equals(cmd) || "zrevrangebyscore".equals(cmd) || "zrevrank".equals(cmd)
-                || "zscore".equals(cmd)) {
+                || "zscore".equals(cmd) || "zscan".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
@@ -127,6 +155,25 @@ public class ZGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("zmpop".equals(cmd)) {
+            if (data.length < 4) {
+                return slotWithKeyHashList;
+            }
+            int numKeys;
+            try {
+                numKeys = Integer.parseInt(new String(data[1]));
+            } catch (NumberFormatException e) {
+                return slotWithKeyHashList;
+            }
+            if (numKeys <= 0 || data.length < 2 + numKeys + 1) {
+                return slotWithKeyHashList;
+            }
+            for (int i = 0; i < numKeys; i++) {
+                slotWithKeyHashList.add(slot(data[2 + i], slotNumber));
+            }
+            return slotWithKeyHashList;
+        }
+
         if ("zrangestore".equals(cmd)) {
             if (data.length < 5) {
                 return slotWithKeyHashList;
@@ -156,6 +203,10 @@ public class ZGroup extends BaseCommand {
     public Reply handle() {
         // sorted set group
         // like set group in SGroup
+        if ("bzmpop".equals(cmd) || "bzpopmax".equals(cmd) || "bzpopmin".equals(cmd)) {
+            return ErrorReply.NOT_SUPPORT;
+        }
+
         if ("zadd".equals(cmd)) {
             return zadd();
         }
@@ -198,6 +249,10 @@ public class ZGroup extends BaseCommand {
 
         if ("zmscore".equals(cmd)) {
             return zmscore();
+        }
+
+        if ("zmpop".equals(cmd)) {
+            return zmpop();
         }
 
         if ("zpopmax".equals(cmd)) {
@@ -345,6 +400,10 @@ public class ZGroup extends BaseCommand {
 
         if ("zscore".equals(cmd)) {
             return zscore();
+        }
+
+        if ("zscan".equals(cmd)) {
+            return zscan();
         }
 
         if ("zunion".equals(cmd)) {
@@ -2113,5 +2172,265 @@ public class ZGroup extends BaseCommand {
         });
 
         return isExistArray[0] ? new BulkReply(scoreArray[0]) : NilReply.INSTANCE;
+    }
+
+    private Reply zscan() {
+        if (data.length < 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        var cursorBytes = data[2];
+        long cursorLong;
+        try {
+            cursorLong = Long.parseLong(new String(cursorBytes));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+
+        String matchPattern = null;
+        int count = 10;
+        if (data.length > 3) {
+            for (int i = 3; i < data.length; i++) {
+                var tmp = new String(data[i]).toLowerCase();
+                if ("match".equals(tmp)) {
+                    if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    matchPattern = new String(data[i + 1]);
+                    i++;
+                } else if ("count".equals(tmp)) {
+                    if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    try {
+                        count = Integer.parseInt(new String(data[i + 1]));
+                    } catch (NumberFormatException e) {
+                        return ErrorReply.NOT_INTEGER;
+                    }
+                    if (count <= 0) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    i++;
+                } else {
+                    return ErrorReply.SYNTAX;
+                }
+            }
+        }
+
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var rz = getRedisZSet(slotWithKeyHash);
+        if (rz == null || rz.size() == 0) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
+        var set = rz.getSet();
+        long skipCount = cursorLong;
+
+        ArrayList<RedisZSet.ScoreValue> matched = new ArrayList<>();
+        int loopCount = 0;
+        for (var sv : set) {
+            loopCount++;
+            if (!KeyLoader.isKeyMatch(sv.member(), matchPattern)) {
+                continue;
+            }
+
+            if (skipCount > 0) {
+                skipCount--;
+                continue;
+            }
+
+            matched.add(sv);
+            if (matched.size() >= count) {
+                break;
+            }
+        }
+
+        if (matched.isEmpty()) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
+        var replies = new Reply[matched.size() * 2];
+        for (int i = 0; i < matched.size(); i++) {
+            var sv = matched.get(i);
+            replies[i * 2] = new BulkReply(sv.member());
+            replies[i * 2 + 1] = new BulkReply(sv.score());
+        }
+
+        var isEnd = loopCount == set.size();
+        var nextCursor = String.valueOf(isEnd ? 0L : cursorLong + matched.size());
+        return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor), new MultiBulkReply(replies)});
+    }
+
+    private Reply zmpop() {
+        if (data.length < 4) {
+            return ErrorReply.FORMAT;
+        }
+
+        int numKeys;
+        try {
+            numKeys = Integer.parseInt(new String(data[1]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        if (numKeys <= 0) {
+            return ErrorReply.RANGE_OUT_OF_INDEX;
+        }
+        if (data.length < 2 + numKeys + 1) {
+            return ErrorReply.FORMAT;
+        }
+
+        boolean isMin;
+        var direction = new String(data[2 + numKeys]).toLowerCase();
+        if ("min".equals(direction)) {
+            isMin = true;
+        } else if ("max".equals(direction)) {
+            isMin = false;
+        } else {
+            return ErrorReply.SYNTAX;
+        }
+
+        int count = 1;
+        if (data.length > 3 + numKeys) {
+            if (data.length == 3 + numKeys + 2 && "count".equalsIgnoreCase(new String(data[3 + numKeys]))) {
+                try {
+                    count = Integer.parseInt(new String(data[4 + numKeys]));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+                if (count <= 0) {
+                    return ErrorReply.VALUE_NOT_POSITIVE;
+                }
+            } else {
+                return ErrorReply.SYNTAX;
+            }
+        }
+
+        for (int i = 0; i < numKeys; i++) {
+            if (data[2 + i].length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+        }
+
+        if (!isCrossRequestWorker) {
+            for (int i = 0; i < numKeys; i++) {
+                var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+                var cv = getCv(slotWithKeyHash);
+                if (cv == null) {
+                    continue;
+                }
+                if (!cv.isZSet()) {
+                    return ErrorReply.WRONG_TYPE;
+                }
+                var rz = getRedisZSet(slotWithKeyHash);
+                if (rz == null || rz.isEmpty()) {
+                    continue;
+                }
+
+                var keyBytes = data[2 + i];
+
+                int min = Math.min(count, rz.size());
+                var valueReplies = new Reply[min * 2];
+                for (int j = 0; j < min; j++) {
+                    var sv = isMin ? rz.pollFirst() : rz.pollLast();
+                    valueReplies[j * 2] = new BulkReply(sv.member());
+                    valueReplies[j * 2 + 1] = new BulkReply(sv.score());
+                }
+
+                saveRedisZSet(rz, slotWithKeyHash);
+
+                var keyReply = new BulkReply(keyBytes);
+                var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
+                return new MultiBulkReply(arr);
+            }
+
+            return NilReply.INSTANCE;
+        }
+
+        // cross-slot path
+        record IndexAndRz(int index, RedisZSet rz, boolean isWrongType) {}
+        ArrayList<Promise<IndexAndRz>> rzPromises = new ArrayList<>(numKeys);
+        for (int i = 0; i < numKeys; i++) {
+            var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+            var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
+            int finalI = i;
+            var p = oneSlot.asyncCall(() -> {
+                var cv = getCv(slotWithKeyHash);
+                if (cv == null) {
+                    return new IndexAndRz(finalI, null, false);
+                }
+                if (!cv.isZSet()) {
+                    return new IndexAndRz(finalI, null, true);
+                }
+                var encodedBytes = getValueBytesByCv(cv, slotWithKeyHash);
+                if (encodedBytes == null) {
+                    return new IndexAndRz(finalI, null, false);
+                }
+                return new IndexAndRz(finalI, RedisZSet.decode(encodedBytes), false);
+            });
+            rzPromises.add(p);
+        }
+
+        boolean finalIsMin = isMin;
+        int finalCount = count;
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        Promises.all(rzPromises).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error("zmpop error={}", e.getMessage());
+                finalPromise.setException(e);
+                return;
+            }
+
+            var rzResults = new IndexAndRz[numKeys];
+            for (var p : rzPromises) {
+                var result = p.getResult();
+                rzResults[result.index()] = result;
+            }
+
+            for (int i = 0; i < numKeys; i++) {
+                var item = rzResults[i];
+                if (item.rz() == null) {
+                    if (item.isWrongType()) {
+                        finalPromise.set(ErrorReply.WRONG_TYPE);
+                        return;
+                    }
+                    continue;
+                }
+                if (item.rz().isEmpty()) {
+                    continue;
+                }
+
+                var rz = item.rz();
+                var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+
+                int min = Math.min(finalCount, rz.size());
+                var valueReplies = new Reply[min * 2];
+                for (int j = 0; j < min; j++) {
+                    var sv = finalIsMin ? rz.pollFirst() : rz.pollLast();
+                    valueReplies[j * 2] = new BulkReply(sv.member());
+                    valueReplies[j * 2 + 1] = new BulkReply(sv.score());
+                }
+
+                var keyBytes = data[2 + i];
+                var keyReply = new BulkReply(keyBytes);
+                var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
+
+                var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
+                oneSlot.asyncExecute(() -> saveRedisZSet(rz, slotWithKeyHash));
+                finalPromise.set(new MultiBulkReply(arr));
+                return;
+            }
+
+            finalPromise.set(NilReply.INSTANCE);
+        });
+
+        return asyncReply;
     }
 }
