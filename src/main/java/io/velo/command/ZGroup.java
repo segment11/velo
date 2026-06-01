@@ -145,6 +145,25 @@ public class ZGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("zmpop".equals(cmd)) {
+            if (data.length < 4) {
+                return slotWithKeyHashList;
+            }
+            int numKeys;
+            try {
+                numKeys = Integer.parseInt(new String(data[1]));
+            } catch (NumberFormatException e) {
+                return slotWithKeyHashList;
+            }
+            if (numKeys <= 0 || data.length < 2 + numKeys + 1) {
+                return slotWithKeyHashList;
+            }
+            for (int i = 0; i < numKeys; i++) {
+                slotWithKeyHashList.add(slot(data[2 + i], slotNumber));
+            }
+            return slotWithKeyHashList;
+        }
+
         return slotWithKeyHashList;
     }
 
@@ -350,6 +369,10 @@ public class ZGroup extends BaseCommand {
 
         if ("zscan".equals(cmd)) {
             return zscan();
+        }
+
+        if ("zmpop".equals(cmd)) {
+            return zmpop();
         }
 
         if ("zunion".equals(cmd)) {
@@ -2210,5 +2233,89 @@ public class ZGroup extends BaseCommand {
         var isEnd = loopCount == set.size();
         var nextCursor = String.valueOf(isEnd ? 0L : cursorLong + matched.size());
         return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor), new MultiBulkReply(replies)});
+    }
+
+    private Reply zmpop() {
+        if (data.length < 4) {
+            return ErrorReply.FORMAT;
+        }
+
+        int numKeys;
+        try {
+            numKeys = Integer.parseInt(new String(data[1]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+        if (numKeys <= 0) {
+            return ErrorReply.RANGE_OUT_OF_INDEX;
+        }
+        if (data.length < 2 + numKeys + 1) {
+            return ErrorReply.FORMAT;
+        }
+
+        boolean isMin;
+        var direction = new String(data[2 + numKeys]).toLowerCase();
+        if ("min".equals(direction)) {
+            isMin = true;
+        } else if ("max".equals(direction)) {
+            isMin = false;
+        } else {
+            return ErrorReply.SYNTAX;
+        }
+
+        int count = 1;
+        if (data.length > 3 + numKeys) {
+            if (data.length == 3 + numKeys + 2 && "count".equalsIgnoreCase(new String(data[3 + numKeys]))) {
+                try {
+                    count = Integer.parseInt(new String(data[4 + numKeys]));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+                if (count <= 0) {
+                    return ErrorReply.VALUE_NOT_POSITIVE;
+                }
+            } else {
+                return ErrorReply.SYNTAX;
+            }
+        }
+
+        for (int i = 0; i < numKeys; i++) {
+            if (data[2 + i].length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+        }
+
+        for (int i = 0; i < numKeys; i++) {
+            var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+            var cv = getCv(slotWithKeyHash);
+            if (cv == null) {
+                continue;
+            }
+            if (!cv.isZSet()) {
+                return ErrorReply.WRONG_TYPE;
+            }
+            var rz = getRedisZSet(slotWithKeyHash);
+            if (rz == null || rz.isEmpty()) {
+                continue;
+            }
+
+            var keyBytes = data[2 + i];
+
+            int min = Math.min(count, rz.size());
+            var valueReplies = new Reply[min * 2];
+            for (int j = 0; j < min; j++) {
+                var sv = isMin ? rz.pollFirst() : rz.pollLast();
+                valueReplies[j * 2] = new BulkReply(sv.member());
+                valueReplies[j * 2 + 1] = new BulkReply(sv.score());
+            }
+
+            saveRedisZSet(rz, slotWithKeyHash);
+
+            var keyReply = new BulkReply(keyBytes);
+            var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
+            return new MultiBulkReply(arr);
+        }
+
+        return NilReply.INSTANCE;
     }
 }
