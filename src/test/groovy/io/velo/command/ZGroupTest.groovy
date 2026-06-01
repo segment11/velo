@@ -3060,6 +3060,35 @@ zunionstore
         then:
         reply == ErrorReply.WRONG_TYPE
 
+        when: 'format error - numkeys claims more keys than provided'
+        reply = zGroup.execute('zmpop 3 a b MIN')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'same-slot - first key empty zset skipped, second has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvEmptySlot = Mock.prepareCompressedValueList(1)[0]
+        cvEmptySlot.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzEmptySlot = new RedisZSet()
+        cvEmptySlot.compressedData = rzEmptySlot.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvEmptySlot)
+        def cvBSlot = Mock.prepareCompressedValueList(1)[0]
+        cvBSlot.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzBSlot = new RedisZSet()
+        rzBSlot.add(7.0, 'seven')
+        cvBSlot.compressedData = rzBSlot.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvBSlot)
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        then:
+        reply instanceof MultiBulkReply
+        def mbSlot = reply as MultiBulkReply
+        (mbSlot.replies[0] as BulkReply).raw == 'b'.bytes
+        def vrSlot = mbSlot.replies[1] as MultiBulkReply
+        vrSlot.replies.length == 2
+        (vrSlot.replies[0] as BulkReply).raw == 'seven'.bytes
+        (vrSlot.replies[1] as BulkReply).raw == '7.0'.bytes
+
         when: 'cross-slot - all keys missing'
         inMemoryGetSet.remove(slot, 'a')
         inMemoryGetSet.remove(slot, 'b')

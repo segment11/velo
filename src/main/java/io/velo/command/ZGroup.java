@@ -2335,7 +2335,11 @@ public class ZGroup extends BaseCommand {
                 if (!cv.isZSet()) {
                     return new IndexAndRz(finalI, null, true);
                 }
-                return new IndexAndRz(finalI, getRedisZSet(slotWithKeyHash), false);
+                var encodedBytes = getValueBytesByCv(cv, slotWithKeyHash);
+                if (encodedBytes == null) {
+                    return new IndexAndRz(finalI, null, false);
+                }
+                return new IndexAndRz(finalI, RedisZSet.decode(encodedBytes), false);
             });
             rzPromises.add(p);
         }
