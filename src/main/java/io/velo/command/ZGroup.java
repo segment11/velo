@@ -2380,7 +2380,8 @@ public class ZGroup extends BaseCommand {
                 var keyReply = new BulkReply(keyBytes);
                 var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
 
-                saveRedisZSet(rz, slotWithKeyHash);
+                var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
+                oneSlot.asyncExecute(() -> saveRedisZSet(rz, slotWithKeyHash));
                 finalPromise.set(new MultiBulkReply(arr));
                 return;
             }
