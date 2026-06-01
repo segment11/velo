@@ -668,6 +668,37 @@ class GGroupTest extends Specification {
         then:
         inMemoryGetSet.getBuf(slot, 'yyy', sss.bucketIndex(), sss.keyHash()) == null
 
+        when:
+        // Bug 1: STOREDIST should be accepted in store mode
+        gGroup.crossRequestWorker = false
+        reply = gGroup.execute('geosearchstore zzz xxx fromlonlat 15 37 bybox 400 400 km STOREDIST')
+        then:
+        reply instanceof IntegerReply
+
+        when:
+        // Bug 1: STOREDIST should be rejected in read mode (GEOSEARCH)
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 400 400 km STOREDIST')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 1: WITHDIST should be rejected in store mode
+        reply = gGroup.execute('geosearchstore zzz xxx fromlonlat 15 37 bybox 400 400 km WITHDIST')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 1: WITHHASH should be rejected in store mode
+        reply = gGroup.execute('geosearchstore zzz xxx fromlonlat 15 37 bybox 400 400 km WITHHASH')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 1: WITHCOORD should be rejected in store mode
+        reply = gGroup.execute('geosearchstore zzz xxx fromlonlat 15 37 bybox 400 400 km WITHCOORD')
+        then:
+        reply == ErrorReply.SYNTAX
+
         cleanup:
         eventloop.breakEventloop()
     }
