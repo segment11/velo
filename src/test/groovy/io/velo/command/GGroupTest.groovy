@@ -752,6 +752,42 @@ class GGroupTest extends Specification {
         then:
         reply == ErrorReply.SYNTAX
 
+        when:
+        // Bug 5: FROMLONLAT invalid longitude should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 181 37 byradius 100 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // Bug 5: FROMLONLAT invalid latitude should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 90 byradius 100 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // Bug 5: BYRADIUS zero should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 0 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // Bug 5: BYRADIUS negative should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius -1 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // Bug 5: BYBOX zero width should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 0 10 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // Bug 5: BYBOX negative height should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 10 -1 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
         cleanup:
         eventloop.breakEventloop()
     }

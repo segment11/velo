@@ -630,6 +630,10 @@ public class GGroup extends BaseCommand {
                 try {
                     fromLon = Double.parseDouble(new String(dd[i + 1]));
                     fromLat = Double.parseDouble(new String(dd[i + 2]));
+                    if (fromLon > RedisGeo.GEO_LONG_MAX || fromLon < RedisGeo.GEO_LONG_MIN ||
+                        fromLat > RedisGeo.GEO_LAT_MAX || fromLat < RedisGeo.GEO_LAT_MIN) {
+                        return ErrorReply.NOT_FLOAT;
+                    }
                     i += 2;
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_FLOAT;
@@ -655,6 +659,9 @@ public class GGroup extends BaseCommand {
                 }
                 try {
                     byRadius = Double.parseDouble(new String(dd[i + 1]));
+                    if (byRadius <= 0 || Double.isInfinite(byRadius) || Double.isNaN(byRadius)) {
+                        return ErrorReply.NOT_FLOAT;
+                    }
                     i++;
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_FLOAT;
@@ -681,6 +688,10 @@ public class GGroup extends BaseCommand {
                 try {
                     byBoxWidth = Double.parseDouble(new String(dd[i + 1]));
                     byBoxHeight = Double.parseDouble(new String(dd[i + 2]));
+                    if (byBoxWidth <= 0 || Double.isInfinite(byBoxWidth) || Double.isNaN(byBoxWidth) ||
+                        byBoxHeight <= 0 || Double.isInfinite(byBoxHeight) || Double.isNaN(byBoxHeight)) {
+                        return ErrorReply.NOT_FLOAT;
+                    }
                     i += 2;
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_FLOAT;
