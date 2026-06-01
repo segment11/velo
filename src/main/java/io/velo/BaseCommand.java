@@ -436,12 +436,15 @@ public abstract class BaseCommand {
                 }
             }
             if (c == '"') {
+                if (inQuotes && sb.isEmpty()) {
+                    result.add("");
+                }
                 inQuotes = !inQuotes;
                 i++;
                 continue;
             }
             if (c == ' ' && !inQuotes) {
-                if (sb.length() > 0) {
+                if (!sb.isEmpty()) {
                     result.add(sb.toString());
                     sb.setLength(0);
                 }
@@ -451,7 +454,7 @@ public abstract class BaseCommand {
             sb.append(c);
             i++;
         }
-        if (sb.length() > 0) {
+        if (!sb.isEmpty()) {
             result.add(sb.toString());
         }
         return result;
