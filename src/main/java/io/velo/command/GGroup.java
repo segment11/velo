@@ -42,15 +42,6 @@ public class GGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
-        if ("get".equals(cmd) || "getbit".equals(cmd) || "getdel".equals(cmd) || "getex".equals(cmd)
-                || "getrange".equals(cmd) || "getset".equals(cmd)) {
-            if (data.length < 2) {
-                return slotWithKeyHashList;
-            }
-            slotWithKeyHashList.add(slot(data[1], slotNumber));
-            return slotWithKeyHashList;
-        }
-
         // geo category
         if (cmd.startsWith("geo")) {
             if ("geosearchstore".equals(cmd)) {
@@ -73,6 +64,15 @@ public class GGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("get".equals(cmd) || "getbit".equals(cmd) || "getdel".equals(cmd) || "getex".equals(cmd)
+                || "getrange".equals(cmd) || "getset".equals(cmd)) {
+            if (data.length < 2) {
+                return slotWithKeyHashList;
+            }
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
+            return slotWithKeyHashList;
+        }
+
         return slotWithKeyHashList;
     }
 
@@ -83,6 +83,10 @@ public class GGroup extends BaseCommand {
      */
     @Override
     public Reply handle() {
+        if (cmd.startsWith("geo")) {
+            return geo();
+        }
+
         if ("getbit".equals(cmd)) {
             return getbit();
         }
@@ -101,10 +105,6 @@ public class GGroup extends BaseCommand {
 
         if ("getset".equals(cmd)) {
             return getset();
-        }
-
-        if (cmd.startsWith("geo")) {
-            return geo();
         }
 
         return NilReply.INSTANCE;

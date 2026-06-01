@@ -50,13 +50,14 @@ public class SGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
-        if ("set".equals(cmd) || "setbit".equals(cmd) || "setex".equals(cmd) || "setrange".equals(cmd) ||
-                "setnx".equals(cmd) || "strlen".equals(cmd) || "substr".equals(cmd) ||
-                "sadd".equals(cmd) || "scard".equals(cmd) ||
+        if ("sadd".equals(cmd) || "scard".equals(cmd) ||
+                "set".equals(cmd) || "setbit".equals(cmd) || "setex".equals(cmd) || "setnx".equals(cmd) ||
+                "setrange".equals(cmd) ||
                 "sismember".equals(cmd) || "smembers".equals(cmd) || "smismember".equals(cmd) ||
                 "sort".equals(cmd) || "sort_ro".equals(cmd) ||
                 "spop".equals(cmd) || "srandmember".equals(cmd) || "srem".equals(cmd) ||
-                "sscan".equals(cmd)) {
+                "sscan".equals(cmd) ||
+                "strlen".equals(cmd) || "substr".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
@@ -64,8 +65,9 @@ public class SGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
-        if ("sdiff".equals(cmd) || "sinter".equals(cmd) || "sunion".equals(cmd) ||
-                "sdiffstore".equals(cmd) || "sinterstore".equals(cmd) || "sunionstore".equals(cmd)) {
+        if ("sdiff".equals(cmd) || "sdiffstore".equals(cmd) ||
+                "sinter".equals(cmd) || "sinterstore".equals(cmd) ||
+                "sunion".equals(cmd) || "sunionstore".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
@@ -111,13 +113,33 @@ public class SGroup extends BaseCommand {
      */
     @Override
     public Reply handle() {
+        if ("sadd".equals(cmd)) {
+            return sadd();
+        }
+
         if ("save".equals(cmd)) {
             BGroup.lastBgSaveMillis.set(System.currentTimeMillis());
             return save();
         }
 
+        if ("scard".equals(cmd)) {
+            return scard();
+        }
+
         if ("scan".equals(cmd)) {
             return scan();
+        }
+
+        if ("sdiff".equals(cmd)) {
+            return sdiff(false, false);
+        }
+
+        if ("sdiffstore".equals(cmd)) {
+            return sdiffstore(false, false);
+        }
+
+        if ("select".equals(cmd)) {
+            return ErrorReply.NOT_SUPPORT;
         }
 
         if ("sentinel".equals(cmd)) {
@@ -158,37 +180,6 @@ public class SGroup extends BaseCommand {
             return setrange();
         }
 
-        if ("strlen".equals(cmd)) {
-            return strlen();
-        }
-
-        if ("substr".equals(cmd)) {
-            var gGroup = new GGroup(cmd, data, socket);
-            gGroup.from(this);
-            return gGroup.getrange();
-        }
-
-        if ("select".equals(cmd)) {
-            return ErrorReply.NOT_SUPPORT;
-        }
-
-        // set group
-        if ("sadd".equals(cmd)) {
-            return sadd();
-        }
-
-        if ("scard".equals(cmd)) {
-            return scard();
-        }
-
-        if ("sdiff".equals(cmd)) {
-            return sdiff(false, false);
-        }
-
-        if ("sdiffstore".equals(cmd)) {
-            return sdiffstore(false, false);
-        }
-
         if ("sinter".equals(cmd)) {
             return sdiff(true, false);
         }
@@ -203,6 +194,10 @@ public class SGroup extends BaseCommand {
 
         if ("sismember".equals(cmd)) {
             return sismember();
+        }
+
+        if ("slaveof".equals(cmd)) {
+            return slaveof();
         }
 
         if ("smembers".equals(cmd)) {
@@ -241,8 +236,18 @@ public class SGroup extends BaseCommand {
             return sscan();
         }
 
+        if ("strlen".equals(cmd)) {
+            return strlen();
+        }
+
         if ("subscribe".equals(cmd)) {
             return subscribe(false);
+        }
+
+        if ("substr".equals(cmd)) {
+            var gGroup = new GGroup(cmd, data, socket);
+            gGroup.from(this);
+            return gGroup.getrange();
         }
 
         if ("sunion".equals(cmd)) {
@@ -251,10 +256,6 @@ public class SGroup extends BaseCommand {
 
         if ("sunionstore".equals(cmd)) {
             return sdiffstore(false, true);
-        }
-
-        if ("slaveof".equals(cmd)) {
-            return slaveof();
         }
 
         return NilReply.INSTANCE;

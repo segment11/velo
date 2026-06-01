@@ -247,12 +247,12 @@ public class ZGroup extends BaseCommand {
             return zcount(true);
         }
 
-        if ("zmscore".equals(cmd)) {
-            return zmscore();
-        }
-
         if ("zmpop".equals(cmd)) {
             return zmpop();
+        }
+
+        if ("zmscore".equals(cmd)) {
+            return zmscore();
         }
 
         if ("zpopmax".equals(cmd)) {

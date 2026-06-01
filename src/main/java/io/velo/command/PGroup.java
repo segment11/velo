@@ -131,12 +131,6 @@ public class PGroup extends BaseCommand {
             return eGroup.expiretime(true);
         }
 
-        if ("pttl".equals(cmd)) {
-            var tGroup = new TGroup(cmd, data, socket);
-            tGroup.from(this);
-            return tGroup.ttl(true);
-        }
-
         if ("pfadd".equals(cmd)) {
             return pfadd();
         }
@@ -164,6 +158,12 @@ public class PGroup extends BaseCommand {
             var sGroup = new SGroup(cmd, data, socket);
             sGroup.from(this);
             return sGroup.subscribe(true);
+        }
+
+        if ("pttl".equals(cmd)) {
+            var tGroup = new TGroup(cmd, data, socket);
+            tGroup.from(this);
+            return tGroup.ttl(true);
         }
 
         if ("publish".equals(cmd)) {

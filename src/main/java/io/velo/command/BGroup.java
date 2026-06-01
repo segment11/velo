@@ -122,6 +122,15 @@ public class BGroup extends BaseCommand {
      */
     @Override
     public Reply handle() {
+        if (cmd.startsWith("bf.")) {
+            return bf();
+        }
+
+        if ("bgsave".equals(cmd)) {
+            lastBgSaveMillis.set(System.currentTimeMillis());
+            return OKReply.INSTANCE;
+        }
+
         if ("bitcount".equals(cmd)) {
             return bitcount();
         }
@@ -130,13 +139,8 @@ public class BGroup extends BaseCommand {
             return bitpos();
         }
 
-        if (cmd.startsWith("bf.")) {
-            return bf();
-        }
-
-        if ("bgsave".equals(cmd)) {
-            lastBgSaveMillis.set(System.currentTimeMillis());
-            return OKReply.INSTANCE;
+        if ("blmpop".equals(cmd)) {
+            return blmpop();
         }
 
         if ("blmove".equals(cmd)) {
@@ -166,10 +170,6 @@ public class BGroup extends BaseCommand {
             var lGroup = new LGroup(null, dd, socket);
             lGroup.from(this);
             return lGroup.lmove(true);
-        }
-
-        if ("blmpop".equals(cmd)) {
-            return blmpop();
         }
 
         return NilReply.INSTANCE;

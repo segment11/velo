@@ -43,12 +43,11 @@ public class LGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
-        if ("lmove".equals(cmd)) {
-            if (data.length != 5 && data.length != 6) {
+        if ("lindex".equals(cmd) || "linsert".equals(cmd) || "llen".equals(cmd)) {
+            if (data.length < 2) {
                 return slotWithKeyHashList;
             }
             slotWithKeyHashList.add(slot(data[1], slotNumber));
-            slotWithKeyHashList.add(slot(data[2], slotNumber));
             return slotWithKeyHashList;
         }
 
@@ -71,8 +70,16 @@ public class LGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
-        if ("lindex".equals(cmd) || "linsert".equals(cmd)
-                || "llen".equals(cmd) || "lpop".equals(cmd) || "lpos".equals(cmd)
+        if ("lmove".equals(cmd)) {
+            if (data.length != 5 && data.length != 6) {
+                return slotWithKeyHashList;
+            }
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
+            slotWithKeyHashList.add(slot(data[2], slotNumber));
+            return slotWithKeyHashList;
+        }
+
+        if ("lpop".equals(cmd) || "lpos".equals(cmd)
                 || "lpush".equals(cmd) || "lpushx".equals(cmd)
                 || "lrange".equals(cmd) || "lrem".equals(cmd)
                 || "lset".equals(cmd) || "ltrim".equals(cmd)) {
@@ -109,6 +116,18 @@ public class LGroup extends BaseCommand {
             return llen();
         }
 
+        if ("load-rdb".equals(cmd)) {
+            try {
+                return loadRdb();
+            } catch (Exception e) {
+                return new ErrorReply(e.getMessage());
+            }
+        }
+
+        if ("lmpop".equals(cmd)) {
+            return lmpop();
+        }
+
         if ("lmove".equals(cmd)) {
             return lmove();
         }
@@ -143,18 +162,6 @@ public class LGroup extends BaseCommand {
 
         if ("ltrim".equals(cmd)) {
             return ltrim();
-        }
-
-        if ("lmpop".equals(cmd)) {
-            return lmpop();
-        }
-
-        if ("load-rdb".equals(cmd)) {
-            try {
-                return loadRdb();
-            } catch (Exception e) {
-                return new ErrorReply(e.getMessage());
-            }
         }
 
         return NilReply.INSTANCE;

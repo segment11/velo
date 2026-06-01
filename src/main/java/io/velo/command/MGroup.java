@@ -47,6 +47,17 @@ public class MGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
+        if ("manage".equals(cmd)) {
+            var scriptText = RefreshLoader.getScriptText("/dyn/src/io/velo/script/ManageCommandParseSlots.groovy");
+
+            var variables = new HashMap<String, Object>();
+            variables.put("cmd", cmd);
+            variables.put("data", data);
+            variables.put("slotNumber", slotNumber);
+
+            return (ArrayList<SlotWithKeyHash>) cl.eval(scriptText, variables);
+        }
+
         if ("mget".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
@@ -61,17 +72,6 @@ public class MGroup extends BaseCommand {
             }
             addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin1Step2);
             return slotWithKeyHashList;
-        }
-
-        if ("manage".equals(cmd)) {
-            var scriptText = RefreshLoader.getScriptText("/dyn/src/io/velo/script/ManageCommandParseSlots.groovy");
-
-            var variables = new HashMap<String, Object>();
-            variables.put("cmd", cmd);
-            variables.put("data", data);
-            variables.put("slotNumber", slotNumber);
-
-            return (ArrayList<SlotWithKeyHash>) cl.eval(scriptText, variables);
         }
 
         return slotWithKeyHashList;
@@ -92,20 +92,20 @@ public class MGroup extends BaseCommand {
             return mget();
         }
 
-        if ("mset".equals(cmd)) {
-            return mset();
-        }
-
-        if ("msetnx".equals(cmd)) {
-            return msetnx();
-        }
-
         if ("migrate".equals(cmd)) {
             return migrate();
         }
 
         if ("move".equals(cmd)) {
             return ErrorReply.NOT_SUPPORT;
+        }
+
+        if ("mset".equals(cmd)) {
+            return mset();
+        }
+
+        if ("msetnx".equals(cmd)) {
+            return msetnx();
         }
 
         return NilReply.INSTANCE;

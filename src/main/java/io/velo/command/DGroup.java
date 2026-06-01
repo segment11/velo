@@ -63,14 +63,6 @@ public class DGroup extends BaseCommand {
             // add other debug sub command
         }
 
-        if ("del".equals(cmd)) {
-            if (data.length < 2) {
-                return slotWithKeyHashList;
-            }
-            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin1);
-            return slotWithKeyHashList;
-        }
-
         if ("decr".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
@@ -83,6 +75,14 @@ public class DGroup extends BaseCommand {
                 return slotWithKeyHashList;
             }
             slotWithKeyHashList.add(slot(data[1], slotNumber));
+        }
+
+        if ("del".equals(cmd)) {
+            if (data.length < 2) {
+                return slotWithKeyHashList;
+            }
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin1);
+            return slotWithKeyHashList;
         }
 
         if ("dump".equals(cmd)) {
@@ -102,16 +102,12 @@ public class DGroup extends BaseCommand {
      */
     @Override
     public Reply handle() {
-        if ("debug".equals(cmd)) {
-            return debug();
-        }
-
-        if ("del".equals(cmd)) {
-            return del();
-        }
-
         if ("dbsize".equals(cmd)) {
             return dbsize();
+        }
+
+        if ("debug".equals(cmd)) {
+            return debug();
         }
 
         if ("decr".equals(cmd)) {
@@ -148,6 +144,10 @@ public class DGroup extends BaseCommand {
             }
 
             return decrBy(0, by);
+        }
+
+        if ("del".equals(cmd)) {
+            return del();
         }
 
         if ("dump".equals(cmd)) {

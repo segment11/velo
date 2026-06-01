@@ -45,22 +45,14 @@ public class HGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
-        if ("hdel".equals(cmd) || "hexists".equals(cmd) || "hget".equals(cmd) || "hgetall".equals(cmd) ||
+        if ("hdel".equals(cmd) || "hexists".equals(cmd) || "hexpire".equals(cmd) || "hexpireat".equals(cmd) ||
+                "hexpiretime".equals(cmd) || "hget".equals(cmd) || "hgetall".equals(cmd) ||
                 "hgetdel".equals(cmd) || "hgetex".equals(cmd) || "hincrby".equals(cmd) || "hincrbyfloat".equals(cmd) ||
                 "hkeys".equals(cmd) || "hlen".equals(cmd) || "hmget".equals(cmd) || "hmset".equals(cmd) ||
-                "hrandfield".equals(cmd) || "hscan".equals(cmd) || "hset".equals(cmd) || "hsetex".equals(cmd) ||
-                "hsetnx".equals(cmd) || "hstrlen".equals(cmd) || "hvals".equals(cmd)) {
-            if (data.length < 2) {
-                return slotWithKeyHashList;
-            }
-            slotWithKeyHashList.add(slot(data[1], slotNumber));
-            return slotWithKeyHashList;
-        }
-
-        // hash ttl commands
-        if ("hexpire".equals(cmd) || "hexpireat".equals(cmd) || "hexpiretime".equals(cmd) ||
                 "hpersist".equals(cmd) || "hpexpire".equals(cmd) || "hpexpireat".equals(cmd) || "hpexpiretime".equals(cmd) ||
-                "hpttl".equals(cmd) || "httl".equals(cmd)) {
+                "hpttl".equals(cmd) || "hrandfield".equals(cmd) || "hscan".equals(cmd) || "hset".equals(cmd) ||
+                "hsetex".equals(cmd) || "hsetnx".equals(cmd) || "hstrlen".equals(cmd) || "httl".equals(cmd) ||
+                "hvals".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }

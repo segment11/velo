@@ -46,14 +46,6 @@ public class AGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
-        if ("append".equals(cmd)) {
-            if (data.length < 3) {
-                return slotWithKeyHashList;
-            }
-            slotWithKeyHashList.add(slot(data[1], slotNumber));
-            return slotWithKeyHashList;
-        }
-
         if ("acl".equals(cmd)) {
             if (data.length > 2) {
                 var isDryrun = "dryrun".equalsIgnoreCase(new String(data[1]));
@@ -73,6 +65,14 @@ public class AGroup extends BaseCommand {
                     slotWithKeyHashList.add(SlotWithKeyHash.TO_FIX_FIRST_SLOT);
                 }
             }
+        }
+
+        if ("append".equals(cmd)) {
+            if (data.length < 3) {
+                return slotWithKeyHashList;
+            }
+            slotWithKeyHashList.add(slot(data[1], slotNumber));
+            return slotWithKeyHashList;
         }
 
         return slotWithKeyHashList;
