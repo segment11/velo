@@ -487,3 +487,175 @@ All three were addressed in follow-up commit `27347433`:
 ### Verdict
 
 **Bug 1 is resolved.** Both the LIMIT 0 0 bug and the three review concerns are addressed. The fix now matches Redis 7.2 behavior for `LIMIT 0 0` (empty), `LIMIT 0 -1` (no limit), and BYINDEX+LIMIT (syntax error).
+
+---
+
+## Review Feedback - AI Agent 2
+
+Reviewed commit: `9e1d2de5fa5ed3f67ac96e4863f7805fd5adb0ef` (`feat: implement ZSCAN command for cursor-based sorted set iteration`)
+
+Addressed status:
+
+- Finding 4 is partially addressed.
+- `ZSCAN` is now parsed, routed, implemented, and covered by tests.
+- The remaining Redis 7.2 sorted-set command gaps from Finding 4 (`ZMPOP`, `BZMPOP`, `BZPOPMAX`, `BZPOPMIN`) are still unimplemented and still fall through outside the implemented command set.
+
+Verification:
+
+- `ZGroup.parseSlots()` now includes `zscan`, so the key slot is parsed before execution.
+- `ZGroup.handle()` dispatches `zscan` to the new implementation instead of falling through to `NilReply.INSTANCE`.
+- The implementation returns the Redis scan reply shape `[cursor, [member, score, ...]]`, supports `MATCH` and `COUNT`, handles missing/non-zset-empty results with `MultiBulkReply.SCAN_EMPTY`, and validates malformed option syntax.
+- Focused test command re-run after `:cleanTest`: `./gradlew :test --tests "io.velo.command.ZGroupTest.test zscan"` passed.
+- JaCoCo check: `python3 scripts/jacoco_cover.py io.velo.command.ZGroup 2123 2212 --src` reported `Lines: 60 | Covered: 60 | Partial: 0 | Not-covered: 0` and all 18 branch lines fully covered.
+
+Strengths:
+
+- The implementation follows the existing `SSCAN` command shape and option parsing conventions, which keeps behavior consistent across scan-family commands in this codebase.
+- The test covers missing key, empty zset, default scan, count-limited pagination, `MATCH`, malformed cursor, missing option arguments, invalid count, and unknown options.
+- The coverage evidence confirms the newly added branches were executed, not just compiled.
+
+Concerns:
+
+- No blocking concern found for the implemented `ZSCAN` scope.
+- The cursor is implemented as a simple in-memory offset over matched sorted-set members and restarts iteration from the beginning on each page. This differs from Redis hash-table cursor behavior and makes a complete filtered iteration more expensive than Redis documented scan complexity, but Velo sorted-set size is currently bounded by `RedisZSet.ZSET_MAX_SIZE`, so this is an acceptable implementation tradeoff unless that bound changes.
+- Finding 4 should not be marked fully fixed by this commit alone because the other missing sorted-set commands remain open.
+
+Verdict:
+
+- The `ZSCAN` portion of Finding 4 is accepted.
+- Keep Finding 4 open or split it so `ZSCAN` can be marked fixed while `ZMPOP`, `BZMPOP`, `BZPOPMAX`, and `BZPOPMIN` remain tracked separately.
+
+---
+
+## Review Feedback - AI Agent 2
+
+Reviewed commits:
+
+- `b619ebfa48c25a419eaef88722f2dbc5b2d91c0a` (`feat: implement ZMPOP command for popping from multiple sorted sets`)
+- `57bd8452261fccd5db0221a6af9af3701407a46f` (`refactor: add cross-slot promise support to ZMPOP`)
+- `c4c33096e7005767a3f02148e3e4acfc6256aaad` (`fix: use asyncExecute for saveRedisZSet in ZMPOP cross-slot path`)
+- `5771b55551a7a0ec2a183f959595d5f7996527e5` (`test: add cross-slot unit tests for ZMPOP with eventloop promises`)
+
+Addressed status:
+
+- Finding 4 is further partially addressed.
+- `ZMPOP` is now parsed, routed, implemented, and covered by focused tests.
+- Remaining Redis 7.2 sorted-set command gaps from Finding 4: `BZMPOP`, `BZPOPMAX`, and `BZPOPMIN`.
+
+Verification:
+
+- `ZGroup.parseSlots()` now handles `zmpop` key positions using Redis' `numkeys` form.
+- `ZGroup.handle()` dispatches `zmpop` to the new implementation.
+- The non-cross-worker path pops from the first non-empty zset in request key order, supports `MIN`/`MAX`, defaults `COUNT` to 1, rejects non-positive counts, returns nil when all keys are absent or empty, and deletes the key when the last member is popped via `saveRedisZSet()`.
+- Redis spot checks against local `redis-server` confirmed the reviewed edge semantics for missing direction, `numkeys <= 0`, `COUNT 0`, wrong-type ordering, and first-non-empty key behavior.
+- Focused test command re-run after `:cleanTest`: `./gradlew :test --tests "io.velo.command.ZGroupTest.test zmpop"` passed.
+- JaCoCo check: `python3 scripts/jacoco_cover.py io.velo.command.ZGroup 2238 2392 --src` reported `Lines: 103 | Covered: 93 | Partial: 4 | Not-covered: 6`.
+
+Strengths:
+
+- The command implements the core Redis `ZMPOP` contract: first non-empty key wins, `COUNT` is capped by zset cardinality, and `MIN`/`MAX` pop from the expected end of the score-ordered set.
+- The single-worker tests cover most parser errors and the main mutation behavior.
+- The follow-up commits correctly identify that `ZMPOP` needs an async path when keys can be owned by other slot workers.
+
+Concerns:
+
+- **Medium: cross-slot path performs a second synchronous read after async slot reads.** The async branch first fetches each key's `CompressedValue` on the owning slot worker (`oneSlot.asyncCall(() -> new IndexAndCv(..., getCv(...)))`), but then discards the fetched value for the selected key and calls `getRedisZSet(slotWithKeyHash)` again inside the `Promises.all(...).whenComplete(...)` callback. `getRedisZSet()` calls `getCv()` internally, so the selected key is read twice and the second read is not part of the original per-slot async call. The safer pattern is to decode/use the `CompressedValue` already returned by the owning slot task, or return an `IndexAndRedisZSet` from that task, then perform only the save on the selected slot worker.
+- **Medium: cross-slot tests do not assert the async result contents.** The new tests use `settablePromise.whenResult { result -> ... }.result`; the boolean comparisons inside the callback are not Spock assertions, and `.result` returns the promise result object rather than the callback's boolean. A wrong non-null async result can still satisfy the outer then-expression. These cases should use `def result = (reply as AsyncReply).settablePromise.getResult()` or `toCompletableFuture().get(...)`, then assert `result` directly.
+- Coverage still misses several ZMPOP branches: the exact missing-direction format branch, non-cross empty-zset continuation, cross-slot async exception path, and cross-slot empty-zset continuation. The missing exception branch is acceptable, but the empty-zset continuations are ordinary behavior and should be covered.
+
+Verdict:
+
+- The single-worker `ZMPOP` implementation is accepted.
+- The cross-slot implementation should be tightened before marking the `ZMPOP` portion fully closed: avoid the second synchronous read and make the cross-slot tests assert actual promise results.
+
+---
+
+## Review Feedback - AI Agent 2
+
+Reviewed commit: `628cfac8c097ea8f2c5f4dda4c0b2d861b78028b` (`fix: address review feedback - eliminate double-read in cross-slot ZMPOP and use proper assertions`)
+
+Addressed status:
+
+- The weak cross-slot async assertions are fixed.
+- The unsafe off-slot second read in the cross-slot completion callback is fixed.
+- The double-read concern is reduced but not fully eliminated.
+
+Verification:
+
+- Cross-slot tests now fetch `AsyncReply.settablePromise.getResult()` and assert the result directly.
+- Cross-slot empty-zset continuation coverage was added and now exercises the `item.rz().isEmpty()` branch.
+- The cross-slot path now returns `IndexAndRz` from the owning slot worker task and no longer calls `getRedisZSet()` from the `Promises.all(...).whenComplete(...)` callback.
+- Focused test command re-run after `:cleanTest`: `./gradlew :test --tests "io.velo.command.ZGroupTest.test zmpop"` passed.
+- JaCoCo check: `python3 scripts/jacoco_cover.py io.velo.command.ZGroup 2238 2396 --src` reported `Lines: 104 | Covered: 96 | Partial: 3 | Not-covered: 5`.
+
+Strengths:
+
+- The test assertions now fail correctly if the async result is wrong.
+- The cross-slot mutation decision now uses data returned by per-slot tasks instead of re-reading from the completion callback.
+- Coverage improved for the cross-slot empty-zset branch.
+
+Concerns:
+
+- **Low/Medium: zset keys are still read twice inside each cross-slot task.** The new task calls `getCv(slotWithKeyHash)` to check type, then calls `getRedisZSet(slotWithKeyHash)`, and `getRedisZSet()` internally reads the key again through `get(...)`/`getCv(...)`. This removes the off-slot second read, which was the main safety issue, but it does not fully eliminate double-read behavior. A cleaner fix would decode the `RedisZSet` directly from the already fetched `CompressedValue`, or add a helper that builds `RedisZSet` from an existing `CompressedValue` without another storage lookup.
+- The exact missing-direction format branch and the cross-slot async exception branch remain uncovered. The exception branch is not a practical blocker; the missing-direction parser branch is ordinary error handling and can be covered cheaply.
+
+Verdict:
+
+- The assertion concern is resolved.
+- The cross-slot safety concern is resolved enough for correctness because the remaining second read happens inside the owning slot task.
+- Keep a follow-up open for the residual double-read inefficiency if the project wants the commit's "eliminate double-read" claim to be strictly true.
+
+---
+
+## Review Feedback - AI Agent 2
+
+Reviewed commit: `e85adfec0d3907882e936ff9cf3e5a5a143e2b7a` (`fix: eliminate double-read in cross-slot ZMPOP task and cover remaining branches`)
+
+Addressed status:
+
+- The residual cross-slot double-read concern is resolved.
+- The ordinary uncovered parser and empty-zset continuation branches are addressed.
+
+Verification:
+
+- The cross-slot task now decodes `RedisZSet` from the already fetched `CompressedValue` via `getValueBytesByCv(cv, slotWithKeyHash)` and `RedisZSet.decode(...)`, instead of calling `getRedisZSet()` after the type check.
+- The focused test now covers `numkeys` claiming more keys than provided.
+- The focused test now covers same-slot empty-zset continuation before selecting the next non-empty key.
+- Focused test command re-run after `:cleanTest`: `./gradlew :test --tests "io.velo.command.ZGroupTest.test zmpop"` passed.
+- JaCoCo check: `python3 scripts/jacoco_cover.py io.velo.command.ZGroup 2238 2396 --src` reported `Lines: 105 | Covered: 98 | Partial: 3 | Not-covered: 4`.
+
+Review notes:
+
+- The remaining missed lines are defensive branches: `encodedBytes == null` after a present zset `CompressedValue`, and the async exception callback path. These are not blockers for accepting the addressed commit.
+- The `ZMPOP` implementation concerns raised in the prior reviews are now resolved.
+
+Verdict:
+
+- The `ZMPOP` portion of Finding 4 can be treated as fixed.
+- Finding 4 should remain open only for the remaining unimplemented blocking pop commands: `BZMPOP`, `BZPOPMAX`, and `BZPOPMIN`.
+
+---
+
+## Implementation Note - Blocking Sorted-Set Pops
+
+Implemented decision: `BZMPOP`, `BZPOPMAX`, and `BZPOPMIN` are intentionally not supported because blocking sorted-set pop semantics require additional blocking-command infrastructure.
+
+Behavior:
+
+- `BZMPOP` returns `ErrorReply.NOT_SUPPORT`.
+- `BZPOPMAX` returns `ErrorReply.NOT_SUPPORT`.
+- `BZPOPMIN` returns `ErrorReply.NOT_SUPPORT`.
+
+Verification:
+
+- Added focused tests for all three commands.
+- Added parse-slot coverage for valid and malformed `BZMPOP`, plus `BZPOPMAX` and `BZPOPMIN`.
+- TDD red check: `./gradlew :test --tests "io.velo.command.ZGroupTest.test blocking sorted set pops not supported"` failed before production changes because the commands fell through instead of returning `NOT_SUPPORT`.
+- Green check: `./gradlew :test --tests "io.velo.command.ZGroupTest.test parse slot" --tests "io.velo.command.ZGroupTest.test blocking sorted set pops not supported" --tests "io.velo.command.ZGroupTest.test zmpop"` passed.
+- JaCoCo checks confirmed the changed parse and dispatch lines were executed:
+  - `python3 scripts/jacoco_cover.py io.velo.command.ZGroup 168 184 --src`
+  - `python3 scripts/jacoco_cover.py io.velo.command.ZGroup 394 400 --src`
+
+Status:
+
+- Finding 4 is now closed for Redis 7.2 sorted-set command discovery: `ZSCAN` and `ZMPOP` are implemented; `BZMPOP`, `BZPOPMAX`, and `BZPOPMIN` now return an explicit unsupported-command error instead of silently falling through to nil.
