@@ -2285,37 +2285,109 @@ public class ZGroup extends BaseCommand {
             }
         }
 
-        for (int i = 0; i < numKeys; i++) {
-            var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
-            var cv = getCv(slotWithKeyHash);
-            if (cv == null) {
-                continue;
-            }
-            if (!cv.isZSet()) {
-                return ErrorReply.WRONG_TYPE;
-            }
-            var rz = getRedisZSet(slotWithKeyHash);
-            if (rz == null || rz.isEmpty()) {
-                continue;
+        if (!isCrossRequestWorker) {
+            for (int i = 0; i < numKeys; i++) {
+                var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+                var cv = getCv(slotWithKeyHash);
+                if (cv == null) {
+                    continue;
+                }
+                if (!cv.isZSet()) {
+                    return ErrorReply.WRONG_TYPE;
+                }
+                var rz = getRedisZSet(slotWithKeyHash);
+                if (rz == null || rz.isEmpty()) {
+                    continue;
+                }
+
+                var keyBytes = data[2 + i];
+
+                int min = Math.min(count, rz.size());
+                var valueReplies = new Reply[min * 2];
+                for (int j = 0; j < min; j++) {
+                    var sv = isMin ? rz.pollFirst() : rz.pollLast();
+                    valueReplies[j * 2] = new BulkReply(sv.member());
+                    valueReplies[j * 2 + 1] = new BulkReply(sv.score());
+                }
+
+                saveRedisZSet(rz, slotWithKeyHash);
+
+                var keyReply = new BulkReply(keyBytes);
+                var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
+                return new MultiBulkReply(arr);
             }
 
-            var keyBytes = data[2 + i];
-
-            int min = Math.min(count, rz.size());
-            var valueReplies = new Reply[min * 2];
-            for (int j = 0; j < min; j++) {
-                var sv = isMin ? rz.pollFirst() : rz.pollLast();
-                valueReplies[j * 2] = new BulkReply(sv.member());
-                valueReplies[j * 2 + 1] = new BulkReply(sv.score());
-            }
-
-            saveRedisZSet(rz, slotWithKeyHash);
-
-            var keyReply = new BulkReply(keyBytes);
-            var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
-            return new MultiBulkReply(arr);
+            return NilReply.INSTANCE;
         }
 
-        return NilReply.INSTANCE;
+        // cross-slot path
+        record IndexAndCv(int index, CompressedValue cv) {}
+        ArrayList<Promise<IndexAndCv>> cvPromises = new ArrayList<>(numKeys);
+        for (int i = 0; i < numKeys; i++) {
+            var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+            var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
+            int finalI = i;
+            var p = oneSlot.asyncCall(() -> new IndexAndCv(finalI, getCv(slotWithKeyHash)));
+            cvPromises.add(p);
+        }
+
+        boolean finalIsMin = isMin;
+        int finalCount = count;
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        Promises.all(cvPromises).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error("zmpop error={}", e.getMessage());
+                finalPromise.setException(e);
+                return;
+            }
+
+            var cvResults = new CompressedValue[numKeys];
+            for (var p : cvPromises) {
+                var result = p.getResult();
+                cvResults[result.index()] = result.cv();
+            }
+
+            int firstNonEmptyIndex = -1;
+            for (int i = 0; i < numKeys; i++) {
+                var cv = cvResults[i];
+                if (cv == null) {
+                    continue;
+                }
+                if (!cv.isZSet()) {
+                    finalPromise.set(ErrorReply.WRONG_TYPE);
+                    return;
+                }
+                var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+                var rz = getRedisZSet(slotWithKeyHash);
+                if (rz == null || rz.isEmpty()) {
+                    continue;
+                }
+
+                firstNonEmptyIndex = i;
+
+                int min = Math.min(finalCount, rz.size());
+                var valueReplies = new Reply[min * 2];
+                for (int j = 0; j < min; j++) {
+                    var sv = finalIsMin ? rz.pollFirst() : rz.pollLast();
+                    valueReplies[j * 2] = new BulkReply(sv.member());
+                    valueReplies[j * 2 + 1] = new BulkReply(sv.score());
+                }
+
+                var keyBytes = data[2 + i];
+                var keyReply = new BulkReply(keyBytes);
+                var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
+
+                saveRedisZSet(rz, slotWithKeyHash);
+                finalPromise.set(new MultiBulkReply(arr));
+                return;
+            }
+
+            finalPromise.set(NilReply.INSTANCE);
+        });
+
+        return asyncReply;
     }
 }
