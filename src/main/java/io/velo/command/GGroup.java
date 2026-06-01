@@ -630,7 +630,9 @@ public class GGroup extends BaseCommand {
                 try {
                     fromLon = Double.parseDouble(new String(dd[i + 1]));
                     fromLat = Double.parseDouble(new String(dd[i + 2]));
-                    if (fromLon > RedisGeo.GEO_LONG_MAX || fromLon < RedisGeo.GEO_LONG_MIN ||
+                    if (Double.isNaN(fromLon) || Double.isInfinite(fromLon) ||
+                        Double.isNaN(fromLat) || Double.isInfinite(fromLat) ||
+                        fromLon > RedisGeo.GEO_LONG_MAX || fromLon < RedisGeo.GEO_LONG_MIN ||
                         fromLat > RedisGeo.GEO_LAT_MAX || fromLat < RedisGeo.GEO_LAT_MIN) {
                         return ErrorReply.NOT_FLOAT;
                     }

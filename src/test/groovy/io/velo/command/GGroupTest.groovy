@@ -765,6 +765,18 @@ class GGroupTest extends Specification {
         reply == ErrorReply.NOT_FLOAT
 
         when:
+        // Bug 5: FROMLONLAT NaN longitude should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat NaN 37 byradius 100 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // Bug 5: FROMLONLAT NaN latitude should be rejected
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 NaN byradius 100 km')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
         // Bug 5: BYRADIUS zero should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 0 km')
         then:
