@@ -722,9 +722,6 @@ class WalTest extends Specification {
 
     def 'test reset write position'() {
         given:
-        Debug.instance.bulkLoad = true
-
-        and:
         def file = new File(Consts.slotDir, 'test-raf.wal')
         def fileShortValue = new File(Consts.slotDir, 'test-raf-short-value.wal')
         if (file.exists()) {
@@ -771,7 +768,6 @@ class WalTest extends Specification {
         rafShortValue.close()
         file.delete()
         fileShortValue.delete()
-        Debug.instance.bulkLoad = false
     }
 
     def 'test delete expired big string files'() {

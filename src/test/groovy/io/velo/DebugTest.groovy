@@ -11,6 +11,5 @@ class DebugTest extends Specification {
         !d.logCmd
         !d.logTrainDict
         !d.logRestore
-        !d.bulkLoad
     }
 }
