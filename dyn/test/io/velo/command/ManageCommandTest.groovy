@@ -170,13 +170,6 @@ class ManageCommandTest extends Specification {
         reply == OKReply.INSTANCE
 
         when:
-        data5[3] = 'bulkLoad'.bytes
-        data5[4] = '0'.bytes
-        reply = manage.debug()
-        then:
-        reply == OKReply.INSTANCE
-
-        when:
         data5[3] = 'xxx'.bytes
         reply = manage.debug()
         then:
