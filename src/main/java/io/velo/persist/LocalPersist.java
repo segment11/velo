@@ -479,6 +479,20 @@ public class LocalPersist implements NeedCleanUp {
         }
     }
 
+    @TestOnly
+    public void resetForTest() {
+        oneSlots = new OneSlot[0];
+        multiShard = null;
+        persistDir = null;
+        persistConfig = null;
+        indexHandlerPool = null;
+    }
+
+    @TestOnly
+    public void clearOneSlotsForTest() {
+        this.oneSlots = new OneSlot[0];
+    }
+
     /**
      * Asynchronously cleans up all slot-owned persistence resources by submitting
      * cleanup work to each slot's owning eventloop thread. This avoids rewriting

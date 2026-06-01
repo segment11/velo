@@ -7,14 +7,10 @@ import io.velo.acl.AclUsers
 import io.velo.acl.RCmd
 import io.velo.acl.U
 import io.velo.decode.Request
-import io.velo.persist.Consts
-import io.velo.persist.KeyBucket
-import io.velo.persist.LocalPersist
-import io.velo.persist.LocalPersistTest
+import io.velo.persist.*
 import io.velo.repl.LeaderSelector
 import io.velo.repl.ReplRequest
 import io.velo.repl.ReplType
-import io.velo.repl.cluster.MultiShard
 import io.velo.repl.cluster.MultiSlotRange
 import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
@@ -1109,6 +1105,9 @@ class MultiWorkerServerTest extends Specification {
         p != null
 
         when:
+        // Set oneSlots to empty to avoid timeout in cleanUpAsync()
+        // because LocalPersist.instance has internal eventloops that aren't the test's eventloop0/eventloop1
+        LocalPersist.instance.clearOneSlotsForTest()
         m.onStop()
         then:
         m.requestHandlerArray[0].isStopped
@@ -2017,7 +2016,8 @@ class MultiWorkerServerTest extends Specification {
             if (channel != null) {
                 channel.close()
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
         tempDir.deleteDir()
     }
 
@@ -2057,7 +2057,8 @@ class MultiWorkerServerTest extends Specification {
             if (channel != null) {
                 channel.close()
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
         tempDir.deleteDir()
     }
 }
