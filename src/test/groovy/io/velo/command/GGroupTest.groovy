@@ -551,7 +551,7 @@ class GGroupTest extends Specification {
 
         when:
         // only return member
-        reply = gGroup.execute('geosearch xxx frommember mmm bybox 100 100 asc count 1')
+        reply = gGroup.execute('geosearch xxx frommember mmm bybox 100 100 m asc count 1')
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
@@ -612,6 +612,11 @@ class GGroupTest extends Specification {
 
         when:
         reply = gGroup.execute('geosearch xxx byradius a')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = gGroup.execute('geosearch xxx byradius a km')
         then:
         reply == ErrorReply.NOT_FLOAT
 
@@ -696,6 +701,30 @@ class GGroupTest extends Specification {
         when:
         // Bug 1: WITHCOORD should be rejected in store mode
         reply = gGroup.execute('geosearchstore zzz xxx fromlonlat 15 37 bybox 400 400 km WITHCOORD')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 2: BYRADIUS without unit should be syntax error
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 100')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 2: BYBOX without unit should be syntax error
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 10 10')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 2: BYRADIUS with unknown unit should be syntax error
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 100 xyz')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // Bug 2: BYBOX with unknown unit should be syntax error
+        reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 10 10 xyz')
         then:
         reply == ErrorReply.SYNTAX
 

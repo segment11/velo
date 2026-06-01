@@ -636,7 +636,7 @@ public class GGroup extends BaseCommand {
                 i++;
                 hasCenterSource = true;
             } else if ("byradius".equalsIgnoreCase(arg)) {
-                if (i + 1 >= dd.length) {
+                if (i + 2 >= dd.length) {
                     return ErrorReply.SYNTAX;
                 }
                 if (hasByRadius || hasByBox) {
@@ -649,18 +649,19 @@ public class GGroup extends BaseCommand {
                     return ErrorReply.NOT_FLOAT;
                 }
 
-                // maybe has unit
-                if (dd.length > i + 1) {
-                    var unitString = new String(dd[i + 1]);
-                    byRadiusUnit = RedisGeo.Unit.fromString(unitString);
-                    if (byRadiusUnit != RedisGeo.Unit.UNKNOWN) {
-                        byRadius = byRadiusUnit.toMeters(byRadius);
-                        i++;
-                    }
+                if (i + 1 >= dd.length) {
+                    return ErrorReply.SYNTAX;
                 }
+                var unitString = new String(dd[i + 1]);
+                byRadiusUnit = RedisGeo.Unit.fromString(unitString);
+                if (byRadiusUnit == RedisGeo.Unit.UNKNOWN) {
+                    return ErrorReply.SYNTAX;
+                }
+                byRadius = byRadiusUnit.toMeters(byRadius);
+                i++;
                 hasByRadius = true;
             } else if ("bybox".equalsIgnoreCase(arg)) {
-                if (i + 2 >= dd.length) {
+                if (i + 3 >= dd.length) {
                     return ErrorReply.SYNTAX;
                 }
                 if (hasByRadius || hasByBox) {
@@ -674,16 +675,17 @@ public class GGroup extends BaseCommand {
                     return ErrorReply.NOT_FLOAT;
                 }
 
-                // maybe has unit
-                if (dd.length > i + 1) {
-                    var unitString = new String(dd[i + 1]);
-                    byBoxUnit = RedisGeo.Unit.fromString(unitString);
-                    if (byBoxUnit != RedisGeo.Unit.UNKNOWN) {
-                        byBoxWidth = byBoxUnit.toMeters(byBoxWidth);
-                        byBoxHeight = byBoxUnit.toMeters(byBoxHeight);
-                        i++;
-                    }
+                if (i + 1 >= dd.length) {
+                    return ErrorReply.SYNTAX;
                 }
+                var unitString = new String(dd[i + 1]);
+                byBoxUnit = RedisGeo.Unit.fromString(unitString);
+                if (byBoxUnit == RedisGeo.Unit.UNKNOWN) {
+                    return ErrorReply.SYNTAX;
+                }
+                byBoxWidth = byBoxUnit.toMeters(byBoxWidth);
+                byBoxHeight = byBoxUnit.toMeters(byBoxHeight);
+                i++;
                 hasByBox = true;
             } else {
                 return ErrorReply.SYNTAX;
