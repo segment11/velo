@@ -5,6 +5,7 @@ import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.*;
+import io.velo.persist.KeyLoader;
 import io.velo.reply.*;
 import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.TestOnly;
@@ -50,7 +51,7 @@ public class ZGroup extends BaseCommand {
                 || "zrank".equals(cmd)
                 || "zrem".equals(cmd) || "zremrangebylex".equals(cmd) || "zremrangebyrank".equals(cmd) || "zremrangebyscore".equals(cmd)
                 || "zrevrange".equals(cmd) || "zrevrangebylex".equals(cmd) || "zrevrangebyscore".equals(cmd) || "zrevrank".equals(cmd)
-                || "zscore".equals(cmd)) {
+                || "zscore".equals(cmd) || "zscan".equals(cmd)) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
@@ -345,6 +346,10 @@ public class ZGroup extends BaseCommand {
 
         if ("zscore".equals(cmd)) {
             return zscore();
+        }
+
+        if ("zscan".equals(cmd)) {
+            return zscan();
         }
 
         if ("zunion".equals(cmd)) {
@@ -2113,5 +2118,97 @@ public class ZGroup extends BaseCommand {
         });
 
         return isExistArray[0] ? new BulkReply(scoreArray[0]) : NilReply.INSTANCE;
+    }
+
+    private Reply zscan() {
+        if (data.length < 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        var cursorBytes = data[2];
+        long cursorLong;
+        try {
+            cursorLong = Long.parseLong(new String(cursorBytes));
+        } catch (NumberFormatException e) {
+            return ErrorReply.NOT_INTEGER;
+        }
+
+        String matchPattern = null;
+        int count = 10;
+        if (data.length > 3) {
+            for (int i = 3; i < data.length; i++) {
+                var tmp = new String(data[i]).toLowerCase();
+                if ("match".equals(tmp)) {
+                    if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    matchPattern = new String(data[i + 1]);
+                    i++;
+                } else if ("count".equals(tmp)) {
+                    if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    try {
+                        count = Integer.parseInt(new String(data[i + 1]));
+                    } catch (NumberFormatException e) {
+                        return ErrorReply.NOT_INTEGER;
+                    }
+                    if (count <= 0) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    i++;
+                } else {
+                    return ErrorReply.SYNTAX;
+                }
+            }
+        }
+
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var rz = getRedisZSet(slotWithKeyHash);
+        if (rz == null || rz.size() == 0) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
+        var set = rz.getSet();
+        long skipCount = cursorLong;
+
+        ArrayList<RedisZSet.ScoreValue> matched = new ArrayList<>();
+        int loopCount = 0;
+        for (var sv : set) {
+            loopCount++;
+            if (!KeyLoader.isKeyMatch(sv.member(), matchPattern)) {
+                continue;
+            }
+
+            if (skipCount > 0) {
+                skipCount--;
+                continue;
+            }
+
+            matched.add(sv);
+            if (matched.size() >= count) {
+                break;
+            }
+        }
+
+        if (matched.isEmpty()) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
+        var replies = new Reply[matched.size() * 2];
+        for (int i = 0; i < matched.size(); i++) {
+            var sv = matched.get(i);
+            replies[i * 2] = new BulkReply(sv.member());
+            replies[i * 2 + 1] = new BulkReply(sv.score());
+        }
+
+        var isEnd = loopCount == set.size();
+        var nextCursor = String.valueOf(isEnd ? 0L : cursorLong + matched.size());
+        return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor), new MultiBulkReply(replies)});
     }
 }
