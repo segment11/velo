@@ -44,10 +44,15 @@ class MultiShardTest extends Specification {
         when:
         multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7380)])
         multiShard.saveMeta()
+        def epochBefore = multiShard.getClusterMyEpoch()
         multiShard.updateClusterVersion(0)
+        def epochAfter1 = multiShard.getClusterMyEpoch()
         multiShard.updateClusterVersion(1)
+        def epochAfter2 = multiShard.getClusterMyEpoch()
         then:
         multiShard.clusterCurrentEpoch == 1
+        epochAfter1 - epochBefore == 1
+        epochAfter2 - epochAfter1 == 1
 
         when:
         multiShard.shards[0].nodes[0].mySelf = false

@@ -136,7 +136,6 @@ vars currentEpoch 0 lastVoteEpoch 0
             clusterCurrentEpoch = clusterVersion;
         }
 
-        clusterMyEpoch++;
         saveMeta();
     }
 
