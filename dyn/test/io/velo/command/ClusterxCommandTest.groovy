@@ -534,7 +534,8 @@ slots
         ConfForGlobal.clusterEnabled = true
         def reply = clusterx.execute('cluster meet 127.0.0.1 6379')
         then:
-        reply == ClusterxCommand.OK
+        reply instanceof ErrorReply
+        ((ErrorReply) reply).message.contains('not implemented')
 
         when:
         reply = clusterx.execute('cluster meet 127.0.0.1 -1')

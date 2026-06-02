@@ -646,7 +646,9 @@ migrating_state:ok
             return ErrorReply.INVALID_INTEGER
         }
 
-        OK
+        // MEET is not yet implemented; Velo uses a central controller for cluster topology,
+        // so users should configure nodes via setnodes instead of gossip meet.
+        new ErrorReply('CLUSTER MEET is not implemented, use clusterx setnodes instead')
     }
 
     @VisibleForTesting
