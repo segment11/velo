@@ -793,7 +793,13 @@ migrating_state:ok
             // remove from old shard
             mySelfShard.nodes.remove(mySelfNode)
 
-            mySelfNode.slaveIndex = toShard.nodes.size() - 1
+            // assign smallest unused non-negative slave index in destination shard
+            def usedIndexes = toShard.nodes.findAll { !it.isMaster() }.collect { it.slaveIndex } as Set
+            int nextSlaveIndex = 0
+            while (usedIndexes.contains(nextSlaveIndex)) {
+                nextSlaveIndex++
+            }
+            mySelfNode.slaveIndex = nextSlaveIndex
             toShard.nodes << mySelfNode
         }
 

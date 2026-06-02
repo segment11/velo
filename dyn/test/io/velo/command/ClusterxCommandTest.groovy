@@ -873,6 +873,18 @@ slots
         !(errReply as ErrorReply).message.contains('reset as master')
 
         when:
+        // replicate to shard1 where existing slave has slaveIndex=5 (gap)
+        // new slave must get smallest unused non-negative slaveIndex (0), not size-1 (1)
+        shard1.nodes[1].slaveIndex = 5
+        data3[2] = 'new_node_id3'.bytes
+        leaderSelector.masterAddressLocalMocked = 'localhost:7379'
+        reply = clusterx.replicate()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        shard1.nodes.last().slaveIndex == 0
+
+        when:
         clusterx.data = data4
         reply = clusterx.replicate()
         then:
