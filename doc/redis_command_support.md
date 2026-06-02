@@ -39,7 +39,7 @@
 - [√] CLUSTER INFO
 - [√] CLUSTER KEYSLOT
 - [x] CLUSTER LINKS
-- [x] CLUSTER MEET
+- [x] CLUSTER MEET (use `clusterx setnodes` instead; Velo uses a central controller for topology)
 - [√] CLUSTER MYID
 - [√] CLUSTER MYSHARDID
 - [√] CLUSTER NODES
