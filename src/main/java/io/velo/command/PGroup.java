@@ -84,7 +84,7 @@ public class PGroup extends BaseCommand {
         }
 
         if ("pfmerge".equals(cmd)) {
-            if (data.length < 3) {
+            if (data.length < 2) {
                 return slotWithKeyHashList;
             }
             addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin1);
@@ -368,14 +368,17 @@ public class PGroup extends BaseCommand {
     }
 
     private Reply pfmerge() {
-        if (data.length < 3) {
+        if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
 
         var dstS = slotWithKeyHashListParsed.getFirst();
 
         if (!isCrossRequestWorker) {
-            var dstHll = emptyHll();
+            var dstHll = getHll(dstS);
+            if (dstHll == null) {
+                dstHll = emptyHll();
+            }
             for (var i = 2; i < data.length; i++) {
                 var srcS = slotWithKeyHashListParsed.get(i - 1);
                 mergeHllInto(dstHll, getHll(srcS));
@@ -423,7 +426,10 @@ public class PGroup extends BaseCommand {
                 return;
             }
 
-            var dstHll = emptyHll();
+            var dstHll = getHll(dstS);
+            if (dstHll == null) {
+                dstHll = emptyHll();
+            }
             for (var p : promises) {
                 var hllList = p.getResult();
                 for (var hll : hllList) {
