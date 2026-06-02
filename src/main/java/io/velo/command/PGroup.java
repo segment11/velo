@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 public class PGroup extends BaseCommand {
     private static HyperLogLog emptyHll() {
         return HyperLogLog.builder()
-                .setEncoding(HyperLogLog.EncodingType.DENSE)
+                .setEncoding(HyperLogLog.EncodingType.SPARSE)
                 .build();
     }
 
@@ -68,7 +68,7 @@ public class PGroup extends BaseCommand {
         }
 
         if ("pfadd".equals(cmd)) {
-            if (data.length < 3) {
+            if (data.length < 2) {
                 return slotWithKeyHashList;
             }
             slotWithKeyHashList.add(slot(data[1], slotNumber));
@@ -84,7 +84,7 @@ public class PGroup extends BaseCommand {
         }
 
         if ("pfmerge".equals(cmd)) {
-            if (data.length < 3) {
+            if (data.length < 2) {
                 return slotWithKeyHashList;
             }
             addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin1);
@@ -262,7 +262,7 @@ public class PGroup extends BaseCommand {
     }
 
     private Reply pfadd() {
-        if (data.length < 3) {
+        if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
 
@@ -270,6 +270,15 @@ public class PGroup extends BaseCommand {
 
         var hll = getHll(slotWithKeyHash);
         if (hll == null) {
+            if (data.length == 2) {
+                hll = emptyHll();
+                try {
+                    saveHll(slotWithKeyHash, hll, CompressedValue.NO_EXPIRE);
+                } catch (IOException e) {
+                    return new ErrorReply(e.getMessage());
+                }
+                return IntegerReply.REPLY_1;
+            }
             hll = emptyHll();
         }
 
@@ -359,14 +368,17 @@ public class PGroup extends BaseCommand {
     }
 
     private Reply pfmerge() {
-        if (data.length < 3) {
+        if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
 
         var dstS = slotWithKeyHashListParsed.getFirst();
 
         if (!isCrossRequestWorker) {
-            var dstHll = emptyHll();
+            var dstHll = getHll(dstS);
+            if (dstHll == null) {
+                dstHll = emptyHll();
+            }
             for (var i = 2; i < data.length; i++) {
                 var srcS = slotWithKeyHashListParsed.get(i - 1);
                 mergeHllInto(dstHll, getHll(srcS));
@@ -414,7 +426,10 @@ public class PGroup extends BaseCommand {
                 return;
             }
 
-            var dstHll = emptyHll();
+            var dstHll = getHll(dstS);
+            if (dstHll == null) {
+                dstHll = emptyHll();
+            }
             for (var p : promises) {
                 var hllList = p.getResult();
                 for (var hll : hllList) {

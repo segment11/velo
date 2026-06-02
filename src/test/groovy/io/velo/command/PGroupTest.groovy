@@ -43,9 +43,9 @@ class PGroupTest extends Specification {
         _PGroup.parseSlots('pexpire', data4, slotNumber).size() == 1
         _PGroup.parseSlots('pexpireat', data4, slotNumber).size() == 1
         _PGroup.parseSlots('pexpiretime', data2, slotNumber).size() == 1
-        _PGroup.parseSlots('pfadd', data2, slotNumber).size() == 0
+        _PGroup.parseSlots('pfadd', data2, slotNumber).size() == 1
         _PGroup.parseSlots('pfcount', data2, slotNumber).size() == 1
-        _PGroup.parseSlots('pfmerge', data2, slotNumber).size() == 0
+        _PGroup.parseSlots('pfmerge', data2, slotNumber).size() == 1
         _PGroup.parseSlots('pttl', data2, slotNumber).size() == 1
         _PGroup.parseSlots('persist', data2, slotNumber).size() == 1
         _PGroup.parseSlots('psetex', data4, slotNumber).size() == 1
@@ -253,6 +253,34 @@ class PGroupTest extends Specification {
         exception
         errorMessage == ErrorReply.WRONG_TYPE.message
 
+        when: 'PFADD key-only on missing key creates HLL and returns 1'
+        inMemoryGetSet.remove(slot, 'hll_empty')
+        def keyOnlyReply = pGroup.execute('pfadd hll_empty')
+        then:
+        keyOnlyReply == IntegerReply.REPLY_1
+
+        when: 'PFADD key-only on existing HLL returns 0'
+        keyOnlyReply = pGroup.execute('pfadd hll_empty')
+        then:
+        keyOnlyReply == IntegerReply.REPLY_0
+
+        when: 'PFADD key-only on wrong type key throws WRONGTYPE'
+        inMemoryGetSet.remove(slot, 'hll_wrong')
+        def cvWrong = Mock.prepareCompressedValueList(1)[0]
+        cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        inMemoryGetSet.put(slot, 'hll_wrong', 0, cvWrong)
+        boolean keyOnlyException = false
+        String keyOnlyError = null
+        try {
+            pGroup.execute('pfadd hll_wrong')
+        } catch (RuntimeException e) {
+            keyOnlyError = e.message
+            keyOnlyException = true
+        }
+        then:
+        keyOnlyException
+        keyOnlyError == ErrorReply.WRONG_TYPE.message
+
         when:
         inMemoryGetSet.remove(slot, 'ttl_hll')
         def ttlReply = pGroup.execute('pfadd ttl_hll first')
@@ -355,6 +383,46 @@ class PGroupTest extends Specification {
 
         cleanup:
         eventloop.breakEventloop()
+    }
+
+    def 'test pfmerge destkey-only'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def pGroup = new PGroup('pfmerge', null, null)
+        pGroup.byPassGetSet = inMemoryGetSet
+        pGroup.from(BaseCommand.mockAGroup())
+
+        when: 'PFMERGE destkey-only on missing key creates empty HLL and returns OK'
+        inMemoryGetSet.remove(slot, 'dst_empty')
+        def reply = pGroup.execute('pfmerge dst_empty')
+        then:
+        reply == OKReply.INSTANCE
+
+        when: 'PFMERGE destkey-only on existing HLL preserves it and returns OK'
+        pGroup.execute('pfadd existing_hll abc')
+        reply = pGroup.execute('pfmerge existing_hll')
+        then:
+        reply == OKReply.INSTANCE
+        def countReply = pGroup.execute('pfcount existing_hll')
+        (countReply as IntegerReply).integer == 1
+
+        when: 'PFMERGE destkey-only on wrong type key throws WRONGTYPE'
+        inMemoryGetSet.remove(slot, 'dst_wrong')
+        def cvWrong = Mock.prepareCompressedValueList(1)[0]
+        cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        inMemoryGetSet.put(slot, 'dst_wrong', 0, cvWrong)
+        boolean exception = false
+        String errorMessage = null
+        try {
+            pGroup.execute('pfmerge dst_wrong')
+        } catch (RuntimeException e) {
+            errorMessage = e.message
+            exception = true
+        }
+        then:
+        exception
+        errorMessage == ErrorReply.WRONG_TYPE.message
     }
 
     def 'test publish'() {
