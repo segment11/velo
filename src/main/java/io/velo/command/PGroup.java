@@ -238,13 +238,7 @@ public class PGroup extends BaseCommand {
         }
 
         var beginT = System.nanoTime();
-        byte[] decompressed;
-        try {
-            decompressed = cv.decompress(Dict.SELF_ZSTD_DICT);
-        } catch (Exception e) {
-            log.warn("Failed to decompress HLL for key {}, treating as missing", s.rawKey(), e);
-            return null;
-        }
+        var decompressed = cv.decompress(Dict.SELF_ZSTD_DICT);
         var costT = System.nanoTime() - beginT;
 
         // stats
@@ -255,8 +249,7 @@ public class PGroup extends BaseCommand {
         try {
             return HyperLogLogUtils.deserializeHLL(is);
         } catch (IOException e) {
-            log.warn("Failed to deserialize HLL for key {}, treating as missing", s.rawKey(), e);
-            return null;
+            throw new RuntimeException(e);
         }
     }
 
