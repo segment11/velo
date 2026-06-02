@@ -744,6 +744,32 @@ slots
         (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
 
         when:
+        // setnodes error path: my self is slave, reset as slave fails
+        def oldMocked = leaderSelector.masterAddressLocalMocked
+        try {
+            leaderSelector.masterAddressLocalMocked = null
+            data4[2] = 'new_node_id2 localhost 7380 master - 0 10-20 \nnew_node_id localhost 7379 slave new_node_id2\n'.bytes
+            reply = clusterx.setnodes()
+        } finally {
+            leaderSelector.masterAddressLocalMocked = oldMocked
+        }
+        then:
+        reply instanceof AsyncReply
+        def errResult = (reply as AsyncReply).settablePromise.getResult()
+        errResult instanceof ErrorReply
+        (errResult as ErrorReply).message.contains('reset as slave')
+        !(errResult as ErrorReply).message.contains('reset as master')
+
+        when:
+        // clean up: delete from cluster so subsequent failover test sees 'not in cluster'
+        leaderSelector.masterAddressLocalMocked = 'localhost:7379'
+        data4[2] = 'new_node_id2 localhost 7380 master - 0 10-20 \n'.bytes
+        reply = clusterx.setnodes()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+
+        when:
         // failover
         data3[1] = 'failover'.bytes
         data3[2] = 'force'.bytes

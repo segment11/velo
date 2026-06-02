@@ -1021,7 +1021,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             leaderSelector.resetAsSlave(toMasterNode.host, toMasterNode.port, (e) -> {
                 if (e != null) {
                     log.error('Reset as slave failed', e)
-                    finalPromise.set(new ErrorReply('error when reset as master: ' + e.message))
+                    finalPromise.set(new ErrorReply('error when reset as slave: ' + e.message))
                 } else {
                     log.warn('Reset as slave success')
                     finalPromise.set(OK)
