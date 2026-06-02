@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 public class PGroup extends BaseCommand {
     private static HyperLogLog emptyHll() {
         return HyperLogLog.builder()
-                .setEncoding(HyperLogLog.EncodingType.DENSE)
+                .setEncoding(HyperLogLog.EncodingType.SPARSE)
                 .build();
     }
 
@@ -68,7 +68,7 @@ public class PGroup extends BaseCommand {
         }
 
         if ("pfadd".equals(cmd)) {
-            if (data.length < 3) {
+            if (data.length < 2) {
                 return slotWithKeyHashList;
             }
             slotWithKeyHashList.add(slot(data[1], slotNumber));
@@ -238,7 +238,13 @@ public class PGroup extends BaseCommand {
         }
 
         var beginT = System.nanoTime();
-        var decompressed = cv.decompress(Dict.SELF_ZSTD_DICT);
+        byte[] decompressed;
+        try {
+            decompressed = cv.decompress(Dict.SELF_ZSTD_DICT);
+        } catch (Exception e) {
+            log.warn("Failed to decompress HLL for key {}, treating as missing", s.rawKey(), e);
+            return null;
+        }
         var costT = System.nanoTime() - beginT;
 
         // stats
@@ -249,7 +255,8 @@ public class PGroup extends BaseCommand {
         try {
             return HyperLogLogUtils.deserializeHLL(is);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            log.warn("Failed to deserialize HLL for key {}, treating as missing", s.rawKey(), e);
+            return null;
         }
     }
 
@@ -262,7 +269,7 @@ public class PGroup extends BaseCommand {
     }
 
     private Reply pfadd() {
-        if (data.length < 3) {
+        if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
 
@@ -270,6 +277,15 @@ public class PGroup extends BaseCommand {
 
         var hll = getHll(slotWithKeyHash);
         if (hll == null) {
+            if (data.length == 2) {
+                hll = emptyHll();
+                try {
+                    saveHll(slotWithKeyHash, hll, CompressedValue.NO_EXPIRE);
+                } catch (IOException e) {
+                    return new ErrorReply(e.getMessage());
+                }
+                return IntegerReply.REPLY_1;
+            }
             hll = emptyHll();
         }
 
