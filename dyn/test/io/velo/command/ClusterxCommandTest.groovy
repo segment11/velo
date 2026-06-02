@@ -857,6 +857,22 @@ slots
         (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
 
         when:
+        // replicate error path: reset as slave fails
+        def oldMockedR = leaderSelector.masterAddressLocalMocked
+        try {
+            leaderSelector.masterAddressLocalMocked = null
+            reply = clusterx.replicate()
+        } finally {
+            leaderSelector.masterAddressLocalMocked = oldMockedR
+        }
+        then:
+        reply instanceof AsyncReply
+        def errReply = (reply as AsyncReply).settablePromise.getResult()
+        errReply instanceof ErrorReply
+        (errReply as ErrorReply).message.contains('reset as slave')
+        !(errReply as ErrorReply).message.contains('reset as master')
+
+        when:
         clusterx.data = data4
         reply = clusterx.replicate()
         then:
