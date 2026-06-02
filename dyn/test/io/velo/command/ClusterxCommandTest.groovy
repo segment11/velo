@@ -921,6 +921,21 @@ slots
         new String(((BulkReply) (reply as MultiBulkReply).replies[0]).raw).startsWith shard0.nodes[1].nodeId()
 
         when:
+        // two shards with different slot ranges - reply must contain ONLY matched shard's slot range
+        def shard1 = new Shard()
+        shard1.multiSlotRange.addSingle(8192, 16383)
+        shard1.nodes << new Node(nodeIdFix: 'other_master', master: true)
+        shards << shard1
+        reply = clusterx.replicas()
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        def replicaLine = new String(((BulkReply) (reply as MultiBulkReply).replies[0]).raw)
+        replicaLine.contains('0-16383')
+        !replicaLine.contains('8192-16383')
+
+        when:
         data3[2] = 'xxx'.bytes
         reply = clusterx.replicas()
         then:

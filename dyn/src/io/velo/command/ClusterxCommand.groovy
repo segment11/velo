@@ -734,7 +734,7 @@ migrating_state:ok
             return MultiBulkReply.EMPTY
         }
 
-        def allSlotRange = shards.multiSlotRange.list.collect { it.toString() }.join(' ')
+        def allSlotRange = shard.multiSlotRange.list.collect { it.toString() }.join(' ')
 
         def replies = new Reply[replicaNodes.size()]
         for (int i = 0; i < replicaNodes.size(); i++) {
