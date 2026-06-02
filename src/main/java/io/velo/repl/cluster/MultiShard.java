@@ -204,6 +204,7 @@ vars currentEpoch 0 lastVoteEpoch 0
     }
 
     public Integer nextToClientSlot(int toClientSlot) {
+        Integer min = null;
         for (var shard : shards) {
             var list = shard.getMultiSlotRange().getList();
             if (list.isEmpty()) {
@@ -212,9 +213,11 @@ vars currentEpoch 0 lastVoteEpoch 0
 
             var firstSlot = list.getFirst().begin;
             if (firstSlot > toClientSlot) {
-                return firstSlot;
+                if (min == null || firstSlot < min) {
+                    min = firstSlot;
+                }
             }
         }
-        return null;
+        return min;
     }
 }

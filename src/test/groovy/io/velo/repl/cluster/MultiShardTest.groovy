@@ -99,6 +99,20 @@ class MultiShardTest extends Specification {
         multiShard.nextToClientSlot(1024) == 2048
 
         when:
+        // shards inserted in non-slot order: first shard's begin > second shard's begin
+        // nextToClientSlot must return the minimum first-slot > input, not the first match
+        multiShard.shards.clear()
+        multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7390)])
+        multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7391)])
+        multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7392)])
+        multiShard.shards[0].multiSlotRange.addSingle(2048, 3071)
+        multiShard.shards[1].multiSlotRange.addSingle(512, 1023)
+        multiShard.shards[2].multiSlotRange.addSingle(1024, 2047)
+        then:
+        multiShard.firstToClientSlot() == 512
+        multiShard.nextToClientSlot(0) == 512
+
+        when:
         multiShard.reset(false)
         multiShard.reset(true)
         then:
