@@ -232,6 +232,26 @@ class KeyBucketTest extends Specification {
         value.valueBytes() == 'value'.bytes
     }
 
+    def 'reject sentinel key hash values'() {
+        given:
+        def snowFlake = new SnowFlake(1, 1)
+        def keyBucket = new KeyBucket(slot, 0, (byte) 0, (byte) 1, null, snowFlake)
+
+        when:
+        keyBucket.put('zero-hash', 0L, 0L, 1L, 'value'.bytes)
+
+        then:
+        def e0 = thrown(IllegalArgumentException)
+        e0.message.contains('Reserved key hash')
+
+        when:
+        keyBucket.put('pre-key-hash', -1L, 0L, 2L, 'value'.bytes)
+
+        then:
+        def e1 = thrown(IllegalArgumentException)
+        e1.message.contains('Reserved key hash')
+    }
+
     def 'test last update seq'() {
         given:
         def snowFlake = new SnowFlake(1, 1)

@@ -395,6 +395,11 @@ public class KeyBucket {
             throw new IllegalArgumentException("Value bytes too large, value length=" + valueBytes.length);
         }
 
+        // 0 and -1 are reserved in the key-bucket meta hash field for NO_KEY and PRE_KEY markers.
+        if (keyHash == NO_KEY || keyHash == PRE_KEY) {
+            throw new IllegalArgumentException("Reserved key hash for key bucket, key hash=" + keyHash + ", key=" + key);
+        }
+
         var keyBytes = Wal.keyBytes(key);
         int cellCount = KVMeta.calcCellCount((short) keyBytes.length, (byte) valueBytes.length);
         if (cellCount >= INIT_CAPACITY) {
