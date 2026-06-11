@@ -1564,7 +1564,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private long lastPersistTimeMs = 0L;
 
-    @VisibleForTesting
+    @TestOnly
     boolean doPersistForceThrowForTest = false;
 
     public void doPersist(int walGroupIndex, @NotNull String key, @NotNull Wal.PutResult putResult) {
