@@ -1570,6 +1570,65 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test put big string with WAL buffer full and doPersist throw enqueues new uuid for cleanup'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def bucketIndex = 0
+        def key = 'kerry-test-big-string-orphan-on-dopersist-throw'
+
+        and: 'write first big string value so the overwrite snapshot is not null'
+        def cv1 = new CompressedValue()
+        cv1.seq = oneSlot.snowFlake.nextId()
+        cv1.keyHash = 666666666L
+        cv1.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
+        oneSlot.put(key, bucketIndex, cv1)
+        def firstUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+        assert firstUuid != null
+        // drain pending delete so we can count delta for the new uuid
+        oneSlot.delayToDeleteBigStringFileIds.clear()
+
+        and: 'manipulate WAL state so next short-value put triggers buffer-full early return'
+        def wal = oneSlot.getWalByBucketIndex(bucketIndex)
+        wal.writePositionShortValue = Wal.ONE_GROUP_BUFFER_SIZE - 10
+        wal.isOnRewrite = false
+
+        and: 'force doPersist to throw — simulates BucketFullException or other bucket persist failure'
+        oneSlot.doPersistForceThrowForTest = true
+
+        when: 'put a second big string value; needPutV != null path; doPersist throws'
+        def cv2 = new CompressedValue()
+        cv2.seq = oneSlot.snowFlake.nextId()
+        cv2.keyHash = 666666666L
+        cv2.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
+        oneSlot.put(key, bucketIndex, cv2)
+
+        then: 'RuntimeException propagates out of put'
+        def thrown = thrown(RuntimeException)
+        thrown.message.contains('doPersist forced throw for test')
+
+        and: 'the new big-string file uuid is enqueued for deletion (size delta == +1)'
+        oneSlot.delayToDeleteBigStringFileIds.size() == 1
+        def newIdEntry = oneSlot.delayToDeleteBigStringFileIds.peekFirst()
+        newIdEntry.uuid() != firstUuid
+        newIdEntry.bucketIndex() == bucketIndex
+        newIdEntry.keyHash() == 666666666L
+        newIdEntry.key() == key
+
+        and: 'the orphan big-string file is on disk and exists at the expected path'
+        new File(oneSlot.bigStringFiles.bigStringDir, bucketIndex + '/' + newIdEntry.uuid() + '_' + 666666666L).exists()
+
+        and: 'the new uuid was NOT promoted into the WAL bigStringFileUuidByKey (WAL did not accept v)'
+        oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key) == firstUuid
+
+        cleanup:
+        oneSlot.doPersistForceThrowForTest = false
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test get reads TIGHT segment correctly after isSegmentUseCompression flipped to false'() {
         given:
         LocalPersistTest.prepareLocalPersist()

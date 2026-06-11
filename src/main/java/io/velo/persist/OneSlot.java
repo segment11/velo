@@ -1504,7 +1504,16 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 isBinlogAppended = true;
             }
 
-            doPersist(walGroupIndex, key, putResult);
+            try {
+                doPersist(walGroupIndex, key, putResult);
+            } catch (RuntimeException e) {
+                if (xBigStrings != null && putResult.needPutV() != null) {
+                    delayToDeleteBigStringFileIds.add(new BigStringFiles.IdWithKey(
+                            xBigStrings.getUuid(), bucketIndex, cv.getKeyHash(), key));
+                    isBinlogAppended = true;
+                }
+                throw e;
+            }
         }
 
         if (overwrittenBigStringUuid != null) {
@@ -1555,7 +1564,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private long lastPersistTimeMs = 0L;
 
+    @VisibleForTesting
+    boolean doPersistForceThrowForTest = false;
+
     public void doPersist(int walGroupIndex, @NotNull String key, @NotNull Wal.PutResult putResult) {
+        if (doPersistForceThrowForTest) {
+            throw new RuntimeException("doPersist forced throw for test");
+        }
         var targetWal = walArray[walGroupIndex];
         putValueToWal(putResult.isValueShort(), targetWal);
         lastPersistTimeMs = System.currentTimeMillis();
