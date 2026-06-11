@@ -913,7 +913,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     int intervalDeleteOverwriteBigStringFiles(int targetBucketIndex) {
         if (!delayToDeleteBigStringFileIds.isEmpty()) {
             var oneId = delayToDeleteBigStringFileIds.removeFirst();
-            bigStringFiles.deleteBigStringFileIfExist(oneId.uuid(), oneId.bucketIndex(), oneId.keyHash());
+            var isDeleted = bigStringFiles.deleteBigStringFileIfExist(oneId.uuid(), oneId.bucketIndex(), oneId.keyHash());
+            if (!isDeleted) {
+                log.warn("Big string file delete returned false, will retry next tick, uuid={}, key={}, slot={}, bucket index={}",
+                        oneId.uuid(), oneId.key(), slot, oneId.bucketIndex());
+                delayToDeleteBigStringFileIds.addLast(oneId);
+            }
         }
 
         int count = 0;

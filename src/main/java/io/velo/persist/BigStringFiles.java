@@ -258,9 +258,15 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @param keyHash     the hash of the key
      * @return true if the file was successfully deleted or doesn't exist
      */
+    @TestOnly
+    boolean deleteForceReturnFalseForTest = false;
+
     public boolean deleteBigStringFileIfExist(long uuid, int bucketIndex, long keyHash) {
         if (bigStringBytesByUuidLRU != null) {
             bigStringBytesByUuidLRU.remove(uuid);
+        }
+        if (deleteForceReturnFalseForTest) {
+            return false;
         }
 
         var file = new File(bigStringDir, bucketIndex + "/" + uuid + "_" + keyHash);

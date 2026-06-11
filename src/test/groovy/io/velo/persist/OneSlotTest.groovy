@@ -1629,6 +1629,48 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test interval delete re-enqueues big string id when delete returns false'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def bucketIndex = 0
+        def keyHash = 777777777L
+
+        and: 'write a big string file on disk so delete is even attempted'
+        def orphanUuid = 8001L
+        oneSlot.bigStringFiles.writeBigStringBytes(orphanUuid, bucketIndex, keyHash, 'orphan-bytes'.bytes)
+        assert new File(oneSlot.bigStringFiles.bigStringDir, bucketIndex + '/' + orphanUuid + '_' + keyHash).exists()
+
+        and: 'enqueue the id for deletion and force the underlying delete to return false'
+        oneSlot.delayToDeleteBigStringFileIds.clear()
+        def queuedId = new BigStringFiles.IdWithKey(orphanUuid, bucketIndex, keyHash, 'kerry-test-big-string-stuck-on-delete-fail')
+        oneSlot.delayToDeleteBigStringFileIds.add(queuedId)
+        oneSlot.bigStringFiles.deleteForceReturnFalseForTest = true
+
+        when: 'one interval tick processes the queue'
+        oneSlot.intervalDeleteOverwriteBigStringFiles(bucketIndex)
+
+        then: 'the original queued id with its key is preserved (re-enqueued at the head) — fix must not drop it'
+        oneSlot.delayToDeleteBigStringFileIds.size() >= 1
+        def first = oneSlot.delayToDeleteBigStringFileIds.peekFirst()
+        first.uuid() == orphanUuid
+        first.bucketIndex() == bucketIndex
+        first.keyHash() == keyHash
+        first.key() == 'kerry-test-big-string-stuck-on-delete-fail'
+
+        and: 'underlying file is still on disk (delete was forced to return false)'
+        new File(oneSlot.bigStringFiles.bigStringDir, bucketIndex + '/' + orphanUuid + '_' + keyHash).exists()
+
+        cleanup:
+        oneSlot.bigStringFiles.deleteForceReturnFalseForTest = false
+        // re-attempt delete for real so the file does not leak into the next test
+        oneSlot.bigStringFiles.deleteBigStringFileIfExist(orphanUuid, bucketIndex, keyHash)
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test get reads TIGHT segment correctly after isSegmentUseCompression flipped to false'() {
         given:
         LocalPersistTest.prepareLocalPersist()
