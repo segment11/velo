@@ -101,10 +101,18 @@ public class SegmentBatch2 implements InSlotMetricCollector {
 
             if (persistLength < bytes.length) {
                 onceList.add(v);
-            } else {
+            } else if (persistLength == bytes.length && !onceList.isEmpty()) {
+                onceList.add(v);
                 result.add(compressAsSegment(onceList, i, returnPvmList));
                 i++;
 
+                onceList.clear();
+                persistLength = SEGMENT_HEADER_LENGTH;
+            } else {
+                if (!onceList.isEmpty()) {
+                    result.add(compressAsSegment(onceList, i, returnPvmList));
+                    i++;
+                }
                 onceList.clear();
                 persistLength = SEGMENT_HEADER_LENGTH + v.persistLength();
                 onceList.add(v);
