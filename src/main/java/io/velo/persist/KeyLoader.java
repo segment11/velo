@@ -431,6 +431,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                                       final int[] countArray,
                                       final long beginScanSeq,
                                       HashSet<String> inWalKeys) {
+        // Per-call "real scan" flag. The caller at KeyLoader.java:570 bumps scanLoopCount when
+        // this is > 0, so it must be reset at function entry - otherwise a previous real scan
+        // would make every subsequent early-return path (no data in this split) be counted as
+        // a real scan, exhausting onceScanMaxLoopCount prematurely and cutting scans short.
+        countArray[1] = 0;
+
         var keyCountThisWalGroup = statKeyCountInBuckets.getKeyCountForOneWalGroup(walGroupIndex);
         if (keyCountThisWalGroup == 0) {
             return null;
@@ -455,7 +461,12 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
             var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
             var keyBucket = new KeyBucket(slot, bucketIndex, splitIndex, splitNumber, sharedBytes, position, snowFlake);
-            countArray[1]++;
+            // Only count buckets that actually hold live keys. Cleared-but-valid buckets (size=0
+            // but lastUpdateSeq non-zero from encode) used to bump the flag too, which made
+            // empty splits look like real scans and short-circuited the outer loop.
+            if (keyBucket.size > 0) {
+                countArray[1]++;
+            }
 
             final short[] addedKeyCount = {0};
             final short[] tmpSkipCount = {skipCount};

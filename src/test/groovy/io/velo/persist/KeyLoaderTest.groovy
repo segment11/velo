@@ -795,4 +795,86 @@ def 'test scan cursor counts post-scan-start entries'() {
         def e = thrown(IllegalArgumentException)
         e.message.contains('value length')
     }
+
+    def 'test scan loop count not overcounted when a split has no valid buckets'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
+        // The bug under test is that `countArray[1]` in KeyLoader.readKeysToList (line 458) is
+        // not reset between calls, so an iteration over an empty split that returns early
+        // still bumps scanLoopCount (the `if (countArray[1] > 0)` check at KeyLoader.java:570
+        // sees the stale value from a previous real-scan call). We assert on the cursor
+        // position: with the bug the scan terminates early at a low walGroup (because the
+        // overcount exhausts onceScanMaxLoopCount quickly), but with the fix countArray[1] is
+        // reset at the top of readKeysToList and only real-scan iterations count, so the scan
+        // completes wal group 0 and reaches ScanCursor.END.
+        ConfForSlot.global.confBucket.onceScanMaxLoopCount = 1000
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def keyLoader = oneSlot.keyLoader
+
+        and:
+        // Trigger splits 1 -> 3 -> 9 by inserting 25 multi-cell keys. Use controlled keyHash
+        // values such that (keyHash >> 32) % 3 == 0 (so at splitNumber=3 all 50 cells cluster
+        // in split 0, which is still over 48, forcing a re-split to 9). At splitNumber=9 the
+        // keys land in splits 3 and 6 only, so splits 0, 1, 2, 4, 5, 7, 8 have FDs but no valid
+        // buckets - exactly the state that exposes the countArray[1] overcount.
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        def upperBits = [3L, 6L, 12L, 15L, 21L, 24L]
+        List<Wal.V> longKeyList = []
+        25.times { i ->
+            def key = 'long_key_for_scan_overcount_test_' + i.toString().padLeft(16, '0')
+            def cv = new CompressedValue()
+            cv.compressedData = ('value' + i).bytes
+            def cvEncoded = cv.encodeAsShortString()
+            def keyHash = upperBits[i % upperBits.size()] << 32
+            longKeyList << new Wal.V(i, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                    key, cvEncoded, false)
+        }
+        inner.putAll(longKeyList)
+
+        // Persist to disk - mirrors what KeyLoader.doAfterPutAll does: update key count stats
+        // (the scan's early-return path at KeyLoader.java:436 reads statKeyCountInBuckets),
+        // then write shared bytes, then update split-number metadata so maxSplitNumber becomes 9.
+        def sharedBytesList = inner.encodeAfterPutBatch()
+        keyLoader.writeSharedBytesList(sharedBytesList, inner.beginBucketIndex)
+        keyLoader.updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp)
+        keyLoader.updateKeyCountBatch(0, inner.beginBucketIndex, inner.keyCountForStatsTmp)
+
+        expect:
+        inner.isSplit
+        sharedBytesList.length == 9
+        longKeyList.size() == 25
+        longKeyList.every {
+            inner.getValueX(it.bucketIndex(), it.key(), it.keyHash()) != null
+        }
+
+        when:
+        // count = 100 is large enough to hold all 25 keys in a single call; the only thing
+        // that can short-circuit the scan is scanLoopCount >= onceScanMaxLoopCount.
+        // beginScanSeq = 100 (greater than all test Wal.V seq values 0..24) so the
+        // `seq > beginScanSeq` filter at KeyLoader.java:504 does not drop any key.
+        def r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 100, 100L)
+
+        then:
+        // With the bug: countArray[1] is never reset, so the first real scan (in split 3)
+        // bumps scanLoopCount to 1, and every subsequent early-return iteration in empty
+        // splits AND in wal groups 1..N keeps bumping scanLoopCount because the stale
+        // countArray[1] > 0 trips the check. With onceScanMaxLoopCount=1000 the scan
+        // terminates well before completing all 2048 wal groups, so the cursor is not END.
+        // With the fix: countArray[1] is reset at the top of readKeysToList, so only real
+        // scans count. The scan completes wal group 0 (real scans at splits 3 and 6, bumps
+        // scanLoopCount to 2), then runs through all remaining wal groups (all early-return,
+        // no bump), and finally calls scanNextSlotCursor. Since this is the only slot, the
+        // returned cursor is ScanCursor.END.
+        r.scanCursor() == ScanCursor.END
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }
