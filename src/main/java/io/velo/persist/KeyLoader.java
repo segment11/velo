@@ -460,6 +460,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             }
 
             var splitNumber = metaKeyBucketSplitNumber.get(bucketIndex);
+            // Strict construction on the SCAN hot path. The splitNumber here was repaired
+            // by readBeforePutBatch at the last write batch; if it disagrees with the data
+            // now, the metadata is stale from a newer crash window and a write batch
+            // (which triggers readBeforePutBatch) is needed to repair.
             var keyBucket = new KeyBucket(slot, bucketIndex, splitIndex, splitNumber, sharedBytes, position, snowFlake);
             // Only count buckets that actually hold live keys. Cleared-but-valid buckets (size=0
             // but lastUpdateSeq non-zero from encode) used to bump the flag too, which made
@@ -637,6 +641,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         if (!isBytesValidAsKeyBucket(bytes, 0)) {
             return null;
         }
+        // Strict construction: the metadata was repaired by readBeforePutBatch at the
+        // last write batch. A mismatch here means we're being hit by a fresh crash
+        // window before any subsequent write - surface it as IllegalStateException
+        // rather than silently retrying on a hot path.
         var r = new KeyBucket(slot, bucketIndex, splitIndex, splitNumber, bytes, snowFlake);
         r.cvExpiredOrDeletedCallBack = cvExpiredOrDeletedCallBack;
         return r;
@@ -744,7 +752,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             if (!isBytesValidAsKeyBucket(bytes, 0)) {
                 keyBuckets.add(null);
             } else {
-                var keyBucket = new KeyBucket(slot, bucketIndex, (byte) splitIndex, splitNumber, bytes, snowFlake);
+                // Tolerant read: fall back to the embedded split number on crash-window mismatch.
+                var keyBucket = KeyBucket.readWithFallback(slot, bucketIndex, (byte) splitIndex, splitNumber, bytes, 0, snowFlake).keyBucket();
                 keyBuckets.add(keyBucket);
             }
         }

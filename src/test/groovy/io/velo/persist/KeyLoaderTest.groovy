@@ -213,7 +213,7 @@ class KeyLoaderTest extends Specification {
 
         when:
         def encodeAsShortStringA = Mock.prepareShortStringCvEncoded('a', 'a')
-        keyLoader.putValueByKey(0, 'a', 10L,  0L, 1L, encodeAsShortStringA)
+        keyLoader.putValueByKey(0, 'a', 10L, 0L, 1L, encodeAsShortStringA)
         expireAt = keyLoader.getExpireAt(0, 'a', 10L)
         expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(0, 'a', 10L)
         valueBytesX = keyLoader.getValueXByKey(0, 'a', 10L)
@@ -594,7 +594,7 @@ class KeyLoaderTest extends Specification {
         keyLoader.cleanUp()
     }
 
-def 'test scan cursor counts post-scan-start entries'() {
+    def 'test scan cursor counts post-scan-start entries'() {
         given:
         ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
 
@@ -872,6 +872,148 @@ def 'test scan cursor counts post-scan-start entries'() {
         // no bump), and finally calls scanNextSlotCursor. Since this is the only slot, the
         // returned cursor is ScanCursor.END.
         r.scanCursor() == ScanCursor.END
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test key bucket read recovers from crash window data-new metadata-old'() {
+        given:
+        // Crash window #1: key bucket bytes were written with the new split number
+        // (encodeAfterPutBatch encodes the bucket with splitNumberTmp[i] which is the new
+        // value, including for cleared buckets in lower splits whose lastUpdateSeq is set
+        // by the encode call), but the metadata file still has the old split number.
+        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def keyLoader = oneSlot.keyLoader
+
+        and:
+        // Trigger a split 1 -> 3 by inserting 25 multi-cell keys. Use controlled keyHash
+        // values so at splitNumber=3 all 50 cells cluster in split 0 (forcing a re-split to
+        // 9 - or use a count that stops at 3). The point is just to bump splitNumber > 1
+        // for bucket 0.
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        def upperBits = [3L, 6L, 12L, 15L, 21L, 24L]
+        List<Wal.V> longKeyList = []
+        25.times { i ->
+            def key = 'crash_window_1_test_' + i.toString().padLeft(16, '0')
+            def cv = new CompressedValue()
+            cv.compressedData = ('value' + i).bytes
+            def cvEncoded = cv.encodeAsShortString()
+            def keyHash = upperBits[i % upperBits.size()] << 32
+            longKeyList << new Wal.V(i, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                    key, cvEncoded, false)
+        }
+        inner.putAll(longKeyList)
+        def sharedBytesList = inner.encodeAfterPutBatch()
+        keyLoader.writeSharedBytesList(sharedBytesList, inner.beginBucketIndex)
+        keyLoader.updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp)
+        keyLoader.updateKeyCountBatch(0, inner.beginBucketIndex, inner.keyCountForStatsTmp)
+        def finalSplitNumber = inner.splitNumberTmp[0]
+        assert finalSplitNumber > 1, "split must have happened, got splitNumber=" + finalSplitNumber
+
+        when:
+        // Simulate crash window #1: data already has the new split number (cleared buckets
+        // in lower splits got lastUpdateSeq set by encode(true)), but the metadata file still
+        // has the old split number. Use setMetaKeyBucketSplitNumber which writes the byte
+        // AND updates the in-memory cache.
+        keyLoader.setMetaKeyBucketSplitNumber(0, (byte) 1)
+
+        and:
+        // Now simulate "restart": build a fresh KeyBucketsInOneWalGroup and run
+        // readBeforePutBatch. With the bug this throws IllegalStateException at
+        // KeyBucket.java:170 because lastUpdateSplitNumber (the new value, e.g. 9) does
+        // not match the splitNumber we passed in (1). With the fix, the read path detects
+        // the mismatch, retries with splitNumber=-1 to decode from lastUpdateSeq, and
+        // monotonically repairs the metadata to the new value.
+        def inner2 = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner2.readBeforePutBatch()
+
+        then:
+        // No exception thrown - the recovery is transparent to the caller.
+        // The keys are still readable.
+        longKeyList.every {
+            inner2.getValueX(it.bucketIndex(), it.key(), it.keyHash()) != null
+        }
+        // The metadata byte for bucket 0 was monotonically repaired from 1 to finalSplitNumber.
+        keyLoader.getMetaKeyBucketSplitNumberBatch(0, 1)[0] == finalSplitNumber
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test key bucket read handles crash window data-old metadata-new and downgrades to match data'() {
+        given:
+        // Crash window #2: metadata file was updated to a higher split number, but the
+        // corresponding data files were never written (or were written with the old split
+        // number). The recovery must DOWNGRADE the metadata to match the on-disk data
+        // layout. The "don't downgrade" intuition only holds for full-iteration reads;
+        // per-key lookups are hash-routed via KeyHash.splitIndex(keyHash, splitNumber,
+        // bucketIndex), so a stale higher metadata would route the key to a different
+        // (non-existent) split and the lookup would silently fail. The data layout is
+        // ground truth; metadata must follow.
+        ConfForSlot.global.confBucket.initialSplitNumber = (byte) 1
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def keyLoader = oneSlot.keyLoader
+
+        and:
+        // Persist data with splitNumber=1 (no split).
+        def inner = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner.readBeforePutBatch()
+
+        List<Wal.V> longKeyList = []
+        10.times { i ->
+            def key = 'crash_window_2_test_' + i.toString().padLeft(16, '0')
+            def cv = new CompressedValue()
+            cv.compressedData = ('value' + i).bytes
+            def cvEncoded = cv.encodeAsShortString()
+            def keyHash = (3L + i) << 32
+            longKeyList << new Wal.V(i, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                    key, cvEncoded, false)
+        }
+        inner.putAll(longKeyList)
+        def sharedBytesList = inner.encodeAfterPutBatch()
+        keyLoader.writeSharedBytesList(sharedBytesList, inner.beginBucketIndex)
+        keyLoader.updateMetaKeyBucketSplitNumberBatchIfChanged(inner.beginBucketIndex, inner.splitNumberTmp)
+        keyLoader.updateKeyCountBatch(0, inner.beginBucketIndex, inner.keyCountForStatsTmp)
+        // Sanity: data was written with splitNumber=1.
+        assert inner.splitNumberTmp[0] == 1
+
+        when:
+        // Simulate crash window #2: update the metadata to a higher split number (e.g. 3)
+        // WITHOUT writing the corresponding data files for splits 1 and 2. The data in
+        // split 0 still has lastUpdateSeq encoding splitNumber=1.
+        keyLoader.setMetaKeyBucketSplitNumber(0, (byte) 3)
+
+        and:
+        // Simulate "restart": re-read. With the bug this throws IllegalStateException at
+        // KeyBucket.java:170 because lastUpdateSplitNumber (1, from data) does not match
+        // the metadata split number (3). With the fix, the recovery decodes via the
+        // splitNumber=-1 path, picks the embedded value (1) as the ground truth, and
+        // downgrades the metadata to 1 so subsequent hash-routed lookups work correctly.
+        def inner2 = new KeyBucketsInOneWalGroup(slot, 0, keyLoader)
+        inner2.readBeforePutBatch()
+
+        then:
+        // No exception - the recovery is transparent.
+        // The keys are still readable (the bucket was constructed with the data's split
+        // number 1 via the recovery path).
+        longKeyList.every {
+            inner2.getValueX(it.bucketIndex(), it.key(), it.keyHash()) != null
+        }
+        // The metadata WAS downgraded from 3 to 1, because the data layout is the
+        // ground truth and per-key hash routing must align with it.
+        keyLoader.getMetaKeyBucketSplitNumberBatch(0, 1)[0] == (byte) 1
 
         cleanup:
         localPersist.cleanUp()

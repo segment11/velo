@@ -5,6 +5,8 @@ import io.velo.SnowFlake;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.nio.ByteBuffer;
@@ -102,25 +104,25 @@ public class KeyBucket {
     }
 
     /**
-     * @param slot slot index of this key bucket
+     * @param slot        slot index of this key bucket
      * @param bucketIndex index of this key bucket in the slot
-     * @param splitIndex the split index
+     * @param splitIndex  the split index
      * @param splitNumber the split number
-     * @param bytes the byte array containing the key-value pairs
-     * @param snowFlake SnowFlake instance for generating unique sequence numbers
+     * @param bytes       the byte array containing the key-value pairs
+     * @param snowFlake   SnowFlake instance for generating unique sequence numbers
      */
     public KeyBucket(short slot, int bucketIndex, byte splitIndex, byte splitNumber, @Nullable byte[] bytes, @NotNull SnowFlake snowFlake) {
         this(slot, bucketIndex, splitIndex, splitNumber, bytes, 0, snowFlake);
     }
 
     /**
-     * @param slot slot index of this key bucket
+     * @param slot        slot index of this key bucket
      * @param bucketIndex index of this key bucket in the slot
-     * @param splitIndex the split index
+     * @param splitIndex  the split index
      * @param splitNumber the split number
      * @param sharedBytes the shared byte array containing the key-value pairs
-     * @param position position in the shared byte array
-     * @param snowFlake SnowFlake instance for generating unique sequence numbers
+     * @param position    position in the shared byte array
+     * @param snowFlake   SnowFlake instance for generating unique sequence numbers
      */
     public KeyBucket(short slot, int bucketIndex, byte splitIndex, byte splitNumber, @Nullable byte[] sharedBytes, int position, @NotNull SnowFlake snowFlake) {
         this.slot = slot;
@@ -170,6 +172,52 @@ public class KeyBucket {
                 throw new IllegalStateException("Key bucket last update split number not match, last=" + lastUpdateSplitNumber + ", current=" + splitNumber
                         + ", slot=" + slot + ", bucket index=" + bucketIndex + ", split index=" + splitIndex);
             }
+        }
+    }
+
+    /**
+     * Result of a tolerant key-bucket read that may have recovered from a crash-window mismatch.
+     *
+     * @param keyBucket            the constructed bucket (never null)
+     * @param effectiveSplitNumber the split number actually encoded in the bucket's
+     *                             lastUpdateSeq. Equals the metadata split number on the happy path, and equals the
+     *                             embedded split number on the recovery path.
+     * @param wasRecovered         true if the constructor threw on the first attempt and the caller
+     *                             was forced to fall back to the embedded split number.
+     */
+    public record ReadResult(@NotNull KeyBucket keyBucket, byte effectiveSplitNumber, boolean wasRecovered) {
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(KeyBucket.class);
+
+    /**
+     * Tolerant constructor for on-disk reads. Tries the given {@code metadataSplitNumber}
+     * first; if the {@code lastUpdateSplitNumber} embedded in the bucket header disagrees
+     * (the crash-window mismatch documented in bug 48 finding 1), retries with
+     * {@code splitNumber = -1} so the constructor uses the embedded value. The caller is
+     * expected to use {@link ReadResult#effectiveSplitNumber()} to drive metadata repair.
+     *
+     * <p>The recovery path covers both crash windows:
+     * <ul>
+     *   <li>Window A (data-new, metadata-old): retry gives the new split number.</li>
+     *   <li>Window B (data-old, metadata-new): retry gives the old split number, which
+     *       must be persisted back to metadata because per-key lookups are hash-routed
+     *       by {@code KeyHash.splitIndex(keyHash, splitNumber, bucketIndex)} and a stale
+     *       higher metadata would route keys to non-existent splits.</li>
+     * </ul>
+     */
+    @VisibleForTesting
+    public static ReadResult readWithFallback(short slot, int bucketIndex, byte splitIndex, byte metadataSplitNumber,
+                                              @Nullable byte[] sharedBytes, int position, @NotNull SnowFlake snowFlake) {
+        try {
+            var bucket = new KeyBucket(slot, bucketIndex, splitIndex, metadataSplitNumber, sharedBytes, position, snowFlake);
+            return new ReadResult(bucket, metadataSplitNumber, false);
+        } catch (IllegalStateException e) {
+            // Crash-window mismatch: decode with the embedded split number from lastUpdateSeq.
+            var bucket = new KeyBucket(slot, bucketIndex, splitIndex, (byte) -1, sharedBytes, position, snowFlake);
+            log.warn("Key bucket split number mismatch, recovered from crash window: slot={}, bucket={}, split={}, metadata={}, embedded={}",
+                    slot, bucketIndex, splitIndex, metadataSplitNumber, bucket.splitNumber);
+            return new ReadResult(bucket, bucket.splitNumber, true);
         }
     }
 
@@ -366,10 +414,10 @@ public class KeyBucket {
     }
 
     /**
-     * @param key key
-     * @param keyHash hash value of the key
-     * @param expireAt expiration time
-     * @param seq sequence number
+     * @param key        key
+     * @param keyHash    hash value of the key
+     * @param expireAt   expiration time
+     * @param seq        sequence number
      * @param valueBytes byte array of the value
      * @return result of the put operation
      */
@@ -378,11 +426,11 @@ public class KeyBucket {
     }
 
     /**
-     * @param key key
-     * @param keyHash hash value of the key
-     * @param expireAt expiration time
-     * @param seq sequence number
-     * @param valueBytes byte array of the value
+     * @param key         key
+     * @param keyHash     hash value of the key
+     * @param expireAt    expiration time
+     * @param seq         sequence number
+     * @param valueBytes  byte array of the value
      * @param doUpdateSeq if true, update the sequence number after putting
      * @return result of the put operation
      */
@@ -541,8 +589,8 @@ public class KeyBucket {
     }
 
     /**
-     * @param cellIndex starting index of the cell
-     * @param cellCount number of cells to check
+     * @param cellIndex   starting index of the cell
+     * @param cellCount   number of cells to check
      * @param isForUpdate if true, checks for updating an existing key-value pair
      * @return true if the cells are available
      */
@@ -574,7 +622,7 @@ public class KeyBucket {
     }
 
     /**
-     * @param key key
+     * @param key     key
      * @param keyHash hash value of the key
      * @return ExpireAtAndSeq, or null if key does not exist
      */
@@ -623,7 +671,7 @@ public class KeyBucket {
     }
 
     /**
-     * @param key key
+     * @param key     key
      * @param keyHash hash value of the key
      * @return ValueBytesWithExpireAtAndSeq, or null if key does not exist
      */
@@ -684,8 +732,8 @@ public class KeyBucket {
     }
 
     /**
-     * @param key key
-     * @param keyHash hash value of the key
+     * @param key         key
+     * @param keyHash     hash value of the key
      * @param doUpdateSeq if true, update the sequence number after deleting
      * @return true if the key-value pair was successfully deleted
      */

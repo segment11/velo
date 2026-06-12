@@ -88,6 +88,22 @@ public class KeyBucketsInOneWalGroup {
             }
         }
 
+        // Slow-path recovery for the crash-window mismatch (bug 48 finding 1). The invariant
+        // we restore is "metadata must match the data layout actually encoded in
+        // lastUpdateSeq" - not "metadata should only go up". Per-key lookups are
+        // hash-routed via KeyHash.splitIndex(keyHash, splitNumber, bucketIndex), so a
+        // stale higher metadata in Window B is unsafe even though it "covers" more splits.
+        //
+        // We do it lazily, per-bucket, on the first mismatch: the strict constructor
+        // throws if the on-disk data was encoded with a different split number. The
+        // fallback helper retries with splitNumber=-1 to decode the embedded value and
+        // we patch splitNumberTmp so the rest of this load uses the correct routing.
+        // In the common consistent case this is a single try with no extra work.
+        var sharedBytesList = new byte[maxSplitNumber][];
+        for (int splitIndex = 0; splitIndex < maxSplitNumber; splitIndex++) {
+            sharedBytesList[splitIndex] = keyLoader.readBatchInOneWalGroup((byte) splitIndex, beginBucketIndex);
+        }
+
         for (int splitIndex = 0; splitIndex < maxSplitNumber; splitIndex++) {
             if (listList.size() <= splitIndex) {
                 // init size with null
@@ -99,7 +115,7 @@ public class KeyBucketsInOneWalGroup {
             var list = prepareListInitWithNull();
             listList.set(splitIndex, list);
 
-            var sharedBytes = keyLoader.readBatchInOneWalGroup((byte) splitIndex, beginBucketIndex);
+            var sharedBytes = sharedBytesList[splitIndex];
             if (sharedBytes == null) {
                 continue;
             }
@@ -107,14 +123,35 @@ public class KeyBucketsInOneWalGroup {
             for (int i = 0; i < oneChargeBucketNumber; i++) {
                 var bucketIndex = beginBucketIndex + i;
                 var currentSplitNumber = splitNumberTmp[i];
-                var keyBucket = new KeyBucket(slot, bucketIndex, (byte) splitIndex, currentSplitNumber, sharedBytes,
-                        KeyLoader.KEY_BUCKET_ONE_COST_SIZE * i, keyLoader.snowFlake);
+                var position = KeyLoader.KEY_BUCKET_ONE_COST_SIZE * i;
+                if (position >= sharedBytes.length) {
+                    continue;
+                }
+                if (!keyLoader.isBytesValidAsKeyBucket(sharedBytes, position)) {
+                    continue;
+                }
+                var result = KeyBucket.readWithFallback(slot, bucketIndex, (byte) splitIndex, currentSplitNumber,
+                        sharedBytes, position, keyLoader.snowFlake);
+                if (result.wasRecovered() && result.effectiveSplitNumber() != currentSplitNumber) {
+                    // The on-disk split layout disagrees with metadata. Patch splitNumberTmp
+                    // so subsequent iterations in this load (and per-key reads after the
+                    // load completes) use the correct routing. The constructor has
+                    // already decoded the bucket with the embedded value, so iterate()
+                    // would find the keys in their actual data layout.
+                    splitNumberTmp[i] = result.effectiveSplitNumber();
+                }
+                var keyBucket = result.keyBucket();
                 keyBucket.cvExpiredOrDeletedCallBack = keyLoader.cvExpiredOrDeletedCallBack;
                 // one key bucket max size = KeyBucket.INIT_CAPACITY (48), max split number = 9 or 27, 27 * 48 = 1296 < short max value
                 keyCountForStatsTmp[i] += keyBucket.size;
                 list.set(i, keyBucket);
             }
         }
+
+        // Persist the repair so the next read (which may bypass this code path) sees
+        // the corrected metadata. updateMetaKeyBucketSplitNumberBatchIfChanged is a no-op
+        // when nothing changed, so this is cheap in the common case.
+        keyLoader.updateMetaKeyBucketSplitNumberBatchIfChanged(beginBucketIndex, splitNumberTmp);
     }
 
     /**
