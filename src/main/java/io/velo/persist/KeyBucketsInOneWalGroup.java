@@ -216,7 +216,18 @@ public class KeyBucketsInOneWalGroup {
 
         var sharedBytesList = new byte[maxSplitNumberTmp][];
 
-        for (int splitIndex = 0; splitIndex < listList.size(); splitIndex++) {
+        // Loop bound is min(listList.size(), maxSplitNumberTmp) for two reasons:
+        //   1. Window B (metadata downgrade): listList.size() is the pre-repair max (e.g. 3)
+        //      while maxSplitNumberTmp is the post-repair max (e.g. 1). Using
+        //      listList.size() alone would index sharedBytesList past its end.
+        //   2. Window A (metadata upgrade): listList.size() is the pre-repair max (e.g. 1)
+        //      while maxSplitNumberTmp is the post-repair max (e.g. 9). Using
+        //      maxSplitNumberTmp alone would call listList.get(...) past the array
+        //      and NPE on the inner list.size() loop.
+        // For splits in [bound, maxSplitNumberTmp), the data was never loaded in
+        // readBeforePutBatch (or is stale and should be discarded), and the writer
+        // skips null entries, so the on-disk data is preserved.
+        for (int splitIndex = 0; splitIndex < Math.min(listList.size(), maxSplitNumberTmp); splitIndex++) {
             var list = listList.get(splitIndex);
             for (int i = 0; i < list.size(); i++) {
                 var keyBucket = list.get(i);

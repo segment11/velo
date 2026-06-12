@@ -1015,6 +1015,33 @@ class KeyLoaderTest extends Specification {
         // ground truth and per-key hash routing must align with it.
         keyLoader.getMetaKeyBucketSplitNumberBatch(0, 1)[0] == (byte) 1
 
+        and:
+        // Regression: the next write batch after a Window-B recovery must not AIOOBE.
+        // encodeAfterPutBatch sizes sharedBytesList by the post-repair maxSplitNumberTmp
+        // but the original loop bound was listList.size() (pre-repair), so on Window B
+        // (metadata downgrade) the loop would index past the array.
+        when:
+        def putList = []
+        1.times { i ->
+            def key = 'crash_window_2_write_after_' + i.toString().padLeft(16, '0')
+            def cv = new CompressedValue()
+            cv.compressedData = ('after' + i).bytes
+            def cvEncoded = cv.encodeAsShortString()
+            def keyHash = (100L + i) << 32
+            putList << new Wal.V(i, 0, keyHash, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                    key, cvEncoded, false)
+        }
+        inner2.putAll(putList)
+        def sharedBytesListAfterWrite = inner2.encodeAfterPutBatch()
+
+        then:
+        // No exception; the shared bytes array matches the repaired max split number (= 1).
+        sharedBytesListAfterWrite.length == 1
+        // The new key is readable after the write.
+        putList.every {
+            inner2.getValueX(it.bucketIndex(), it.key(), it.keyHash()) != null
+        }
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
