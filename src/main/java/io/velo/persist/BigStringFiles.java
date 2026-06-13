@@ -69,11 +69,13 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * Single source of truth for key-to-big-string-UUID mapping.
      * Populated from WAL short values and KeyBucket data, survives WAL clears.
      */
+    // Owned by the slot worker thread — not safe for concurrent access from multiple threads.
     final HashMap<String, Long> bigStringUuidByKey = new HashMap<>();
     /**
      * Reverse index for O(1) UUID membership checks.
      * Kept in sync with {@link #bigStringUuidByKey} on every put/remove.
      */
+    // Owned by the slot worker thread — not safe for concurrent access from multiple threads.
     final HashSet<Long> bigStringUuidSet = new HashSet<>();
 
     /**
@@ -109,6 +111,24 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     public void removeBigStringUuid(String key) {
         var old = bigStringUuidByKey.remove(key);
         if (old != null) bigStringUuidSet.remove(old);
+    }
+
+    /**
+     * Removes the key from the UUID map only if its current UUID matches the given uuid.
+     * Safe to call when the key may have been overwritten with a newer big string.
+     *
+     * @param key  the key to conditionally remove
+     * @param uuid the expected UUID
+     * @return true if the entry was removed
+     */
+    public boolean removeBigStringUuidIfMatches(String key, long uuid) {
+        var current = bigStringUuidByKey.get(key);
+        if (current != null && current == uuid) {
+            bigStringUuidByKey.remove(key);
+            bigStringUuidSet.remove(uuid);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -192,13 +212,15 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
                     if (PersistValueMeta.isPvm(valueBytes)) {
                         return;
                     }
-                    var cv = CompressedValue.decode(valueBytes, Wal.keyBytes(key), keyHash);
-                    if (cv.isBigString()) {
-                        // WAL may have loaded a more recent value already; only fill gaps
-                        var uuid = cv.getBigStringMetaUuid();
-                        if (bigStringUuidByKey.putIfAbsent(key, uuid) == null) {
-                            bigStringUuidSet.add(uuid);
-                        }
+                    // cheap pre-check before expensive decode
+                    if (valueBytes.length < 28
+                            || CompressedValue.onlyReadSpType(valueBytes) != CompressedValue.SP_TYPE_BIG_STRING) {
+                        return;
+                    }
+                    // WAL may have loaded a more recent value already; only fill gaps
+                    var uuid = CompressedValue.getBigStringMetaUuid(valueBytes);
+                    if (bigStringUuidByKey.putIfAbsent(key, uuid) == null) {
+                        bigStringUuidSet.add(uuid);
                     }
                 });
             }
@@ -471,11 +493,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         var isDeleted = deleteBigStringFileIfExist(uuid, bucketIndex, shortStringCv.getKeyHash());
         // only remove if the current map entry still points to this uuid
         // (key may have been overwritten with a newer big string uuid since expiry)
-        var currentUuid = bigStringUuidByKey.get(key);
-        if (currentUuid != null && currentUuid == uuid) {
-            bigStringUuidByKey.remove(key);
-            bigStringUuidSet.remove(uuid);
-        }
+        removeBigStringUuidIfMatches(key, uuid);
         if (!isDeleted) {
             throw new RuntimeException("Delete big string file error, s=" + slot + ", key=" + key + ", uuid=" + uuid);
         } else {

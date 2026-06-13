@@ -177,6 +177,8 @@ Before                                    After
 
 Primary win: eliminates `keyLoader.getValueXByKey()` disk I/O from the `put()` hot path.
 
+Memory cost: `bigStringUuidByKey` ~100B/entry (String + Long + HashMap overhead), `bigStringUuidSet` ~32B/entry (Long boxed + HashSet overhead). Together ~130B per big-string key. For ~1M big-string keys: ~130MB.
+
 ## Files Changed
 
 | File | Changes |

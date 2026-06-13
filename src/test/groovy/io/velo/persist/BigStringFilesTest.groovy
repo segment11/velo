@@ -1,6 +1,7 @@
 package io.velo.persist
 
 import io.velo.CompressedValue
+import io.velo.KeyHash
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
 
@@ -345,5 +346,46 @@ class BigStringFilesTest extends Specification {
         cleanup:
         bigStringFiles.deleteAllBigStringFiles()
         tmpSlotDir.deleteDir()
+    }
+
+    def 'test populateFromKeyBuckets fills uuid map from persisted entries'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def bigStringFiles = oneSlot.bigStringFiles
+        def keyLoader = oneSlot.keyLoader
+        bigStringFiles.clearUuidMap()
+
+        // write a big string entry directly to key bucket
+        def key = 'bs-populate-key'
+        def keyHash = KeyHash.hash(key.bytes)
+        def cv = new CompressedValue()
+        cv.seq = 100L
+        cv.keyHash = keyHash
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv.setCompressedDataAsBigString(9999L, CompressedValue.NULL_DICT_SEQ)
+        keyLoader.putValueByKey(0, key, keyHash, 0L, 100L, cv.encode())
+
+        when: 'populate from key buckets'
+        bigStringFiles.populateFromKeyBuckets(keyLoader, 0)
+
+        then: 'uuid map has the key'
+        bigStringFiles.getBigStringUuid(key) == 9999L
+
+        when: 'pre-populate via WAL with a different UUID, then populate from key buckets'
+        def walCv = new CompressedValue()
+        walCv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        walCv.setCompressedDataAsBigString(8888L, CompressedValue.NULL_DICT_SEQ)
+        bigStringFiles.updateUuidFromEncoded(key, walCv.encode())
+        bigStringFiles.populateFromKeyBuckets(keyLoader, 0)
+
+        then: 'WAL entry takes precedence over key bucket'
+        bigStringFiles.getBigStringUuid(key) == 8888L
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 }
