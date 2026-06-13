@@ -65,11 +65,138 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     HashSet<Integer> bucketIndexesWhenFirstServerStart = new HashSet<>();
 
+    /**
+     * Single source of truth for key-to-big-string-UUID mapping.
+     * Populated from WAL short values and KeyBucket data, survives WAL clears.
+     */
+    final HashMap<String, Long> bigStringUuidByKey = new HashMap<>();
+
+    /**
+     * Updates the UUID map from encoded value bytes.
+     * If the encoded value is a big string reference, records its UUID;
+     * otherwise removes any stale entry for the key.
+     *
+     * @param key       the key to update
+     * @param cvEncoded the encoded bytes of the CompressedValue
+     */
+    public void updateUuidFromEncoded(String key, byte[] cvEncoded) {
+        if (cvEncoded.length < 28) {
+            bigStringUuidByKey.remove(key);
+            return;
+        }
+        if (CompressedValue.onlyReadSpType(cvEncoded) == CompressedValue.SP_TYPE_BIG_STRING) {
+            bigStringUuidByKey.put(key, CompressedValue.getBigStringMetaUuid(cvEncoded));
+        } else {
+            bigStringUuidByKey.remove(key);
+        }
+    }
+
+    /**
+     * Removes the UUID mapping for the given key.
+     *
+     * @param key the key to remove
+     */
+    public void removeBigStringUuid(String key) {
+        bigStringUuidByKey.remove(key);
+    }
+
+    /**
+     * Returns the big string UUID for the given key, or null if not present.
+     *
+     * @param key the key to look up
+     * @return the UUID, or null
+     */
+    @Nullable
+    public Long getBigStringUuid(String key) {
+        return bigStringUuidByKey.get(key);
+    }
+
+    /**
+     * Checks whether the given UUID is present in the map.
+     *
+     * @param uuid the UUID to check
+     * @return true if the UUID is mapped to any key
+     */
+    public boolean containsUuid(long uuid) {
+        return bigStringUuidByKey.containsValue(uuid);
+    }
+
+    /**
+     * @return the number of entries in the UUID map
+     */
+    public int uuidMapSize() {
+        return bigStringUuidByKey.size();
+    }
+
+    /**
+     * Clears all entries from the UUID map.
+     * Called by {@link io.velo.persist.Wal#refreshBigStringUuidMap()} before rebuilding.
+     */
+    public void clearUuidMap() {
+        bigStringUuidByKey.clear();
+    }
+
+    /**
+     * Populates the UUID map from persisted KeyBucket data for a WAL group's bucket range.
+     * Called during startup after WAL reload to fill in entries that were persisted
+     * and cleared from WAL. Only fills gaps (WAL entries take precedence).
+     *
+     * @param keyLoader     the KeyLoader to read persisted data from
+     * @param walGroupIndex the WAL group index to populate for
+     */
+    public void populateFromKeyBuckets(@NotNull KeyLoader keyLoader, int walGroupIndex) {
+        int oneCharge = ConfForSlot.global.confWal.oneChargeBucketNumber;
+        int beginBucketIndex = oneCharge * walGroupIndex;
+
+        var splitNumbers = keyLoader.getMetaKeyBucketSplitNumberBatch(beginBucketIndex, oneCharge);
+        byte maxSplitNumber = 1;
+        for (int i = 0; i < oneCharge; i++) {
+            if (splitNumbers[i] > maxSplitNumber) {
+                maxSplitNumber = splitNumbers[i];
+            }
+        }
+
+        for (byte splitIndex = 0; splitIndex < maxSplitNumber; splitIndex++) {
+            var sharedBytes = keyLoader.readBatchInOneWalGroup(splitIndex, beginBucketIndex);
+            if (sharedBytes == null) {
+                continue;
+            }
+
+            for (int i = 0; i < oneCharge; i++) {
+                int bucketIndex = beginBucketIndex + i;
+                int position = KeyLoader.KEY_BUCKET_ONE_COST_SIZE * i;
+                if (position >= sharedBytes.length) {
+                    continue;
+                }
+                if (!keyLoader.isBytesValidAsKeyBucket(sharedBytes, position)) {
+                    continue;
+                }
+
+                var currentSplitNumber = splitNumbers[i];
+                var result = KeyBucket.readWithFallback(slot, bucketIndex, splitIndex,
+                        currentSplitNumber, sharedBytes, position, keyLoader.snowFlake);
+
+                var keyBucket = result.keyBucket();
+                keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
+                    if (PersistValueMeta.isPvm(valueBytes)) {
+                        return;
+                    }
+                    var cv = CompressedValue.decode(valueBytes, Wal.keyBytes(key), keyHash);
+                    if (cv.isBigString()) {
+                        // WAL may have loaded a more recent value already; only fill gaps
+                        bigStringUuidByKey.putIfAbsent(key, cv.getBigStringMetaUuid());
+                    }
+                });
+            }
+        }
+    }
+
     @Override
     public Map<String, Double> collect() {
         var map = new HashMap<String, Double>();
         map.put("big_string_files_count", (double) bigStringFilesCount);
         map.put("big_string_missing_file_total", (double) bigStringMissingFileTotal);
+        map.put("big_string_uuid_by_key_size", (double) bigStringUuidByKey.size());
         return map;
     }
 
@@ -302,6 +429,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         if (bigStringBytesByUuidLRU != null) {
             bigStringBytesByUuidLRU.clear();
         }
+        bigStringUuidByKey.clear();
 
         try {
             FileUtils.cleanDirectory(bigStringDir);
@@ -326,6 +454,12 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         var uuid = shortStringCv.getBigStringMetaUuid();
         var bucketIndex = KeyHash.bucketIndex(shortStringCv.getKeyHash());
         var isDeleted = deleteBigStringFileIfExist(uuid, bucketIndex, shortStringCv.getKeyHash());
+        // only remove if the current map entry still points to this uuid
+        // (key may have been overwritten with a newer big string uuid since expiry)
+        var currentUuid = bigStringUuidByKey.get(key);
+        if (currentUuid != null && currentUuid == uuid) {
+            bigStringUuidByKey.remove(key);
+        }
         if (!isDeleted) {
             throw new RuntimeException("Delete big string file error, s=" + slot + ", key=" + key + ", uuid=" + uuid);
         } else {

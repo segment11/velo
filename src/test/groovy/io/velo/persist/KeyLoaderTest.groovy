@@ -347,17 +347,6 @@ class KeyLoaderTest extends Specification {
         1 == 1
 
         when:
-        def sKey = BaseCommand.slot('1234', slotNumber)
-        def cvBigString = new CompressedValue()
-        cvBigString.seq = 1234L
-        cvBigString.keyHash = sKey.keyHash()
-        cvBigString.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
-        cvBigString.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
-        keyLoader.putValueByKey(0, '1234', sKey.keyHash(), 0L, 1234L, cvBigString.encode())
-        then:
-        keyLoader.getPersistedBigStringIdList(0).size() == 1
-
-        when:
         def encodeAsShortStringA = Mock.prepareShortStringCvEncoded('a', 'a')
         keyLoader.putValueByKey(0, 'a', 10L, 0L, 1L, encodeAsShortStringA)
         def cv = new CompressedValue()
@@ -369,35 +358,6 @@ class KeyLoaderTest extends Specification {
         int count = keyLoader.intervalDeleteExpiredBigStringFiles()
         then:
         count == 1
-
-        cleanup:
-        keyLoader.flush()
-        keyLoader.cleanUp()
-    }
-
-    def 'test get persisted big string id list skips pvm entries'() {
-        given:
-        def keyLoader = prepareKeyLoader()
-        def sKey = BaseCommand.slot('1234', slotNumber)
-        def cvBigString = new CompressedValue()
-        cvBigString.seq = 1234L
-        cvBigString.keyHash = sKey.keyHash()
-        cvBigString.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
-        cvBigString.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
-        keyLoader.putValueByKey(0, '1234', sKey.keyHash(), 0L, 1234L, cvBigString.encode())
-
-        def pvm = new PersistValueMeta()
-        pvm.segmentIndex = 1
-        pvm.segmentOffset = 2
-        keyLoader.putValueByKey(0, 'normal-key', 100L, 0L, 100L, pvm.encode())
-
-        when:
-        def list = keyLoader.getPersistedBigStringIdList(0)
-
-        then:
-        list.size() == 1
-        list.first().uuid() == 1234L
-        list.first().key() == '1234'
 
         cleanup:
         keyLoader.flush()

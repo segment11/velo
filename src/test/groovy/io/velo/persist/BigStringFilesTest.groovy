@@ -1,5 +1,6 @@
 package io.velo.persist
 
+import io.velo.CompressedValue
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
 
@@ -249,6 +250,100 @@ class BigStringFilesTest extends Specification {
         cleanup:
         Files.setAttribute(dir.toPath(),
                 'posix:permissions', PosixFilePermissions.fromString('rwxrwxrwx'))
+        tmpSlotDir.deleteDir()
+    }
+
+    def 'test uuid map update from encoded'() {
+        given:
+        def tmpSlotDir = new File('/tmp/tmp-slot-dir-uuid-map')
+        tmpSlotDir.mkdirs()
+        def bigStringFiles = new BigStringFiles(slot, tmpSlotDir)
+
+        // prepare big string encoded bytes
+        def cvBig = new CompressedValue()
+        cvBig.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBig.setCompressedDataAsBigString(8888L, CompressedValue.NULL_DICT_SEQ)
+        def bigEncoded = cvBig.encode()
+        println 'big encoded length: ' + bigEncoded.length
+
+        // prepare normal short string encoded bytes
+        def shortEncoded = Mock.prepareShortStringCvEncoded('key1', 'val1')
+
+        expect:
+        bigStringFiles.bigStringUuidByKey.isEmpty()
+
+        when: 'big string encoded -> put uuid'
+        bigStringFiles.updateUuidFromEncoded('key-a', bigEncoded)
+        then:
+        bigStringFiles.getBigStringUuid('key-a') == 8888L
+        bigStringFiles.containsUuid(8888L)
+        bigStringFiles.uuidMapSize() == 1
+
+        when: 'non-big-string encoded -> remove'
+        bigStringFiles.updateUuidFromEncoded('key-a', shortEncoded)
+        then:
+        bigStringFiles.getBigStringUuid('key-a') == null
+        bigStringFiles.uuidMapSize() == 0
+
+        when: 'short bytes (<28) -> remove (tombstone)'
+        bigStringFiles.updateUuidFromEncoded('key-a', bigEncoded)
+        bigStringFiles.updateUuidFromEncoded('key-a', [CompressedValue.SP_FLAG_DELETE_TMP] as byte[])
+        then:
+        bigStringFiles.getBigStringUuid('key-a') == null
+
+        when: 'removeBigStringUuid'
+        bigStringFiles.updateUuidFromEncoded('key-b', bigEncoded)
+        bigStringFiles.removeBigStringUuid('key-b')
+        then:
+        bigStringFiles.getBigStringUuid('key-b') == null
+
+        when: 'clearUuidMap'
+        bigStringFiles.updateUuidFromEncoded('key-c', bigEncoded)
+        bigStringFiles.clearUuidMap()
+        then:
+        bigStringFiles.uuidMapSize() == 0
+
+        cleanup:
+        bigStringFiles.deleteAllBigStringFiles()
+        tmpSlotDir.deleteDir()
+    }
+
+    def 'test handleWhenCvExpiredOrDeleted only removes matching uuid'() {
+        given:
+        def tmpSlotDir = new File('/tmp/tmp-slot-dir-uuid-expire')
+        tmpSlotDir.mkdirs()
+        def bigStringFiles = new BigStringFiles(slot, tmpSlotDir)
+
+        def key = 'expire-key'
+        def oldUuid = 1111L
+        def newUuid = 2222L
+        // use keyHash=0 so bucketIndex=0 (bucketIndex = keyHash & (bucketsPerSlot-1))
+        def keyHash = 0L
+
+        // write old big string file to bucket 0
+        bigStringFiles.writeBigStringBytes(oldUuid, 0, keyHash, 'old'.bytes)
+        bigStringFiles.writeBigStringBytes(newUuid, 0, keyHash, 'new'.bytes)
+
+        // map has new UUID (simulating an overwrite)
+        def cvNew2 = new CompressedValue()
+        cvNew2.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvNew2.setCompressedDataAsBigString(newUuid, CompressedValue.NULL_DICT_SEQ)
+        bigStringFiles.updateUuidFromEncoded(key, cvNew2.encode())
+
+        when: 'expire callback with old UUID -> should not remove new UUID from map'
+        def cvOld = new CompressedValue()
+        cvOld.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvOld.keyHash = keyHash
+        cvOld.setCompressedDataAsBigString(oldUuid, CompressedValue.NULL_DICT_SEQ)
+        bigStringFiles.handleWhenCvExpiredOrDeleted(key, cvOld, null)
+
+        then: 'new UUID still in map, old file deleted'
+        bigStringFiles.getBigStringUuid(key) == newUuid
+        !new File(tmpSlotDir, 'big-string/0/' + oldUuid + '_' + keyHash).exists()
+        new File(tmpSlotDir, 'big-string/0/' + newUuid + '_' + keyHash).exists()
+
+        cleanup:
+        bigStringFiles.deleteAllBigStringFiles()
         tmpSlotDir.deleteDir()
     }
 }

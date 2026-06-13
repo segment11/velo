@@ -924,47 +924,18 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         int count = 0;
 
         var idList = bigStringFiles.getBigStringFileIdList(targetBucketIndex);
-        if (!idList.isEmpty()) {
-            var walGroupIndex = Wal.calcWalGroupIndex(targetBucketIndex);
-            var targetWal = walArray[walGroupIndex];
-
-            var persistedIdWithKeyList = keyLoader.getPersistedBigStringIdList(targetBucketIndex);
-            if (persistedIdWithKeyList.isEmpty()) {
-                for (var id : idList) {
-                    if (targetWal.bigStringFileUuidByKey.containsValue(id.uuid())) {
-                        continue;
-                    }
-
-                    delayToDeleteBigStringFileIds.add(new BigStringFiles.IdWithKey(id.uuid(), targetBucketIndex, id.keyHash(), ""));
-                    count++;
-                }
-            } else {
-                var map = new HashMap<Long, String>();
-                for (var one : persistedIdWithKeyList) {
-                    map.put(one.uuid(), one.key());
-                }
-                // check those not exists in key buckets or wal cached
-                for (var id : idList) {
-                    boolean canDelete;
-                    if (map.containsKey(id.uuid())) {
-                        var key = map.get(id.uuid());
-                        // wal is newer
-                        canDelete = targetWal.hasKey(key);
-                    } else {
-                        canDelete = !targetWal.bigStringFileUuidByKey.containsValue(id.uuid());
-                    }
-
-                    if (canDelete) {
-                        delayToDeleteBigStringFileIds.add(new BigStringFiles.IdWithKey(id.uuid(), targetBucketIndex, id.keyHash(), ""));
-                        count++;
-                    }
-                }
+        for (var id : idList) {
+            if (bigStringFiles.containsUuid(id.uuid())) {
+                continue;
             }
-
-            if (count > 0 && targetBucketIndex % 16384 == 0) {
-                log.info("Interval delete overwrite big string files, slot={}, bucket index={}, count={}", slot, targetBucketIndex, count);
-            }
+            delayToDeleteBigStringFileIds.add(new BigStringFiles.IdWithKey(id.uuid(), targetBucketIndex, id.keyHash(), ""));
+            count++;
         }
+
+        if (count > 0 && targetBucketIndex % 16384 == 0) {
+            log.info("Interval delete overwrite big string files, slot={}, bucket index={}, count={}", slot, targetBucketIndex, count);
+        }
+
         return count;
     }
 
@@ -1358,7 +1329,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
         var targetWal = walArray[walGroupIndex];
 
-        Long overwrittenBigStringUuid = getCurrentBigStringUuid(targetWal, key, bucketIndex, keyHash);
+        var overwrittenBigStringUuid = getCurrentBigStringUuid(targetWal, key, bucketIndex, keyHash);
 
         var putResult = targetWal.removeDelay(key, bucketIndex, keyHash, lastPersistTimeMs);
 
@@ -1374,7 +1345,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         if (overwrittenBigStringUuid != null) {
-            var currentBigStringUuid = targetWal.bigStringFileUuidByKey.get(key);
+            var currentBigStringUuid = bigStringFiles.getBigStringUuid(key);
             if (!overwrittenBigStringUuid.equals(currentBigStringUuid)) {
                 delayToDeleteBigStringFileIds.add(new BigStringFiles.IdWithKey(overwrittenBigStringUuid, bucketIndex, keyHash, key));
             }
@@ -1522,7 +1493,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         if (overwrittenBigStringUuid != null) {
-            var currentBigStringUuid = targetWal.bigStringFileUuidByKey.get(key);
+            var currentBigStringUuid = bigStringFiles.getBigStringUuid(key);
             if (!overwrittenBigStringUuid.equals(currentBigStringUuid)) {
                 delayToDeleteBigStringFileIds.add(new BigStringFiles.IdWithKey(overwrittenBigStringUuid, bucketIndex, cv.getKeyHash(), key));
             }
@@ -1546,15 +1517,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             return getBigStringUuidIfStored(walV.cvEncoded());
         }
 
-        if (keyLoader == null) {
-            return null;
-        }
-
-        var valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(bucketIndex, key, keyHash);
-        if (valueBytesWithExpireAtAndSeq == null || valueBytesWithExpireAtAndSeq.isExpired()) {
-            return null;
-        }
-        return getBigStringUuidIfStored(valueBytesWithExpireAtAndSeq.valueBytes());
+        return bigStringFiles.getBigStringUuid(key);
     }
 
     private Long getBigStringUuidIfStored(byte[] valueBytes) {

@@ -21,7 +21,7 @@ int totalFileCount = 0
             def raf = new RandomAccessFile(new File(slotDir, 'wal.dat'), 'rw')
             def rafShortValue = new RandomAccessFile(new File(slotDir, 'wal-short-value.dat'), 'rw')
             def snowFlake = new SnowFlake(1, 1)
-            def oneSlot = new OneSlot(slot)
+            def oneSlot = new OneSlot(slot, slotDir, null, null)
 
             HashMap<Integer, Set<Long>> fileUuidSetByBucketIndex = [:]
             dirs.each { subDir ->
@@ -47,8 +47,8 @@ int totalFileCount = 0
             walGroupNumber.times { walGroupIndex ->
                 def wal = new Wal(slot, oneSlot, walGroupIndex, raf, rafShortValue, snowFlake)
                 wal.lazyReadFromFile()
-                walBigStringCount += wal.bigStringFileUuidByKey.size()
-                walUuidSet.addAll wal.bigStringFileUuidByKey.values()
+                walBigStringCount += oneSlot.bigStringFiles.bigStringUuidByKey.size()
+                walUuidSet.addAll oneSlot.bigStringFiles.bigStringUuidByKey.values()
             }
 
             if (totalFileCount != walBigStringCount) {

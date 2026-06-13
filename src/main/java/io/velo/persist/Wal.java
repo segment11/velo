@@ -168,11 +168,11 @@ public class Wal implements InMemoryEstimate {
     long initMemoryN = 0;
 
     /**
-     * @param slot the slot identifier
-     * @param groupIndex the group index
-     * @param walSharedFile the shared file for long values
+     * @param slot                    the slot identifier
+     * @param groupIndex              the group index
+     * @param walSharedFile           the shared file for long values
      * @param walSharedFileShortValue the shared file for short values
-     * @param snowFlake the SnowFlake instance for generating unique IDs
+     * @param snowFlake               the SnowFlake instance for generating unique IDs
      * @throws IOException if an I/O error occurs
      */
     public Wal(short slot, OneSlot oneSlot, int groupIndex,
@@ -199,6 +199,10 @@ public class Wal implements InMemoryEstimate {
         mergeAfterReload();
 
         refreshBigStringUuidMap();
+        var bsf = oneSlot.getBigStringFiles();
+        if (bsf != null && oneSlot.keyLoader != null && oneSlot.keyLoader.metaKeyBucketSplitNumber != null) {
+            bsf.populateFromKeyBuckets(oneSlot.keyLoader, groupIndex);
+        }
         initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketValues);
         initMemoryN += RamUsageEstimator.sizeOfMap(delayToKeyBucketShortValues);
 
@@ -314,8 +318,6 @@ public class Wal implements InMemoryEstimate {
      */
     public volatile boolean bulkLoad = false;
 
-    HashMap<String, Long> bigStringFileUuidByKey = new HashMap<>();
-
     final long fileToWriteIndex;
 
     long lastSeqAfterPut;
@@ -350,10 +352,10 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * @param skipCount the number of keys to skip
-     * @param typeAsByte value type, @see KeyLoader.typeAsByteIgnore
+     * @param skipCount    the number of keys to skip
+     * @param typeAsByte   value type, @see KeyLoader.typeAsByteIgnore
      * @param matchPattern the pattern to match against keys
-     * @param count the maximum number of keys to return
+     * @param count        the maximum number of keys to return
      * @param beginScanSeq the sequence number set when begin scanning from
      * @return the KeyLoader.ScanCursorWithReturnKeys instance containing the scan results
      */
@@ -494,7 +496,8 @@ public class Wal implements InMemoryEstimate {
             n++;
 
             if (isShortValue) {
-                addBigStringUuidIfMatch(v);
+                var bsf = bigStringFiles();
+                if (bsf != null) bsf.updateUuidFromEncoded(v.key, v.cvEncoded);
             }
         }
 
@@ -508,26 +511,20 @@ public class Wal implements InMemoryEstimate {
         return n;
     }
 
-    private void addBigStringUuidIfMatch(V v) {
-        // deleted flag or test value
-        if (v.cvEncoded.length < 28) {
-            bigStringFileUuidByKey.remove(v.key);
-            return;
-        }
-
-        if (CompressedValue.onlyReadSpType(v.cvEncoded) == CompressedValue.SP_TYPE_BIG_STRING) {
-            bigStringFileUuidByKey.put(v.key, CompressedValue.getBigStringMetaUuid(v.cvEncoded));
-        } else {
-            bigStringFileUuidByKey.remove(v.key);
-        }
+    @Nullable
+    private BigStringFiles bigStringFiles() {
+        if (oneSlot == null) return null;
+        return oneSlot.getBigStringFiles();
     }
 
     private void refreshBigStringUuidMap() {
-        bigStringFileUuidByKey.clear();
+        var bsf = bigStringFiles();
+        if (bsf == null) return;
+        bsf.clearUuidMap();
         for (var entry : delayToKeyBucketShortValues.entrySet()) {
             var latest = getV(entry.getKey());
             if (latest == entry.getValue()) {
-                addBigStringUuidIfMatch(latest);
+                bsf.updateUuidFromEncoded(latest.key, latest.cvEncoded);
             }
         }
     }
@@ -587,7 +584,6 @@ public class Wal implements InMemoryEstimate {
     void clear(boolean writeBytes0ToRaf) {
         delayToKeyBucketValues.clear();
         delayToKeyBucketShortValues.clear();
-        bigStringFileUuidByKey.clear();
 
         if (writeBytes0ToRaf) {
             resetWal(false);
@@ -606,7 +602,6 @@ public class Wal implements InMemoryEstimate {
 
     public void clearShortValues() {
         delayToKeyBucketShortValues.clear();
-        bigStringFileUuidByKey.clear();
         resetWal(true);
 
         clearShortValuesCount++;
@@ -664,9 +659,9 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * @param key the key to remove
-     * @param bucketIndex the bucket index
-     * @param keyHash the hash of the key
+     * @param key               the key to remove
+     * @param bucketIndex       the bucket index
+     * @param keyHash           the hash of the key
      * @param lastPersistTimeMs the last persist time in milliseconds
      * @return the result of the removal operation
      */
@@ -699,9 +694,9 @@ public class Wal implements InMemoryEstimate {
     long needPersistOffsetTotal = 0;
 
     /**
-     * @param v the log entry to put
+     * @param v            the log entry to put
      * @param isValueShort whether the value is short
-     * @param offset the offset to write at
+     * @param offset       the offset to write at
      */
     @SlaveReplay
     public void putFromX(@NotNull V v, boolean isValueShort, int offset) {
@@ -813,8 +808,8 @@ public class Wal implements InMemoryEstimate {
 
     /**
      * @param isValueShort whether the value is short
-     * @param key the key to put
-     * @param v the log entry to put
+     * @param key          the key to put
+     * @param v            the log entry to put
      * @return the result of the put operation
      */
     public PutResult put(boolean isValueShort, @NotNull String key, @NotNull V v) {
@@ -822,9 +817,9 @@ public class Wal implements InMemoryEstimate {
     }
 
     /**
-     * @param isValueShort whether the value is short
-     * @param key the key to put
-     * @param v the log entry to put
+     * @param isValueShort      whether the value is short
+     * @param key               the key to put
+     * @param v                 the log entry to put
      * @param lastPersistTimeMs the last persist time in milliseconds
      * @return the result of the put operation
      */
@@ -873,6 +868,7 @@ public class Wal implements InMemoryEstimate {
         // 2 ms at least do persist once, suppose once batch 150 key values, 1 thread 1s may persist 1000 / 2 * 150 = 75000 key values
         final int atLeastDoPersistOnceIntervalMs = ConfForSlot.global.confWal.atLeastDoPersistOnceIntervalMs;
         final double checkAtLeastDoPersistOnceSizeRate = ConfForSlot.global.confWal.checkAtLeastDoPersistOnceSizeRate;
+        BigStringFiles bsf = bigStringFiles();
         if (isValueShort) {
             delayToKeyBucketShortValues.put(key, v);
             delayToKeyBucketValues.remove(key);
@@ -895,14 +891,14 @@ public class Wal implements InMemoryEstimate {
                 }
             }
 
-            addBigStringUuidIfMatch(v);
+            if (bsf != null) bsf.updateUuidFromEncoded(v.key, v.cvEncoded);
 
             return new PutResult(needPersist, true, v, null, needPersist ? 0 : offset);
         }
 
         delayToKeyBucketValues.put(key, v);
         delayToKeyBucketShortValues.remove(key);
-        bigStringFileUuidByKey.remove(key);
+        if (bsf != null) bsf.removeBigStringUuid(key);
 
         lastSeqAfterPut = v.seq;
 
@@ -923,7 +919,7 @@ public class Wal implements InMemoryEstimate {
         }
 
         if (!needPersist) {
-            addBigStringUuidIfMatch(v);
+            if (bsf != null) bsf.updateUuidFromEncoded(v.key, v.cvEncoded);
         }
 
         return new PutResult(needPersist, false, v, null, needPersist ? 0 : offset);

@@ -595,8 +595,8 @@ class OneSlotTest extends Specification {
         oneSlot.put(key2, bucketIndex, cv2)
 
         then:
-        def uuid1 = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key1)
-        def uuid2 = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key2)
+        def uuid1 = oneSlot.bigStringFiles.bigStringUuidByKey.get(key1)
+        def uuid2 = oneSlot.bigStringFiles.bigStringUuidByKey.get(key2)
         uuid1 != null
         uuid2 != null
         uuid1 != forcedKeyHash
@@ -626,14 +626,14 @@ class OneSlotTest extends Specification {
         cv1.keyHash = 222222222L
         cv1.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
         oneSlot.put(key, bucketIndex, cv1)
-        def firstUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+        def firstUuid = oneSlot.bigStringFiles.bigStringUuidByKey.get(key)
 
         def cv2 = new CompressedValue()
         cv2.seq = oneSlot.snowFlake.nextId()
         cv2.keyHash = 222222222L
         cv2.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
         oneSlot.put(key, bucketIndex, cv2)
-        def currentUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+        def currentUuid = oneSlot.bigStringFiles.bigStringUuidByKey.get(key)
 
         when:
         def count = oneSlot.intervalDeleteOverwriteBigStringFiles(bucketIndex)
@@ -665,7 +665,7 @@ class OneSlotTest extends Specification {
         cvBig.keyHash = keyHash
         cvBig.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
         oneSlot.put(key, bucketIndex, cvBig)
-        def bigStringUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+        def bigStringUuid = oneSlot.bigStringFiles.bigStringUuidByKey.get(key)
         assert bigStringUuid != null
 
         when: 'overwrite with a normal long value (not short, not big-string, not oversized)'
@@ -1278,7 +1278,7 @@ class OneSlotTest extends Specification {
         when:
         oneSlot.bigStringFiles.writeBigStringBytes(1234L, 0, 1234L, '1234'.bytes)
         oneSlot.bigStringFiles.writeBigStringBytes(2345L, 0, 2345L, '2345'.bytes)
-        oneSlot.getWalByBucketIndex(0).bigStringFileUuidByKey.put('1234', 1234L)
+        oneSlot.bigStringFiles.bigStringUuidByKey.put('1234', 1234L)
         oneSlot.intervalDeleteOverwriteBigStringFiles()
         then:
         oneSlot.delayToDeleteBigStringFileIds.size() == 1
@@ -1290,7 +1290,7 @@ class OneSlotTest extends Specification {
         oneSlot.bigStringFiles.writeBigStringBytes(2345L, 0, 2345L, '2345'.bytes)
         oneSlot.bigStringFiles.writeBigStringBytes(3456L, 0, 3456L, '3456'.bytes)
         oneSlot.getWalByBucketIndex(0).clear()
-        oneSlot.getWalByBucketIndex(0).bigStringFileUuidByKey.put('2345', 2345L)
+        oneSlot.bigStringFiles.bigStringUuidByKey.put('2345', 2345L)
         def sKey = BaseCommand.slot('1234', slotNumber)
         def cv = new CompressedValue()
         cv.seq = 1234L
@@ -1298,6 +1298,7 @@ class OneSlotTest extends Specification {
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
         cv.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
         oneSlot.keyLoader.putValueByKey(0, '1234', sKey.keyHash(), 0L, 1234L, cv.encode())
+        oneSlot.bigStringFiles.bigStringUuidByKey.put('1234', 1234L)
         oneSlot.deleteOverwriteBigStringFilesLastBucketIndex = 0
         oneSlot.intervalDeleteOverwriteBigStringFiles()
         then:
@@ -1541,7 +1542,7 @@ class OneSlotTest extends Specification {
         cv1.keyHash = 333333333L
         cv1.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
         oneSlot.put(key, bucketIndex, cv1)
-        def firstUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+        def firstUuid = oneSlot.bigStringFiles.bigStringUuidByKey.get(key)
         assert firstUuid != null
 
         and: 'manipulate WAL state so next short-value put triggers buffer-full early return'
@@ -1561,7 +1562,7 @@ class OneSlotTest extends Specification {
         oneSlot.delayToDeleteBigStringFileIds.any { it.uuid() == firstUuid }
 
         and: 'new UUID should be in the WAL map'
-        def currentUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+        def currentUuid = oneSlot.bigStringFiles.bigStringUuidByKey.get(key)
         currentUuid != null
         currentUuid != firstUuid
 
@@ -1585,7 +1586,7 @@ class OneSlotTest extends Specification {
         cv1.keyHash = 666666666L
         cv1.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
         oneSlot.put(key, bucketIndex, cv1)
-        def firstUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+        def firstUuid = oneSlot.bigStringFiles.bigStringUuidByKey.get(key)
         assert firstUuid != null
         // drain pending delete so we can count delta for the new uuid
         oneSlot.delayToDeleteBigStringFileIds.clear()
@@ -1620,8 +1621,8 @@ class OneSlotTest extends Specification {
         and: 'the orphan big-string file is on disk and exists at the expected path'
         new File(oneSlot.bigStringFiles.bigStringDir, bucketIndex + '/' + newIdEntry.uuid() + '_' + 666666666L).exists()
 
-        and: 'the new uuid was NOT promoted into the WAL bigStringFileUuidByKey (WAL did not accept v)'
-        oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key) == firstUuid
+        and: 'the new uuid was NOT promoted into the BigStringFiles UUID map (WAL did not accept v)'
+        oneSlot.bigStringFiles.bigStringUuidByKey.get(key) == firstUuid
 
         cleanup:
         oneSlot.doPersistForceThrowForTest = false
@@ -1849,7 +1850,7 @@ class OneSlotTest extends Specification {
         cvBig.keyHash = keyHash
         cvBig.compressedData = new byte[oneSlot.chunk.chunkSegmentLength]
         oneSlot.put(key, bucketIndex, cvBig)
-        def bigStringUuid = oneSlot.getWalByBucketIndex(bucketIndex).bigStringFileUuidByKey.get(key)
+        def bigStringUuid = oneSlot.bigStringFiles.bigStringUuidByKey.get(key)
 
         then: 'big-string uuid was recorded in WAL'
         bigStringUuid != null

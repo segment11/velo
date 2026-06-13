@@ -916,37 +916,6 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param bucketIndex the bucket index
-     * @return the persisted big string uuid with key list
-     */
-    List<BigStringFiles.IdWithKey> getPersistedBigStringIdList(int bucketIndex) {
-        var list = new ArrayList<BigStringFiles.IdWithKey>();
-        final long currentTimeMillis = System.currentTimeMillis();
-
-        var keyBuckets = readKeyBuckets(bucketIndex);
-        for (var keyBucket : keyBuckets) {
-            if (keyBucket == null) {
-                continue;
-            }
-
-            keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
-                if (expireAt == CompressedValue.NO_EXPIRE || expireAt > currentTimeMillis) {
-                    if (PersistValueMeta.isPvm(valueBytes)) {
-                        return;
-                    }
-
-                    var cv = CompressedValue.decode(valueBytes, Wal.keyBytes(key), keyHash);
-                    if (cv.isBigString()) {
-                        list.add(new BigStringFiles.IdWithKey(cv.getBigStringMetaUuid(), bucketIndex, keyHash, key));
-                    }
-                }
-            });
-        }
-        return list;
-    }
-
-
-    /**
-     * @param bucketIndex the bucket index
      * @param slice the Slice to which the encoded short strings will be written
      */
     @SlaveNeedReplay

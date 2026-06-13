@@ -86,7 +86,7 @@ class WalTest extends Specification {
         def raf = new RandomAccessFile(file, 'rw')
         def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
         def snowFlake = new SnowFlake(1, 1)
-        def oneSlot = new OneSlot(slot)
+        def oneSlot = new OneSlot(slot, Consts.slotDir, null, null)
         def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
         def wal2 = new Wal(slot, oneSlot, 1, raf, rafShortValue, snowFlake)
         println 'Wal: ' + wal
@@ -142,8 +142,8 @@ class WalTest extends Specification {
         toMap.size() == 10
         wal.keyCount == 10
         wal.lastSeqShortValueAfterPut == vList[-1].seq()
-        wal.bigStringFileUuidByKey.size() == 1
-        wal.bigStringFileUuidByKey.containsValue 1234L
+        oneSlot.bigStringFiles.bigStringUuidByKey.size() == 1
+        oneSlot.bigStringFiles.bigStringUuidByKey.containsValue 1234L
 
         when:
         def vBytes = new byte[2]
@@ -309,7 +309,7 @@ class WalTest extends Specification {
         def raf = new RandomAccessFile(file, 'rw')
         def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
         def snowFlake = new SnowFlake(1, 1)
-        def oneSlot = new OneSlot(slot)
+        def oneSlot = new OneSlot(slot, Consts.slotDir, null, null)
         def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
 
         def bigStringKey = 'big-string-key'
@@ -326,14 +326,14 @@ class WalTest extends Specification {
         wal.put(true, bigStringKey, bigStringV)
 
         then:
-        wal.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+        oneSlot.bigStringFiles.bigStringUuidByKey.get(bigStringKey) == 5678L
 
         when:
         def reloadedWalWithBigString = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
         reloadedWalWithBigString.lazyReadFromFile()
 
         then:
-        reloadedWalWithBigString.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+        oneSlot.bigStringFiles.bigStringUuidByKey.get(bigStringKey) == 5678L
 
         when:
         def normalShortCvEncoded = Mock.prepareShortStringCvEncoded(bigStringKey, 'normal-short')
@@ -342,13 +342,13 @@ class WalTest extends Specification {
         wal.put(true, bigStringKey, normalShortV)
 
         then:
-        !wal.bigStringFileUuidByKey.containsKey(bigStringKey)
+        !oneSlot.bigStringFiles.bigStringUuidByKey.containsKey(bigStringKey)
 
         when:
         wal.put(true, bigStringKey, bigStringV)
 
         then:
-        wal.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+        oneSlot.bigStringFiles.bigStringUuidByKey.get(bigStringKey) == 5678L
 
         when:
         def normalCv = new CompressedValue()
@@ -361,33 +361,33 @@ class WalTest extends Specification {
         wal.put(false, bigStringKey, normalV)
 
         then:
-        !wal.bigStringFileUuidByKey.containsKey(bigStringKey)
+        !oneSlot.bigStringFiles.bigStringUuidByKey.containsKey(bigStringKey)
 
         when:
         def reloadedWalAfterNormal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
         reloadedWalAfterNormal.lazyReadFromFile()
 
         then:
-        !reloadedWalAfterNormal.bigStringFileUuidByKey.containsKey(bigStringKey)
+        !oneSlot.bigStringFiles.bigStringUuidByKey.containsKey(bigStringKey)
 
         when:
         wal.put(true, bigStringKey, bigStringV)
 
         then:
-        wal.bigStringFileUuidByKey.get(bigStringKey) == 5678L
+        oneSlot.bigStringFiles.bigStringUuidByKey.get(bigStringKey) == 5678L
 
         when:
         wal.removeDelay(bigStringKey, 0, bigStringKeyHash, 0L)
 
         then:
-        !wal.bigStringFileUuidByKey.containsKey(bigStringKey)
+        !oneSlot.bigStringFiles.bigStringUuidByKey.containsKey(bigStringKey)
 
         when:
         def reloadedWalAfterDelete = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
         reloadedWalAfterDelete.lazyReadFromFile()
 
         then:
-        !reloadedWalAfterDelete.bigStringFileUuidByKey.containsKey(bigStringKey)
+        !oneSlot.bigStringFiles.bigStringUuidByKey.containsKey(bigStringKey)
 
         cleanup:
         wal.clear()
@@ -662,7 +662,7 @@ class WalTest extends Specification {
         def raf = new RandomAccessFile(file, 'rw')
         def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
         def snowFlake = new SnowFlake(1, 1)
-        def oneSlot = new OneSlot(slot)
+        def oneSlot = new OneSlot(slot, Consts.slotDir, null, null)
         def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
 
         def key = 'conflict-key'
@@ -737,7 +737,7 @@ class WalTest extends Specification {
         def raf = new RandomAccessFile(file, 'rw')
         def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
         def snowFlake = new SnowFlake(1, 1)
-        def oneSlot = new OneSlot(slot)
+        def oneSlot = new OneSlot(slot, Consts.slotDir, null, null)
         def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
 
         when:
@@ -786,7 +786,7 @@ class WalTest extends Specification {
         def raf = new RandomAccessFile(file, 'rw')
         def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
         def snowFlake = new SnowFlake(1, 1)
-        def oneSlot = new OneSlot(slot)
+        def oneSlot = new OneSlot(slot, Consts.slotDir, null, null)
         def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
 
         when:
@@ -824,7 +824,7 @@ class WalTest extends Specification {
         def raf = new RandomAccessFile(file, 'rw')
         def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
         def snowFlake = new SnowFlake(1, 1)
-        def oneSlot = new OneSlot(slot)
+        def oneSlot = new OneSlot(slot, Consts.slotDir, null, null)
         def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
         wal.lazyReadFromFile()
 
@@ -881,7 +881,7 @@ class WalTest extends Specification {
         def raf = new RandomAccessFile(file, 'rw')
         def rafShortValue = new RandomAccessFile(fileShortValue, 'rw')
         def snowFlake = new SnowFlake(1, 1)
-        def oneSlot = new OneSlot(slot)
+        def oneSlot = new OneSlot(slot, Consts.slotDir, null, null)
 
         def wal = new Wal(slot, oneSlot, 0, raf, rafShortValue, snowFlake)
         wal.lazyReadFromFile()
