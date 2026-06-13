@@ -119,16 +119,13 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      *
      * @param key  the key to conditionally remove
      * @param uuid the expected UUID
-     * @return true if the entry was removed
      */
-    public boolean removeBigStringUuidIfMatches(String key, long uuid) {
+    public void removeBigStringUuidIfMatches(String key, long uuid) {
         var current = bigStringUuidByKey.get(key);
         if (current != null && current == uuid) {
             bigStringUuidByKey.remove(key);
             bigStringUuidSet.remove(uuid);
-            return true;
         }
-        return false;
     }
 
     /**
