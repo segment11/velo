@@ -495,10 +495,6 @@ public class Wal implements InMemoryEstimate {
             position += v.encodeLength();
             n++;
 
-            if (isShortValue) {
-                var bsf = bigStringFiles();
-                if (bsf != null) bsf.updateUuidFromEncoded(v.key, v.cvEncoded);
-            }
         }
 
         if (isShortValue) {
@@ -520,12 +516,9 @@ public class Wal implements InMemoryEstimate {
     private void refreshBigStringUuidMap() {
         var bsf = bigStringFiles();
         if (bsf == null) return;
-        bsf.clearUuidMap();
+        // mergeAfterReload() already resolved cross-map conflicts — entry.getValue() is authoritative
         for (var entry : delayToKeyBucketShortValues.entrySet()) {
-            var latest = getV(entry.getKey());
-            if (latest == entry.getValue()) {
-                bsf.updateUuidFromEncoded(latest.key, latest.cvEncoded);
-            }
+            bsf.updateUuidFromEncoded(entry.getKey(), entry.getValue().cvEncoded);
         }
     }
 

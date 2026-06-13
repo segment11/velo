@@ -1279,6 +1279,7 @@ class OneSlotTest extends Specification {
         oneSlot.bigStringFiles.writeBigStringBytes(1234L, 0, 1234L, '1234'.bytes)
         oneSlot.bigStringFiles.writeBigStringBytes(2345L, 0, 2345L, '2345'.bytes)
         oneSlot.bigStringFiles.bigStringUuidByKey.put('1234', 1234L)
+        oneSlot.bigStringFiles.bigStringUuidSet.add(1234L)
         oneSlot.intervalDeleteOverwriteBigStringFiles()
         then:
         oneSlot.delayToDeleteBigStringFileIds.size() == 1
@@ -1291,6 +1292,7 @@ class OneSlotTest extends Specification {
         oneSlot.bigStringFiles.writeBigStringBytes(3456L, 0, 3456L, '3456'.bytes)
         oneSlot.getWalByBucketIndex(0).clear()
         oneSlot.bigStringFiles.bigStringUuidByKey.put('2345', 2345L)
+        oneSlot.bigStringFiles.bigStringUuidSet.add(2345L)
         def sKey = BaseCommand.slot('1234', slotNumber)
         def cv = new CompressedValue()
         cv.seq = 1234L
@@ -1299,6 +1301,7 @@ class OneSlotTest extends Specification {
         cv.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
         oneSlot.keyLoader.putValueByKey(0, '1234', sKey.keyHash(), 0L, 1234L, cv.encode())
         oneSlot.bigStringFiles.bigStringUuidByKey.put('1234', 1234L)
+        oneSlot.bigStringFiles.bigStringUuidSet.add(1234L)
         oneSlot.deleteOverwriteBigStringFilesLastBucketIndex = 0
         oneSlot.intervalDeleteOverwriteBigStringFiles()
         then:

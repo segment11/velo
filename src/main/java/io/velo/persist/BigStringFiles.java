@@ -70,6 +70,11 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * Populated from WAL short values and KeyBucket data, survives WAL clears.
      */
     final HashMap<String, Long> bigStringUuidByKey = new HashMap<>();
+    /**
+     * Reverse index for O(1) UUID membership checks.
+     * Kept in sync with {@link #bigStringUuidByKey} on every put/remove.
+     */
+    final HashSet<Long> bigStringUuidSet = new HashSet<>();
 
     /**
      * Updates the UUID map from encoded value bytes.
@@ -81,13 +86,18 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      */
     public void updateUuidFromEncoded(String key, byte[] cvEncoded) {
         if (cvEncoded.length < 28) {
-            bigStringUuidByKey.remove(key);
+            var old = bigStringUuidByKey.remove(key);
+            if (old != null) bigStringUuidSet.remove(old);
             return;
         }
         if (CompressedValue.onlyReadSpType(cvEncoded) == CompressedValue.SP_TYPE_BIG_STRING) {
-            bigStringUuidByKey.put(key, CompressedValue.getBigStringMetaUuid(cvEncoded));
+            var newUuid = CompressedValue.getBigStringMetaUuid(cvEncoded);
+            var old = bigStringUuidByKey.put(key, newUuid);
+            bigStringUuidSet.add(newUuid);
+            if (old != null && old != newUuid) bigStringUuidSet.remove(old);
         } else {
-            bigStringUuidByKey.remove(key);
+            var old = bigStringUuidByKey.remove(key);
+            if (old != null) bigStringUuidSet.remove(old);
         }
     }
 
@@ -97,7 +107,8 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @param key the key to remove
      */
     public void removeBigStringUuid(String key) {
-        bigStringUuidByKey.remove(key);
+        var old = bigStringUuidByKey.remove(key);
+        if (old != null) bigStringUuidSet.remove(old);
     }
 
     /**
@@ -118,7 +129,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @return true if the UUID is mapped to any key
      */
     public boolean containsUuid(long uuid) {
-        return bigStringUuidByKey.containsValue(uuid);
+        return bigStringUuidSet.contains(uuid);
     }
 
     /**
@@ -129,11 +140,11 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     }
 
     /**
-     * Clears all entries from the UUID map.
-     * Called by {@link io.velo.persist.Wal#refreshBigStringUuidMap()} before rebuilding.
+     * Clears all entries from the UUID map and reverse index.
      */
     public void clearUuidMap() {
         bigStringUuidByKey.clear();
+        bigStringUuidSet.clear();
     }
 
     /**
@@ -184,7 +195,10 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
                     var cv = CompressedValue.decode(valueBytes, Wal.keyBytes(key), keyHash);
                     if (cv.isBigString()) {
                         // WAL may have loaded a more recent value already; only fill gaps
-                        bigStringUuidByKey.putIfAbsent(key, cv.getBigStringMetaUuid());
+                        var uuid = cv.getBigStringMetaUuid();
+                        if (bigStringUuidByKey.putIfAbsent(key, uuid) == null) {
+                            bigStringUuidSet.add(uuid);
+                        }
                     }
                 });
             }
@@ -430,6 +444,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             bigStringBytesByUuidLRU.clear();
         }
         bigStringUuidByKey.clear();
+        bigStringUuidSet.clear();
 
         try {
             FileUtils.cleanDirectory(bigStringDir);
@@ -459,6 +474,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         var currentUuid = bigStringUuidByKey.get(key);
         if (currentUuid != null && currentUuid == uuid) {
             bigStringUuidByKey.remove(key);
+            bigStringUuidSet.remove(uuid);
         }
         if (!isDeleted) {
             throw new RuntimeException("Delete big string file error, s=" + slot + ", key=" + key + ", uuid=" + uuid);
