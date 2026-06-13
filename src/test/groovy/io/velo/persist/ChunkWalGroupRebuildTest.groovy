@@ -193,7 +193,7 @@ class ChunkWalGroupRebuildTest extends Specification {
         Consts.slotDir.deleteDir()
     }
 
-    def 'chunk persist logs and rethrows key bucket update failure after segment write'() {
+    def 'chunk persist rolls back single segment flag and rewinds segment index when key bucket update fails'() {
         given:
         ConfForSlot.global.confBucket.initialSplitNumber = 1
         def keyLoader = new FailingKeyLoader(slot)
@@ -202,13 +202,89 @@ class ChunkWalGroupRebuildTest extends Specification {
         oneSlot.chunk = chunk
         chunk.initFds()
 
+        and: 'single value produces a single segment (segmentCount < BATCH_ONCE_SEGMENT_COUNT_WRITE)'
+        def vList = prepareWalGroup0ValueList(1)
+        def pvmListProbe = [] as ArrayList<PersistValueMeta>
+        def segmentCount = (ConfForSlot.global.confChunk.isSegmentUseCompression ?
+                new SegmentBatch(new SnowFlake(1, 1)) :
+                new SegmentBatch2(new SnowFlake(1, 1))).split(vList, pvmListProbe).size()
+        assert segmentCount == 1
+        assert segmentCount < FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE
+
         when:
-        chunk.persist(0, prepareWalGroup0ValueList(1), null)
+        chunk.persist(0, vList, null)
+
+        then: 'persist rethrows the bucket-update failure'
+        def e = thrown(RuntimeException)
+        e.message == 'mock key bucket update failed'
+
+        and: 'segment 0 is rolled back to REUSABLE (flag, seq cleared)'
+        def flag0 = oneSlot.metaChunkSegmentFlagSeq.getSegmentMergeFlag(0)
+        flag0.flagByte() == Chunk.SEGMENT_FLAG_REUSABLE
+        flag0.segmentSeq() == 0L
+
+        and: 'no spurious WAL-group marker was inserted for the rolled-back range'
+        oneSlot.metaChunkSegmentFlagSeq.countMarkersForWalGroup(0) == 0
+
+        and: 'rolled-back segment is immediately reusable via findCanReuseSegmentIndex'
+        oneSlot.metaChunkSegmentFlagSeq.findCanReuseSegmentIndex(0, 1) == 0
+
+        and: 'in-memory chunk.segmentIndex was rewound to currentSegmentIndex (0), not advanced past the rolled-back segment'
+        chunk.segmentIndex == 0
+
+        cleanup:
+        chunk.cleanUp()
+        keyLoader.cleanUp()
+        oneSlot.metaChunkSegmentFlagSeq.clear()
+        oneSlot.metaChunkSegmentFlagSeq.cleanUp()
+        Consts.slotDir.deleteDir()
+    }
+
+    def 'chunk persist rolls back batch-path segment flags when key bucket update fails'() {
+        given:
+        ConfForSlot.global.confBucket.initialSplitNumber = 1
+        def keyLoader = new FailingKeyLoader(slot)
+        def oneSlot = new OneSlot(slot, Consts.slotDir, keyLoader, null)
+        def chunk = new Chunk(slot, Consts.slotDir, oneSlot)
+        oneSlot.chunk = chunk
+        chunk.initFds()
+
+        and: 'enough values to force the batch write branch (segmentCount >= BATCH_ONCE_SEGMENT_COUNT_WRITE) plus a remainder'
+        def segmentBatch = ConfForSlot.global.confChunk.isSegmentUseCompression ?
+                new SegmentBatch(new SnowFlake(1, 1)) :
+                new SegmentBatch2(new SnowFlake(1, 1))
+        def vList = (50..2000).step(50).findResult { n ->
+            def candidate = prepareWalGroup0ValueList(n)
+            def pvmListProbe = [] as ArrayList<PersistValueMeta>
+            def cnt = segmentBatch.split(candidate, pvmListProbe).size()
+            cnt >= FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE + 1 ? [candidate, cnt] : null
+        }
+        assert vList != null
+        def values = vList[0] as ArrayList<Wal.V>
+        def expectedSegmentCount = (int) vList[1]
+        assert expectedSegmentCount >= FdReadWrite.BATCH_ONCE_SEGMENT_COUNT_WRITE + 1
+
+        when:
+        chunk.persist(0, values, null)
 
         then:
         def e = thrown(RuntimeException)
         e.message == 'mock key bucket update failed'
-        oneSlot.metaChunkSegmentFlagSeq.getSegmentMergeFlag(0).flagByte() == Chunk.SEGMENT_FLAG_HAS_DATA
+
+        and: 'every segment touched in Phase 1 (both batch and remainder paths) is rolled back to REUSABLE'
+        (0..<expectedSegmentCount).every {
+            def flag = oneSlot.metaChunkSegmentFlagSeq.getSegmentMergeFlag(it)
+            flag.flagByte() == Chunk.SEGMENT_FLAG_REUSABLE && flag.segmentSeq() == 0L
+        }
+
+        and: 'no spurious WAL-group marker was inserted'
+        oneSlot.metaChunkSegmentFlagSeq.countMarkersForWalGroup(0) == 0
+
+        and: 'the entire rolled-back range is reusable as one contiguous block'
+        oneSlot.metaChunkSegmentFlagSeq.findCanReuseSegmentIndex(0, expectedSegmentCount) == 0
+
+        and: 'in-memory chunk.segmentIndex was rewound to 0, not advanced past the rolled-back range'
+        chunk.segmentIndex == 0
 
         cleanup:
         chunk.cleanUp()

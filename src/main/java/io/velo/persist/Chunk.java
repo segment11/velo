@@ -408,6 +408,12 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
             log.error("Update key buckets after write chunk segments failed, s={}, wal group index={}, begin segment index={}, " +
                             "segment count={}, next segment index={}, value count={}, pvm count={}",
                     slot, walGroupIndex, currentSegmentIndex, segmentCount, segmentIndex, list.size(), pvmList.size(), e);
+            // roll back: flip the just-written segments back to REUSABLE so the orphan range is not leaked.
+            // Phase 3 (markPersistedSegmentIndexToTargetWalGroup) was never reached, so no marker needs to be cleared.
+            oneSlot.setSegmentMergeFlagBatch(currentSegmentIndex, segmentCount,
+                    SEGMENT_FLAG_REUSABLE, null, walGroupIndex);
+            // rewind the in-memory cursor so the next persist immediately reuses the rolled-back range.
+            this.segmentIndex = currentSegmentIndex;
             throw e;
         }
         var costT = (System.nanoTime() - beginT) / 1000;
