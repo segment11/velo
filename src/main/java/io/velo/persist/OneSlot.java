@@ -851,7 +851,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             // execute once every 100ms
             var wal = walArray[loopCount % walArray.length];
             // wal == null for unit test
-            if (wal != null) {
+            if (wal != null && !isAsSlave()) {
                 var count = wal.intervalDeleteExpiredBigStringFiles();
                 if (count > 0 || wal.groupIndex == 0) {
                     log.debug("Wal interval delete expired big string files, slot={}, group index={}, refer big string files count={}",
