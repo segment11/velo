@@ -3,6 +3,7 @@ package io.velo;
 import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdCompressCtx;
 import com.github.luben.zstd.ZstdDecompressCtx;
+import io.velo.persist.Wal;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -352,7 +353,7 @@ public class Dict implements Serializable {
      * @return the length of the encoded dictionary
      */
     public int encodeLength(String keyPrefix) {
-        return 4 + ENCODED_HEADER_LENGTH + keyPrefix.length() + dictBytes.length;
+        return 4 + ENCODED_HEADER_LENGTH + Wal.keyBytes(keyPrefix).length + dictBytes.length;
     }
 
     /**
@@ -362,7 +363,13 @@ public class Dict implements Serializable {
      * @return the encoded dictionary bytes
      */
     public byte[] encode(String keyPrefixOrSuffix) {
-        int vLength = ENCODED_HEADER_LENGTH + keyPrefixOrSuffix.length() + dictBytes.length;
+        // Use UTF-8 byte count (not char count) for both sizing and writing.
+        // For non-ASCII prefixes the UTF-8 byte count exceeds String.length()
+        // (e.g. a CJK char is 1 char but 3 bytes), so using char count
+        // would either overflow the buffer (encode) or read the wrong
+        // number of bytes (decode), corrupting all subsequent fields.
+        var keyPrefixOrSuffixBytes = Wal.keyBytes(keyPrefixOrSuffix);
+        int vLength = ENCODED_HEADER_LENGTH + keyPrefixOrSuffixBytes.length + dictBytes.length;
 
         var bytes = new byte[4 + vLength];
         var buffer = ByteBuffer.wrap(bytes);
@@ -370,8 +377,8 @@ public class Dict implements Serializable {
         buffer.putInt(vLength);
         buffer.putInt(seq);
         buffer.putLong(createdTime);
-        buffer.putShort((short) keyPrefixOrSuffix.length());
-        buffer.put(keyPrefixOrSuffix.getBytes());
+        buffer.putShort((short) keyPrefixOrSuffixBytes.length);
+        buffer.put(keyPrefixOrSuffixBytes);
         buffer.putShort((short) dictBytes.length);
         buffer.put(dictBytes);
 
@@ -436,7 +443,7 @@ public class Dict implements Serializable {
         dict.createdTime = createdTime;
         dict.dictBytes = dictBytes;
 
-        return new DictWithKeyPrefixOrSuffix(new String(keyPrefixOrSuffixBytes), dict);
+        return new DictWithKeyPrefixOrSuffix(Wal.keyString(keyPrefixOrSuffixBytes), dict);
     }
 
     /**

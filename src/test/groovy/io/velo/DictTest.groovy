@@ -158,6 +158,28 @@ class DictTest extends Specification {
         exception
     }
 
+    def 'test encode and decode round trip with non ascii prefix'() {
+        given: 'a dict and a non-ascii prefix (utf-8 bytes > char count)'
+        def dict = new Dict(new byte[8])
+        def keyPrefix = '用户'  // 2 chars, 6 UTF-8 bytes (3 bytes per char)
+
+        when: 'encoded'
+        def encoded = dict.encode(keyPrefix)
+
+        then: 'no exception, encodeLength matches actual byte length, and decode round-trips'
+        // Old bug: char count (2) was used to size the buffer but getBytes() wrote 6 bytes,
+        // causing BufferOverflowException. Fix must use UTF-8 byte count consistently.
+        dict.encodeLength(keyPrefix) == encoded.length
+
+        when: 'decoded back'
+        def decoded = Dict.decode(new DataInputStream(new ByteArrayInputStream(encoded)))
+
+        then: 'the original string is recovered'
+        decoded != null
+        decoded.keyPrefixOrSuffix() == keyPrefix
+        decoded.dict().dictBytes == dict.dictBytes
+    }
+
     def 'test init ctx'() {
         given:
         MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
