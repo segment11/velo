@@ -198,6 +198,13 @@ class DictMapTest extends Specification {
         dictMap.getDictBySeq(dict.seq) == dict
         dictMap.dictSize() == 1
 
+        and: 're-init from disk to verify the file write succeeded'
+        dictMap.cleanUp()
+        dictMap.initDictMap(Consts.testDir)
+        dictMap.dictSize() == 1
+        dictMap.getDict('fail-binlog-prefix') != null
+        dictMap.getDict('fail-binlog-prefix').dictBytes == 'fail-binlog-test'.bytes
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()

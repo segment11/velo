@@ -94,7 +94,10 @@ public class DictMap implements NeedCleanUp {
     /**
      * @param keyPrefixOrSuffix the key prefix or suffix of the dictionary
      * @param dict              the dictionary to put
-     * @return the dictionary that was put into the map
+     * @return the stored dict — i.e. the (possibly seq-regenerated) dict actually
+     * inserted. This is NOT the previous dict for that prefix; the map
+     * uses "store, don't replace" semantics, so the caller's {@code dict}
+     * reference is what ends up in both the cache and the file.
      */
     @SlaveNeedReplay
     @SlaveReplay
