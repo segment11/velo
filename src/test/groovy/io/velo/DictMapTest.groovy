@@ -202,4 +202,42 @@ class DictMapTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test cleanUp nulls fos even when close throws'() {
+        given:
+        FileUtils.forceMkdir(Consts.testDir)
+
+        def dictFile = new File(Consts.testDir, 'dict-map.dat')
+        if (dictFile.exists()) {
+            dictFile.delete()
+        }
+
+        and:
+        def dictMap = DictMap.instance
+        dictMap.cleanUp()
+        dictMap.initDictMap(Consts.testDir)
+
+        and: 'replace fos with a FileOutputStream whose close() throws IOException'
+        def fosField = DictMap.class.getDeclaredField('fos')
+        fosField.setAccessible(true)
+        def tempFile = new File(Consts.testDir, 'cleanUp-fail-test.dat')
+        FileUtils.touch(tempFile)
+        def throwingFos = new FileOutputStream(tempFile) {
+            @Override
+            void close() throws IOException {
+                throw new IOException("Simulated close failure")
+            }
+        }
+        fosField.set(dictMap, throwingFos)
+
+        when:
+        dictMap.cleanUp()
+
+        then: 'fos is null even though close() threw — finally block must always null it'
+        fosField.get(dictMap) == null
+
+        cleanup:
+        fosField.setAccessible(false)
+        Consts.persistDir.deleteDir()
+    }
 }

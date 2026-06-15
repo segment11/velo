@@ -215,12 +215,19 @@ public class DictMap implements NeedCleanUp {
     @Override
     public synchronized void cleanUp() {
         if (fos != null) {
+            // finally block ensures fos is always nulled, even if close() throws.
+            // Without it, a transient I/O error during shutdown leaves fos pointing
+            // at a closed-or-broken stream, and the next cleanUp() / putDict()
+            // would call into a closed stream (silently no-op'd or throws).
+            // Use System.out/err directly: the SLF4J logger may already be
+            // shut down at this point in the server-stop sequence.
             try {
                 fos.close();
                 System.out.println("Close dict fos");
-                fos = null;
             } catch (IOException e) {
                 System.err.println("Close dict fos error, message=" + e.getMessage());
+            } finally {
+                fos = null;
             }
         }
 
