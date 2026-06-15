@@ -388,4 +388,46 @@ class BigStringFilesTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test getBigStringFileIdList skips unparseable stray files without throwing'() {
+        given:
+        def tmpSlotDir = new File('/tmp/tmp-slot-dir-stray-files')
+        if (tmpSlotDir.exists()) {
+            tmpSlotDir.deleteDir()
+        }
+        def bigStringFiles = new BigStringFiles(slot, tmpSlotDir)
+        def bucketDir = new File(tmpSlotDir, 'big-string/0')
+        bucketDir.mkdirs()
+
+        and: 'one valid big-string file'
+        bigStringFiles.writeBigStringBytes(1234L, 0, 5678L, 'valid'.bytes)
+
+        and: 'stray files that would previously throw NumberFormatException / ArrayIndexOutOfBoundsException'
+        def strayNoUnderscore = new File(bucketDir, 'not_a_uuid_at_all')
+        strayNoUnderscore.text = 'junk'
+        def strayNonNumeric = new File(bucketDir, 'abc_def')
+        strayNonNumeric.text = 'junk'
+        def straySinglePart = new File(bucketDir, '12345')
+        straySinglePart.text = 'junk'
+        def straySubdir = new File(bucketDir, 'not_a_real_uuid')
+        straySubdir.mkdirs()
+
+        when: 'getBigStringFileIdList is called on a bucket with stray files'
+        def list = bigStringFiles.getBigStringFileIdList(0)
+
+        then: 'only the valid file is returned, no exception is thrown'
+        list.size() == 1
+        list[0].uuid() == 1234L
+        list[0].bucketIndex() == 0
+        list[0].keyHash() == 5678L
+
+        when: 'getBigStringFileIdList is called on a non-existent bucket directory'
+        def emptyList = bigStringFiles.getBigStringFileIdList(99999)
+
+        then: 'returns empty list without throwing (listFiles returns null)'
+        emptyList.isEmpty()
+
+        cleanup:
+        tmpSlotDir.deleteDir()
+    }
 }

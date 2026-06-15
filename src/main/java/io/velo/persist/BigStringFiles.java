@@ -304,10 +304,20 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
 
         for (var file : files) {
+            if (!file.isFile()) {
+                continue;
+            }
             var arr = file.getName().split("_");
-            var uuid = Long.parseLong(arr[0]);
-            var keyHash = Long.parseLong(arr[1]);
-            list.add(new IdWithKey(uuid, bucketIndex, keyHash, ""));
+            if (arr.length < 2) {
+                continue;
+            }
+            try {
+                var uuid = Long.parseLong(arr[0]);
+                var keyHash = Long.parseLong(arr[1]);
+                list.add(new IdWithKey(uuid, bucketIndex, keyHash, ""));
+            } catch (NumberFormatException e) {
+                log.warn("Skip unparseable big string file, name={}, slot={}", file.getName(), slot);
+            }
         }
         return list;
     }

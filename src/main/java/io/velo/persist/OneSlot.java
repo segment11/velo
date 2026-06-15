@@ -853,16 +853,25 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             var wal = walArray[loopCount % walArray.length];
             // wal == null for unit test
             if (wal != null) {
-                var count = wal.intervalDeleteExpiredBigStringFiles();
-                if (count > 0 || wal.groupIndex == 0) {
-                    log.debug("Wal interval delete expired big string files, slot={}, group index={}, refer big string files count={}",
-                            slot, wal.groupIndex, count);
+                try {
+                    var count = wal.intervalDeleteExpiredBigStringFiles();
+                    if (count > 0 || wal.groupIndex == 0) {
+                        log.debug("Wal interval delete expired big string files, slot={}, group index={}, refer big string files count={}",
+                                slot, wal.groupIndex, count);
+                    }
+                } catch (Exception e) {
+                    log.error("Wal interval delete expired big string files error, slot={}, group index={}",
+                            slot, wal.groupIndex, e);
                 }
             }
         }
 
         // execute once every 10ms
-        intervalDeleteOverwriteBigStringFiles();
+        try {
+            intervalDeleteOverwriteBigStringFiles();
+        } catch (Exception e) {
+            log.error("Interval delete overwrite big string files error, slot={}", slot, e);
+        }
     }
 
     @VisibleForTesting
@@ -898,10 +907,16 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @VisibleForTesting
     int deleteOverwriteBigStringFilesLastBucketIndex = 0;
 
+    @TestOnly
+    boolean intervalDeleteOverwriteBigStringFilesForceThrowForTest = false;
+
     void intervalDeleteOverwriteBigStringFiles() {
         // unit test
         if (keyLoader == null) {
             return;
+        }
+        if (intervalDeleteOverwriteBigStringFilesForceThrowForTest) {
+            throw new RuntimeException("intervalDeleteOverwriteBigStringFiles forced throw for test");
         }
 
         intervalDeleteOverwriteBigStringFiles(deleteOverwriteBigStringFilesLastBucketIndex);

@@ -1870,4 +1870,72 @@ class OneSlotTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test doTask does not propagate exception from wal interval delete expired big string files'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def bucketIndex = 0
+        def keyHash = 888888888L
+        def key = 'kerry-test-do-task-wal-expired-bs'
+
+        and: 'write a big-string file so the delete path is reached'
+        def bigStringUuid = 9001L
+        oneSlot.bigStringFiles.writeBigStringBytes(bigStringUuid, bucketIndex, keyHash, 'do-task-wal-bytes'.bytes)
+
+        and: 'inject an expired big-string entry into the first WAL short values'
+        def cv = new CompressedValue()
+        cv.seq = oneSlot.snowFlake.nextId()
+        cv.keyHash = keyHash
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv.setCompressedDataAsBigString(bigStringUuid, CompressedValue.NULL_DICT_SEQ)
+        def expiredV = new Wal.V(cv.seq, bucketIndex, keyHash,
+                System.currentTimeMillis() - 60_000L,
+                CompressedValue.SP_TYPE_BIG_STRING,
+                key, cv.encode(), false)
+        def wal = oneSlot.getWalByGroupIndex(0)
+        wal.delayToKeyBucketShortValues.put(key, expiredV)
+        oneSlot.bigStringFiles.bigStringUuidByKey.put(key, bigStringUuid)
+        oneSlot.bigStringFiles.bigStringUuidSet.add(bigStringUuid)
+
+        and: 'force the underlying delete to return false so handleWhenCvExpiredOrDeleted throws'
+        oneSlot.bigStringFiles.deleteForceReturnFalseForTest = true
+
+        when: 'doTask is called with loopCount=0 (loopCount % 10 == 0 fires the 100ms tick, walArray[0] is the WAL group we populated)'
+        oneSlot.doTask(0)
+
+        then: 'no RuntimeException propagates out of doTask'
+        noExceptionThrown()
+
+        cleanup:
+        oneSlot.bigStringFiles.deleteForceReturnFalseForTest = false
+        // re-attempt delete for real so the file does not leak into the next test
+        oneSlot.bigStringFiles.deleteBigStringFileIfExist(bigStringUuid, bucketIndex, keyHash)
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test doTask does not propagate exception from interval delete overwrite big string files'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and: 'force intervalDeleteOverwriteBigStringFiles to throw so the doTask catch is exercised'
+        oneSlot.intervalDeleteOverwriteBigStringFilesForceThrowForTest = true
+
+        when: 'doTask is called with loopCount=0 (fires the 10ms tick intervalDeleteOverwriteBigStringFiles)'
+        oneSlot.doTask(0)
+
+        then: 'no exception propagates from intervalDeleteOverwriteBigStringFiles'
+        noExceptionThrown()
+
+        cleanup:
+        oneSlot.intervalDeleteOverwriteBigStringFilesForceThrowForTest = false
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }
