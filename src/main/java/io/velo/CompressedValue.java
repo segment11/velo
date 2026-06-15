@@ -217,7 +217,7 @@ public class CompressedValue {
      * @return {@code true} if the type is any of the numeric special types.
      */
     public boolean isTypeNumber() {
-        return dictSeqOrSpType <= SP_TYPE_NUM_BYTE && dictSeqOrSpType >= SP_TYPE_NUM_DOUBLE;
+        return isTypeNumber(dictSeqOrSpType);
     }
 
     /**
@@ -227,7 +227,11 @@ public class CompressedValue {
      * @return {@code true} if the type is any of the numeric special types
      */
     public static boolean isTypeNumber(int spType) {
-        return spType <= SP_TYPE_NUM_BYTE && spType >= SP_TYPE_NUM_DOUBLE;
+        return spType == SP_TYPE_NUM_BYTE
+                || spType == SP_TYPE_NUM_SHORT
+                || spType == SP_TYPE_NUM_INT
+                || spType == SP_TYPE_NUM_LONG
+                || spType == SP_TYPE_NUM_DOUBLE;
     }
 
     /**

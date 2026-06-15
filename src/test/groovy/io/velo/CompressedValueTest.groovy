@@ -25,6 +25,10 @@ class CompressedValueTest extends Specification {
         CompressedValue.isTypeNumber(CompressedValue.SP_TYPE_NUM_DOUBLE)
         CompressedValue.isTypeDouble(CompressedValue.SP_TYPE_NUM_DOUBLE)
         !CompressedValue.isTypeDouble(CompressedValue.SP_TYPE_NUM_LONG)
+        // gap values between valid numeric type markers must not be accepted
+        [-3, -5, -6, -7, -9, -10, -11, -12, -13, -14, -15].each {
+            !CompressedValue.isTypeNumber(it)
+        }
         !CompressedValue.isTypeNumber(CompressedValue.SP_TYPE_SHORT_STRING)
         !CompressedValue.isTypeNumber(CompressedValue.NULL_DICT_SEQ)
         !CompressedValue.isTypeString(CompressedValue.SP_TYPE_HASH)
