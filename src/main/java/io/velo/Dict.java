@@ -455,6 +455,8 @@ public class Dict implements Serializable {
      * @return a random sequence number
      */
     static int generateRandomSeq() {
+        // Allocate a per-call Random instance (not ThreadLocalRandom) so the
+        // TestOnly swappable source below can override it in tests.
         var random = testOnlyRandom != null ? testOnlyRandom : new Random();
         // +1 on the most significant term ensures the result is always > SELF_ZSTD_DICT_SEQ (1),
         // so a trained dict can never collide with the reserved self-dict seq.

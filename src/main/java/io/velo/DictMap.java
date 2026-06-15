@@ -93,12 +93,20 @@ public class DictMap implements NeedCleanUp {
 
     /**
      * @param keyPrefixOrSuffix the key prefix or suffix of the dictionary
-     * @param dict the dictionary to put
+     * @param dict              the dictionary to put
      * @return the dictionary that was put into the map
      */
     @SlaveNeedReplay
     @SlaveReplay
     public synchronized Dict putDict(String keyPrefixOrSuffix, Dict dict) {
+        // The reserved SELF_ZSTD_DICT_SEQ is owned by the self-dict singleton.
+        // generateRandomSeq() never returns 1 after the round-2 fix, but a caller
+        // (e.g. corrupted binlog replay, hand-crafted test dict) could still force
+        // it via setSeq(). Fail fast — do not silently regenerate, because the
+        // value would already be on disk and the file write below would corrupt
+        // the dict-map.
+        assert dict.getSeq() != Dict.SELF_ZSTD_DICT_SEQ;
+
         // check dict seq is already in cache
         var existDict = cacheDictBySeq.get(dict.getSeq());
         if (existDict != null) {

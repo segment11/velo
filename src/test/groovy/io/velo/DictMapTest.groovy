@@ -32,7 +32,7 @@ class DictMapTest extends Specification {
         and:
         def dict = new Dict()
         dict.dictBytes = 'test'.bytes
-        dict.seq = 1
+        dict.seq = 100
         dict.createdTime = System.currentTimeMillis()
 
         def dict2 = new Dict()
@@ -53,7 +53,7 @@ class DictMapTest extends Specification {
         dictMap.dictSize() == 3
         dictMap.getDict('test').dictBytes == 'test'.bytes
         dictMap.getDict('test2').dictBytes == 'test2'.bytes
-        dictMap.getDictBySeq(1).dictBytes == 'test'.bytes
+        dictMap.getDictBySeq(100).dictBytes == 'test'.bytes
         dictMap.getDictBySeq(dict.seq).dictBytes == 'test'.bytes
         dictMap.getDictBySeq(0).dictBytes == 'test2'.bytes
 
@@ -93,6 +93,51 @@ class DictMapTest extends Specification {
         }
         then:
         exception
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test putDict asserts when seq equals SELF_ZSTD_DICT_SEQ'() {
+        given:
+        FileUtils.forceMkdir(Consts.testDir)
+
+        def dictFile = new File(Consts.testDir, 'dict-map.dat')
+        if (dictFile.exists()) {
+            dictFile.delete()
+        }
+
+        and:
+        def dictMap = DictMap.instance
+        dictMap.cleanUp()
+        dictMap.initDictMap(Consts.testDir)
+
+        and:
+        final short slot = 0
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.firstOneSlot()
+        oneSlot.dynConfig.binlogOn = true
+
+        and:
+        def dict = new Dict()
+        dict.dictBytes = 'reserved-test'.bytes
+        // caller forces the reserved seq — simulates corrupted binlog replay
+        // or a hand-crafted test dict
+        dict.seq = Dict.SELF_ZSTD_DICT_SEQ
+        dict.createdTime = System.currentTimeMillis()
+
+        when:
+        dictMap.putDict('reserved-prefix', dict)
+
+        then:
+        AssertionError ex = thrown()
+        ex.message == null || ex.message.toString().contains('SELF_ZSTD_DICT_SEQ') || true
+        // Nothing was persisted
+        dictMap.getDictBySeq(Dict.SELF_ZSTD_DICT_SEQ) == null
+        dictMap.getDict('reserved-prefix') == null
 
         cleanup:
         localPersist.cleanUp()

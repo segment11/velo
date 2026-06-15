@@ -50,9 +50,10 @@ class DictTest extends Specification {
         Dict.testOnlyRandom = allZerosRandom
 
         expect:
-        // The old formula returns 0+0+0+1 = 1, which collides with SELF_ZSTD_DICT_SEQ.
-        // The fix must produce a seq > 1.
-        Dict.generateRandomSeq() != Dict.SELF_ZSTD_DICT_SEQ
+        // The fix guarantees the minimum return value is 1_000_001.
+        // Asserting > (not !=) also catches a regression that produces a negative
+        // seq from integer overflow, which != SELF_ZSTD_DICT_SEQ would miss.
+        Dict.generateRandomSeq() > Dict.SELF_ZSTD_DICT_SEQ
 
         cleanup:
         Dict.testOnlyRandom = null
