@@ -39,6 +39,25 @@ class DictTest extends Specification {
         seqSet.size() == 10000 || seqSet.size() == 9999
     }
 
+    def 'test generate random seq never collides with self zstd dict seq'() {
+        given: 'a random source that always returns 0 — the worst case for the old formula'
+        def allZerosRandom = new Random() {
+            @Override
+            int nextInt(int bound) {
+                return 0
+            }
+        }
+        Dict.testOnlyRandom = allZerosRandom
+
+        expect:
+        // The old formula returns 0+0+0+1 = 1, which collides with SELF_ZSTD_DICT_SEQ.
+        // The fix must produce a seq > 1.
+        Dict.generateRandomSeq() != Dict.SELF_ZSTD_DICT_SEQ
+
+        cleanup:
+        Dict.testOnlyRandom = null
+    }
+
     def 'test decode'() {
         given:
         def dict = new Dict(new byte[10])

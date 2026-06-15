@@ -4,6 +4,7 @@ import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdCompressCtx;
 import com.github.luben.zstd.ZstdDecompressCtx;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -454,12 +455,23 @@ public class Dict implements Serializable {
      * @return a random sequence number
      */
     static int generateRandomSeq() {
-        var random = new Random();
-        return random.nextInt(1000) * 1000 * 1000 +
+        var random = testOnlyRandom != null ? testOnlyRandom : new Random();
+        // +1 on the most significant term ensures the result is always > SELF_ZSTD_DICT_SEQ (1),
+        // so a trained dict can never collide with the reserved self-dict seq.
+        return (random.nextInt(1000) + 1) * 1000 * 1000 +
                 random.nextInt(1000) * 1000 +
                 random.nextInt(1000) +
                 SELF_ZSTD_DICT_SEQ;
     }
+
+    /**
+     * Test-only random source for {@link #generateRandomSeq()}.
+     * When set, the production code uses this Random instead of allocating a new one,
+     * so tests can force deterministic values (e.g., all zeros) to cover corner cases.
+     * Always null in production; tests must reset it to null in their cleanup block.
+     */
+    @TestOnly
+    static Random testOnlyRandom;
 
     /**
      * @param dictBytes the dictionary bytes
