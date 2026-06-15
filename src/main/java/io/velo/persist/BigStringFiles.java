@@ -422,12 +422,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
     }
 
-    /**
-     * @param uuid        the UUID of the big string file to delete
-     * @param bucketIndex the bucket index
-     * @param keyHash     the hash of the key
-     * @return true if the file was successfully deleted or doesn't exist
-     */
     @TestOnly
     boolean deleteForceReturnFalseForTest = false;
 
@@ -462,10 +456,6 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         return r;
     }
 
-    private static long getUuid(long uuid) {
-        return uuid;
-    }
-
     @SlaveNeedReplay
     @SlaveReplay
     public void deleteAllBigStringFiles() {
@@ -475,13 +465,39 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         bigStringUuidByKey.clear();
         bigStringUuidSet.clear();
 
+        var oldCount = bigStringFilesCount;
         try {
             FileUtils.cleanDirectory(bigStringDir);
-            log.warn("Delete all big string files, count={}, slot={}", bigStringFilesCount, slot);
             bigStringFilesCount = 0;
             diskUsage = 0L;
+            log.warn("Delete all big string files, count={}, slot={}", oldCount, slot);
         } catch (IOException e) {
             log.error("Delete all big string files error, slot={}", slot, e);
+            reconcileCountersFromDisk();
+        }
+    }
+
+    void reconcileCountersFromDisk() {
+        bigStringFilesCount = 0;
+        diskUsage = 0L;
+        var dirs = bigStringDir.listFiles();
+        if (dirs == null) {
+            return;
+        }
+        for (var dir : dirs) {
+            if (!dir.isDirectory()) {
+                continue;
+            }
+            var subFiles = dir.listFiles();
+            if (subFiles == null) {
+                continue;
+            }
+            for (var subFile : subFiles) {
+                if (subFile.isFile()) {
+                    diskUsage += subFile.length();
+                    bigStringFilesCount++;
+                }
+            }
         }
     }
 

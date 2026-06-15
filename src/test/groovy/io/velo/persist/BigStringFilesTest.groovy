@@ -430,4 +430,32 @@ class BigStringFilesTest extends Specification {
         cleanup:
         tmpSlotDir.deleteDir()
     }
+
+    def 'test reconcileCountersFromDisk matches actual files after partial cleanup failure'() {
+        given:
+        def tmpSlotDir = new File('/tmp/tmp-slot-dir-reconcile')
+        if (tmpSlotDir.exists()) {
+            tmpSlotDir.deleteDir()
+        }
+        def bigStringFiles = new BigStringFiles(slot, tmpSlotDir)
+
+        and: 'write 3 big string files across 2 buckets'
+        bigStringFiles.writeBigStringBytes(1L, 0, 10L, 'aaaa'.bytes)
+        bigStringFiles.writeBigStringBytes(2L, 0, 20L, 'bbbbbb'.bytes)
+        bigStringFiles.writeBigStringBytes(3L, 1, 30L, 'cccccccc'.bytes)
+
+        and: 'corrupt the counters to simulate stale state after partial cleanDirectory failure'
+        bigStringFiles.bigStringFilesCount = 999
+        bigStringFiles.diskUsage = 9999L
+
+        when: 'reconcile from disk'
+        bigStringFiles.reconcileCountersFromDisk()
+
+        then: 'counters match actual files'
+        bigStringFiles.bigStringFilesCount == 3
+        bigStringFiles.diskUsage == (4L + 6L + 8L)
+
+        cleanup:
+        tmpSlotDir.deleteDir()
+    }
 }
