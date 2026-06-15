@@ -420,6 +420,9 @@ public class Dict implements Serializable {
         var keyPrefixOrSuffixBytes = new byte[keyPrefixOrSuffixLength];
         is.readFully(keyPrefixOrSuffixBytes);
         var dictBytesLength = is.readShort();
+        if (dictBytesLength < 0) {
+            throw new IllegalStateException("Dict bytes length error, dict bytes length=" + dictBytesLength);
+        }
         var dictBytes = new byte[dictBytesLength];
         is.readFully(dictBytes);
 

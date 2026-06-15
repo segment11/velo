@@ -106,6 +106,26 @@ class DictTest extends Specification {
         then:
         exception
 
+        when: 'corrupt dict bytes length is negative'
+        byte[] corruptNegBytes = new byte[4 + 4 + 8 + 2 + keyPrefix.length() + 2]
+        def corruptNegBuffer = ByteBuffer.wrap(corruptNegBytes)
+        corruptNegBuffer.putInt(0, corruptNegBytes.length - 4)
+        corruptNegBuffer.putInt(4, dict.seq)
+        corruptNegBuffer.putLong(8, dict.createdTime)
+        corruptNegBuffer.putShort(16, (short) keyPrefix.length())
+        corruptNegBuffer.position(18)
+        corruptNegBuffer.put(keyPrefix.bytes)
+        corruptNegBuffer.putShort(18 + keyPrefix.length(), (short) -1)
+        exception = false
+        try {
+            Dict.decode(new DataInputStream(new ByteArrayInputStream(corruptNegBytes)))
+        } catch (IllegalStateException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
         when:
         exception = false
         try {
