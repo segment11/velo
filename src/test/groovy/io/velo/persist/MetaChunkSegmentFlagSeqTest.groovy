@@ -597,6 +597,31 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         ConfForSlot.global = ConfForSlot.c1m
     }
 
+    def 'test setSegmentMergeFlagBatch sets isOverHalfSegmentNumberForFirstReuseLoop when batch crosses boundary'() {
+        given:
+        final File slotDirTmp = new File(Consts.persistDir, 'test-slot-tmp')
+        slotDirTmp.mkdirs()
+
+        ConfForSlot.global = ConfForSlot.debugMode
+        def one = new MetaChunkSegmentFlagSeq(slot, slotDirTmp)
+        int half = ConfForSlot.global.confChunk.maxSegmentNumber() / 2
+
+        expect: 'flag starts false'
+        !one.isOverHalfSegmentNumberForFirstReuseLoop
+
+        when: 'batch starts before half but ends after half — crosses the boundary'
+        int beginSegmentIndex = half - 2
+        int segmentCount = 4
+        one.setSegmentMergeFlagBatch(beginSegmentIndex, segmentCount, Chunk.SEGMENT_FLAG_HAS_DATA, null, 0)
+
+        then: 'flag should be set because the batch end (half + 1) >= half'
+        one.isOverHalfSegmentNumberForFirstReuseLoop
+
+        cleanup:
+        slotDirTmp.deleteDir()
+        ConfForSlot.global = ConfForSlot.c1m
+    }
+
     def 'test c10m marker budget stays below marker ring capacity'() {
         given:
         def originalGlobal = ConfForSlot.global

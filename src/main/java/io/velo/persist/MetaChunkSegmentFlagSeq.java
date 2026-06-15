@@ -666,7 +666,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         }
 
         if (!isOverHalfSegmentNumberForFirstReuseLoop) {
-            if (beginSegmentIndex >= halfSegmentNumber) {
+            if (beginSegmentIndex + segmentCount - 1 >= halfSegmentNumber) {
                 isOverHalfSegmentNumberForFirstReuseLoop = true;
             }
         }
