@@ -119,12 +119,27 @@ public class DictMap implements NeedCleanUp {
             }
         }
 
+        // 1. Write to file first — if this fails the dict is rejected outright
         try {
             fos.write(dict.encode(keyPrefixOrSuffix));
         } catch (IOException e) {
             throw new RuntimeException("Write dict to file error", e);
         }
 
+        // 2. Update the in-memory cache BEFORE the binlog. The dict is already
+        // persisted to disk above, so it is usable for compression/decompression
+        // in this session regardless of binlog status.
+        TrainSampleJob.addKeyPrefixGroupIfNotExist(keyPrefixOrSuffix);
+        dict.initCtx();
+        cacheDictBySeq.put(dict.getSeq(), dict);
+        cacheDict.put(keyPrefixOrSuffix, dict);
+
+        // 3. Append to binlog last. A binlog failure here is a REPLICATION
+        // event (the slave will not see this dict), but it is NOT a put failure —
+        // the dict is already in the cache and on disk. Log loudly and let
+        // operators detect the replication drift via metrics/alerting. Do not
+        // rethrow: rethrowing would leave the cache in an inconsistent state
+        // (file written, cache not updated) and confuse the caller.
         var firstOneSlot = localPersist.firstOneSlot();
         if (firstOneSlot != null && firstOneSlot.getDynConfig().isBinlogOn()) {
             var p = firstOneSlot.asyncCall(() -> {
@@ -135,21 +150,21 @@ public class DictMap implements NeedCleanUp {
                     throw new RuntimeException("Append binlog error, dict key prefix=" + keyPrefixOrSuffix, e);
                 }
             });
-            // sync
             var r = p.getResult();
             var e = p.getException();
             if (e != null) {
-                throw (RuntimeException) e;
+                // Master-slave divergence: dict is in the master's cache and
+                // dict-map.dat, but no binlog entry was created, so the slave
+                // will not receive it. Operators must repair via re-train or
+                // a manual xdict sync.
+                log.error("Append binlog error (dict is in master cache but not replicated to slave), " +
+                        "dict key prefix={}, seq={}", keyPrefixOrSuffix, dict.getSeq(), e);
+            } else {
+                log.warn("Append binlog success, dict key prefix={}, result={}", keyPrefixOrSuffix, r);
             }
-            log.warn("Append binlog success, dict key prefix={}, result={}", keyPrefixOrSuffix, r);
         }
 
-        TrainSampleJob.addKeyPrefixGroupIfNotExist(keyPrefixOrSuffix);
-
-        dict.initCtx();
-
-        cacheDictBySeq.put(dict.getSeq(), dict);
-        return cacheDict.put(keyPrefixOrSuffix, dict);
+        return dict;
     }
 
     /**

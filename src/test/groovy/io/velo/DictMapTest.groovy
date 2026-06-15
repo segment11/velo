@@ -3,7 +3,10 @@ package io.velo
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
+import io.velo.repl.Binlog
+import io.velo.repl.BinlogContent
 import org.apache.commons.io.FileUtils
+import org.jetbrains.annotations.NotNull
 import spock.lang.Specification
 
 class DictMapTest extends Specification {
@@ -138,6 +141,62 @@ class DictMapTest extends Specification {
         // Nothing was persisted
         dictMap.getDictBySeq(Dict.SELF_ZSTD_DICT_SEQ) == null
         dictMap.getDict('reserved-prefix') == null
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test putDict keeps dict in cache when binlog append fails'() {
+        given:
+        FileUtils.forceMkdir(Consts.testDir)
+
+        def dictFile = new File(Consts.testDir, 'dict-map.dat')
+        if (dictFile.exists()) {
+            dictFile.delete()
+        }
+
+        and:
+        def dictMap = DictMap.instance
+        dictMap.cleanUp()
+        dictMap.initDictMap(Consts.testDir)
+
+        and:
+        final short slot = 0
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.firstOneSlot()
+        oneSlot.dynConfig.binlogOn = true
+
+        and: 'install a binlog whose append always throws IOException'
+        def stubSlotDir = new File(Consts.testDir, 'stub-slot')
+        FileUtils.forceMkdir(stubSlotDir)
+        def failingBinlog = new Binlog(slot, stubSlotDir, oneSlot.dynConfig) {
+            @Override
+            void append(@NotNull BinlogContent content) throws IOException {
+                throw new IOException("Simulated binlog failure")
+            }
+        }
+        oneSlot.setBinlog(failingBinlog)
+
+        and:
+        def dict = new Dict()
+        dict.dictBytes = 'fail-binlog-test'.bytes
+        dict.seq = 200
+        dict.createdTime = System.currentTimeMillis()
+
+        when: 'putDict is called'
+        def result = dictMap.putDict('fail-binlog-prefix', dict)
+
+        then: 'no exception escapes — binlog failure is logged and swallowed'
+        noExceptionThrown()
+        result == dict
+
+        and: 'the dict is in the cache (cache update happened before binlog)'
+        dictMap.getDict('fail-binlog-prefix') == dict
+        dictMap.getDictBySeq(dict.seq) == dict
+        dictMap.dictSize() == 1
 
         cleanup:
         localPersist.cleanUp()
