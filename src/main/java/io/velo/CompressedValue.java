@@ -189,13 +189,25 @@ public class CompressedValue {
      * Returns the length of the original data before compression.
      *
      * @return the length of the original data before compression
+     * @throws IllegalStateException if the compressed frame is corrupted or its
+     *         content size cannot be determined
      */
     public int getUncompressedLength() {
         if (!isCompressed()) {
             return getCompressedLength();
         }
 
-        return (int) Zstd.getFrameContentSize(compressedData);
+        // Zstd.getFrameContentSize returns -1 (ZSTD_CONTENTSIZE_UNKNOWN) when
+        // the frame header omits the size, and -2 (ZSTD_CONTENTSIZE_ERROR)
+        // when the frame is corrupted. Both would silently corrupt the
+        // caller (negative shifts in key-analysis metadata, negative STRLEN
+        // replies to clients), so fail fast with a descriptive message.
+        long rawSize = Zstd.getFrameContentSize(compressedData);
+        if (rawSize < 0) {
+            throw new IllegalStateException(
+                    "Decompress error, invalid frame content size=" + rawSize);
+        }
+        return (int) rawSize;
     }
 
     /**
@@ -595,10 +607,23 @@ public class CompressedValue {
     /**
      * @param dict the given Zstd dictionary; {@code null} means use the self-trained dictionary
      * @return the decompressed data
+     * @throws IllegalStateException if the compressed frame is corrupted or its
+     *         content size cannot be determined
      */
     public byte[] decompress(@Nullable Dict dict) {
         assert compressedData != null;
-        var dst = new byte[(int) Zstd.getFrameContentSize(compressedData)];
+        // Validate the frame content size before allocating. The C library
+        // contract is: >= 0 on success, -1 (ZSTD_CONTENTSIZE_UNKNOWN) when
+        // the frame header omits the size, -2 (ZSTD_CONTENTSIZE_ERROR)
+        // when the frame is corrupted. Casting -1/-2 to int and passing
+        // to new byte[...] would otherwise throw NegativeArraySizeException
+        // with no descriptive message, on every GET of a corrupted value.
+        long rawSize = Zstd.getFrameContentSize(compressedData);
+        if (rawSize < 0) {
+            throw new IllegalStateException(
+                    "Decompress error, invalid frame content size=" + rawSize);
+        }
+        var dst = new byte[(int) rawSize];
         int r;
         if (dict == null || dict == Dict.SELF_ZSTD_DICT) {
             r = (int) Zstd.decompress(dst, compressedData);

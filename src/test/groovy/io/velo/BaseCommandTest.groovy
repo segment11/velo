@@ -1060,8 +1060,15 @@ class BaseCommandTest extends Specification {
 
         when:
         c.set('a'.bytes, sKey)
+        // use a real compressed frame so getUncompressedLength succeeds —
+        // the key-analysis path is only invoked for compressed values, but
+        // a corrupt frame would now correctly throw IllegalStateException
+        // instead of silently feeding a negative length into the handler
+        def rawBytes = ('key-analysis-value-' * 10).bytes
+        def cr = CompressedValue.compress(rawBytes, null)
         def cv = Mock.prepareCompressedValueList(1)[0]
-        cv.dictSeqOrSpType = 1
+        cv.compressedData = cr.isCompressed() ? cr.data() : rawBytes
+        cv.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
         c.setCv(cv, sKey)
         c.remove(sKey)
         c.removeDelay(sKey)

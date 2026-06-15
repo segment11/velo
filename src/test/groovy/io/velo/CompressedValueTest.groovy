@@ -445,6 +445,30 @@ class CompressedValueTest extends Specification {
         dict.closeCtx()
     }
 
+    def 'test decompress and uncompressed length on corrupted frame'() {
+        given: 'a CompressedValue whose frame bytes are not a valid zstd frame'
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
+        cv.compressedData = new byte[100]  // all zeros — no valid zstd magic
+
+        when: 'decompress is called'
+        cv.decompress(null)
+
+        then: 'IllegalStateException is thrown, not NegativeArraySizeException'
+        // The fix must validate Zstd.getFrameContentSize before allocating,
+        // so a corrupted frame surfaces as a descriptive error instead of
+        // an opaque NegativeArraySizeException from the JVM.
+        IllegalStateException ex = thrown()
+        ex.message != null && ex.message.contains('frame content size')
+
+        when: 'getUncompressedLength is called on the same corrupted frame'
+        cv.getUncompressedLength()
+
+        then: 'same descriptive error'
+        IllegalStateException ex2 = thrown()
+        ex2.message != null && ex2.message.contains('frame content size')
+    }
+
     def 'test short-form decode preserves caller-provided keyHash'() {
         given:
         def keyBytes = 'my-key'.bytes
