@@ -1501,6 +1501,11 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             }
         }
 
+        // Warning: this trailing binlog append is outside the doPersist try/catch above.
+        // On the needPutV != null path (WAL buffer full), if appendBinlog throws here,
+        // the put already succeeded (data is durable in WAL + chunk) but the exception
+        // propagates to the caller — the client sees a false error and the binlog is
+        // missing this entry, causing a replication gap until full resync.
         if (!isBinlogAppended) {
             if (xBigStrings != null) {
                 appendBinlog(xBigStrings);
