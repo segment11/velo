@@ -205,7 +205,7 @@ public class CompressedValue {
         long rawSize = Zstd.getFrameContentSize(compressedData);
         if (rawSize < 0) {
             throw new IllegalStateException(
-                    "Decompress error, invalid frame content size=" + rawSize);
+                    "Invalid frame content size=" + rawSize);
         }
         return (int) rawSize;
     }

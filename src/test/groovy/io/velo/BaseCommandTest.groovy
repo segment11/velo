@@ -1066,8 +1066,13 @@ class BaseCommandTest extends Specification {
         // instead of silently feeding a negative length into the handler
         def rawBytes = ('key-analysis-value-' * 10).bytes
         def cr = CompressedValue.compress(rawBytes, null)
+        // repetitive ASCII is highly compressible, but assert explicitly so
+        // a future change to the test data that breaks compressibility fails
+        // here instead of silently feeding raw bytes (not a zstd frame) into
+        // the key-analysis path
+        assert cr.isCompressed()
         def cv = Mock.prepareCompressedValueList(1)[0]
-        cv.compressedData = cr.isCompressed() ? cr.data() : rawBytes
+        cv.compressedData = cr.data()
         cv.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
         c.setCv(cv, sKey)
         c.remove(sKey)
