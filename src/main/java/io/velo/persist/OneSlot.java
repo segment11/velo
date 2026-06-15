@@ -551,7 +551,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return slotDir;
     }
 
-    private final BigStringFiles bigStringFiles;
+    final BigStringFiles bigStringFiles;
 
     public BigStringFiles getBigStringFiles() {
         return bigStringFiles;
@@ -847,11 +847,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             truncateChunkFile(canTruncateFdIndex);
         }
 
-        if (loopCount % 10 == 0) {
-            // execute once every 100ms
+        // delete expired big string files in wal, only when master role
+        // execute once every 100ms
+        if (!isAsSlave() && loopCount % 10 == 0) {
             var wal = walArray[loopCount % walArray.length];
             // wal == null for unit test
-            if (wal != null && !isAsSlave()) {
+            if (wal != null) {
                 var count = wal.intervalDeleteExpiredBigStringFiles();
                 if (count > 0 || wal.groupIndex == 0) {
                     log.debug("Wal interval delete expired big string files, slot={}, group index={}, refer big string files count={}",

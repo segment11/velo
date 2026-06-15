@@ -929,7 +929,8 @@ public class Wal implements InMemoryEstimate {
                 var spType = CompressedValue.onlyReadSpType(v.cvEncoded);
                 if (spType == CompressedValue.SP_TYPE_BIG_STRING) {
                     var cv = CompressedValue.decode(v.cvEncoded, v.keyBytes(), v.keyHash);
-                    oneSlot.handleWhenCvExpiredOrDeleted(entry.getKey(), cv, null);
+                    assert oneSlot.bigStringFiles != null;
+                    oneSlot.bigStringFiles.handleWhenCvExpiredOrDeleted(entry.getKey(), cv, null);
 
                     count++;
                 }
