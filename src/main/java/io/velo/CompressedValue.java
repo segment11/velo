@@ -300,9 +300,9 @@ public class CompressedValue {
     }
 
     /**
-     * @param seq the sequence number for version tracking
+     * @param seq      the sequence number for version tracking
      * @param expireAt the expiration time in milliseconds
-     * @param data the string data bytes to encode
+     * @param data     the string data bytes to encode
      * @return the encoded byte array with type header, sequence, and data
      */
     public static byte[] encodeAsShortString(long seq, long expireAt, byte[] data) {
@@ -704,27 +704,6 @@ public class CompressedValue {
     }
 
     /**
-     * Only reads the sequence number from the encoded bytes.
-     *
-     * @param encodedBytes the encoded bytes
-     * @return the sequence number
-     */
-    public static long onlyReadSeq(byte[] encodedBytes) {
-        var buffer = ByteBuffer.wrap(encodedBytes);
-
-        long valueSeqCurrent;
-        // Refer to CompressedValue decode.
-        var firstByte = buffer.get(0);
-        if (firstByte < 0) {
-            valueSeqCurrent = buffer.position(1).getLong();
-        } else {
-            // Normal compressed value encoded.
-            valueSeqCurrent = buffer.getLong();
-        }
-        return valueSeqCurrent;
-    }
-
-    /**
      * Only reads the Zstd dictionary ID or type marker from the encoded bytes.
      *
      * @param encodedBytes the encoded bytes
@@ -740,6 +719,25 @@ public class CompressedValue {
             // Normal compressed value encoded.
             // Skip seq long and expire at long and key hash long.
             return buffer.getInt(8 + 8 + 8);
+        }
+    }
+
+    /**
+     * Only reads the expireAt from the encoded bytes without full deserialization.
+     * Handles both short/number encodings (type byte prefix) and normal compressed
+     * value encodings (seq prefix).
+     *
+     * @param encodedBytes the encoded bytes
+     * @return the expiration time in milliseconds since epoch
+     */
+    public static long onlyReadExpireAt(byte[] encodedBytes) {
+        var buffer = ByteBuffer.wrap(encodedBytes);
+
+        var firstByte = buffer.get(0);
+        if (firstByte < 0) {
+            return buffer.getLong(1 + 8);
+        } else {
+            return buffer.getLong(8);
         }
     }
 
@@ -812,8 +810,8 @@ public class CompressedValue {
 
     /**
      * @param valueBytes the value bytes
-     * @param keyBytes the key bytes
-     * @param keyHash the 64-bit key hash
+     * @param keyBytes   the key bytes
+     * @param keyHash    the 64-bit key hash
      * @return the decoded compressed value
      */
     public static CompressedValue decode(byte[] valueBytes, byte[] keyBytes, long keyHash) {
@@ -824,7 +822,7 @@ public class CompressedValue {
     /**
      * @param nettyBuf the buffer
      * @param keyBytes the key bytes
-     * @param keyHash the 64-bit key hash
+     * @param keyHash  the 64-bit key hash
      * @return the decoded compressed value
      */
     public static CompressedValue decode(io.netty.buffer.ByteBuf nettyBuf, byte[] keyBytes, long keyHash) {
