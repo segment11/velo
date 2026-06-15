@@ -142,3 +142,57 @@ Because:
 3. **DC1:** Confirm that the `rePutAll` retry path is not triggered in production (entries are always placed contiguously into empty buckets).
 
 4. **DN2:** Confirm that `CompressedValue.decode()` at line 850 already handles hash=0 during wire deserialization, and that XXHash64 collision probability (~10⁻¹⁹) makes the KeyBucket path practically immune.
+
+---
+
+## Review Feedback
+
+Reviewed by: AI agent 2
+Date: 2026-06-11
+Commit reviewed: `5ed37d9c` `fix: reject sentinel key hash values 0 and -1 in KeyBucket.put`
+
+### Summary of the Fix
+
+A defensive guard was added in `KeyBucket.put()` (lines 398–401) that throws `IllegalArgumentException` with the message "Reserved key hash for key bucket, key hash=..., key=..." when the incoming `keyHash` equals `NO_KEY` (0) or `PRE_KEY` (-1). This rejects the only known input that could collide with the bucket's structural sentinels and produce the "invisible entry" or "permanently blocked cell" failure modes described in the original Bug 3 analysis.
+
+A targeted test was added in `KeyBucketTest.groovy` (`'reject sentinel key hash values'`, lines 235–253) that verifies the exception is thrown for both `keyHash=0L` and `keyHash=-1L`. The pre-existing test fixture `TestSplitInner.groovy` was updated to use `keyHash=1L` instead of `0L` so the local scratch test script does not trigger the new guard.
+
+### Verification
+
+1. **Code change is correct and minimal.** The guard sits in the first lines of the private `put(...)` overload, after the existing `valueBytes.length` size check. It is executed unconditionally for every put call — no skip paths. The check uses the existing private constants `NO_KEY` and `PRE_KEY` (no new constants were introduced), and the exception message includes the offending `keyHash` and `key` for debuggability.
+
+2. **The guard is correct from a domain-modeling perspective.** The author of Design Note 2 is right that the practical probability of an XXHash64 collision with `0` or `-1` is ~10⁻¹⁹ per key, and that the production `clearAll()` → repopulate flow would still produce a correctly-shaped bucket even if a collision occurred. However, the guard is cheap (two `long` comparisons per put), runs in O(1) per call, and the test directly exercises it. Adding the guard is a textbook example of *defense in depth*: a sentinel that the format reserves should be rejected at the boundary that introduces values into the format, even if the boundary is internal. This matches the existing precedent in `CompressedValue.decode()` (line 850), which already explicitly remaps `keyHash == 0`.
+
+3. **Test correctness.** The new test (`'reject sentinel key hash values'`) uses `thrown(IllegalArgumentException)` from Spock, asserts the message contains `'Reserved key hash'`, and covers both sentinel values. JaCoCo coverage on the changed lines (393–401) is 4/4 lines and 2/2 branches covered — both the `== NO_KEY` and `== PRE_KEY` branches are exercised. The full `KeyBucketTest` suite re-runs clean (BUILD SUCCESSFUL).
+
+4. **Test fixture update is consistent.** `TestSplitInner.groovy` is a one-off scratch file used during development, not part of the regular test suite. Changing its `keyHash` literal from `0L` to `1L` is purely a "make the fixture still run after the new guard" change; it has no semantic effect on what the scratch script demonstrates.
+
+### Strengths
+
+- The fix is the minimal possible change to address the invariant violation: a 4-line guard with no new constants, no new dependencies, and no refactor of the read paths.
+- The chosen error type (`IllegalArgumentException`) is consistent with the other validation in the same `put(...)` method (`valueBytes.length` and `cellCount >= INIT_CAPACITY`).
+- The error message includes the offending `keyHash` value and the key string, which is exactly the context an operator needs when this fires.
+- A new test was added that directly exercises the guard; the test was placed in `KeyBucketTest` next to the other `put`-related cases for discoverability.
+- The `TestSplitInner.groovy` update shows the author checked that the guard does not silently break the local scratch workflow.
+
+### Concerns
+
+- **The doc's `NOT A BUG` verdict is at odds with the actual code change.** Design Note 2 (lines 87–102) argues that the guard is unnecessary and that "no guard is needed in `KeyBucket.put()`" because the probability is ~10⁻¹⁹. The committed fix in `KeyBucket.put()` says otherwise. This is not a bug in the code — it is a documentation/code inconsistency. The fix is correct, but the doc's `Summary` table and the `Verdict: NOT A BUG` line should probably be reconciled: either upgrade DN2 to a confirmed fix (low-severity) and update the summary row, or leave DN2 as-is and add a note that the code was fixed defensively despite the "not a bug" verdict.
+
+- **The guard is only in `put()`.** If a future caller writes to the cell hash field through a different path (e.g., direct buffer manipulation, a new overload, a recovery tool), the guard will not fire. The bucket format invariant is now enforced at the `put()` boundary, but not at the `buffer.putLong(metaIndex, ...)` boundary. This is acceptable today because `put()` is the only write path, but it is worth a sentence in the doc.
+
+- **No coverage of the existing `KeyHash` path that *could* still return 0 or -1.** `KeyHash.hash()` and `KeyHash.hashOffset()` are unchanged. In production, every `KeyHash.hash()` call passes through `KeyBucket.put()` (or one of the other callers: `XGroup`, `XBigStrings`, `CompressedValue`), so the new guard catches any value coming from those paths at the bucket boundary. But `KeyHash.hash()` itself still has the same theoretical invariant violation. The fix is localized to the data structure, which is correct, but the doc's discussion of "KeyHash returns raw XXHash64" is now slightly out of date — the conversation is "KeyHash returns raw XXHash64 AND the bucket rejects the sentinels", not "KeyHash returns raw XXHash64 and no one cares".
+
+### Pre-commit Follow-ups (none open)
+
+None — the commit is correct, the test is in place, JaCoCo confirms coverage, and `KeyBucketTest` passes clean.
+
+### Post-commit Follow-ups (suggested, non-blocking)
+
+1. **Reconcile the doc with the code.** Either:
+   - Change DN2's verdict to "FIXED — defensive guard added in `KeyBucket.put()`" and update the `Summary` table accordingly, or
+   - Leave DN2 as "NOT A BUG" and add a one-line note that "the code was patched defensively despite the verdict, see commit `5ed37d9c`".
+
+2. **Optional: add a property test for `KeyHash.hash()`.** A test that calls `KeyHash.hash()` on a few thousand random inputs and asserts the result is never `0L` or `-1L` would lock in the *current* behavior even though it has near-zero chance of catching a regression. This is purely a documentation-of-contract test; skip if the team prefers minimal coverage.
+
+3. **Optional: add a similar guard in `KeyHash.hashOffset()`.** The other public `KeyHash` entry point is not protected. If a key uses hash tags (see `BaseCommand.tagHash`, line 527), the tag-hash path also flows into `KeyBucket.put()` and is now protected there. No additional code change required unless the team wants belt-and-suspenders coverage at the `KeyHash` layer too.
