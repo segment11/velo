@@ -167,15 +167,40 @@ class CGroupTest extends Specification {
         reply == ErrorReply.SYNTAX
 
         when: 'CLIENT KILL TYPE normal — the only filter Sentinel needs'
-        def otherSocket = SocketInspectorTest.mockTcpSocket()
+        // Real-world scenario: the slot worker thread that runs this command is NOT the
+        // socket's owning net worker reactor thread. A direct s.close() would throw
+        // "Not in reactor thread"; a reactor.submit(s::close) succeeds.
+        def netWorkerEventloop = Eventloop.builder()
+                .withThreadName('client-kill-test-net')
+                .withIdleInterval(Duration.ofMillis(50))
+                .build()
+        netWorkerEventloop.keepAlive(true)
+        Thread.start { netWorkerEventloop.run() }
+        Thread.sleep(200)
+        def otherSocket = SocketInspectorTest.mockTcpSocket(netWorkerEventloop)
+        // wire inspector so close() triggers onDisconnect and removes the socket from socketMap
+        otherSocket.setInspector(inspector)
         inspector.onConnect(otherSocket)
         reply = cGroup.execute('client kill type normal')
         then:
         reply instanceof IntegerReply
-        // reply counts other clients we killed; the issuing socket is preserved
-        (reply as IntegerReply).integer >= 0
+        // the only non-issuing normal socket must have been queued for close
+        (reply as IntegerReply).integer == 1
+
+        and: 'after the owning reactor processes the close, the non-issuing socket is removed'
+        // Poll briefly for the async onDisconnect to propagate through the background reactor
+        def deadline = System.currentTimeMillis() + 2000
+        while (inspector.socketMap.size() != 0 && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20)
+        }
+        // issuing socket was never added; other normal socket has been removed via onDisconnect
+        inspector.socketMap.size() == 0
 
         cleanup:
+        netWorkerEventloop.breakEventloop()
+        if (inspector.socketMap.containsValue(otherSocket)) {
+            inspector.onDisconnect(otherSocket)
+        }
         inspector.onDisconnect(socket)
         LocalPersist.instance.setSocketInspector(null)
     }

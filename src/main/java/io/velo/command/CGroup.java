@@ -219,7 +219,17 @@ public class CGroup extends BaseCommand {
                 continue;
             }
             try {
-                s.close();
+                // TcpSocket.close() must run on the socket's owning reactor thread.
+                // Mirror MultiWorkerServer.handleQuit(): schedule the close on the reactor
+                // rather than calling close() directly, since the slot worker thread that
+                // ran this command is not necessarily the net worker reactor for s.
+                s.getReactor().submit(() -> {
+                    try {
+                        s.close();
+                    } catch (Exception ex) {
+                        log.warn("Client kill close error, addr={}, msg={}", addr, ex.getMessage());
+                    }
+                });
                 killed++;
             } catch (Exception e) {
                 log.warn("Client kill error, addr={}, msg={}", addr, e.getMessage());
