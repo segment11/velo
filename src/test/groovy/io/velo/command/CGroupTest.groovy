@@ -1,6 +1,7 @@
 package io.velo.command
 
 import io.activej.eventloop.Eventloop
+import io.activej.net.socket.tcp.ITcpSocket
 import io.velo.BaseCommand
 import io.velo.MultiWorkerServer
 import io.velo.SocketInspector
@@ -10,6 +11,7 @@ import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
+import io.velo.repl.ReplPairTest
 import io.velo.reply.*
 import spock.lang.Specification
 
@@ -62,6 +64,7 @@ class CGroupTest extends Specification {
         def cGroup = fixture.cGroup
         def socket = fixture.socket
         def inspector = fixture.inspector
+        def fixtureEventloop = fixture.eventloop
 
         // Track extra sockets we add during the test so we can clean them all up
         // in a single method-level cleanup block (Spock does not allow per-when
@@ -186,9 +189,9 @@ class CGroupTest extends Specification {
         (reply as BulkReply).asString().split('\n').length == 1
 
         when: 'CLIENT LIST also reports an extra registered socket'
-        def secondSocket = SocketInspectorTest.mockTcpSocket(null, 46410)
+        def secondSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46410)
         secondSocket.setInspector(inspector)
-        inspector.onConnect(secondSocket)
+        registerSocketOnInspector(inspector, fixtureEventloop, secondSocket)
         extras << secondSocket
         reply = cGroup.execute('client list')
         then:
@@ -271,18 +274,31 @@ class CGroupTest extends Specification {
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 0L
 
-        when: 'CLIENT KILL MAXAGE 0 matches no client when none are old enough'
+        when: 'CLIENT KILL MAXAGE 0 matches clients at least 0s old; the non-issuing socket is killed'
+        // secondSocket (port 46410) was added by the earlier LIST test and is still registered.
+        // The issuing socket is skipped by SKIPME yes default, so exactly one non-issuing
+        // socket should be reported killed.
+        def maxAgeSizeBefore = inspector.socketMap.size()
         reply = cGroup.execute('client kill maxage 0')
         then:
         reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0L
+        (reply as IntegerReply).integer == 1L
+        // poll for the reactor-driven close to complete
+        def maxAgeDeadline = System.currentTimeMillis() + 2000
+        while (inspector.socketMap.containsValue(secondSocket) && System.currentTimeMillis() < maxAgeDeadline) {
+            Thread.sleep(20)
+        }
+        !inspector.socketMap.containsValue(secondSocket)
+        inspector.socketMap.size() == maxAgeSizeBefore - 1
+        // the issuing socket is preserved
+        inspector.socketMap.containsValue(socket)
 
         // ----- CLIENT KILL behavior (Task 3 continued) -----
 
         when: 'CLIENT KILL legacy form ip:port matches by remote address'
-        def addrToKill = SocketInspectorTest.mockTcpSocket(null, 46411)
+        def addrToKill = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46411)
         addrToKill.setInspector(inspector)
-        inspector.onConnect(addrToKill)
+        registerSocketOnInspector(inspector, fixtureEventloop, addrToKill)
         extras << addrToKill
         def addrToKillStr = addrToKill.remoteAddress.toString()
         def sizeBefore = inspector.socketMap.size()
@@ -290,25 +306,34 @@ class CGroupTest extends Specification {
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1L
+        // poll for the reactor-driven close to complete on the eventloop
+        def addrDeadline = System.currentTimeMillis() + 2000
+        while (inspector.socketMap.containsValue(addrToKill) && System.currentTimeMillis() < addrDeadline) {
+            Thread.sleep(20)
+        }
         !inspector.socketMap.containsValue(addrToKill)
         inspector.socketMap.size() == sizeBefore - 1
 
         when: 'CLIENT KILL ADDR matches by remote address'
-        def addrSocket = SocketInspectorTest.mockTcpSocket(null, 46412)
+        def addrSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46412)
         addrSocket.setInspector(inspector)
-        inspector.onConnect(addrSocket)
+        registerSocketOnInspector(inspector, fixtureEventloop, addrSocket)
         extras << addrSocket
         def addrSocketStr = addrSocket.remoteAddress.toString()
         reply = cGroup.execute("client kill addr ${addrSocketStr}")
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1L
+        def addrSocketDeadline = System.currentTimeMillis() + 2000
+        while (inspector.socketMap.containsValue(addrSocket) && System.currentTimeMillis() < addrSocketDeadline) {
+            Thread.sleep(20)
+        }
         !inspector.socketMap.containsValue(addrSocket)
 
         when: 'CLIENT KILL ID matches by monotonic id'
-        def idSocket = SocketInspectorTest.mockTcpSocket(null, 46413)
+        def idSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46413)
         idSocket.setInspector(inspector)
-        inspector.onConnect(idSocket)
+        registerSocketOnInspector(inspector, fixtureEventloop, idSocket)
         extras << idSocket
         def idToKill = idSocket.userData.clientId
         def sizeBefore2 = inspector.socketMap.size()
@@ -316,6 +341,10 @@ class CGroupTest extends Specification {
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1L
+        def idSocketDeadline = System.currentTimeMillis() + 2000
+        while (inspector.socketMap.containsValue(idSocket) && System.currentTimeMillis() < idSocketDeadline) {
+            Thread.sleep(20)
+        }
         !inspector.socketMap.containsValue(idSocket)
         inspector.socketMap.size() == sizeBefore2 - 1
 
@@ -335,16 +364,20 @@ class CGroupTest extends Specification {
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1L
-        // the issuing socket is gone
+        // poll for the reactor-driven close to complete on the eventloop
+        def skipMeDeadline = System.currentTimeMillis() + 2000
+        while (inspector.socketMap.containsValue(socket) && System.currentTimeMillis() < skipMeDeadline) {
+            Thread.sleep(20)
+        }
         !inspector.socketMap.containsValue(socket)
         inspector.socketMap.size() == sizeBefore4 - 1
         // re-register the issuing socket so later cases can still issue commands on it
-        inspector.onConnect(socket)
+        registerSocketOnInspector(inspector, fixtureEventloop, socket)
 
         when: 'CLIENT KILL USER matches by authenticated username'
-        def aliceSocket = SocketInspectorTest.mockTcpSocket(null, 46414)
+        def aliceSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46414)
         aliceSocket.setInspector(inspector)
-        inspector.onConnect(aliceSocket)
+        registerSocketOnInspector(inspector, fixtureEventloop, aliceSocket)
         extras << aliceSocket
         SocketInspector.setAuthUser(aliceSocket, 'alice')
         def sizeBefore5 = inspector.socketMap.size()
@@ -352,6 +385,10 @@ class CGroupTest extends Specification {
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1L
+        def aliceDeadline = System.currentTimeMillis() + 2000
+        while (inspector.socketMap.containsValue(aliceSocket) && System.currentTimeMillis() < aliceDeadline) {
+            Thread.sleep(20)
+        }
         !inspector.socketMap.containsValue(aliceSocket)
         inspector.socketMap.size() == sizeBefore5 - 1
 
@@ -361,6 +398,31 @@ class CGroupTest extends Specification {
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 0L
 
+        when: 'CLIENT KILL TYPE replica matches a socket whose user data has a ReplPair'
+        def replSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46416)
+        replSocket.setInspector(inspector)
+        registerSocketOnInspector(inspector, fixtureEventloop, replSocket)
+        extras << replSocket
+        // mark it as a slave/repl socket by stamping a ReplPair into the user data
+        def replUserData = SocketInspector.createUserDataIfNotSet(replSocket)
+        replUserData.replPairAsSlaveInTcpClient = ReplPairTest.mockAsSlave()
+        reply = cGroup.execute('client kill type replica skipme yes')
+        then:
+        reply instanceof IntegerReply
+        // The filter matched the repl socket so the count is 1. The actual close()
+        // still fires, but Velo's onDisconnect short-circuits for repl sockets
+        // (see SocketInspector.onDisconnect) so the entry is intentionally kept
+        // in socketMap — that is the existing Velo behavior for repl sockets.
+        (reply as IntegerReply).integer == 1L
+
+        when: 'CLIENT KILL MAXAGE 99999 matches no client because none are old enough'
+        reply = cGroup.execute('client kill maxage 99999')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0L
+        // issuing socket preserved (its age is well under 99999 seconds)
+        inspector.socketMap.containsValue(socket)
+
         when: 'CLIENT KILL TYPE normal with reactor on a different net worker (reactor-safe close)'
         def netWorkerEventloop = Eventloop.builder()
                 .withThreadName('client-kill-test-net')
@@ -369,10 +431,20 @@ class CGroupTest extends Specification {
         netWorkerEventloop.keepAlive(true)
         Thread.start { netWorkerEventloop.run() }
         Thread.sleep(200)
+        // Make the second net worker visible to the inspector + STATIC_GLOBAL_V
+        // so onConnect running on the other reactor finds its thread index.
+        inspector.connectedClientCountArray = [0, 0]
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [
+                fixtureEventloop.getEventloopThread().threadId(),
+                netWorkerEventloop.getEventloopThread().threadId()
+        ]
         eventloopsToBreak << netWorkerEventloop
         def otherSocket = SocketInspectorTest.mockTcpSocket(netWorkerEventloop, 46415)
         otherSocket.setInspector(inspector)
-        inspector.onConnect(otherSocket)
+        // Register on the OTHER eventloop (the socket's owning reactor), not
+        // the fixture's, since onConnect reads connectedClientCountArray via
+        // the owning net-thread index.
+        registerSocketOnInspector(inspector, netWorkerEventloop, otherSocket)
         extras << otherSocket
         def sizeBefore6 = inspector.socketMap.size()
         reply = cGroup.execute('client kill type normal skipme yes')
@@ -450,40 +522,76 @@ class CGroupTest extends Specification {
         reply == ErrorReply.SYNTAX
 
         cleanup:
-        extras.each {
-            if (inspector.socketMap.containsValue(it)) {
-                inspector.onDisconnect(it)
-            }
-        }
+        extras.each { unregisterSocketOnInspector(inspector, fixtureEventloop, it) }
         eventloopsToBreak.each { it.breakEventloop() }
         fixture.cleanup()
     }
 
     /**
+     * Registers a socket with the inspector on the eventloop thread (so the
+     * thread index for {@code connectedClientCountArray} is correct) and
+     * returns when registration is done.
+     */
+    private static void registerSocketOnInspector(SocketInspector inspector, Eventloop eventloop, ITcpSocket socket) {
+        def latch = new java.util.concurrent.CountDownLatch(1)
+        eventloop.execute {
+            inspector.onConnect(socket)
+            latch.countDown()
+        }
+        latch.await(2, java.util.concurrent.TimeUnit.SECONDS)
+    }
+
+    /**
+     * Unregisters a socket from the inspector on the eventloop thread. The
+     * test no-ops on a null socket (e.g. one that was killed and whose
+     * reactor-driven onDisconnect already removed it).
+     */
+    private static void unregisterSocketOnInspector(SocketInspector inspector, Eventloop eventloop, ITcpSocket socket) {
+        if (socket == null || !inspector.socketMap.containsValue(socket)) {
+            return
+        }
+        def latch = new java.util.concurrent.CountDownLatch(1)
+        eventloop.execute {
+            inspector.onDisconnect(socket)
+            latch.countDown()
+        }
+        latch.await(2, java.util.concurrent.TimeUnit.SECONDS)
+    }
+
+    /**
      * Builds a focused fixture for the {@code CLIENT} command tests.
      *
-     * <p>Creates a current-thread {@link Eventloop}, a fresh {@link SocketInspector}
-     * with a single net-worker/slot-worker reactor, a mocked issuing socket, and a
-     * {@link CGroup} ready to call {@code execute(...)} on. The issuing socket is
-     * registered with the inspector so {@code CLIENT ID}, {@code CLIENT INFO}, and
-     * {@code CLIENT LIST} see it; the cleanup closure unregisters it.
+     * <p>Creates a background-thread {@link Eventloop} (so reactor-submitted
+     * closes actually run while the test polls for them), a fresh
+     * {@link SocketInspector} with a single net-worker/slot-worker reactor, a
+     * mocked issuing socket, and a {@link CGroup} ready to call
+     * {@code execute(...)} on. The issuing socket is registered with the
+     * inspector on the eventloop thread (so {@code onConnect} sees the
+     * correct net-thread index) so {@code CLIENT ID}, {@code CLIENT INFO},
+     * and {@code CLIENT LIST} see it; the cleanup closure unregisters it and
+     * breaks the eventloop.
      */
     private static Map clientFixture() {
-        def eventloopCurrent = Eventloop.builder()
-                .withCurrentThread()
-                .withIdleInterval(Duration.ofMillis(100))
+        def eventloop = Eventloop.builder()
+                .withThreadName('client-test')
+                .withIdleInterval(Duration.ofMillis(50))
                 .build()
-        Eventloop[] eventloopArray = [eventloopCurrent]
+        eventloop.keepAlive(true)
+        Thread.start { eventloop.run() }
+        Thread.sleep(200)
+        Eventloop[] eventloopArray = [eventloop]
         def inspector = new SocketInspector()
         inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
         inspector.connectedClientCountArray = [0]
         BlockingList.initBySlotWorkerEventloopArray(eventloopArray)
-        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = new long[]{Thread.currentThread().threadId()}
-        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = new long[]{Thread.currentThread().threadId()}
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [eventloop.getEventloopThread().threadId()]
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [eventloop.getEventloopThread().threadId()]
 
-        def socket = SocketInspectorTest.mockTcpSocket()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloop)
+        socket.setInspector(inspector)
         LocalPersist.instance.setSocketInspector(inspector)
-        inspector.onConnect(socket)
+        registerSocketOnInspector(inspector, eventloop, socket)
+
         def cGroup = new CGroup(null, null, socket)
         cGroup.from(BaseCommand.mockAGroup())
 
@@ -491,11 +599,11 @@ class CGroupTest extends Specification {
                 inspector: inspector,
                 socket: socket,
                 cGroup: cGroup,
+                eventloop: eventloop,
                 cleanup: {
-                    if (inspector.socketMap.containsValue(socket)) {
-                        inspector.onDisconnect(socket)
-                    }
+                    unregisterSocketOnInspector(inspector, eventloop, socket)
                     LocalPersist.instance.setSocketInspector(null)
+                    eventloop.breakEventloop()
                 }
         ]
     }

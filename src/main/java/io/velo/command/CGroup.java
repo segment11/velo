@@ -280,9 +280,6 @@ public class CGroup extends BaseCommand {
             boolean skipMe,
             Long maxAgeSeconds
     ) {
-        static ClientKillFilter defaults() {
-            return new ClientKillFilter(null, null, null, null, null, true, null);
-        }
     }
 
     /**
