@@ -20,6 +20,7 @@ import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Inspects and manages TCP sockets for a Velo server.
@@ -185,16 +186,20 @@ public class SocketInspector implements TcpSocket.Inspector {
         assert veloUserData != null;
         var remoteAddress = ((TcpSocket) socket).getRemoteAddress();
 
+        // Prefer the monotonic client id stamped at connect time; fall back to hashCode()
+        // for callers that synthesized a user data object without going through onConnect.
+        var clientId = veloUserData.getClientId() != 0L ? veloUserData.getClientId() : socket.hashCode();
+
         var sb = new StringBuilder();
         sb.append("id=");
-        sb.append(socket.hashCode());
+        sb.append(clientId);
         sb.append(" addr=");
         sb.append(remoteAddress);
         sb.append(" laddr=");
         sb.append(ConfForGlobal.netListenAddresses);
         sb.append(" fd=");
         // use id as fd
-        sb.append(socket.hashCode());
+        sb.append(clientId);
         sb.append(" name=");
         if (veloUserData.getClientName() != null) {
             sb.append(veloUserData.getClientName());
@@ -600,6 +605,15 @@ public class SocketInspector implements TcpSocket.Inspector {
     final AtomicInteger connectionCount = new AtomicInteger(0);
 
     /**
+     * Monotonic id source for {@code CLIENT ID} / {@code CLIENT LIST}.
+     * Stamped into {@link VeloUserDataInSocket#setClientId(long)} on each successful
+     * {@link #onConnect(TcpSocket)}. Using a single global counter guarantees uniqueness
+     * across the server lifetime, so {@code CLIENT KILL ID <n>} cannot misfire on a
+     * {@code hashCode()} collision.
+     */
+    final AtomicLong nextClientId = new AtomicLong(0L);
+
+    /**
      * Returns the maximum number of connections allowed.
      *
      * @return the maximum number of connections
@@ -669,6 +683,12 @@ public class SocketInspector implements TcpSocket.Inspector {
             log.warn("Inspector max connections reached={}, close the socket", maxConnections);
             socket.close();
             return;
+        }
+
+        // Stamp a monotonic client id before exposing the socket via socketMap so
+        // CLIENT ID / CLIENT LIST see the same value CLIENT KILL ID <n> will use.
+        if (veloUserData.getClientId() == 0L) {
+            veloUserData.setClientId(nextClientId.incrementAndGet());
         }
 
         var remoteAddress = socket.getRemoteAddress();
