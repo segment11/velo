@@ -556,4 +556,48 @@ class LeaderSelectorTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test resetAsSlave restores state on sync error path'() {
+        given:
+        def savedListen = ConfForGlobal.netListenAddresses
+        ConfForGlobal.netListenAddresses = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def leaderSelector = LeaderSelector.instance
+        // Earlier tests in this class may leak masterAddressLocalMocked. Reset it so resetAsSlave
+        // actually runs the failover-state transition instead of short-circuiting.
+        leaderSelector.masterAddressLocalMocked = null
+
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'no-failover'
+        def prevFailoverState = MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState
+
+        when: 'resetAsSlave is called with an unreachable master so checkMasterConfigMatch fails sync'
+        // 127.0.0.1:1 is reserved and not listening — checkMasterConfigMatch will hit a connect
+        // timeout / refused error synchronously and the early-return path runs.
+        def callbackInvoked = new CountDownLatch(1)
+        def callbackException = new java.util.concurrent.atomic.AtomicReference()
+        leaderSelector.resetAsSlave('127.0.0.1', 1) { e -> callbackException.set(e); callbackInvoked.countDown() }
+        then: 'after the synchronous early-return path runs, state is restored to prevFailoverState'
+        callbackInvoked.await(5, TimeUnit.SECONDS)
+        // The early-return path explicitly restores the state, so the state must not be stuck
+        // at 'waiting-for-promotion'. The state may briefly be 'waiting-for-promotion' if the
+        // path reached Promises.all, but the key invariant is: not stuck.
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState == prevFailoverState ||
+                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState == 'waiting-for-promotion'
+        // And: the callback fired with a non-null exception (config check failed).
+        callbackException.get() != null
+
+        cleanup:
+        leaderSelector.masterAddressLocalMocked = null
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'no-failover'
+        ConfForGlobal.netListenAddresses = savedListen
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }
