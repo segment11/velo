@@ -248,11 +248,14 @@ public class CGroup extends BaseCommand {
 
     /**
      * CLIENT KILL — Redis-compatible filter-form KILL plus the legacy {@code ip:port}
-     * form. Supports {@code ID}, {@code TYPE} (normal / pubsub / slave / replica;
-     * master is accepted but never matches because Velo has no incoming master
-     * connection concept), {@code USER}, {@code ADDR}, {@code LADDR} (best-effort
-     * against {@link ConfForGlobal#netListenAddresses}), {@code SKIPME} (default
-     * yes; {@code no} lets the issuing socket be killed), and {@code MAXAGE}.
+     * form. Supports {@code ID}, {@code TYPE} (only {@code normal} and {@code pubsub}
+     * actually match; {@code master} is accepted for Redis-compat but never matches
+     * because Velo has no incoming master connection concept; {@code slave} and
+     * {@code replica} are rejected at parse time with SYNTAX because real replication
+     * sockets never reach {@link SocketInspector#socketMap}), {@code USER},
+     * {@code ADDR}, {@code LADDR} (best-effort against
+     * {@link ConfForGlobal#netListenAddresses}), {@code SKIPME} (default yes;
+     * {@code no} lets the issuing socket be killed), and {@code MAXAGE}.
      */
     @VisibleForTesting
     Reply clientKill() {
@@ -374,9 +377,13 @@ public class CGroup extends BaseCommand {
 
     /**
      * Returns the logical Redis client type for {@code candidate} based on what Velo
-     * tracks: {@code replica} (and synonym {@code slave}) for repl sockets,
-     * {@code pubsub} for sockets that appear in any subscription map,
-     * {@code normal} otherwise.
+     * tracks: {@code pubsub} for sockets that appear in any subscription map,
+     * {@code normal} otherwise. The {@code replica} return is retained defensively
+     * (real repl sockets are short-circuited in {@link SocketInspector#onConnect} and
+     * never reach {@code socketMap}); the {@code slave}/{@code replica} parse-time
+     * rejection in {@link #isSupportedClientKillType(String)} makes this branch
+     * unreachable for {@code CLIENT KILL} but keeps the method honest about what it
+     * could observe.
      */
     private String clientType(ITcpSocket candidate) {
         var ud = (VeloUserDataInSocket) ((TcpSocket) candidate).getUserData();

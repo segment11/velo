@@ -133,15 +133,15 @@ class SocketInspectorTest extends Specification {
         expect: 'null is preserved'
         SocketInspector.formatRedisAddress(null) == null
 
-        when: 'IPv4 address'
+        when: 'explicit IPv4 address'
         def v4 = new InetSocketAddress('127.0.0.1', 46379)
         then: 'rendered as ip:port with no host/ prefix'
         SocketInspector.formatRedisAddress(v4) == '127.0.0.1:46379'
 
-        when: 'IPv4 hostname that resolves to 127.0.0.1'
-        def v4ByName = new InetSocketAddress('localhost', 46379)
-        then: 'still rendered as the IP, not host/ip:port'
-        SocketInspector.formatRedisAddress(v4ByName) == '127.0.0.1:46379'
+        when: 'unresolved hostname falls back to the host string'
+        def v4Unresolved = new InetSocketAddress('some.host.example', 46379)
+        then: 'still produces ip:port, not "host/host:port"'
+        SocketInspector.formatRedisAddress(v4Unresolved) == 'some.host.example:46379'
 
         when: 'IPv6 loopback'
         def v6 = new InetSocketAddress(InetAddress.getByName('::1'), 46379)
@@ -152,6 +152,12 @@ class SocketInspectorTest extends Specification {
         def anyPort = new InetSocketAddress('127.0.0.1', 0)
         then:
         SocketInspector.formatRedisAddress(anyPort) == '127.0.0.1:0'
+
+        when: 'the rendered form never carries the InetSocketAddress "host/" prefix'
+        def rendered = SocketInspector.formatRedisAddress(new InetSocketAddress('127.0.0.1', 46379))
+        then: 'no slash-separated host qualifier, and port is suffixed'
+        !rendered.contains('/')
+        rendered.endsWith(':46379')
     }
 
     def 'test connect'() {

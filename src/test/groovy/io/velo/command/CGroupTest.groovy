@@ -2,6 +2,7 @@ package io.velo.command
 
 import io.activej.eventloop.Eventloop
 import io.activej.net.socket.tcp.ITcpSocket
+import io.activej.net.socket.tcp.TcpSocket
 import io.velo.BaseCommand
 import io.velo.MultiWorkerServer
 import io.velo.SocketInspector
@@ -14,6 +15,9 @@ import io.velo.persist.Mock
 import io.velo.reply.*
 import spock.lang.Specification
 
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.nio.channels.SocketChannel
 import java.time.Duration
 
 class CGroupTest extends Specification {
@@ -593,7 +597,9 @@ class CGroupTest extends Specification {
         MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [eventloop.getEventloopThread().threadId()]
         MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [eventloop.getEventloopThread().threadId()]
 
-        def socket = SocketInspectorTest.mockTcpSocket(eventloop)
+        def socket = TcpSocket.wrapChannel(eventloop, SocketChannel.open(),
+                new InetSocketAddress(InetAddress.getByName('127.0.0.1'), 46379), null)
+        SocketInspector.createUserDataIfNotSet(socket)
         socket.setInspector(inspector)
         LocalPersist.instance.setSocketInspector(inspector)
         registerSocketOnInspector(inspector, eventloop, socket)
