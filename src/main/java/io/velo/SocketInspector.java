@@ -747,7 +747,7 @@ public class SocketInspector implements TcpSocket.Inspector {
         }
 
         var remoteAddress = socket.getRemoteAddress();
-        log.debug("Inspector on connect, remote address={}", remoteAddress);
+        log.info("Inspector on connect, remote address={}, clientId={}", remoteAddress, veloUserData.getClientId());
         socketMap.put(remoteAddress, socket);
 
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
@@ -836,7 +836,7 @@ public class SocketInspector implements TcpSocket.Inspector {
             return;
         }
 
-        log.debug("Inspector on disconnect, remote address={}", remoteAddress);
+        log.info("Inspector on disconnect, remote address={}", remoteAddress);
         var removed = socketMap.remove(remoteAddress);
         if (removed != null) {
             connectionCount.decrementAndGet();

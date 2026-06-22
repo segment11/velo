@@ -486,11 +486,13 @@ public class CGroup extends BaseCommand {
                     }
                 });
                 killed++;
+                log.info("Client kill scheduled, addr={}, remaining_in_filter={}", addr, killed);
             } catch (Exception e) {
                 log.warn("Client kill error, addr={}, msg={}", addr, e.getMessage());
             }
         }
 
+        log.info("Client kill complete, killed={}", killed);
         return new IntegerReply(killed);
     }
 
