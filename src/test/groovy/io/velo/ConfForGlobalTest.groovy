@@ -126,19 +126,21 @@ class ConfForGlobalTest extends Specification {
         exception
         message.contains('Sentinel replica priority')
 
-        when: 'sentinel+zk combination is no longer rejected here — enforced in confForSlot'
-        // Sentinel+ZK mutual exclusion is enforced earlier in MultiWorkerServer.InnerModule.confForSlot()
-        // before any ZK connect-check side effect. ConfForGlobal.checkIfValid() must not throw
-        // for this combination anymore — the only path that sets both flags and reaches here
-        // would already have failed at the config-reading layer.
+        when: 'sentinel mode combined with zookeeper is rejected'
         exception = false
         message = null
         ConfForGlobal.sentinelReplicaPriority = 100
         ConfForGlobal.sentinelModeEnabled = true
         ConfForGlobal.zookeeperConnectString = '127.0.0.1:2181'
-        ConfForGlobal.checkIfValid()
+        try {
+            ConfForGlobal.checkIfValid()
+        } catch (IllegalArgumentException e) {
+            message = e.message
+            exception = true
+        }
         then:
-        !exception
+        exception
+        message.contains('Sentinel mode and ZooKeeper mode')
 
         when: 'sentinel mode without zookeeper is accepted'
         exception = false

@@ -151,10 +151,10 @@ class CGroupTest extends Specification {
 
         // ----- CLIENT KILL (Redis Sentinel reconfiguration path) -----
 
-        when: 'CLIENT KILL without args — arity error'
+        when: 'CLIENT KILL without args — format error'
         reply = cGroup.execute('client kill')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == ErrorReply.FORMAT
 
         when: 'CLIENT KILL with unsupported filter clause'
         reply = cGroup.execute('client kill id 123')

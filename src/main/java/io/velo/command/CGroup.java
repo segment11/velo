@@ -181,7 +181,10 @@ public class CGroup extends BaseCommand {
         // For Sentinel compatibility we only support exactly CLIENT KILL TYPE normal.
         // Additional Redis filters (ID, ADDR, LADDR, SKIPME, ...) are rejected explicitly
         // rather than silently killing every normal client.
-        if (data.length != 4) {
+        if (data.length < 4) {
+            return ErrorReply.FORMAT;
+        }
+        if (data.length > 4) {
             return ErrorReply.SYNTAX;
         }
 
