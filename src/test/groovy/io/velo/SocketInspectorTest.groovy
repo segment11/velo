@@ -139,9 +139,14 @@ class SocketInspectorTest extends Specification {
         SocketInspector.formatRedisAddress(v4) == '127.0.0.1:46379'
 
         when: 'unresolved hostname falls back to the host string'
-        def v4Unresolved = new InetSocketAddress('some.host.example', 46379)
+        // Use createUnresolved() so the test does not depend on the local resolver
+        // or DNS latency; the InetAddress-backed constructor would attempt a lookup
+        // and might leave the address resolved on hosts that happen to know this name.
+        def v4Unresolved = InetSocketAddress.createUnresolved('some.host.example', 46379)
         then: 'still produces ip:port, not "host/host:port"'
         SocketInspector.formatRedisAddress(v4Unresolved) == 'some.host.example:46379'
+        // and the underlying address really is unresolved (no InetAddress cached)
+        v4Unresolved.getAddress() == null
 
         when: 'IPv6 loopback'
         def v6 = new InetSocketAddress(InetAddress.getByName('::1'), 46379)
