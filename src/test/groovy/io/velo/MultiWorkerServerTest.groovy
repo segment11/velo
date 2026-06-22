@@ -2061,4 +2061,67 @@ class MultiWorkerServerTest extends Specification {
         }
         tempDir.deleteDir()
     }
+
+    def 'test sentinel mode is rejected before zookeeper connect-check'() {
+        given:
+        // Sentinel mode and ZooKeeper are mutually exclusive per the plan's hard
+        // architectural rule. When both are configured the mutual-exclusion error
+        // must fire BEFORE the ZK TCP connect-check side effect — otherwise the
+        // connect-check throws first and the user sees a ZK connectivity error
+        // instead of the actual configuration mistake.
+        var m1 = new MultiWorkerServer.InnerModule()
+        m1.skipZookeeperConnectCheck = false
+
+        def savedSentinel = ConfForGlobal.sentinelModeEnabled
+        def savedZk = ConfForGlobal.zookeeperConnectString
+        def savedMasterName = ConfForGlobal.sentinelMasterName
+        def savedPriority = ConfForGlobal.sentinelReplicaPriority
+        def savedAnnounceIp = ConfForGlobal.replicaAnnounceIp
+        def savedAnnouncePort = ConfForGlobal.replicaAnnouncePort
+
+        var cc = ConfForSlot.global
+        def config = Config.create()
+                .with('doFileLock', "false")
+                .with("net.listenAddresses", "localhost:7379")
+                .with("debugMode", "true")
+                .with("pureMemory", "true")
+                .with("sentinelModeEnabled", "true")
+                // localhost:1 is reserved and not listening — connect-check would throw
+                // 'Zookeeper connect string invalid' if the ZK block ran first.
+                .with("zookeeperConnectString", "localhost:1")
+                .with("bucket.bucketsPerSlot", cc.confBucket.bucketsPerSlot.toString())
+                .with("bucket.initialSplitNumber", cc.confBucket.initialSplitNumber.toString())
+                .with("chunk.segmentNumberPerFd", cc.confChunk.segmentNumberPerFd.toString())
+                .with("chunk.fdPerChunk", cc.confChunk.fdPerChunk.toString())
+                .with("chunk.segmentLength", cc.confChunk.segmentLength.toString())
+                .with("wal.oneChargeBucketNumber", cc.confWal.oneChargeBucketNumber.toString())
+                .with("wal.valueSizeTrigger", cc.confWal.valueSizeTrigger.toString())
+                .with("wal.shortValueSizeTrigger", cc.confWal.shortValueSizeTrigger.toString())
+
+        when:
+        boolean exception = false
+        String message = null
+        try {
+            m1.confForSlot(config)
+        } catch (IllegalArgumentException e) {
+            exception = true
+            message = e.message
+        }
+
+        then:
+        exception
+        // The mutual-exclusion error must come from the early check, not the ZK connect.
+        message != null
+        message.contains('Sentinel mode and ZooKeeper mode')
+        // It must NOT be the ZK connect-check error (which would mean the ZK block ran first).
+        !message.contains('Zookeeper connect string invalid')
+
+        cleanup:
+        ConfForGlobal.sentinelModeEnabled = savedSentinel
+        ConfForGlobal.zookeeperConnectString = savedZk
+        ConfForGlobal.sentinelMasterName = savedMasterName
+        ConfForGlobal.sentinelReplicaPriority = savedPriority
+        ConfForGlobal.replicaAnnounceIp = savedAnnounceIp
+        ConfForGlobal.replicaAnnouncePort = savedAnnouncePort
+    }
 }

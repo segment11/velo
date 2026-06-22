@@ -1380,7 +1380,20 @@ public class MultiWorkerServer extends Launcher {
 
             ConfForGlobal.PASSWORD = config.get(ofString(), "password", null);
 
-            if (config.getChild("zookeeperConnectString").hasValue()) {
+            // Read sentinelModeEnabled before the ZooKeeper block so the mutual-exclusion
+            // rule can be enforced BEFORE any ZK connect-check side effect. Otherwise an
+            // invalid Sentinel+ZK config reports a ZK connectivity error instead of the
+            // real configuration mistake.
+            ConfForGlobal.sentinelModeEnabled = config.get(ofBoolean(), "sentinelModeEnabled", false);
+            log.warn("Global config, sentinelModeEnabled={}", ConfForGlobal.sentinelModeEnabled);
+
+            boolean hasZk = config.getChild("zookeeperConnectString").hasValue();
+            if (hasZk && ConfForGlobal.sentinelModeEnabled) {
+                throw new IllegalArgumentException(
+                        "Sentinel mode and ZooKeeper mode are mutually exclusive: leave zookeeperConnectString unset when sentinelModeEnabled=true");
+            }
+
+            if (hasZk) {
                 ConfForGlobal.zookeeperConnectString = config.get(ofString(), "zookeeperConnectString");
                 ConfForGlobal.zookeeperSessionTimeoutMs = config.get(ofInteger(), "zookeeperSessionTimeoutMs", 30000);
                 ConfForGlobal.zookeeperConnectionTimeoutMs = config.get(ofInteger(), "zookeeperConnectionTimeoutMs", 10000);
@@ -1413,8 +1426,6 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.clusterEnabled = config.get(ofBoolean(), "clusterEnabled", false);
             log.warn("Global config, clusterEnabled={}", ConfForGlobal.clusterEnabled);
 
-            ConfForGlobal.sentinelModeEnabled = config.get(ofBoolean(), "sentinelModeEnabled", false);
-            log.warn("Global config, sentinelModeEnabled={}", ConfForGlobal.sentinelModeEnabled);
             ConfForGlobal.sentinelMasterName = config.get(ofString(), "sentinelMasterName", "mymaster");
             log.warn("Global config, sentinelMasterName={}", ConfForGlobal.sentinelMasterName);
             ConfForGlobal.replicaAnnounceIp = config.get(ofString(), "replicaAnnounceIp", null);
