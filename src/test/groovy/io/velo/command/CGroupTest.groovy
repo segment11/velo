@@ -11,7 +11,6 @@ import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
-import io.velo.repl.ReplPairTest
 import io.velo.reply.*
 import spock.lang.Specification
 
@@ -185,6 +184,9 @@ class CGroupTest extends Specification {
         (reply as BulkReply).asString().contains('addr=')
         (reply as BulkReply).asString().contains('user=default')
         (reply as BulkReply).asString().contains('name=xxx')
+        // The addr= field is in Redis ip:port form (not "host/ip:port"), so a
+        // user can feed the value back into CLIENT KILL ADDR verbatim.
+        (reply as BulkReply).asString().contains('addr=127.0.0.1:46379')
         // Exactly one line for the only registered socket (the issuing one)
         (reply as BulkReply).asString().split('\n').length == 1
 
@@ -295,12 +297,15 @@ class CGroupTest extends Specification {
 
         // ----- CLIENT KILL behavior (Task 3 continued) -----
 
-        when: 'CLIENT KILL legacy form ip:port matches by remote address'
+        when: 'CLIENT KILL legacy form ip:port matches by remote address in Redis form'
         def addrToKill = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46411)
         addrToKill.setInspector(inspector)
         registerSocketOnInspector(inspector, fixtureEventloop, addrToKill)
         extras << addrToKill
-        def addrToKillStr = addrToKill.remoteAddress.toString()
+        // Use the Redis ip:port form (the same shape CLIENT LIST emits) rather
+        // than InetSocketAddress.toString() which prepends "host/" for resolved
+        // hostnames and would never match in production.
+        def addrToKillStr = SocketInspector.formatRedisAddress(addrToKill.remoteAddress)
         def sizeBefore = inspector.socketMap.size()
         reply = cGroup.execute("client kill ${addrToKillStr}")
         then:
@@ -314,12 +319,12 @@ class CGroupTest extends Specification {
         !inspector.socketMap.containsValue(addrToKill)
         inspector.socketMap.size() == sizeBefore - 1
 
-        when: 'CLIENT KILL ADDR matches by remote address'
+        when: 'CLIENT KILL ADDR matches by remote address in Redis form'
         def addrSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46412)
         addrSocket.setInspector(inspector)
         registerSocketOnInspector(inspector, fixtureEventloop, addrSocket)
         extras << addrSocket
-        def addrSocketStr = addrSocket.remoteAddress.toString()
+        def addrSocketStr = SocketInspector.formatRedisAddress(addrSocket.remoteAddress)
         reply = cGroup.execute("client kill addr ${addrSocketStr}")
         then:
         reply instanceof IntegerReply
@@ -398,22 +403,23 @@ class CGroupTest extends Specification {
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 0L
 
-        when: 'CLIENT KILL TYPE replica matches a socket whose user data has a ReplPair'
-        def replSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46416)
-        replSocket.setInspector(inspector)
-        registerSocketOnInspector(inspector, fixtureEventloop, replSocket)
-        extras << replSocket
-        // mark it as a slave/repl socket by stamping a ReplPair into the user data
-        def replUserData = SocketInspector.createUserDataIfNotSet(replSocket)
-        replUserData.replPairAsSlaveInTcpClient = ReplPairTest.mockAsSlave()
-        reply = cGroup.execute('client kill type replica skipme yes')
+        when: 'CLIENT KILL TYPE slave / replica return SYNTAX (Velo cannot iterate real repl sockets)'
+        reply = cGroup.execute('client kill type slave')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'CLIENT KILL TYPE replica returns SYNTAX'
+        reply = cGroup.execute('client kill type replica')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'CLIENT KILL TYPE master is accepted in parsing (Redis-compat) but matches nothing in Velo'
+        reply = cGroup.execute('client kill type master')
         then:
         reply instanceof IntegerReply
-        // The filter matched the repl socket so the count is 1. The actual close()
-        // still fires, but Velo's onDisconnect short-circuits for repl sockets
-        // (see SocketInspector.onDisconnect) so the entry is intentionally kept
-        // in socketMap — that is the existing Velo behavior for repl sockets.
-        (reply as IntegerReply).integer == 1L
+        // Velo has no incoming master connection concept, so the parsed filter
+        // never matches a registered socket. This is the documented behavior.
+        (reply as IntegerReply).integer == 0L
 
         when: 'CLIENT KILL MAXAGE 99999 matches no client because none are old enough'
         reply = cGroup.execute('client kill maxage 99999')

@@ -11,6 +11,8 @@ import io.velo.repl.ReplPairTest
 import io.velo.reply.BulkReply
 import spock.lang.Specification
 
+import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.nio.channels.SocketChannel
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
@@ -125,6 +127,31 @@ class SocketInspectorTest extends Specification {
 
         cleanup:
         netWorkerEventloop.breakEventloop()
+    }
+
+    def 'test formatRedisAddress'() {
+        expect: 'null is preserved'
+        SocketInspector.formatRedisAddress(null) == null
+
+        when: 'IPv4 address'
+        def v4 = new InetSocketAddress('127.0.0.1', 46379)
+        then: 'rendered as ip:port with no host/ prefix'
+        SocketInspector.formatRedisAddress(v4) == '127.0.0.1:46379'
+
+        when: 'IPv4 hostname that resolves to 127.0.0.1'
+        def v4ByName = new InetSocketAddress('localhost', 46379)
+        then: 'still rendered as the IP, not host/ip:port'
+        SocketInspector.formatRedisAddress(v4ByName) == '127.0.0.1:46379'
+
+        when: 'IPv6 loopback'
+        def v6 = new InetSocketAddress(InetAddress.getByName('::1'), 46379)
+        then: 'rendered as [ip]:port with brackets'
+        SocketInspector.formatRedisAddress(v6) == '[0:0:0:0:0:0:0:1]:46379'
+
+        when: 'port 0 is preserved'
+        def anyPort = new InetSocketAddress('127.0.0.1', 0)
+        then:
+        SocketInspector.formatRedisAddress(anyPort) == '127.0.0.1:0'
     }
 
     def 'test connect'() {

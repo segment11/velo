@@ -358,16 +358,18 @@ public class CGroup extends BaseCommand {
     }
 
     /**
-     * Recognized {@code TYPE} filter values. All five Redis values are accepted in
-     * parsing; {@code master} is honored at parse time but never matches because Velo
-     * does not track an incoming master connection role.
+     * Recognized {@code TYPE} filter values. Only {@code normal} and {@code pubsub}
+     * are honored at match time. {@code master} is accepted in parsing (Redis
+     * compatibility) but never matches because Velo has no incoming master
+     * connection role. {@code slave} and {@code replica} are rejected at parse time
+     * with SYNTAX because real replication sockets are not tracked in
+     * {@link SocketInspector#socketMap} (their {@code onConnect} returns early), so
+     * Velo cannot iterate them in {@code CLIENT KILL}.
      */
     private static boolean isSupportedClientKillType(String type) {
         return "normal".equals(type)
-                || "master".equals(type)
-                || "slave".equals(type)
-                || "replica".equals(type)
-                || "pubsub".equals(type);
+                || "pubsub".equals(type)
+                || "master".equals(type);
     }
 
     /**
@@ -402,13 +404,13 @@ public class CGroup extends BaseCommand {
             }
         }
         if (filter.type() != null) {
+            // Only normal / pubsub / master are accepted in parsing (see
+            // isSupportedClientKillType). master never matches because Velo has
+            // no incoming master connection concept, so a TYPE master filter
+            // always returns 0 killed — which is the documented Redis-compatible
+            // behavior on a non-replica server.
             var t = clientType(candidate);
-            // 'slave' and 'replica' are Redis synonyms — both match repl sockets.
-            if ("slave".equals(filter.type()) || "replica".equals(filter.type())) {
-                if (!"replica".equals(t)) {
-                    return false;
-                }
-            } else if (!filter.type().equals(t)) {
+            if (!filter.type().equals(t)) {
                 return false;
             }
         }
@@ -420,7 +422,10 @@ public class CGroup extends BaseCommand {
             }
         }
         if (filter.addr() != null) {
-            var remoteAddress = ((TcpSocket) candidate).getRemoteAddress().toString();
+            // Normalize through formatRedisAddress so the comparison is in the
+            // same ip:port form CLIENT LIST emits, not InetSocketAddress.toString()
+            // (which prepends "host/" for resolved hostnames).
+            var remoteAddress = SocketInspector.formatRedisAddress(((TcpSocket) candidate).getRemoteAddress());
             if (!filter.addr().equals(remoteAddress)) {
                 return false;
             }
