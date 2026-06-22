@@ -82,6 +82,49 @@ class SocketInspectorTest extends Specification {
         def clientInfo = SocketInspector.getClientInfo(socket)
         then:
         clientInfo != null
+
+        // ----- new isSubscribed(): null-safe and reports false on an empty inspector -----
+        def inspector = new SocketInspector()
+        !inspector.isSubscribed(socket)
+        !inspector.isSubscribed(null)
+    }
+
+    def 'test isSubscribed'() {
+        given:
+        def inspector = new SocketInspector()
+        def subscribedSocket = mockTcpSocket()
+        def otherSocket = mockTcpSocket()
+
+        // subscribe() needs at least one net-worker eventloop to register the socket,
+        // otherwise it short-circuits and never adds the socket to the subscription map.
+        def netWorkerEventloop = Eventloop.builder()
+                .withThreadName('is-subscribed-test')
+                .withIdleInterval(Duration.ofMillis(50))
+                .build()
+        netWorkerEventloop.keepAlive(true)
+        Thread.start { netWorkerEventloop.run() }
+        Thread.sleep(200)
+        inspector.initByNetWorkerEventloopArray([netWorkerEventloop] as Eventloop[], [netWorkerEventloop] as Eventloop[])
+
+        expect: 'empty inspector has no subscribers'
+        !inspector.isSubscribed(subscribedSocket)
+        !inspector.isSubscribed(otherSocket)
+        !inspector.isSubscribed(null)
+
+        when: 'a socket is subscribed'
+        inspector.subscribe('test_chan', false, subscribedSocket)
+        then:
+        inspector.isSubscribed(subscribedSocket)
+        // a different socket is still not subscribed
+        !inspector.isSubscribed(otherSocket)
+
+        when: 'the socket is unsubscribed'
+        inspector.unsubscribe('test_chan', false, subscribedSocket)
+        then:
+        !inspector.isSubscribed(subscribedSocket)
+
+        cleanup:
+        netWorkerEventloop.breakEventloop()
     }
 
     def 'test connect'() {

@@ -33,6 +33,17 @@ class VeloUserDataInSocketTest extends Specification {
         VeloUserDataInSocket.ReplyMode.from('off') == VeloUserDataInSocket.ReplyMode.off
         VeloUserDataInSocket.ReplyMode.from('skip') == VeloUserDataInSocket.ReplyMode.skip
 
+        // ----- new monotonic clientId field (stamped by SocketInspector.onConnect) -----
+        one.clientId == 0L
+        one.getClientId() == 0L
+
+        // ----- new getConnectedTimeMillis() (used by CLIENT KILL MAXAGE) -----
+        def before = System.currentTimeMillis()
+        def fresh = new VeloUserDataInSocket()
+        def after = System.currentTimeMillis()
+        fresh.getConnectedTimeMillis() >= before
+        fresh.getConnectedTimeMillis() <= after
+
         when:
         one.replyMode = VeloUserDataInSocket.ReplyMode.off
         one.lastScanAssignCursor = 1
@@ -40,6 +51,7 @@ class VeloUserDataInSocketTest extends Specification {
         one.clientName = 'xxx'
         one.libName = 'Jedis'
         one.libVer = '4.3'
+        one.setClientId(42L)
         then:
         one.replyMode == VeloUserDataInSocket.ReplyMode.off
         one.lastScanAssignCursor == 1
@@ -47,5 +59,7 @@ class VeloUserDataInSocketTest extends Specification {
         one.clientName == 'xxx'
         one.libName == 'Jedis'
         one.libVer == '4.3'
+        one.getClientId() == 42L
+        one.clientId == 42L
     }
 }
