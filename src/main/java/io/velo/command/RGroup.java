@@ -442,11 +442,15 @@ public class RGroup extends BaseCommand {
             var replPair = firstOneSlot.getOnlyOneReplPairAsSlave();
             assert replPair != null;
 
+            // Redis-compatible link state: report "connected" only when the slave TCP client is
+            // actually up; otherwise "down" so Sentinel can mark the slave SDOWN / ODOWN.
+            var linkState = replPair.isLinkUpAnyOk() ? "connected" : "connecting";
+
             var replies = new Reply[]{
                     new BulkReply("slave"),
                     new BulkReply(replPair.getHost()),
                     new IntegerReply(replPair.getPort()),
-                    new BulkReply("connected"),
+                    new BulkReply(linkState),
                     new IntegerReply(replPair.getSlaveLastCatchUpBinlogAsReplOffset())
             };
             return new MultiBulkReply(replies);

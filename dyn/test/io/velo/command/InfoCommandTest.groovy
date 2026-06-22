@@ -1,6 +1,7 @@
 package io.velo.command
 
 import io.velo.BaseCommand
+import io.velo.ConfForGlobal
 import io.velo.MultiWorkerServer
 import io.velo.SocketInspector
 import io.velo.monitor.RuntimeCpuCollector
@@ -185,7 +186,34 @@ class InfoCommandTest extends Specification {
         lines.find { it.contains('master_repl_offset') } != null
         lines.find { it.contains('slave_repl_offset:') } != null
 
+        when: 'sentinel-grade: a healthy master with NO replicas must NOT report master_repl_offset:-1'
+        oneSlot.replPairs.clear()
+        reply = infoCommand.handle()
+        lines = ClusterxCommandTest.infoToLines(reply)
+        then:
+        lines.find { it.contains('master_repl_offset:-1') } == null
+        lines.find { it.contains('master_link_status:down') } != null
+
+        when: 'sentinel-grade: master_host/port follow replicaAnnounceIp/Port when configured'
+        ConfForGlobal.replicaAnnounceIp = '127.0.0.1'
+        ConfForGlobal.replicaAnnouncePort = 9999
+        reply = infoCommand.handle()
+        lines = ClusterxCommandTest.infoToLines(reply)
+        then:
+        lines.find { it.contains('master_host:127.0.0.1') } != null
+        lines.find { it.contains('master_port:9999') } != null
+
+        when: 'sentinel-grade: failover state surfaces from STATIC_GLOBAL_V.masterFailoverState'
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'promotion-in-progress'
+        reply = infoCommand.handle()
+        lines = ClusterxCommandTest.infoToLines(reply)
+        then:
+        lines.find { it.contains('master_failover_state:promotion-in-progress') } != null
+
         cleanup:
+        ConfForGlobal.replicaAnnounceIp = null
+        ConfForGlobal.replicaAnnouncePort = 0
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'no-failover'
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }

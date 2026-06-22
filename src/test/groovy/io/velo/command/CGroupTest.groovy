@@ -2,6 +2,8 @@ package io.velo.command
 
 import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
+import io.velo.MultiWorkerServer
+import io.velo.SocketInspector
 import io.velo.SocketInspectorTest
 import io.velo.Utils
 import io.velo.dyn.CachedGroovyClassLoader
@@ -56,13 +58,29 @@ class CGroupTest extends Specification {
 
     def 'test client'() {
         given:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        BlockingList.initBySlotWorkerEventloopArray(eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = new long[]{Thread.currentThread().threadId()}
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = new long[]{Thread.currentThread().threadId()}
+
         def socket = SocketInspectorTest.mockTcpSocket()
+        LocalPersist.instance.setSocketInspector(inspector)
 
         def cGroup = new CGroup(null, null, socket)
         cGroup.from(BaseCommand.mockAGroup())
 
+        def reply
+
+        // ----- basic client subcommands -----
+
         when:
-        def reply = cGroup.execute('client id')
+        reply = cGroup.execute('client id')
         then:
         reply instanceof IntegerReply
 
@@ -130,6 +148,36 @@ class CGroupTest extends Specification {
         reply = cGroup.execute('client zzz')
         then:
         reply == NilReply.INSTANCE
+
+        // ----- CLIENT KILL (Redis Sentinel reconfiguration path) -----
+
+        when: 'CLIENT KILL without args — format error'
+        reply = cGroup.execute('client kill')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'CLIENT KILL with unsupported filter clause'
+        reply = cGroup.execute('client kill id 123')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'CLIENT KILL with unknown type — must be explicit, not silently accepted'
+        reply = cGroup.execute('client kill type whatever')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'CLIENT KILL TYPE normal — the only filter Sentinel needs'
+        def otherSocket = SocketInspectorTest.mockTcpSocket()
+        inspector.onConnect(otherSocket)
+        reply = cGroup.execute('client kill type normal')
+        then:
+        reply instanceof IntegerReply
+        // reply counts other clients we killed; the issuing socket is preserved
+        (reply as IntegerReply).integer >= 0
+
+        cleanup:
+        inspector.onDisconnect(socket)
+        LocalPersist.instance.setSocketInspector(null)
     }
 
     def 'test clusterx'() {

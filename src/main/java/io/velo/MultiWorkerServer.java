@@ -1413,6 +1413,17 @@ public class MultiWorkerServer extends Launcher {
             ConfForGlobal.clusterEnabled = config.get(ofBoolean(), "clusterEnabled", false);
             log.warn("Global config, clusterEnabled={}", ConfForGlobal.clusterEnabled);
 
+            ConfForGlobal.sentinelModeEnabled = config.get(ofBoolean(), "sentinelModeEnabled", false);
+            log.warn("Global config, sentinelModeEnabled={}", ConfForGlobal.sentinelModeEnabled);
+            ConfForGlobal.sentinelMasterName = config.get(ofString(), "sentinelMasterName", "mymaster");
+            log.warn("Global config, sentinelMasterName={}", ConfForGlobal.sentinelMasterName);
+            ConfForGlobal.replicaAnnounceIp = config.get(ofString(), "replicaAnnounceIp", null);
+            log.warn("Global config, replicaAnnounceIp={}", ConfForGlobal.replicaAnnounceIp);
+            ConfForGlobal.replicaAnnouncePort = config.get(ofInteger(), "replicaAnnouncePort", 0);
+            log.warn("Global config, replicaAnnouncePort={}", ConfForGlobal.replicaAnnouncePort);
+            ConfForGlobal.sentinelReplicaPriority = config.get(ofInteger(), "replicaPriority", 100);
+            log.warn("Global config, replicaPriority={}", ConfForGlobal.sentinelReplicaPriority);
+
             ConfForGlobal.doubleScale = config.get(ofInteger(), "number.doubleScale", 2);
             log.warn("Global config, doubleScale={}", ConfForGlobal.doubleScale);
 
@@ -1735,6 +1746,14 @@ public class MultiWorkerServer extends Launcher {
          * This array is immutable.
          */
         public long[] netWorkerThreadIds;
+
+        /**
+         * Current failover state for {@code INFO replication} {@code master_failover_state}.
+         * Defaults to {@code no-failover}. Set to {@code waiting-for-promotion} or
+         * {@code promotion-in-progress} from {@code LeaderSelector} during role transitions
+         * when managed by Redis Sentinel.
+         */
+        public volatile String masterFailoverState = "no-failover";
 
         /**
          * List of information about the server.

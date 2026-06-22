@@ -119,6 +119,38 @@ public class ConfForGlobal {
     public static String zookeeperRootPath;
 
     /**
+     * When {@code true}, this instance is managed by an external Redis Sentinel process.
+     * Sentinel owns topology decisions in this mode; ZooKeeper leader election must be disabled
+     * and {@link #zookeeperConnectString} must not be set.
+     */
+    public static boolean sentinelModeEnabled = false;
+
+    /**
+     * Master name advertised to an external Redis Sentinel. Decoupled from
+     * {@link #zookeeperRootPath} so Sentinel-managed deployments do not collide with the
+     * existing ZooKeeper-based cluster name.
+     */
+    public static String sentinelMasterName = "mymaster";
+
+    /**
+     * IP address that this instance advertises to Redis Sentinel as the reachable host.
+     * Defaults to {@code null}, which falls back to {@link #netListenAddresses}.
+     */
+    public static String replicaAnnounceIp;
+
+    /**
+     * Port that this instance advertises to Redis Sentinel as the reachable port.
+     * Defaults to {@code 0}, which falls back to the port in {@link #netListenAddresses}.
+     */
+    public static int replicaAnnouncePort = 0;
+
+    /**
+     * Replica priority reported to Redis Sentinel via {@code INFO replication}.
+     * Higher value wins Sentinel election; default 100 matches Redis.
+     */
+    public static int sentinelReplicaPriority = 100;
+
+    /**
      * Flag to indicate if this instance can be a leader.
      */
     public static boolean canBeLeader = true;
@@ -206,9 +238,52 @@ public class ConfForGlobal {
             throw new IllegalArgumentException("Key analysis number percent must be between 1 and 100");
         }
 
+        if (sentinelReplicaPriority < 0) {
+            throw new IllegalArgumentException("Sentinel replica priority must be >= 0");
+        }
+
+        if (sentinelModeEnabled && zookeeperConnectString != null) {
+            throw new IllegalArgumentException(
+                    "Sentinel mode and ZooKeeper mode are mutually exclusive: leave zookeeperConnectString unset when sentinelModeEnabled=true");
+        }
+
         if (ConfForGlobal.PASSWORD != null) {
             var aclUsers = AclUsers.getInstance();
             aclUsers.upInsert(U.DEFAULT_USER, u -> u.setPassword(U.Password.plain(ConfForGlobal.PASSWORD)));
         }
+    }
+
+    /**
+     * Resolve the externally reachable host:port this node should advertise to Redis Sentinel.
+     * Prefers {@link #replicaAnnounceIp} / {@link #replicaAnnouncePort} when set, otherwise
+     * falls back to the host:port parsed out of {@link #netListenAddresses}.
+     *
+     * @return [announcedHost, announcedPort]
+     */
+    public static String[] getAnnouncedHostAndPort() {
+        var announcedIp = replicaAnnounceIp;
+        int announcedPort = replicaAnnouncePort;
+        String host = null;
+        int port = 0;
+        if (netListenAddresses != null) {
+            var idx = netListenAddresses.lastIndexOf(':');
+            if (idx > 0 && idx < netListenAddresses.length() - 1) {
+                host = netListenAddresses.substring(0, idx);
+                try {
+                    port = Integer.parseInt(netListenAddresses.substring(idx + 1));
+                } catch (NumberFormatException ignored) {
+                    // fall through with port=0
+                }
+            } else {
+                host = netListenAddresses;
+            }
+        }
+        if (announcedIp == null || announcedIp.isEmpty()) {
+            announcedIp = host;
+        }
+        if (announcedPort <= 0) {
+            announcedPort = port;
+        }
+        return new String[]{announcedIp, Integer.toString(announcedPort)};
     }
 }

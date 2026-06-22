@@ -461,16 +461,31 @@ public class SGroup extends BaseCommand {
 
     public static final Pattern IPv4_PATTERN = Pattern.compile(IPV4_REGEX);
 
+    /**
+     * Hostname regex: RFC-1123-ish label segments separated by dots.
+     * Allows letters, digits and hyphens, each label 1..63 chars, total length <= 253.
+     */
+    private static final String HOSTNAME_REGEX =
+            "^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?" +
+                    "(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$";
+
+    public static final Pattern HOSTNAME_PATTERN = Pattern.compile(HOSTNAME_REGEX);
+
     Reply slaveof() {
         if (data.length != 3) {
             return ErrorReply.FORMAT;
         }
 
-        var host = new String(data[1]);
+        var arg1 = new String(data[1]);
+        var arg2 = new String(data[2]);
+
+        // Redis-compatible NO ONE: both args must be NO and ONE (case-insensitive).
+        // Legacy single-token "NO" without "ONE" in the second arg is NOT treated as no-one —
+        // Sentinel always sends both, and a partial no-one would risk silently promoting.
+        var isNoOne = "no".equalsIgnoreCase(arg1) && "one".equalsIgnoreCase(arg2);
 
         var leaderSelector = LeaderSelector.getInstance();
 
-        var isNoOne = "no".equalsIgnoreCase(host);
         if (isNoOne) {
             SettablePromise<Reply> finalPromise = new SettablePromise<>();
             var asyncReply = new AsyncReply(finalPromise);
@@ -488,14 +503,16 @@ public class SGroup extends BaseCommand {
             return asyncReply;
         }
 
-        var matcher = IPv4_PATTERN.matcher(host);
-        if (!matcher.matches()) {
+        // Host can be IPv4 literal or a hostname (Sentinel may announce either).
+        var matcherV4 = IPv4_PATTERN.matcher(arg1);
+        var matcherHost = HOSTNAME_PATTERN.matcher(arg1);
+        if (!matcherV4.matches() && !matcherHost.matches()) {
             return ErrorReply.SYNTAX;
         }
 
         int port;
         try {
-            port = Integer.parseInt(new String(data[2]));
+            port = Integer.parseInt(arg2);
         } catch (NumberFormatException e) {
             return ErrorReply.NOT_INTEGER;
         }
@@ -506,7 +523,7 @@ public class SGroup extends BaseCommand {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        leaderSelector.resetAsSlave(host, port, (e) -> {
+        leaderSelector.resetAsSlave(arg1, port, (e) -> {
             if (e != null) {
                 log.error("slaveof error={}", e.getMessage());
                 finalPromise.set(new ErrorReply(e.getMessage()));

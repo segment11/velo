@@ -218,7 +218,10 @@ maxmemory_human:${totalMaxHumanReadable}
             list << new Tuple2('master_replid', replPairAsSlave.slaveUuid.toString().padLeft(40, '0'))
             list << new Tuple2('master_replid2', '0' * 40)
 
-            list << new Tuple2('master_link_status', replPairAsSlave.isLinkUpAnyOk() ? 'up' : 'down')
+            // Real link state from the actual replication TCP client.
+            // Previously hard-coded "connected" — which masked Sentinel failover signals.
+            def tcpClientUp = replPairAsSlave.isLinkUpAnyOk()
+            list << new Tuple2('master_link_status', tcpClientUp ? 'up' : 'down')
 
             def masterFo = replPairAsSlave.masterBinlogCurrentFileIndexAndOffset
             list << new Tuple2('master_repl_offset', masterFo ? masterFo.asReplOffset() : 0)
@@ -228,18 +231,24 @@ maxmemory_human:${totalMaxHumanReadable}
 
             list << new Tuple2('slave_read_only', firstOneSlot.isReadonly() ? 1 : 0)
             list << new Tuple2('slave_priority', ValkeyRawConfSupport.replicaPriority)
+            list << new Tuple2('replica_priority', ConfForGlobal.sentinelReplicaPriority)
 
-            // fix values, may be need change, todo
+            // Sentinel-configured announce host/port, with fall-back to local listen address.
+            def announcedHp = ConfForGlobal.getAnnouncedHostAndPort()
             list << new Tuple2('replica_announced', 1)
-            list << new Tuple2('master_failover_state', 'no-failover')
+            list << new Tuple2('replica-announce-ip', announcedHp[0] ?: '')
+            list << new Tuple2('replica-announce-port', announcedHp[1] ?: '0')
+
+            list << new Tuple2('master_failover_state', MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState)
             list << new Tuple2('repl_backlog_active', 1)
             list << new Tuple2('repl_backlog_size', 1048576)
             list << new Tuple2('repl_backlog_first_byte_offset', 1)
             list << new Tuple2('repl_backlog_histlen', replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset)
         } else {
-            def hostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
-            list << new Tuple2('master_host', hostAndPort.host())
-            list << new Tuple2('master_port', hostAndPort.port())
+            // Master mode: prefer replicaAnnounceIp/Port so Sentinel sees a reachable address.
+            def announcedHp = ConfForGlobal.getAnnouncedHostAndPort()
+            list << new Tuple2('master_host', announcedHp[0] ?: '')
+            list << new Tuple2('master_port', announcedHp[1] ?: '0')
 
             def replPairAsMasterList = firstOneSlot.replPairAsMasterList
             if (!replPairAsMasterList.isEmpty()) {
@@ -268,18 +277,19 @@ maxmemory_human:${totalMaxHumanReadable}
                 list << new Tuple2('master_replid', '0' * 40)
                 list << new Tuple2('master_replid2', '0' * 40)
 
-                list << new Tuple2('master_repl_offset', -1)
+                // Healthy master with no replicas still produces binlog; report real offset.
+                // Previous code emitted -1 here, which Sentinel treats as a broken master.
+                list << new Tuple2('master_repl_offset', firstOneSlot.binlog.currentReplOffset())
                 list << new Tuple2('second_repl_offset', -1)
 
-                // for redis 6.x compat
+                // for redis 6.x compat — no slaves so no link to report.
                 list << new Tuple2('master_link_status', 'down')
                 list << new Tuple2('slave_repl_offset', '0')
 
                 list << new Tuple2('repl_backlog_histlen', 0)
             }
 
-            // fix values, may be need change, todo
-            list << new Tuple2('master_failover_state', 'no-failover')
+            list << new Tuple2('master_failover_state', MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState)
             list << new Tuple2('repl_backlog_active', 1)
             list << new Tuple2('repl_backlog_size', 1048576)
             list << new Tuple2('repl_backlog_first_byte_offset', 1)

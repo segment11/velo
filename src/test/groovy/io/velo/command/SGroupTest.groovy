@@ -2346,46 +2346,114 @@ sunionstore
 
         and:
         def leaderSelector = LeaderSelector.instance
-        def testListenAddress = 'localhost:7379'
-        leaderSelector.masterAddressLocalMocked = testListenAddress
+        leaderSelector.masterAddressLocalMocked = 'localhost:7379'
 
         and:
         def data3 = new byte[3][]
-        data3[1] = 'no'.bytes
-        data3[2] = '7379'.bytes
-
         def sGroup = new SGroup('slaveof', data3, null)
         sGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def reply = sGroup.slaveof()
-        then:
-        reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == OKReply.INSTANCE
-        }.result
+        def reply
 
-        when:
-        data3[1] = 'localhost'.bytes
+        // ----- format / parse errors -----
+
+        when: 'wrong arity'
+        def data2 = new byte[2][]
+        def sGroupArity = new SGroup('slaveof', data2, null)
+        sGroupArity.from(BaseCommand.mockAGroup())
+        reply = sGroupArity.slaveof()
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'invalid host (contains spaces)'
+        data3[1] = 'bad host name'.bytes
+        data3[2] = '7379'.bytes
         reply = sGroup.slaveof()
         then:
         reply == ErrorReply.SYNTAX
 
-        when:
+        when: 'port out of range'
         data3[1] = '127.0.0.1'.bytes
         data3[2] = '-1'.bytes
         reply = sGroup.slaveof()
         then:
         reply == ErrorReply.INVALID_INTEGER
 
-        when:
+        when: 'port not a number'
+        data3[1] = '127.0.0.1'.bytes
         data3[2] = 'a'.bytes
         reply = sGroup.slaveof()
         then:
         reply == ErrorReply.NOT_INTEGER
 
-        when:
-        data3[2] = '7379'.bytes
+        when: 'port above 65535'
+        data3[1] = 'redis-master.local'.bytes
+        data3[2] = '70000'.bytes
+        reply = sGroup.slaveof()
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when: 'port is non-numeric with hostname'
+        data3[1] = 'redis-master.local'.bytes
+        data3[2] = 'abc'.bytes
+        reply = sGroup.slaveof()
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        // ----- NO ONE semantics (Redis Sentinel) -----
+
+        when: 'redis sentinel calls SLAVEOF NO ONE — both args must be NO / ONE'
+        data3[1] = 'NO'.bytes
+        data3[2] = 'ONE'.bytes
+        reply = sGroup.slaveof()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == OKReply.INSTANCE
+        }.result
+
+        when: 'mixed-case NO ONE'
+        data3[1] = 'No'.bytes
+        data3[2] = 'One'.bytes
+        reply = sGroup.slaveof()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == OKReply.INSTANCE
+        }.result
+
+        when: 'NO with wrong second arg must NOT trigger no-one promotion; falls through to host parsing'
+        data3[1] = 'NO'.bytes
+        data3[2] = 'TWO'.bytes
+        reply = sGroup.slaveof()
+        then: 'NO alone parses as a valid hostname, then port parse fails on TWO'
+        reply == ErrorReply.NOT_INTEGER
+
+        // ----- happy path: hostname / IPv4 slaveof -----
+
+        when: 'fully qualified hostname as master host'
+        data3[1] = 'redis-master.local'.bytes
+        data3[2] = '6379'.bytes
+        reply = sGroup.slaveof()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == OKReply.INSTANCE
+        }.result
+
+        when: 'short hostname'
+        data3[1] = 'my-replica-host'.bytes
+        data3[2] = '6380'.bytes
+        reply = sGroup.slaveof()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == OKReply.INSTANCE
+        }.result
+
+        when: 'IPv4 literal still works'
+        data3[1] = '127.0.0.1'.bytes
+        data3[2] = '6381'.bytes
         reply = sGroup.slaveof()
         then:
         reply instanceof AsyncReply

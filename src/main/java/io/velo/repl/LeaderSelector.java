@@ -5,6 +5,7 @@ import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
+import io.velo.MultiWorkerServer;
 import io.velo.NeedCleanUp;
 import io.velo.command.PGroup;
 import io.velo.command.XGroup;
@@ -295,6 +296,19 @@ public class LeaderSelector implements NeedCleanUp {
 
         lastResetAsMasterTimeMillis = System.currentTimeMillis();
 
+        // Sentinel failover state observability.
+        var prevFailoverState = MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState;
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = "promotion-in-progress";
+        try {
+            doResetAsMaster(force, callback);
+        } finally {
+            if ("promotion-in-progress".equals(MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState)) {
+                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+            }
+        }
+    }
+
+    private void doResetAsMaster(boolean force, Consumer<Exception> callback) {
         var localPersist = LocalPersist.getInstance();
 
         Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
@@ -395,6 +409,19 @@ public class LeaderSelector implements NeedCleanUp {
 
         lastResetAsSlaveTimeMillis = System.currentTimeMillis();
 
+        // Sentinel demotion observability: this node is being demoted to a replica.
+        var prevFailoverState = MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState;
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = "waiting-for-promotion";
+        try {
+            doResetAsSlave(host, port, callback);
+        } finally {
+            if ("waiting-for-promotion".equals(MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState)) {
+                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+            }
+        }
+    }
+
+    private void doResetAsSlave(String host, int port, Consumer<Exception> callback) {
         var checkMasterConfigMatch = checkMasterConfigMatch(host, port, callback);
         if (!checkMasterConfigMatch) {
             // already callback handle with exception

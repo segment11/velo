@@ -217,6 +217,13 @@ public class VeloUserDataInSocket {
      */
     ReplPair replPairAsSlaveInTcpClient = null;
 
+    /**
+     * @return the ReplPair representing the slave in the TCP client, or null if this is a normal client socket.
+     */
+    public ReplPair getReplPairAsSlaveInTcpClient() {
+        return replPairAsSlaveInTcpClient;
+    }
+
     Eventloop netWorkerEventloop;
 
     /**

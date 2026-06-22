@@ -11,6 +11,7 @@ import io.velo.dyn.RefreshLoader;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -159,8 +160,73 @@ public class CGroup extends BaseCommand {
             return OKReply.INSTANCE;
         }
 
+        if ("kill".equals(subCmd)) {
+            return clientKill();
+        }
+
         // todo
         return NilReply.INSTANCE;
+    }
+
+    /**
+     * Minimal CLIENT KILL implementation sufficient for Redis Sentinel reconfiguration.
+     *
+     * <p>Supports {@code CLIENT KILL TYPE normal} which Sentinel issues after promoting a replica,
+     * to drop stale connections that still believe the old master is authoritative. Replication
+     * sockets and the issuing socket itself are NOT disconnected.
+     */
+    @VisibleForTesting
+    Reply clientKill() {
+        // data[0] is the cmd word "client", data[1] is "kill", data[2] is "type", data[3] is the type value
+        if (data.length < 4) {
+            return ErrorReply.FORMAT;
+        }
+
+        // Expect: CLIENT KILL TYPE <type>  (optionally followed by other filter clauses we don't support)
+        // We only fully support TYPE normal; other filter clauses (ID, ADDR, LADDR, SKIPME yes/no) are
+        // accepted only as part of TYPE normal for Sentinel compatibility and otherwise return SYNTAX.
+        var filterArg = new String(data[2]).toLowerCase();
+        if (!"type".equals(filterArg)) {
+            return ErrorReply.SYNTAX;
+        }
+
+        var killType = new String(data[3]).toLowerCase();
+        if (!"normal".equals(killType)) {
+            // Sentinel does not ask us to kill pubsub / replica / master, so reject explicitly
+            return ErrorReply.SYNTAX;
+        }
+
+        var socketInspector = localPersist.getSocketInspector();
+        if (socketInspector == null) {
+            return IntegerReply.REPLY_0;
+        }
+
+        int killed = 0;
+        // Snapshot the keys to avoid concurrent modification while iterating.
+        var keys = new ArrayList<>(socketInspector.socketMap.keySet());
+        for (InetSocketAddress addr : keys) {
+            var s = socketInspector.socketMap.get(addr);
+            if (s == null) {
+                continue;
+            }
+            if (s == socket) {
+                // never kill the issuing connection
+                continue;
+            }
+            var ud = SocketInspector.createUserDataIfNotSet(s);
+            if (ud.getReplPairAsSlaveInTcpClient() != null) {
+                // this socket is a replication TCP client — leave it alone
+                continue;
+            }
+            try {
+                s.close();
+                killed++;
+            } catch (Exception e) {
+                log.warn("Client kill error, addr={}, msg={}", addr, e.getMessage());
+            }
+        }
+
+        return new IntegerReply(killed);
     }
 
     private final CachedGroovyClassLoader cl = CachedGroovyClassLoader.getInstance();

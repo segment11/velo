@@ -417,6 +417,9 @@ class RGroupTest extends Specification {
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 5
         (reply as MultiBulkReply).replies[0] == new BulkReply('slave')
+        // link state reflects actual TCP client state, not hard-coded "connected"
+        (reply as MultiBulkReply).replies[3] == new BulkReply('connected') ||
+            (reply as MultiBulkReply).replies[3] == new BulkReply('connecting')
 
         cleanup:
         localPersist.cleanUp()
