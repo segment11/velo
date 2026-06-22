@@ -585,11 +585,11 @@ class LeaderSelectorTest extends Specification {
         leaderSelector.resetAsSlave('127.0.0.1', 1) { e -> callbackException.set(e); callbackInvoked.countDown() }
         then: 'after the synchronous early-return path runs, state is restored to prevFailoverState'
         callbackInvoked.await(5, TimeUnit.SECONDS)
-        // The early-return path explicitly restores the state, so the state must not be stuck
-        // at 'waiting-for-promotion'. The state may briefly be 'waiting-for-promotion' if the
-        // path reached Promises.all, but the key invariant is: not stuck.
-        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState == prevFailoverState ||
-                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState == 'waiting-for-promotion'
+        // The early-return path (LeaderSelector.doResetAsSlave) explicitly restores the
+        // state to prevFailoverState before returning. Allowing 'waiting-for-promotion'
+        // here would mask a regression where the state was left stuck in the transition
+        // value — which is exactly what e31ad43e and a0a39d8c were meant to prevent.
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState == prevFailoverState
         // And: the callback fired with a non-null exception (config check failed).
         callbackException.get() != null
 
