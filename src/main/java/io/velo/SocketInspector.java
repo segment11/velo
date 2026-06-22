@@ -14,12 +14,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.Inet6Address;
 import java.net.InetSocketAddress;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Inspects and manages TCP sockets for a Velo server.
@@ -177,6 +179,42 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
+     * Format an {@link InetSocketAddress} in the Redis-compatible {@code ip:port} form used
+     * by {@code CLIENT LIST} and {@code CLIENT KILL ADDR}. Unlike
+     * {@link InetSocketAddress#toString()}, this skips the {@code host/} prefix for
+     * resolved hostnames and brackets IPv6 addresses, so a value printed by
+     * {@code CLIENT LIST} can be fed back into {@code CLIENT KILL ADDR} verbatim.
+     *
+     * <p>Examples:
+     * <ul>
+     *   <li>{@code InetSocketAddress("127.0.0.1", 46379)} → {@code 127.0.0.1:46379}</li>
+     *   <li>{@code InetSocketAddress("localhost", 46379)} → {@code 127.0.0.1:46379}</li>
+     *   <li>{@code InetSocketAddress(0)} on IPv6 → {@code [0:0:0:0:0:0:0:1]:46379}</li>
+     * </ul>
+     *
+     * @param addr the address to format
+     * @return the Redis-formatted {@code ip:port} string, or {@code null} if {@code addr} is null
+     */
+    public static String formatRedisAddress(InetSocketAddress addr) {
+        if (addr == null) {
+            return null;
+        }
+        // Force hostname resolution to obtain the IP. For unresolved addresses
+        // (no DNS lookup performed yet) getAddress() returns null, in which case
+        // we fall back to the host string so the call still produces a usable value.
+        var inetAddr = addr.getAddress();
+        String ipString;
+        if (inetAddr == null) {
+            ipString = addr.getHostString();
+        } else if (inetAddr instanceof Inet6Address) {
+            ipString = "[" + inetAddr.getHostAddress() + "]";
+        } else {
+            ipString = inetAddr.getHostAddress();
+        }
+        return ipString + ":" + addr.getPort();
+    }
+
+    /**
      * @param socket the client socket
      * @return the client info reply
      */
@@ -185,16 +223,20 @@ public class SocketInspector implements TcpSocket.Inspector {
         assert veloUserData != null;
         var remoteAddress = ((TcpSocket) socket).getRemoteAddress();
 
+        // Prefer the monotonic client id stamped at connect time; fall back to hashCode()
+        // for callers that synthesized a user data object without going through onConnect.
+        var clientId = veloUserData.getClientId() != 0L ? veloUserData.getClientId() : socket.hashCode();
+
         var sb = new StringBuilder();
         sb.append("id=");
-        sb.append(socket.hashCode());
+        sb.append(clientId);
         sb.append(" addr=");
-        sb.append(remoteAddress);
+        sb.append(formatRedisAddress(remoteAddress));
         sb.append(" laddr=");
         sb.append(ConfForGlobal.netListenAddresses);
         sb.append(" fd=");
         // use id as fd
-        sb.append(socket.hashCode());
+        sb.append(clientId);
         sb.append(" name=");
         if (veloUserData.getClientName() != null) {
             sb.append(veloUserData.getClientName());
@@ -420,6 +462,24 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
+     * @param socket the socket to check
+     * @return {@code true} if the socket appears in any subscription map held by
+     * this inspector, used by {@code CLIENT KILL TYPE pubsub} to match subscribed
+     * sockets.
+     */
+    public boolean isSubscribed(ITcpSocket socket) {
+        if (socket == null) {
+            return false;
+        }
+        for (var sockets : subscribeByChannel.values()) {
+            if (sockets.containsKey(socket)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Filters subscribed channels by a given channel and pattern flag.
      *
      * @param channel   the channel to filter by
@@ -600,6 +660,15 @@ public class SocketInspector implements TcpSocket.Inspector {
     final AtomicInteger connectionCount = new AtomicInteger(0);
 
     /**
+     * Monotonic id source for {@code CLIENT ID} / {@code CLIENT LIST}.
+     * Stamped into {@link VeloUserDataInSocket#setClientId(long)} on each successful
+     * {@link #onConnect(TcpSocket)}. Using a single global counter guarantees uniqueness
+     * across the server lifetime, so {@code CLIENT KILL ID <n>} cannot misfire on a
+     * {@code hashCode()} collision.
+     */
+    final AtomicLong nextClientId = new AtomicLong(0L);
+
+    /**
      * Returns the maximum number of connections allowed.
      *
      * @return the maximum number of connections
@@ -671,8 +740,14 @@ public class SocketInspector implements TcpSocket.Inspector {
             return;
         }
 
+        // Stamp a monotonic client id before exposing the socket via socketMap so
+        // CLIENT ID / CLIENT LIST see the same value CLIENT KILL ID <n> will use.
+        if (veloUserData.getClientId() == 0L) {
+            veloUserData.setClientId(nextClientId.incrementAndGet());
+        }
+
         var remoteAddress = socket.getRemoteAddress();
-        log.debug("Inspector on connect, remote address={}", remoteAddress);
+        log.info("Inspector on connect, remote address={}, clientId={}", remoteAddress, veloUserData.getClientId());
         socketMap.put(remoteAddress, socket);
 
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
@@ -761,7 +836,7 @@ public class SocketInspector implements TcpSocket.Inspector {
             return;
         }
 
-        log.debug("Inspector on disconnect, remote address={}", remoteAddress);
+        log.info("Inspector on disconnect, remote address={}", remoteAddress);
         var removed = socketMap.remove(remoteAddress);
         if (removed != null) {
             connectionCount.decrementAndGet();

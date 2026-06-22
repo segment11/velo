@@ -9,9 +9,37 @@ import io.velo.repl.ReplPair;
  */
 public class VeloUserDataInSocket {
     /**
+     * Monotonic client id assigned by {@link SocketInspector#onConnect(TcpSocket)}.
+     * Defaults to 0 until stamping occurs. Unlike {@code socket.hashCode()} this is unique
+     * for the lifetime of the server, so {@code CLIENT KILL ID <n>} cannot misfire on a hash collision.
+     */
+    long clientId = 0L;
+
+    /**
+     * @return the monotonic client id assigned at connect time, or 0 if not yet stamped.
+     */
+    public long getClientId() {
+        return clientId;
+    }
+
+    /**
+     * @param clientId the monotonic client id assigned at connect time
+     */
+    public void setClientId(long clientId) {
+        this.clientId = clientId;
+    }
+
+    /**
      * The time when the client was established.
      */
     long connectedTimeMillis = System.currentTimeMillis();
+
+    /**
+     * @return the connect-time epoch millis, used by {@code CLIENT KILL MAXAGE}.
+     */
+    public long getConnectedTimeMillis() {
+        return connectedTimeMillis;
+    }
 
     /**
      * The time when the last command was sent.
