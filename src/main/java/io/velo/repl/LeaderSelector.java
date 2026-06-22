@@ -305,67 +305,76 @@ public class LeaderSelector implements NeedCleanUp {
     }
 
     private void doResetAsMaster(boolean force, String prevFailoverState, Consumer<Exception> callback) {
-        var localPersist = LocalPersist.getInstance();
+        // Restore the failover state on any synchronous throw too — the whenComplete callback
+        // below only runs if Promises.all is reached, so anything that throws before that
+        // (e.g. localPersist.oneSlot returning null, asyncRun failing) would otherwise leave
+        // masterFailoverState stuck at "promotion-in-progress" forever.
+        try {
+            var localPersist = LocalPersist.getInstance();
 
-        Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
-        for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
-            var oneSlot = localPersist.oneSlot((short) i);
-            promises[i] = oneSlot.asyncRun(() -> {
-                boolean canResetSelfAsMasterNow = false;
+            Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
+            for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
+                var oneSlot = localPersist.oneSlot((short) i);
+                promises[i] = oneSlot.asyncRun(() -> {
+                    boolean canResetSelfAsMasterNow = false;
 
-                var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
-                if (replPairAsSlave != null) {
-                    if (replPairAsSlave.isMasterReadonly() && replPairAsSlave.isAllCaughtUp()) {
+                    var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
+                    if (replPairAsSlave != null) {
+                        if (replPairAsSlave.isMasterReadonly() && replPairAsSlave.isAllCaughtUp()) {
+                            canResetSelfAsMasterNow = true;
+                        }
+                    } else {
                         canResetSelfAsMasterNow = true;
+                        log.debug("Repl old repl pair as slave is null, slot={}", oneSlot.slot());
                     }
-                } else {
-                    canResetSelfAsMasterNow = true;
-                    log.debug("Repl old repl pair as slave is null, slot={}", oneSlot.slot());
-                }
 
-                if (!force && !canResetSelfAsMasterNow) {
-                    log.warn("Repl slave can not reset as master now, need wait current master readonly and slave all caught up, slot={}",
-                            replPairAsSlave.getSlot());
-                    XGroup.tryCatchUpAgainAfterSlaveTcpClientClosed(replPairAsSlave, null);
-                    throw new IllegalStateException("Repl slave can not reset as master, slot=" + replPairAsSlave.getSlot());
-                }
-
-                resetAsSlaveCount = 0;
-
-                var isSelfSlave = oneSlot.removeReplPairAsSlave();
-                if (isSelfSlave) {
-                    oneSlot.resetAsMaster();
-                    resetAsMasterCount = 0;
-                } else {
-                    resetAsMasterCount++;
-                    if (resetAsMasterCount % 100 == 0) {
-                        log.info("Repl reset as master, is already master, do nothing, slot={}", oneSlot.slot());
+                    if (!force && !canResetSelfAsMasterNow) {
+                        log.warn("Repl slave can not reset as master now, need wait current master readonly and slave all caught up, slot={}",
+                                replPairAsSlave.getSlot());
+                        XGroup.tryCatchUpAgainAfterSlaveTcpClientClosed(replPairAsSlave, null);
+                        throw new IllegalStateException("Repl slave can not reset as master, slot=" + replPairAsSlave.getSlot());
                     }
+
+                    resetAsSlaveCount = 0;
+
+                    var isSelfSlave = oneSlot.removeReplPairAsSlave();
+                    if (isSelfSlave) {
+                        oneSlot.resetAsMaster();
+                        resetAsMasterCount = 0;
+                    } else {
+                        resetAsMasterCount++;
+                        if (resetAsMasterCount % 100 == 0) {
+                            log.info("Repl reset as master, is already master, do nothing, slot={}", oneSlot.slot());
+                        }
+                    }
+                });
+            }
+
+            Promises.all(promises).whenComplete((r, e) -> {
+                // Restore previous failover state once the role transition actually completed (or failed),
+                // so Sentinel polling INFO replication can observe the transition window.
+                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+
+                if (e != null) {
+                    callback.accept(e);
+                    return;
                 }
+
+                // publish switch master to clients
+                var leaderSelector = LeaderSelector.getInstance();
+                var oldMasterHostAndPort = ReplPair.parseHostAndPort(leaderSelector.lastGetMasterListenAddressAsSlave);
+                var selfAsMasterHostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses);
+                if (oldMasterHostAndPort == null) {
+                    oldMasterHostAndPort = selfAsMasterHostAndPort;
+                }
+                publishMasterSwitchMessage(oldMasterHostAndPort, selfAsMasterHostAndPort, true);
+
+                callback.accept(null);
             });
-        }
-
-        Promises.all(promises).whenComplete((r, e) -> {
-            // Restore previous failover state once the role transition actually completed (or failed),
-            // so Sentinel polling INFO replication can observe the transition window.
+        } catch (RuntimeException e) {
             MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
-
-            if (e != null) {
-                callback.accept(e);
-                return;
-            }
-
-            // publish switch master to clients
-            var leaderSelector = LeaderSelector.getInstance();
-            var oldMasterHostAndPort = ReplPair.parseHostAndPort(leaderSelector.lastGetMasterListenAddressAsSlave);
-            var selfAsMasterHostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses);
-            if (oldMasterHostAndPort == null) {
-                oldMasterHostAndPort = selfAsMasterHostAndPort;
-            }
-            publishMasterSwitchMessage(oldMasterHostAndPort, selfAsMasterHostAndPort, true);
-
-            callback.accept(null);
-        });
+            throw e;
+        }
     }
 
     private boolean checkMasterConfigMatch(String host, int port, Consumer<Exception> callback) {
@@ -417,53 +426,60 @@ public class LeaderSelector implements NeedCleanUp {
     }
 
     private void doResetAsSlave(String host, int port, String prevFailoverState, Consumer<Exception> callback) {
-        var checkMasterConfigMatch = checkMasterConfigMatch(host, port, callback);
-        if (!checkMasterConfigMatch) {
-            // already callback handle with exception — restore state so we don't get stuck
-            MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
-            return;
-        }
-
-        var localPersist = LocalPersist.getInstance();
-
-        Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
-        for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
-            var oneSlot = localPersist.oneSlot((short) i);
-            promises[i] = oneSlot.asyncRun(() -> {
-                var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
-                if (replPairAsSlave != null) {
-                    if (replPairAsSlave.getHost().equals(host) && replPairAsSlave.getPort() == port) {
-                        log.debug("Repl old repl pair as slave is same as new master, slot={}", oneSlot.slot());
-                        return;
-                    } else {
-                        oneSlot.removeReplPairAsSlave();
-                    }
-                }
-
-                oneSlot.resetAsSlave(host, port);
-
-                resetAsMasterCount = 0;
-                resetAsSlaveCount++;
-            });
-        }
-
-        Promises.all(promises).whenComplete((r, e) -> {
-            // Restore previous failover state once the role transition actually completed (or failed),
-            // so Sentinel polling INFO replication can observe the transition window.
-            MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
-
-            if (e != null) {
-                callback.accept(e);
+        // Same synchronous-throw guard as doResetAsMaster — anything that throws before the
+        // whenComplete callback runs must still restore the failover state.
+        try {
+            var checkMasterConfigMatch = checkMasterConfigMatch(host, port, callback);
+            if (!checkMasterConfigMatch) {
+                // already callback handle with exception — restore state so we don't get stuck
+                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
                 return;
             }
 
-            // publish switch master to clients
-            var selfAsOldMasterHostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses);
-            var newMasterHostAndPort = new ReplPair.HostAndPort(host, port);
-            publishMasterSwitchMessage(selfAsOldMasterHostAndPort, newMasterHostAndPort, false);
+            var localPersist = LocalPersist.getInstance();
 
-            callback.accept(null);
-        });
+            Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
+            for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
+                var oneSlot = localPersist.oneSlot((short) i);
+                promises[i] = oneSlot.asyncRun(() -> {
+                    var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
+                    if (replPairAsSlave != null) {
+                        if (replPairAsSlave.getHost().equals(host) && replPairAsSlave.getPort() == port) {
+                            log.debug("Repl old repl pair as slave is same as new master, slot={}", oneSlot.slot());
+                            return;
+                        } else {
+                            oneSlot.removeReplPairAsSlave();
+                        }
+                    }
+
+                    oneSlot.resetAsSlave(host, port);
+
+                    resetAsMasterCount = 0;
+                    resetAsSlaveCount++;
+                });
+            }
+
+            Promises.all(promises).whenComplete((r, e) -> {
+                // Restore previous failover state once the role transition actually completed (or failed),
+                // so Sentinel polling INFO replication can observe the transition window.
+                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+
+                if (e != null) {
+                    callback.accept(e);
+                    return;
+                }
+
+                // publish switch master to clients
+                var selfAsOldMasterHostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses);
+                var newMasterHostAndPort = new ReplPair.HostAndPort(host, port);
+                publishMasterSwitchMessage(selfAsOldMasterHostAndPort, newMasterHostAndPort, false);
+
+                callback.accept(null);
+            });
+        } catch (RuntimeException e) {
+            MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+            throw e;
+        }
     }
 
     private static final byte[] PUBLISH_CMD_BYTES = "publish".getBytes();

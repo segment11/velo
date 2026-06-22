@@ -18,6 +18,8 @@ import spock.lang.Specification
 
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class LeaderSelectorTest extends Specification {
     def 'test leader latch'() {
@@ -493,6 +495,7 @@ class LeaderSelectorTest extends Specification {
 
     def 'test failover state observability'() {
         given:
+        def savedListen = ConfForGlobal.netListenAddresses
         ConfForGlobal.netListenAddresses = 'localhost:7380'
         LocalPersist.instance.socketInspector = new SocketInspector()
 
@@ -502,10 +505,9 @@ class LeaderSelectorTest extends Specification {
 
         and:
         // Build the slot-worker eventloop and start it on a separate thread, then park it
-        // with a busy task so the resetAsMaster slot work stays pending until we release it.
+        // with a busy task so the role transition's slot work stays pending until we release it.
         // Earlier tests may have bound BlockingList.slotWorkerEventloopArray to stale eventloops;
         // rebind it to ours so asyncRun path-2 (if reached) uses the right eventloop.
-        BlockingList.slotWorkerEventloopArray = null
         def slotEventloop = Eventloop.builder()
                 .withIdleInterval(Duration.ofMillis(10))
                 .build()
@@ -514,16 +516,16 @@ class LeaderSelectorTest extends Specification {
         Thread.sleep(200)
         oneSlot.setSlotWorkerEventloop(slotEventloop)
         localPersist.fixSlotThreadId(slot, slotEventloop.getEventloopThread().threadId())
-        BlockingList.slotWorkerEventloopArray = new Eventloop[]{slotEventloop}
+        BlockingList.initBySlotWorkerEventloopArray(new Eventloop[]{slotEventloop})
 
         // Park the slot eventloop with a busy task so resetAsMaster's slot work stays queued.
-        def releaseLatch = new java.util.concurrent.CountDownLatch(1)
-        def parkingStarted = new java.util.concurrent.CountDownLatch(1)
+        def releaseLatch = new CountDownLatch(1)
+        def parkingStarted = new CountDownLatch(1)
         slotEventloop.execute {
             parkingStarted.countDown()
             releaseLatch.await()
         }
-        parkingStarted.await(2, java.util.concurrent.TimeUnit.SECONDS)
+        parkingStarted.await(2, TimeUnit.SECONDS)
 
         and:
         def leaderSelector = LeaderSelector.instance
@@ -550,6 +552,7 @@ class LeaderSelectorTest extends Specification {
         slotEventloop.breakEventloop()
         leaderSelector.masterAddressLocalMocked = null
         MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'no-failover'
+        ConfForGlobal.netListenAddresses = savedListen
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
