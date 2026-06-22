@@ -425,6 +425,24 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
+     * @param socket the socket to check
+     * @return {@code true} if the socket appears in any subscription map held by
+     * this inspector, used by {@code CLIENT KILL TYPE pubsub} to match subscribed
+     * sockets.
+     */
+    public boolean isSubscribed(ITcpSocket socket) {
+        if (socket == null) {
+            return false;
+        }
+        for (var sockets : subscribeByChannel.values()) {
+            if (sockets.containsKey(socket)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Filters subscribed channels by a given channel and pattern flag.
      *
      * @param channel   the channel to filter by

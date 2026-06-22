@@ -35,6 +35,13 @@ public class VeloUserDataInSocket {
     long connectedTimeMillis = System.currentTimeMillis();
 
     /**
+     * @return the connect-time epoch millis, used by {@code CLIENT KILL MAXAGE}.
+     */
+    public long getConnectedTimeMillis() {
+        return connectedTimeMillis;
+    }
+
+    /**
      * The time when the last command was sent.
      */
     long lastSendCommandTimeMillis = System.currentTimeMillis();
