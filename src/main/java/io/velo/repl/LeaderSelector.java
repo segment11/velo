@@ -296,19 +296,15 @@ public class LeaderSelector implements NeedCleanUp {
 
         lastResetAsMasterTimeMillis = System.currentTimeMillis();
 
-        // Sentinel failover state observability.
+        // Sentinel failover state observability. The actual reset happens when the per-slot
+        // async work completes, so the state is set/cleared inside the whenComplete callback
+        // — otherwise a synchronous finally would clear the state before Sentinel can observe it.
         var prevFailoverState = MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState;
         MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = "promotion-in-progress";
-        try {
-            doResetAsMaster(force, callback);
-        } finally {
-            if ("promotion-in-progress".equals(MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState)) {
-                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
-            }
-        }
+        doResetAsMaster(force, prevFailoverState, callback);
     }
 
-    private void doResetAsMaster(boolean force, Consumer<Exception> callback) {
+    private void doResetAsMaster(boolean force, String prevFailoverState, Consumer<Exception> callback) {
         var localPersist = LocalPersist.getInstance();
 
         Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
@@ -350,6 +346,10 @@ public class LeaderSelector implements NeedCleanUp {
         }
 
         Promises.all(promises).whenComplete((r, e) -> {
+            // Restore previous failover state once the role transition actually completed (or failed),
+            // so Sentinel polling INFO replication can observe the transition window.
+            MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+
             if (e != null) {
                 callback.accept(e);
                 return;
@@ -410,21 +410,17 @@ public class LeaderSelector implements NeedCleanUp {
         lastResetAsSlaveTimeMillis = System.currentTimeMillis();
 
         // Sentinel demotion observability: this node is being demoted to a replica.
+        // Like resetAsMaster, the actual transition is async; clear the state in whenComplete.
         var prevFailoverState = MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState;
         MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = "waiting-for-promotion";
-        try {
-            doResetAsSlave(host, port, callback);
-        } finally {
-            if ("waiting-for-promotion".equals(MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState)) {
-                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
-            }
-        }
+        doResetAsSlave(host, port, prevFailoverState, callback);
     }
 
-    private void doResetAsSlave(String host, int port, Consumer<Exception> callback) {
+    private void doResetAsSlave(String host, int port, String prevFailoverState, Consumer<Exception> callback) {
         var checkMasterConfigMatch = checkMasterConfigMatch(host, port, callback);
         if (!checkMasterConfigMatch) {
-            // already callback handle with exception
+            // already callback handle with exception — restore state so we don't get stuck
+            MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
             return;
         }
 
@@ -452,6 +448,10 @@ public class LeaderSelector implements NeedCleanUp {
         }
 
         Promises.all(promises).whenComplete((r, e) -> {
+            // Restore previous failover state once the role transition actually completed (or failed),
+            // so Sentinel polling INFO replication can observe the transition window.
+            MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+
             if (e != null) {
                 callback.accept(e);
                 return;

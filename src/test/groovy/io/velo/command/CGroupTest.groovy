@@ -48,12 +48,12 @@ class CGroupTest extends Specification {
         cGroup.execute(input) == expected
 
         where:
-        input       | expected
-        'client'    | ErrorReply.FORMAT
-        'clusterx'  | ErrorReply.FORMAT
-        'config'    | ErrorReply.FORMAT
-        'copy'      | ErrorReply.FORMAT
-        'zzz'       | NilReply.INSTANCE
+        input      | expected
+        'client'   | ErrorReply.FORMAT
+        'clusterx' | ErrorReply.FORMAT
+        'config'   | ErrorReply.FORMAT
+        'copy'     | ErrorReply.FORMAT
+        'zzz'      | NilReply.INSTANCE
     }
 
     def 'test client'() {
@@ -62,7 +62,7 @@ class CGroupTest extends Specification {
                 .withCurrentThread()
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
-Eventloop[] eventloopArray = [eventloopCurrent]
+        Eventloop[] eventloopArray = [eventloopCurrent]
         def inspector = new SocketInspector()
         inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
         BlockingList.initBySlotWorkerEventloopArray(eventloopArray)

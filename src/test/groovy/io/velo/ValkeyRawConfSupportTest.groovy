@@ -26,11 +26,5 @@ class ValkeyRawConfSupportTest extends Specification {
         ValkeyRawConfSupport.load()
         then:
         ValkeyRawConfSupport.aclFilename == 'acl2.conf'
-
-        when:
-        file.text = 'replica-priority: 1'
-        ValkeyRawConfSupport.load()
-        then:
-        ValkeyRawConfSupport.replicaPriority == 1
     }
 }

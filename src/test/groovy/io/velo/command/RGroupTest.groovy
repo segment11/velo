@@ -408,18 +408,22 @@ class RGroupTest extends Specification {
         (reply as MultiBulkReply).replies[2] instanceof MultiBulkReply
         ((MultiBulkReply) (reply as MultiBulkReply).replies[2]).replies[0] instanceof MultiBulkReply
 
-        when:
+        when: 'slave with no live TCP client (default mock has empty linkUpFlagArray, so isLinkUpAnyOk returns false)'
         oneSlot.replPairs.clear()
         def replPairAsSlave = ReplPairTest.mockAsSlave(0L, oneSlot.masterUuid)
         oneSlot.replPairs.add(replPairAsSlave)
         reply = rGroup.role()
-        then:
+        then: 'link state must reflect actual TCP state, not hard-coded "connected"'
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 5
         (reply as MultiBulkReply).replies[0] == new BulkReply('slave')
-        // link state reflects actual TCP client state, not hard-coded "connected"
-        (reply as MultiBulkReply).replies[3] == new BulkReply('connected') ||
-            (reply as MultiBulkReply).replies[3] == new BulkReply('connecting')
+        (reply as MultiBulkReply).replies[3] == new BulkReply('connecting')
+
+        when: 'link-up flag set via the test hook'
+        replPairAsSlave.addLinkUpFlag(true)
+        reply = rGroup.role()
+        then: 'with a real link-up flag, state is "connected"'
+        (reply as MultiBulkReply).replies[3] == new BulkReply('connected')
 
         cleanup:
         localPersist.cleanUp()

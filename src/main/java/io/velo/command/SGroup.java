@@ -463,11 +463,15 @@ public class SGroup extends BaseCommand {
 
     /**
      * Hostname regex: RFC-1123-ish label segments separated by dots.
-     * Allows letters, digits and hyphens, each label 1..63 chars, total length <= 253.
+     * Allows letters, digits and hyphens, each label 1..63 chars. Total length is checked
+     * separately at the call site (the regex itself only enforces per-label length).
      */
     private static final String HOSTNAME_REGEX =
             "^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?" +
                     "(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$";
+
+    /** RFC 1035 caps a full domain name at 253 octets. */
+    private static final int HOSTNAME_MAX_LENGTH = 253;
 
     public static final Pattern HOSTNAME_PATTERN = Pattern.compile(HOSTNAME_REGEX);
 
@@ -506,7 +510,7 @@ public class SGroup extends BaseCommand {
         // Host can be IPv4 literal or a hostname (Sentinel may announce either).
         var matcherV4 = IPv4_PATTERN.matcher(arg1);
         var matcherHost = HOSTNAME_PATTERN.matcher(arg1);
-        if (!matcherV4.matches() && !matcherHost.matches()) {
+        if (!matcherV4.matches() && !(matcherHost.matches() && arg1.length() <= HOSTNAME_MAX_LENGTH)) {
             return ErrorReply.SYNTAX;
         }
 

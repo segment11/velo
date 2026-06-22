@@ -37,11 +37,6 @@ public class ValkeyRawConfSupport {
     public static boolean aclPubsubDefault = true;
 
     /**
-     * The priority setting for replicas.
-     */
-    public static int replicaPriority = 100;
-
-    /**
      * Loads the configuration settings from the Valkey configuration file.
      */
     public static void load() throws IOException {
@@ -70,7 +65,6 @@ public class ValkeyRawConfSupport {
             switch (key) {
                 case "acl-filename" -> aclFilename = value;
                 case "acl-pubsub-default" -> aclPubsubDefault = Boolean.parseBoolean(value);
-                case "replica-priority" -> replicaPriority = Integer.parseInt(value);
             }
 
             // other key-value pairs, todo

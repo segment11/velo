@@ -4,7 +4,6 @@ import groovy.transform.CompileStatic
 import io.velo.BaseCommand
 import io.velo.ConfForGlobal
 import io.velo.MultiWorkerServer
-import io.velo.ValkeyRawConfSupport
 import io.velo.monitor.RuntimeCpuCollector
 import io.velo.repl.ReplPair
 import io.velo.reply.AsyncReply
@@ -230,7 +229,7 @@ maxmemory_human:${totalMaxHumanReadable}
             list << new Tuple2('slave_repl_offset', replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset)
 
             list << new Tuple2('slave_read_only', firstOneSlot.isReadonly() ? 1 : 0)
-            list << new Tuple2('slave_priority', ValkeyRawConfSupport.replicaPriority)
+            list << new Tuple2('slave_priority', ConfForGlobal.sentinelReplicaPriority)
             list << new Tuple2('replica_priority', ConfForGlobal.sentinelReplicaPriority)
 
             // Sentinel-configured announce host/port, with fall-back to local listen address.
