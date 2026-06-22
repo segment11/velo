@@ -178,8 +178,14 @@ public class CGroup extends BaseCommand {
     @VisibleForTesting
     Reply clientKill() {
         // data[0] is the cmd word "client", data[1] is "kill", data[2] is "type", data[3] is the type value
+        // For Sentinel compatibility we only support exactly CLIENT KILL TYPE normal.
+        // Additional Redis filters (ID, ADDR, LADDR, SKIPME, ...) are rejected explicitly
+        // rather than silently killing every normal client.
         if (data.length < 4) {
             return ErrorReply.FORMAT;
+        }
+        if (data.length > 4) {
+            return ErrorReply.SYNTAX;
         }
 
         // Expect: CLIENT KILL TYPE <type>  (optionally followed by other filter clauses we don't support)

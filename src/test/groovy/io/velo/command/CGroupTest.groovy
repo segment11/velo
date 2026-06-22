@@ -166,6 +166,16 @@ class CGroupTest extends Specification {
         then:
         reply == ErrorReply.SYNTAX
 
+        when: 'CLIENT KILL TYPE normal with extra trailing filters — must be explicit, not silently kill all'
+        reply = cGroup.execute('client kill type normal id 123')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'CLIENT KILL TYPE normal with extra ADDR filter — must be explicit, not silently kill all'
+        reply = cGroup.execute('client kill type normal addr 127.0.0.1:12345')
+        then:
+        reply == ErrorReply.SYNTAX
+
         when: 'CLIENT KILL TYPE normal — the only filter Sentinel needs'
         // Real-world scenario: the slot worker thread that runs this command is NOT the
         // socket's owning net worker reactor thread. A direct s.close() would throw
