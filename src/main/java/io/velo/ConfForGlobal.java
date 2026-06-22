@@ -242,10 +242,8 @@ public class ConfForGlobal {
             throw new IllegalArgumentException("Sentinel replica priority must be >= 0");
         }
 
-        if (sentinelModeEnabled && zookeeperConnectString != null) {
-            throw new IllegalArgumentException(
-                    "Sentinel mode and ZooKeeper mode are mutually exclusive: leave zookeeperConnectString unset when sentinelModeEnabled=true");
-        }
+        // Sentinel+ZK mutual exclusion is enforced earlier in MultiWorkerServer.InnerModule.confForSlot()
+        // before the ZK connect-check side effect, so it does not need to be re-checked here.
 
         if (ConfForGlobal.PASSWORD != null) {
             var aclUsers = AclUsers.getInstance();
