@@ -4,7 +4,7 @@ import io.velo.BaseCommand
 import io.velo.test.tools.VeloServer
 import spock.lang.Specification
 
-class SlaveOfTest extends Specification {
+class SlaveofTest extends Specification {
     def 'test slaveof'() {
         given:
         def suffix = System.nanoTime()
