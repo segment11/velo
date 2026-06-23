@@ -1,7 +1,9 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.promise.Promise;
 import io.activej.promise.SettablePromise;
+import io.activej.reactor.Reactor;
 import io.velo.BaseCommand;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -98,19 +100,38 @@ public class KGroup extends BaseCommand {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        f.whenComplete((r, e) -> {
-            if (e != null) {
-                log.error("keys error={}", e.getMessage());
-                finalPromise.setException((Exception) e);
-                return;
-            }
+        // Complete finalPromise on the request reactor instead of the key-analysis
+        // eventloop. Promise.ofFuture captures the current reactor and bounces the
+        // completion (and the downstream transferAsyncReply map) back to it, preserving
+        // reactor affinity. Fallback keeps inline completion for off-reactor unit tests.
+        if (Reactor.getCurrentReactorOrNull() != null) {
+            Promise.ofFuture(f)
+                    .whenResult(r -> {
+                        var replies = new Reply[r.size()];
+                        for (int i = 0; i < r.size(); i++) {
+                            replies[i] = new BulkReply(r.get(i));
+                        }
+                        finalPromise.set(new MultiBulkReply(replies));
+                    })
+                    .whenException(e -> {
+                        log.error("keys error={}", e.getMessage());
+                        finalPromise.setException(e);
+                    });
+        } else {
+            f.whenComplete((r, e) -> {
+                if (e != null) {
+                    log.error("keys error={}", e.getMessage());
+                    finalPromise.setException((Exception) e);
+                    return;
+                }
 
-            var replies = new Reply[r.size()];
-            for (int i = 0; i < r.size(); i++) {
-                replies[i] = new BulkReply(r.get(i));
-            }
-            finalPromise.set(new MultiBulkReply(replies));
-        });
+                var replies = new Reply[r.size()];
+                for (int i = 0; i < r.size(); i++) {
+                    replies[i] = new BulkReply(r.get(i));
+                }
+                finalPromise.set(new MultiBulkReply(replies));
+            });
+        }
 
         return asyncReply;
     }
