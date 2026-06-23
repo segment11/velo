@@ -309,7 +309,8 @@ class CGroupTest extends Specification {
         // Use the Redis ip:port form (the same shape CLIENT LIST emits) rather
         // than InetSocketAddress.toString() which prepends "host/" for resolved
         // hostnames and would never match in production.
-        def addrToKillStr = SocketInspector.formatRedisAddress(addrToKill.remoteAddress)
+        def addrToKillInet = addrToKill.remoteAddress.address
+        def addrToKillStr = (addrToKillInet == null ? addrToKill.remoteAddress.hostString : addrToKillInet.hostAddress) + ':' + addrToKill.remoteAddress.port
         def sizeBefore = inspector.socketMap.size()
         reply = cGroup.execute("client kill ${addrToKillStr}")
         then:
@@ -328,7 +329,8 @@ class CGroupTest extends Specification {
         addrSocket.setInspector(inspector)
         registerSocketOnInspector(inspector, fixtureEventloop, addrSocket)
         extras << addrSocket
-        def addrSocketStr = SocketInspector.formatRedisAddress(addrSocket.remoteAddress)
+        def addrSocketInet = addrSocket.remoteAddress.address
+        def addrSocketStr = (addrSocketInet == null ? addrSocket.remoteAddress.hostString : addrSocketInet.hostAddress) + ':' + addrSocket.remoteAddress.port
         reply = cGroup.execute("client kill addr ${addrSocketStr}")
         then:
         reply instanceof IntegerReply

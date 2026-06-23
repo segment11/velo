@@ -183,7 +183,15 @@ public class CGroup extends BaseCommand {
         }
 
         if ("kill".equals(subCmd)) {
-            return clientKill();
+            if (data.length < 3) {
+                return ErrorReply.FORMAT;
+            }
+
+            var filter = parseClientKillFilter();
+            if (filter == null) {
+                return ErrorReply.SYNTAX;
+            }
+            return killClientsMatching(filter);
         }
 
         // ----- safe no-op compatibility flags (Task 5) -----
@@ -244,30 +252,6 @@ public class CGroup extends BaseCommand {
             }
         }
         return new BulkReply(sb.toString().getBytes());
-    }
-
-    /**
-     * CLIENT KILL — Redis-compatible filter-form KILL plus the legacy {@code ip:port}
-     * form. Supports {@code ID}, {@code TYPE} (only {@code normal} and {@code pubsub}
-     * actually match; {@code master} is accepted for Redis-compat but never matches
-     * because Velo has no incoming master connection concept; {@code slave} and
-     * {@code replica} are rejected at parse time with SYNTAX because real replication
-     * sockets never reach {@link SocketInspector#socketMap}), {@code USER},
-     * {@code ADDR}, {@code LADDR} (best-effort against
-     * {@link ConfForGlobal#netListenAddresses}), {@code SKIPME} (default yes;
-     * {@code no} lets the issuing socket be killed), and {@code MAXAGE}.
-     */
-    @VisibleForTesting
-    Reply clientKill() {
-        if (data.length < 3) {
-            return ErrorReply.FORMAT;
-        }
-
-        var filter = parseClientKillFilter();
-        if (filter == null) {
-            return ErrorReply.SYNTAX;
-        }
-        return killClientsMatching(filter);
     }
 
     /**
@@ -429,10 +413,13 @@ public class CGroup extends BaseCommand {
             }
         }
         if (filter.addr() != null) {
-            // Normalize through formatRedisAddress so the comparison is in the
-            // same ip:port form CLIENT LIST emits, not InetSocketAddress.toString()
-            // (which prepends "host/" for resolved hostnames).
-            var remoteAddress = SocketInspector.formatRedisAddress(((TcpSocket) candidate).getRemoteAddress());
+            // Normalize through ip:port so the comparison is in the same
+            // form CLIENT LIST emits, not InetSocketAddress.toString() which
+            // prepends "host/" for resolved hostnames. Velo is IPv4 only.
+            var remoteSocketAddress = ((TcpSocket) candidate).getRemoteAddress();
+            var inetAddr = remoteSocketAddress.getAddress();
+            var addrString = inetAddr == null ? remoteSocketAddress.getHostString() : inetAddr.getHostAddress();
+            var remoteAddress = addrString + ":" + remoteSocketAddress.getPort();
             if (!filter.addr().equals(remoteAddress)) {
                 return false;
             }
@@ -457,8 +444,7 @@ public class CGroup extends BaseCommand {
 
     /**
      * Iterates the current socket map and closes every match on its owning reactor
-     * thread (mirroring {@link MultiWorkerServer#handleQuit} so a slot worker can
-     * close a socket owned by a different net-worker reactor).
+     * close a socket owned by a different net-worker reactor
      */
     private Reply killClientsMatching(ClientKillFilter filter) {
         var socketInspector = localPersist.getSocketInspector();

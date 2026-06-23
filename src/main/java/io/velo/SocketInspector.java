@@ -14,7 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.Inet6Address;
 import java.net.InetSocketAddress;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
@@ -179,42 +178,6 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
-     * Format an {@link InetSocketAddress} in the Redis-compatible {@code ip:port} form used
-     * by {@code CLIENT LIST} and {@code CLIENT KILL ADDR}. Unlike
-     * {@link InetSocketAddress#toString()}, this skips the {@code host/} prefix for
-     * resolved hostnames and brackets IPv6 addresses, so a value printed by
-     * {@code CLIENT LIST} can be fed back into {@code CLIENT KILL ADDR} verbatim.
-     *
-     * <p>Examples:
-     * <ul>
-     *   <li>{@code InetSocketAddress("127.0.0.1", 46379)} → {@code 127.0.0.1:46379}</li>
-     *   <li>{@code InetSocketAddress("localhost", 46379)} → {@code 127.0.0.1:46379}</li>
-     *   <li>{@code InetSocketAddress(0)} on IPv6 → {@code [0:0:0:0:0:0:0:1]:46379}</li>
-     * </ul>
-     *
-     * @param addr the address to format
-     * @return the Redis-formatted {@code ip:port} string, or {@code null} if {@code addr} is null
-     */
-    public static String formatRedisAddress(InetSocketAddress addr) {
-        if (addr == null) {
-            return null;
-        }
-        // Force hostname resolution to obtain the IP. For unresolved addresses
-        // (no DNS lookup performed yet) getAddress() returns null, in which case
-        // we fall back to the host string so the call still produces a usable value.
-        var inetAddr = addr.getAddress();
-        String ipString;
-        if (inetAddr == null) {
-            ipString = addr.getHostString();
-        } else if (inetAddr instanceof Inet6Address) {
-            ipString = "[" + inetAddr.getHostAddress() + "]";
-        } else {
-            ipString = inetAddr.getHostAddress();
-        }
-        return ipString + ":" + addr.getPort();
-    }
-
-    /**
      * @param socket the client socket
      * @return the client info reply
      */
@@ -231,7 +194,17 @@ public class SocketInspector implements TcpSocket.Inspector {
         sb.append("id=");
         sb.append(clientId);
         sb.append(" addr=");
-        sb.append(formatRedisAddress(remoteAddress));
+        // Velo is IPv4 only: render the resolved IPv4 address (or the raw host
+        // string when DNS has not been resolved yet) followed by :port, matching
+        // the ip:port form CLIENT LIST emits so it can be fed back into
+        // CLIENT KILL ADDR. This intentionally differs from
+        // InetSocketAddress.toString(), which prepends "host/" for resolved
+        // hostnames.
+        var inetAddr = remoteAddress.getAddress();
+        var addrString = inetAddr == null ? remoteAddress.getHostString() : inetAddr.getHostAddress();
+        sb.append(addrString);
+        sb.append(":");
+        sb.append(remoteAddress.getPort());
         sb.append(" laddr=");
         sb.append(ConfForGlobal.netListenAddresses);
         sb.append(" fd=");

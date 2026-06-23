@@ -11,13 +11,10 @@ import io.velo.repl.ReplPairTest
 import io.velo.reply.BulkReply
 import spock.lang.Specification
 
-import java.net.InetAddress
-import java.net.InetSocketAddress
 import java.nio.channels.SocketChannel
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 class SocketInspectorTest extends Specification {
@@ -127,42 +124,6 @@ class SocketInspectorTest extends Specification {
 
         cleanup:
         netWorkerEventloop.breakEventloop()
-    }
-
-    def 'test formatRedisAddress'() {
-        expect: 'null is preserved'
-        SocketInspector.formatRedisAddress(null) == null
-
-        when: 'explicit IPv4 address'
-        def v4 = new InetSocketAddress('127.0.0.1', 46379)
-        then: 'rendered as ip:port with no host/ prefix'
-        SocketInspector.formatRedisAddress(v4) == '127.0.0.1:46379'
-
-        when: 'unresolved hostname falls back to the host string'
-        // Use createUnresolved() so the test does not depend on the local resolver
-        // or DNS latency; the InetAddress-backed constructor would attempt a lookup
-        // and might leave the address resolved on hosts that happen to know this name.
-        def v4Unresolved = InetSocketAddress.createUnresolved('some.host.example', 46379)
-        then: 'still produces ip:port, not "host/host:port"'
-        SocketInspector.formatRedisAddress(v4Unresolved) == 'some.host.example:46379'
-        // and the underlying address really is unresolved (no InetAddress cached)
-        v4Unresolved.getAddress() == null
-
-        when: 'IPv6 loopback'
-        def v6 = new InetSocketAddress(InetAddress.getByName('::1'), 46379)
-        then: 'rendered as [ip]:port with brackets'
-        SocketInspector.formatRedisAddress(v6) == '[0:0:0:0:0:0:0:1]:46379'
-
-        when: 'port 0 is preserved'
-        def anyPort = new InetSocketAddress('127.0.0.1', 0)
-        then:
-        SocketInspector.formatRedisAddress(anyPort) == '127.0.0.1:0'
-
-        when: 'the rendered form never carries the InetSocketAddress "host/" prefix'
-        def rendered = SocketInspector.formatRedisAddress(new InetSocketAddress('127.0.0.1', 46379))
-        then: 'no slash-separated host qualifier, and port is suffixed'
-        !rendered.contains('/')
-        rendered.endsWith(':46379')
     }
 
     def 'test connect'() {
