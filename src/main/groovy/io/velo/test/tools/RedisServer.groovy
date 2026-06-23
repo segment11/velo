@@ -4,6 +4,8 @@ import org.apache.commons.net.telnet.TelnetClient
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.Jedis
 
+import java.util.concurrent.TimeUnit
+
 class RedisServer {
     static final String BIN_FILE_PATH = '/usr/local/bin/redis-server'
 
@@ -103,6 +105,13 @@ class RedisServer {
         if (process != null && process.isAlive()) {
             process.destroy()
             println "stop redis server, port=$port"
+            // Redis Sentinel can take several seconds to flush its config on SIGTERM;
+            // escalate to SIGKILL after 5s so a slow shutdown cannot leak a sentinel
+            // process holding the test port across runs.
+            if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                println "redis server did not exit in 5s, force killing, port=$port"
+                process.destroyForcibly()
+            }
         } else {
             println "redis server not running, port=$port"
         }

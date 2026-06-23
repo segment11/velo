@@ -1172,6 +1172,14 @@ public class MultiWorkerServer extends Launcher {
      * @param slot the slot index
      */
     static void doReplAfterLeaderSelect(short slot) {
+        // Sentinel owns topology decisions when sentinelModeEnabled=true. Skip the internal
+        // leader-election / peer-discovery path entirely so a freshly started Velo instance
+        // does not autonomously demote itself to follow another Velo instance it discovered
+        // on the same host. Sentinel will drive role transitions via SLAVEOF / REPLICAOF.
+        if (ConfForGlobal.sentinelModeEnabled) {
+            return;
+        }
+
         var leaderSelector = LeaderSelector.getInstance();
         // if failover, wait 20s and then start leader select
         if (System.currentTimeMillis() - leaderSelector.getLastStopLeaderLatchTimeMillis()

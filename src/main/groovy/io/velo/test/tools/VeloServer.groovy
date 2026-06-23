@@ -3,6 +3,8 @@ package io.velo.test.tools
 import com.segment.common.Conf
 import redis.clients.jedis.Jedis
 
+import java.util.concurrent.TimeUnit
+
 class VeloServer {
     static final String jdkVersion
     static final String JAVA_BIN_PATH
@@ -110,6 +112,14 @@ ${args ? args.join("\r\n") : ''}
         if (process != null && process.isAlive()) {
             process.destroy()
             println "stop velo server, port=$port"
+            // Give ActiveJ up to 5s to run shutdown hooks on SIGTERM, then escalate to
+            // SIGKILL so a hung or slow shutdown cannot leak a JVM holding the test port
+            // (which would cause the next test run to randomly pick a different port and
+            // potentially auto-discover the leaked instance).
+            if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                println "velo server did not exit in 5s, force killing, port=$port"
+                process.destroyForcibly()
+            }
         } else {
             println "velo server not running, port=$port"
         }

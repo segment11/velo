@@ -469,7 +469,14 @@ public class ReplPair {
                 && tcpClient != null && tcpClient.isSocketConnected()) {
             log.warn("Repl pair init as slave: already connected, target host={}, port={}, slot={}", host, port, slot);
         } else {
-            var replContent = new Hello(slaveUuid, ConfForGlobal.netListenAddresses);
+            // Advertise the Sentinel-reachable address (replicaAnnounceIp/Port) instead of the raw
+            // netListenAddresses (typically 0.0.0.0). Otherwise the master's INFO replication reports
+            // slaveN:ip=0.0.0.0 and Redis Sentinel cannot reach the replica for monitoring / promotion.
+            var announcedHp = ConfForGlobal.getAnnouncedHostAndPort();
+            var advertisedAddress = (announcedHp[0] != null && !announcedHp[0].isEmpty())
+                    ? announcedHp[0] + ":" + announcedHp[1]
+                    : ConfForGlobal.netListenAddresses;
+            var replContent = new Hello(slaveUuid, advertisedAddress);
 
             tcpClient = new TcpClient(slot, eventloop, requestHandler, this);
             tcpClient.connect(host, port, connectTimeoutMillis, () -> Repl.buffer(slaveUuid, slot, ReplType.hello, replContent));

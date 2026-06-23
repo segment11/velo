@@ -251,8 +251,14 @@ maxmemory_human:${totalMaxHumanReadable}
 
             def replPairAsMasterList = firstOneSlot.replPairAsMasterList
             if (!replPairAsMasterList.isEmpty()) {
+                // Real Redis emits all slaveN: lines consecutively immediately after connected_slaves
+                // and before master_replid; keep the same order so Redis Sentinel's line-based parser
+                // sees every replica in the expected position.
+                for (int i = 0; i < replPairAsMasterList.size() && i < 2; i++) {
+                    list.addAll slaveConnectState(replPairAsMasterList.get(i), i)
+                }
+
                 def firstReplPair = replPairAsMasterList.getFirst()
-                list.addAll slaveConnectState(firstReplPair, 0)
                 list << new Tuple2('master_replid', firstReplPair.slaveUuid.toString().padLeft(40, '0'))
                 list << new Tuple2('master_repl_offset', firstOneSlot.binlog.currentReplOffset())
 
@@ -263,7 +269,6 @@ maxmemory_human:${totalMaxHumanReadable}
                 if (replPairAsMasterList.size() > 1) {
                     def secondReplPair = replPairAsMasterList.get(1)
 
-                    list.addAll slaveConnectState(secondReplPair, 1)
                     list << new Tuple2('master_replid2', secondReplPair.slaveUuid.toString().padLeft(40, '0'))
                     list << new Tuple2('second_repl_offset', secondReplPair.slaveLastCatchUpBinlogAsReplOffset)
                 } else {
