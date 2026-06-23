@@ -10,7 +10,6 @@ import io.velo.VeloUserDataInSocket;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.reply.*;
-import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -91,8 +90,7 @@ public class CGroup extends BaseCommand {
      */
     private static final ErrorReply CLIENT_SUBCOMMAND_UNSUPPORTED = ErrorReply.NOT_SUPPORT;
 
-    @VisibleForTesting
-    Reply client() {
+    private Reply client() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -233,8 +231,7 @@ public class CGroup extends BaseCommand {
      * socket. No {@code TYPE}/{@code ID} filters are recognized yet; any extra argument
      * is rejected as a format error to surface a likely bug in the caller.
      */
-    @VisibleForTesting
-    Reply clientList() {
+    private Reply clientList() {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }
@@ -484,8 +481,7 @@ public class CGroup extends BaseCommand {
 
     private final CachedGroovyClassLoader cl = CachedGroovyClassLoader.getInstance();
 
-    @VisibleForTesting
-    Reply clusterx() {
+    private Reply clusterx() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -497,8 +493,7 @@ public class CGroup extends BaseCommand {
         return (Reply) cl.eval(scriptText, variables);
     }
 
-    @VisibleForTesting
-    Reply command() {
+    private Reply command() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -510,8 +505,7 @@ public class CGroup extends BaseCommand {
         return (Reply) cl.eval(scriptText, variables);
     }
 
-    @VisibleForTesting
-    Reply config() {
+    private Reply config() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -523,8 +517,7 @@ public class CGroup extends BaseCommand {
         return (Reply) cl.eval(scriptText, variables);
     }
 
-    @VisibleForTesting
-    Reply copy() {
+    private Reply copy() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }

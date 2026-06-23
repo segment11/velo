@@ -9,7 +9,6 @@ import io.velo.decode.Request;
 import io.velo.repl.incremental.XAclUpdate;
 import io.velo.reply.*;
 import org.apache.commons.io.FileUtils;
-import org.jetbrains.annotations.VisibleForTesting;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -101,8 +100,7 @@ public class AGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply acl() {
+    private Reply acl() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
         }
@@ -486,8 +484,7 @@ public class AGroup extends BaseCommand {
         }
     }
 
-    @VisibleForTesting
-    Reply append() {
+    private Reply append() {
         if (data.length < 3) {
             return ErrorReply.FORMAT;
         }

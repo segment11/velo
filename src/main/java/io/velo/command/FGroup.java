@@ -113,8 +113,7 @@ public class FGroup extends BaseCommand {
         });
     }
 
-    @VisibleForTesting
-    Reply flushdb() {
+    private Reply flushdb() {
         // skip for test
         if (data.length == 2) {
             return OKReply.INSTANCE;

@@ -147,8 +147,7 @@ public class RGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    Reply randomkey() {
+    private Reply randomkey() {
         if (data.length != 1) {
             return ErrorReply.FORMAT;
         }
@@ -265,8 +264,7 @@ public class RGroup extends BaseCommand {
     private final static String IDLETIME = "idletime";
     private final static String FREQ = "freq";
 
-    @VisibleForTesting
-    Reply restore() {
+    private Reply restore() {
         if (data.length < 4) {
             return ErrorReply.FORMAT;
         }

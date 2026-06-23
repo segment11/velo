@@ -3,7 +3,6 @@ package io.velo.command
 import io.activej.eventloop.Eventloop
 import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
-import io.velo.ConfForGlobal
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
@@ -37,11 +36,11 @@ class FGroupTest extends Specification {
         fGroup.handle() == expected
 
         where:
-        cmd         | expected
-        'failover'  | OKReply.INSTANCE
-        'flushall'  | OKReply.INSTANCE
-        'flushdb'   | OKReply.INSTANCE
-        'zzz'       | NilReply.INSTANCE
+        cmd        | expected
+        'failover' | OKReply.INSTANCE
+        'flushall' | OKReply.INSTANCE
+        'flushdb'  | OKReply.INSTANCE
+        'zzz'      | NilReply.INSTANCE
     }
 
     final short slot = 0
@@ -142,7 +141,7 @@ class FGroupTest extends Specification {
                 .withCurrentThread()
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
-        def reply = fGroup.flushdb()
+        def reply = fGroup.execute('flushdb')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
