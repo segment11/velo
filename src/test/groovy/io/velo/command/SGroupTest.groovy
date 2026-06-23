@@ -2336,7 +2336,7 @@ sunionstore
 
     def 'test slaveof'() {
         given:
-        ConfForGlobal.netListenAddresses = 'localhost:7380'
+        ConfForGlobal.netListenAddress = 'localhost:7380'
         LocalPersist.instance.socketInspector = new SocketInspector()
 
         LocalPersistTest.prepareLocalPersist()

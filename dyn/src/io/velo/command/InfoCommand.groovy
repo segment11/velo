@@ -233,10 +233,10 @@ maxmemory_human:${totalMaxHumanReadable}
             list << new Tuple2('replica_priority', ConfForGlobal.sentinelReplicaPriority)
 
             // Sentinel-configured announce host/port, with fall-back to local listen address.
-            def announcedHp = ConfForGlobal.getAnnouncedHostAndPort()
+            def announcedHp = ConfForGlobal.announcedHostPort()
             list << new Tuple2('replica_announced', 1)
-            list << new Tuple2('replica-announce-ip', announcedHp[0] ?: '')
-            list << new Tuple2('replica-announce-port', announcedHp[1] ?: '0')
+            list << new Tuple2('replica-announce-ip', announcedHp.host ?: '')
+            list << new Tuple2('replica-announce-port', String.valueOf(announcedHp.port))
 
             list << new Tuple2('master_failover_state', MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState)
             list << new Tuple2('repl_backlog_active', 1)
@@ -245,9 +245,9 @@ maxmemory_human:${totalMaxHumanReadable}
             list << new Tuple2('repl_backlog_histlen', replPairAsSlave.slaveLastCatchUpBinlogAsReplOffset)
         } else {
             // Master mode: prefer replicaAnnounceIp/Port so Sentinel sees a reachable address.
-            def announcedHp = ConfForGlobal.getAnnouncedHostAndPort()
-            list << new Tuple2('master_host', announcedHp[0] ?: '')
-            list << new Tuple2('master_port', announcedHp[1] ?: '0')
+            def announcedHp = ConfForGlobal.announcedHostPort()
+            list << new Tuple2('master_host', announcedHp.host ?: '')
+            list << new Tuple2('master_port', String.valueOf(announcedHp.port))
 
             def replPairAsMasterList = firstOneSlot.replPairAsMasterList
             if (!replPairAsMasterList.isEmpty()) {

@@ -6,6 +6,7 @@ import io.activej.common.function.SupplierEx
 import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.ConfForGlobal
+import io.velo.HostAndPort
 import io.velo.persist.Wal
 import io.velo.repl.LeaderSelector
 import io.velo.repl.ReplPair
@@ -662,9 +663,9 @@ migrating_state:ok
         def mySelfShard = multiShard.mySelfShard()
         if (!mySelfShard) {
             def node = new Node()
-            def hostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
-            node.host = hostAndPort.host()
-            node.port = hostAndPort.port()
+            def hostAndPort = ConfForGlobal.announcedHostPort()
+            node.host = hostAndPort.host
+            node.port = hostAndPort.port
             return new BulkReply(node.nodeId().bytes)
             // return new ErrorReply('not in cluster')
         }
@@ -884,9 +885,9 @@ migrating_state:ok
         def mySelfShard = multiShard.mySelfShard()
         if (!mySelfShard) {
             def node = new Node()
-            def hostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
-            node.host = hostAndPort.host()
-            node.port = hostAndPort.port()
+            def hostAndPort = ConfForGlobal.announcedHostPort()
+            node.host = hostAndPort.host
+            node.port = hostAndPort.port
             node.master = true
             node.mySelf = true
             node.nodeIdFix = nodeIdFix
@@ -928,7 +929,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
         def clusterVersion = new String(data[3]) as int
 
-        def mySelfHostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
+        def mySelfHostAndPort = ConfForGlobal.announcedHostPort()
 
         ArrayList<Shard> shards = []
         lines.findAll { it.contains('master') }.each {
@@ -938,7 +939,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             node.host = arr[1]
             node.port = arr[2] as int
             node.master = true
-            node.mySelf = node.host == mySelfHostAndPort.host() && node.port == mySelfHostAndPort.port()
+            node.mySelf = node.host == mySelfHostAndPort.host && node.port == mySelfHostAndPort.port
 
             def shard = new Shard()
             shard.nodes << node
@@ -971,7 +972,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             node.host = arr[1]
             node.port = arr[2] as int
             node.master = false
-            node.mySelf = node.host == mySelfHostAndPort.host() && node.port == mySelfHostAndPort.port()
+            node.mySelf = node.host == mySelfHostAndPort.host && node.port == mySelfHostAndPort.port
             def followNodeId = arr[4]
             node.followNodeId = followNodeId
 

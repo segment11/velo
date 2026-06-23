@@ -11,11 +11,11 @@ import io.velo.repl.ReplContent;
  */
 public class Hello implements ReplContent {
     private final long slaveUuid;
-    private final String netListenAddresses;
+    private final String netListenAddress;
 
-    public Hello(long slaveUuid, String netListenAddresses) {
+    public Hello(long slaveUuid, String netListenAddress) {
         this.slaveUuid = slaveUuid;
-        this.netListenAddresses = netListenAddresses;
+        this.netListenAddress = netListenAddress;
     }
 
     /**
@@ -25,13 +25,13 @@ public class Hello implements ReplContent {
      * - 4 bytes for net listen addresses length
      * - 2 bytes for slot number
      * - 4 + 4 + 4 + 1 + 4 + 1 for ReplProperties
-     * - netListenAddresses bytes
+     * - netListenAddress bytes
      *
      * @param toBuf the buffer to which the message content will be written
      */
     @Override
     public void encodeTo(ByteBuf toBuf) {
-        var addressBytes = Wal.keyBytes(netListenAddresses);
+        var addressBytes = Wal.keyBytes(netListenAddress);
         toBuf.writeLong(slaveUuid);
         toBuf.writeInt(addressBytes.length);
         toBuf.write(addressBytes);
@@ -52,12 +52,12 @@ public class Hello implements ReplContent {
 
     /**
      * Calculates and returns the total length in bytes required to encode this message.
-     * Length breakdown: 8 (UUID) + 4 (length) + netListenAddresses.length() + 2 (slot) + 18 (ReplProperties)
+     * Length breakdown: 8 (UUID) + 4 (length) + netListenAddress.length() + 2 (slot) + 18 (ReplProperties)
      *
      * @return the length in bytes required to encode this message
      */
     @Override
     public int encodeLength() {
-        return 8 + 4 + Wal.keyBytes(netListenAddresses).length + 2 + 18;
+        return 8 + 4 + Wal.keyBytes(netListenAddress).length + 2 + 18;
     }
 }

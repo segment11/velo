@@ -11,10 +11,10 @@ public class Pong extends Ping implements ReplContent {
     /**
      * Constructs a new Pong instance with the specified network listen addresses.
      *
-     * @param netListenAddresses a string representing the network listen addresses
+     * @param netListenAddress a string representing the network listen addresses
      *                           used for communication between slave and master nodes
      */
-    public Pong(String netListenAddresses) {
-        super(netListenAddresses);
+    public Pong(String netListenAddress) {
+        super(netListenAddress);
     }
 }

@@ -30,7 +30,7 @@ class TcpClientTest extends Specification {
     def 'test connect and close'() {
         given:
         short slot = 0
-        ConfForGlobal.netListenAddresses = 'localhost:6380'
+        ConfForGlobal.netListenAddress = 'localhost:6380'
 
         def eventloop = Eventloop.builder()
                 .withIdleInterval(Duration.ofMillis(100))

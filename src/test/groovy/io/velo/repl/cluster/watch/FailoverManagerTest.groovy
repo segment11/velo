@@ -1,6 +1,7 @@
 package io.velo.repl.cluster.watch
 
 import io.velo.ConfForGlobal
+import io.velo.HostAndPort
 import io.velo.persist.Consts
 import io.velo.repl.LeaderSelector
 import io.velo.repl.cluster.Node
@@ -44,7 +45,7 @@ class FailoverManagerTest extends Specification {
 
     def 'test update one cluster meta and check failover'() {
         given:
-        ConfForGlobal.netListenAddresses = 'localhost:27379'
+        ConfForGlobal.netListenAddress = 'localhost:27379'
 
         def fm = FailoverManager.instance
         fm.zookeeperVeloMetaBasePath = '/velo/failover_manager'
@@ -205,7 +206,7 @@ yyy localhost 17380 slave bbb
         def lines = clusterxNodesArgs.readLines().collect { it.trim() }.findAll { it }
         boolean isZkListen = Consts.checkConnectAvailable()
         if (isZkListen) {
-            ConfForGlobal.netListenAddresses = 'localhost:27379'
+            ConfForGlobal.netListenAddress = 'localhost:27379'
 
             fm.zookeeperVeloMetaBasePath = '/velo/failover_manager'
             ConfForGlobal.zookeeperRootPath = fm.zookeeperVeloMetaBasePath
@@ -220,7 +221,7 @@ yyy localhost 17380 slave bbb
         true
 
         when:
-        failHostAndPort.host = '127.0.0.1'
+        failHostAndPort = new HostAndPort('127.0.0.1', failHostAndPort.port)
         // shard not find
         if (isZkListen) {
             fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
@@ -229,8 +230,7 @@ yyy localhost 17380 slave bbb
         true
 
         when:
-        failHostAndPort.host = 'localhost'
-        failHostAndPort.port = 17379
+        failHostAndPort = new HostAndPort('localhost', 17379)
         // slave node need not failover
         if (isZkListen) {
             fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
@@ -239,7 +239,7 @@ yyy localhost 17380 slave bbb
         true
 
         when:
-        failHostAndPort.port = 7379
+        failHostAndPort = new HostAndPort('localhost', 7379)
         clusterxNodesArgs = '''
 aaa localhost 7379 master - 0-8191
 bbb localhost 7380 master - 8192-16383

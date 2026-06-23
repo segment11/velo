@@ -1386,7 +1386,7 @@ class MultiWorkerServerTest extends Specification {
         ConfForGlobal.slotNumber = 1
         def leaderSelector = LeaderSelector.instance
         leaderSelector.masterAddressLocalMocked = 'localhost:7379'
-        ConfForGlobal.netListenAddresses = leaderSelector.masterAddressLocalMocked
+        ConfForGlobal.netListenAddress = leaderSelector.masterAddressLocalMocked
 
         and:
         LocalPersistTest.prepareLocalPersist()
@@ -1450,7 +1450,7 @@ class MultiWorkerServerTest extends Specification {
         staticGlobalV.netThreadLocalIndexByCurrentThread == 0
 
         when:
-        ConfForGlobal.netListenAddresses = 'localhost:7379'
+        ConfForGlobal.netListenAddress = 'localhost:7379'
         def config = Config.create()
         staticGlobalV.resetInfoServer(config)
         def infoServerList = staticGlobalV.infoServerList
@@ -1486,7 +1486,7 @@ class MultiWorkerServerTest extends Specification {
         m.slotWorkerThreadIds = MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds
 
         and:
-        ConfForGlobal.netListenAddresses = 'localhost:7379'
+        ConfForGlobal.netListenAddress = 'localhost:7379'
         def multiShard = localPersist.getMultiShard()
         multiShard.mySelfShard().multiSlotRange.addSingle(0, 8191)
         def shard1 = new Shard()
@@ -1586,7 +1586,7 @@ class MultiWorkerServerTest extends Specification {
         m.slotWorkerThreadIds = MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds
 
         and:
-        ConfForGlobal.netListenAddresses = 'localhost:7379'
+        ConfForGlobal.netListenAddress = 'localhost:7379'
         def multiShard = localPersist.getMultiShard()
         multiShard.mySelfShard().multiSlotRange.addSingle(0, 8191)
         def shard1 = new Shard()

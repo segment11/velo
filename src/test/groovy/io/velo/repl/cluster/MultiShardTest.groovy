@@ -32,7 +32,7 @@ class MultiShardTest extends Specification {
         def localPersist = LocalPersist.instance
 
         and:
-        ConfForGlobal.netListenAddresses = 'localhost:7379'
+        ConfForGlobal.netListenAddress = 'localhost:7379'
         def multiShard = new MultiShard(Consts.persistDir)
 
         expect:

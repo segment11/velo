@@ -206,7 +206,7 @@ public class SocketInspector implements TcpSocket.Inspector {
         sb.append(":");
         sb.append(remoteAddress.getPort());
         sb.append(" laddr=");
-        sb.append(ConfForGlobal.netListenAddresses);
+        sb.append(ConfForGlobal.announcedHostPortString());
         sb.append(" fd=");
         // use id as fd
         sb.append(clientId);

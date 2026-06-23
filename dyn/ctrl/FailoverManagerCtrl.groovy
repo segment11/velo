@@ -1,7 +1,7 @@
 import io.velo.ConfForGlobal
 import io.velo.repl.LeaderSelector
 import io.velo.repl.cluster.watch.FailoverManager
-import io.velo.repl.cluster.watch.HostAndPort
+import io.velo.HostAndPort
 import io.velo.repl.cluster.watch.TmpEndpointsStatus
 import io.velo.repl.support.JedisPoolHolder
 import org.segment.web.handler.ChainHandler
@@ -27,7 +27,7 @@ h.exceptionHandler { req, resp, t ->
 
 h.get('/failover_manager/leader') { req, resp ->
     def leaderSelector = LeaderSelector.instance
-    [isMaster: leaderSelector.hasLeadership(), listenAddress: ConfForGlobal.netListenAddresses]
+    [isMaster: leaderSelector.hasLeadership(), listenAddress: ConfForGlobal.announcedHostPortString()]
 }
 
 // one cluster meta manage

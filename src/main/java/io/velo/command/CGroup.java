@@ -422,10 +422,10 @@ public class CGroup extends BaseCommand {
             }
         }
         if (filter.laddr() != null) {
-            // LADDR is best-effort: Velo reports the configured listen addresses, not the
-            // concrete local address of the accepted socket. Match if any configured
-            // listen address equals the filter value.
-            if (!filter.laddr().equals(ConfForGlobal.netListenAddresses)) {
+            // LADDR is best-effort: Velo reports the configured announced address (see
+            // SocketInspector#getClientInfo) as laddr=, so the kill filter must compare
+            // against the same value — not the raw bind address (which may be 0.0.0.0).
+            if (!filter.laddr().equals(ConfForGlobal.announcedHostPortString())) {
                 return false;
             }
         }

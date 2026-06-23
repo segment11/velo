@@ -45,7 +45,7 @@ if (!Utils.isPortListenAvailable(listenPort, listenHost)) {
     log.info 'velo guarder server is already running'
     return
 }
-ConfForGlobal.netListenAddresses = listenHost + ':' + listenPort
+ConfForGlobal.netListenAddress = listenHost + ':' + listenPort
 
 def zookeeperConnectString = c.get('zookeeperConnectString')
 if (zookeeperConnectString == null) {

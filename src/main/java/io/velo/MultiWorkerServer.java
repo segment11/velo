@@ -1192,7 +1192,11 @@ public class MultiWorkerServer extends Launcher {
             return;
         }
 
-        if (ConfForGlobal.netListenAddresses.equals(masterListenAddress)) {
+        // Self-detection: the master address read from ZK is the announced address published
+        // by LeaderSelector (see tryConnectAndGetMasterListenAddress), so compare like-for-like
+        // against our own announced address — not the raw bind address, which is typically 0.0.0.0
+        // and would never match the value the leader published.
+        if (ConfForGlobal.announcedHostPortString().equals(masterListenAddress)) {
             // self become master
             leaderSelector.resetAsMaster((e) -> {
                 if (e != null) {
@@ -1378,8 +1382,8 @@ public class MultiWorkerServer extends Launcher {
             log.warn("Global config, isValueSetUseCompression={}", ConfForGlobal.isValueSetUseCompression);
             log.warn("Global config, isOnDynTrainDictForCompression={}", ConfForGlobal.isOnDynTrainDictForCompression);
 
-            ConfForGlobal.netListenAddresses = config.get(ofString(), "net.listenAddresses", "0.0.0.0:" + PORT);
-            logger.info("Net listen addresses={}", ConfForGlobal.netListenAddresses);
+            ConfForGlobal.netListenAddress = config.get(ofString(), "net.listenAddresses", "0.0.0.0:" + PORT);
+            logger.info("Net listen addresses={}", ConfForGlobal.netListenAddress);
             ConfForGlobal.eventloopIdleMillis = config.get(ofInteger(), "eventloop.idleMillis", 10);
             log.warn("Global config, eventLoopIdleMillis={}", ConfForGlobal.eventloopIdleMillis);
             if (ConfForGlobal.eventloopIdleMillis < 10 || ConfForGlobal.eventloopIdleMillis > 100) {
@@ -1421,13 +1425,13 @@ public class MultiWorkerServer extends Launcher {
                 if (!skipZookeeperConnectCheck) {
                     // check can connect
                     var array = ConfForGlobal.zookeeperConnectString.split(",");
-                    var hostAndPort = ReplPair.parseHostAndPort(array[array.length - 1]);
+                    var hostAndPort = HostAndPort.parse(array[array.length - 1]);
                     var tc = new TelnetClient();
                     try {
-                        tc.connect(hostAndPort.host(), hostAndPort.port());
+                        tc.connect(hostAndPort.host, hostAndPort.port);
                         tc.disconnect();
                     } catch (IOException e) {
-                        throw new IllegalArgumentException("Zookeeper connect string invalid, can not connect to " + hostAndPort.host() + ":" + hostAndPort.port());
+                        throw new IllegalArgumentException("Zookeeper connect string invalid, can not connect to " + hostAndPort.host + ":" + hostAndPort.port);
                     }
                 }
             }
@@ -1809,9 +1813,13 @@ public class MultiWorkerServer extends Launcher {
             infoServerList.add(new Tuple2<>("multiplexing_api", "epoll"));
             infoServerList.add(new Tuple2<>("java_version", System.getProperty("java.version")));
 
-            var arr = ConfForGlobal.netListenAddresses.split(":");
-            infoServerList.add(new Tuple2<>("tcp_port", arr[1]));
-            infoServerList.add(new Tuple2<>("listener0", "name=tcp,bind=" + arr[0] + ",port=" + arr[1]));
+            // INFO listener0 / tcp_port report the bound interface (the raw listen address),
+            // not the externally-announced one — matching Redis INFO semantics. Use the
+            // centralized parser instead of hand-rolled split(":") so malformed input
+            // surfaces as a clear IllegalArgumentException instead of ArrayIndexOutOfBounds.
+            var bindHp = HostAndPort.parse(ConfForGlobal.netListenAddress);
+            infoServerList.add(new Tuple2<>("tcp_port", Integer.toString(bindHp.port)));
+            infoServerList.add(new Tuple2<>("listener0", "name=tcp,bind=" + bindHp.host + ",port=" + bindHp.port));
             infoServerList.add(new Tuple2<>("server_time_usec", String.valueOf(UP_TIME * 1000)));
 
             var slotWorkers = config.get(ofInteger(), "slotWorkers", 1);

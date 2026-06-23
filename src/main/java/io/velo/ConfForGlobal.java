@@ -2,7 +2,6 @@ package io.velo;
 
 import io.velo.acl.AclUsers;
 import io.velo.acl.U;
-
 import java.util.HashMap;
 
 /**
@@ -64,9 +63,16 @@ public class ConfForGlobal {
     public static boolean isOnDynTrainDictForCompression = true;
 
     /**
-     * Network listen addresses.
+     * Network listen address. Single {@code host:port} (IPv4 host literal or DNS name, one colon).
+     * Despite the historical plural name, every call site treats this as a single value; multi-bind
+     * is not wired up to the ActiveJ bootstrap today.
+     *
+     * <p>This is the raw config string and the single source of truth. Callers that need the
+     * externally-advertised value (with {@link #replicaAnnounceIp} / {@link #replicaAnnouncePort}
+     * overrides applied) should use {@link #announcedHostPortString()} or
+     * {@link #announcedHostPort()} / {@link #announcedHostPortString()} — never read this field directly.
      */
-    public static String netListenAddresses = "localhost:7379";
+    public static String netListenAddress = "localhost:7379";
 
     /**
      * Directory path for data storage (default is "/tmp/velo-data").
@@ -134,13 +140,13 @@ public class ConfForGlobal {
 
     /**
      * IP address that this instance advertises to Redis Sentinel as the reachable host.
-     * Defaults to {@code null}, which falls back to {@link #netListenAddresses}.
+     * Defaults to {@code null}, which falls back to {@link #netListenAddress}.
      */
     public static String replicaAnnounceIp;
 
     /**
      * Port that this instance advertises to Redis Sentinel as the reachable port.
-     * Defaults to {@code 0}, which falls back to the port in {@link #netListenAddresses}.
+     * Defaults to {@code 0}, which falls back to the port in {@link #netListenAddress}.
      */
     public static int replicaAnnouncePort = 0;
 
@@ -261,26 +267,29 @@ public class ConfForGlobal {
     /**
      * Resolve the externally reachable host:port this node should advertise to Redis Sentinel.
      * Prefers {@link #replicaAnnounceIp} / {@link #replicaAnnouncePort} when set, otherwise
-     * falls back to the host:port parsed out of {@link #netListenAddresses}.
+     * falls back to the host:port parsed out of {@link #netListenAddress}.
      *
-     * @return [announcedHost, announcedPort]
+     * <p>Lenient: never throws on malformed input — {@code host} may be {@code null} and
+     * {@code port} may be {@code 0} when the config is unset or unparseable.
+     *
+     * @return the announced HostAndPort (host may be null, port may be 0)
      */
-    public static String[] getAnnouncedHostAndPort() {
+    public static HostAndPort announcedHostPort() {
         var announcedIp = replicaAnnounceIp;
         int announcedPort = replicaAnnouncePort;
         String host = null;
         int port = 0;
-        if (netListenAddresses != null) {
-            var idx = netListenAddresses.lastIndexOf(':');
-            if (idx > 0 && idx < netListenAddresses.length() - 1) {
-                host = netListenAddresses.substring(0, idx);
+        if (netListenAddress != null) {
+            var idx = netListenAddress.lastIndexOf(':');
+            if (idx > 0 && idx < netListenAddress.length() - 1) {
+                host = netListenAddress.substring(0, idx);
                 try {
-                    port = Integer.parseInt(netListenAddresses.substring(idx + 1));
+                    port = Integer.parseInt(netListenAddress.substring(idx + 1));
                 } catch (NumberFormatException ignored) {
                     // fall through with port=0
                 }
             } else {
-                host = netListenAddresses;
+                host = netListenAddress;
             }
         }
         if (announcedIp == null || announcedIp.isEmpty()) {
@@ -289,6 +298,27 @@ public class ConfForGlobal {
         if (announcedPort <= 0) {
             announcedPort = port;
         }
-        return new String[]{announcedIp, Integer.toString(announcedPort)};
+        return new HostAndPort(announcedIp, announcedPort);
+    }
+
+    /**
+     * Single source of truth for the {@code host:port} string this node advertises to peers,
+     * sentinels, and clients. Applies {@link #replicaAnnounceIp} / {@link #replicaAnnouncePort}
+     * overrides on top of {@link #netListenAddress}.
+     *
+     * <p>Used by the replication wire format ({@code Ping}/{@code Pong}/{@code Hello}),
+     * {@code CLIENT LIST laddr=}, {@code CLIENT KILL LADDR}, and the cluster-watch endpoint
+     * reporting — anywhere we need one externally-reachable address. If neither announce nor
+     * listen host can be resolved, the raw {@link #netListenAddress} string is returned
+     * (which may be {@code null}).
+     *
+     * @return the advertised {@code host:port} string, or {@code null} if unconfigured
+     */
+    public static String announcedHostPortString() {
+        var hp = announcedHostPort();
+        if (hp.host == null || hp.host.isEmpty()) {
+            return netListenAddress;
+        }
+        return hp.host + ":" + hp.port;
     }
 }

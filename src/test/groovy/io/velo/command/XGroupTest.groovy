@@ -80,7 +80,7 @@ class XGroupTest extends Specification {
     }
 
     private MasterContext setupMasterContext(long slaveUuid = 1L) {
-        ConfForGlobal.netListenAddresses = 'localhost:6379'
+        ConfForGlobal.netListenAddress = 'localhost:6379'
 
         LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
         def localPersist = LocalPersist.instance
@@ -99,7 +99,7 @@ class XGroupTest extends Specification {
     }
 
     private SlaveContext setupSlaveContext(long masterUuid = 10L) {
-        ConfForGlobal.netListenAddresses = 'localhost:6380'
+        ConfForGlobal.netListenAddress = 'localhost:6380'
 
         LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
         def localPersist = LocalPersist.instance
@@ -2774,7 +2774,7 @@ class XGroupTest extends Specification {
 
     def 'test hello hi reply uses binlog offset after skip apply append'() {
         given:
-        ConfForGlobal.netListenAddresses = 'localhost:6379'
+        ConfForGlobal.netListenAddress = 'localhost:6379'
 
         LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
         def localPersist = LocalPersist.instance
@@ -3012,7 +3012,7 @@ class XGroupTest extends Specification {
 
     def 'test hi skips exists fetch when last updated file is newer than earliest file'() {
         given:
-        ConfForGlobal.netListenAddresses = 'localhost:6380'
+        ConfForGlobal.netListenAddress = 'localhost:6380'
 
         LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)
         def localPersist = LocalPersist.instance
@@ -3054,7 +3054,7 @@ class XGroupTest extends Specification {
 
     def 'test hi resets first slot fetched exists all done flag on master uuid change for non first slot'() {
         given:
-        ConfForGlobal.netListenAddresses = 'localhost:6380'
+        ConfForGlobal.netListenAddress = 'localhost:6380'
         ConfForGlobal.slotNumber = slotNumber
 
         LocalPersistTest.prepareLocalPersist((byte) 1, slotNumber)

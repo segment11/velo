@@ -96,7 +96,7 @@ public class TcpClient implements NeedCleanUp {
      * @return true if ping was sent successfully
      */
     public boolean ping() {
-        return write(ReplType.ping, new Ping(ConfForGlobal.netListenAddresses));
+        return write(ReplType.ping, new Ping(ConfForGlobal.announcedHostPortString()));
     }
 
     /**
@@ -105,7 +105,7 @@ public class TcpClient implements NeedCleanUp {
     public boolean bye() {
         log.warn("Repl slave send bye to server={}, slot={}", replPair.getHostAndPort(), slot);
         System.out.println("Repl slave send bye to server=" + replPair.getHostAndPort() + ", slot=" + slot);
-        return write(ReplType.bye, new Ping(ConfForGlobal.netListenAddresses));
+        return write(ReplType.bye, new Ping(ConfForGlobal.announcedHostPortString()));
     }
 
     /**

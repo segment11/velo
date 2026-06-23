@@ -16,7 +16,7 @@ class ConfForGlobalTest extends Specification {
         println ConfForGlobal.isValueSetUseCompression
         println ConfForGlobal.isOnDynTrainDictForCompression
 
-        println ConfForGlobal.netListenAddresses
+        println ConfForGlobal.netListenAddress
 
         println ConfForGlobal.dirPath
         println ConfForGlobal.slotNumber
@@ -162,106 +162,157 @@ class ConfForGlobalTest extends Specification {
         ConfForGlobal.sentinelReplicaPriority = savedPriority
     }
 
-    def 'test getAnnouncedHostAndPort'() {
+    def 'test announcedHostPort'() {
         given:
-        def savedListen = ConfForGlobal.netListenAddresses
+        def savedListen = ConfForGlobal.netListenAddress
         def savedIp = ConfForGlobal.replicaAnnounceIp
         def savedPort = ConfForGlobal.replicaAnnouncePort
 
         when: 'no announce configured and listen address is host:port'
-        ConfForGlobal.netListenAddresses = '127.0.0.1:7379'
+        ConfForGlobal.netListenAddress = '127.0.0.1:7379'
         ConfForGlobal.replicaAnnounceIp = null
         ConfForGlobal.replicaAnnouncePort = 0
-        def result = ConfForGlobal.getAnnouncedHostAndPort()
+        def result = ConfForGlobal.announcedHostPort()
         then:
-        result.length == 2
-        result[0] == '127.0.0.1'
-        result[1] == '7379'
+        result.host == '127.0.0.1'
+        result.port == 7379
 
         when: 'listen address with another IPv4 port'
-        ConfForGlobal.netListenAddresses = '0.0.0.0:6380'
-        result = ConfForGlobal.getAnnouncedHostAndPort()
+        ConfForGlobal.netListenAddress = '0.0.0.0:6380'
+        result = ConfForGlobal.announcedHostPort()
         then:
-        result[0] == '0.0.0.0'
-        result[1] == '6380'
+        result.host == '0.0.0.0'
+        result.port == 6380
 
         when: 'listen address with hostname'
-        ConfForGlobal.netListenAddresses = 'redis-master.local:6381'
-        result = ConfForGlobal.getAnnouncedHostAndPort()
+        ConfForGlobal.netListenAddress = 'redis-master.local:6381'
+        result = ConfForGlobal.announcedHostPort()
         then:
-        result[0] == 'redis-master.local'
-        result[1] == '6381'
+        result.host == 'redis-master.local'
+        result.port == 6381
 
         when: 'only announce IP is set — port falls back to listen port'
-        ConfForGlobal.netListenAddresses = '127.0.0.1:7379'
+        ConfForGlobal.netListenAddress = '127.0.0.1:7379'
         ConfForGlobal.replicaAnnounceIp = '10.0.0.5'
         ConfForGlobal.replicaAnnouncePort = 0
-        result = ConfForGlobal.getAnnouncedHostAndPort()
+        result = ConfForGlobal.announcedHostPort()
         then:
-        result[0] == '10.0.0.5'
-        result[1] == '7379'
+        result.host == '10.0.0.5'
+        result.port == 7379
 
         when: 'only announce port is set — host falls back to listen host'
         ConfForGlobal.replicaAnnounceIp = null
         ConfForGlobal.replicaAnnouncePort = 9999
-        result = ConfForGlobal.getAnnouncedHostAndPort()
+        result = ConfForGlobal.announcedHostPort()
         then:
-        result[0] == '127.0.0.1'
-        result[1] == '9999'
+        result.host == '127.0.0.1'
+        result.port == 9999
 
         when: 'both announce IP and port are set'
         ConfForGlobal.replicaAnnounceIp = '192.168.1.10'
         ConfForGlobal.replicaAnnouncePort = 16379
-        result = ConfForGlobal.getAnnouncedHostAndPort()
+        result = ConfForGlobal.announcedHostPort()
         then:
-        result[0] == '192.168.1.10'
-        result[1] == '16379'
+        result.host == '192.168.1.10'
+        result.port == 16379
 
         when: 'empty announce IP is treated as unset'
-        ConfForGlobal.netListenAddresses = 'redis-host:6390'
+        ConfForGlobal.netListenAddress = 'redis-host:6390'
         ConfForGlobal.replicaAnnounceIp = ''
         ConfForGlobal.replicaAnnouncePort = 0
-        result = ConfForGlobal.getAnnouncedHostAndPort()
+        result = ConfForGlobal.announcedHostPort()
         then:
-        result[0] == 'redis-host'
-        result[1] == '6390'
+        result.host == 'redis-host'
+        result.port == 6390
 
         when: 'listen address has no colon — host only, port stays 0'
-        ConfForGlobal.netListenAddresses = 'myhost'
+        ConfForGlobal.netListenAddress = 'myhost'
         ConfForGlobal.replicaAnnounceIp = null
         ConfForGlobal.replicaAnnouncePort = 0
-        result = ConfForGlobal.getAnnouncedHostAndPort()
+        result = ConfForGlobal.announcedHostPort()
         then:
-        result[0] == 'myhost'
-        result[1] == '0'
+        result.host == 'myhost'
+        result.port == 0
 
         when: 'listen address has unparseable port after colon — port falls through to 0'
-        ConfForGlobal.netListenAddresses = 'myhost:notanumber'
-        result = ConfForGlobal.getAnnouncedHostAndPort()
+        ConfForGlobal.netListenAddress = 'myhost:notanumber'
+        result = ConfForGlobal.announcedHostPort()
         then:
-        result[0] == 'myhost'
-        result[1] == '0'
+        result.host == 'myhost'
+        result.port == 0
 
         when: 'listen address ends with trailing colon'
-        ConfForGlobal.netListenAddresses = 'myhost:'
-        result = ConfForGlobal.getAnnouncedHostAndPort()
+        ConfForGlobal.netListenAddress = 'myhost:'
+        result = ConfForGlobal.announcedHostPort()
         then: 'idx == length - 1, host/port are not parsed from the string'
         // current behavior keeps the whole string as host, port stays 0
-        result[0] == 'myhost:'
-        result[1] == '0'
+        result.host == 'myhost:'
+        result.port == 0
 
-        when: 'netListenAddresses is null and announce is unset'
-        ConfForGlobal.netListenAddresses = null
+        when: 'netListenAddress is null and announce is unset'
+        ConfForGlobal.netListenAddress = null
         ConfForGlobal.replicaAnnounceIp = null
         ConfForGlobal.replicaAnnouncePort = 0
-        result = ConfForGlobal.getAnnouncedHostAndPort()
+        result = ConfForGlobal.announcedHostPort()
         then:
-        result.length == 2
-        result[0] == null
-        result[1] == '0'
+        result.host == null
+        result.port == 0
 
         cleanup:
-        ConfForGlobal.netListenAddresses = savedListen
+        ConfForGlobal.netListenAddress = savedListen
+        ConfForGlobal.replicaAnnounceIp = savedIp
+        ConfForGlobal.replicaAnnouncePort = savedPort
+    }
+
+    def 'test announcedHostPortString'() {
+        given:
+        def savedListen = ConfForGlobal.netListenAddress
+        def savedIp = ConfForGlobal.replicaAnnounceIp
+        def savedPort = ConfForGlobal.replicaAnnouncePort
+
+        when: 'no announce configured — string mirrors the listen address'
+        ConfForGlobal.netListenAddress = '127.0.0.1:7379'
+        ConfForGlobal.replicaAnnounceIp = null
+        ConfForGlobal.replicaAnnouncePort = 0
+        then:
+        ConfForGlobal.announcedHostPortString() == '127.0.0.1:7379'
+
+        when: 'only announce IP is set — port falls back to listen port'
+        ConfForGlobal.netListenAddress = '0.0.0.0:7379'
+        ConfForGlobal.replicaAnnounceIp = '10.0.0.5'
+        ConfForGlobal.replicaAnnouncePort = 0
+        then:
+        ConfForGlobal.announcedHostPortString() == '10.0.0.5:7379'
+
+        when: 'both announce IP and port are set'
+        ConfForGlobal.replicaAnnounceIp = '10.0.0.5'
+        ConfForGlobal.replicaAnnouncePort = 7380
+        then:
+        ConfForGlobal.announcedHostPortString() == '10.0.0.5:7380'
+
+        when: 'empty announce IP is treated as unset — falls back to listen host'
+        ConfForGlobal.netListenAddress = '0.0.0.0:7379'
+        ConfForGlobal.replicaAnnounceIp = ''
+        ConfForGlobal.replicaAnnouncePort = 0
+        then:
+        ConfForGlobal.announcedHostPortString() == '0.0.0.0:7379'
+
+        when: 'listen address is null and announce is unset — returns raw null'
+        ConfForGlobal.netListenAddress = null
+        ConfForGlobal.replicaAnnounceIp = null
+        ConfForGlobal.replicaAnnouncePort = 0
+        then:
+        ConfForGlobal.announcedHostPortString() == null
+
+        when: 'listen address is the empty string — host parses to empty, falls back to raw'
+        ConfForGlobal.netListenAddress = ''
+        ConfForGlobal.replicaAnnounceIp = null
+        ConfForGlobal.replicaAnnouncePort = 0
+        then:
+        ConfForGlobal.announcedHostPortString() == ''
+
+        cleanup:
+        ConfForGlobal.netListenAddress = savedListen
         ConfForGlobal.replicaAnnounceIp = savedIp
         ConfForGlobal.replicaAnnouncePort = savedPort
     }

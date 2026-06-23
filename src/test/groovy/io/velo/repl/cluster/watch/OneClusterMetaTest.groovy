@@ -1,5 +1,6 @@
 package io.velo.repl.cluster.watch
 
+import io.velo.HostAndPort
 import spock.lang.Specification
 
 class OneClusterMetaTest extends Specification {

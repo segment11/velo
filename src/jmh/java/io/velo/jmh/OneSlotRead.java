@@ -44,7 +44,7 @@ public class OneSlotRead {
     @Setup
     public void setup() throws IOException {
         ConfForSlot.global = ConfForSlot.c1m;
-        ConfForGlobal.netListenAddresses = "localhost:7379";
+        ConfForGlobal.netListenAddress = "localhost:7379";
 
         var localPersist = LocalPersist.getInstance();
 

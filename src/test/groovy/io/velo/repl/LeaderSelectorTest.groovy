@@ -57,7 +57,7 @@ class LeaderSelectorTest extends Specification {
         leaderSelector.masterAddressLocalMocked = null
         ConfForGlobal.zookeeperConnectString = 'localhost:2181'
         ConfForGlobal.zookeeperRootPath = '/velo/cluster-test'
-        ConfForGlobal.netListenAddresses = testListenAddress
+        ConfForGlobal.netListenAddress = testListenAddress
 
         if (!doThisCase) {
             ConfForGlobal.zookeeperConnectString = null
@@ -68,7 +68,7 @@ class LeaderSelectorTest extends Specification {
         // already connected, skip, for coverage
         leaderSelector.connect()
         then:
-        masterListenAddress == (doThisCase ? ConfForGlobal.netListenAddresses : null)
+        masterListenAddress == (doThisCase ? ConfForGlobal.netListenAddress : null)
         doThisCase ? leaderSelector.client != null : true
 
         when:
@@ -78,7 +78,7 @@ class LeaderSelectorTest extends Specification {
         leaderSelector.isLeaderLoopCount = 99
         masterListenAddress = leaderSelector.tryConnectAndGetMasterListenAddress()
         then:
-        masterListenAddress == (doThisCase ? ConfForGlobal.netListenAddresses : null)
+        masterListenAddress == (doThisCase ? ConfForGlobal.netListenAddress : null)
 
         when:
         leaderSelector.startLeaderLatchFailMocked = true
@@ -93,13 +93,13 @@ class LeaderSelectorTest extends Specification {
         }
         masterListenAddress = leaderSelector.tryConnectAndGetMasterListenAddress()
         then:
-        masterListenAddress == (doThisCase ? ConfForGlobal.netListenAddresses : null)
+        masterListenAddress == (doThisCase ? ConfForGlobal.netListenAddress : null)
 
         when:
         ConfForGlobal.canBeLeader = false
         masterListenAddress = leaderSelector.tryConnectAndGetMasterListenAddress()
         then:
-        masterListenAddress == (doThisCase ? ConfForGlobal.netListenAddresses : null)
+        masterListenAddress == (doThisCase ? ConfForGlobal.netListenAddress : null)
 
         when:
         ConfForGlobal.canBeLeader = true
@@ -128,7 +128,7 @@ class LeaderSelectorTest extends Specification {
 
     def 'test reset as master'() {
         given:
-        ConfForGlobal.netListenAddresses = 'localhost:7380'
+        ConfForGlobal.netListenAddress = 'localhost:7380'
         LocalPersist.instance.socketInspector = new SocketInspector()
 
         LocalPersistTest.prepareLocalPersist()
@@ -303,7 +303,7 @@ class LeaderSelectorTest extends Specification {
 
     def 'reset as slave'() {
         given:
-        ConfForGlobal.netListenAddresses = 'localhost:7380'
+        ConfForGlobal.netListenAddress = 'localhost:7380'
         LocalPersist.instance.socketInspector = new SocketInspector()
 
         LocalPersistTest.prepareLocalPersist()
@@ -495,8 +495,8 @@ class LeaderSelectorTest extends Specification {
 
     def 'test failover state observability'() {
         given:
-        def savedListen = ConfForGlobal.netListenAddresses
-        ConfForGlobal.netListenAddresses = 'localhost:7380'
+        def savedListen = ConfForGlobal.netListenAddress
+        ConfForGlobal.netListenAddress = 'localhost:7380'
         LocalPersist.instance.socketInspector = new SocketInspector()
 
         LocalPersistTest.prepareLocalPersist()
@@ -552,15 +552,15 @@ class LeaderSelectorTest extends Specification {
         slotEventloop.breakEventloop()
         leaderSelector.masterAddressLocalMocked = null
         MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'no-failover'
-        ConfForGlobal.netListenAddresses = savedListen
+        ConfForGlobal.netListenAddress = savedListen
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
 
     def 'test resetAsSlave restores state on sync error path'() {
         given:
-        def savedListen = ConfForGlobal.netListenAddresses
-        ConfForGlobal.netListenAddresses = 'localhost:7380'
+        def savedListen = ConfForGlobal.netListenAddress
+        ConfForGlobal.netListenAddress = 'localhost:7380'
         LocalPersist.instance.socketInspector = new SocketInspector()
 
         LocalPersistTest.prepareLocalPersist()
@@ -596,7 +596,7 @@ class LeaderSelectorTest extends Specification {
         cleanup:
         leaderSelector.masterAddressLocalMocked = null
         MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'no-failover'
-        ConfForGlobal.netListenAddresses = savedListen
+        ConfForGlobal.netListenAddress = savedListen
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }

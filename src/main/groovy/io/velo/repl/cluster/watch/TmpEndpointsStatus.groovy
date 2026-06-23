@@ -2,6 +2,7 @@ package io.velo.repl.cluster.watch
 
 import groovy.transform.CompileStatic
 import groovy.transform.TupleConstructor
+import io.velo.HostAndPort
 
 /**
  * Represents the status of endpoints in various clusters, specifically capturing

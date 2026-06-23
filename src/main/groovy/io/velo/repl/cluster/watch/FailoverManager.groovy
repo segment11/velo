@@ -5,6 +5,7 @@ import com.github.kevinsawicki.http.HttpRequest
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 import io.velo.ConfForGlobal
+import io.velo.HostAndPort
 import io.velo.repl.LeaderSelector
 import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
@@ -382,7 +383,7 @@ class FailoverManager {
             return
         }
 
-        def tmp = new TmpEndpointsStatus(ConfForGlobal.netListenAddresses, oneEndpointStatusMapByClusterName)
+        def tmp = new TmpEndpointsStatus(ConfForGlobal.announcedHostPortString(), oneEndpointStatusMapByClusterName)
         def req = HttpRequest.post('http://' + leaderListenAddress + '/velo/failover_manager/endpoints_status/slave_post')
                 .connectTimeout(1000)
                 .readTimeout(1000)

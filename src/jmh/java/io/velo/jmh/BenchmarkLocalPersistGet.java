@@ -68,7 +68,7 @@ public class BenchmarkLocalPersistGet {
             System.out.println("slot worker event loop started, thread id: " + eventloop.getEventloopThread().threadId());
         }
 
-        ConfForGlobal.netListenAddresses = "127.0.0.1:7379";
+        ConfForGlobal.netListenAddress = "127.0.0.1:7379";
 
         if (persistDir.exists()) {
             FileUtils.deleteDirectory(persistDir);

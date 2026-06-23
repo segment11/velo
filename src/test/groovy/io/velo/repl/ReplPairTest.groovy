@@ -39,17 +39,17 @@ class ReplPairTest extends Specification {
 
     def 'test base'() {
         given:
-        ConfForGlobal.netListenAddresses = 'localhost:6380'
+        ConfForGlobal.netListenAddress = 'localhost:6380'
 
         def replPairAsMaster = mockAsMaster()
         def replPairAsSlave = mockAsSlave()
         println replPairAsMaster
         println replPairAsSlave
         replPairAsSlave.remoteReplProperties = ConfForSlot.global.generateReplProperties()
-        ReplPair.parseHostAndPort(null)
-        println ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses)
+        HostAndPort.parse(null)
+        println HostAndPort.parse(ConfForGlobal.netListenAddress)
         try {
-            ReplPair.parseHostAndPort('127.0.0.1')
+            HostAndPort.parse('127.0.0.1')
         } catch (Exception ignore) {
         }
 
@@ -268,30 +268,4 @@ class ReplPairTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
-    def 'test parse host and port rejects empty host and invalid port range'() {
-        when:
-        ReplPair.parseHostAndPort(':6379')
-
-        then:
-        thrown(IllegalArgumentException)
-
-        when:
-        ReplPair.parseHostAndPort('localhost:0')
-
-        then:
-        thrown(IllegalArgumentException)
-
-        when:
-        ReplPair.parseHostAndPort('localhost:65536')
-
-        then:
-        thrown(IllegalArgumentException)
-
-        when:
-        ReplPair.parseHostAndPort('localhost:abc')
-
-        then:
-        def e = thrown(IllegalArgumentException)
-        e.message.contains('Invalid host:port format')
-    }
 }

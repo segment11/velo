@@ -1,6 +1,7 @@
 package io.velo.repl.cluster.watch
 
 import groovy.transform.CompileStatic
+import io.velo.HostAndPort
 
 /**
  * Represents metadata for a single cluster, including a list of master hosts and their corresponding ports.

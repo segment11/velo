@@ -14,8 +14,8 @@ import java.util.concurrent.TimeUnit
 
 class LocalPersistTest extends Specification {
     static void prepareLocalPersist(byte netWorkers = 1, short slotNumber = 1) {
-        if (!ConfForGlobal.netListenAddresses) {
-            ConfForGlobal.netListenAddresses = 'localhost:7379'
+        if (!ConfForGlobal.netListenAddress) {
+            ConfForGlobal.netListenAddress = 'localhost:7379'
         }
 
 
@@ -191,7 +191,7 @@ class LocalPersistTest extends Specification {
         byte netWorkers = 1
         short slotNumber = 1
 
-        ConfForGlobal.netListenAddresses = 'localhost:7379'
+        ConfForGlobal.netListenAddress = 'localhost:7379'
         def snowFlakes = new SnowFlake[netWorkers]
         for (int i = 0; i < netWorkers; i++) {
             snowFlakes[i] = new SnowFlake(i + 1, 1)

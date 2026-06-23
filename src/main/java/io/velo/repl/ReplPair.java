@@ -77,41 +77,6 @@ public class ReplPair {
 
     private static final Logger log = LoggerFactory.getLogger(ReplPair.class);
 
-    /**
-     * A record to hold a host and port combination.
-     */
-    public record HostAndPort(String host, int port) {
-    }
-
-    /**
-     * Parses a host and port string into a HostAndPort record.
-     *
-     * @param hostAndPort the host and port string to parse
-     * @return the HostAndPort record, or null if the input is null
-     */
-    public static HostAndPort parseHostAndPort(String hostAndPort) {
-        if (hostAndPort == null) {
-            return null;
-        }
-
-        var separatorIndex = hostAndPort.indexOf(':');
-        if (separatorIndex <= 0 || separatorIndex != hostAndPort.lastIndexOf(':')
-                || separatorIndex == hostAndPort.length() - 1) {
-            throw new IllegalArgumentException("Invalid host:port format: " + hostAndPort);
-        }
-
-        var host = hostAndPort.substring(0, separatorIndex);
-        try {
-            var port = Integer.parseInt(hostAndPort.substring(separatorIndex + 1));
-            if (port <= 0 || port > 65535) {
-                throw new IllegalArgumentException("Invalid host:port format: " + hostAndPort);
-            }
-            return new HostAndPort(host, port);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid host:port format: " + hostAndPort, e);
-        }
-    }
-
     @Override
     public boolean equals(Object obj) {
         if (obj == null) {
@@ -470,13 +435,9 @@ public class ReplPair {
             log.warn("Repl pair init as slave: already connected, target host={}, port={}, slot={}", host, port, slot);
         } else {
             // Advertise the Sentinel-reachable address (replicaAnnounceIp/Port) instead of the raw
-            // netListenAddresses (typically 0.0.0.0). Otherwise the master's INFO replication reports
+            // netListenAddress (typically 0.0.0.0). Otherwise the master's INFO replication reports
             // slaveN:ip=0.0.0.0 and Redis Sentinel cannot reach the replica for monitoring / promotion.
-            var announcedHp = ConfForGlobal.getAnnouncedHostAndPort();
-            var advertisedAddress = (announcedHp[0] != null && !announcedHp[0].isEmpty())
-                    ? announcedHp[0] + ":" + announcedHp[1]
-                    : ConfForGlobal.netListenAddresses;
-            var replContent = new Hello(slaveUuid, advertisedAddress);
+            var replContent = new Hello(slaveUuid, ConfForGlobal.announcedHostPortString());
 
             tcpClient = new TcpClient(slot, eventloop, requestHandler, this);
             tcpClient.connect(host, port, connectTimeoutMillis, () -> Repl.buffer(slaveUuid, slot, ReplType.hello, replContent));

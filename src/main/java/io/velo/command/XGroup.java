@@ -273,21 +273,21 @@ public class XGroup extends BaseCommand {
             }
             case ping -> {
                 // server received ping from client
-                var netListenAddresses = Wal.keyString(contentBytes);
-                var hostAndPort = ReplPair.parseHostAndPort(netListenAddresses);
+                var netListenAddress = Wal.keyString(contentBytes);
+                var hostAndPort = HostAndPort.parse(netListenAddress);
 
                 if (replPair == null) {
-                    replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, hostAndPort.host(), hostAndPort.port());
+                    replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, hostAndPort.host, hostAndPort.port);
                     replPair.increaseStatsCountForReplType(ping);
                 }
 
                 replPair.setLastPingGetTimestamp(System.currentTimeMillis());
-                yield Repl.reply(slot, replPair, pong, new Pong(ConfForGlobal.netListenAddresses));
+                yield Repl.reply(slot, replPair, pong, new Pong(ConfForGlobal.announcedHostPortString()));
             }
             case pong -> {
                 // client received pong from server
                 assert replPair != null;
-                ReplPair.parseHostAndPort(Wal.keyString(contentBytes));
+                HostAndPort.parse(Wal.keyString(contentBytes));
                 replPair.setLastPongGetTimestamp(System.currentTimeMillis());
 
                 var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();
@@ -311,22 +311,22 @@ public class XGroup extends BaseCommand {
             }
             case bye -> {
                 // server received bye from client
-                var netListenAddresses = Wal.keyString(contentBytes);
-                ReplPair.parseHostAndPort(netListenAddresses);
-                log.warn("Repl master handle bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
+                var netListenAddress = Wal.keyString(contentBytes);
+                HostAndPort.parse(netListenAddress);
+                log.warn("Repl master handle bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddress, slot);
 
                 if (replPair == null) {
                     yield Repl.emptyReply();
                 }
 
                 oneSlot.addDelayNeedCloseReplPair(replPair);
-                yield Repl.reply(slot, replPair, byeBye, new Pong(ConfForGlobal.netListenAddresses));
+                yield Repl.reply(slot, replPair, byeBye, new Pong(ConfForGlobal.announcedHostPortString()));
             }
             case byeBye -> {
                 // client received bye from server
-                var netListenAddresses = Wal.keyString(contentBytes);
-                ReplPair.parseHostAndPort(netListenAddresses);
-                log.warn("Repl slave handle bye bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
+                var netListenAddress = Wal.keyString(contentBytes);
+                HostAndPort.parse(netListenAddress);
+                log.warn("Repl slave handle bye bye: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddress, slot);
 
                 oneSlot.addDelayNeedCloseReplPair(replPair);
                 yield Repl.emptyReply();
@@ -367,7 +367,7 @@ public class XGroup extends BaseCommand {
         }
         var b = new byte[len];
         buffer.get(b);
-        var netListenAddresses = Wal.keyString(b);
+        var netListenAddress = Wal.keyString(b);
 
         // ignore remote slot number
         var slaveSlotNumber = buffer.getShort();
@@ -387,15 +387,15 @@ public class XGroup extends BaseCommand {
             throw new IllegalArgumentException("Repl master handle error: hello payload has trailing bytes, slot=" + slot);
         }
 
-        var hostAndPort = ReplPair.parseHostAndPort(netListenAddresses);
+        var hostAndPort = HostAndPort.parse(netListenAddress);
 
         var oneSlot = localPersist.oneSlot(slot);
         if (replPair == null) {
-            replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, hostAndPort.host(), hostAndPort.port());
+            replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, hostAndPort.host, hostAndPort.port);
             replPair.increaseStatsCountForReplType(hello);
         }
 
-        log.warn("Repl master handle hello: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddresses, slot);
+        log.warn("Repl master handle hello: slave uuid={}, net listen addresses={}, slot={}", slaveUuid, netListenAddress, slot);
 
         replPair.setRemoteReplProperties(replProperties);
 

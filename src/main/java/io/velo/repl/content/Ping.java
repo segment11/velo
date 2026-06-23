@@ -9,16 +9,16 @@ import io.velo.repl.ReplContent;
  * It corresponds to the {@link io.velo.repl.ReplType#ping} message type, which is sent by a slave to a master.
  */
 public class Ping implements ReplContent {
-    private final String netListenAddresses;
+    private final String netListenAddress;
 
     /**
      * Constructs a new Ping instance with the specified network listen addresses.
      *
-     * @param netListenAddresses a string representing the network listen addresses
+     * @param netListenAddress a string representing the network listen addresses
      *                           used for communication between slave and master nodes
      */
-    public Ping(String netListenAddresses) {
-        this.netListenAddresses = netListenAddresses;
+    public Ping(String netListenAddress) {
+        this.netListenAddress = netListenAddress;
     }
 
     /**
@@ -30,7 +30,7 @@ public class Ping implements ReplContent {
      */
     @Override
     public void encodeTo(ByteBuf toBuf) {
-        toBuf.write(Wal.keyBytes(netListenAddresses));
+        toBuf.write(Wal.keyBytes(netListenAddress));
     }
 
     /**
@@ -42,6 +42,6 @@ public class Ping implements ReplContent {
      */
     @Override
     public int encodeLength() {
-        return Wal.keyBytes(netListenAddresses).length;
+        return Wal.keyBytes(netListenAddress).length;
     }
 }

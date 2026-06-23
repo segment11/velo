@@ -5,6 +5,7 @@ import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
+import io.velo.HostAndPort;
 import io.velo.MultiWorkerServer;
 import io.velo.NeedCleanUp;
 import io.velo.command.PGroup;
@@ -125,15 +126,18 @@ public class LeaderSelector implements NeedCleanUp {
             }
 
             if (!hasLeadershipLastTry) {
-                log.warn("Repl self become leader, {}", ConfForGlobal.netListenAddresses);
+                log.warn("Repl self become leader, {}", ConfForGlobal.announcedHostPortString());
             }
             hasLeadershipLastTry = true;
 
-            return ConfForGlobal.netListenAddresses;
+            // The address published to ZK as "the cluster master" — peers read this to connect
+            // as slaves, so it must be the externally-reachable announced address, not the raw
+            // bind address (which is typically 0.0.0.0).
+            return ConfForGlobal.announcedHostPortString();
         } else {
             isLeaderLoopCount = 0;
             if (hasLeadershipLastTry) {
-                log.warn("Repl self lost leader, {}", ConfForGlobal.netListenAddresses);
+                log.warn("Repl self lost leader, {}", ConfForGlobal.netListenAddress);
             }
             hasLeadershipLastTry = false;
 
@@ -228,7 +232,7 @@ public class LeaderSelector implements NeedCleanUp {
         // client must not be null
         // local listen address as id
         leaderLatch = new LeaderLatch(client, ConfForGlobal.zookeeperRootPath + ConfForGlobal.LEADER_LATCH_PATH,
-                ConfForGlobal.netListenAddresses);
+                ConfForGlobal.netListenAddress);
         try {
             leaderLatch.start();
             log.info("Repl leader latch started and wait 5s");
@@ -362,8 +366,8 @@ public class LeaderSelector implements NeedCleanUp {
 
                 // publish switch master to clients
                 var leaderSelector = LeaderSelector.getInstance();
-                var oldMasterHostAndPort = ReplPair.parseHostAndPort(leaderSelector.lastGetMasterListenAddressAsSlave);
-                var selfAsMasterHostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses);
+                var oldMasterHostAndPort = HostAndPort.parse(leaderSelector.lastGetMasterListenAddressAsSlave);
+                var selfAsMasterHostAndPort = ConfForGlobal.announcedHostPort();
                 if (oldMasterHostAndPort == null) {
                     oldMasterHostAndPort = selfAsMasterHostAndPort;
                 }
@@ -378,7 +382,7 @@ public class LeaderSelector implements NeedCleanUp {
     }
 
     private boolean checkMasterConfigMatch(String host, int port, Consumer<Exception> callback) {
-        log.debug("Repl reset self as slave begin, check new master global config first, self={}", ConfForGlobal.netListenAddresses);
+        log.debug("Repl reset self as slave begin, check new master global config first, self={}", ConfForGlobal.netListenAddress);
         // sync, perf bad
         try {
             var jedisPoolHolder = JedisPoolHolder.getInstance();
@@ -394,13 +398,13 @@ public class LeaderSelector implements NeedCleanUp {
             var checkValuesFromMaster = objectMapper.readValue(jsonStr, ConfForSlot.SlaveCheckValues.class);
 
             if (!ConfForSlot.global.slaveCanMatch(checkValuesFromMaster)) {
-                log.warn("Repl reset self as slave begin, check new master global config fail, self={}", ConfForGlobal.netListenAddresses);
+                log.warn("Repl reset self as slave begin, check new master global config fail, self={}", ConfForGlobal.netListenAddress);
                 log.info("Repl local={}", ConfForSlot.global.getSlaveCheckValues());
                 log.info("Repl remote={}", checkValuesFromMaster);
                 callback.accept(new IllegalStateException("Repl slave can not match check values"));
                 return false;
             } else {
-                log.debug("Repl reset self as slave begin, check new master global config ok, self={}", ConfForGlobal.netListenAddresses);
+                log.debug("Repl reset self as slave begin, check new master global config ok, self={}", ConfForGlobal.netListenAddress);
                 return true;
             }
         } catch (Exception e) {
@@ -470,8 +474,8 @@ public class LeaderSelector implements NeedCleanUp {
                 }
 
                 // publish switch master to clients
-                var selfAsOldMasterHostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses);
-                var newMasterHostAndPort = new ReplPair.HostAndPort(host, port);
+                var selfAsOldMasterHostAndPort = ConfForGlobal.announcedHostPort();
+                var newMasterHostAndPort = new HostAndPort(host, port);
                 publishMasterSwitchMessage(selfAsOldMasterHostAndPort, newMasterHostAndPort, false);
 
                 callback.accept(null);
@@ -484,10 +488,10 @@ public class LeaderSelector implements NeedCleanUp {
 
     private static final byte[] PUBLISH_CMD_BYTES = "publish".getBytes();
 
-    private void publishMasterSwitchMessage(ReplPair.HostAndPort from, ReplPair.HostAndPort to, boolean isAsMaster) {
+    private void publishMasterSwitchMessage(HostAndPort from, HostAndPort to, boolean isAsMaster) {
         // publish master address to clients
-        var publishMessage = ConfForGlobal.zookeeperRootPath + " " + from.host() + " " + from.port() + " " +
-                to.host() + " " + to.port();
+        var publishMessage = ConfForGlobal.zookeeperRootPath + " " + from.host + " " + from.port + " " +
+                to.host + " " + to.port;
 
         var data = new byte[][]{
                 PUBLISH_CMD_BYTES,
@@ -502,7 +506,7 @@ public class LeaderSelector implements NeedCleanUp {
 
         // publish slave address to clients for readonly slave
         var publishMessageReadonlySlave = ConfForGlobal.zookeeperRootPath + ReplConsts.REPL_MASTER_NAME_READONLY_SLAVE_SUFFIX + " " +
-                to.host() + " " + to.port() + " " + from.host() + " " + from.port();
+                to.host + " " + to.port + " " + from.host + " " + from.port;
         var dataSlave = new byte[][]{
                 PUBLISH_CMD_BYTES,
                 XGroup.X_MASTER_SWITCH_PUBLISH_CHANNEL_BYTES,

@@ -77,13 +77,13 @@ vars currentEpoch 0 lastVoteEpoch 0
             shards.add(shard);
 
             var node = new Node();
-            var hostAndPort = ReplPair.parseHostAndPort(ConfForGlobal.netListenAddresses);
+            var hostAndPort = ConfForGlobal.announcedHostPort();
 //            if (hostAndPort == null) {
-//                throw new RuntimeException("Repl clusterx parse host and port failed=" + ConfForGlobal.netListenAddresses);
+//                throw new RuntimeException("Repl clusterx parse host and port failed=" + ConfForGlobal.netListenAddress);
 //            }
             node.setMaster(true);
-            node.host = hostAndPort.host();
-            node.port = hostAndPort.port();
+            node.host = hostAndPort.host;
+            node.port = hostAndPort.port;
             node.setMySelf(true);
             // with blank slot range
 

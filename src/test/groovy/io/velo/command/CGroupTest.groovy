@@ -4,6 +4,7 @@ import io.activej.eventloop.Eventloop
 import io.activej.net.socket.tcp.ITcpSocket
 import io.activej.net.socket.tcp.TcpSocket
 import io.velo.BaseCommand
+import io.velo.ConfForGlobal
 import io.velo.MultiWorkerServer
 import io.velo.SocketInspector
 import io.velo.SocketInspectorTest
@@ -298,6 +299,23 @@ class CGroupTest extends Specification {
         inspector.socketMap.size() == maxAgeSizeBefore - 1
         // the issuing socket is preserved
         inspector.socketMap.containsValue(socket)
+
+        when: 'CLIENT KILL LADDR matching the announced address passes the filter and kills the non-issuing socket'
+        def laddrSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46420)
+        laddrSocket.setInspector(inspector)
+        registerSocketOnInspector(inspector, fixtureEventloop, laddrSocket)
+        extras << laddrSocket
+        def laddrSizeBefore = inspector.socketMap.size()
+        reply = cGroup.execute("client kill laddr ${ConfForGlobal.announcedHostPortString()}")
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1L
+        def laddrDeadline = System.currentTimeMillis() + 2000
+        while (inspector.socketMap.containsValue(laddrSocket) && System.currentTimeMillis() < laddrDeadline) {
+            Thread.sleep(20)
+        }
+        !inspector.socketMap.containsValue(laddrSocket)
+        inspector.socketMap.size() == laddrSizeBefore - 1
 
         // ----- CLIENT KILL behavior (Task 3 continued) -----
 
