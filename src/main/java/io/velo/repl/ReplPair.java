@@ -6,7 +6,6 @@ import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.RequestHandler;
 import io.velo.persist.BigStringFiles;
-import io.velo.persist.LocalPersist;
 import io.velo.repl.content.Hello;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -557,25 +556,23 @@ public class ReplPair {
     TcpSocket slaveConnectSocketInMaster;
 
     public void setSlaveConnectSocketInMaster(TcpSocket slaveConnectSocketInMaster) {
-        if (this.slaveConnectSocketInMaster != slaveConnectSocketInMaster) {
-            this.slaveConnectSocketInMaster = slaveConnectSocketInMaster;
+        if (this.slaveConnectSocketInMaster != null && this.slaveConnectSocketInMaster != slaveConnectSocketInMaster) {
+            log.warn("Repl pair master, slave connect not null, overwrite");
         }
+
+        this.slaveConnectSocketInMaster = slaveConnectSocketInMaster;
     }
 
     public void closeSlaveConnectSocket() {
         if (slaveConnectSocketInMaster != null && !slaveConnectSocketInMaster.isClosed()) {
-            var localPersist = LocalPersist.getInstance();
-            var oneSlot = localPersist.oneSlot(slot);
-            oneSlot.asyncExecute(() -> {
-                try {
-                    slaveConnectSocketInMaster.close();
-                    log.warn("Repl pair master close slave socket, {}:{}, slot={}", host, port, slot);
-                } catch (Exception e) {
-                    log.error("Repl pair master close slave socket error={}, {}:{}, slot={}", e.getMessage(), host, port, slot);
-                } finally {
-                    slaveConnectSocketInMaster = null;
-                }
-            });
+            try {
+                slaveConnectSocketInMaster.getReactor().submit(slaveConnectSocketInMaster::close);
+                log.warn("Repl pair master close slave socket, {}:{}, slot={}", host, port, slot);
+            } catch (Exception e) {
+                log.error("Repl pair master close slave socket error={}, {}:{}, slot={}", e.getMessage(), host, port, slot);
+            } finally {
+                slaveConnectSocketInMaster = null;
+            }
         }
     }
 
@@ -651,7 +648,9 @@ public class ReplPair {
         closeSlaveConnectSocket();
     }
 
-    /** Timestamp for delayed removal from list. */
+    /**
+     * Timestamp for delayed removal from list.
+     */
     private long putToDelayListToRemoveTimeMillis;
 
     /**
@@ -668,10 +667,14 @@ public class ReplPair {
         this.putToDelayListToRemoveTimeMillis = putToDelayListToRemoveTimeMillis;
     }
 
-    /** Big string files to fetch after catch-up. */
+    /**
+     * Big string files to fetch after catch-up.
+     */
     @ForSlaveField
     private final LinkedList<BigStringFiles.IdWithKey> toFetchBigStringIdList = new LinkedList<>();
-    /** Big string files currently being fetched. */
+    /**
+     * Big string files currently being fetched.
+     */
     @ForSlaveField
     private final LinkedList<BigStringFiles.IdWithKey> doFetchingBigStringIdList = new LinkedList<>();
 
