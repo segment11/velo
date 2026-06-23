@@ -196,8 +196,7 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
             return false;
         }
 
-        var iterator = db.newIterator();
-        try {
+        try (var iterator = db.newIterator()) {
             if (lastIterateKeyBytes != null) {
                 iterator.seek(lastIterateKeyBytes);
                 if (!iterator.isValid()) {
@@ -212,8 +211,6 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
             }
 
             return iterateAndDoAnalysis(iterator, null);
-        } finally {
-            iterator.close();
         }
     }
 

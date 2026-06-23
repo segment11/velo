@@ -5,8 +5,8 @@ import io.activej.config.Config;
 import io.activej.eventloop.Eventloop;
 import io.velo.ConfForGlobal;
 import io.velo.NeedCleanUp;
-import io.velo.persist.Wal;
 import io.velo.metric.SimpleGauge;
+import io.velo.persist.Wal;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -19,11 +19,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -236,8 +232,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
     public CompletableFuture<Void> iterateKeys(byte[] beginKeyBytes, int batchSize, boolean isIncludeBeginKey, @NotNull BiConsumer<byte[], Integer> consumer) {
         return eventloop.submit(() -> {
-            var iterator = db.newIterator();
-            try {
+            try (var iterator = db.newIterator()) {
                 seekIterator(beginKeyBytes, iterator, isIncludeBeginKey);
 
                 int count = 0;
@@ -249,8 +244,6 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                     iterator.next();
                     count++;
                 }
-            } finally {
-                iterator.close();
             }
         });
     }
@@ -261,8 +254,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                                                            @Nullable Predicate<Integer> valueBytesAsIntFilter) {
         return eventloop.submit(AsyncComputation.of(() -> {
             var result = new ArrayList<String>();
-            var iterator = db.newIterator();
-            try {
+            try (var iterator = db.newIterator()) {
                 seekIterator(beginKeyBytes, iterator, false);
 
                 while (iterator.isValid() && result.size() < expectedCount) {
@@ -292,8 +284,6 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                 }
 
                 return result;
-            } finally {
-                iterator.close();
             }
         }));
     }
@@ -301,8 +291,7 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
     public CompletableFuture<ArrayList<String>> prefixMatch(@NotNull String prefix, Pattern pattern, int maxCount) {
         return eventloop.submit(AsyncComputation.of(() -> {
             var result = new ArrayList<String>();
-            var iterator = db.newIterator();
-            try {
+            try (var iterator = db.newIterator()) {
                 iterator.seek(Wal.keyBytes(prefix));
 
                 while (iterator.isValid() && result.size() < maxCount) {
@@ -319,8 +308,6 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
                 }
 
                 return result;
-            } finally {
-                iterator.close();
             }
         }));
     }

@@ -410,17 +410,18 @@ public class IGroup extends BaseCommand {
         final int batchSize = 10000;
         log.info("try to do iterate, only iterate first {} keys.", batchSize);
 
-        var iterator = db.newIterator();
-        iterator.seekToFirst();
-        int count = 0;
-        while (iterator.isValid() && count < batchSize) {
-            var keyBytes = iterator.key();
-            var valueBytes = iterator.value();
-            iterator.next();
-            count++;
+        try (var iterator = db.newIterator()) {
+            iterator.seekToFirst();
+            int count = 0;
+            while (iterator.isValid() && count < batchSize) {
+                var keyBytes = iterator.key();
+                var valueBytes = iterator.value();
+                iterator.next();
+                count++;
 
-            if (count % 100 == 0) {
-                log.info("key={}, value bytes size={}", Wal.keyString(keyBytes), valueBytes.length);
+                if (count % 100 == 0) {
+                    log.info("key={}, value bytes size={}", Wal.keyString(keyBytes), valueBytes.length);
+                }
             }
         }
 
@@ -432,21 +433,22 @@ public class IGroup extends BaseCommand {
             // put number + skip number
             int[] r = new int[2];
             try {
-                var it = db.newIterator();
-                it.seekToFirst();
-                while (it.isValid()) {
-                    var keyBytes = it.key();
-                    var valueBytes = it.value();
+                try (var it = db.newIterator()) {
+                    it.seekToFirst();
+                    while (it.isValid()) {
+                        var keyBytes = it.key();
+                        var valueBytes = it.value();
 
-                    var slotWithKeyHash = slot(keyBytes, slotNumber);
-                    if (slotWithKeyHash.slot() != oneSlot.slot()) {
-                        r[1]++;
-                    } else {
-                        set(valueBytes, slotWithKeyHash);
-                        r[0]++;
+                        var slotWithKeyHash = slot(keyBytes, slotNumber);
+                        if (slotWithKeyHash.slot() != oneSlot.slot()) {
+                            r[1]++;
+                        } else {
+                            set(valueBytes, slotWithKeyHash);
+                            r[0]++;
+                        }
+
+                        it.next();
                     }
-
-                    it.next();
                 }
             } finally {
                 oneSlot.resetWritePositionAfterBulkLoad();
