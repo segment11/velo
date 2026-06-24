@@ -575,6 +575,13 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         diskUsage += metaChunkSegmentFlagSeq.allCapacity;
         map.put("chunk_disk_usage", (double) diskUsage);
 
+        var maxSegmentNumber = maxSegmentIndex + 1;
+        var reusableSegmentCount = metaChunkSegmentFlagSeq.countReusableSegments();
+        var usedSegmentCount = maxSegmentNumber - reusableSegmentCount;
+        map.put("chunk_segment_reusable_count", (double) reusableSegmentCount);
+        map.put("chunk_segment_used_count", (double) usedSegmentCount);
+        map.put("chunk_segment_fill_rate", (double) usedSegmentCount / maxSegmentNumber);
+
         return map;
     }
 }

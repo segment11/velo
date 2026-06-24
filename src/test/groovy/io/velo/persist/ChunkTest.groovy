@@ -39,6 +39,44 @@ class ChunkTest extends Specification {
         writeSegmentsMethod.returnType == Void.TYPE
     }
 
+    def 'test segment fill rate metric'() {
+        given:
+        def chunk = prepareOne(slot)
+        def oneSlot = chunk.oneSlot
+        def metaChunkSegmentFlagSeq = oneSlot.metaChunkSegmentFlagSeq
+        def maxSegmentNumber = ConfForSlot.global.confChunk.maxSegmentNumber()
+
+        when: 'no data yet — all segments reusable'
+        def metrics = chunk.collect()
+        then:
+        metrics['chunk_segment_reusable_count'] == (double) maxSegmentNumber
+        metrics['chunk_segment_used_count'] == 0.0d
+        metrics['chunk_segment_fill_rate'] == 0.0d
+
+        when: 'mark 8 segments HAS_DATA (filled)'
+        8.times { i ->
+            metaChunkSegmentFlagSeq.setSegmentMergeFlag(i, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 0)
+        }
+        metrics = chunk.collect()
+        then:
+        metrics['chunk_segment_reusable_count'] == (double) (maxSegmentNumber - 8)
+        metrics['chunk_segment_used_count'] == 8.0d
+        metrics['chunk_segment_fill_rate'] == (double) 8 / maxSegmentNumber
+
+        when: 'free 3 back to REUSABLE (merged)'
+        3.times { i ->
+            metaChunkSegmentFlagSeq.setSegmentMergeFlag(i, Chunk.SEGMENT_FLAG_REUSABLE, 0L, 0)
+        }
+        metrics = chunk.collect()
+        then:
+        metrics['chunk_segment_used_count'] == 5.0d
+        metrics['chunk_segment_fill_rate'] == (double) 5 / maxSegmentNumber
+
+        cleanup:
+        metaChunkSegmentFlagSeq.clear()
+        metaChunkSegmentFlagSeq.cleanUp()
+    }
+
     def 'test segment index'() {
         given:
         def chunk = prepareOne(slot)

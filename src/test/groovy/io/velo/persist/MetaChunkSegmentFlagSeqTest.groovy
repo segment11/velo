@@ -32,6 +32,37 @@ class MetaChunkSegmentFlagSeqTest extends Specification {
         one.cleanUp()
     }
 
+    def 'test count reusable segments reflects fill'() {
+        given:
+        def one = new MetaChunkSegmentFlagSeq(slot, slotDir)
+        def max = ConfForSlot.global.confChunk.maxSegmentNumber()
+
+        expect: 'initial state — all segments reusable, none filled'
+        one.countReusableSegments() == max
+
+        when: 'mark 10 segments HAS_DATA (filled)'
+        10.times { i ->
+            one.setSegmentMergeFlag(i, Chunk.SEGMENT_FLAG_HAS_DATA, 1L, 0)
+        }
+        then: '10 fewer reusable segments'
+        one.countReusableSegments() == max - 10
+
+        when: 'mark 4 of them back REUSABLE (merged / freed)'
+        4.times { i ->
+            one.setSegmentMergeFlag(i, Chunk.SEGMENT_FLAG_REUSABLE, 0L, 0)
+        }
+        then: 'fill drops accordingly'
+        one.countReusableSegments() == max - 6
+
+        when: 'clear resets all to reusable'
+        one.clear()
+        then:
+        one.countReusableSegments() == max
+
+        cleanup:
+        one.cleanUp()
+    }
+
     def 'test read batch for repl'() {
         given:
         def one = new MetaChunkSegmentFlagSeq(slot, slotDir)

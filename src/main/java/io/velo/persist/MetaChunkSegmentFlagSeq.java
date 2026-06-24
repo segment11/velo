@@ -216,6 +216,20 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     }
 
     /**
+     * Counts segments currently reusable (flag {@link Chunk#SEGMENT_FLAG_REUSABLE}), i.e. not filled with data.
+     * A segment holding {@link Chunk#SEGMENT_FLAG_HAS_DATA} (including data pending merge) is NOT reusable.
+     *
+     * @return the total number of reusable segments across all FDs
+     */
+    int countReusableSegments() {
+        int count = 0;
+        for (var bitSet : segmentCanReuseBitSet) {
+            count += bitSet.cardinality();
+        }
+        return count;
+    }
+
+    /**
      * @param beginSegmentIndex the starting index to search for a reusable segment
      * @param segmentCount the number of segments to find
      * @return the index of the first segment that can be reused, or -1 if no such segment is found
