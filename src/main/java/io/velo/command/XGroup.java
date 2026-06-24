@@ -41,6 +41,8 @@ import static io.velo.repl.ReplType.*;
  * Handles Velo master-slave replications.
  */
 public class XGroup extends BaseCommand {
+    private static final int MAX_HELLO_ADDRESS_LENGTH = 256;
+
     /**
      * @param cmd    the command string
      * @param data   the data array
@@ -51,11 +53,11 @@ public class XGroup extends BaseCommand {
     }
 
     /**
-     * @param cmd             the command string
-     * @param data            the data array
-     * @param socket          the TCP socket
-     * @param requestHandler  the request handler
-     * @param request         the request
+     * @param cmd            the command string
+     * @param data           the data array
+     * @param socket         the TCP socket
+     * @param requestHandler the request handler
+     * @param request        the request
      */
     public XGroup(String cmd, byte[][] data, ITcpSocket socket, RequestHandler requestHandler, Request request) {
         super(cmd, data, socket);
@@ -359,10 +361,10 @@ public class XGroup extends BaseCommand {
         var slaveUuid = buffer.getLong();
 
         var len = buffer.getInt();
-        if (len < 0) {
+        if (len <= 0 || len > MAX_HELLO_ADDRESS_LENGTH) {
             throw new IllegalArgumentException("Repl master handle error: hello address length invalid=" + len + ", slot=" + slot);
         }
-        if (buffer.remaining() < len + 20) {
+        if (buffer.remaining() < 20 || len > buffer.remaining() - 20) {
             throw new IllegalArgumentException("Repl master handle error: hello payload too short, slot=" + slot);
         }
         var b = new byte[len];

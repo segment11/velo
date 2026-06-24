@@ -474,6 +474,13 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.error)
 
         when:
+        replRequest = mockReplRequest(replPairAsSlave, ReplType.hello, new Hello(slaveUuid, 'a' * 257))
+        r = x.handleRepl(replRequest) as ReplReply
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('hello address length invalid')
+
+        when:
         replRequest = mockReplRequest(replPairAsSlave, ReplType.hello, hello)
         replRequest.data[replRequest.data.length - 1] = (byte) 2
         r = x.handleRepl(replRequest) as ReplReply
