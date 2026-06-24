@@ -326,4 +326,30 @@ zzz localhost 17381 slave aaa
         fm.clearOneEndpointStatusMapByClusterName()
         fm.clearOneEndpointStatusMapByClusterNamePostBySlave()
     }
+
+    def 'stale slave posted endpoint status is not trusted for failover suppression'() {
+        given:
+        def fm = FailoverManager.instance
+        fm.clearOneEndpointStatusMapByClusterNamePostBySlave()
+        fm.slavePostedStatusMaxAgeMillisForTest = 1L
+
+        def failedHostAndPort = new HostAndPort('localhost', 7379)
+        def statusBySlave = new OneEndpointStatus()
+        statusBySlave.addStatus(OneEndpointStatus.Status.PING_OK)
+        fm.addOneEndpointStatusMapByClusterNamePostBySlave('localhost:17379', [
+                cluster1: [
+                        (failedHostAndPort): statusBySlave,
+                ]
+        ])
+
+        when:
+        Thread.sleep(5L)
+
+        then:
+        !fm.isPingOkPostBySlaveFresh('cluster1', failedHostAndPort)
+
+        cleanup:
+        fm.slavePostedStatusMaxAgeMillisForTest = null
+        fm.clearOneEndpointStatusMapByClusterNamePostBySlave()
+    }
 }

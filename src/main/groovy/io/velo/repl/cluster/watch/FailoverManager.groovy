@@ -55,7 +55,13 @@ class FailoverManager {
     /**
      * A concurrent map that stores the status of cluster endpoints posted by slaves, grouped by slave listen address.
      */
+    private static final long SLAVE_POSTED_STATUS_MAX_AGE_MILLIS = 10000L
+
+    @TestOnly
+    Long slavePostedStatusMaxAgeMillisForTest
+
     private final ConcurrentHashMap<String, Map<String, Map<HostAndPort, OneEndpointStatus>>> oneEndpointStatusMapByClusterNamePostBySlave = new ConcurrentHashMap<>()
+    private final ConcurrentHashMap<String, Long> slavePostedStatusReceivedAtMillisByListenAddress = new ConcurrentHashMap<>()
 
     /**
      * Adds the status of cluster endpoints posted by a slave to the map.
@@ -64,6 +70,7 @@ class FailoverManager {
      */
     void addOneEndpointStatusMapByClusterNamePostBySlave(String slaveListenAddress, Map<String, Map<HostAndPort, OneEndpointStatus>> oneEndpointStatusMapByClusterName) {
         oneEndpointStatusMapByClusterNamePostBySlave[slaveListenAddress] = oneEndpointStatusMapByClusterName
+        slavePostedStatusReceivedAtMillisByListenAddress[slaveListenAddress] = System.currentTimeMillis()
     }
 
     /**
@@ -73,6 +80,7 @@ class FailoverManager {
     @TestOnly
     void clearOneEndpointStatusMapByClusterNamePostBySlave() {
         oneEndpointStatusMapByClusterNamePostBySlave.clear()
+        slavePostedStatusReceivedAtMillisByListenAddress.clear()
     }
 
     /**
@@ -414,36 +422,39 @@ class FailoverManager {
                 if (oneEndpointStatus.isPingOk()) {
                     continue
                 }
-
-                boolean isPingOkPostBySlave = false
-                // check is ping ok post by slave
-                for (entry3 in oneEndpointStatusMapByClusterNamePostBySlave.entrySet()) {
-                    def slaveListenAddress = entry3.key
-                    def oneEndpointStatusMapByClusterNamePostBySlave = entry3.value
-
-                    def oneEndpointStatusMapByClusterName = oneEndpointStatusMapByClusterNamePostBySlave[oneClusterName]
-                    if (oneEndpointStatusMapByClusterName == null) {
-                        continue
-                    }
-
-                    def oneEndpointStatusBySlave = oneEndpointStatusMapByClusterName[hostAndPort]
-                    if (oneEndpointStatusBySlave == null) {
-                        continue
-                    }
-
-                    if (oneEndpointStatusBySlave.isPingOk()) {
-                        isPingOkPostBySlave = true
-                        break
-                    }
-                }
-
-                if (isPingOkPostBySlave) {
+                if (isPingOkPostBySlaveFresh(oneClusterName, hostAndPort)) {
                     continue
                 }
 
                 doFailover(oneClusterName, hostAndPort)
             }
         }
+    }
+
+    @VisibleForTesting
+    boolean isPingOkPostBySlaveFresh(String oneClusterName, HostAndPort hostAndPort) {
+        var now = System.currentTimeMillis()
+        var maxAgeMillis = slavePostedStatusMaxAgeMillisForTest != null ? slavePostedStatusMaxAgeMillisForTest : SLAVE_POSTED_STATUS_MAX_AGE_MILLIS
+        for (entry in oneEndpointStatusMapByClusterNamePostBySlave.entrySet()) {
+            var slaveListenAddress = entry.key
+            var receivedAtMillis = slavePostedStatusReceivedAtMillisByListenAddress[slaveListenAddress]
+            if (receivedAtMillis == null || now - receivedAtMillis > maxAgeMillis) {
+                oneEndpointStatusMapByClusterNamePostBySlave.remove(slaveListenAddress)
+                slavePostedStatusReceivedAtMillisByListenAddress.remove(slaveListenAddress)
+                continue
+            }
+
+            var oneEndpointStatusMapByClusterNameFromSlave = entry.value[oneClusterName]
+            if (oneEndpointStatusMapByClusterNameFromSlave == null) {
+                continue
+            }
+
+            var oneEndpointStatusBySlave = oneEndpointStatusMapByClusterNameFromSlave[hostAndPort]
+            if (oneEndpointStatusBySlave != null && oneEndpointStatusBySlave.isPingOk()) {
+                return true
+            }
+        }
+        return false
     }
 
     /**
