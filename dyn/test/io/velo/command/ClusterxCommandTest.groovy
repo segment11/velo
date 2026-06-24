@@ -760,6 +760,8 @@ slots
         errResult instanceof ErrorReply
         (errResult as ErrorReply).message.contains('reset as slave')
         !(errResult as ErrorReply).message.contains('reset as master')
+        shards[0].nodes.size() == 1
+        shards[0].nodes[0].nodeId() == 'new_node_id2'
 
         when:
         // clean up: delete from cluster so subsequent failover test sees 'not in cluster'

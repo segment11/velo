@@ -985,12 +985,15 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         }
 
         def multiShard = localPersist.multiShard
-        multiShard.refreshAllShards(shards, clusterVersion)
 
         boolean resetMySelfAsMaster = false
         boolean resetMySelfAsSlave = false
 
-        def mySelfShard = multiShard.mySelfShard()
+        def mySelfShard = shards.find { ss ->
+            ss.nodes.find { nn ->
+                nn.mySelf
+            } != null
+        }
         if (!mySelfShard) {
             // delete my self node from cluster, reset as master
             resetMySelfAsMaster = true
@@ -1013,8 +1016,14 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                     log.error('Reset as master failed', e)
                     finalPromise.set(new ErrorReply('error when reset as master: ' + e.message))
                 } else {
-                    log.warn('Reset as master success')
-                    finalPromise.set(OK)
+                    try {
+                        multiShard.refreshAllShards(shards, clusterVersion)
+                        log.warn('Reset as master success')
+                        finalPromise.set(OK)
+                    } catch (Exception ex) {
+                        log.error('Refresh clusterx meta after reset as master failed', ex)
+                        finalPromise.set(new ErrorReply('error when refresh clusterx meta: ' + ex.message))
+                    }
                 }
             })
             return asyncReply
@@ -1032,8 +1041,14 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                     log.error('Reset as slave failed', e)
                     finalPromise.set(new ErrorReply('error when reset as slave: ' + e.message))
                 } else {
-                    log.warn('Reset as slave success')
-                    finalPromise.set(OK)
+                    try {
+                        multiShard.refreshAllShards(shards, clusterVersion)
+                        log.warn('Reset as slave success')
+                        finalPromise.set(OK)
+                    } catch (Exception ex) {
+                        log.error('Refresh clusterx meta after reset as slave failed', ex)
+                        finalPromise.set(new ErrorReply('error when refresh clusterx meta: ' + ex.message))
+                    }
                 }
             })
             return asyncReply
