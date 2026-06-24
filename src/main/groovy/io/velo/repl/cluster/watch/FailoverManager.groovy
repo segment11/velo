@@ -144,6 +144,16 @@ class FailoverManager {
     @TestOnly
     Closure<Void> delayRestartCheckHandlerForTest
 
+    private static class SlaveReplOffsetCandidate {
+        final Node node
+        final long offset
+
+        SlaveReplOffsetCandidate(Node node, long offset) {
+            this.node = node
+            this.offset = offset
+        }
+    }
+
     /**
      * Adds a new cluster metadata to the map of cluster endpoint statuses and updates the metadata in Zookeeper.
      * @param oneClusterName The name of the cluster.
@@ -581,10 +591,24 @@ class FailoverManager {
         }
 
         // choose repl offset nearest slave
-        def sortedSlaveNodeList = targetSlaveNodeList.sort { a ->
-            getSlaveReplOffset(a)
+        List<SlaveReplOffsetCandidate> slaveReplOffsetCandidateList = []
+        for (Node targetSlaveNodeCandidate in targetSlaveNodeList) {
+            try {
+                slaveReplOffsetCandidateList << new SlaveReplOffsetCandidate(
+                        targetSlaveNodeCandidate, getSlaveReplOffset(targetSlaveNodeCandidate))
+            } catch (Exception e) {
+                log.warn 'failover manager skip slave, repl offset read fail, cluster name={}, slave node={}:{}, error={}',
+                        oneClusterName, targetSlaveNodeCandidate.host, targetSlaveNodeCandidate.port, e.message
+            }
         }
-        def targetSlaveNode = sortedSlaveNodeList.getLast()
+        if (!slaveReplOffsetCandidateList) {
+            log.warn 'failover manager do failover, no slave repl offset can be read, cluster name={}, master node={}:{}, fail host and port={}:{}',
+                    oneClusterName, targetMasterNode.host, targetMasterNode.port, failHostAndPort.host, failHostAndPort.port
+            return
+        }
+        def targetSlaveNode = slaveReplOffsetCandidateList.max { SlaveReplOffsetCandidate candidate ->
+            candidate.offset
+        }.node
 
         // change slave to master
         targetSlaveNode.master = true
