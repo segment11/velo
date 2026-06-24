@@ -7,11 +7,20 @@ import io.velo.repl.ReplContent;
  * Signals end of current operation, ready to accept next input.
  */
 public class NextStepContent implements ReplContent {
+    /**
+     * Singleton instance signaling readiness for the next operation.
+     */
     public static final NextStepContent INSTANCE = new NextStepContent();
 
     private NextStepContent() {
     }
 
+    /**
+     * Checks whether the given content bytes represent a NextStepContent message.
+     *
+     * @param contentBytes the content bytes to check
+     * @return true if the bytes represent a NextStepContent message
+     */
     public static boolean isNextStep(byte[] contentBytes) {
         return contentBytes.length == 1 && contentBytes[0] == 0;
     }

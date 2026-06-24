@@ -25,6 +25,13 @@ public class XDynConfig implements BinlogContent {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * Decodes a dynamic config binlog content from the provided ByteBuffer.
+     *
+     * @param buffer the ByteBuffer containing the encoded content
+     * @return the decoded XDynConfig object
+     * @throws UnsupportedOperationException always, as this is not yet implemented
+     */
     public static XDynConfig decodeFrom(ByteBuffer buffer) {
         throw new UnsupportedOperationException();
     }

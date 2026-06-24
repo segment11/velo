@@ -37,11 +37,19 @@ public class RedisHashKeys {
     private final TreeSet<String> set = new TreeSet<>();
     private final HashMap<String, Long> expireAtByField = new HashMap<>();
 
+    /**
+     * @param field the hash field name
+     * @return the cached expire timestamp, or {@link CompressedValue#NO_EXPIRE} if not set
+     */
     public long getCachedExpireAt(String field) {
         var expireAt = expireAtByField.get(field);
         return expireAt == null ? CompressedValue.NO_EXPIRE : expireAt;
     }
 
+    /**
+     * @param field   the hash field name
+     * @param expireAt the expire timestamp to cache, or {@link CompressedValue#NO_EXPIRE} to remove
+     */
     public void putCachedExpireAt(String field, long expireAt) {
         if (expireAt == CompressedValue.NO_EXPIRE) {
             expireAtByField.remove(field);
@@ -50,10 +58,18 @@ public class RedisHashKeys {
         }
     }
 
+    /**
+     * @param field the hash field name whose cached expire should be cleared
+     */
     public void clearCachedExpireAt(String field) {
         expireAtByField.remove(field);
     }
 
+    /**
+     * @param field the hash field name
+     * @param now   the current timestamp in milliseconds
+     * @return true if the field has not expired
+     */
     public boolean isLiveByCache(String field, long now) {
         var expireAt = expireAtByField.get(field);
         if (expireAt == null || expireAt == CompressedValue.NO_EXPIRE) {
@@ -62,10 +78,17 @@ public class RedisHashKeys {
         return expireAt >= now;
     }
 
+    /**
+     * @return the list of live fields based on the current system time
+     */
     public ArrayList<String> liveFieldsByCache() {
         return liveFieldsByCache(System.currentTimeMillis());
     }
 
+    /**
+     * @param now the current timestamp in milliseconds
+     * @return the list of fields that have not expired
+     */
     public ArrayList<String> liveFieldsByCache(long now) {
         var liveFields = new ArrayList<String>(set.size());
         for (var field : set) {

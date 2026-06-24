@@ -14,12 +14,23 @@ import oshi.SystemInfo
 
 import java.lang.management.ManagementFactory
 
+/**
+ * Implements the INFO command, returning server statistics and runtime information sections.
+ */
 @CompileStatic
 class InfoCommand extends BaseCommand {
+    /**
+     * Creates an InfoCommand with no bound group (used for dispatch).
+     */
     InfoCommand() {
         super(null, null, null)
     }
 
+    /**
+     * Creates an InfoCommand from the given IGroup, copying its command data and socket.
+     *
+     * @param iGroup the group providing the command context
+     */
     InfoCommand(IGroup iGroup) {
         super(iGroup.cmd, iGroup.data, iGroup.socket)
     }

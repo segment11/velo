@@ -322,6 +322,9 @@ public class LocalPersist implements NeedCleanUp {
         return isDebugMode;
     }
 
+    /**
+     * Enables debug mode for this instance and all owned slots.
+     */
     public void debugMode() {
         isDebugMode = true;
         for (var oneSlot : oneSlots) {
@@ -368,6 +371,11 @@ public class LocalPersist implements NeedCleanUp {
         return getInnerOneSlotByToClientSlot(toClientSlot);
     }
 
+    /**
+     * Returns the last slot owned by this instance (in cluster mode, the last to-client slot).
+     *
+     * @return the last one slot, or null if not owned
+     */
     public @Nullable OneSlot lastOneSlot() {
         if (!ConfForGlobal.clusterEnabled) {
             return oneSlots[oneSlots.length - 1];
@@ -377,6 +385,12 @@ public class LocalPersist implements NeedCleanUp {
         return getInnerOneSlotByToClientSlot(toClientSlot);
     }
 
+    /**
+     * Returns the slot following the given slot index.
+     *
+     * @param slot the current slot index
+     * @return the next one slot, or null if there is none
+     */
     public @Nullable OneSlot nextOneSlot(short slot) {
         if (!ConfForGlobal.clusterEnabled) {
             if (slot < 0 || slot + 1 >= oneSlots.length) {
@@ -479,6 +493,9 @@ public class LocalPersist implements NeedCleanUp {
         }
     }
 
+    /**
+     * Resets all internal state to empty. Test only.
+     */
     @TestOnly
     public void resetForTest() {
         oneSlots = new OneSlot[0];
@@ -488,6 +505,9 @@ public class LocalPersist implements NeedCleanUp {
         indexHandlerPool = null;
     }
 
+    /**
+     * Clears the owned slots array to empty. Test only.
+     */
     @TestOnly
     public void clearOneSlotsForTest() {
         this.oneSlots = new OneSlot[0];

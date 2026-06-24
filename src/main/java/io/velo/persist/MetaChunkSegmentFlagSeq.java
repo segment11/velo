@@ -32,6 +32,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
      */
     public static final int ONE_LENGTH = 1 + 8 + 4;
 
+    /**
+     * Sentinel WAL group index used for segments that have not yet been assigned to a WAL group.
+     */
     public static final int INIT_WAL_GROUP_INDEX = -1;
 
     private final short slot;
@@ -543,6 +546,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         return true;
     }
 
+    /**
+     * Callback invoked for each segment during iteration of the flag/seq metadata.
+     */
     public interface IterateCallBack {
         /**
          * @param segmentIndex the segment index

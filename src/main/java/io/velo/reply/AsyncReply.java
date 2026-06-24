@@ -16,6 +16,9 @@ public class AsyncReply implements Reply {
         this.settablePromise = settablePromise;
     }
 
+    /**
+     * @return the promise backing this asynchronous reply
+     */
     public SettablePromise<Reply> getSettablePromise() {
         return settablePromise;
     }

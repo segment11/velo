@@ -391,6 +391,11 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         latestAppendForReadCacheSegmentBytesSet.add(new BytesWithFileIndexAndOffset(bytes, fileIndex, offset));
     }
 
+    /**
+     * Returns the maximum number of segments that fit in a single binlog file.
+     *
+     * @return the max segment count per file
+     */
     public static int oneFileMaxSegmentCount() {
         return ConfForSlot.global.confRepl.binlogOneFileMaxLength / ConfForSlot.global.confRepl.binlogOneSegmentLength;
     }
@@ -736,6 +741,15 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         return contents;
     }
 
+    /**
+     * Decodes binlog contents from a single segment and applies them to the given repl pair.
+     *
+     * @param slot            the slot index
+     * @param oneSegmentBytes the bytes of one binlog segment
+     * @param skipBytesN      the number of bytes to skip at the beginning
+     * @param replPair        the repl pair to apply contents to
+     * @return the number of decoded and applied contents
+     */
     public static int decodeAndApply(short slot,
                                      byte[] oneSegmentBytes,
                                      int skipBytesN,
@@ -802,6 +816,9 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         return totalCount;
     }
 
+    /**
+     * Truncates all binlog data including the current file and all previous files.
+     */
     @SlaveNeedReplay
     @SlaveReplay
     public void truncateAll() {

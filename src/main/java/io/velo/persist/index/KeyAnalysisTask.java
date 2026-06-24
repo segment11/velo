@@ -16,6 +16,10 @@ import java.util.*;
 import static io.activej.config.converter.ConfigConverters.ofInteger;
 import static io.activej.config.converter.ConfigConverters.ofLocalTime;
 
+/**
+ * Periodic analysis task that samples the analysis store during quiet periods, groups
+ * keys by prefix length, and keeps the top-k prefix counts. Tuning is read from config.
+ */
 public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
     private final KeyAnalysisHandler handler;
     private final RocksDB db;
@@ -31,6 +35,14 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
 
     private static final Logger log = LoggerFactory.getLogger(KeyAnalysisTask.class);
 
+    /**
+     * Copy constructor that preserves the tuning parameters from an existing task while
+     * rebinding to a new handler and DB instance.
+     *
+     * @param handler the owning handler
+     * @param db      the RocksDB instance, or null for tests
+     * @param oldOne  the task whose tuning parameters to copy
+     */
     public KeyAnalysisTask(KeyAnalysisHandler handler, @Nullable RocksDB db, KeyAnalysisTask oldOne) {
         this.handler = handler;
         this.db = db;
@@ -46,6 +58,13 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
         this.groupByMaxLengthForKey = oldOne.groupByMaxLengthForKey;
     }
 
+    /**
+     * Creates a new task reading all tuning parameters from the given config.
+     *
+     * @param handler       the owning handler
+     * @param db            the RocksDB instance, or null for tests
+     * @param persistConfig the configuration for quiet-period and iteration tuning
+     */
     public KeyAnalysisTask(KeyAnalysisHandler handler, @Nullable RocksDB db, Config persistConfig) {
         this.handler = handler;
         this.db = db;
@@ -106,6 +125,12 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
     @VisibleForTesting
     int maxTmpSaveTopKSize = 1000;
 
+    /**
+     * Adds (or replaces) a prefix entry in the top-k counts. Test only.
+     *
+     * @param prefix the key prefix
+     * @param count  the count for the prefix
+     */
     @TestOnly
     public void addTopKPrefixCount(String prefix, int count) {
         topKPrefixCounts.put(prefix, count);
@@ -214,6 +239,13 @@ public class KeyAnalysisTask implements KeyAnalysisHandler.InnerTask {
         }
     }
 
+    /**
+     * Sorts map entries by value descending, breaking ties by key length descending.
+     *
+     * @param map the input map
+     * @param <V> the value type, must be comparable
+     * @return a list of entries sorted by value (then key length) descending
+     */
     public static <V extends Comparable<? super V>> List<Map.Entry<String, V>> sortMapByValues(Map<String, V> map) {
         List<Map.Entry<String, V>> sortedEntries = new ArrayList<>(map.entrySet());
         sortedEntries.sort((a, b) -> {

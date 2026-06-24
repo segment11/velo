@@ -71,6 +71,14 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         return map;
     }
 
+    /**
+     * A segment's raw bytes together with its temporary placement metadata.
+     *
+     * @param segmentBytes    the raw segment bytes
+     * @param tmpSegmentIndex the temporary segment index used during the write
+     * @param segmentSeq      the segment sequence number
+     * @param valueBytesLength the logical length of the value bytes packed
+     */
     public record SegmentBytesWithIndex(byte[] segmentBytes, int tmpSegmentIndex, long segmentSeq,
                                         int valueBytesLength) {
         @Override
@@ -222,7 +230,15 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         return valueBytesLengthTotal;
     }
 
+    /**
+     * Callback invoked for each compressed value while iterating segment bytes.
+     */
     public interface CvCallback {
+        /**
+         * @param key                 the key for the entry
+         * @param cv                  the compressed value for the entry
+         * @param offsetInThisSegment the byte offset of the entry within its segment
+         */
         void callback(@NotNull String key, @NotNull CompressedValue cv, int offsetInThisSegment);
     }
 
@@ -290,6 +306,15 @@ public class SegmentBatch2 implements InSlotMetricCollector {
         return segmentBytes[offset + 8] == Chunk.SegmentType.TIGHT.val;
     }
 
+    /**
+     * A compressed value decoded from a segment together with its key and placement location.
+     *
+     * @param cv            the decoded compressed value
+     * @param key           the key for the entry
+     * @param segmentOffset the byte offset of the entry within its segment
+     * @param segmentIndex  the index of the segment holding the entry
+     * @param subBlockIndex the sub-block index within the segment for the entry
+     */
     public record CvWithKeyAndSegmentOffset(CompressedValue cv, String key, int segmentOffset, int segmentIndex,
                                             byte subBlockIndex) {
         public String shortString() {

@@ -20,13 +20,24 @@ import org.jetbrains.annotations.VisibleForTesting
 import redis.clients.jedis.util.JedisClusterCRC16
 
 // act same as kvrocks clusterx commands
+/**
+ * Implements the CLUSTER family (clusterx) commands.
+ */
 @CompileStatic
 class ClusterxCommand extends BaseCommand {
 
+    /**
+     * Creates a ClusterxCommand with no bound group (used for dispatch).
+     */
     ClusterxCommand() {
         super(null, null, null)
     }
 
+    /**
+     * Creates a ClusterxCommand from the given CGroup, copying its command data and socket.
+     *
+     * @param cGroup the group providing the command context
+     */
     ClusterxCommand(CGroup cGroup) {
         super(cGroup.cmd, cGroup.data, cGroup.socket)
     }
@@ -257,6 +268,9 @@ migrating_state:ok
     }
 
     // need broadcast by gossip, prefer use a central controller to change all cluster nodes
+    /**
+     * Handles CLUSTER FAILOVER, initiating a manual failover for this node's shard.
+     */
     @VisibleForTesting
     Reply failover() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -341,6 +355,9 @@ migrating_state:ok
         OK
     }
 
+    /**
+     * Handles CLUSTER COUNTKEYSINSLOT, returning the number of keys hashing to the given slot.
+     */
     @VisibleForTesting
     Reply countkeysinslot() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -370,6 +387,9 @@ migrating_state:ok
         new IntegerReply(avgKeyCount)
     }
 
+    /**
+     * Handles CLUSTER GETKEYSINSLOT, returning up to the requested count of keys in the given slot.
+     */
     @VisibleForTesting
     Reply getkeysinslot() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -439,6 +459,9 @@ migrating_state:ok
         return asyncReply
     }
 
+    /**
+     * Handles CLUSTER INFO, returning cluster state and statistics information.
+     */
     @VisibleForTesting
     Reply info() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -553,6 +576,9 @@ migrating_state:ok
         asyncReply
     }
 
+    /**
+     * Handles CLUSTER KEYSLOT, returning the hash slot a given key maps to.
+     */
     @VisibleForTesting
     Reply keyslot() {
         if (data.length != 3) {
@@ -567,6 +593,9 @@ migrating_state:ok
     // refer to segment_kvrocks_controller
     // after call 'clusterx migrate 0 toNodeId', need call 'manage slot 0 migrate_from host port force'
     // refer ManageCommand
+    /**
+     * Handles CLUSTER MIGRATE-related slot data migration between nodes.
+     */
     @VisibleForTesting
     Reply migrate() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -621,6 +650,9 @@ migrating_state:ok
         OK
     }
 
+    /**
+     * Handles CLUSTER MEET, introducing a new node into the cluster.
+     */
     @VisibleForTesting
     Reply meet() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -652,6 +684,9 @@ migrating_state:ok
         new ErrorReply('CLUSTER MEET is not implemented, use clusterx setnodes instead')
     }
 
+    /**
+     * Handles CLUSTER MYID, returning this node's unique id.
+     */
     @VisibleForTesting
     Reply myid() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -674,6 +709,9 @@ migrating_state:ok
         new BulkReply(mySelfNode.nodeId().bytes)
     }
 
+    /**
+     * Handles CLUSTER MYSHARDID, returning the shard id this node belongs to.
+     */
     @VisibleForTesting
     Reply myshardid() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -692,6 +730,9 @@ migrating_state:ok
         new BulkReply(shardId.bytes)
     }
 
+    /**
+     * Handles CLUSTER NODES, returning the cluster topology as a textual node list.
+     */
     @VisibleForTesting
     Reply nodes() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -710,6 +751,9 @@ migrating_state:ok
         new BulkReply(lines.bytes)
     }
 
+    /**
+     * Handles CLUSTER REPLICAS, returning the list of replicas for a master node.
+     */
     @VisibleForTesting
     Reply replicas() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -747,6 +791,9 @@ migrating_state:ok
         new MultiBulkReply(replies)
     }
 
+    /**
+     * Handles CLUSTER REPLICATE, configuring this node as a replica of the specified master.
+     */
     @VisibleForTesting
     Reply replicate() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -827,6 +874,9 @@ migrating_state:ok
         return asyncReply
     }
 
+    /**
+     * Handles CLUSTER RESET, resetting the cluster state of this node.
+     */
     @VisibleForTesting
     Reply reset() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -857,6 +907,9 @@ migrating_state:ok
         OK
     }
 
+    /**
+     * Handles CLUSTER SAVECONFIG, persisting the current cluster nodes configuration to disk.
+     */
     @VisibleForTesting
     Reply saveconfig() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -869,6 +922,9 @@ migrating_state:ok
         OK
     }
 
+    /**
+     * Handles CLUSTER SETNODEID, setting this node's unique id.
+     */
     @VisibleForTesting
     Reply setnodeid() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -903,6 +959,9 @@ migrating_state:ok
         OK
     }
 
+    /**
+     * Handles CLUSTER SETNODES, applying a provided cluster node view to this node.
+     */
     @VisibleForTesting
     Reply setnodes() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -1057,6 +1116,9 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         OK
     }
 
+    /**
+     * Handles CLUSTER SETSLOT, assigning or migrating a slot between nodes.
+     */
     @VisibleForTesting
     Reply setslot() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -1148,6 +1210,9 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         asyncReply
     }
 
+    /**
+     * Handles CLUSTER SHARDS, returning shard grouping information for the cluster.
+     */
     @VisibleForTesting
     Reply shards() {
         if (!ConfForGlobal.clusterEnabled) {
@@ -1205,6 +1270,9 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         new MultiBulkReply(replies)
     }
 
+    /**
+     * Handles CLUSTER SLOTS, returning the slot-to-node mapping of the cluster.
+     */
     @VisibleForTesting
     Reply slots() {
         if (!ConfForGlobal.clusterEnabled) {

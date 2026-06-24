@@ -23,6 +23,9 @@ public class DoubleReply implements Reply {
         this.value = value;
     }
 
+    /**
+     * @return the double value of this reply
+     */
     @TestOnly
     public double doubleValue() {
         return value.doubleValue();

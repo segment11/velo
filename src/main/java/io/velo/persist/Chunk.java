@@ -211,10 +211,20 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
 
     private int segmentIndex = 0;
 
+    /**
+     * Returns the current segment index used as the write cursor.
+     *
+     * @return the current segment index
+     */
     public int getSegmentIndex() {
         return segmentIndex;
     }
 
+    /**
+     * Sets the current segment index used as the write cursor.
+     *
+     * @param segmentIndex the new segment index
+     */
     public void setSegmentIndex(int segmentIndex) {
         this.segmentIndex = segmentIndex;
     }
@@ -261,13 +271,32 @@ public class Chunk implements InMemoryEstimate, InSlotMetricCollector, NeedClean
         return targetSegmentIndex % segmentNumberPerFd;
     }
 
+    /**
+     * Flag byte marking a segment as reusable (empty / overwritten).
+     */
     public static final byte SEGMENT_FLAG_REUSABLE = 0;
+    /**
+     * Flag byte marking a segment as holding live data.
+     */
     public static final byte SEGMENT_FLAG_HAS_DATA = 1;
 
+    /**
+     * Returns whether the given flag byte marks a segment as reusable.
+     *
+     * @param flagByte the segment flag byte
+     * @return true if the segment is reusable
+     */
     public static boolean isSegmentReusable(byte flagByte) {
         return flagByte == SEGMENT_FLAG_REUSABLE;
     }
 
+    /**
+     * Metadata flag stored per segment describing its state and ownership.
+     *
+     * @param flagByte      the segment flag, either {@link #SEGMENT_FLAG_REUSABLE} or {@link #SEGMENT_FLAG_HAS_DATA}
+     * @param segmentSeq    the sequence number of the segment
+     * @param walGroupIndex the WAL group index that owns the segment
+     */
     public record SegmentFlag(byte flagByte, long segmentSeq, int walGroupIndex) {
         @Override
         public @NotNull String toString() {

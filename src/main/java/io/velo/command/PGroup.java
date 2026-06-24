@@ -449,6 +449,13 @@ public class PGroup extends BaseCommand {
 
     private static final BulkReply MESSAGE = new BulkReply("message");
 
+    /**
+     * Publishes a message to all subscribers of a channel and returns the number of receivers.
+     *
+     * @param dataGiven the command data: [PUBLISH, channel, message]
+     * @param socket    the client socket, used for ACL checking; may be null
+     * @return a reply with the number of clients that received the message, or an error reply
+     */
     public static Reply publish(byte[][] dataGiven, ITcpSocket socket) {
         if (dataGiven.length != 3) {
             return ErrorReply.FORMAT;

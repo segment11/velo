@@ -93,6 +93,10 @@ public enum ConfForSlot {
         }
     }
 
+    /**
+     * Values a slave checks against its master for consistency (datacenter/machine id,
+     * clock, and slot count).
+     */
     public static class SlaveCheckValues {
         long datacenterId;
         long machineId;

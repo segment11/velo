@@ -198,9 +198,13 @@ public class RedisGeo {
         return p.lon >= westLon;
     }
 
+    /** Maximum valid longitude for geo encoding. */
     public static final double GEO_LONG_MAX = 180.0;
+    /** Minimum valid longitude for geo encoding. */
     public static final double GEO_LONG_MIN = -180.0;
+    /** Maximum valid latitude for geo encoding (Web Mercator limit). */
     public static final double GEO_LAT_MAX = 85.05112877980659;
+    /** Minimum valid latitude for geo encoding (Web Mercator limit). */
     public static final double GEO_LAT_MIN = -85.05112877980659;
 
     /**

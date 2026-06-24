@@ -269,6 +269,13 @@ public class LGroup extends BaseCommand {
         return new IntegerReply(rl.size());
     }
 
+    /**
+     * Loads and decodes the {@link RedisList} stored for the given key.
+     *
+     * @param slotWithKeyHash the slot and key hash to look up
+     * @param baseCommand     the base command providing storage access
+     * @return the decoded RedisList, or null if the key does not exist
+     */
     public static RedisList getRedisList(SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand) {
         var encodedBytes = baseCommand.get(slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
         if (encodedBytes == null) {

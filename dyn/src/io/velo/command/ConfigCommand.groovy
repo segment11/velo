@@ -5,14 +5,25 @@ import io.velo.BaseCommand
 import io.velo.MultiWorkerServer
 import io.velo.reply.*
 
+/**
+ * Implements the CONFIG command, supporting runtime get/set of configuration parameters.
+ */
 @CompileStatic
 class ConfigCommand extends BaseCommand {
     static final String version = '1.0.0'
 
+    /**
+     * Creates a ConfigCommand with no bound group (used for dispatch).
+     */
     ConfigCommand() {
         super(null, null, null)
     }
 
+    /**
+     * Creates a ConfigCommand from the given CGroup, copying its command data and socket.
+     *
+     * @param cGroup the group providing the command context
+     */
     ConfigCommand(CGroup cGroup) {
         super(cGroup.cmd, cGroup.data, cGroup.socket)
     }
@@ -51,6 +62,9 @@ class ConfigCommand extends BaseCommand {
         }
     }
 
+    /**
+     * Handles CONFIG SET, updating a runtime configuration parameter (e.g. max_connections).
+     */
     Reply _set() {
         if (data.length < 4) {
             return ErrorReply.SYNTAX
@@ -87,6 +101,9 @@ class ConfigCommand extends BaseCommand {
         ErrorReply.SYNTAX
     }
 
+    /**
+     * Handles CONFIG GET, returning the value of a runtime configuration parameter.
+     */
     Reply _get() {
         if (data.length < 3) {
             return ErrorReply.SYNTAX

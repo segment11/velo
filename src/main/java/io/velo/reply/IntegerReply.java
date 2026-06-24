@@ -56,6 +56,9 @@ public class IntegerReply implements Reply {
 
     private static final byte MARKER = ':';
 
+    /**
+     * @return the integer value of this reply
+     */
     public long getInteger() {
         return integer;
     }

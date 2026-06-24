@@ -18,12 +18,27 @@ import java.util.ArrayList;
  * Manages multiple shards in the cluster.
  */
 public class MultiShard {
+    /**
+     * The total number of client-facing slots, matching Redis cluster's slot count.
+     */
     public static final short TO_CLIENT_SLOT_NUMBER = 16384;
 
+    /**
+     * Converts a client slot to the inner (sharded) slot index.
+     *
+     * @param toClientSlot the client slot
+     * @return the inner slot index
+     */
     public static short asInnerSlotByToClientSlot(int toClientSlot) {
         return (short) (toClientSlot / (TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber));
     }
 
+    /**
+     * Checks whether the given client slot should be skipped (not handled by this node).
+     *
+     * @param toClientSlot the client slot
+     * @return true if the client slot should be skipped
+     */
     public static boolean isToClientSlotSkip(int toClientSlot) {
         return toClientSlot % (TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber) != 0;
     }
@@ -39,10 +54,21 @@ vars currentEpoch 0 lastVoteEpoch 0
 
     private final ArrayList<Shard> shards = new ArrayList<>();
 
+    /**
+     * Returns the list of shards.
+     *
+     * @return the list of shards
+     */
     public ArrayList<Shard> getShards() {
         return shards;
     }
 
+    /**
+     * Returns the shard that owns the given client slot.
+     *
+     * @param toClientSlot the client slot
+     * @return the owning shard, or null if none
+     */
     public Shard getShardBySlot(int toClientSlot) {
         for (var shard : shards) {
             if (shard.contains(toClientSlot)) {
@@ -55,12 +81,24 @@ vars currentEpoch 0 lastVoteEpoch 0
 
     private static final Logger log = LoggerFactory.getLogger(MultiShard.class);
 
+    /**
+     * Constructs a MultiShard, loading persisted metadata and adding the local node if needed.
+     *
+     * @param persistDir the directory where cluster metadata is persisted
+     * @throws IOException if loading or saving metadata fails
+     */
     public MultiShard(File persistDir) throws IOException {
         this.persistDir = persistDir;
         loadMeta();
         addMySelfIfNeed();
     }
 
+    /**
+     * Resets all shards to only the local node, optionally resetting cluster epochs.
+     *
+     * @param isResetEpoch whether to reset the cluster epochs to zero
+     * @throws IOException if saving metadata fails
+     */
     public void reset(boolean isResetEpoch) throws IOException {
         shards.clear();
         addMySelfIfNeed();
@@ -93,6 +131,11 @@ vars currentEpoch 0 lastVoteEpoch 0
         }
     }
 
+    /**
+     * Returns the shard that contains the local node.
+     *
+     * @return the local node's shard, or null if none
+     */
     public Shard mySelfShard() {
         for (var shard : shards) {
             for (var node : shard.getNodes()) {
@@ -124,6 +167,13 @@ vars currentEpoch 0 lastVoteEpoch 0
 
     }
 
+    /**
+     * Replaces all shards with the provided list and updates the cluster version.
+     *
+     * @param shardsNew     the new list of shards
+     * @param clusterVersion the new cluster version (current epoch)
+     * @throws IOException if saving metadata fails
+     */
     public synchronized void refreshAllShards(ArrayList<Shard> shardsNew, int clusterVersion) throws IOException {
         shards.clear();
         shards.addAll(shardsNew);
@@ -131,6 +181,12 @@ vars currentEpoch 0 lastVoteEpoch 0
         saveMeta();
     }
 
+    /**
+     * Updates the cluster version and persists metadata.
+     *
+     * @param clusterVersion the new cluster version, or 0 to leave it unchanged
+     * @throws IOException if saving metadata fails
+     */
     public synchronized void updateClusterVersion(int clusterVersion) throws IOException {
         if (clusterVersion != 0) {
             clusterCurrentEpoch = clusterVersion;
@@ -139,10 +195,20 @@ vars currentEpoch 0 lastVoteEpoch 0
         saveMeta();
     }
 
+    /**
+     * Returns this node's cluster epoch.
+     *
+     * @return the cluster my epoch
+     */
     public int getClusterMyEpoch() {
         return clusterMyEpoch;
     }
 
+    /**
+     * Returns the current cluster epoch.
+     *
+     * @return the cluster current epoch
+     */
     public int getClusterCurrentEpoch() {
         return clusterCurrentEpoch;
     }
@@ -151,6 +217,11 @@ vars currentEpoch 0 lastVoteEpoch 0
 
     private int clusterCurrentEpoch;
 
+    /**
+     * Persists the current cluster metadata to disk and re-initializes slots.
+     *
+     * @throws IOException if writing metadata fails
+     */
     public synchronized void saveMeta() throws IOException {
         clusterMyEpoch++;
 
@@ -170,6 +241,11 @@ vars currentEpoch 0 lastVoteEpoch 0
         localPersist.initSlotsAgainAfterMultiShardLoadedOrChanged();
     }
 
+    /**
+     * Returns the first (smallest) client slot across all shards.
+     *
+     * @return the first client slot, or null if none
+     */
     public Integer firstToClientSlot() {
         Integer min = null;
         for (var shard : shards) {
@@ -186,6 +262,11 @@ vars currentEpoch 0 lastVoteEpoch 0
         return min;
     }
 
+    /**
+     * Returns the last (largest) client slot across all shards.
+     *
+     * @return the last client slot, or null if none
+     */
     public Integer lastToClientSlot() {
         Integer max = null;
         for (var shard : shards) {
@@ -202,6 +283,12 @@ vars currentEpoch 0 lastVoteEpoch 0
         return max;
     }
 
+    /**
+     * Returns the smallest client slot that is greater than the given client slot.
+     *
+     * @param toClientSlot the reference client slot
+     * @return the next client slot, or null if none
+     */
     public Integer nextToClientSlot(int toClientSlot) {
         Integer min = null;
         for (var shard : shards) {

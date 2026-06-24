@@ -8,6 +8,10 @@ import io.velo.extend.BetaExtend;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Example handler demonstrating how to extend Velo with an alternate index/persist backend.
+ * Wraps a single-worker event loop and serializes work onto that event loop thread.
+ */
 // only a test to give an example, extend velo support other persist system
 @BetaExtend
 public class IndexHandler implements NeedCleanUp {
@@ -23,6 +27,13 @@ public class IndexHandler implements NeedCleanUp {
 
     long threadIdProtectedForSafe = -1;
 
+    /**
+     * Runs the given runnable on this handler's event loop thread. If the caller
+     * is already on that thread the runnable is executed inline.
+     *
+     * @param runnableEx the work to run
+     * @return a promise completing when the runnable finishes, or with the thrown exception
+     */
     public Promise<Void> asyncRun(RunnableEx runnableEx) {
         var threadId = Thread.currentThread().threadId();
         if (threadId == threadIdProtectedForSafe) {

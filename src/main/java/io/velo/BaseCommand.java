@@ -57,8 +57,11 @@ public abstract class BaseCommand {
      * Predefined IsKeyBytes instances for common use cases.
      */
     protected static final FromToKeyIndex KeyIndexBegin1 = new FromToKeyIndex(1, -1, 1);
+    /** Keys begin at index 1, every 2nd index is a key (e.g. key, arg, key, arg). */
     protected static final FromToKeyIndex KeyIndexBegin1Step2 = new FromToKeyIndex(1, -1, 2);
+    /** Keys begin at index 2 to the end, every index is a key. */
     protected static final FromToKeyIndex KeyIndexBegin2 = new FromToKeyIndex(2, -1, 1);
+    /** Keys begin at index 2, every 2nd index is a key. */
     protected static final FromToKeyIndex KeyIndexBegin2Step2 = new FromToKeyIndex(2, -1, 2);
 
     /**
@@ -107,23 +110,30 @@ public abstract class BaseCommand {
         return socket;
     }
 
+    /** The command string received from the client. */
     // need final, for unit test, can change
     protected String cmd;
+    /** The data array received from the client including the command. */
     protected byte[][] data;
+    /** The TCP socket connection to the client. */
     protected ITcpSocket socket;
 
+    /** Whether this command is an XGroup instance (stream commands). */
     protected final boolean isXGroup;
 
+    /** Sets the command string. Test only. */
     @TestOnly
     public void setCmd(String cmd) {
         this.cmd = cmd;
     }
 
+    /** Sets the data array. Test only. */
     @TestOnly
     public void setData(byte[][] data) {
         this.data = data;
     }
 
+    /** Sets the network socket. Test only. */
     @TestOnly
     public void setSocket(ITcpSocket socket) {
         this.socket = socket;
@@ -181,6 +191,7 @@ public abstract class BaseCommand {
         return sb.toString();
     }
 
+    /** The ACL users registry singleton. */
     protected static final AclUsers aclUsers = AclUsers.getInstance();
 
     /**
@@ -202,53 +213,72 @@ public abstract class BaseCommand {
         return aclUsers.get(authUser);
     }
 
+    /** @return the ACL user for this command's socket */
     protected @Nullable U getAuthU() {
         return getAuthU(socket);
     }
 
+    /** The Zstd dictionary map singleton. */
     protected final DictMap dictMap = DictMap.getInstance();
 
+    /** The request handler that owns this command. */
     protected RequestHandler requestHandler;
 
+    /** Sets the request handler. Test only. */
     @TestOnly
     public void setRequestHandler(RequestHandler requestHandler) {
         this.requestHandler = requestHandler;
     }
 
+    /** The worker id this command is bound to. */
     protected byte workerId;
+    /** The total number of slot workers. */
     protected byte slotWorkers;
 
+    /** @return the slot number */
     @TestOnly
     public short getSlotNumber() {
         return slotNumber;
     }
 
+    /** The total number of slots for sharding. */
     protected short slotNumber;
+    /** The compress statistics collector. */
     protected CompressStats compressStats;
 
+    /** The max size of the train sample list before triggering dictionary training. */
     protected int trainSampleListMaxSize = 1000;
 
+    /** Sets the snowflake id generator. Test only. */
     @TestOnly
     public void setSnowFlake(SnowFlake snowFlake) {
         this.snowFlake = snowFlake;
     }
 
+    /** The snowflake id generator for sequence numbers. */
     protected SnowFlake snowFlake;
+    /** The job that trains Zstd dictionaries from samples. */
     protected TrainSampleJob trainSampleJob;
+    /** The collected key-value samples used for dictionary training. */
     protected List<TrainSampleJob.TrainSampleKV> sampleToTrainList;
 
+    /** The parsed list of slot and key hash mappings for this command's keys. */
     protected ArrayList<SlotWithKeyHash> slotWithKeyHashListParsed;
 
+    /** @return the parsed slot and key hash list */
     public ArrayList<SlotWithKeyHash> getSlotWithKeyHashListParsed() {
         return slotWithKeyHashListParsed;
     }
 
+    /** Sets the parsed slot and key hash list. */
     public void setSlotWithKeyHashListParsed(ArrayList<SlotWithKeyHash> slotWithKeyHashListParsed) {
         this.slotWithKeyHashListParsed = slotWithKeyHashListParsed;
     }
 
+    /** Whether this command must be forwarded to other slot workers. */
     protected boolean isCrossRequestWorker;
 
+    /** Helper for big string operations without memory copy. */
     protected BigStringNoMemoryCopy bigStringNoMemoryCopy;
 
     /**
@@ -262,11 +292,20 @@ public abstract class BaseCommand {
         isCrossRequestWorker = crossRequestWorker;
     }
 
+    /** Creates a mock AGroup with default worker/slot values. Test only. */
     @TestOnly
     public static AGroup mockAGroup() {
         return BaseCommand.mockAGroup((byte) 0, (byte) 1, (short) 1);
     }
 
+    /**
+     * Creates a mock AGroup with the given worker/slot configuration. Test only.
+     *
+     * @param workerId    the worker id
+     * @param slotWorkers the number of slot workers
+     * @param slotNumber  the number of slots
+     * @return a mock AGroup instance
+     */
     @TestOnly
     public static AGroup mockAGroup(byte workerId, byte slotWorkers, short slotNumber) {
         return mockAGroup(workerId, slotWorkers, slotNumber, new CompressStats("mock", "worker_"),
@@ -275,6 +314,22 @@ public abstract class BaseCommand {
                 new ArrayList<>(), false);
     }
 
+    /**
+     * Creates a mock AGroup with fully specified dependencies. Test only.
+     *
+     * @param workerId                  the worker id
+     * @param slotWorkers               the number of slot workers
+     * @param slotNumber                the number of slots
+     * @param compressStats             the compress stats
+     * @param compressLevel             the zstd compression level
+     * @param trainSampleListMaxSize    the max train sample list size
+     * @param snowFlake                 the snowflake id generator
+     * @param trainSampleJob            the train sample job
+     * @param sampleToTrainList         the sample to train list
+     * @param slotWithKeyHashListParsed the parsed slot and key hash list
+     * @param isCrossRequestWorker      whether the command crosses request workers
+     * @return a mock AGroup instance
+     */
     @TestOnly
     public static AGroup mockAGroup(byte workerId, byte slotWorkers, short slotNumber, CompressStats compressStats,
                                     int compressLevel, int trainSampleListMaxSize, SnowFlake snowFlake,
@@ -344,6 +399,13 @@ public abstract class BaseCommand {
         return this;
     }
 
+    /**
+     * Initializes this command with the request handler and request context. Test only.
+     *
+     * @param requestHandler the request handler
+     * @param request        the request holding slot/hash and cross-worker context
+     * @return this BaseCommand
+     */
     @TestOnly
     public BaseCommand init(RequestHandler requestHandler, Request request) {
         this.init(requestHandler);
@@ -374,16 +436,33 @@ public abstract class BaseCommand {
     private static final String GT_VALUE_LENGTH_PLACEHOLDER = ">value";
 
 
+    /**
+     * Callback that can replace the parsed data array before command execution. Test only.
+     */
     @TestOnly
     public interface DataArrayReplacer {
         void replace(byte[][] data);
     }
 
+    /**
+     * Parses and executes the given RESP-like data line string. Test only.
+     *
+     * @param allDataString the data line string
+     * @return the command reply
+     */
     @TestOnly
     public Reply execute(String allDataString) {
         return execute(allDataString, null);
     }
 
+    /**
+     * Parses and executes the given RESP-like data line string, optionally replacing the data
+     * array before execution. Test only.
+     *
+     * @param allDataString the data line string
+     * @param replacer      optional callback to replace the parsed data array, may be null
+     * @return the command reply
+     */
     @TestOnly
     public Reply execute(String allDataString, DataArrayReplacer replacer) {
         var dataStrings = parseLine(allDataString);
@@ -460,8 +539,10 @@ public abstract class BaseCommand {
         return result;
     }
 
+    /** The local persistence layer singleton. */
     protected final LocalPersist localPersist = LocalPersist.getInstance();
 
+    /** The logger for this class. */
     // create log for each object, perf bad, use static better
     protected static final Logger log = LoggerFactory.getLogger(BaseCommand.class);
 
@@ -617,6 +698,7 @@ public abstract class BaseCommand {
     // for mock test
     private ByPassGetSet byPassGetSet;
 
+    /** Sets the in-memory bypass get/set helper used for mock tests. Test only. */
     @TestOnly
     public void setByPassGetSet(ByPassGetSet byPassGetSet) {
         this.byPassGetSet = byPassGetSet;
@@ -894,6 +976,12 @@ public abstract class BaseCommand {
         }
     }
 
+    /**
+     * Sets a key to the given value bytes with no dictionary and no expiration. Test only.
+     *
+     * @param key        the key
+     * @param valueBytes the value bytes
+     */
     @TestOnly
     public void set(String key, byte[] valueBytes) {
         set(valueBytes, slot(key, slotNumber), CompressedValue.NULL_DICT_SEQ, CompressedValue.NO_EXPIRE);

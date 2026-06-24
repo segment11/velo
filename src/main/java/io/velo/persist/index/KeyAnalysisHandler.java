@@ -27,8 +27,22 @@ import java.util.regex.Pattern;
 
 import static io.activej.config.converter.ConfigConverters.ofInteger;
 
+/**
+ * Background key analysis handler backed by RocksDB. Samples keys written to the system,
+ * periodically groups them by prefix during quiet periods, and exposes the resulting
+ * top-k prefix counts. All DB access is serialized onto a single event loop.
+ */
 public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
+    /**
+     * Inner periodic task interface run by the handler on the event loop.
+     */
     public interface InnerTask {
+        /**
+         * Runs one iteration of the task.
+         *
+         * @param loopCount the current loop count
+         * @return true if the task has reached its end
+         */
         boolean run(int loopCount);
     }
 
@@ -46,11 +60,21 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
 
     private Runnable metricsUnregister;
 
+    /**
+     * Returns the current inner analysis task. Test only.
+     *
+     * @return the inner task, or null during unit tests
+     */
     @TestOnly
     public KeyAnalysisTask getInnerTask() {
         return innerTask;
     }
 
+    /**
+     * Replaces the inner analysis task with a new one built from the given config.
+     *
+     * @param persistConfig the configuration for the new task
+     */
     public void resetInnerTask(Config persistConfig) {
         this.innerTask = new KeyAnalysisTask(this, db, persistConfig);
     }
@@ -105,6 +129,15 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         this.addCount = db.getLongProperty("rocksdb.estimate-num-keys");
     }
 
+    /**
+     * Creates the handler, opens (or creates) the RocksDB instance under the given directory,
+     * and schedules periodic analysis on the provided event loop.
+     *
+     * @param keysDir       the directory holding the RocksDB files
+     * @param eventloop     the event loop used for serialized DB access and periodic runs
+     * @param persistConfig the configuration for RocksDB options and analysis tuning
+     * @throws RocksDBException if the RocksDB instance cannot be opened
+     */
     public KeyAnalysisHandler(File keysDir, Eventloop eventloop, Config persistConfig) throws RocksDBException {
         this.keysDir = keysDir;
         this.eventloop = eventloop;
@@ -125,6 +158,13 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         this.initMetricsCollect();
     }
 
+    /**
+     * Samples a key into the analysis store. Sampling rate is controlled by the configured
+     * percent and writing stops once the configured key analysis number is full.
+     *
+     * @param key                              the key to sample
+     * @param valueLengthHigh24WithShortTypeLow8 the value length (high 24 bits) combined with short type (low 8 bits)
+     */
     public void addKey(String key, int valueLengthHigh24WithShortTypeLow8) {
         if (isKeyAnalysisNumberFull) {
             return;
@@ -149,9 +189,21 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         });
     }
 
+    /**
+     * Result of a batched add: the last key bytes written and how many keys were written.
+     *
+     * @param lastKeyBytes the last key bytes written in the batch
+     * @param keyCount     the number of keys written in the batch
+     */
     public record LastKeyBytesWithKeyCount(byte[] lastKeyBytes, int keyCount) {
     }
 
+    /**
+     * Writes a batch of keys (each with a 4-byte value int) into the analysis store.
+     *
+     * @param keysWithValueInt a serialized buffer of [2-byte key length][key bytes][4-byte value int] entries
+     * @return a future completing with the last key bytes written and the key count
+     */
     public CompletableFuture<LastKeyBytesWithKeyCount> addBatch(byte[] keysWithValueInt) {
         return eventloop.submit(AsyncComputation.of(() -> {
             var wb = new WriteBatch();
@@ -185,6 +237,11 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         });
     }
 
+    /**
+     * Returns the estimated total number of keys in the analysis store.
+     *
+     * @return the estimated key count, or -1 if it cannot be read
+     */
     public long allKeyCount() {
         try {
             return db.getLongProperty("rocksdb.estimate-num-keys");
@@ -207,6 +264,11 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         isKeyAnalysisNumberFull = false;
     }
 
+    /**
+     * Clears the analysis store, deleting all keys and resetting counters. Runs on the event loop.
+     *
+     * @return a future completing when the store has been cleared and recreated
+     */
     public CompletableFuture<Void> flushdb() {
         return eventloop.submit(this::clearAllKeysAfterAnalysis);
     }
@@ -230,6 +292,16 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         }
     }
 
+    /**
+     * Iterates up to {@code batchSize} keys starting from (optionally) the given begin key,
+     * invoking the consumer with each key's bytes and value int.
+     *
+     * @param beginKeyBytes       the key to seek to, or null to start from the first key
+     * @param batchSize           the maximum number of keys to visit
+     * @param isIncludeBeginKey   whether the begin key itself is included in the iteration
+     * @param consumer            called with each key bytes and its value length int
+     * @return a future completing when the iteration finishes
+     */
     public CompletableFuture<Void> iterateKeys(byte[] beginKeyBytes, int batchSize, boolean isIncludeBeginKey, @NotNull BiConsumer<byte[], Integer> consumer) {
         return eventloop.submit(() -> {
             try (var iterator = db.newIterator()) {
@@ -248,6 +320,16 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         });
     }
 
+    /**
+     * Collects up to {@code expectedCount} keys (excluding the begin key) that optionally
+     * match the key and value-int filters.
+     *
+     * @param beginKeyBytes          the exclusive begin key, or null to start from the first key
+     * @param expectedCount          the maximum number of matching keys to return
+     * @param keyFilter              optional predicate on the decoded key, or null
+     * @param valueBytesAsIntFilter  optional predicate on the value length int, or null
+     * @return a future completing with the list of matching keys
+     */
     // begin key exclude
     public CompletableFuture<ArrayList<String>> filterKeys(byte[] beginKeyBytes, int expectedCount,
                                                            @Nullable Predicate<String> keyFilter,
@@ -288,6 +370,15 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         }));
     }
 
+    /**
+     * Collects up to {@code maxCount} keys that start with the given prefix and match the
+     * optional regex pattern.
+     *
+     * @param prefix  the key prefix to seek to and match
+     * @param pattern an optional regex pattern, or null to match all prefixed keys
+     * @param maxCount the maximum number of matching keys to return
+     * @return a future completing with the list of matching keys
+     */
     public CompletableFuture<ArrayList<String>> prefixMatch(@NotNull String prefix, Pattern pattern, int maxCount) {
         return eventloop.submit(AsyncComputation.of(() -> {
             var result = new ArrayList<String>();
@@ -337,6 +428,11 @@ public class KeyAnalysisHandler implements Runnable, NeedCleanUp {
         eventloop.delay(LOOP_INTERVAL_MILLIS, this);
     }
 
+    /**
+     * Returns a snapshot of the current top-k prefix counts collected by the analysis task.
+     *
+     * @return a future completing with a map of prefix to count
+     */
     public CompletableFuture<Map<String, Integer>> getTopKPrefixCounts() {
         return eventloop.submit(AsyncComputation.of(() -> new LinkedHashMap<>(innerTask.topKPrefixCounts)));
     }

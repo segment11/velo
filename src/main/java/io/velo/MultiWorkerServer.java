@@ -1253,6 +1253,7 @@ public class MultiWorkerServer extends Launcher {
         awaitShutdown();
     }
 
+    /** Flag indicating the server is shutting down. */
     public static volatile boolean isStopping = false;
 
     /**
@@ -1742,6 +1743,12 @@ public class MultiWorkerServer extends Launcher {
         }
     }
 
+    /**
+     * Entry point. Prepares configuration and launches the server.
+     *
+     * @param args command line arguments forwarded to the launcher
+     * @throws Exception if the server fails to start
+     */
     public static void main(String[] args) throws Exception {
         MAIN_ARGS = args;
         prepareConfig();

@@ -12,16 +12,25 @@ import java.util.Arrays;
 public class BulkReply implements Reply {
     private byte[] raw;
 
+    /**
+     * @return the raw bytes of this bulk reply
+     */
     public byte[] getRaw() {
         return raw;
     }
 
+    /**
+     * @return the raw bytes decoded as a string
+     */
     @TestOnly
     public String asString() {
         assert raw != null;
         return new String(raw);
     }
 
+    /**
+     * Creates an empty bulk reply with no raw bytes set.
+     */
     public BulkReply() {
     }
 
@@ -78,8 +87,10 @@ public class BulkReply implements Reply {
      * Marker byte for the start of a bulk reply in the Redis protocol.
      */
     public static final byte MARKER = '$';
+    /** Marker byte for the start of a bulk reply in RESP3 protocol (simple string). */
     public static final byte MARKER_RESP3 = '+';
 
+    /** Carriage return and line feed bytes used to terminate RESP lines. */
     public static final byte[] CRLF = new byte[]{CR, LF};
 
     /** Bytes representing -1 in bulk reply format. */

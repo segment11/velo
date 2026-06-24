@@ -91,6 +91,9 @@ public class MetaChunkSegmentIndex implements NeedCleanUp {
         setAll(get(), masterUuid, isExistsDataAllFetched, masterBinlogFileIndexNextTimeToFetch, masterBinlogOffsetNextTimeToFetch);
     }
 
+    /**
+     * Resets the master binlog file index and offset back to zero, used when replication state is cleared.
+     */
     public void clearMasterBinlogFileIndexAndOffset() {
         setMasterBinlogFileIndexAndOffset(0L, false, 0, 0L);
         log.warn("Repl meta chunk segment index clear master binlog file index and offset done, set 0 from the beginning, slot={}", slot);

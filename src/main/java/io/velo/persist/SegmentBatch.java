@@ -129,6 +129,15 @@ public class SegmentBatch implements InSlotMetricCollector {
         }
     }
 
+    /**
+     * A segment's tight-packed bytes (with embedded length prefix) along with its placement metadata.
+     *
+     * @param tightBytesWithLength the tight-packed bytes including the embedded length prefix
+     * @param tmpSegmentIndex      the temporary segment index used during the write
+     * @param blockNumber          the number of blocks packed into the segment
+     * @param segmentSeq           the segment sequence number
+     * @param valueBytesLength     the logical length of the value bytes packed
+     */
     public record SegmentTightBytesWithLengthAndSegmentIndex(byte[] tightBytesWithLength, int tmpSegmentIndex,
                                                              byte blockNumber, long segmentSeq, int valueBytesLength) {
         @Override

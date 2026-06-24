@@ -25,14 +25,38 @@ import static io.velo.CompressedValue.NO_EXPIRE;
  * Write-Ahead Log (WAL) implementation for persistent storage of operation logs.
  */
 public class Wal implements InMemoryEstimate {
+    /**
+     * Encodes a key string to its UTF-8 bytes.
+     *
+     * @param key the key string
+     * @return the UTF-8 encoded key bytes
+     */
     public static byte[] keyBytes(String key) {
         return key.getBytes(StandardCharsets.UTF_8);
     }
 
+    /**
+     * Decodes UTF-8 key bytes back into a key string.
+     *
+     * @param keyBytes the UTF-8 encoded key bytes
+     * @return the decoded key string
+     */
     public static String keyString(byte[] keyBytes) {
         return new String(keyBytes, StandardCharsets.UTF_8);
     }
 
+    /**
+     * A single write-ahead log entry.
+     *
+     * @param seq         the monotonically increasing sequence number
+     * @param bucketIndex the bucket index the key belongs to
+     * @param keyHash     the hash of the key
+     * @param expireAt    the absolute expiry timestamp in millis, or {@link CompressedValue#NO_EXPIRE}
+     * @param spType      the sub-type/flag packed int
+     * @param key         the key string
+     * @param cvEncoded   the encoded compressed value bytes
+     * @param isFromMerge whether this entry was produced by a background merge
+     */
     public record V(long seq, int bucketIndex, long keyHash, long expireAt, int spType,
                     String key, byte[] cvEncoded, boolean isFromMerge) implements Comparable<V> {
         public byte[] keyBytes() {
@@ -266,11 +290,21 @@ public class Wal implements InMemoryEstimate {
     @VisibleForTesting
     int writePositionShortValue;
 
+    /**
+     * Returns the current write position in the main value WAL group. Test only.
+     *
+     * @return the current write position
+     */
     @TestOnly
     public int getWritePosition() {
         return writePosition;
     }
 
+    /**
+     * Returns the current write position in the short value WAL group. Test only.
+     *
+     * @return the current write position for short values
+     */
     @TestOnly
     public int getWritePositionShortValue() {
         return writePositionShortValue;
@@ -564,6 +598,9 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
+    /**
+     * Clears both value and short-value buffers and resets the WAL files. Test only.
+     */
     @TestOnly
     public void clear() {
         clear(true);
@@ -593,6 +630,9 @@ public class Wal implements InMemoryEstimate {
     @VisibleForTesting
     long clearValuesCount = 0;
 
+    /**
+     * Clears the short-value buffer and resets the short-value WAL file.
+     */
     public void clearShortValues() {
         delayToKeyBucketShortValues.clear();
         resetWal(true);
@@ -603,6 +643,9 @@ public class Wal implements InMemoryEstimate {
         }
     }
 
+    /**
+     * Clears the main value buffer and resets the main value WAL file.
+     */
     public void clearValues() {
         delayToKeyBucketValues.clear();
         resetWal(false);
@@ -973,7 +1016,15 @@ public class Wal implements InMemoryEstimate {
         return bytes;
     }
 
+    /**
+     * Callback for handling each log entry decoded from a master's WAL group bytes.
+     */
     public interface FromMasterVCallback {
+        /**
+         * @param isShortValue whether the entry lives in the short-value WAL file
+         * @param key          the key for the entry
+         * @param v            the decoded log entry
+         */
         void handle(boolean isShortValue, String key, V v);
     }
 

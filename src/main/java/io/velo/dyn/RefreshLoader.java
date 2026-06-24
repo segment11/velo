@@ -82,6 +82,9 @@ public class RefreshLoader {
         return this;
     }
 
+    /**
+     * Recursively refreshes all Groovy files in the added directories that have been modified since the last refresh.
+     */
     public void refresh() {
         for (var dir : dirList) {
             var d = new File(dir);

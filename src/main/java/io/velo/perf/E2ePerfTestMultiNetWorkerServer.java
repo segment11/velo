@@ -61,6 +61,7 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
     HashMap<String, byte[]>[] inMemoryThreadLocalData;
     long[] threadIdArray;
 
+    /** Properties file name used to configure the end-to-end perf test. */
     public static final String PROPERTIES_FILE = "velo-e2e-test.properties";
 
     @Inject

@@ -5,12 +5,23 @@ import io.velo.BaseCommand
 import io.velo.reply.BulkReply
 import io.velo.reply.Reply
 
+/**
+ * Example extension command skeleton for user-defined commands.
+ */
 @CompileStatic
 class ExtendCommand extends BaseCommand {
+    /**
+     * Creates an ExtendCommand with no bound group (used for dispatch).
+     */
     ExtendCommand() {
         super(null, null, null)
     }
 
+    /**
+     * Creates an ExtendCommand from the given EGroup, copying its command data and socket.
+     *
+     * @param eGroup the group providing the command context
+     */
     ExtendCommand(EGroup eGroup) {
         super(eGroup.cmd, eGroup.data, eGroup.socket)
     }

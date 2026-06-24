@@ -13,6 +13,12 @@ public class Hello implements ReplContent {
     private final long slaveUuid;
     private final String netListenAddress;
 
+    /**
+     * Constructs a Hello message.
+     *
+     * @param slaveUuid         the slave's UUID
+     * @param netListenAddress  the slave's network listen address
+     */
     public Hello(long slaveUuid, String netListenAddress) {
         this.slaveUuid = slaveUuid;
         this.netListenAddress = netListenAddress;

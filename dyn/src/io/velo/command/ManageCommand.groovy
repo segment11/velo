@@ -32,16 +32,36 @@ import org.slf4j.LoggerFactory
 
 import static io.velo.TrainSampleJob.MIN_TRAIN_SAMPLE_SIZE
 
+/**
+ * Implements the MANAGE command, providing operational sub-commands for slots, buckets,
+ * indexes, dictionaries, dynamic config and debugging.
+ */
 @CompileStatic
 class ManageCommand extends BaseCommand {
+    /**
+     * Creates a ManageCommand with no bound group (used for dispatch).
+     */
     ManageCommand() {
         super(null, null, null)
     }
 
+    /**
+     * Creates a ManageCommand from the given MGroup, copying its command data and socket.
+     *
+     * @param mGroup the group providing the command context
+     */
     ManageCommand(MGroup mGroup) {
         super(mGroup.cmd, mGroup.data, mGroup.socket)
     }
 
+    /**
+     * Parses the target slot for manage sub-commands that operate on a single slot.
+     *
+     * @param cmd        the command string
+     * @param data       the raw command arguments
+     * @param slotNumber the total number of slots
+     * @return the list of slot with key hash entries, empty if not applicable
+     */
     ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> r = []
 
@@ -113,6 +133,11 @@ class ManageCommand extends BaseCommand {
         return NilReply.INSTANCE
     }
 
+    /**
+     * Dispatches the manage sub-command targeting a single slot (e.g. bucket view, key inspection).
+     *
+     * @return the reply for the requested slot manage operation
+     */
     Reply manageInOneSlot() {
         if (data.length < 4) {
             return ErrorReply.FORMAT
@@ -494,6 +519,9 @@ class ManageCommand extends BaseCommand {
         new BatchDone(putN, skipN, costT)
     }
 
+    /**
+     * Handles slot migrate_from, importing data into the local slot from a source node.
+     */
     @VisibleForTesting
     Reply migrateFrom() {
         // manage slot 0 migrate_from localhost 7379 force
@@ -590,6 +618,9 @@ class ManageCommand extends BaseCommand {
         return new BulkReply(ratio.toString().bytes)
     }
 
+    /**
+     * Manages the hash index, e.g. reloading the key analysis task scheduling.
+     */
     Reply manageIndex() {
         if (data.length < 3) {
             return ErrorReply.FORMAT
@@ -625,6 +656,9 @@ class ManageCommand extends BaseCommand {
         return ErrorReply.SYNTAX
     }
 
+    /**
+     * Manages Zstd dictionaries, such as setting key prefix or suffix groups for training.
+     */
     Reply dict() {
         if (data.length < 3) {
             return ErrorReply.FORMAT
@@ -882,6 +916,9 @@ class ManageCommand extends BaseCommand {
         return ErrorReply.SYNTAX
     }
 
+    /**
+     * Handles dynamic configuration updates for a key/value pair at runtime.
+     */
     Reply dynConfig() {
         // manage dyn-config key value
         if (data.length != 4) {
@@ -926,6 +963,9 @@ class ManageCommand extends BaseCommand {
         return asyncReply
     }
 
+    /**
+     * Provides debug sub-commands, such as toggling log levels.
+     */
     Reply debug() {
         if (data.length < 4) {
             return ErrorReply.FORMAT

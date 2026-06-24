@@ -160,6 +160,9 @@ public class ErrorReply implements Reply {
         this.rawErrorPrefix = rawErrorPrefix;
     }
 
+    /**
+     * @return the error message of this reply
+     */
     public String getMessage() {
         return message;
     }

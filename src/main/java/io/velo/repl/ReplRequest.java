@@ -52,21 +52,41 @@ public class ReplRequest {
         return isFullyRead() ? data : Arrays.copyOf(data, dataLength);
     }
 
+    /**
+     * Sets the slave's UUID (test only).
+     *
+     * @param slaveUuid the slave's UUID
+     */
     @TestOnly
     public void setSlaveUuid(long slaveUuid) {
         this.slaveUuid = slaveUuid;
     }
 
+    /**
+     * Sets the slot index (test only).
+     *
+     * @param slot the slot index
+     */
     @TestOnly
     public void setSlot(short slot) {
         this.slot = slot;
     }
 
+    /**
+     * Sets the replication type (test only).
+     *
+     * @param type the replication type
+     */
     @TestOnly
     public void setType(ReplType type) {
         this.type = type;
     }
 
+    /**
+     * Sets the data bytes (test only).
+     *
+     * @param data the data bytes
+     */
     @TestOnly
     public void setData(byte[] data) {
         this.data = data;

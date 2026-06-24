@@ -19,8 +19,17 @@ import static io.velo.persist.KeyLoader.KEY_BUCKET_ONE_COST_SIZE;
  * A data structure that holds key-value pairs optimized for storage and retrieval.
  */
 public class KeyBucket {
+    /**
+     * Initial cell capacity for a key bucket.
+     */
     public static final short INIT_CAPACITY = 48;
+    /**
+     * Default number of buckets per slot.
+     */
     public static final int DEFAULT_BUCKETS_PER_SLOT = 16384 * 4;
+    /**
+     * Maximum number of buckets per slot.
+     */
     public static final int MAX_BUCKETS_PER_SLOT = 16384 * 16;
 
     static final byte[] EMPTY_BYTES = new byte[KeyLoader.KEY_BUCKET_ONE_COST_SIZE];
@@ -66,10 +75,20 @@ public class KeyBucket {
     final byte splitIndex;
     byte splitNumber;
 
+    /**
+     * Returns the current split number of this bucket.
+     *
+     * @return the split number
+     */
     public byte getSplitNumber() {
         return splitNumber;
     }
 
+    /**
+     * Returns the split index of this bucket.
+     *
+     * @return the split index
+     */
     public byte getSplitIndex() {
         return splitIndex;
     }
@@ -95,6 +114,9 @@ public class KeyBucket {
         return bytes.length != KEY_BUCKET_ONE_COST_SIZE;
     }
 
+    /**
+     * Clears all cells and resets size, cost, and update sequence to empty.
+     */
     public void clearAll() {
         this.buffer.position(0).put(EMPTY_BYTES);
         this.size = 0;
@@ -221,7 +243,17 @@ public class KeyBucket {
         }
     }
 
+    /**
+     * Callback invoked for each live key-value pair during iteration.
+     */
     public interface IterateCallBack {
+        /**
+         * @param keyHash    the hash of the key
+         * @param expireAt   the absolute expiry timestamp, or {@link CompressedValue#NO_EXPIRE}
+         * @param seq        the sequence number of the entry
+         * @param key        the key string
+         * @param valueBytes the value bytes
+         */
         void call(long keyHash, long expireAt, long seq, String key, byte[] valueBytes);
     }
 
@@ -304,6 +336,9 @@ public class KeyBucket {
 
     private final ByteBuffer buffer;
 
+    /**
+     * Writes the current header (sequence, size, cost) back into the bucket bytes.
+     */
     public void putMeta() {
         updateSeq();
         buffer.position(0).putLong(lastUpdateSeq).putShort(size).putShort(cellCost);
@@ -328,9 +363,20 @@ public class KeyBucket {
         }
     }
 
+    /**
+     * Callback for handling expired or deleted entries discovered during bucket operations.
+     */
     public interface CvExpiredOrDeletedCallBack {
+        /**
+         * @param key           the key that expired or was deleted
+         * @param shortStringCv the in-memory short string compressed value
+         */
         void handle(@NotNull String key, @NotNull CompressedValue shortStringCv);
 
+        /**
+         * @param key the key that expired or was deleted
+         * @param cv  the persisted value meta
+         */
         void handle(@NotNull String key, @NotNull PersistValueMeta cv);
     }
 
@@ -372,6 +418,9 @@ public class KeyBucket {
         cellCost -= cellCount;
     }
 
+    /**
+     * Clears all cells whose entries have expired, invoking the expiry callback for each.
+     */
     public void clearAllExpired() {
         final long currentTimeMillis = System.currentTimeMillis();
         for (int i = 0; i < capacity; i++) {
@@ -410,6 +459,12 @@ public class KeyBucket {
     private record CanPutResult(boolean flag, boolean isUpdate) {
     }
 
+    /**
+     * Result of a put operation on a key bucket.
+     *
+     * @param isPut    whether the value was put into the bucket
+     * @param isUpdate whether the put updated an existing key
+     */
     public record DoPutResult(boolean isPut, boolean isUpdate) {
     }
 
@@ -615,6 +670,12 @@ public class KeyBucket {
         return true;
     }
 
+    /**
+     * An entry's expiry timestamp and sequence number.
+     *
+     * @param expireAt the absolute expiry timestamp, or {@link CompressedValue#NO_EXPIRE}
+     * @param seq      the sequence number of the entry
+     */
     public record ExpireAtAndSeq(long expireAt, long seq) {
         boolean isExpired() {
             return expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis();
@@ -664,6 +725,13 @@ public class KeyBucket {
         return new ExpireAtAndSeq(expireAt, seq);
     }
 
+    /**
+     * An entry's value bytes along with its expiry timestamp and sequence number.
+     *
+     * @param valueBytes the value bytes
+     * @param expireAt   the absolute expiry timestamp, or {@link CompressedValue#NO_EXPIRE}
+     * @param seq        the sequence number of the entry
+     */
     public record ValueBytesWithExpireAtAndSeq(byte[] valueBytes, long expireAt, long seq) {
         boolean isExpired() {
             return expireAt != NO_EXPIRE && expireAt < System.currentTimeMillis();

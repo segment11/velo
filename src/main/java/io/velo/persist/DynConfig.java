@@ -214,6 +214,9 @@ public class DynConfig {
         return data.get(key);
     }
 
+    /**
+     * Callback invoked after a dynamic configuration key is updated.
+     */
     public interface AfterUpdateCallback {
         /**
          * @param key the key that was updated

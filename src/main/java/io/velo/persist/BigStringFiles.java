@@ -27,6 +27,14 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     record Id(long uuid, int bucketIndex) {
     }
 
+    /**
+     * Identifier of a big string along with its owning key.
+     *
+     * @param uuid        the snowflake UUID of the big string
+     * @param bucketIndex the bucket index the key belongs to
+     * @param keyHash     the hash of the key
+     * @param key         the key string
+     */
     public record IdWithKey(long uuid, int bucketIndex, long keyHash, String key) {
     }
 
@@ -54,6 +62,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
 
     private LRUMap<Long, byte[]> bigStringBytesByUuidLRU;
 
+    /**
+     * Clears the in-memory LRU cache of big string bytes. Test only.
+     */
     @TestOnly
     public void clearLRUCache() {
         if (bigStringBytesByUuidLRU != null) {
@@ -385,6 +396,15 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         }
     }
 
+    /**
+     * Writes the full byte array as a big string file.
+     *
+     * @param uuid        the UUID of the big string file
+     * @param bucketIndex the bucket index
+     * @param keyHash     the hash of the key
+     * @param bytes       the bytes to write
+     * @return true if successful
+     */
     public boolean writeBigStringBytes(long uuid, int bucketIndex, long keyHash, byte[] bytes) {
         return writeBigStringBytes(uuid, bucketIndex, keyHash, bytes, 0, bytes.length);
     }
@@ -425,6 +445,14 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     @TestOnly
     boolean deleteForceReturnFalseForTest = false;
 
+    /**
+     * Deletes the big string file for the given key if it exists, also evicting it from the LRU cache.
+     *
+     * @param uuid        the UUID of the big string file
+     * @param bucketIndex the bucket index
+     * @param keyHash     the hash of the key
+     * @return true if the file did not exist or was successfully deleted, false otherwise
+     */
     public boolean deleteBigStringFileIfExist(long uuid, int bucketIndex, long keyHash) {
         if (bigStringBytesByUuidLRU != null) {
             bigStringBytesByUuidLRU.remove(uuid);
@@ -456,6 +484,9 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         return r;
     }
 
+    /**
+     * Deletes all big string files, clears the UUID maps, and resets counts and disk usage.
+     */
     @SlaveNeedReplay
     @SlaveReplay
     public void deleteAllBigStringFiles() {

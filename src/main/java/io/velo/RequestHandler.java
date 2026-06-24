@@ -40,6 +40,7 @@ public class RequestHandler {
     static final String PING_COMMAND = "ping";
     static final String QUIT_COMMAND = "quit";
     private static final String HELLO_COMMAND = "hello";
+    /** The Redis AUTH command name. */
     public static final String AUTH_COMMAND = "auth";
     private static final String GET_COMMAND = "get";
     private static final String SET_COMMAND = "set";

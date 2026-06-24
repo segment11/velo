@@ -19,7 +19,9 @@ import io.velo.type.encode.ZipList;
  */
 public class RDBParser {
     // Redis RDB type constants
+    /** Minimum RDB version supported for parsing. */
     public static final short RDB_MIN_VERSION = 6;
+    /** RDB version produced when serializing data to RDB format. */
     public static final short RDB_VERSION = 11;
 
     private static final int RDB_TYPE_STRING = 0;

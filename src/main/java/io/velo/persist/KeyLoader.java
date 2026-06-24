@@ -353,12 +353,33 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         return (bucketIndex - firstBucketIndexInTargetWalGroup) * KEY_BUCKET_ONE_COST_SIZE;
     }
 
+    /**
+     * Short type byte indicating the key's type should be ignored / not yet classified.
+     */
     public static final byte typeAsByteIgnore = 0;
+    /**
+     * Short type byte for string (and geo / bloom filter) keys.
+     */
     public static final byte typeAsByteString = 1;
+    /**
+     * Short type byte for list keys.
+     */
     public static final byte typeAsByteList = 2;
+    /**
+     * Short type byte for set keys.
+     */
     public static final byte typeAsByteSet = 3;
+    /**
+     * Short type byte for sorted set keys.
+     */
     public static final byte typeAsByteZSet = 4;
+    /**
+     * Short type byte for hash keys.
+     */
     public static final byte typeAsByteHash = 5;
+    /**
+     * Short type byte for stream keys.
+     */
     public static final byte typeAsByteStream = 6;
 
     /**
@@ -1065,6 +1086,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         return 1;
     }
 
+    /**
+     * Clears all key-bucket metadata, key-count stats, and truncates the backing files,
+     * effectively resetting the key loader to an empty state.
+     */
     @SlaveNeedReplay
     @SlaveReplay
     public void flush() {

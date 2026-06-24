@@ -11,5 +11,6 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.SOURCE)
 @Target({ElementType.TYPE, ElementType.FIELD})
 public @interface ThreadNeedLocal {
+    /** The kind of thread-local binding this class or field needs, e.g. {@code "slot"}. */
     String type() default "slot";
 }

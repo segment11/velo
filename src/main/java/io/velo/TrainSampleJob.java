@@ -122,16 +122,27 @@ public class TrainSampleJob {
     private static final AtomicReference<List<String>> keyPrefixOrSuffixGroupList =
             new AtomicReference<>(List.of());
 
+    /** @return the current list of key prefix or suffix groups used for dictionary grouping */
     public static List<String> getKeyPrefixOrSuffixGroupList() {
         return keyPrefixOrSuffixGroupList.get();
     }
 
+    /**
+     * Replaces the key prefix or suffix group list, sorting entries by length descending.
+     *
+     * @param list the new list of key prefix or suffix groups
+     */
     public static void setKeyPrefixOrSuffixGroupList(List<String> list) {
         var newList = new ArrayList<>(list);
         newList.sort((a, b) -> b.length() - a.length());
         keyPrefixOrSuffixGroupList.set(List.copyOf(newList));
     }
 
+    /**
+     * Adds a key prefix group if it is not already present.
+     *
+     * @param prefix the key prefix to add
+     */
     public static void addKeyPrefixGroupIfNotExist(String prefix) {
         while (true) {
             var current = keyPrefixOrSuffixGroupList.get();

@@ -34,6 +34,11 @@ public class LeaderSelector implements NeedCleanUp {
 
     private static final LeaderSelector instance = new LeaderSelector();
 
+    /**
+     * Returns the singleton instance.
+     *
+     * @return the singleton LeaderSelector instance
+     */
     public static LeaderSelector getInstance() {
         return instance;
     }
@@ -42,6 +47,11 @@ public class LeaderSelector implements NeedCleanUp {
 
     private CuratorFramework client;
 
+    /**
+     * Returns the underlying ZooKeeper client.
+     *
+     * @return the CuratorFramework client, or null if not connected
+     */
     public CuratorFramework getClient() {
         return client;
     }
@@ -77,11 +87,21 @@ public class LeaderSelector implements NeedCleanUp {
     @VisibleForTesting
     long isLeaderLoopCount = 0;
 
+    /**
+     * Returns the locally mocked master address (test only).
+     *
+     * @return the mocked master address
+     */
     @TestOnly
     public String getMasterAddressLocalMocked() {
         return masterAddressLocalMocked;
     }
 
+    /**
+     * Sets the locally mocked master address (test only).
+     *
+     * @param masterAddressLocalMocked the mocked master address
+     */
     @TestOnly
     public void setMasterAddressLocalMocked(String masterAddressLocalMocked) {
         this.masterAddressLocalMocked = masterAddressLocalMocked;
@@ -98,6 +118,12 @@ public class LeaderSelector implements NeedCleanUp {
     @VisibleForTesting
     boolean hasLeadershipLastTry;
 
+    /**
+     * Tries to connect to ZooKeeper and returns the current master's listen address.
+     *
+     * @param doStartLeaderLatch whether to start the leader latch if not yet started
+     * @return the master's listen address, or null if it cannot be determined
+     */
     public String tryConnectAndGetMasterListenAddress(boolean doStartLeaderLatch) {
         if (masterAddressLocalMocked != null) {
             return masterAddressLocalMocked;
@@ -148,11 +174,21 @@ public class LeaderSelector implements NeedCleanUp {
     @TestOnly
     private Boolean hasLeadershipLocalMocked;
 
+    /**
+     * Sets the locally mocked leadership state (test only).
+     *
+     * @param hasLeadershipLocalMocked the mocked leadership state
+     */
     @TestOnly
     public void setHasLeadershipLocalMocked(Boolean hasLeadershipLocalMocked) {
         this.hasLeadershipLocalMocked = hasLeadershipLocalMocked;
     }
 
+    /**
+     * Returns whether this node currently holds the leadership (is the master).
+     *
+     * @return true if this node is the leader
+     */
     public synchronized boolean hasLeadership() {
         if (hasLeadershipLocalMocked != null) {
             return hasLeadershipLocalMocked;
@@ -163,6 +199,11 @@ public class LeaderSelector implements NeedCleanUp {
 
     private String lastGetMasterListenAddressAsSlave;
 
+    /**
+     * Returns the last master listen address observed when acting as a slave.
+     *
+     * @return the last master listen address as a slave, or null
+     */
     public String getLastGetMasterListenAddressAsSlave() {
         return lastGetMasterListenAddressAsSlave;
     }
@@ -247,10 +288,18 @@ public class LeaderSelector implements NeedCleanUp {
 
     private long lastStopLeaderLatchTimeMillis;
 
+    /**
+     * Returns the timestamp when the leader latch was last stopped.
+     *
+     * @return the timestamp in milliseconds
+     */
     public long getLastStopLeaderLatchTimeMillis() {
         return lastStopLeaderLatchTimeMillis;
     }
 
+    /**
+     * Stops the leader latch if it is running.
+     */
     public synchronized void stopLeaderLatch() {
         if (leaderLatch != null) {
             try {
@@ -271,10 +320,20 @@ public class LeaderSelector implements NeedCleanUp {
         disconnect();
     }
 
+    /**
+     * Returns the timestamp when this node was last reset as master.
+     *
+     * @return the timestamp in milliseconds
+     */
     public long getLastResetAsMasterTimeMillis() {
         return lastResetAsMasterTimeMillis;
     }
 
+    /**
+     * Returns the timestamp when this node was last reset as slave.
+     *
+     * @return the timestamp in milliseconds
+     */
     public long getLastResetAsSlaveTimeMillis() {
         return lastResetAsSlaveTimeMillis;
     }
@@ -282,6 +341,11 @@ public class LeaderSelector implements NeedCleanUp {
     private long lastResetAsMasterTimeMillis;
     private long lastResetAsSlaveTimeMillis;
 
+    /**
+     * Resets this node as master and invokes the callback when done.
+     *
+     * @param callback the callback invoked with an exception on failure, or null on success
+     */
     public void resetAsMaster(Consumer<Exception> callback) {
         resetAsMaster(false, callback);
     }
@@ -291,6 +355,12 @@ public class LeaderSelector implements NeedCleanUp {
     @VisibleForTesting
     long resetAsSlaveCount = 0;
 
+    /**
+     * Resets this node as master, optionally forcing the transition.
+     *
+     * @param force    whether to force the reset even if the slave has not caught up
+     * @param callback the callback invoked with an exception on failure, or null on success
+     */
     public void resetAsMaster(boolean force, Consumer<Exception> callback) {
         if (masterAddressLocalMocked != null) {
             callback.accept(null);
@@ -413,6 +483,13 @@ public class LeaderSelector implements NeedCleanUp {
         }
     }
 
+    /**
+     * Resets this node as a slave of the given master host and port.
+     *
+     * @param host     the master host
+     * @param port     the master port
+     * @param callback the callback invoked with an exception on failure, or null on success
+     */
     public void resetAsSlave(String host, int port, Consumer<Exception> callback) {
         if (masterAddressLocalMocked != null) {
             callback.accept(null);
@@ -517,6 +594,14 @@ public class LeaderSelector implements NeedCleanUp {
         }
     }
 
+    /**
+     * Queries the given master host and port for the first slave's listen address for the specified slot.
+     *
+     * @param host the master host
+     * @param port the master port
+     * @param slot the slot index
+     * @return the first slave's listen address, or null if none
+     */
     public String getFirstSlaveListenAddressByMasterHostAndPort(String host, int port, short slot) {
         if (masterAddressLocalMocked != null) {
             return masterAddressLocalMocked;

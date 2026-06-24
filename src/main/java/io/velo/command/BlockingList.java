@@ -81,6 +81,11 @@ public class BlockingList {
         inners[0] = new Inner(Thread.currentThread().threadId());
     }
 
+    /**
+     * Initializes the slot worker event loop array and creates one {@link Inner} instance per worker thread.
+     *
+     * @param slotWorkerEventloopArray the event loop array, one entry per slot worker thread
+     */
     public static void initBySlotWorkerEventloopArray(Eventloop[] slotWorkerEventloopArray) {
         BlockingList.slotWorkerEventloopArray = slotWorkerEventloopArray;
 

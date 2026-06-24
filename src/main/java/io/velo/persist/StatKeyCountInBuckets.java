@@ -19,6 +19,9 @@ import java.util.Arrays;
  */
 public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
     private static final String STAT_KEY_BUCKET_LAST_UPDATE_COUNT_FILE = "stat_key_count_in_buckets.dat";
+    /**
+     * Number of bytes used to store one bucket's key count (a {@code short}).
+     */
     // short is enough for one key bucket index total value count
     public static final int ONE_LENGTH = 2;
 

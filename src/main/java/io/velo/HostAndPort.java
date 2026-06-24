@@ -14,9 +14,17 @@ import java.util.Objects;
  * {@link #toString()} renders the {@code host:port} form (not the auto-generated record form).
  */
 public final class HostAndPort {
+    /** The hostname or IP address literal. */
     public final String host;
+    /** The TCP port number. */
     public final int port;
 
+    /**
+     * Constructs an immutable host:port pair.
+     *
+     * @param host the hostname or IP address literal
+     * @param port the TCP port number
+     */
     @JsonCreator
     public HostAndPort(@JsonProperty("host") String host, @JsonProperty("port") int port) {
         this.host = host;

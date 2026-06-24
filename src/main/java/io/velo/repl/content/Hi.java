@@ -14,6 +14,15 @@ public class Hi implements ReplContent {
     private final Binlog.FileIndexAndOffset earliestFo;
     private final int currentSegmentIndex;
 
+    /**
+     * Constructs a Hi message.
+     *
+     * @param masterUuid          the master's UUID
+     * @param slaveUuid           the slave's UUID
+     * @param currentFo           the current binlog file index and offset
+     * @param earliestFo          the earliest available binlog file index and offset
+     * @param currentSegmentIndex the current segment index within the binlog
+     */
     public Hi(long masterUuid, long slaveUuid, Binlog.FileIndexAndOffset currentFo,
               Binlog.FileIndexAndOffset earliestFo, int currentSegmentIndex) {
         this.masterUuid = masterUuid;

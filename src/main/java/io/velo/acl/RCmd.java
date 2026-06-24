@@ -6,8 +6,11 @@ import org.jetbrains.annotations.VisibleForTesting;
  * Access control rule for commands.
  */
 public class RCmd {
+    /** Literal wildcard matching all commands. */
     public static final String ALL = "*";
+    /** Prefix literal indicating a command is allowed. */
     public static final String ALLOW_LITERAL_PREFIX = "+";
+    /** Prefix literal indicating a command is disallowed. */
     public static final String DISALLOW_LITERAL_PREFIX = "-";
 
     /** Types of rules that RCmd can represent. */

@@ -44,6 +44,23 @@ public class ChunkWalGroupRebuilder {
         }
     }
 
+    /**
+     * Immutable result of rebuilding one WAL group, carrying scan counts and whether the
+     * rebuild was actually applied.
+     *
+     * @param slot                    the slot that was rebuilt
+     * @param walGroupIndex           the WAL group index that was rebuilt
+     * @param mode                    the rebuild mode text (preview or apply)
+     * @param segmentsScanned         number of segments scanned
+     * @param segmentsInvalid         number of segments that could not be decoded
+     * @param recordsDecoded          number of records decoded
+     * @param recordsExpired          number of records skipped due to expiry
+     * @param recordsWalGroupMismatch number of records skipped due to WAL group mismatch
+     * @param recordsAfterSeqMerge    number of records remaining after sequence merge
+     * @param staleRecords            number of stale records superseded by newer versions
+     * @param bucketsTouched          number of buckets touched
+     * @param applied                 whether the rebuild was actually applied to the index
+     */
     public record RebuildResult(short slot,
                                 int walGroupIndex,
                                 String mode,

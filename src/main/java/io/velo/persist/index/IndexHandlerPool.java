@@ -18,6 +18,11 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.function.Consumer;
 
+/**
+ * Pool of {@link IndexHandler} workers backed by dedicated event loops, plus a shared
+ * {@link KeyAnalysisHandler} for RocksDB based key analysis. Work is dispatched to a
+ * worker by worker id.
+ */
 public class IndexHandlerPool implements NeedCleanUp {
 
     @VisibleForTesting
@@ -25,10 +30,21 @@ public class IndexHandlerPool implements NeedCleanUp {
 
     private final KeyAnalysisHandler keyAnalysisHandler;
 
+    /**
+     * Returns the shared key analysis handler used for RocksDB based key analysis.
+     *
+     * @return the key analysis handler
+     */
     public KeyAnalysisHandler getKeyAnalysisHandler() {
         return keyAnalysisHandler;
     }
 
+    /**
+     * Returns the index handler for the given worker id. Test only.
+     *
+     * @param workerId the worker id
+     * @return the index handler for that worker
+     */
     @TestOnly
     public IndexHandler getIndexHandler(byte workerId) {
         return indexHandlers[workerId];
@@ -40,6 +56,14 @@ public class IndexHandlerPool implements NeedCleanUp {
 
     private static final String KEYS_FOR_ANALYSIS = "keys-for-analysis";
 
+    /**
+     * Creates the worker pool and the key analysis handler.
+     *
+     * @param indexWorkers  the number of index worker event loops to create
+     * @param persistDir    the persist directory; a keys-for-analysis sub-directory will be created
+     * @param persistConfig the configuration used for key analysis
+     * @throws IOException if the keys-for-analysis directory cannot be created
+     */
     public IndexHandlerPool(byte indexWorkers, File persistDir, Config persistConfig) throws IOException {
         this.indexHandlers = new IndexHandler[indexWorkers];
         this.workerEventloopArray = new Eventloop[indexWorkers];
@@ -69,6 +93,9 @@ public class IndexHandlerPool implements NeedCleanUp {
         }
     }
 
+    /**
+     * Starts all worker event loops on dedicated affinity-pinned threads.
+     */
     public void start() {
         var affinityThreadFactory = new AffinityThreadFactory("index-worker",
                 AffinityStrategies.SAME_SOCKET, AffinityStrategies.DIFFERENT_CORE);
@@ -91,6 +118,13 @@ public class IndexHandlerPool implements NeedCleanUp {
         }
     }
 
+    /**
+     * Runs the given consumer on the specified worker's event loop thread.
+     *
+     * @param workerId the target worker id
+     * @param consumer the work to perform with that worker's handler
+     * @return a promise completing when the work is done
+     */
     public Promise<Void> run(byte workerId, Consumer<IndexHandler> consumer) {
         var indexHandler = indexHandlers[workerId];
         return indexHandler.asyncRun(() -> {

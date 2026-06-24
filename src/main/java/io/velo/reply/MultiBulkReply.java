@@ -62,6 +62,9 @@ public class MultiBulkReply implements Reply {
 
     private final boolean isSet;
 
+    /**
+     * @return the replies contained in this multi-bulk reply
+     */
     public Reply[] getReplies() {
         return replies;
     }

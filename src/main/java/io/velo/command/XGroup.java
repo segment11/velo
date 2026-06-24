@@ -205,22 +205,48 @@ public class XGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
+    /**
+     * Sub-command keyword used by the slave to request a catch-up from the master.
+     */
     public static final String X_CATCH_UP_AS_SUB_CMD = "x_catch_up";
+    /**
+     * Sub-command keyword used to fetch the configuration for a specific slot.
+     */
     public static final String X_CONF_FOR_SLOT_AS_SUB_CMD = "x_conf_for_slot";
     // like redis, use 'info replication', todo
+    /**
+     * Sub-command keyword used to get the listen address of the first slave.
+     */
     public static final String X_GET_FIRST_SLAVE_LISTEN_ADDRESS_AS_SUB_CMD = "x_get_first_slave_listen_address";
+    /**
+     * Key prefix used to dispatch x_repl commands by key when received as a GET-style command.
+     */
     public static final String X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH = "x_repl";
 
     // for publish
+    /**
+     * Pub/Sub channel (as raw bytes) used to notify subscribers of a master switch event.
+     */
     public static final byte[] X_MASTER_SWITCH_PUBLISH_CHANNEL_BYTES = "+switch-master".getBytes();
 //    public static final String X_MASTER_RESET_PUBLISH_CHANNEL = "+reset-master";
 
+    /**
+     * Sets the replication pair associated with this command instance.
+     *
+     * @param replPair the replication pair to set
+     */
     public void setReplPair(ReplPair replPair) {
         this.replPair = replPair;
     }
 
     private ReplPair replPair;
 
+    /**
+     * Handles an incoming replication request from a slave or master.
+     *
+     * @param replRequest the replication request containing slot, type, uuid and payload
+     * @return the reply for the replication request
+     */
     public Reply handleRepl(@NotNull ReplRequest replRequest) {
         var slaveUuid = replRequest.getSlaveUuid();
         var slotRemote = replRequest.getSlot();
@@ -1861,16 +1887,32 @@ public class XGroup extends BaseCommand {
 
     private static boolean skipTryCatchUpAgainAfterSlaveTcpClientClosed;
 
+    /**
+     * Returns whether re-catch-up after slave TCP client close is skipped (test only).
+     *
+     * @return true if the re-catch-up should be skipped
+     */
     @TestOnly
     public static boolean isSkipTryCatchUpAgainAfterSlaveTcpClientClosed() {
         return skipTryCatchUpAgainAfterSlaveTcpClientClosed;
     }
 
+    /**
+     * Sets whether re-catch-up after slave TCP client close should be skipped (test only).
+     *
+     * @param skipTryCatchUpAgainAfterSlaveTcpClientClosed true to skip the re-catch-up
+     */
     @TestOnly
     public static void setSkipTryCatchUpAgainAfterSlaveTcpClientClosed(boolean skipTryCatchUpAgainAfterSlaveTcpClientClosed) {
         XGroup.skipTryCatchUpAgainAfterSlaveTcpClientClosed = skipTryCatchUpAgainAfterSlaveTcpClientClosed;
     }
 
+    /**
+     * After a slave TCP client is closed, attempts to catch up the slot data again from the master.
+     *
+     * @param replPairAsSlave  the replication pair where this node acts as slave
+     * @param mockResultBytes  optional mock result bytes used for testing
+     */
     public static void tryCatchUpAgainAfterSlaveTcpClientClosed(ReplPair replPairAsSlave, byte[] mockResultBytes) {
         if (skipTryCatchUpAgainAfterSlaveTcpClientClosed) {
             return;

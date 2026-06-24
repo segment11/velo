@@ -26,10 +26,16 @@ public class Request {
 
     private ReplRequest replRequest;
 
+    /**
+     * @return the replication request, or null if this is not a REPL request
+     */
     public ReplRequest getReplRequest() {
         return replRequest;
     }
 
+    /**
+     * @param replRequest the replication request to set
+     */
     public void setReplRequest(ReplRequest replRequest) {
         this.replRequest = replRequest;
     }
@@ -212,6 +218,7 @@ public class Request {
         return first.slot();
     }
 
+    /** Command name used when the request is a replication request. */
     @VisibleForTesting
     public static final String REPL_AS_CMD = "x-repl";
 

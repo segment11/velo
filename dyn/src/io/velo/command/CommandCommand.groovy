@@ -5,14 +5,25 @@ import io.velo.BaseCommand
 import io.velo.ConfForGlobal
 import io.velo.reply.*
 
+/**
+ * Implements the COMMAND command, returning metadata and key extraction for supported commands.
+ */
 @CompileStatic
 class CommandCommand extends BaseCommand {
     static final String version = '1.0.0'
 
+    /**
+     * Creates a CommandCommand with no bound group (used for dispatch).
+     */
     CommandCommand() {
         super(null, null, null)
     }
 
+    /**
+     * Creates a CommandCommand from the given CGroup, copying its command data and socket.
+     *
+     * @param cGroup the group providing the command context
+     */
     CommandCommand(CGroup cGroup) {
         super(cGroup.cmd, cGroup.data, cGroup.socket)
     }

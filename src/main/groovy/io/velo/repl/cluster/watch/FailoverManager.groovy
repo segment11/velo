@@ -248,6 +248,12 @@ class FailoverManager {
 
     private final JedisPoolHolder jedisPoolHolder = JedisPoolHolder.instance
 
+    /**
+     * Queries the given node for its slave replication offset.
+     *
+     * @param node the node to query
+     * @return the slave replication offset
+     */
     long getSlaveReplOffset(Node node) {
         if (slaveReplOffsetProviderForTest != null) {
             return slaveReplOffsetProviderForTest.call(node)
@@ -441,6 +447,13 @@ class FailoverManager {
         }
     }
 
+    /**
+     * Checks whether the given endpoint still has a fresh Ping-Ok status posted by a slave.
+     *
+     * @param oneClusterName the cluster name
+     * @param hostAndPort    the endpoint host and port
+     * @return true if the Ping-Ok status posted by the slave is still fresh
+     */
     @VisibleForTesting
     boolean isPingOkPostBySlaveFresh(String oneClusterName, HostAndPort hostAndPort) {
         var now = System.currentTimeMillis()

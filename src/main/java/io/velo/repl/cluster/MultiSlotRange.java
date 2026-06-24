@@ -10,10 +10,20 @@ import java.util.TreeSet;
  * Represents multiple slot ranges.
  */
 public class MultiSlotRange implements Comparable<MultiSlotRange> {
+    /**
+     * Returns the list of slot ranges (already sorted).
+     *
+     * @return the list of slot ranges
+     */
     public ArrayList<SlotRange> getList() {
         return list;
     }
 
+    /**
+     * Sets the list of slot ranges.
+     *
+     * @param list the list of slot ranges
+     */
     public void setList(ArrayList<SlotRange> list) {
         this.list = list;
     }
@@ -21,6 +31,11 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
     // already sorted
     private ArrayList<SlotRange> list = new ArrayList<>();
 
+    /**
+     * Returns the total number of slots across all ranges.
+     *
+     * @return the total slot count
+     */
     public int slotCount() {
         int total = 0;
         for (var slotRange : list) {
@@ -29,6 +44,12 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         return total;
     }
 
+    /**
+     * Checks whether the given client slot is contained in any of the ranges.
+     *
+     * @param toClientSlot the client slot
+     * @return true if the slot is contained
+     */
     public boolean contains(int toClientSlot) {
         for (var slotRange : list) {
             if (slotRange.contains(toClientSlot)) {
@@ -64,11 +85,24 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         return sb.substring(0, sb.length() - 1);
     }
 
+    /**
+     * Adds a single slot range and keeps the list sorted.
+     *
+     * @param begin the inclusive begin
+     * @param end   the inclusive end
+     */
     public void addSingle(int begin, int end) {
         list.add(new SlotRange(begin, end));
         Collections.sort(list);
     }
 
+    /**
+     * Parses a MultiSlotRange from its string representation produced by {@link #toString()}.
+     *
+     * @param toString the string representation
+     * @return the parsed MultiSlotRange
+     * @throws IllegalArgumentException if the string is invalid
+     */
     public static MultiSlotRange fromSelfString(String toString) {
         var r = new MultiSlotRange();
         r.list = new ArrayList<>();
@@ -94,6 +128,11 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         return r;
     }
 
+    /**
+     * Converts all slot ranges into a sorted set of individual slot numbers.
+     *
+     * @return the sorted set of slot numbers
+     */
     public TreeSet<Integer> toTreeSet() {
         TreeSet<Integer> r = new TreeSet<>();
         if (list.isEmpty()) {
@@ -153,6 +192,12 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         return r;
     }
 
+    /**
+     * Removes the given slots and adds the given slots, rebuilding the range list.
+     *
+     * @param remove the slots to remove
+     * @param add    the slots to add
+     */
     public void removeOrAddSet(TreeSet<Integer> remove, TreeSet<Integer> add) {
         if (remove.isEmpty() && add.isEmpty()) {
             return;
@@ -171,6 +216,11 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         list.addAll(r.list);
     }
 
+    /**
+     * Adds a single client slot if it is not already present.
+     *
+     * @param toClientSlot the client slot to add
+     */
     public void addOneSlot(int toClientSlot) {
         if (contains(toClientSlot)) {
             return;
@@ -183,6 +233,11 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         list.addAll(r.list);
     }
 
+    /**
+     * Removes a single client slot if it is present.
+     *
+     * @param toClientSlot the client slot to remove
+     */
     public void removeOneSlot(int toClientSlot) {
         if (!contains(toClientSlot)) {
             return;
@@ -195,6 +250,14 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         list.addAll(r.list);
     }
 
+    /**
+     * Returns the CLUSTER NODES formatted line(s) for the slot ranges owned by the given node.
+     *
+     * @param nodeId the node id
+     * @param ip     the node ip
+     * @param port   the node port
+     * @return the formatted node line(s) including slot ranges
+     */
     public ArrayList<String> clusterNodesSlotRangeList(String nodeId, String ip, Integer port) {
         ArrayList<String> list = new ArrayList<>();
         if (this.list.isEmpty()) {

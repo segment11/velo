@@ -93,6 +93,7 @@ public class CompressStats {
         });
     }
 
+    /** Unregisters the metrics collected by this instance. */
     public void cleanUp() {
         metricsUnregister.run();
     }

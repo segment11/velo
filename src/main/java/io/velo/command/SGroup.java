@@ -459,6 +459,9 @@ public class SGroup extends BaseCommand {
                     "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
                     "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
 
+    /**
+     * Compiled pattern matching a valid IPv4 address.
+     */
     public static final Pattern IPv4_PATTERN = Pattern.compile(IPV4_REGEX);
 
     /**
@@ -473,6 +476,9 @@ public class SGroup extends BaseCommand {
     /** RFC 1035 caps a full domain name at 253 octets. */
     private static final int HOSTNAME_MAX_LENGTH = 253;
 
+    /**
+     * Compiled pattern matching a valid RFC-1123 hostname.
+     */
     public static final Pattern HOSTNAME_PATTERN = Pattern.compile(HOSTNAME_REGEX);
 
     Reply slaveof() {
@@ -816,6 +822,13 @@ public class SGroup extends BaseCommand {
         return getRedisSet(slotWithKeyHash, this);
     }
 
+    /**
+     * Loads and decodes the {@link RedisHashKeys} (set type) stored for the given key.
+     *
+     * @param slotWithKeyHash the slot and key hash to look up
+     * @param baseCommand     the base command providing storage access
+     * @return the decoded set, or null if the key does not exist
+     */
     public static RedisHashKeys getRedisSet(SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand) {
         var encodedBytes = baseCommand.get(slotWithKeyHash, false, CompressedValue.SP_TYPE_SET);
         if (encodedBytes == null) {

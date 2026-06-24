@@ -830,6 +830,7 @@ public class SocketInspector implements TcpSocket.Inspector {
         return null;
     }
 
+    /** Clears all subscriptions, socket mappings, and resets the connection count to zero. */
     public void clearAll() {
         subscribeByChannel.clear();
 

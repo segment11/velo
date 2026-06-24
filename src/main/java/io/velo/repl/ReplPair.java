@@ -523,6 +523,11 @@ public class ReplPair {
     @ForMasterField
     TcpSocket slaveConnectSocketInMaster;
 
+    /**
+     * Sets the slave connect socket held in the master side.
+     *
+     * @param slaveConnectSocketInMaster the slave connect socket
+     */
     public void setSlaveConnectSocketInMaster(TcpSocket slaveConnectSocketInMaster) {
         if (this.slaveConnectSocketInMaster != null && this.slaveConnectSocketInMaster != slaveConnectSocketInMaster) {
             log.warn("Repl pair master, slave connect not null, overwrite");
@@ -531,6 +536,9 @@ public class ReplPair {
         this.slaveConnectSocketInMaster = slaveConnectSocketInMaster;
     }
 
+    /**
+     * Closes the slave connect socket held in the master side, if one exists.
+     */
     public void closeSlaveConnectSocket() {
         if (slaveConnectSocketInMaster != null && !slaveConnectSocketInMaster.isClosed()) {
             try {

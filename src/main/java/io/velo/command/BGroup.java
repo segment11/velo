@@ -113,6 +113,9 @@ public class BGroup extends BaseCommand {
         return slotWithKeyHashList;
     }
 
+    /**
+     * The timestamp (in milliseconds) of the last successful BGSAVE operation.
+     */
     public static final AtomicLong lastBgSaveMillis = new AtomicLong(0);
 
     /**

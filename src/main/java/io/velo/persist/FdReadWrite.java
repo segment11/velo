@@ -826,6 +826,9 @@ public class FdReadWrite implements InMemoryEstimate, InSlotMetricCollector, Nee
         return writeInnerByBuffer(bucketIndex, forOneWalGroupBatchBuffer, (buffer) -> buffer.put(sharedBytes), false);
     }
 
+    /**
+     * Truncates the backing file to zero length and clears the in-memory LRU cache.
+     */
     public void truncate() {
         if (raf != null) {
             try {

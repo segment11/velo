@@ -33,9 +33,13 @@ public class CompressedValue {
      * Numeric type markers (negative values).
      */
     public static final int SP_TYPE_NUM_BYTE = -1;   // 1-byte numeric value
+    /** Marker for a 2-byte (short) numeric value. */
     public static final int SP_TYPE_NUM_SHORT = -2;  // 2-byte numeric value
+    /** Marker for a 4-byte (int) numeric value. */
     public static final int SP_TYPE_NUM_INT = -4;    // 4-byte numeric value
+    /** Marker for an 8-byte (long) numeric value. */
     public static final int SP_TYPE_NUM_LONG = -8;   // 8-byte numeric value
+    /** Marker for an 8-byte (double) floating point numeric value. */
     public static final int SP_TYPE_NUM_DOUBLE = -16; // 8-byte floating point
 
     /**
@@ -68,18 +72,26 @@ public class CompressedValue {
      * Redis data structure type markers.
      */
     public static final int SP_TYPE_HH = -512;         // Compact hash storage
+    /** Marker for full hash storage. */
     public static final int SP_TYPE_HASH = -1024;      // Full hash storage
+    /** Marker for list structure. */
     public static final int SP_TYPE_LIST = -2048;      // List structure
+    /** Marker for set structure. */
     public static final int SP_TYPE_SET = -4096;       // Set structure
+    /** Marker for sorted set structure. */
     public static final int SP_TYPE_ZSET = -8192;      // Sorted set
+    /** Marker for geospatial data. */
     public static final int SP_TYPE_GEO = -8193;       // Geospatial data
+    /** Marker for stream data. */
     public static final int SP_TYPE_STREAM = -16384;   // Stream data
+    /** Marker for a bloom filter bitmap. */
     public static final int SP_TYPE_BLOOM_BITMAP = -200;// Bloom filter
 
     /**
      * Size limits.
      */
     public static final short KEY_MAX_LENGTH = 256;    // Maximum allowed key size
+    /** Maximum allowed compressed value size, must be less than {@code Wal.ONE_GROUP_BUFFER_SIZE}. */
     // must < Wal.ONE_GROUP_BUFFER_SIZE
     public static final int VALUE_MAX_LENGTH = 1024 * 1024;  // Maximum compressed value size
 
@@ -88,6 +100,7 @@ public class CompressedValue {
      * seq long + expireAt long + keyHash long + dictSeqOrSpType int + compressedLength int
      */
     public static final int VALUE_HEADER_LENGTH = 8 + 8 + 8 + 4 + 4;
+    /** Number of bytes in the key header. */
     public static final int KEY_HEADER_LENGTH = 2;
 
     /**
@@ -805,6 +818,12 @@ public class CompressedValue {
         }
     }
 
+    /**
+     * Encodes the big string metadata (UUID + dictionary seq) into the compressed data buffer.
+     *
+     * @param uuid   the big string UUID
+     * @param dictSeq the dictionary sequence number
+     */
     public void setCompressedDataAsBigString(long uuid, int dictSeq) {
         assert dictSeqOrSpType == SP_TYPE_BIG_STRING;
         // UUID + dict int.

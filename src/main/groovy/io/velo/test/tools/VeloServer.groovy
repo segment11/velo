@@ -5,6 +5,9 @@ import redis.clients.jedis.Jedis
 
 import java.util.concurrent.TimeUnit
 
+/**
+ * Helper for starting and stopping a real Velo server process during integration tests.
+ */
 class VeloServer {
     static final String jdkVersion
     static final String JAVA_BIN_PATH
@@ -41,10 +44,17 @@ class VeloServer {
     int port = 7379
     String dir
 
+    /**
+     * @return true if the built Velo jar exists at the expected path
+     */
     static boolean isJarExists() {
         new File(JAR_FILE_PATH).exists()
     }
 
+    /**
+     * @param name    the logical name of this server instance
+     * @param extArgs extra key=value arguments forwarded to the Velo server
+     */
     VeloServer(String name = 'test-velo-server', String... extArgs) {
         this.name = name
         this.args.addAll extArgs
@@ -67,20 +77,38 @@ class VeloServer {
         -1
     }
 
+    /**
+     * @param port the port the Velo server should listen on
+     * @return this server instance for method chaining
+     */
     VeloServer port(int port) {
         this.port = port
         this
     }
 
+    /**
+     * Picks a random available port and applies it via {@link #port(int)}.
+     *
+     * @return this server instance for method chaining
+     */
     VeloServer randomPort() {
         port(onePortListenAvailable)
     }
 
+    /**
+     * @param dir the working directory for Velo data files
+     * @return this server instance for method chaining
+     */
     VeloServer dir(String dir) {
         this.dir = dir
         this
     }
 
+    /**
+     * @param key   the configuration key
+     * @param value the configuration value
+     * @return this server instance for method chaining
+     */
     VeloServer arg(String key, Object value) {
         this.args.add "${key}=${value.toString()}".toString()
         this
@@ -88,6 +116,11 @@ class VeloServer {
 
     private Process process
 
+    /**
+     * Generates a temporary properties file, starts the Velo server process, and blocks until it exits.
+     *
+     * @return the process exit code
+     */
     int run() {
         def tmpConfigPath = "velo-port${port}.properties"
         new File(tmpConfigPath).text = """
@@ -108,6 +141,9 @@ ${args ? args.join("\r\n") : ''}
         exitCode
     }
 
+    /**
+     * Stops the Velo server process, escalating to a forced kill after 5 seconds.
+     */
     void stop() {
         if (process != null && process.isAlive()) {
             process.destroy()
@@ -125,10 +161,18 @@ ${args ? args.join("\r\n") : ''}
         }
     }
 
+    /**
+     * @return a connected Jedis client targeting this server's port
+     */
     Jedis jedis() {
         RedisServer.initJedis('127.0.0.1', port)
     }
 
+    /**
+     * Entry point for ad-hoc verification that the built Velo jar can be started.
+     *
+     * @param args command line arguments (unused)
+     */
     static void main(String[] args) {
         if (!isJarExists()) {
             println 'jar file not exists, please run `./gradlew jar` first'
