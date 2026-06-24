@@ -302,6 +302,50 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test reset as slave removes master side repl pairs'() {
+        given:
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        when:
+        // simulate this node is a master with one downstream replica
+        def replPairAsMaster = ReplPairTest.mockAsMaster(oneSlot.masterUuid)
+        replPairAsMaster.slaveUuid = 11L
+        oneSlot.replPairs.add(replPairAsMaster)
+        // an already byed master pair must be skipped, not double closed
+        def replPairAsMasterByed = ReplPairTest.mockOne((short) 0, true, 'localhost', 6390)
+        replPairAsMasterByed.masterUuid = oneSlot.masterUuid
+        replPairAsMasterByed.slaveUuid = 12L
+        replPairAsMasterByed.sendBye = true
+        oneSlot.replPairs.add(replPairAsMasterByed)
+        // a slave pair must be left untouched by removeReplPairAsMaster
+        def replPairAsSlave = ReplPairTest.mockAsSlave(oneSlot.masterUuid, 13L)
+        oneSlot.replPairs.add(replPairAsSlave)
+        then:
+        oneSlot.getReplPairAsMasterList().size() == 1
+        !replPairAsMaster.isSendBye()
+
+        when:
+        // demote this node to slave of another master
+        oneSlot.resetAsSlave('localhost', 6379)
+        then:
+        // the old master side pair must be byed and no longer active
+        oneSlot.getReplPairAsMasterList().isEmpty()
+        replPairAsMaster.isSendBye()
+        oneSlot.delayNeedCloseReplPairs.contains(replPairAsMaster)
+        // the already byed master pair is not added again to the delay close list
+        oneSlot.delayNeedCloseReplPairs.count { it == replPairAsMasterByed } == 0
+        // the new slave pair is created
+        oneSlot.getOnlyOneReplPairAsSlave() != null
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test eventloop'() {
         given:
         def persistConfig = Config.create()

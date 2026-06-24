@@ -353,6 +353,32 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         return isSelfSlave;
     }
 
+    /**
+     * Close every active master-side repl pair, used when this node is demoted from master to slave.
+     * Without this the demoted node keeps servicing old downstream replicas as if it were still their master.
+     *
+     * @return true if at least one master-side repl pair was closed
+     */
+    public boolean removeReplPairAsMaster() {
+        boolean isSelfMaster = false;
+        for (var replPair : replPairs) {
+            if (replPair.isSendBye()) {
+                continue;
+            }
+
+            if (!replPair.isAsMaster()) {
+                continue;
+            }
+
+            log.warn("Repl remove repl pair as master, host={}, port={}, slot={}", replPair.getHost(), replPair.getPort(), slot);
+            replPair.bye();
+            addDelayNeedCloseReplPair(replPair);
+            isSelfMaster = true;
+        }
+
+        return isSelfMaster;
+    }
+
     public @Nullable ReplPair getReplPairAsMaster(long slaveUuid) {
         var list = getReplPairAsMasterList();
         return list.stream().filter(one -> one.getSlaveUuid() == slaveUuid).findFirst().orElse(null);
@@ -1991,6 +2017,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         log.warn("Repl clear fetched binlog file index and offset as old slave, slot={}", slot);
 
         binlog.moveToNextSegment();
+
+        // demotion: drop any master-side repl pairs so old downstream replicas stop treating this node as their master
+        removeReplPairAsMaster();
 
         createReplPairAsSlave(host, port);
 
