@@ -261,6 +261,16 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
+     * @return key-count skew snapshot, or null when key-count stats are not initialized
+     */
+    public StatKeyCountInBuckets.KeyCountSkew calcKeyCountSkew() {
+        if (statKeyCountInBuckets == null) {
+            return null;
+        }
+        return statKeyCountInBuckets.calcKeyCountSkew();
+    }
+
+    /**
      * @param walGroupIndex the WAL group index
      * @param beginBucketIndex the starting bucket index
      * @param keyCountArray the new key counts

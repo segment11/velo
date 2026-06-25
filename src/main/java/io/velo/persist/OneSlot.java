@@ -296,6 +296,18 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
     private static final Logger log = LoggerFactory.getLogger(OneSlot.class);
 
+    @VisibleForTesting
+    static final double HEALTH_WARN_CHUNK_SEGMENT_FILL_RATE = 0.80D;
+
+    @VisibleForTesting
+    static final int HEALTH_WARN_KEY_BUCKET_KEY_COUNT_MAX = KeyBucket.INIT_CAPACITY * KeyLoader.MAX_SPLIT_NUMBER * 9 / 10;
+
+    @VisibleForTesting
+    static final int HEALTH_WARN_KEY_BUCKET_SKEW_MIN_MAX_COUNT = KeyBucket.INIT_CAPACITY;
+
+    @VisibleForTesting
+    static final double HEALTH_WARN_KEY_BUCKET_SKEW_RATIO = 100.0D;
+
     private final long masterUuid;
 
     /**
@@ -1345,6 +1357,12 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                     log.info("Task {} run, slot={}, loop count={}", name(), slot, loopCount);
                 }
 
+                handleReplPairSubTasks();
+
+                checkHealthyAndWarn();
+            }
+
+            private void handleReplPairSubTasks() {
                 boolean isAsMaster = false;
                 for (var replPair : replPairs) {
                     if (replPair.isSendBye()) {
@@ -1401,6 +1419,20 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 }
             }
 
+            private void checkHealthyAndWarn() {
+                // check every 10m
+                if (loopCount % (100 * 600) != 0) {
+                    return;
+                }
+
+                var warnings = collectHealthWarnings();
+                if (warnings.isEmpty()) {
+                    log.info("Slot health no warn, slot={}", slot);
+                } else {
+                    log.warn("Slot health warn, slot={}, {}", slot, String.join("; ", warnings));
+                }
+            }
+
             @Override
             public void setLoopCount(long loopCount) {
                 this.loopCount = loopCount;
@@ -1412,6 +1444,46 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                 return 100;
             }
         });
+    }
+
+    @VisibleForTesting
+    List<String> collectHealthWarnings() {
+        var warnings = new ArrayList<String>(2);
+
+        if (chunk != null && metaChunkSegmentFlagSeq != null) {
+            var maxSegmentNumber = chunk.maxSegmentIndex + 1;
+            var reusableSegmentCount = metaChunkSegmentFlagSeq.countReusableSegments();
+            var usedSegmentCount = Math.max(0, maxSegmentNumber - reusableSegmentCount);
+            var fillRate = usedSegmentCount / (double) maxSegmentNumber;
+            if (fillRate >= HEALTH_WARN_CHUNK_SEGMENT_FILL_RATE) {
+                warnings.add(String.format(Locale.ROOT,
+                        "chunk_segment_fill_rate=%.6f, chunk_segment_used_count=%d, " +
+                                "chunk_segment_reusable_count=%d, chunk_segment_max_count=%d, threshold=%.2f",
+                        fillRate, usedSegmentCount, reusableSegmentCount, maxSegmentNumber,
+                        HEALTH_WARN_CHUNK_SEGMENT_FILL_RATE));
+            }
+        }
+
+        if (keyLoader != null) {
+            var keyCountSkew = keyLoader.calcKeyCountSkew();
+            if (keyCountSkew != null) {
+                if (keyCountSkew.keyCountMax() >= HEALTH_WARN_KEY_BUCKET_KEY_COUNT_MAX) {
+                    warnings.add(String.format(Locale.ROOT,
+                            "key_bucket_key_count_max=%d, threshold=%d, key_bucket_bucket_count=%d, calc_cost_ms=%.6f",
+                            keyCountSkew.keyCountMax(), HEALTH_WARN_KEY_BUCKET_KEY_COUNT_MAX,
+                            keyCountSkew.bucketCount(), keyCountSkew.calcCostMs()));
+                } else if (keyCountSkew.keyCountMax() >= HEALTH_WARN_KEY_BUCKET_SKEW_MIN_MAX_COUNT &&
+                        keyCountSkew.skewRatioMaxToAvg() >= HEALTH_WARN_KEY_BUCKET_SKEW_RATIO) {
+                    warnings.add(String.format(Locale.ROOT,
+                            "key_bucket_skew_ratio_max_to_avg=%.6f, threshold=%.2f, " +
+                                    "key_bucket_key_count_max=%d, key_bucket_key_count_avg=%.6f, calc_cost_ms=%.6f",
+                            keyCountSkew.skewRatioMaxToAvg(), HEALTH_WARN_KEY_BUCKET_SKEW_RATIO,
+                            keyCountSkew.keyCountMax(), keyCountSkew.keyCountAvg(), keyCountSkew.calcCostMs()));
+                }
+            }
+        }
+
+        return warnings;
     }
 
     void debugMode() {

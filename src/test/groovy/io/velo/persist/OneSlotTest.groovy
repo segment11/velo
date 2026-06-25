@@ -71,6 +71,55 @@ class OneSlotTest extends Specification {
         eventloop.breakEventloop()
     }
 
+    def 'test healthy warn collection'() {
+        given:
+        Consts.slotDir.deleteDir()
+        def keyLoader = new KeyLoader(slot, ConfForSlot.global.confBucket.bucketsPerSlot, Consts.slotDir, new SnowFlake(1, 1))
+
+        expect:
+        new OneSlot(slot).collectHealthWarnings().isEmpty()
+        keyLoader.calcKeyCountSkew() == null
+
+        when:
+        keyLoader.initFds()
+        def oneSlot = new OneSlot(slot, Consts.slotDir, keyLoader, null)
+
+        then:
+        oneSlot.collectHealthWarnings().isEmpty()
+
+        when:
+        keyLoader.updateKeyCountBatch(0, 0, [(short) (KeyBucket.INIT_CAPACITY * KeyLoader.MAX_SPLIT_NUMBER)] as short[])
+        def warnings = oneSlot.collectHealthWarnings()
+
+        then:
+        warnings.size() == 1
+        warnings[0].contains('key_bucket_key_count_max=432')
+
+        when:
+        keyLoader.updateKeyCountBatch(0, 0, [(short) KeyBucket.INIT_CAPACITY] as short[])
+        warnings = oneSlot.collectHealthWarnings()
+
+        then:
+        warnings.size() == 1
+        warnings[0].contains('key_bucket_skew_ratio_max_to_avg=')
+
+        when:
+        oneSlot.chunk = new Chunk(slot, Consts.slotDir, oneSlot)
+        def warnUsedSegmentCount = (int) Math.ceil((oneSlot.chunk.maxSegmentIndex + 1) * OneSlot.HEALTH_WARN_CHUNK_SEGMENT_FILL_RATE)
+        oneSlot.metaChunkSegmentFlagSeq.setSegmentMergeFlagBatch(0, warnUsedSegmentCount, Chunk.SEGMENT_FLAG_HAS_DATA, null, 0)
+        warnings = oneSlot.collectHealthWarnings()
+
+        then:
+        warnings.size() == 2
+        warnings.any { it.contains('chunk_segment_fill_rate=') }
+        warnings.any { it.contains('key_bucket_skew_ratio_max_to_avg=') }
+
+        cleanup:
+        keyLoader.cleanUp()
+        oneSlot.metaChunkSegmentFlagSeq.cleanUp()
+        oneSlot.metaChunkSegmentIndex.cleanUp()
+    }
+
     def 'test init'() {
         given:
         def persistConfig = Config.create()
