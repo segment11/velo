@@ -445,6 +445,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             isSelfSlave = true;
         }
 
+        // 2N scale-up: when a slave stream's repl pair is torn down, drop its readiness so the
+        // global read gate closes. The guard inside publishStreamReadyAndRefreshGate makes this
+        // a no-op when not in a scale-up session (e.g. equal-slot mode or promotion).
+        if (isSelfSlave) {
+            LocalPersist.getInstance().publishStreamReadyAndRefreshGate(slot, false);
+        }
+
         return isSelfSlave;
     }
 

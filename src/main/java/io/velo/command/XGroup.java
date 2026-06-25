@@ -1683,6 +1683,11 @@ public class XGroup extends BaseCommand {
                 var masterCurrentFo = new Binlog.FileIndexAndOffset(masterCurrentFileIndex, masterCurrentOffset);
                 replPair.setMasterBinlogCurrentFileIndexAndOffset(masterCurrentFo);
                 replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(masterCurrentFo);
+
+                // 2N scale-up: master has no more binlog, this stream is read-ready
+                if (localPersist.isAsSlaveScaleUp()) {
+                    localPersist.publishStreamReadyAndRefreshGate(slot, true);
+                }
             }
 
             if (!isMasterReadonly) {
@@ -1838,7 +1843,12 @@ public class XGroup extends BaseCommand {
             canRead = false;
         }
 
-        if ((canRead && !oneSlot.isCanRead()) || (!canRead && oneSlot.isCanRead())) {
+        if (localPersist.isAsSlaveScaleUp()) {
+            // 2N scale-up: publish this stream's readiness to the central gate, which fans
+            // canRead to ALL local slots only when the global AND changes. Do NOT set canRead
+            // per-slot here — any local slot can hold keys from any master stream.
+            localPersist.publishStreamReadyAndRefreshGate(slot, canRead);
+        } else if ((canRead && !oneSlot.isCanRead()) || (!canRead && oneSlot.isCanRead())) {
             try {
                 oneSlot.setCanRead(canRead);
                 log.warn("Repl slave can read={}, as already catch up nearly to master latest, slot={}", canRead, slot);

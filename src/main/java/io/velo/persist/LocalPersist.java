@@ -456,6 +456,70 @@ public class LocalPersist implements NeedCleanUp {
         return ConfForGlobal.masterSlotNumber > 0 && ConfForGlobal.slotNumber > ConfForGlobal.masterSlotNumber;
     }
 
+    // ---- Scale-up global read gate (central, lock-serialized, race-free) ----
+    // Each stream publishes only its own readiness into streamReadReady[streamSlot].
+    // The gate recomputes the AND and fans canRead to ALL local slots — only when the AND changes.
+    // All under scaleUpGateLock so two streams cannot interleave fan-outs (kills the check-then-act race).
+    private boolean[] streamReadReady = new boolean[0];
+    private boolean scaleUpGateOpen = false;
+    private final Object scaleUpGateLock = new Object();
+
+    /**
+     * Allocate/clear gate state for a fresh scale-up slave session.
+     * Call from {@code doResetAsSlave} before the reset loop.
+     *
+     * @param masterSlotNumber the remote master's slot count (= number of stream slots)
+     */
+    @TestOnly
+    public void resetScaleUpReadGate(int masterSlotNumber) {
+        synchronized (scaleUpGateLock) {
+            streamReadReady = new boolean[masterSlotNumber];
+            scaleUpGateOpen = false;
+        }
+    }
+
+    /**
+     * One stream publishes its own readiness; the gate recomputes the AND and fans {@code canRead}
+     * to ALL local slots only when the AND actually changes. Serialized so two streams cannot
+     * interleave fan-outs (a stale {@code true} can never land after a {@code false}).
+     * <p>
+     * Each stream writes only its own index, so no foreign-thread {@code ReplPair} state is touched.
+     *
+     * @param streamSlot the stream slot publishing readiness
+     * @param ready      whether this stream is read-ready
+     */
+    public void publishStreamReadyAndRefreshGate(short streamSlot, boolean ready) {
+        synchronized (scaleUpGateLock) {
+            if (streamSlot >= streamReadReady.length) {
+                return; // not in a scale-up session, or out-of-range
+            }
+            streamReadReady[streamSlot] = ready;
+            boolean open = true;
+            for (boolean r : streamReadReady) {
+                if (!r) {
+                    open = false;
+                    break;
+                }
+            }
+            if (open == scaleUpGateOpen) {
+                return; // no change, no fan-out
+            }
+            scaleUpGateOpen = open;
+            // Fan canRead to all local slots. asyncRun submits to each slot's eventloop
+            // (runs inline for the current slot) and returns immediately; the lock is held
+            // only briefly during submission. Lock-ordered submits guarantee per-slot ordering.
+            final boolean gateOpen = open;
+            for (short s = 0; s < ConfForGlobal.slotNumber; s++) {
+                var ts = oneSlot(s);
+                ts.asyncRun(() -> {
+                    if (ts.isCanRead() != gateOpen) {
+                        ts.setCanRead(gateOpen);
+                    }
+                });
+            }
+        }
+    }
+
     /**
      * @param asSlaveFirstSlotFetchedExistsAllDone the flag value to set
      */

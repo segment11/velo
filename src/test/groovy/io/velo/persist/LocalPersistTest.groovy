@@ -254,4 +254,72 @@ class LocalPersistTest extends Specification {
         localPersist.resetForTest()
         eventloop.breakEventloop()
     }
+
+    def 'test scale-up read gate'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+
+        prepareLocalPersist((byte) 1, (short) 4)
+        def localPersist = LocalPersist.instance
+        // fix all 4 slot threads to current thread so asyncRun runs inline (deterministic)
+        for (short s = 0; s < 4; s++) {
+            localPersist.fixSlotThreadId(s, Thread.currentThread().threadId())
+        }
+
+        and:
+        ConfForGlobal.masterSlotNumber = (short) 2
+        ConfForGlobal.slotNumber = (short) 4
+        // masterSlotNumber=2 (streams 0,1), slotNumber=4 (slots 0,1,2,3)
+        localPersist.resetScaleUpReadGate(2)
+
+        // init all slots to canRead=false
+        for (short s = 0; s < 4; s++) {
+            localPersist.oneSlot(s).canRead = false
+        }
+
+        expect: 'gate starts closed — no stream is ready yet'
+        !localPersist.oneSlot((short) 0).canRead
+        !localPersist.oneSlot((short) 3).canRead
+
+        when: 'only stream 0 ready — gate still closed'
+        localPersist.publishStreamReadyAndRefreshGate((short) 0, true)
+        then:
+        !localPersist.oneSlot((short) 0).canRead
+        !localPersist.oneSlot((short) 3).canRead
+
+        when: 'stream 1 also ready — gate opens, all 4 slots readable'
+        // pre-set slot 2 to already canRead=true so the per-slot skip branch is exercised
+        localPersist.oneSlot((short) 2).canRead = true
+        localPersist.publishStreamReadyAndRefreshGate((short) 1, true)
+        then:
+        localPersist.oneSlot((short) 0).canRead
+        localPersist.oneSlot((short) 1).canRead
+        localPersist.oneSlot((short) 2).canRead
+        localPersist.oneSlot((short) 3).canRead
+
+        when: 'stream 0 drops — gate closes, all 4 slots unreadable'
+        localPersist.publishStreamReadyAndRefreshGate((short) 0, false)
+        then:
+        !localPersist.oneSlot((short) 0).canRead
+        !localPersist.oneSlot((short) 3).canRead
+
+        when: 'stream 0 comes back — gate reopens'
+        localPersist.publishStreamReadyAndRefreshGate((short) 0, true)
+        then:
+        localPersist.oneSlot((short) 0).canRead
+        localPersist.oneSlot((short) 3).canRead
+
+        when: 'publish out-of-range stream slot is ignored (no-op guard)'
+        localPersist.publishStreamReadyAndRefreshGate((short) 5, true)
+        then:
+        localPersist.oneSlot((short) 0).canRead
+        noExceptionThrown()
+
+        cleanup:
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

@@ -537,6 +537,12 @@ public class LeaderSelector implements NeedCleanUp {
 
             var localPersist = LocalPersist.getInstance();
 
+            // Initialize the scale-up read gate for a fresh slave session (no-op allocation
+            // for equal-slot mode where masterSlotNumber == slotNumber, but harmless).
+            if (localPersist.isAsSlaveScaleUp()) {
+                localPersist.resetScaleUpReadGate(ConfForGlobal.masterSlotNumber);
+            }
+
             Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
             for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
                 var oneSlot = localPersist.oneSlot((short) i);
