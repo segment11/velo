@@ -208,6 +208,10 @@ class ManageCommand extends BaseCommand {
             // manage slot 0 bucket 0 view-bucket-key-count
             def keyCount = bucketIndex == -1 ? oneSlot.getAllKeyCount() : oneSlot.keyLoader.getKeyCountInBucketIndex(bucketIndex)
             return new IntegerReply(keyCount)
+        } else if (subSubCmd == 'view-bucket-key-count-skew') {
+            // manage slot 0 view-bucket-key-count-skew
+            // manage slot 0 bucket 0 view-bucket-key-count-skew
+            return new BulkReply(oneSlot.keyLoader.describeKeyCountSkew().bytes)
         } else if (subSubCmd == 'view-bucket-keys') {
             // manage slot 0 bucket 0 view-bucket-keys [iterate]
             def isIterate = data.length == subSubCmdIndex + 2 && new String(data[data.length - 1]).toLowerCase() == 'iterate'

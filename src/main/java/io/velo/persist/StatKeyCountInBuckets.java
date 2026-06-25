@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * Manages the count of keys in different buckets within a slot.
@@ -190,6 +191,78 @@ public class StatKeyCountInBuckets implements InMemoryEstimate, NeedCleanUp {
      */
     long getKeyCount() {
         return totalKeyCountCached;
+    }
+
+
+    /**
+     * Snapshot of key-count distribution across the slot's key buckets.
+     *
+     * @param bucketCount bucket count in the slot
+     * @param keyCountTotal total key count
+     * @param keyCountAvg average key count per bucket
+     * @param keyCountMax maximum key count in one bucket
+     * @param nonEmptyCount number of buckets with at least one key
+     * @param skewRatioMaxToAvg maximum bucket count divided by average bucket count
+     * @param calcCostMs calculation cost in milliseconds
+     */
+    public record KeyCountSkew(int bucketCount,
+                               long keyCountTotal,
+                               double keyCountAvg,
+                               int keyCountMax,
+                               int nonEmptyCount,
+                               double skewRatioMaxToAvg,
+                               double calcCostMs) {
+        /**
+         * @return a line-oriented text representation for manage commands
+         */
+        public String asText() {
+            return String.format(Locale.ROOT,
+                    "key_bucket_bucket_count=%d%n" +
+                            "key_bucket_key_count_total=%d%n" +
+                            "key_bucket_key_count_avg=%.6f%n" +
+                            "key_bucket_key_count_max=%d%n" +
+                            "key_bucket_non_empty_count=%d%n" +
+                            "key_bucket_skew_ratio_max_to_avg=%.6f%n" +
+                            "calc_cost_ms=%.6f%n",
+                    bucketCount, keyCountTotal, keyCountAvg, keyCountMax, nonEmptyCount, skewRatioMaxToAvg, calcCostMs);
+        }
+    }
+
+    /**
+     * Calculates key-count skew across all bucket indexes using only in-memory bucket-count stats.
+     *
+     * @return key-count skew snapshot
+     */
+    public KeyCountSkew calcKeyCountSkew() {
+        long beginNs = System.nanoTime();
+
+        long keyCountTotal = 0;
+        int keyCountMax = 0;
+        int nonEmptyCount = 0;
+        for (int i = 0; i < bucketsPerSlot; i++) {
+            var offset = i * ONE_LENGTH;
+            int keyCount = inMemoryCachedByteBuffer.getShort(offset);
+            keyCountTotal += keyCount;
+            if (keyCount > keyCountMax) {
+                keyCountMax = keyCount;
+            }
+            if (keyCount > 0) {
+                nonEmptyCount++;
+            }
+        }
+
+        double keyCountAvg = keyCountTotal / (double) bucketsPerSlot;
+        double skewRatioMaxToAvg = keyCountAvg == 0 ? 0 : keyCountMax / keyCountAvg;
+        double calcCostMs = (System.nanoTime() - beginNs) / 1_000_000.0;
+        return new KeyCountSkew(bucketsPerSlot, keyCountTotal, keyCountAvg, keyCountMax, nonEmptyCount,
+                skewRatioMaxToAvg, calcCostMs);
+    }
+
+    /**
+     * @return a line-oriented key-count skew report for manage commands
+     */
+    public String describeKeyCountSkew() {
+        return calcKeyCountSkew().asText();
     }
 
     void clear() {

@@ -11,6 +11,9 @@ class StatKeyCountInBucketsTest extends Specification {
         given:
         def one = new StatKeyCountInBuckets(slot, slotDir)
 
+        expect:
+        one.describeKeyCountSkew().contains('key_bucket_skew_ratio_max_to_avg=0.000000')
+
         when:
         short[] keyCountArray = new short[32]
         keyCountArray[10] = (short) 10
@@ -38,6 +41,31 @@ class StatKeyCountInBucketsTest extends Specification {
         one.clear()
         one.cleanUp()
         one1.cleanUp()
+        slotDir.deleteDir()
+    }
+
+    def 'test describe key count skew'() {
+        given:
+        def one = new StatKeyCountInBuckets(slot, slotDir)
+
+        when:
+        short[] keyCountArray = new short[32]
+        keyCountArray[0] = (short) 10
+        keyCountArray[1] = (short) 20
+        keyCountArray[2] = (short) 30
+        one.setKeyCountBatch(0, 0, keyCountArray)
+        def str = one.describeKeyCountSkew()
+
+        then:
+        str.contains('key_bucket_key_count_total=60')
+        str.contains('key_bucket_key_count_max=30')
+        str.contains('key_bucket_non_empty_count=3')
+        str.contains('key_bucket_skew_ratio_max_to_avg=')
+        str.contains('calc_cost_ms=')
+
+        cleanup:
+        one.clear()
+        one.cleanUp()
         slotDir.deleteDir()
     }
 }

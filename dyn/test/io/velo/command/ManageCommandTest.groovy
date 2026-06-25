@@ -692,6 +692,13 @@ class ManageCommandTest extends Specification {
         reply instanceof IntegerReply
 
         when:
+        data7[5] = 'view-bucket-key-count-skew'.bytes
+        reply = manage.manageInOneSlot()
+        then:
+        reply instanceof BulkReply
+        ((BulkReply) reply).asString().contains('key_bucket_key_count_max=')
+
+        when:
         data7[5] = 'view-bucket-keys'.bytes
         reply = manage.manageInOneSlot()
         then:

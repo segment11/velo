@@ -169,6 +169,14 @@ class KeyLoaderTest extends Specification {
         keyLoader.getKeyCountInBucketIndex(1) == 2
 
         when:
+        def keyCountSkew = keyLoader.describeKeyCountSkew()
+        then:
+        keyCountSkew.contains('key_bucket_key_count_total=3')
+        keyCountSkew.contains('key_bucket_key_count_max=2')
+        keyCountSkew.contains('key_bucket_non_empty_count=2')
+        keyCountSkew.contains('calc_cost_ms=')
+
+        when:
         exception = false
         try {
             keyLoader.updateKeyCountBatch(0, -1, new short[1])

@@ -251,6 +251,16 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
+     * @return a line-oriented key-count skew report for manage commands
+     */
+    public String describeKeyCountSkew() {
+        if (statKeyCountInBuckets == null) {
+            return "";
+        }
+        return statKeyCountInBuckets.describeKeyCountSkew();
+    }
+
+    /**
      * @param walGroupIndex the WAL group index
      * @param beginBucketIndex the starting bucket index
      * @param keyCountArray the new key counts
