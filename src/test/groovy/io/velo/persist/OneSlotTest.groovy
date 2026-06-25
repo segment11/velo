@@ -661,6 +661,35 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test reset as slave no stream for extra scale-up slot'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        when: 'reset as slave without opening a repl stream (extra 2N slot)'
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+        oneSlot.resetAsSlave('localhost', 6379, false)
+        then:
+        oneSlot.readonly
+        !oneSlot.canRead
+        // NO slave ReplPair was created
+        oneSlot.getOnlyOneReplPairAsSlave() == null
+
+        when: 'reset as slave WITH opening a repl stream (stream slot)'
+        oneSlot.resetAsSlave('localhost', 6379, true)
+        then:
+        oneSlot.readonly
+        !oneSlot.canRead
+        // a slave ReplPair WAS created
+        oneSlot.getOnlyOneReplPairAsSlave() != null
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test big string uuid is not key hash'() {
         given:
         LocalPersistTest.prepareLocalPersist()

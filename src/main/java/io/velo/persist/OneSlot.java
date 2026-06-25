@@ -2574,6 +2574,22 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      */
     @SlaveReset
     public void resetAsSlave(@NotNull String host, int port) throws IOException {
+        resetAsSlave(host, port, true);
+    }
+
+    /**
+     * Resets this slot to act as a slave of the given master. When {@code openReplStream} is false,
+     * the slot is put into the slave state (readonly, not readable, binlog off) but does NOT open a
+     * replication stream to the master — used for extra target slots in 2N scale-up mode whose data
+     * arrives via fan-out from stream slots rather than their own master connection.
+     *
+     * @param host           the master host
+     * @param port           the master port
+     * @param openReplStream true to create a slave-side ReplPair and connect; false for no-stream target slots
+     * @throws IOException if the binlog or config cannot be updated
+     */
+    @SlaveReset
+    public void resetAsSlave(@NotNull String host, int port, boolean openReplStream) throws IOException {
         // clear old as slave catch up binlog info
         // need fetch from the beginning, for data consistency
         metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
@@ -2584,7 +2600,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // demotion: drop any master-side repl pairs so old downstream replicas stop treating this node as their master
         removeReplPairAsMaster();
 
-        createReplPairAsSlave(host, port);
+        if (openReplStream) {
+            createReplPairAsSlave(host, port);
+        }
 
         if (!isReadonly()) {
             setReadonly(true);

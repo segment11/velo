@@ -551,7 +551,10 @@ public class LeaderSelector implements NeedCleanUp {
                         }
                     }
 
-                    oneSlot.resetAsSlave(host, port);
+                    var masterSlotNumberForStream = ConfForGlobal.masterSlotNumber > 0
+                            ? ConfForGlobal.masterSlotNumber : ConfForGlobal.slotNumber;
+                    boolean openReplStream = oneSlot.slot() < masterSlotNumberForStream;
+                    oneSlot.resetAsSlave(host, port, openReplStream);
 
                     resetAsMasterCount = 0;
                     resetAsSlaveCount++;
