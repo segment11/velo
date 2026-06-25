@@ -115,4 +115,39 @@ class XWalVTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test applyAsync returns awaitable promise even when target equals stream slot'() {
+        given:
+        final short slot = 0
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def replPair = ReplPairTest.mockAsSlave()
+
+        and:
+        // key that hashes to slot 0 (the stream slot) under slotNumber=1
+        def vList = Mock.prepareValueList(1, 0) { v ->
+            def s = BaseCommand.slot(v.key(), ConfForGlobal.slotNumber)
+            def v2 = new Wal.V(v.seq(), s.bucketIndex(), v.keyHash(), System.currentTimeMillis() + 1000, CompressedValue.NULL_DICT_SEQ,
+                    v.key(), v.cvEncoded(), false)
+            return v2
+        }
+        def v0 = vList[0]
+        def xWalV = new XWalV(v0, true)
+
+        expect: 'isApplyAsync returns false when target == stream'
+        !xWalV.isApplyAsync(slot)
+
+        when: 'applyAsync must NOT short-circuit to fire-and-forget apply; it must return a real promise'
+        def promise = xWalV.applyAsync(slot, replPair)
+        promise.getResult()
+        then: 'the promise completed and the write landed in the target slot'
+        promise.isComplete()
+        !promise.isException()
+        localPersist.oneSlot(slot).get(v0.key(), v0.bucketIndex(), v0.keyHash()) != null
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

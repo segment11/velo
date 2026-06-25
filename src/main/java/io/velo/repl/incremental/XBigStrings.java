@@ -202,11 +202,6 @@ public class XBigStrings implements BinlogContent {
 
     @Override
     public Promise<Void> applyAsync(short slot, ReplPair replPair) {
-        if (!isApplyAsync(slot)) {
-            apply(slot, replPair);
-            return Promise.complete();
-        }
-
         var keyBytes = Wal.keyBytes(key);
         var keyHash = KeyHash.hash(keyBytes);
         var cv = CompressedValue.decode(cvEncoded, keyBytes, keyHash);

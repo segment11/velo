@@ -186,11 +186,6 @@ public class XWalV implements BinlogContent {
 
     @Override
     public Promise<Void> applyAsync(short slot, ReplPair replPair) {
-        if (!isApplyAsync(slot)) {
-            apply(slot, replPair);
-            return Promise.complete();
-        }
-
         var key = v.key();
         var s = targetSlot(key);
         var v2 = new Wal.V(v.seq(), s.bucketIndex(), v.keyHash(), v.expireAt(), v.spType(), key, v.cvEncoded(), false);

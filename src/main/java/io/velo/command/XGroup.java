@@ -1767,7 +1767,12 @@ public class XGroup extends BaseCommand {
             }
         }
 
-        if (!hasAsyncApply) {
+        // Scale-up mode must always route through the async apply path so that Promises.all
+        // awaits all cross-slot writes before the fetched-offset is advanced (await-before-advance).
+        // In equal-slot mode, hasAsyncApply is false for same-slot entries and the sync path is safe.
+        boolean useAsync = hasAsyncApply || localPersist.isAsSlaveScaleUp();
+
+        if (!useAsync) {
             try {
                 for (var content : decodedContents) {
                     content.apply(slot, replPair);
