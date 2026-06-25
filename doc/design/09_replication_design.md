@@ -114,3 +114,47 @@ reflected the same two major ideas that still apply:
 
 - [Protocol Decoding](/home/kerry/ws/velo/doc/design/05_protocol_decoding_design.md)
 - [Cluster Management](/home/kerry/ws/velo/doc/design/16_cluster_management_design.md)
+
+## 2N Scale-Up Slave Replication
+
+A slave may have `slotNumber == master slotNumber * 2`. This is the "shadow scale-up" mode used for online capacity
+growth (see [Scale-Up Design](/home/kerry/ws/velo/doc/design/18_scale_up_design.md)).
+
+### Topology
+
+- Master has `N` slots; slave has `2N` slots.
+- Only stream slots `[0, N)` on the slave open a `ReplPair` and connect to the master (send `hello`).
+- Extra slots `[N, 2N)` are reset as slave target slots (readonly, not readable, binlog off) but do **not** connect.
+- Data from any master stream can fan out to any local slot because the non-cluster slot hash is doubling-hostile.
+
+### Read visibility (global gate)
+
+Because any local slot can hold keys from any master stream, read visibility is global: all local slots become
+readable only when **every** stream slot is read-ready, and flip closed when any stream stops being read-ready.
+
+This is implemented by a central, lock-serialized gate in `LocalPersist`:
+- Each stream publishes its own readiness into `streamReadReady[streamSlot]`.
+- The gate recomputes the AND and fans `canRead` to all `2N` local slots only when the AND changes.
+- All under `scaleUpGateLock` so two streams cannot interleave fan-outs (no check-then-act race).
+- A stream teardown (`removeReplPairAsSlave`) publishes `false` so the gate closes.
+
+### Incremental replay ordering
+
+In 2N mode, `s_catch_up` always routes through the async `applyAsync` path (`useAsync = hasAsyncApply ||
+isAsSlaveScaleUp()`). `Promises.all` awaits all cross-slot writes before `finishSlaveCatchUpApply` advances the
+persisted fetched-offset (await-before-advance). Per-key order is preserved by the target slot's FIFO eventloop.
+
+### FLUSH handling
+
+`FLUSHALL`/`FLUSHDB` produces `N` independent un-coordinated `XFlush` binlog entries. A lagging stream's flush
+would wipe a leading stream's post-flush writes. For v1, `XFlush.apply`/`applyAsync` **throw** in scale-up mode
+(stuck-but-safe): the stream stalls at that offset, the read gate stays closed, no data loss. A cross-stream flush
+barrier is a future task.
+
+### Promotion
+
+`doResetAsMaster` promotes both stream slots (via the existing `removeReplPairAsSlave` → `resetAsMaster` path) and
+extra slots (new: when `replPairAsSlave == null` and `isAsSlaveScaleUp()` and `slot >= masterSlotNumber`).
+
+Known limitation: extra slots are promoted with data but no binlog history (their offset was zeroed at slave reset
+and never advanced). Downstream replication from a promoted 2N node for `[N, 2N)` is not supported in v1.

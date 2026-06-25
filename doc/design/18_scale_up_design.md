@@ -122,24 +122,40 @@ copy-then-cutover.
 
 ## Threading: Keep the Run-to-Completion Invariant
 
-Two ways to relax thread-binding (constraints #2, #3):
+For v1, **do not add slot-worker threads or rehome slots inside a live process**. Changing the slot-worker
+execution topology is a deeper runtime mutation than value-container growth: `OneSlot` ownership is
+thread-affine, command execution uses `@ThreadNeedLocal`, and `LocalPersist`/bootstrap currently size worker
+bindings at startup. A rolling restart or replica-promotion flow is an acceptable CPU scale-up mechanism and
+matches how many storage engines treat deep execution-topology changes.
+
+Reference patterns from other engines:
+
+| Engine | CPU scale-up pattern | Lesson for Velo |
+|--------|----------------------|-----------------|
+| PostgreSQL | More CPU helps more backend processes; some worker/config limits require restart. | Restart for deeper CPU topology is normal. |
+| MySQL/InnoDB | Some concurrency knobs are runtime-tunable; deeper thread/layout assumptions are startup-time. | Runtime knobs tune scheduling, not ownership migration. |
+| RocksDB | Background flush/compaction threads can be adjusted online; foreground work is caller-thread driven. | Online CPU scaling is easiest for background work. |
+| Redis | Main command execution topology is mostly fixed; CPU scale uses cluster/processes/IO threads. | Local multi-process or rolling restart is the baseline. |
+| Elasticsearch/Cassandra | Thread pools exist, but shard/token ownership changes are topology operations. | Treat CPU scale-up as topology/config change. |
+
+So the v1 CPU story should be:
+
+1. Start a replacement instance or promote a replica with a higher `slotWorkers` value.
+2. Let replication catch up or use the cluster/failover path to switch traffic.
+3. Retire the old lower-worker instance.
+
+Two live in-process alternatives remain possible later, but should not be v1:
 
 - **Option A — abandon run-to-completion** (shared `OneSlot` state + locks). **Rejected.** It regresses the
   steady-state lock-free hot path on every slot to fix a rare growth event.
-- **Option B — keep the invariant, make the binding dynamic** (recommended). Replace `slot % slotWorkers`
-  with a mutable slot→worker table, and add a *rehome* operation: quiesce a slot, drain in-flight, rebuild
-  its `@ThreadNeedLocal` state on the target event loop (ActiveJ `execute`/`submit`), flip the table.
+- **Option B — keep the invariant, make the binding dynamic**. Replace `slot % slotWorkers` with a mutable
+  slot→worker table, and add a *rehome* operation: quiesce a slot, drain in-flight, rebuild its
+  `@ThreadNeedLocal` state on the target event loop (ActiveJ `execute`/`submit`), flip the table. This is a
+  later throughput feature only if rolling restart / replica promotion proves too disruptive.
 
-Option B splits into two difficulties, and the pressures do not all need the hard half:
-
-- **Add a slot to an existing worker** (easy) — `initSlots` already round-robins `slot % netWorkers`; a
-  worker can own more slots on its own thread. Covers **key-count** and **value-bytes** growth with no
-  cross-thread data movement.
-- **Move a slot between workers** (hard — the rehome + thread-local rebuild) — needed **only** for the
-  **throughput/CPU** dimension (spreading hot slots onto spare cores).
-
-The safepoint reshard reuses this: folding slots onto one thread is a bulk rehome at a quiesced boundary, not
-a live per-key handoff.
+Adding a physical slot to an existing worker can still be useful for space-oriented resharding, because it does
+not require cross-thread ownership movement. Moving a slot between workers is the hard half and is needed only
+for the throughput/CPU dimension.
 
 ## Difficult Points / Open Hard Problems
 
@@ -374,17 +390,48 @@ move — which a full rebuild does regardless.
   for `clusterEnabled = false`; route `virtualSlot → physicalSlot` through a table in `BaseCommand.slot()`
   instead of `keyHash / x`. Backward-compatible default: one physical slot owns all ranges. Prove parity with
   existing slot tests first (TDD).
-- **Phase 2 — Dynamic slot→worker binding + safepoint reshard.** Mutable slot→worker table; add-slot-to-worker
-  (space); safepoint reshard with copy-then-cutover; reconfig journal; binlog topology record for slaves.
-- **Phase 3 — Slot rehoming + autoscale.** Move slots between workers for throughput; a controller under
-  `dyn/ctrl/` (alongside `FailoverManagerCtrl.groovy`) triggers reshard on Phase-0 metrics within a max-pause
-  budget.
+- **Phase 2 — Space-oriented safepoint reshard.** Add physical slots to existing workers; safepoint reshard
+  with copy-then-cutover; reconfig journal; binlog topology record for slaves. This covers space pressure
+  without live slot-worker growth or cross-thread rehome.
+- **Phase 3 — CPU scale-up by restart / replica promotion.** Treat higher `slotWorkers` as a startup topology
+  change. Use rolling restart, shadow replacement, or replica promotion to move traffic to an instance started
+  with more slot workers.
+- **Phase 4 — Optional live slot rehoming + autoscale.** Move slots between workers for throughput only if the
+  restart/promotion path is not acceptable in practice; a controller under `dyn/ctrl/` can use Phase-0 metrics
+  within a max-pause budget.
 
+### Key-Bucket Capacity Reality Check
+
+With the current upper-bound constants, key-bucket capacity is large enough that normal key-count growth is
+probably **not** the first single-host scale-up risk:
+
+```text
+MAX_BUCKETS_PER_SLOT = 16384 * 16 = 262144 bucket indexes
+KeyBucket.INIT_CAPACITY = 48 key cells per bucket page
+KeyLoader.MAX_SPLIT_NUMBER = 9
+
+one split fd file capacity per slot = 262144 * 48 = 12,582,912 key cells
+max key-cell capacity per slot = 262144 * 48 * 9 = 113,246,208 key cells
+```
+
+So the key-bucket wall should be framed as a **skew / pathological-distribution risk**, not the default v1
+scale-up driver. A single hot bucket can still exhaust its 9 split pages while the slot average looks safe, and
+large split numbers can hurt batch persist/rebuild paths before a hard full. Smaller `bucketsPerSlot` configs
+also reduce this headroom. But for max-bucket deployments, value bytes and slot-worker throughput are more
+likely to drive scale-up pressure than raw key-count capacity.
+
+Practical priority:
+
+| Pressure | Likely scale-up urgency |
+|----------|-------------------------|
+| Value bytes / chunk segments | Highest; direct capacity wall and already visible through `chunk_segment_fill_rate`. |
+| Throughput / CPU per slot worker | Workload dependent; important for hot slots. |
+| Key buckets | Mostly skew diagnostics and warning; not usually the first capacity wall at max settings. |
 
 ### Phase-0 Cap-Warning Metrics
 
 `chunk_segment_fill_rate` already covers the most direct value-bytes capacity wall. The missing early-warning
-surface is the key-bucket wall: total key count alone is not enough, because one skewed bucket can exhaust its
+surface is key-bucket skew: total key count alone is not enough, because one skewed bucket can exhaust its
 split headroom while the slot average fill still looks safe. Fortunately
 [`StatKeyCountInBuckets`](/home/kerry/ws/velo/src/main/java/io/velo/persist/StatKeyCountInBuckets.java)
 already keeps per-bucket key counts in memory, so skew metrics can be computed cheaply without scanning
@@ -408,8 +455,8 @@ Add per-slot key-bucket capacity metrics:
 | `key_bucket_max_split_bucket_count` | Buckets already at the maximum split number. |
 
 The most important alert conditions are `key_bucket_full_risk_count > 0`,
-`key_bucket_max_split_bucket_count > 0`, and a rising `key_bucket_skew_ratio_max_to_avg`. They warn about the
-key-count wall before `BucketFullException` appears.
+`key_bucket_max_split_bucket_count > 0`, and a rising `key_bucket_skew_ratio_max_to_avg`. They warn about skew-driven
+key-bucket exhaustion before `BucketFullException` appears.
 
 Add node-level rollups across slots so an operator does not need to inspect every slot manually:
 
@@ -443,10 +490,12 @@ capacity-wall metrics for single-host scale-up.
 - **In-process vs multi-process** — settle against the alternative above before committing to Phase 1.
 - **Virtual-slot count and definition** — reuse Redis's 16384, or define from `keyHash` high bits to align
   ranges with bucket ranges (cheaper migration). Default to the keyHash-aligned scheme.
-- **Concurrency model for online growth** — global safepoint reshard (simplest, brownout) vs Redis-style
+- **Concurrency model for online space growth** — global safepoint reshard (simplest, brownout) vs Redis-style
   per-op incremental rehash for the key-count wall (no brownout, fits the single-owner thread model) vs
   FASTER-style epoch-phased resize (no brownout, most machinery). See the hash-index Reference section.
-- **Global vs localized collapse** for v1 — global is simpler, localized is more available.
+- **CPU scale-up policy** — v1 should use rolling restart / replica promotion with a higher `slotWorkers`
+  value; live worker addition and slot rehome are deferred unless restart/promotion proves unacceptable.
+- **Global vs localized collapse** for v1 space reshard — global is simpler, localized is more available.
 - **Homogeneous vs heterogeneous per-slot `bucketsPerSlot`** (constraint #1 / hard problem #6).
 
 ## Related Documents
@@ -455,3 +504,23 @@ capacity-wall metrics for single-host scale-up.
 - [Replication](/home/kerry/ws/velo/doc/design/09_replication_design.md)
 - [Cluster Management](/home/kerry/ws/velo/doc/design/16_cluster_management_design.md)
 - [Multithreading](/home/kerry/ws/velo/doc/design/11_multithreading_design.md)
+
+## Update: 2N Shadow Replication Is Implemented (v1)
+
+The "Shadow 2× Rebuild via Replication" approach described above is now implemented for the specific case of
+`slave slotNumber == master slotNumber * 2`. Implementation details are in
+[Replication Design § 2N Scale-Up Slave Replication](/home/kerry/ws/velo/doc/design/09_replication_design.md) and the
+plan at `docs/plans/2026-06-25-master-n-slave-2n-replication.md`.
+
+What v1 provides:
+- Only stream slots `[0, N)` connect to the master; extra slots `[N, 2N)` receive data via fan-out.
+- A central, race-free global read gate gates all `2N` slots on every stream's readiness.
+- Incremental replay is awaited before the fetched-offset advances (await-before-advance).
+- Promotion restores all `2N` slots to master state.
+
+What v1 does **not** provide (known limitations):
+- `FLUSHALL`/`FLUSHDB` stalls the 2N rebuild (stuck-but-safe) until a cross-stream flush barrier exists.
+- A promoted 2N node has no binlog history for extra slots — no downstream replication for `[N, 2N)`.
+- Only exactly `2N` is supported; general `N -> M` and `clusterEnabled=true` need separate designs.
+- The in-process threading/topology growth (Phase 2 safepoint reshard) remains a future task; 2N shadow replication
+  is the separate-init path that dodges walls #1/#2 by requiring a fresh `slotNumber` at startup.
