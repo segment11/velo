@@ -162,7 +162,9 @@ public enum ConfForSlot {
             return false;
         }
 
-        if (ConfForGlobal.slotNumber < checkValuesFromMaster.slotNumber) {
+        var localSlotNumber = ConfForGlobal.slotNumber;
+        var masterSlotNumber = checkValuesFromMaster.slotNumber;
+        if (localSlotNumber != masterSlotNumber && localSlotNumber != masterSlotNumber * 2) {
             return false;
         }
 

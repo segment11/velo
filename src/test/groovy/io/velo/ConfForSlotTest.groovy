@@ -282,6 +282,47 @@ class ConfForSlotTest extends Specification {
         then:
         !slaveCanMatchResult
 
+        // scale-up topology: slave slotNumber must be exactly N or 2N of master
+        when: 'local 4, remote 4 -> accepted (equal)'
+        ConfForGlobal.slotNumber = 4
+        mapRemote = c.getSlaveCheckValues()
+        mapRemote.slotNumber = 4
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        slaveCanMatchResult
+
+        when: 'local 8, remote 4 -> accepted (2N scale-up)'
+        ConfForGlobal.slotNumber = 8
+        mapRemote = c.getSlaveCheckValues()
+        mapRemote.slotNumber = 4
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        slaveCanMatchResult
+
+        when: 'local 5, remote 4 -> rejected (not exactly 2N)'
+        ConfForGlobal.slotNumber = 5
+        mapRemote = c.getSlaveCheckValues()
+        mapRemote.slotNumber = 4
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        !slaveCanMatchResult
+
+        when: 'local 3, remote 4 -> rejected (slave < master)'
+        ConfForGlobal.slotNumber = 3
+        mapRemote = c.getSlaveCheckValues()
+        mapRemote.slotNumber = 4
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        !slaveCanMatchResult
+
+        when: 'local 16, remote 4 -> rejected (4N, not 2N)'
+        ConfForGlobal.slotNumber = 16
+        mapRemote = c.getSlaveCheckValues()
+        mapRemote.slotNumber = 4
+        slaveCanMatchResult = c.slaveCanMatch(mapRemote)
+        then:
+        !slaveCanMatchResult
+
         cleanup:
         // reset back for last assert
         ConfForGlobal.datacenterId = 0L
