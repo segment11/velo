@@ -169,12 +169,13 @@ class KeyLoaderTest extends Specification {
         keyLoader.getKeyCountInBucketIndex(1) == 2
 
         when:
-        def keyCountSkew = keyLoader.describeKeyCountSkew()
+        def keyCountSkewStr = keyLoader.describeKeyCountSkew()
+        def keyCountSkew = keyLoader.calcKeyCountSkew()
         then:
-        keyCountSkew.contains('key_bucket_key_count_total=3')
-        keyCountSkew.contains('key_bucket_key_count_max=2')
-        keyCountSkew.contains('key_bucket_non_empty_count=2')
-        keyCountSkew.contains('calc_cost_ms=')
+        keyCountSkewStr.contains('key_bucket_key_count_total=3')
+        keyCountSkewStr.contains('key_bucket_key_count_max=2')
+        keyCountSkewStr.contains('key_bucket_non_empty_count=2')
+        keyCountSkewStr.contains('calc_cost_ms=')
 
         when:
         exception = false
