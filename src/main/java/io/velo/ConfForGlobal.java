@@ -85,6 +85,14 @@ public class ConfForGlobal {
     public static short slotNumber = 1;
 
     /**
+     * Remote master's slot count while this node acts as a slave.
+     * 0 means no known remote master / not currently in slave topology mode.
+     * Set when {@code resetAsSlave} succeeds, cleared when {@code resetAsMaster} succeeds.
+     * Volatile: read by eventloop threads (e.g. {@code isAsSlaveScaleUp}), written during role transitions.
+     */
+    public static volatile short masterSlotNumber = 0;
+
+    /**
      * Number of network workers (default is 1).
      */
     public static byte netWorkers = 1;

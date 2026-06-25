@@ -126,6 +126,38 @@ class LeaderSelectorTest extends Specification {
 
     final short slot = 0
 
+    def 'test master slot number tracking and isAsSlaveScaleUp'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+        def localPersist = LocalPersist.instance
+
+        expect: 'masterSlotNumber defaults to 0'
+        ConfForGlobal.masterSlotNumber == 0
+
+        when: 'not a slave of any master'
+        ConfForGlobal.masterSlotNumber = 0
+        ConfForGlobal.slotNumber = 8
+        then:
+        !localPersist.isAsSlaveScaleUp()
+
+        when: 'equal-slot slave mode (N == N)'
+        ConfForGlobal.masterSlotNumber = 8
+        ConfForGlobal.slotNumber = 8
+        then:
+        !localPersist.isAsSlaveScaleUp()
+
+        when: 'scale-up slave mode (2N)'
+        ConfForGlobal.masterSlotNumber = 4
+        ConfForGlobal.slotNumber = 8
+        then:
+        localPersist.isAsSlaveScaleUp()
+
+        cleanup:
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+    }
+
     def 'test reset as master'() {
         given:
         ConfForGlobal.netListenAddress = 'localhost:7380'

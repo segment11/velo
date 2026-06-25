@@ -449,6 +449,14 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
+     * @return true if this node is currently acting as a scale-up slave whose local slot count
+     * is greater than the remote master's slot count (e.g. local 2N, master N)
+     */
+    public boolean isAsSlaveScaleUp() {
+        return ConfForGlobal.masterSlotNumber > 0 && ConfForGlobal.slotNumber > ConfForGlobal.masterSlotNumber;
+    }
+
+    /**
      * @param asSlaveFirstSlotFetchedExistsAllDone the flag value to set
      */
     public void setAsSlaveFirstSlotFetchedExistsAllDone(boolean asSlaveFirstSlotFetchedExistsAllDone) {

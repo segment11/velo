@@ -16,6 +16,7 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.leader.LeaderLatch;
 import org.apache.curator.retry.ExponentialBackoffRetry;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -379,6 +380,10 @@ public class LeaderSelector implements NeedCleanUp {
     }
 
     private void doResetAsMaster(boolean force, String prevFailoverState, Consumer<Exception> callback) {
+        // Save masterSlotNumber for restore on failure; cleared to 0 only on overall success so
+        // in-loop isAsSlaveScaleUp() checks still see scale-up mode during the transition.
+        var prevMasterSlotNumber = ConfForGlobal.masterSlotNumber;
+
         // Restore the failover state on any synchronous throw too — the whenComplete callback
         // below only runs if Promises.all is reached, so anything that throws before that
         // (e.g. localPersist.oneSlot returning null, asyncRun failing) would otherwise leave
@@ -430,9 +435,14 @@ public class LeaderSelector implements NeedCleanUp {
                 MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
 
                 if (e != null) {
+                    // Restore masterSlotNumber on failed promotion
+                    ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
                     callback.accept(e);
                     return;
                 }
+
+                // Success: leaving slave mode, clear masterSlotNumber last
+                ConfForGlobal.masterSlotNumber = 0;
 
                 // publish switch master to clients
                 var leaderSelector = LeaderSelector.getInstance();
@@ -446,12 +456,13 @@ public class LeaderSelector implements NeedCleanUp {
                 callback.accept(null);
             });
         } catch (RuntimeException e) {
+            ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
             MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
             throw e;
         }
     }
 
-    private boolean checkMasterConfigMatch(String host, int port, Consumer<Exception> callback) {
+    private @Nullable ConfForSlot.SlaveCheckValues checkMasterConfigMatch(String host, int port, Consumer<Exception> callback) {
         log.debug("Repl reset self as slave begin, check new master global config first, self={}", ConfForGlobal.netListenAddress);
         // sync, perf bad
         try {
@@ -472,14 +483,14 @@ public class LeaderSelector implements NeedCleanUp {
                 log.info("Repl local={}", ConfForSlot.global.getSlaveCheckValues());
                 log.info("Repl remote={}", checkValuesFromMaster);
                 callback.accept(new IllegalStateException("Repl slave can not match check values"));
-                return false;
+                return null;
             } else {
                 log.debug("Repl reset self as slave begin, check new master global config ok, self={}", ConfForGlobal.netListenAddress);
-                return true;
+                return checkValuesFromMaster;
             }
         } catch (Exception e) {
             callback.accept(e);
-            return false;
+            return null;
         }
     }
 
@@ -507,15 +518,22 @@ public class LeaderSelector implements NeedCleanUp {
     }
 
     private void doResetAsSlave(String host, int port, String prevFailoverState, Consumer<Exception> callback) {
+        // Track the remote master's slot count so isAsSlaveScaleUp() can detect 2N mode.
+        // Save the previous value for rollback on any failure path (declared before try so the
+        // catch block can restore it even when the throw happens after the set).
+        var prevMasterSlotNumber = ConfForGlobal.masterSlotNumber;
+
         // Same synchronous-throw guard as doResetAsMaster — anything that throws before the
         // whenComplete callback runs must still restore the failover state.
         try {
-            var checkMasterConfigMatch = checkMasterConfigMatch(host, port, callback);
-            if (!checkMasterConfigMatch) {
+            var checkValuesFromMaster = checkMasterConfigMatch(host, port, callback);
+            if (checkValuesFromMaster == null) {
                 // already callback handle with exception — restore state so we don't get stuck
                 MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
                 return;
             }
+
+            ConfForGlobal.masterSlotNumber = (short) checkValuesFromMaster.getSlotNumber();
 
             var localPersist = LocalPersist.getInstance();
 
@@ -546,6 +564,8 @@ public class LeaderSelector implements NeedCleanUp {
                 MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
 
                 if (e != null) {
+                    // Rollback masterSlotNumber on failed per-slot reset
+                    ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
                     callback.accept(e);
                     return;
                 }
@@ -558,6 +578,7 @@ public class LeaderSelector implements NeedCleanUp {
                 callback.accept(null);
             });
         } catch (RuntimeException e) {
+            ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
             MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
             throw e;
         }
