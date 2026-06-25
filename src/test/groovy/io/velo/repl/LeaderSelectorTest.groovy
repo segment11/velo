@@ -158,6 +158,70 @@ class LeaderSelectorTest extends Specification {
         ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
     }
 
+    def 'test promote 2N slave extra slots to master'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+
+        // 2N: master has 1 slot, slave has 2 slots
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+
+        def slot0 = localPersist.oneSlot((short) 0)
+        def slot1 = localPersist.oneSlot((short) 1)
+
+        and:
+        def leaderSelector = LeaderSelector.instance
+        leaderSelector.masterAddressLocalMocked = null
+
+        // enter scale-up mode
+        ConfForGlobal.masterSlotNumber = (short) 1
+        ConfForGlobal.slotNumber = (short) 2
+
+        // slot 0 is a stream slot with a slave repl pair (caught up, master readonly)
+        slot0.createReplPairAsSlave('localhost', 7379)
+        def replPair0 = slot0.onlyOneReplPairAsSlave
+        replPair0.masterReadonly = true
+        replPair0.allCaughtUp = true
+
+        // slot 1 is an extra target slot: readonly, canRead=false, no repl pair
+        slot0.readonly = true  // also mark slot 0 readonly (slave state)
+        slot1.readonly = true
+        slot1.canRead = false
+
+        when:
+        def future = new CompletableFuture()
+        leaderSelector.resetAsMaster(true) { e ->
+            if (e != null) {
+                println e.message
+                future.complete(false)
+            } else {
+                future.complete(true)
+            }
+        }
+        def r = future.get()
+        then:
+        r
+        // both slots promoted: readonly=false, canRead=true
+        !slot0.readonly
+        slot0.canRead
+        !slot1.readonly
+        slot1.canRead
+        // masterSlotNumber cleared (left scale-up mode)
+        ConfForGlobal.masterSlotNumber == 0
+
+        cleanup:
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+        leaderSelector.masterAddressLocalMocked = null
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test reset as master'() {
         given:
         ConfForGlobal.netListenAddress = 'localhost:7380'

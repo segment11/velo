@@ -420,6 +420,13 @@ public class LeaderSelector implements NeedCleanUp {
                     if (isSelfSlave) {
                         oneSlot.resetAsMaster();
                         resetAsMasterCount = 0;
+                    } else if (localPersist.isAsSlaveScaleUp()
+                            && oneSlot.slot() >= ConfForGlobal.masterSlotNumber) {
+                        // 2N scale-up extra slot: no slave ReplPair (data arrived via fan-out),
+                        // but it IS in slave state (readonly, canRead=false). Promote it too.
+                        log.warn("Repl promote scale-up extra slot to master, slot={}", oneSlot.slot());
+                        oneSlot.resetAsMaster();
+                        resetAsMasterCount = 0;
                     } else {
                         resetAsMasterCount++;
                         if (resetAsMasterCount % 100 == 0) {
