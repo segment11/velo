@@ -1,5 +1,7 @@
 package io.velo.repl.incremental;
 
+import io.activej.promise.Promise;
+import io.velo.ConfForGlobal;
 import io.velo.persist.LocalPersist;
 import io.velo.repl.BinlogContent;
 import io.velo.repl.ReplPair;
@@ -77,15 +79,39 @@ public class XFlush implements BinlogContent {
     /**
      * Applies this binlog content to the specified replication slot and repl pair.
      * This method flushes the specified slot in the local storage, ensuring that all pending changes are written.
+     * <p>
+     * In 2N scale-up mode, FLUSH is rejected because a master {@code FLUSHALL} produces N independent
+     * un-coordinated XFlush entries; a lagging stream's flush would wipe a leading stream's post-flush
+     * writes. See {@code docs/plans/2026-06-25-master-n-slave-2n-replication.md} Task 6.
      *
      * @param slot     the replication slot to which this content is applied
      * @param replPair the repl pair associated with this replication session
      */
     @Override
     public void apply(short slot, ReplPair replPair) {
+        if (localPersist.isAsSlaveScaleUp()) {
+            throw new IllegalStateException("Repl 2N flush unsupported until cross-stream barrier exists");
+        }
         log.warn("Repl slave apply one slot flush, !!!, slot={}", slot);
         var oneSlot = localPersist.oneSlot(slot);
         oneSlot.flush();
         log.warn("Repl slave apply one slot flush done, !!!, slot={}", slot);
+    }
+
+    /**
+     * In 2N scale-up mode, throws to reject the flush (stuck-but-safe: the stream stalls at this offset,
+     * the read gate stays closed, no data loss). In equal-slot mode, delegates to {@link #apply}.
+     *
+     * @param slot     the replication slot
+     * @param replPair the repl pair
+     * @return a completed promise in equal-slot mode; never returns normally in scale-up mode
+     */
+    @Override
+    public Promise<Void> applyAsync(short slot, ReplPair replPair) {
+        if (localPersist.isAsSlaveScaleUp()) {
+            throw new IllegalStateException("Repl 2N flush unsupported until cross-stream barrier exists");
+        }
+        apply(slot, replPair);
+        return Promise.complete();
     }
 }
