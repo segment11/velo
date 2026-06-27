@@ -193,11 +193,11 @@ public class XBigStrings implements BinlogContent {
         var s = targetSlot();
         var oneSlot = localPersist.oneSlot(s.slot());
         oneSlot.asyncExecute(() -> {
-            oneSlot.put(key, s.bucketIndex(), cv, true);
+            if (oneSlot.putIfSeqBigger(key, s.bucketIndex(), cv, true)) {
+                // use remote bucket index
+                replPair.addToFetchBigStringId(uuid, bucketIndex, keyHash, key);
+            }
         });
-
-        // use remote bucket index
-        replPair.addToFetchBigStringId(uuid, bucketIndex, keyHash, key);
     }
 
     @Override
@@ -208,9 +208,14 @@ public class XBigStrings implements BinlogContent {
 
         var s = targetSlot();
         var oneSlot = localPersist.oneSlot(s.slot());
-        var promise = oneSlot.asyncRun(() -> oneSlot.put(key, s.bucketIndex(), cv, true));
-        promise.whenResult(unused -> replPair.addToFetchBigStringId(uuid, bucketIndex, keyHash, key));
-        return promise;
+        var promise = oneSlot.asyncCall(() -> oneSlot.putIfSeqBigger(key, s.bucketIndex(), cv, true));
+        promise.whenResult(isPut -> {
+            if (isPut) {
+                // use remote bucket index
+                replPair.addToFetchBigStringId(uuid, bucketIndex, keyHash, key);
+            }
+        });
+        return promise.map(isPut -> null);
     }
 
     @Override

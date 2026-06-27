@@ -1907,6 +1907,38 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     /**
+     * Puts the compressed value only when no current value has an equal or larger sequence.
+     *
+     * @param key            the key
+     * @param bucketIndex    the bucket index
+     * @param cv             the compressed value
+     * @param ignoreReadonly whether to bypass the readonly check
+     * @return true when the value was written, false when an equal or newer value already exists
+     */
+    public boolean putIfSeqBigger(@NotNull String key, int bucketIndex, @NotNull CompressedValue cv, boolean ignoreReadonly) {
+        checkCurrentThreadId();
+
+        if (isReadonly() && !ignoreReadonly) {
+            throw new ReadonlyException();
+        }
+
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
+        var targetWal = walArray[walGroupIndex];
+        var walV = targetWal.getV(key);
+        if (walV != null && walV.seq() >= cv.getSeq()) {
+            return false;
+        }
+
+        var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, key, cv.getKeyHash());
+        if (expireAtAndSeq != null && expireAtAndSeq.seq() >= cv.getSeq()) {
+            return false;
+        }
+
+        put(key, bucketIndex, cv, ignoreReadonly);
+        return true;
+    }
+
+    /**
      * Puts a compressed value, marking it as merge-originated and optionally bypassing readonly.
      *
      * @param key            the key

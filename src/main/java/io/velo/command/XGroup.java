@@ -919,6 +919,18 @@ public class XGroup extends BaseCommand {
         return Repl.reply(slot, replPair, s_exists_chunk_segments, content);
     }
 
+    @VisibleForTesting
+    static void putGroupedCvIfSeqBigger(HashMap<Short, HashMap<String, CompressedValue>> groupedBySlot,
+                                        short slotInner,
+                                        String key,
+                                        CompressedValue cv) {
+        var byKey = groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>());
+        var oldCv = byKey.get(key);
+        if (oldCv == null || oldCv.getSeq() < cv.getSeq()) {
+            byKey.put(key, cv);
+        }
+    }
+
     private Reply s_exists_chunk_segments(short slot, byte[] contentBytes) {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
@@ -998,7 +1010,7 @@ public class XGroup extends BaseCommand {
 
                         var keyHash = KeyHash.hash(Wal.keyBytes(key));
                         var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
-                        groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
+                        putGroupedCvIfSeqBigger(groupedBySlot, slotInner, key, cv);
                     });
                 }
             } else {
@@ -1009,7 +1021,7 @@ public class XGroup extends BaseCommand {
 
                     var keyHash = KeyHash.hash(Wal.keyBytes(key));
                     var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
-                    groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
+                    putGroupedCvIfSeqBigger(groupedBySlot, slotInner, key, cv);
                 });
             }
 
@@ -1028,7 +1040,7 @@ public class XGroup extends BaseCommand {
                         var key = entry2.getKey();
                         var cv = entry2.getValue();
                         var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
-                        targetOneSlot.put(key, bucketIndex, cv, true);
+                        targetOneSlot.putIfSeqBigger(key, bucketIndex, cv, true);
                     }
                 });
             }
@@ -1365,7 +1377,7 @@ public class XGroup extends BaseCommand {
         KeyLoader.decodeShortStringListFromBuf(slice, (keyHash, expireAt, seq, key, valueBytes) -> {
             var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
             var cv = CompressedValue.decode(valueBytes, Wal.keyBytes(key), keyHash);
-            groupedBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, cv);
+            putGroupedCvIfSeqBigger(groupedBySlot, slotInner, key, cv);
         });
 
         Promise<Void> pendingWrites = null;
@@ -1380,7 +1392,7 @@ public class XGroup extends BaseCommand {
                         var key = entry2.getKey();
                         var cv = entry2.getValue();
                         var bucketIndex = KeyHash.bucketIndex(cv.getKeyHash());
-                        targetOneSlot.put(key, bucketIndex, cv, true);
+                        targetOneSlot.putIfSeqBigger(key, bucketIndex, cv, true);
                     }
                 });
             }
@@ -1925,8 +1937,8 @@ public class XGroup extends BaseCommand {
     /**
      * After a slave TCP client is closed, attempts to catch up the slot data again from the master.
      *
-     * @param replPairAsSlave  the replication pair where this node acts as slave
-     * @param mockResultBytes  optional mock result bytes used for testing
+     * @param replPairAsSlave the replication pair where this node acts as slave
+     * @param mockResultBytes optional mock result bytes used for testing
      */
     public static void tryCatchUpAgainAfterSlaveTcpClientClosed(ReplPair replPairAsSlave, byte[] mockResultBytes) {
         if (skipTryCatchUpAgainAfterSlaveTcpClientClosed) {

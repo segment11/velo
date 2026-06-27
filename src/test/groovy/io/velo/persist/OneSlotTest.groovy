@@ -1128,6 +1128,72 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test put if seq bigger'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def key = 'seq-guard-key'
+        def sKey = BaseCommand.slot(key, slotNumber)
+        def makeCv = { long seq, byte marker, long keyHash = sKey.keyHash() ->
+            def cv = new CompressedValue()
+            cv.seq = seq
+            cv.keyHash = keyHash
+            cv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+            cv.expireAt = CompressedValue.NO_EXPIRE
+            cv.compressedData = [marker] as byte[]
+            cv
+        }
+
+        when:
+        oneSlot.put(key, sKey.bucketIndex(), makeCv(100L, (byte) 100))
+        def stalePut = oneSlot.putIfSeqBigger(key, sKey.bucketIndex(), makeCv(99L, (byte) 99), true)
+        def equalPut = oneSlot.putIfSeqBigger(key, sKey.bucketIndex(), makeCv(100L, (byte) 101), true)
+        def higherPut = oneSlot.putIfSeqBigger(key, sKey.bucketIndex(), makeCv(101L, (byte) 101), true)
+        def result = CompressedValue.decode(oneSlot.get(key, sKey.bucketIndex(), sKey.keyHash()).buf(), key.bytes, sKey.keyHash())
+
+        def persistedKey = 'seq-guard-persisted-key'
+        def sPersistedKey = BaseCommand.slot(persistedKey, slotNumber)
+        def persistedCurrent = new CompressedValue()
+        persistedCurrent.seq = 200L
+        persistedCurrent.keyHash = sPersistedKey.keyHash()
+        persistedCurrent.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        persistedCurrent.expireAt = CompressedValue.NO_EXPIRE
+        persistedCurrent.compressedData = [(byte) 10] as byte[]
+        oneSlot.keyLoader.putValueByKey(sPersistedKey.bucketIndex(), persistedKey, sPersistedKey.keyHash(),
+                persistedCurrent.expireAt, persistedCurrent.seq, persistedCurrent.encodeAsShortString())
+        def stalePersistedPut = oneSlot.putIfSeqBigger(persistedKey, sPersistedKey.bucketIndex(), makeCv(199L, (byte) 11, sPersistedKey.keyHash()), true)
+        def equalPersistedPut = oneSlot.putIfSeqBigger(persistedKey, sPersistedKey.bucketIndex(), makeCv(200L, (byte) 12, sPersistedKey.keyHash()), true)
+        def newerPersistedPut = oneSlot.putIfSeqBigger(persistedKey, sPersistedKey.bucketIndex(),
+                makeCv(201L, (byte) 13, sPersistedKey.keyHash()), true)
+        oneSlot.readonly = true
+        boolean readonlyRejected = false
+        try {
+            oneSlot.putIfSeqBigger(key, sKey.bucketIndex(), makeCv(102L, (byte) 102), false)
+        } catch (ReadonlyException ignored) {
+            readonlyRejected = true
+        } finally {
+            oneSlot.readonly = false
+        }
+
+        then:
+        !stalePut
+        !equalPut
+        higherPut
+        result.seq == 101L
+        result.compressedData[0] == (byte) 101
+        !stalePersistedPut
+        !equalPersistedPut
+        newerPersistedPut
+        readonlyRejected
+
+        cleanup:
+        oneSlot.resetWritePositionAfterBulkLoad()
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test kvLRUHitTotal only counts true LRU hits not WAL hits'() {
         given:
         LocalPersistTest.prepareLocalPersist()

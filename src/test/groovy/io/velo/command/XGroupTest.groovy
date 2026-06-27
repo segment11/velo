@@ -31,6 +31,31 @@ class XGroupTest extends Specification {
     final short slot1 = 1
     final short slotNumber = 2
 
+    def 'test grouped cv keeps bigger seq'() {
+        given:
+        HashMap<Short, HashMap<String, CompressedValue>> groupedBySlot = new HashMap<>()
+        def key = 'dup-key'
+        def older = new CompressedValue()
+        older.seq = 10L
+        def newer = new CompressedValue()
+        newer.seq = 11L
+
+        when:
+        XGroup.putGroupedCvIfSeqBigger(groupedBySlot, slot, key, newer)
+        XGroup.putGroupedCvIfSeqBigger(groupedBySlot, slot, key, older)
+
+        then:
+        groupedBySlot[slot][key].seq == 11L
+
+        when:
+        def newest = new CompressedValue()
+        newest.seq = 12L
+        XGroup.putGroupedCvIfSeqBigger(groupedBySlot, slot, key, newest)
+
+        then:
+        groupedBySlot[slot][key].seq == 12L
+    }
+
     private ReplRequest mockReplRequest(ReplPair replPair, ReplType replType, ReplContent content) {
         def reply = Repl.reply(slot, replPair, replType, content)
         mockReplRequest(reply)

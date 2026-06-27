@@ -1,5 +1,6 @@
 package io.velo.repl.incremental
 
+import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.KeyHash
 import io.velo.persist.Consts
@@ -104,6 +105,123 @@ class XBigStringsTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def replPair = ReplPairTest.mockAsSlave()
         xBigStrings.apply(slot, replPair)
+        then:
+        replPair.toFetchBigStringIdList.size() == 1
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test apply skips older big string metadata'() {
+        given:
+        final short slot = 0
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        def key = 'test-big-string-seq-guard'
+        def keyHash = KeyHash.hash(key.bytes)
+        def newerCv = new CompressedValue()
+        newerCv.seq = 200L
+        newerCv.keyHash = keyHash
+        newerCv.expireAt = CompressedValue.NO_EXPIRE
+        newerCv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        newerCv.compressedData = [(byte) 20] as byte[]
+        def s = BaseCommand.slot(key, (short) 1)
+        oneSlot.put(key, s.bucketIndex(), newerCv, true)
+
+        def olderUuid = 1L
+        def olderCv = new CompressedValue()
+        olderCv.seq = 100L
+        olderCv.keyHash = keyHash
+        olderCv.expireAt = CompressedValue.NO_EXPIRE
+        olderCv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        olderCv.setCompressedDataAsBigString(olderUuid, CompressedValue.NULL_DICT_SEQ)
+        def xBigStrings = new XBigStrings(olderUuid, s.bucketIndex(), keyHash, key, olderCv.encode())
+        def replPair = ReplPairTest.mockAsSlave()
+
+        when:
+        xBigStrings.apply(slot, replPair)
+        def result = CompressedValue.decode(oneSlot.get(key, s.bucketIndex(), keyHash).buf(), key.bytes, keyHash)
+
+        then:
+        result.seq == 200L
+        result.compressedData[0] == (byte) 20
+        replPair.toFetchBigStringIdList.isEmpty()
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test apply async skips older big string metadata'() {
+        given:
+        final short slot = 0
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        def key = 'test-big-string-async-seq-guard'
+        def keyHash = KeyHash.hash(key.bytes)
+        def newerCv = new CompressedValue()
+        newerCv.seq = 200L
+        newerCv.keyHash = keyHash
+        newerCv.expireAt = CompressedValue.NO_EXPIRE
+        newerCv.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        newerCv.compressedData = [(byte) 21] as byte[]
+        def s = io.velo.BaseCommand.slot(key, (short) 1)
+        oneSlot.put(key, s.bucketIndex(), newerCv, true)
+
+        def olderUuid = 2L
+        def olderCv = new CompressedValue()
+        olderCv.seq = 100L
+        olderCv.keyHash = keyHash
+        olderCv.expireAt = CompressedValue.NO_EXPIRE
+        olderCv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        olderCv.setCompressedDataAsBigString(olderUuid, CompressedValue.NULL_DICT_SEQ)
+        def xBigStrings = new XBigStrings(olderUuid, s.bucketIndex(), keyHash, key, olderCv.encode())
+        def replPair = ReplPairTest.mockAsSlave()
+
+        when:
+        xBigStrings.applyAsync(slot, replPair).result
+        def result = CompressedValue.decode(oneSlot.get(key, s.bucketIndex(), keyHash).buf(), key.bytes, keyHash)
+
+        then:
+        result.seq == 200L
+        result.compressedData[0] == (byte) 21
+        replPair.toFetchBigStringIdList.isEmpty()
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test apply async queues big string fetch when metadata wins'() {
+        given:
+        final short slot = 0
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        def key = 'test-big-string-async-fetch'
+        def keyHash = KeyHash.hash(key.bytes)
+        def uuid = 3L
+        def cv = new CompressedValue()
+        cv.seq = 300L
+        cv.keyHash = keyHash
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv.setCompressedDataAsBigString(uuid, CompressedValue.NULL_DICT_SEQ)
+        def s = io.velo.BaseCommand.slot(key, (short) 1)
+        def xBigStrings = new XBigStrings(uuid, s.bucketIndex(), keyHash, key, cv.encode())
+        def replPair = ReplPairTest.mockAsSlave()
+
+        when:
+        xBigStrings.applyAsync(slot, replPair).result
+
         then:
         replPair.toFetchBigStringIdList.size() == 1
 
