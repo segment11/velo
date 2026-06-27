@@ -100,6 +100,16 @@ class ScaleUpReplicationTest extends Specification {
         !localPersist.oneSlot((short) 0).canRead
         !localPersist.oneSlot((short) 3).canRead
 
+        and: 'the fetched-offset is unchanged — the flush did not silently advance progress'
+        def offsetBefore = localPersist.oneSlot(streamSlot).getMetaChunkSegmentIndex().getMasterBinlogFileIndexAndOffset()
+        try {
+            new XFlush().applyAsync(streamSlot, replPair)
+        } catch (IllegalStateException ignored) {
+        }
+        def offsetAfter = localPersist.oneSlot(streamSlot).getMetaChunkSegmentIndex().getMasterBinlogFileIndexAndOffset()
+        offsetAfter.fileIndex() == offsetBefore.fileIndex()
+        offsetAfter.offset() == offsetBefore.offset()
+
         cleanup:
         ConfForGlobal.slotNumber = savedSlotNumber
         ConfForGlobal.masterSlotNumber = savedMasterSlotNumber

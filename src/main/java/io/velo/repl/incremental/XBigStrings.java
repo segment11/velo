@@ -180,6 +180,11 @@ public class XBigStrings implements BinlogContent {
     /**
      * Applies this binlog content to the specified replication slot and repl pair.
      * This method updates the local storage with the new big string and adds the UUID to the list of big strings to fetch.
+     * <p>
+     * Note: this sync path is reached only in equal-slot mode (target == stream, same thread). In 2N scale-up,
+     * {@link #applyAsync} is always used instead, which registers the fetch via {@code whenResult} on the caller
+     * thread. Do NOT reuse this method for cross-slot apply: {@code replPair.addToFetchBigStringId} mutates the
+     * stream's {@code toFetchBigStringIdList}, which is not safe from a foreign slot's thread.
      *
      * @param slot     the replication slot to which this content is applied
      * @param replPair the repl pair associated with this replication session
