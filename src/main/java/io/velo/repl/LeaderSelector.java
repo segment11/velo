@@ -424,7 +424,10 @@ public class LeaderSelector implements NeedCleanUp {
                             && oneSlot.slot() >= ConfForGlobal.masterSlotNumber) {
                         // 2N scale-up extra slot: no slave ReplPair (data arrived via fan-out),
                         // but it IS in slave state (readonly, canRead=false). Promote it too.
-                        log.warn("Repl promote scale-up extra slot to master, slot={}", oneSlot.slot());
+                        // Known limitation: this slot has data but no binlog history (offset was zeroed
+                        // at slave reset and never advanced) — downstream replication for this slot
+                        // from the promoted node is not supported in v1.
+                        log.warn("Repl promote scale-up extra slot to master (no binlog history), slot={}", oneSlot.slot());
                         oneSlot.resetAsMaster();
                         resetAsMasterCount = 0;
                     } else {
@@ -544,11 +547,10 @@ public class LeaderSelector implements NeedCleanUp {
 
             var localPersist = LocalPersist.getInstance();
 
-            // Initialize the scale-up read gate for a fresh slave session (no-op allocation
-            // for equal-slot mode where masterSlotNumber == slotNumber, but harmless).
-            if (localPersist.isAsSlaveScaleUp()) {
-                localPersist.resetScaleUpReadGate(ConfForGlobal.masterSlotNumber);
-            }
+            // Reset the read gate unconditionally: scale-up mode sizes the array to masterSlotNumber;
+            // equal-slot mode sizes it to 0 so all publish calls are no-ops and any stale array from a
+            // prior 2N session is cleared.
+            localPersist.resetScaleUpReadGate(localPersist.isAsSlaveScaleUp() ? ConfForGlobal.masterSlotNumber : 0);
 
             Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
             for (int i = 0; i < ConfForGlobal.slotNumber; i++) {

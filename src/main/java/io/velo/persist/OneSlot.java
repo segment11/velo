@@ -446,10 +446,13 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         // 2N scale-up: when a slave stream's repl pair is torn down, drop its readiness so the
-        // global read gate closes. The guard inside publishStreamReadyAndRefreshGate makes this
-        // a no-op when not in a scale-up session (e.g. equal-slot mode or promotion).
+        // global read gate closes. Guarded by isAsSlaveScaleUp() so equal-slot teardown never touches
+        // the gate (a stale array from a prior 2N session must not affect a later equal-slot session).
         if (isSelfSlave) {
-            LocalPersist.getInstance().publishStreamReadyAndRefreshGate(slot, false);
+            var localPersist = LocalPersist.getInstance();
+            if (localPersist.isAsSlaveScaleUp()) {
+                localPersist.publishStreamReadyAndRefreshGate(slot, false);
+            }
         }
 
         return isSelfSlave;

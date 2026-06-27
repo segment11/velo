@@ -465,12 +465,12 @@ public class LocalPersist implements NeedCleanUp {
     private final Object scaleUpGateLock = new Object();
 
     /**
-     * Allocate/clear gate state for a fresh scale-up slave session.
-     * Call from {@code doResetAsSlave} before the reset loop.
+     * Allocate/clear gate state for a fresh slave session. Called from {@code doResetAsSlave} before the reset loop.
+     * Pass {@code masterSlotNumber} for scale-up mode, or 0 for equal-slot mode (clears the array so all publish
+     * calls become no-ops).
      *
-     * @param masterSlotNumber the remote master's slot count (= number of stream slots)
+     * @param masterSlotNumber the remote master's slot count (= number of stream slots), or 0 to clear
      */
-    @TestOnly
     public void resetScaleUpReadGate(int masterSlotNumber) {
         synchronized (scaleUpGateLock) {
             streamReadReady = new boolean[masterSlotNumber];

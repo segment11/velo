@@ -94,6 +94,12 @@ class ScaleUpReplicationTest extends Specification {
         then:
         thrown(IllegalStateException)
 
+        and: 'after a rejected flush, the gate stays closed — reads are blocked (stuck-but-safe outcome)'
+        // Close the gate first (drop a stream) then try flush; the gate must NOT reopen via flush
+        localPersist.publishStreamReadyAndRefreshGate((short) 0, false)
+        !localPersist.oneSlot((short) 0).canRead
+        !localPersist.oneSlot((short) 3).canRead
+
         cleanup:
         ConfForGlobal.slotNumber = savedSlotNumber
         ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
