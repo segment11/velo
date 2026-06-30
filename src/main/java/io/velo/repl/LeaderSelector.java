@@ -564,6 +564,9 @@ public class LeaderSelector implements NeedCleanUp {
                     if (replPairAsSlave != null) {
                         if (replPairAsSlave.getHost().equals(host) && replPairAsSlave.getPort() == port) {
                             log.debug("Repl old repl pair as slave is same as new master, slot={}", oneSlot.slot());
+                            if (oneSlot.isCanRead()) {
+                                oneSlot.setCanRead(false);
+                            }
                             return;
                         } else {
                             oneSlot.removeReplPairAsSlave();

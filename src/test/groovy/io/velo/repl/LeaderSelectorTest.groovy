@@ -20,6 +20,7 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class LeaderSelectorTest extends Specification {
     def 'test leader latch'() {
@@ -622,6 +623,101 @@ class LeaderSelectorTest extends Specification {
 
         cleanup:
         JedisPoolHolder.instance.cleanUp()
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        if (redisServer) {
+            redisServer.stop()
+        }
+    }
+
+    def 'test same master reset clears canRead'() {
+        given:
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def leaderSelector = LeaderSelector.instance
+        leaderSelector.masterAddressLocalMocked = null
+        RedisServer redisServer
+        boolean doThisCase = false
+        if (RedisServer.isBinExists()) {
+            def redisServerDir = '/tmp/redis_server_for_leader_selector_test'
+            new File(redisServerDir).mkdir()
+            redisServer = new RedisServer().port(16379).dir(redisServerDir).daemonize().noSave()
+
+            boolean isRunOk = false
+            if (Utils.isPortListenAvailable(16379)) {
+                def exitCode = redisServer.run()
+                isRunOk = exitCode == 0
+                Thread.sleep(1000 * 5)
+            } else {
+                redisServer = null
+                println 'port 16379 is already listening'
+                isRunOk = true
+            }
+
+            if (isRunOk) {
+                doThisCase = true
+            }
+        }
+
+        and:
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+        oneSlot.createReplPairAsSlave('localhost', 16379)
+        oneSlot.canRead = true
+
+        when:
+        def future = new CompletableFuture()
+        def updateCheckValues = new AtomicBoolean(false)
+        def firstCheckValuesWritten = new CountDownLatch(1)
+        Thread updateCheckValuesThread = null
+        if (doThisCase) {
+            updateCheckValues.set(true)
+            updateCheckValuesThread = Thread.start {
+                def jedisPool = JedisPoolHolder.instance.createIfNotCached('localhost', 16379)
+                while (updateCheckValues.get()) {
+                    def slaveCheckValues = ConfForSlot.global.getSlaveCheckValues()
+                    def jsonStr = new ObjectMapper().writeValueAsString(slaveCheckValues)
+                    JedisPoolHolder.exe(jedisPool) { jedis ->
+                        jedis.set(XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + "," +
+                                XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD,
+                                jsonStr)
+                    }
+                    firstCheckValuesWritten.countDown()
+                    Thread.sleep(10)
+                }
+            }
+            firstCheckValuesWritten.await(5, TimeUnit.SECONDS)
+            leaderSelector.resetAsSlave('localhost', 16379) { e ->
+                updateCheckValues.set(false)
+                if (e != null) {
+                    println e.message
+                    future.complete(false)
+                } else {
+                    future.complete(true)
+                }
+            }
+        } else {
+            future.complete(true)
+        }
+        def r = future.get()
+        if (updateCheckValuesThread != null) {
+            updateCheckValues.set(false)
+            updateCheckValuesThread.join(1000)
+        }
+
+        then:
+        r
+        doThisCase ? !oneSlot.canRead : true
+
+        cleanup:
+        JedisPoolHolder.instance.cleanUp()
+        leaderSelector.masterAddressLocalMocked = null
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
         if (redisServer) {

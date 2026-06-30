@@ -96,7 +96,7 @@ is still in slave state but has no repl pair, call `oneSlot.resetAsMaster()` any
 **Severity:** Medium
 
 **AI agent 2 status:** Confirmed, with the impact narrowed to stale read visibility; the skipped binlog/offset
-reset side effects are expected to be corrected by the ongoing catch-up loop.
+reset side effects are expected to be corrected by the ongoing catch-up loop. Fixed in this change set.
 
 **Files:**
 
@@ -307,3 +307,60 @@ Verification:
 - Green: `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest.test promote readonly stream slot without repl pair to master"` passed after the fix.
 - Relevant class: `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest"` passed.
 - JaCoCo: `python3 scripts/jacoco_cover.py io.velo.repl.LeaderSelector 419 438 --src` shows the new readonly/no-repl-pair branch lines 433-436 covered.
+
+---
+
+## Review Feedback — Bug 1 Fix (commit `4e8c6b0d`)
+
+**Reviewer:** AI agent (Step 4 feedback)
+**Date:** 2026-06-30
+
+### Summary of the fix
+
+The fix adds a single `else if (oneSlot.isReadonly())` branch between the scale-up extra-slot branch and the already-master fallback in `LeaderSelector.doResetAsMaster()` (line 433-436). When `removeReplPairAsSlave()` returns `false`, the slot has no slave `ReplPair`, and the slot is not a scale-up extra slot, the new branch detects residual slave state via `isReadonly()` and calls `oneSlot.resetAsMaster()`. A regression test (`test promote readonly stream slot without repl pair to master`) was added in `LeaderSelectorTest`.
+
+### Strengths
+
+- **Minimal change.** 4 lines of production code, 20 lines of test. No structural refactoring needed.
+- **Correct branch ordering.** The new check sits at the right priority level: after the explicit repl-pair and scale-up checks, before the "truly already master" fallback. This means explicit checks still have priority; the readonly fallback only catches the missed cases.
+- **`isReadonly()` is a reliable signal.** `setReadonly(true)` is only called in `OneSlot.resetAsSlave()` (line 2650), so `readonly=true` uniquely identifies a slot that was reset as slave but lost its repl pair.
+- **Test faithfully reproduces the bug.** The test sets `readonly=true`, `canRead=false`, no repl pair — exactly the post-teardown state. It asserts the slot becomes `readonly=false` and `canRead=true` after forced promotion.
+- **JaCoCo confirmed.** Lines 433-436 are fully covered; the new branch was executed.
+- **No regression.** The existing `test promote 2N slave extra slots to master` test still passes alongside the new test.
+
+### Concerns
+
+- **No `slot < masterSlotNumber` guard.** The new branch does not distinguish between stream slots and extra slots. In theory, if `isAsSlaveScaleUp()` were to return `false` for a scale-up extra slot (e.g. due to a `masterSlotNumber` mismatch), the readonly fallback would promote it anyway. This is actually **defense-in-depth** — the slot needs promotion regardless — but it means the warning log message ("promote readonly slot without slave repl pair") would fire instead of the scale-up-specific message. Not a correctness concern, but could confuse diagnostics if `masterSlotNumber` is temporarily zero during a race.
+
+### Pre-commit checks (verified)
+
+| Check | Result |
+|-------|--------|
+| New test fails pre-fix? | Yes — `LeaderSelectorTest.groovy:256` |
+| New test passes post-fix? | Yes |
+| Existing promotion test passes? | Yes (`test promote 2N slave extra slots to master`) |
+| JaCoCo covers new branch? | Yes (lines 433-436, all green) |
+| `git diff --check` clean? | Yes |
+| Commit message follows style? | Yes: `fix: promote slave slot without repl pair` |
+
+### Post-commit follow-ups
+
+- **No follow-up required for Bug 1.** The fix is self-contained and verified.
+- Bugs 2, 3, and 4 remain open per the review document's priority order. Bug 2 (same-master `canRead` reset) is next in priority.
+
+---
+
+## Bug 2 Fix Implementation - 2026-06-30
+
+Status: **Fixed**.
+
+Changed `LeaderSelector.doResetAsSlave()` so the same-master early-return path preserves the existing repl pair but clears stale slot readability before returning. The fix calls `oneSlot.setCanRead(false)` only when `oneSlot.isCanRead()` is true, keeping the original no-teardown optimization intact.
+
+Regression coverage added in `LeaderSelectorTest`: `test same master reset clears canRead` creates a same-master slave repl pair, marks the slot readable, refreshes the local Redis config-check key during `resetAsSlave`, and verifies `canRead` becomes false after the same-master reset.
+
+Verification:
+
+- Red: `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest.test same master reset clears canRead"` failed before the production change at `LeaderSelectorTest.groovy:716` because `oneSlot.canRead` remained true.
+- Green: `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest.test same master reset clears canRead"` passed after the fix.
+- Relevant class: `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest"` passed.
+- JaCoCo: `python3 scripts/jacoco_cover.py io.velo.repl.LeaderSelector 563 576 --src` shows the same-master branch and new `setCanRead(false)` line covered.
