@@ -1874,11 +1874,11 @@ public class XGroup extends BaseCommand {
             }
         }
 
-        replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(new Binlog.FileIndexAndOffset(fetchedFileIndex, fetchedOffset + readSegmentLength));
-
         var marginCurrentOffset = Binlog.marginFileOffset(masterCurrentOffset);
         var isCatchUpOffsetInLatestSegment = isCatchUpToCurrentFile && fetchedOffset == marginCurrentOffset;
         if (isCatchUpOffsetInLatestSegment) {
+            replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(
+                    new Binlog.FileIndexAndOffset(fetchedFileIndex, fetchedOffset + readSegmentLength));
             metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(binlogMasterUuid, true,
                     fetchedFileIndex, fetchedOffset + readSegmentLength);
 
@@ -1892,6 +1892,9 @@ public class XGroup extends BaseCommand {
             throw new IllegalStateException("Repl slave handle error: read segment length=" + readSegmentLength +
                     " is not equal to binlog one segment length=" + binlogOneSegmentLength);
         }
+
+        replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(
+                    new Binlog.FileIndexAndOffset(fetchedFileIndex, fetchedOffset + readSegmentLength));
 
         var binlogOneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength;
         var isCatchUpLastSegmentInOneFile = fetchedOffset == (binlogOneFileMaxLength - binlogOneSegmentLength);

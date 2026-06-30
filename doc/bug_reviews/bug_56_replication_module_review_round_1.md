@@ -166,7 +166,7 @@ branch handle the teardown before re-creating. Slightly higher churn but no spec
 **Severity:** Low
 
 
-**AI agent 2 status:** Confirmed as a low-severity split-state hazard on the exceptional invariant-failure path.
+**AI agent 2 status:** Confirmed as a low-severity split-state hazard on the exceptional invariant-failure path. Fixed in this change set.
 
 **Files:**
 
@@ -387,3 +387,21 @@ Verification:
 - Green: `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest.test resetAsMaster notifies callback on synchronous transition exception" --tests "io.velo.repl.LeaderSelectorTest.test resetAsSlave notifies callback on synchronous transition exception"` passed after the fix.
 - Relevant class: fresh `./gradlew :cleanTest` then `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest"` passed.
 - JaCoCo: `python3 scripts/jacoco_cover.py io.velo.repl.LeaderSelector 468 609 --src` shows both new `callback.accept(e)` lines covered.
+
+
+---
+
+## Bug 3 Fix Implementation - 2026-06-30
+
+Status: **Fixed**.
+
+Changed `XGroup.finishSlaveCatchUpApply()` so the in-memory `replPair` catch-up offset is not advanced before the non-latest-segment `readSegmentLength == binlogOneSegmentLength` guard passes. The latest-segment partial-read path still updates the repl-pair offset before returning, preserving the existing catch-up-to-current behavior.
+
+Regression coverage added in `XGroupTest`: `test handle repl rejects short catch up segment before advancing slave offset` sends a valid decoded WAL payload with a short non-latest segment, verifies the error reply, and asserts the slave repl-pair offset and durable meta offset remain unchanged.
+
+Verification:
+
+- Red: `./gradlew :test --tests "io.velo.command.XGroupTest.test handle repl rejects short catch up segment before advancing slave offset"` failed before the production change because `slaveLastCatchUpBinlogFileIndexAndOffset` was advanced.
+- Green: the same focused test passed after the fix.
+- Relevant class: fresh `./gradlew :cleanTest` then `./gradlew :test --tests "io.velo.command.XGroupTest"` passed.
+- JaCoCo: `python3 scripts/jacoco_cover.py io.velo.command.XGroup 1877 1896 --src` shows the guard throw line and both repl-pair offset update paths covered.

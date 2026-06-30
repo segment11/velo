@@ -2751,6 +2751,56 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test handle repl rejects short catch up segment before advancing slave offset'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def masterUuid = 101L
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        def replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
+
+        def replPairAsMaster = ReplPairTest.mockAsMaster(masterUuid)
+        replPairAsMaster.slaveUuid = oneSlot.masterUuid
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+        x.replPair = null
+
+        and:
+        def v = Mock.prepareValueList(1).first()
+        def segmentBytes = new XWalV(v).encodeWithType()
+        def binlogOneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength
+        assert segmentBytes.length != binlogOneSegmentLength
+
+        when:
+        def contentBytes = ByteBuffer.allocate(1 + 4 + 8 + 4 + 8 + 4 + segmentBytes.length)
+                .put((byte) 0)
+                .putInt(0)
+                .putLong(0L)
+                .putInt(0)
+                .putLong(binlogOneSegmentLength * 2L)
+                .putInt(segmentBytes.length)
+                .put(segmentBytes)
+                .array()
+        ReplReply r = x.handleRepl(new ReplRequest(replPairAsMaster.slaveUuid, slot,
+                ReplType.s_catch_up, contentBytes, contentBytes.length)) as ReplReply
+
+        then:
+        r.isReplType(ReplType.error)
+        errorMessage(r).contains('read segment length=')
+        replPairAsSlave.slaveLastCatchUpBinlogFileIndexAndOffset == null
+        oneSlot.metaChunkSegmentIndex.masterBinlogFileIndexAndOffset.offset() == 0L
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test handle repl rejects malformed catch up binlog before state change'() {
         given:
         LocalPersistTest.prepareLocalPersist()
