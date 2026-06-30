@@ -35,6 +35,38 @@ class WorkloadPlanningTest(unittest.TestCase):
         self.assertEqual(1, workload.write_count_after_op(plan, 1))
         self.assertEqual(480_000, workload.write_count_after_op(plan, 600_000))
 
+    def test_big_string_key_uses_kerry_prefix_and_fixed_width(self):
+        self.assertEqual("kerry-test-big-string-0001", workload.big_string_key(1))
+        self.assertEqual("kerry-test-big-string-0005", workload.big_string_key(5))
+        self.assertTrue(workload.big_string_key(1).startswith("kerry-test-big-string-"))
+
+        with self.assertRaises(ValueError):
+            workload.big_string_key(0)
+
+    def test_big_string_size_cycles_through_threshold_sizes(self):
+        # first size must be exactly 256 KiB to hit Velo's big-string + compress branch
+        self.assertEqual(256 * 1024, workload.big_string_size(1))
+        # all sizes must meet the 256 KiB big-string threshold
+        for i in range(1, len(workload.BIG_STRING_SIZES) + 2):
+            self.assertGreaterEqual(workload.big_string_size(i), 256 * 1024)
+        # cycles when index exceeds the schedule length
+        self.assertEqual(workload.big_string_size(1), workload.big_string_size(len(workload.BIG_STRING_SIZES) + 1))
+
+    def test_big_string_value_is_deterministic_and_exact_length(self):
+        for index in (1, 2, 3):
+            size = workload.big_string_size(index)
+            value = workload.big_string_value(index, size)
+            self.assertEqual(size, len(value))
+            self.assertEqual(value, workload.big_string_value(index, size))
+
+        # arbitrary sizes are honored exactly, including tiny ones
+        self.assertEqual(10, len(workload.big_string_value(7, 10)))
+        self.assertEqual(1, len(workload.big_string_value(7, 1)))
+
+    def test_big_string_value_is_bytes_for_binary_safe_transport(self):
+        value = workload.big_string_value(1, workload.big_string_size(1))
+        self.assertIsInstance(value, bytes)
+
 
 if __name__ == "__main__":
     unittest.main()

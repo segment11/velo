@@ -64,6 +64,46 @@ def fixed_value(index: int, data_length: int) -> str:
     return base + ("x" * (data_length - len(base)))
 
 
+# ------------------------- big string workload -------------------------
+
+# Key prefix used for big-string SET/GET coverage. Big strings in Velo take a
+# different code path (on-disk BigStringFiles + XBigStrings binlog + a separate
+# file fetch during replication), so they need dedicated e2e coverage.
+BIG_STRING_KEY_PREFIX = "kerry-test-big-string-"
+
+# Sizes (in bytes) chosen to exercise both Velo big-string branches:
+#   * 256 KiB exactly: size >= bigStringNoMemoryCopySize (256 KiB) makes it a
+#     big string, but length <= bigStringNoCompressMinSize (256 KiB) so it is
+#     still compressed.
+#   * > 256 KiB       : big string stored raw (no compression).
+BIG_STRING_SIZES = [
+    256 * 1024,
+    384 * 1024,
+    512 * 1024,
+    1024 * 1024,
+]
+
+
+def big_string_key(index: int) -> str:
+    if index <= 0:
+        raise ValueError("big string index must be positive")
+    return f"{BIG_STRING_KEY_PREFIX}{index:04d}"
+
+
+def big_string_size(index: int) -> int:
+    return BIG_STRING_SIZES[(index - 1) % len(BIG_STRING_SIZES)]
+
+
+def big_string_value(index: int, size: int) -> bytes:
+    """Deterministic big-string payload of exactly `size` bytes."""
+    header = f"big:{index:04d}:".encode("utf-8")
+    if size <= len(header):
+        return header[:size]
+    chunk = f"<kerry-{index:04d}>".encode("utf-8")
+    body = (chunk * (size // len(chunk) + 2))[: size - len(header)]
+    return header + body
+
+
 # ------------------------- workload -------------------------
 
 class WorkloadStats:
@@ -189,6 +229,93 @@ def run_shared_workload(host: str, velo_port: int, redis_port: int, plan: Worklo
     finally:
         stop_progress.set()
         monitor.join(timeout=1)
+
+
+# ------------------------- big string workload + verification -------------------------
+
+def write_big_strings(host: str, velo_port: int, redis_port: int, count: int) -> list:
+    """Write `count` big-string keys to both Velo and Redis masters.
+
+    Returns a list of (key, size, value_bytes) tuples for later verification.
+    """
+    items = []
+    if count <= 0:
+        return items
+    velo_conn = redis_lib.Redis(host=host, port=velo_port, socket_timeout=120, socket_connect_timeout=5)
+    redis_conn = redis_lib.Redis(host=host, port=redis_port, socket_timeout=120, socket_connect_timeout=5)
+    try:
+        for i in range(1, count + 1):
+            key = big_string_key(i)
+            size = big_string_size(i)
+            value = big_string_value(i, size)
+            velo_conn.set(key, value)
+            redis_conn.set(key, value)
+            items.append((key, size, value))
+            print(f"  wrote {key} ({size} bytes = {size / 1024:.0f} KiB)")
+    finally:
+        velo_conn.close()
+        redis_conn.close()
+    return items
+
+
+def verify_big_strings(host: str, velo_master_port: int, velo_slave_port: int,
+                       redis_master_port: int, redis_slave_port: int,
+                       items: list, timeout_s: float = 180, poll_interval: float = 1.0) -> dict:
+    """Verify big strings replicated to all 4 nodes.
+
+    Big strings replicate via a separate file-fetch path in Velo, so slaves are
+    polled until the values appear (or timeout_s elapses).
+    """
+    result = {
+        "checked": 0,
+        "missing": 0,
+        "mismatch": 0,
+        "samples": [],
+    }
+    if not items:
+        return result
+
+    conns = {
+        "velo_master": redis_lib.Redis(host=host, port=velo_master_port, socket_timeout=120, socket_connect_timeout=5),
+        "velo_slave": redis_lib.Redis(host=host, port=velo_slave_port, socket_timeout=120, socket_connect_timeout=5),
+        "redis_master": redis_lib.Redis(host=host, port=redis_master_port, socket_timeout=120, socket_connect_timeout=5),
+        "redis_slave": redis_lib.Redis(host=host, port=redis_slave_port, socket_timeout=120, socket_connect_timeout=5),
+    }
+    deadline = time.time() + timeout_s
+    try:
+        pending = list(items)
+        while pending and time.time() < deadline:
+            still_pending = []
+            for item in pending:
+                key, size, expected = item
+                got = {}
+                for name, conn in conns.items():
+                    try:
+                        got[name] = conn.get(key)
+                    except Exception:
+                        got[name] = None
+                if any(v is None for v in got.values()):
+                    still_pending.append(item)
+                    continue
+
+                result["checked"] += 1
+                if any(v != expected for v in got.values()):
+                    result["mismatch"] += 1
+                    if len(result["samples"]) < 10:
+                        offenders = {n: len(v) for n, v in got.items()}
+                        result["samples"].append((key, size, "value_mismatch", offenders))
+            pending = still_pending
+            if pending:
+                time.sleep(poll_interval)
+
+        for key, size, _ in pending:
+            result["missing"] += 1
+            if len(result["samples"]) < 10:
+                result["samples"].append((key, size, "missing", None))
+    finally:
+        for conn in conns.values():
+            conn.close()
+    return result
 
 
 # ------------------------- verification -------------------------
@@ -341,6 +468,8 @@ def main():
     p.add_argument("--data-length", type=int, default=100)
     p.add_argument("--settle-seconds", type=int, default=10)
     p.add_argument("--pipeline-batch", type=int, default=100)
+    p.add_argument("--big-string-count", type=int, default=4,
+                   help="number of big-string keys (>= 256 KiB) to write and verify; 0 skips")
     args = p.parse_args()
 
     host = args.host
@@ -364,6 +493,14 @@ def main():
                         args.data_length, args.pipeline_batch, args.worker_threads, stats)
     workload_ms = int((time.time() - start) * 1000)
     print(f"  workload finished in {workload_ms} ms")
+
+    # ---- big strings (separate Velo code path: on-disk files + separate repl fetch) ----
+    big_string_items = []
+    if args.big_string_count > 0:
+        print()
+        print(f"---- big strings: {args.big_string_count} keys, prefix={BIG_STRING_KEY_PREFIX} ----")
+        big_string_items = write_big_strings(host, args.velo_master_port, args.redis_master_port,
+                                             args.big_string_count)
 
     # ---- drain ----
     print()
@@ -403,11 +540,27 @@ def main():
         args.pipeline_batch,
     )
 
+    # ---- big string compare (polled, since big strings use a separate repl fetch path) ----
+    big_string_result = {"checked": 0, "missing": 0, "mismatch": 0, "samples": []}
+    if big_string_items:
+        print("  verifying big strings ...")
+        big_string_result = verify_big_strings(
+            host,
+            args.velo_master_port,
+            args.velo_slave_port,
+            args.redis_master_port,
+            args.redis_slave_port,
+            big_string_items,
+        )
+
     writes, reads, errors = stats.snapshot()
     stats_ok = writes == plan.total_writes and reads == plan.total_reads and errors == 0
     range_ok = (range_result["checked"] == plan.total_writes
                 and range_result["missing"] == 0
                 and range_result["mismatch"] == 0)
+    big_string_ok = (big_string_result["checked"] == len(big_string_items)
+                     and big_string_result["missing"] == 0
+                     and big_string_result["mismatch"] == 0)
 
     print()
     print("==== RESULTS ====")
@@ -421,10 +574,19 @@ def main():
         for key, expected, decoded in range_result["samples"]:
             print(f"    {key} expected={expected} actual={decoded}")
 
+    if big_string_items:
+        print(f"big string     : checked={big_string_result['checked']}/{len(big_string_items)} "
+              f"missing={big_string_result['missing']} mismatch={big_string_result['mismatch']}")
+        if big_string_result["samples"]:
+            print("  big string offending samples:")
+            for key, size, reason, detail in big_string_result["samples"]:
+                print(f"    {key} ({size} bytes) {reason} {detail}")
+
     print()
-    print(f"VELO_REDIS_REPL_RANGE : {'PASS' if range_ok else 'FAIL'}")
-    print(f"OPS_COUNT             : {'PASS' if stats_ok else 'FAIL'}")
-    return 0 if (range_ok and stats_ok) else 1
+    print(f"VELO_REDIS_REPL_RANGE      : {'PASS' if range_ok else 'FAIL'}")
+    print(f"VELO_REDIS_REPL_BIG_STRING : {'PASS' if big_string_ok else 'FAIL'}")
+    print(f"OPS_COUNT                  : {'PASS' if stats_ok else 'FAIL'}")
+    return 0 if (range_ok and stats_ok and big_string_ok) else 1
 
 
 if __name__ == "__main__":

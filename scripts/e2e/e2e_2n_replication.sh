@@ -31,6 +31,7 @@ WORKER_THREADS="${WORKER_THREADS:-10}"
 READ_RATIO="${READ_RATIO:-0.8}"
 DATA_LENGTH="${DATA_LENGTH:-100}"
 SETTLE_SECONDS="${SETTLE_SECONDS:-10}"
+BIG_STRING_COUNT="${BIG_STRING_COUNT:-4}"
 KEEP_DATA="${KEEP_DATA:-false}"
 
 # ------------------------- paths ----------------------------------------------------
@@ -61,6 +62,7 @@ echo "read ratio     = $READ_RATIO"
 echo "worker threads = $WORKER_THREADS (per system)"
 echo "data length    = $DATA_LENGTH"
 echo "settle seconds = $SETTLE_SECONDS"
+echo "big strings    = $BIG_STRING_COUNT keys (>= 256 KiB, prefix kerry-test-big-string-)"
 echo "base dir       = $BASE_DIR"
 echo
 
@@ -307,7 +309,8 @@ python3 "$SCRIPT_DIR/e2e_replication_workload.py" \
     --worker-threads "$WORKER_THREADS" \
     --read-ratio   "$READ_RATIO" \
     --data-length  "$DATA_LENGTH" \
-    --settle-seconds "$SETTLE_SECONDS"
+    --settle-seconds "$SETTLE_SECONDS" \
+    --big-string-count "$BIG_STRING_COUNT"
 
 WORKLOAD_RC=$?
 echo
