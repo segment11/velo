@@ -472,6 +472,7 @@ public class LeaderSelector implements NeedCleanUp {
         } catch (RuntimeException e) {
             ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
             MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+            callback.accept(e);
             throw e;
         }
     }
@@ -605,6 +606,7 @@ public class LeaderSelector implements NeedCleanUp {
         } catch (RuntimeException e) {
             ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
             MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+            callback.accept(e);
             throw e;
         }
     }

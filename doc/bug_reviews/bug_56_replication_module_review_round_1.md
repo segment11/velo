@@ -219,7 +219,7 @@ which is mutated by lines 1850-1877, so reordering is safe.
 **Severity:** Low
 
 **AI agent 2 status:** Confirmed for synchronous `RuntimeException` paths after transition state is changed and
-before `Promises.all(...).whenComplete` is installed.
+before `Promises.all(...).whenComplete` is installed. Fixed in this change set.
 
 **Files:**
 
@@ -364,3 +364,26 @@ Verification:
 - Green: `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest.test same master reset clears canRead"` passed after the fix.
 - Relevant class: `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest"` passed.
 - JaCoCo: `python3 scripts/jacoco_cover.py io.velo.repl.LeaderSelector 563 576 --src` shows the same-master branch and new `setCanRead(false)` line covered.
+
+
+---
+
+## Bug 4 Fix Implementation - 2026-06-30
+
+Status: **Fixed**.
+
+Changed both synchronous `RuntimeException` catch blocks in `LeaderSelector.doResetAsMaster()` and `doResetAsSlave()` to invoke `callback.accept(e)` after restoring `masterSlotNumber` and `masterFailoverState`, then rethrow the same exception. The async `Promises.all(...).whenComplete` error path is unchanged.
+
+Regression coverage added in `LeaderSelectorTest`:
+
+- `test resetAsMaster notifies callback on synchronous transition exception`
+- `test resetAsSlave notifies callback on synchronous transition exception`
+
+Both tests force a synchronous slot-loop exception before the promise completion handler can be installed and assert the callback receives the same exception that is rethrown.
+
+Verification:
+
+- Red: the two focused Bug 4 tests failed before the production change because `callbackException` remained unset.
+- Green: `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest.test resetAsMaster notifies callback on synchronous transition exception" --tests "io.velo.repl.LeaderSelectorTest.test resetAsSlave notifies callback on synchronous transition exception"` passed after the fix.
+- Relevant class: fresh `./gradlew :cleanTest` then `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest"` passed.
+- JaCoCo: `python3 scripts/jacoco_cover.py io.velo.repl.LeaderSelector 468 609 --src` shows both new `callback.accept(e)` lines covered.

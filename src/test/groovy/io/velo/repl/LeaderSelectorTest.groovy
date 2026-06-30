@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 class LeaderSelectorTest extends Specification {
     def 'test leader latch'() {
@@ -813,7 +814,7 @@ class LeaderSelectorTest extends Specification {
         // 127.0.0.1:1 is reserved and not listening — checkMasterConfigMatch will hit a connect
         // timeout / refused error synchronously and the early-return path runs.
         def callbackInvoked = new CountDownLatch(1)
-        def callbackException = new java.util.concurrent.atomic.AtomicReference()
+        def callbackException = new AtomicReference()
         leaderSelector.resetAsSlave('127.0.0.1', 1) { e -> callbackException.set(e); callbackInvoked.countDown() }
         then: 'after the synchronous early-return path runs, state is restored to prevFailoverState'
         callbackInvoked.await(5, TimeUnit.SECONDS)
@@ -828,6 +829,151 @@ class LeaderSelectorTest extends Specification {
         cleanup:
         leaderSelector.masterAddressLocalMocked = null
         MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'no-failover'
+        ConfForGlobal.netListenAddress = savedListen
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test resetAsMaster notifies callback on synchronous transition exception'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+        def savedListen = ConfForGlobal.netListenAddress
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        and:
+        def leaderSelector = LeaderSelector.instance
+        leaderSelector.masterAddressLocalMocked = null
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'no-failover'
+        def prevFailoverState = MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState
+        ConfForGlobal.slotNumber = (short) 2
+        ConfForGlobal.masterSlotNumber = (short) 1
+        def callbackException = new AtomicReference()
+
+        when:
+        def thrown = null
+        try {
+            leaderSelector.resetAsMaster(true) { e -> callbackException.set(e) }
+        } catch (RuntimeException e) {
+            thrown = e
+        }
+
+        then:
+        thrown != null
+        callbackException.get().is(thrown)
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState == prevFailoverState
+        ConfForGlobal.masterSlotNumber == 1
+
+        cleanup:
+        leaderSelector.masterAddressLocalMocked = null
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'no-failover'
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+        ConfForGlobal.netListenAddress = savedListen
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test resetAsSlave notifies callback on synchronous transition exception'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+        def savedListen = ConfForGlobal.netListenAddress
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        and:
+        def leaderSelector = LeaderSelector.instance
+        leaderSelector.masterAddressLocalMocked = null
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'no-failover'
+        def prevFailoverState = MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState
+        ConfForGlobal.slotNumber = (short) 2
+        def callbackException = new AtomicReference()
+
+        def serverSocket = new java.net.ServerSocket(0)
+        def masterPort = serverSocket.localPort
+        def serverStop = new AtomicBoolean(false)
+        def serverThread = Thread.start {
+            while (!serverStop.get()) {
+                try {
+                    def socket = serverSocket.accept()
+                    Thread.start {
+                        try {
+                            socket.withCloseable { accepted ->
+                                def input = new BufferedReader(new InputStreamReader(accepted.getInputStream()))
+                                def output = accepted.getOutputStream()
+                                while (!serverStop.get()) {
+                                    def line = input.readLine()
+                                    if (line == null) {
+                                        break
+                                    }
+                                    if (line.startsWith('*')) {
+                                        def count = Integer.parseInt(line.substring(1))
+                                        def parts = []
+                                        for (int i = 0; i < count; i++) {
+                                            input.readLine()
+                                            parts << input.readLine()
+                                        }
+                                        def cmd = parts[0].toLowerCase()
+                                        if (cmd == 'ping') {
+                                            output.write('+PONG\r\n'.bytes)
+                                        } else if (cmd == 'get') {
+                                            def slaveCheckValues = ConfForSlot.global.getSlaveCheckValues()
+                                            slaveCheckValues.slotNumber = 1
+                                            slaveCheckValues.currentTimeMillis = System.currentTimeMillis() - 10
+                                            def jsonStr = new ObjectMapper().writeValueAsString(slaveCheckValues)
+                                            output.write(('\$' + jsonStr.length() + "\r\n" + jsonStr + "\r\n").bytes)
+                                        } else {
+                                            output.write('$-1\r\n'.bytes)
+                                        }
+                                        output.flush()
+                                    }
+                                }
+                            }
+                        } catch (IOException ignored) {
+                            // Closing the test socket can race with a client read.
+                        }
+                    }
+                } catch (IOException ignored) {
+                    if (!serverStop.get()) {
+                        throw ignored
+                    }
+                }
+            }
+        }
+
+        when:
+        def thrown = null
+        try {
+            leaderSelector.resetAsSlave('localhost', masterPort) { e -> callbackException.set(e) }
+        } catch (RuntimeException e) {
+            thrown = e
+        }
+
+        then:
+        thrown != null
+        callbackException.get().is(thrown)
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState == prevFailoverState
+        ConfForGlobal.masterSlotNumber == savedMasterSlotNumber
+
+        cleanup:
+        serverStop.set(true)
+        serverSocket.close()
+        serverThread.join(1000)
+        JedisPoolHolder.instance.cleanUp()
+        leaderSelector.masterAddressLocalMocked = null
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = 'no-failover'
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
         ConfForGlobal.netListenAddress = savedListen
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
