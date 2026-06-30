@@ -1136,7 +1136,8 @@ class OneSlotTest extends Specification {
         def oneSlot = localPersist.oneSlot(slot)
         def key = 'seq-guard-key'
         def sKey = BaseCommand.slot(key, slotNumber)
-        def makeCv = { long seq, byte marker, long keyHash = sKey.keyHash() ->
+        def keyHashGiven = sKey.keyHash()
+        def makeCv = { long seq, byte marker, long keyHash = keyHashGiven ->
             def cv = new CompressedValue()
             cv.seq = seq
             cv.keyHash = keyHash
@@ -1657,7 +1658,7 @@ class OneSlotTest extends Specification {
                 break
             }
         }
-        assert firstDataSeg >= 0 : "Expected HAS_DATA segment, found none"
+        assert firstDataSeg >= 0: "Expected HAS_DATA segment, found none"
 
         // add ONE manual marker for a single segment
         metaChunkSegmentFlagSeq.markPersistedSegmentIndexToTargetWalGroup(walGroupIndex, firstDataSeg, (short) 1)
