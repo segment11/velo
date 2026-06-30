@@ -219,6 +219,8 @@ class OneSlotTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
+        // shorten delay-close for fast test (default 60s is too long for unit test sleep)
+        ConfForGlobal.replDelayCloseTimeoutSeconds = 1
 
         when:
         // test repl pair
@@ -261,11 +263,11 @@ class OneSlotTest extends Specification {
         when:
         oneSlot.doTask(100)
         then:
-        // will remain in 10s
+        // will remain until delay-close timeout
         oneSlot.delayNeedCloseReplPairs.size() == 1
 
         when:
-        Thread.sleep(11 * 1000)
+        Thread.sleep(2 * 1000)
         oneSlot.doTask(100)
         then:
         oneSlot.delayNeedCloseReplPairs.size() == 0
@@ -289,7 +291,7 @@ class OneSlotTest extends Specification {
         oneSlot.delayNeedCloseReplPairs.size() == 2
 
         when:
-        Thread.sleep(11 * 1000)
+        Thread.sleep(2 * 1000)
         oneSlot.doTask(100)
         oneSlot.doTask(200)
         then:
@@ -347,6 +349,7 @@ class OneSlotTest extends Specification {
         oneSlot.replPairs.size() == 2
 
         cleanup:
+        ConfForGlobal.replDelayCloseTimeoutSeconds = 60
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
@@ -358,6 +361,8 @@ class OneSlotTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
+        // shorten delay-close for fast test (default 60s is too long for unit test sleep)
+        ConfForGlobal.replDelayCloseTimeoutSeconds = 1
 
         when:
         // simulate this node is a master with one downstream replica
@@ -391,6 +396,7 @@ class OneSlotTest extends Specification {
         oneSlot.getOnlyOneReplPairAsSlave() != null
 
         cleanup:
+        ConfForGlobal.replDelayCloseTimeoutSeconds = 60
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
@@ -529,6 +535,8 @@ class OneSlotTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
+        // shorten delay-close for fast test (default 60s is too long for unit test sleep)
+        ConfForGlobal.replDelayCloseTimeoutSeconds = 1
         // not include global metrics if not the first slot
         def oneSlot2 = localPersist.oneSlot((byte) 1)
 
@@ -657,6 +665,7 @@ class OneSlotTest extends Specification {
         n >= 0
 
         cleanup:
+        ConfForGlobal.replDelayCloseTimeoutSeconds = 60
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }

@@ -113,6 +113,15 @@ public class ConfForGlobal {
     public static int eventloopIdleMillis = 10;
 
     /**
+     * Replication delay-close timeout in seconds (default is 60s).
+     * After a repl pair is bye-ed, it stays in the replPairs list this long so a failover-triggered
+     * resetAsMaster can still find and tear it down through the normal removeReplPairAsSlave path.
+     * Must cover the worst-case failover window: Redis Sentinel down-after-ms (default 30s) +
+     * failover orchestration (~15-20s).
+     */
+    public static int replDelayCloseTimeoutSeconds = 60;
+
+    /**
      * Zookeeper connection string.
      */
     public static String zookeeperConnectString;

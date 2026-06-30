@@ -1411,8 +1411,10 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
                 if (!delayNeedCloseReplPairs.isEmpty()) {
                     var first = delayNeedCloseReplPairs.getFirst();
-                    // delay 10s as slave will try to fetch data by jedis sync get
-                    if (System.currentTimeMillis() - first.getPutToDelayListToRemoveTimeMillis() > 1000 * 10) {
+                    // delay replDelayCloseTimeoutSeconds so a failover-triggered resetAsMaster
+                    // can still find and tear the pair down before the reaper removes it.
+                    if (System.currentTimeMillis() - first.getPutToDelayListToRemoveTimeMillis()
+                            > 1000L * ConfForGlobal.replDelayCloseTimeoutSeconds) {
                         var needCloseReplPair = delayNeedCloseReplPairs.pop();
                         needCloseReplPair.close();
 

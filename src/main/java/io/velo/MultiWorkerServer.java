@@ -1389,6 +1389,12 @@ public class MultiWorkerServer extends Launcher {
                 throw new IllegalArgumentException("Eventloop idle millis must be between 10 and 100");
             }
 
+            ConfForGlobal.replDelayCloseTimeoutSeconds = config.get(ofInteger(), "repl.delayCloseTimeoutSeconds", 60);
+            log.warn("Global config, replDelayCloseTimeoutSeconds={}", ConfForGlobal.replDelayCloseTimeoutSeconds);
+            if (ConfForGlobal.replDelayCloseTimeoutSeconds < 10) {
+                throw new IllegalArgumentException("repl.delayCloseTimeoutSeconds must be at least 10");
+            }
+
             ConfForGlobal.PASSWORD = config.get(ofString(), "password", null);
 
             // Read sentinelModeEnabled before the ZooKeeper block so the mutual-exclusion
