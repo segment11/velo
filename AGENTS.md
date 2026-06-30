@@ -18,7 +18,7 @@ system written in Java with Groovy components.
 ### Core Commands
 
 ```bash
-# Build the project
+# Build the project, prefer
 ./gradlew jar
 
 # Run all tests in all Gradle projects, including submodules
@@ -39,7 +39,7 @@ system written in Java with Groovy components.
 # Clean build artifacts
 ./gradlew clean
 
-# Create fat JAR for deployment
+# Create fat JAR for deployment, not prefer
 ./gradlew fatJar
 
 # Run JMH benchmarks

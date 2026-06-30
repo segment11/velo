@@ -16,7 +16,7 @@ Velo is a Redis protocol compatible, low-latency, hash-index based, slot-shardin
 ```bash
 # Build
 ./gradlew jar                  # Build JAR (also copies deps, configs, dyn scripts)
-./gradlew fatJar               # Fat JAR for deployment
+./gradlew fatJar               # Fat JAR for deployment, not prefer
 ./gradlew clean                # Clean build artifacts
 
 # Test (Spock framework on JUnit 5, forkEvery=1, maxHeap=8G)
