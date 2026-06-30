@@ -222,6 +222,46 @@ class LeaderSelectorTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test promote readonly stream slot without repl pair to master'() {
+        given:
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        and:
+        def leaderSelector = LeaderSelector.instance
+        leaderSelector.masterAddressLocalMocked = null
+        oneSlot.readonly = true
+        oneSlot.canRead = false
+        assert oneSlot.onlyOneReplPairAsSlave == null
+
+        when:
+        def future = new CompletableFuture()
+        leaderSelector.resetAsMaster(true) { e ->
+            if (e != null) {
+                println e.message
+                future.complete(false)
+            } else {
+                future.complete(true)
+            }
+        }
+        def r = future.get()
+
+        then:
+        r
+        !oneSlot.readonly
+        oneSlot.canRead
+
+        cleanup:
+        leaderSelector.masterAddressLocalMocked = null
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test reset as master'() {
         given:
         ConfForGlobal.netListenAddress = 'localhost:7380'

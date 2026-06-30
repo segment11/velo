@@ -430,6 +430,10 @@ public class LeaderSelector implements NeedCleanUp {
                         log.warn("Repl promote scale-up extra slot to master (no binlog history), slot={}", oneSlot.slot());
                         oneSlot.resetAsMaster();
                         resetAsMasterCount = 0;
+                    } else if (oneSlot.isReadonly()) {
+                        log.warn("Repl promote readonly slot without slave repl pair, slot={}", oneSlot.slot());
+                        oneSlot.resetAsMaster();
+                        resetAsMasterCount = 0;
                     } else {
                         resetAsMasterCount++;
                         if (resetAsMasterCount % 100 == 0) {
