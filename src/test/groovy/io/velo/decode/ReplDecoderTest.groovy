@@ -39,7 +39,7 @@ class ReplDecoderTest extends Specification {
         bufs2.add(buf2)
         def requestList2 = decoder.tryDecode(bufs2)
         then:
-        requestList2.isEmpty()
+        requestList2 == null
 
         when:
         // 21 is header
@@ -57,7 +57,7 @@ class ReplDecoderTest extends Specification {
         requestList2 = decoder.tryDecode(bufs2)
         then:
         // not fully read, left 10 need read
-        requestList2.isEmpty()
+        requestList2 == null
         decoder.toFullyReadRequest != null
 
         when:
@@ -68,7 +68,7 @@ class ReplDecoderTest extends Specification {
         // read left 5 bytes
         requestList2 = decoder.tryDecode(bufs2)
         then:
-        requestList2.isEmpty()
+        requestList2 == null
         decoder.toFullyReadRequest != null
 
         when:
@@ -165,7 +165,7 @@ class ReplDecoderTest extends Specification {
         def requestList = decoder.tryDecode(bufs)
 
         then:
-        requestList.isEmpty()
+        requestList == null
         decoder.toFullyReadRequest != null
         decoder.toFullyReadRequest.leftToRead() == 3
     }

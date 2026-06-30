@@ -5,7 +5,7 @@ import io.activej.common.exception.MalformedDataException;
 import io.activej.csp.binary.decoder.ByteBufsDecoder;
 import io.velo.repl.Repl;
 import io.velo.repl.ReplRequest;
-import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
@@ -69,10 +69,14 @@ public class ReplDecoder implements ByteBufsDecoder<ArrayList<ReplRequest>> {
 
     /**
      * @param bufs the source of bytes to decode
-     * @return a list of decoded ReplRequest objects
+     * @return a list of fully-read ReplRequest objects, or {@code null} when no fully-read
+     * request is available yet (signals {@code BinaryChannelSupplier} to wait for more bytes).
+     * A partially-read request is accumulated in {@link #toFullyReadRequest}; returning
+     * {@code null} (instead of an empty list) avoids spurious "pipeline is empty" warnings
+     * and empty replies while a large body is still streaming in.
      */
     @Override
-    public @NotNull ArrayList<ReplRequest> tryDecode(ByteBufs bufs) throws MalformedDataException {
+    public @Nullable ArrayList<ReplRequest> tryDecode(ByteBufs bufs) throws MalformedDataException {
         try {
             ArrayList<ReplRequest> pipeline = new ArrayList<>();
             var one = tryDecodeOne(bufs);
@@ -82,7 +86,7 @@ public class ReplDecoder implements ByteBufsDecoder<ArrayList<ReplRequest>> {
                 }
                 one = tryDecodeOne(bufs);
             }
-            return pipeline;
+            return pipeline.isEmpty() ? null : pipeline;
         } catch (Exception e) {
             throw new MalformedDataException(e);
         }

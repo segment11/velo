@@ -129,10 +129,8 @@ public class TcpClient implements NeedCleanUp {
                     BinaryChannelSupplier.of(ChannelSuppliers.ofSocket(socket))
                             .decodeStream(new ReplDecoder())
                             .mapAsync(pipeline -> {
-                                if (pipeline.isEmpty()) {
-                                    log.warn("Repl slave request decode fail: pipeline is empty, slot={}", slot);
-                                    return Promise.of(ByteBuf.empty());
-                                }
+                                // pipeline is never empty: ReplDecoder.tryDecode returns null
+                                // (not an empty list) when no fully-read request is available yet.
 
                                 Promise<ByteBuf>[] promiseN = new Promise[pipeline.size()];
                                 for (int i = 0; i < pipeline.size(); i++) {

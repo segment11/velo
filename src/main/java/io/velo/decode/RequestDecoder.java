@@ -7,7 +7,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.velo.repl.Repl;
 import io.velo.repl.ReplRequest;
-import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -202,10 +202,13 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
 
     /**
      * @param bufs the source of bytes to decode
-     * @return a list of decoded Request objects
+     * @return a list of decoded Request objects, or {@code null} when no complete request
+     * could be decoded yet (signals {@code BinaryChannelSupplier} to wait for more bytes).
+     * Returning an empty list instead of {@code null} would make the event loop busy-loop,
+     * which is why large values that span multiple TCP reads must return {@code null} here.
      */
     @Override
-    public @NotNull ArrayList<Request> tryDecode(ByteBufs bufs) throws MalformedDataException {
+    public @Nullable ArrayList<Request> tryDecode(ByteBufs bufs) throws MalformedDataException {
         try {
             ArrayList<Request> pipeline = new ArrayList<>();
             var one = tryDecodeOne(bufs);
@@ -213,7 +216,7 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                 pipeline.add(one);
                 one = tryDecodeOne(bufs);
             }
-            return pipeline;
+            return pipeline.isEmpty() ? null : pipeline;
         } catch (Exception e) {
             throw new MalformedDataException(e);
         }

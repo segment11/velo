@@ -696,10 +696,8 @@ public class MultiWorkerServer extends Launcher {
      * @return a promise of the response as a ByteBuf
      */
     Promise<ByteBuf> handlePipeline(@NotNull ArrayList<Request> pipeline, ITcpSocket socket, short slotNumber) {
-        if (pipeline.isEmpty()) {
-            return Promise.of(ByteBuf.empty());
-        }
-
+        // pipeline is never empty: RequestDecoder.tryDecode returns null (not an empty list)
+        // when no complete request is available, so mapAsync only ever receives a non-empty list.
         SocketInspector.updateLastSendCommand(socket, pipeline.getLast().cmd(), pipeline.size());
 
         for (var request : pipeline) {

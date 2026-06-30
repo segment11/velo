@@ -151,10 +151,8 @@ public abstract class E2ePerfTestMultiNetWorkerServer extends Launcher {
     abstract Promise<ByteBuf> handleRequest(Request request, ITcpSocket socket);
 
     private Promise<ByteBuf> handlePipeline(ArrayList<Request> pipeline, ITcpSocket socket) {
-        if (pipeline.isEmpty()) {
-            return Promise.of(ByteBuf.empty());
-        }
-
+        // pipeline is never empty: RequestDecoder.tryDecode returns null (not an empty list)
+        // when no complete request is available.
         if (pipeline.size() == 1) {
             return handleRequest(pipeline.getFirst(), socket);
         }

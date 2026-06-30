@@ -43,7 +43,7 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         def requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3.isEmpty()
+        requestList3 == null
 
         when:
         buf3 = ByteBuf.wrapForReading(
@@ -63,7 +63,7 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3.isEmpty()
+        requestList3 == null
 
         when:
         buf3 = ByteBuf.wrapForReading(
@@ -73,7 +73,7 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3.isEmpty()
+        requestList3 == null
 
         when:
         buf3 = ByteBuf.wrapForReading(
@@ -83,7 +83,41 @@ class RequestDecoderTest extends Specification {
         bufs3.add(buf3)
         requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3.isEmpty()
+        requestList3 == null
+    }
+
+    def 'test decode returns null when a bulk value is split across reads (need more data)'() {
+        given:
+        def decoder = new RequestDecoder()
+        // SET mykey <declared 10 bytes> but only 3 value bytes present -> incomplete request.
+        // This is the over-the-network case for any value larger than one TCP read.
+        def buf = ByteBuf.wrapForReading(
+                '*3\r\n$3\r\nSET\r\n$5\r\nmykey\r\n$10\r\nabc'.bytes
+        )
+        def bufs = new ByteBufs(1)
+        bufs.add(buf)
+
+        when:
+        def requestList = decoder.tryDecode(bufs)
+
+        then:
+        // Must signal "need more data" with null so BinaryChannelSupplier reads more bytes.
+        // Returning an empty list here makes the event loop busy-loop forever (the root cause
+        // of large-value SET hangs).
+        requestList == null
+
+        when:
+        // feeding the remaining value bytes + CRLF completes the request
+        bufs.add(ByteBuf.wrapForReading('defghij\r\n'.bytes))
+        def requestList2 = decoder.tryDecode(bufs)
+
+        then:
+        requestList2 != null
+        requestList2.size() == 1
+        !requestList2[0].isHttp() && !requestList2[0].isRepl()
+        requestList2[0].data[0] == 'SET'.bytes
+        requestList2[0].data[1] == 'mykey'.bytes
+        requestList2[0].data[2] == 'abcdefghij'.bytes
     }
 
     def "test decode http"() {
@@ -152,7 +186,7 @@ class RequestDecoderTest extends Specification {
         bufs2.add(buf2)
         def requestList2 = decoder.tryDecode(bufs2)
         then:
-        requestList2.isEmpty()
+        requestList2 == null
 
         when:
         // no params
@@ -184,7 +218,7 @@ class RequestDecoderTest extends Specification {
         buf3.head(1)
         requestList3 = decoder.tryDecode(bufs3)
         then:
-        requestList3.isEmpty()
+        requestList3 == null
     }
 
     def 'test decode http uses utf8 tokens'() {
@@ -363,7 +397,7 @@ class RequestDecoderTest extends Specification {
         bufs2.add(buf2)
         def requestList2 = decoder.tryDecode(bufs2)
         then:
-        requestList2.isEmpty()
+        requestList2 == null
 
         when:
         def bb = new byte[6 + 14 + 1]
@@ -395,7 +429,7 @@ class RequestDecoderTest extends Specification {
         def requestList = decoder.tryDecode(bufs)
 
         then:
-        requestList.isEmpty()
+        requestList == null
 
         when:
         bufs.add(ByteBuf.wrapForReading('T /?get&mykey HTTP/1.1\r\nHost: localhost:8080\r\n\r\n'.bytes))
@@ -424,7 +458,7 @@ class RequestDecoderTest extends Specification {
         def requestList = decoder.tryDecode(bufs)
 
         then:
-        requestList.isEmpty()
+        requestList == null
 
         when:
         bufs.add(ByteBuf.wrapForReading(secondPart))
