@@ -365,6 +365,46 @@ Verification:
 - Relevant class: `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest"` passed.
 - JaCoCo: `python3 scripts/jacoco_cover.py io.velo.repl.LeaderSelector 563 576 --src` shows the same-master branch and new `setCanRead(false)` line covered.
 
+---
+
+## Review Feedback — Bug 2 Fix (commit `c12496bf`)
+
+**Reviewer:** AI agent (Step 4 feedback)
+**Date:** 2026-06-30
+
+### Summary of the fix
+
+The fix adds a `oneSlot.setCanRead(false)` call before the same-master early return in `LeaderSelector.doResetAsSlave()` (line 568), guarded by `if (oneSlot.isCanRead())` to avoid an unnecessary DynConfig write. The regression test creates a same-master repl pair, sets `canRead=true`, runs `resetAsSlave` to the same host/port, and asserts `canRead` is cleared.
+
+### Strengths
+
+- **Minimal change.** 3 lines of production code, no structural refactoring.
+- **Guard avoids needless I/O.** The `if (oneSlot.isCanRead())` check prevents a `setCanRead(false)` call that would write to DynConfig when `canRead` is already false — the common case for a newly-reset slave.
+- **Same-master optimization preserved.** The fix does not tear down the repl pair; it only clears the stale readability flag. The repl pair continues operating, and the catch-up loop will correctly republish `canRead` when the slot catches up.
+- **Test exercises real Redis path.** The test starts a real Redis server, writes the check-values key, and drives through the actual `slaveCanMatch` → `doResetAsSlave` code path rather than mocking at the `masterAddressLocalMocked` shortcut.
+- **JaCoCo confirmed.** Lines 567-568 are covered; the `isCanRead()` guard was exercised (true branch).
+
+### Concerns
+
+- **Test depends on external Redis binary.** The test gracefully degrades when `RedisServer.isBinExists()` returns false (skips the assertion, passes trivially). This means CI environments without `redis-server` on `PATH` will not exercise the bug path.
+- **`setCanRead` throws IOException.** The `asyncRun` wrapper catches it and returns a failed Promise that the `Promises.all(...).whenComplete` error branch handles correctly (restores `masterSlotNumber`). Verified by code inspection — no production risk.
+
+### Pre-commit checks (verified)
+
+| Check | Result |
+|-------|--------|
+| New test fails pre-fix? | Yes — `canRead` remained true |
+| New test passes post-fix? | Yes (rerun-confirmed) |
+| Existing Bug 1 test still passes? | Yes |
+| Scale-up promotion test passes? | Yes (`test promote 2N slave extra slots to master`) |
+| JaCoCo covers new lines? | Yes (lines 567-568) |
+| Commit message follows style? | Yes: `fix: clear canread on same master reset` |
+
+### Post-commit follow-ups
+
+- **No follow-up required for Bug 2.** The fix is self-contained and verified.
+- Bugs 3 and 4 remain open. Bug 3 (offset before guard in `finishSlaveCatchUpApply`) is next in priority.
+
 
 ---
 
@@ -405,3 +445,70 @@ Verification:
 - Green: the same focused test passed after the fix.
 - Relevant class: fresh `./gradlew :cleanTest` then `./gradlew :test --tests "io.velo.command.XGroupTest"` passed.
 - JaCoCo: `python3 scripts/jacoco_cover.py io.velo.command.XGroup 1877 1896 --src` shows the guard throw line and both repl-pair offset update paths covered.
+
+---
+
+## Review Feedback — Bug 3 Fix (commit `aabf3003`)
+
+**Reviewer:** AI agent (Step 4 feedback)
+**Date:** 2026-06-30
+
+### Summary of the fix
+
+Moves `replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(...)` after the `readSegmentLength != binlogOneSegmentLength` consistency guard in `XGroup.finishSlaveCatchUpApply()`. The latest-segment partial-read path (early return branch) still updates the offset before returning. The non-latest-segment path now only advances the offset after the guard passes. If the guard throws, the in-memory `replPair` offset is unchanged, consistent with the durable `metaChunkSegmentIndex` (also not yet advanced).
+
+### Strengths
+
+- **Reorder, no new logic.** The same `setSlaveLastCatchUpBinlogFileIndexAndOffset` call is now duplicated into each branch — one before the latest-segment early return, one after the guard.
+- **Test validates split state.** The test sends a short non-latest catch-up segment, asserts the error reply, and verifies both `replPair.slaveLastCatchUpBinlogFileIndexAndOffset` and `metaChunkSegmentIndex` offsets are unchanged. This directly proves the fix.
+- **No regression on existing XGroup tests.** Full `XGroupTest` suite passes.
+
+### Pre-commit checks (verified)
+
+| Check | Result |
+|-------|--------|
+| New test fails pre-fix? | Yes — offset was advanced before throw |
+| New test passes post-fix? | Yes |
+| Full `XGroupTest` passes? | Yes |
+| Commit message follows style? | Yes: `fix: validate catchup segment before advancing offset` |
+
+### Post-commit follow-ups
+
+- **No follow-up required for Bug 3.** The fix is self-contained and verified.
+
+---
+
+## Review Feedback — Bug 4 Fix (commit `95bef8b9`)
+
+**Reviewer:** AI agent (Step 4 feedback)
+**Date:** 2026-06-30
+
+### Summary of the fix
+
+Adds `callback.accept(e)` before `throw e` in both synchronous `catch (RuntimeException e)` blocks of `LeaderSelector.doResetAsMaster()` and `doResetAsSlave()`. The async failure path (`Promises.all(...).whenComplete`) already notifies the callback correctly.
+
+### Strengths
+
+- **One line per catch block.** Minimal, no structural change.
+- **Two focused tests.** `test resetAsMaster notifies callback` forces `ArrayIndexOutOfBoundsException` by preparing 1 slot but setting `slotNumber=2`. `test resetAsSlave notifies callback` starts a fake Redis server, accepts the `checkMasterConfigMatch` handshake, then forces an exception in the slot loop.
+- **Both tests assert the callback receives the same exception that is rethrown**, proving callback and rethrow are in sync.
+- **JaCoCo confirmed.** Both `callback.accept(e)` lines (lines 475 and 611) are covered.
+
+### Concerns
+
+- **Test uses fake Redis server with manual RESP handling.** While thorough, it's fragile — future RESP format changes could break the test without affecting production code.
+
+### Pre-commit checks (verified)
+
+| Check | Result |
+|-------|--------|
+| New tests fail pre-fix? | Yes — callback was never invoked |
+| New tests pass post-fix? | Yes |
+| Existing failover-observability test passes? | Yes (`test failover state observability`) |
+| JaCoCo covers new lines? | Yes (both `callback.accept(e)` lines) |
+| Commit message follows style? | Yes: `fix: notify callback on sync repl transition failure` |
+
+### Post-commit follow-ups
+
+- **No follow-up required for Bug 4.** All four bugs from round 1 are now fixed.
+- The bug review document (`bug_56_replication_module_review_round_1.md`) is complete with author findings, reviewer verification, fix implementations, and review feedback for all four bugs.
