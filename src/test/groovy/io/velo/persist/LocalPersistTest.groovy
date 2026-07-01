@@ -308,8 +308,9 @@ class LocalPersistTest extends Specification {
         // masterSlotNumber=2 (streams 0,1), slotNumber=4 (slots 0,1,2,3)
         localPersist.resetScaleUpReadGate(2)
 
-        // init all slots to canRead=false
+        // init all slots to readonly slaves with canRead=false
         for (short s = 0; s < 4; s++) {
+            localPersist.oneSlot(s).readonly = true
             localPersist.oneSlot(s).canRead = false
         }
 
@@ -350,6 +351,57 @@ class LocalPersistTest extends Specification {
         then:
         localPersist.oneSlot((short) 0).canRead
         noExceptionThrown()
+
+        cleanup:
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test scale-up read gate skips promoted slots'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+
+        prepareLocalPersist((byte) 1, (short) 4)
+        def localPersist = LocalPersist.instance
+        for (short s = 0; s < 4; s++) {
+            localPersist.fixSlotThreadId(s, Thread.currentThread().threadId())
+        }
+
+        and:
+        ConfForGlobal.masterSlotNumber = (short) 2
+        ConfForGlobal.slotNumber = (short) 4
+        localPersist.resetScaleUpReadGate(2)
+
+        // all slots start as slaves: readonly, not readable
+        for (short s = 0; s < 4; s++) {
+            localPersist.oneSlot(s).readonly = true
+            localPersist.oneSlot(s).canRead = false
+        }
+
+        when: 'both streams ready — gate opens, all slots readable'
+        localPersist.publishStreamReadyAndRefreshGate((short) 0, true)
+        localPersist.publishStreamReadyAndRefreshGate((short) 1, true)
+        then:
+        localPersist.oneSlot((short) 0).canRead
+        localPersist.oneSlot((short) 3).canRead
+
+        when: 'slot 3 is promoted to master (readonly=false) — simulates resetAsMaster'
+        localPersist.oneSlot((short) 3).readonly = false
+        then:
+        !localPersist.oneSlot((short) 3).readonly
+        localPersist.oneSlot((short) 3).canRead
+
+        when: 'a stream drops — gate closes, fan-out setCanRead(false) to all slots'
+        localPersist.publishStreamReadyAndRefreshGate((short) 0, false)
+        then: 'slave slots (readonly=true) get canRead=false'
+        !localPersist.oneSlot((short) 0).canRead
+        !localPersist.oneSlot((short) 1).canRead
+        !localPersist.oneSlot((short) 2).canRead
+        and: 'promoted slot (readonly=false) is NOT overridden — stale close is skipped'
+        localPersist.oneSlot((short) 3).canRead
 
         cleanup:
         ConfForGlobal.slotNumber = savedSlotNumber

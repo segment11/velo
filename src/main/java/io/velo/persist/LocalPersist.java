@@ -512,7 +512,10 @@ public class LocalPersist implements NeedCleanUp {
             for (short s = 0; s < ConfForGlobal.slotNumber; s++) {
                 var ts = oneSlot(s);
                 ts.asyncRun(() -> {
-                    if (ts.isCanRead() != gateOpen) {
+                    // Skip slots already promoted to master (readonly=false). The gate is a
+                    // slave-only mechanism; a promoted slot's canRead must not be overridden by
+                    // a stale fan-out from another stream's repl-pair teardown during promotion.
+                    if (ts.isReadonly() && ts.isCanRead() != gateOpen) {
                         ts.setCanRead(gateOpen);
                     }
                 });

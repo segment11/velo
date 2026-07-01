@@ -27,8 +27,9 @@ class ScaleUpReplicationTest extends Specification {
         ConfForGlobal.masterSlotNumber = (short) 2
         localPersist.resetScaleUpReadGate(2)
 
-        // init all slots to canRead=false
+        // init all slots to readonly slaves with canRead=false
         for (short s = 0; s < 4; s++) {
+            localPersist.oneSlot(s).readonly = true
             localPersist.oneSlot(s).canRead = false
         }
 
