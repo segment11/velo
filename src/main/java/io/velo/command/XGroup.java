@@ -1109,16 +1109,16 @@ public class XGroup extends BaseCommand {
         return Repl.reply(slot, replPair, s_incremental_big_string, content);
     }
 
-    private Repl.ReplReply s_incremental_big_string(short slot, byte[] contentBytes) {
+    private Repl.ReplReply s_incremental_big_string(short streamSlot, byte[] contentBytes) {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
         if (buffer.remaining() < 8 + 4) {
-            throw new IllegalArgumentException("Repl slave handle error: incremental big string payload too short, slot=" + slot);
+            throw new IllegalArgumentException("Repl slave handle error: incremental big string payload too short, slot=" + streamSlot);
         }
         var uuid = buffer.getLong();
         var kenLength = buffer.getInt();
         if (kenLength < 0 || kenLength > buffer.remaining()) {
-            throw new IllegalArgumentException("Repl slave handle error: incremental big string key length invalid=" + kenLength + ", slot=" + slot);
+            throw new IllegalArgumentException("Repl slave handle error: incremental big string key length invalid=" + kenLength + ", slot=" + streamSlot);
         }
         var keyBytes = new byte[kenLength];
         buffer.get(keyBytes);
@@ -1144,32 +1144,32 @@ public class XGroup extends BaseCommand {
             writePromise.whenResult(v -> {
                 replPair.doneFetchBigStringUuid(uuid);
                 if (!replPair.hasPendingBigStringFetches() && replPair.isAllCaughtUp()) {
-                    tryRePublishReadiness(slot);
+                    tryRePublishReadiness(streamSlot);
                 }
             });
         } else {
-            log.warn("Repl slave fetch incremental big string, master file missing, uuid={}, key={}, slot={}", uuid, key, slot);
+            log.warn("Repl slave fetch incremental big string, master file missing, uuid={}, key={}, slot={}", uuid, key, streamSlot);
             replPair.doneFetchBigStringUuid(uuid);
             if (!replPair.hasPendingBigStringFetches() && replPair.isAllCaughtUp()) {
-                tryRePublishReadiness(slot);
+                tryRePublishReadiness(streamSlot);
             }
         }
 
         return Repl.emptyReply();
     }
 
-    private void tryRePublishReadiness(short slot) {
+    private void tryRePublishReadiness(short streamSlot) {
         try {
             if (localPersist.isAsSlaveScaleUp()) {
-                localPersist.publishStreamReadyAndRefreshGate(slot, true);
+                localPersist.publishStreamReadyAndRefreshGate(streamSlot, true);
             } else {
-                var streamSlot = localPersist.oneSlot(slot);
-                if (!streamSlot.isCanRead()) {
-                    streamSlot.setCanRead(true);
+                var oneSlot = localPersist.oneSlot(streamSlot);
+                if (!oneSlot.isCanRead()) {
+                    oneSlot.setCanRead(true);
                 }
             }
         } catch (Exception e) {
-            log.error("Repl re-publish stream readiness after big string fetch failed, slot={}", slot, e);
+            log.error("Repl re-publish stream readiness after big string fetch failed, slot={}", streamSlot, e);
         }
     }
 
@@ -1873,7 +1873,7 @@ public class XGroup extends BaseCommand {
         return new AsyncReply(finalPromise);
     }
 
-    private Reply finishSlaveCatchUpApply(short slot, @NotNull ReplPair replPair, @NotNull OneSlot oneSlot,
+    private Reply finishSlaveCatchUpApply(short streamSlot, @NotNull ReplPair replPair, @NotNull OneSlot oneSlot,
                                           @NotNull MetaChunkSegmentIndex metaChunkSegmentIndex, long binlogMasterUuid,
                                           boolean isScaleUp, boolean isMasterReadonly, int fetchedFileIndex, long fetchedOffset,
                                           int masterCurrentFileIndex, long masterCurrentOffset, int readSegmentLength,
@@ -1902,11 +1902,11 @@ public class XGroup extends BaseCommand {
             // 2N scale-up: publish this stream's readiness to the central gate, which fans
             // canRead to ALL local slots only when the global AND changes. Do NOT set canRead
             // per-slot here — any local slot can hold keys from any master stream.
-            localPersist.publishStreamReadyAndRefreshGate(slot, canRead);
+            localPersist.publishStreamReadyAndRefreshGate(streamSlot, canRead);
         } else if ((canRead && !oneSlot.isCanRead()) || (!canRead && oneSlot.isCanRead())) {
             try {
                 oneSlot.setCanRead(canRead);
-                log.warn("Repl slave can read={}, as already catch up nearly to master latest, slot={}", canRead, slot);
+                log.warn("Repl slave can read={}, as already catch up nearly to master latest, slot={}", canRead, streamSlot);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -1945,12 +1945,12 @@ public class XGroup extends BaseCommand {
         var content = toMasterCatchUp(binlogMasterUuid, nextCatchUpFileIndex, nextCatchUpOffset, nextCatchUpOffset);
         if (nextCatchUpOffset == 0) {
             log.info("Repl slave ready to catch up to next file, slave uuid={}, {}, binlog file index={}, offset={}, slot={}",
-                    replPair.getSlaveUuid(), replPair.getHostAndPort(), nextCatchUpFileIndex, nextCatchUpOffset, slot);
+                    replPair.getSlaveUuid(), replPair.getHostAndPort(), nextCatchUpFileIndex, nextCatchUpOffset, streamSlot);
 
             oneSlot.delayRun(catchUpIntervalMillis, () -> replPair.write(catch_up, content));
             return Repl.emptyReply();
         }
-        return Repl.reply(slot, replPair, catch_up, content);
+        return Repl.reply(streamSlot, replPair, catch_up, content);
     }
 
     private static boolean skipTryCatchUpAgainAfterSlaveTcpClientClosed;
@@ -1989,20 +1989,20 @@ public class XGroup extends BaseCommand {
         var log = LoggerFactory.getLogger(XGroup.class);
         var localPersist = LocalPersist.getInstance();
 
-        final var targetSlot = replPairAsSlave.getSlot();
-        var oneSlot = localPersist.oneSlot(targetSlot);
+        final var streamSlot = replPairAsSlave.getSlot();
+        var oneSlot = localPersist.oneSlot(streamSlot);
         oneSlot.asyncExecute(() -> {
             var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();
 
             var isExistsDataAllFetched = metaChunkSegmentIndex.isExistsDataAllFetched();
             if (!isExistsDataAllFetched) {
-                System.out.println("Repl slave try catch up again after slave tcp client close, but exists data not all fetched, slot=" + targetSlot);
+                System.out.println("Repl slave try catch up again after slave tcp client close, but exists data not all fetched, slot=" + streamSlot);
                 return;
             }
 
             var lastUpdatedMasterUuid = metaChunkSegmentIndex.getMasterUuid();
             if (lastUpdatedMasterUuid != replPairAsSlave.getMasterUuid()) {
-                System.out.println("Repl slave try catch up again after slave tcp client close, but master uuid not match, slot=" + targetSlot);
+                System.out.println("Repl slave try catch up again after slave tcp client close, but master uuid not match, slot=" + streamSlot);
                 return;
             }
 
@@ -2022,14 +2022,14 @@ public class XGroup extends BaseCommand {
                 try {
                     resultBytes = JedisPoolHolder.exe(jedisPool, jedis -> {
                         var pong = jedis.ping();
-                        System.out.println("Repl slave try ping after slave tcp client close, to " + replPairAsSlave.getHostAndPort() + ", pong=" + pong + ", slot=" + targetSlot);
+                        System.out.println("Repl slave try ping after slave tcp client close, to " + replPairAsSlave.getHostAndPort() + ", pong=" + pong + ", slot=" + streamSlot);
                         // get data from master
                         // refer RequestHandler.transferDataForXGroup
                         return jedis.get(
                                 (
                                         XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + ","
                                                 + "slot,"
-                                                + targetSlot + ","
+                                                + streamSlot + ","
                                                 + X_CATCH_UP_AS_SUB_CMD + ","
                                                 + replPairAsSlave.getSlaveUuid() + ","
                                                 + lastUpdatedMasterUuid + ","
@@ -2040,25 +2040,25 @@ public class XGroup extends BaseCommand {
                         );
                     });
                 } catch (Exception e) {
-                    System.out.println("Repl slave try catch up again after slave tcp client close error=" + e.getMessage() + ", slot=" + targetSlot);
+                    System.out.println("Repl slave try catch up again after slave tcp client close error=" + e.getMessage() + ", slot=" + streamSlot);
                     replPairAsSlave.setMasterCanNotConnect(true);
                 }
             }
 
             if (resultBytes == null) {
-                System.out.println("Repl slave try catch up again after slave tcp client close, but get data from master is null, slot=" + targetSlot);
+                System.out.println("Repl slave try catch up again after slave tcp client close, but get data from master is null, slot=" + streamSlot);
                 return;
             }
 
             try {
                 var xGroup = new XGroup("", null, null);
                 xGroup.replPair = replPairAsSlave;
-                xGroup.s_catch_up(targetSlot, resultBytes);
+                xGroup.s_catch_up(streamSlot, resultBytes);
 
                 if (replPairAsSlave.isAllCaughtUp()) {
-                    System.out.println("Repl slave try catch up again, is all caught up!!!, slot=" + targetSlot);
+                    System.out.println("Repl slave try catch up again, is all caught up!!!, slot=" + streamSlot);
                 } else {
-                    System.out.println("Repl slave try catch up again, is not!!! all caught up!!!, slot=" + targetSlot);
+                    System.out.println("Repl slave try catch up again, is not!!! all caught up!!!, slot=" + streamSlot);
                     // try to loop if not all caught up, but usually can not connect to master, goto exception catch block, ignore
                 }
             } catch (Exception e) {
