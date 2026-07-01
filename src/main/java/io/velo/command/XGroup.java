@@ -1138,13 +1138,39 @@ public class XGroup extends BaseCommand {
             // Defer clearing the in-flight list until the target-slot file write completes,
             // so gate-readiness sees an accurate pending count. whenResult fires on the
             // caller's thread (stream slot eventloop), preserving @ForSlaveField safety.
-            writePromise.whenResult(v -> replPair.doneFetchBigStringUuid(uuid));
+            // After the last pending fetch clears, re-publish readiness if the stream was
+            // otherwise caught up — covers the readonly no-more-binlog path where no
+            // further catch-up requests will arrive to re-evaluate.
+            writePromise.whenResult(v -> {
+                replPair.doneFetchBigStringUuid(uuid);
+                if (!replPair.hasPendingBigStringFetches() && replPair.isAllCaughtUp()) {
+                    tryRePublishReadiness(slot);
+                }
+            });
         } else {
             log.warn("Repl slave fetch incremental big string, master file missing, uuid={}, key={}, slot={}", uuid, key, slot);
             replPair.doneFetchBigStringUuid(uuid);
+            if (!replPair.hasPendingBigStringFetches() && replPair.isAllCaughtUp()) {
+                tryRePublishReadiness(slot);
+            }
         }
 
         return Repl.emptyReply();
+    }
+
+    private void tryRePublishReadiness(short slot) {
+        try {
+            if (localPersist.isAsSlaveScaleUp()) {
+                localPersist.publishStreamReadyAndRefreshGate(slot, true);
+            } else {
+                var streamSlot = localPersist.oneSlot(slot);
+                if (!streamSlot.isCanRead()) {
+                    streamSlot.setCanRead(true);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Repl re-publish stream readiness after big string fetch failed, slot={}", slot, e);
+        }
     }
 
     private Repl.ReplReply exists_big_string(short slot, byte[] contentBytes) {

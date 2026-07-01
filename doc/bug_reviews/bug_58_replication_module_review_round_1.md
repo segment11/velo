@@ -407,3 +407,70 @@ master's `canRead=true`.
   pending fetches), passes post-fix (gate stays closed until fetches complete).
 - JaCoCo: line 1871 all 4 branches covered; line 1706 all branches covered; `s_incremental_big_string`
   all lines covered.
+
+---
+
+## Review Feedback - Bug 2 Fix - AI agent 2 - 2026-07-01
+
+Reviewed commit `433e94fd` (`fix: block read gate while big-string fetches pending`).
+
+### Findings
+
+1. **High - Gate can remain closed forever after a readonly no-more-binlog response with pending big strings.**
+
+   The fix correctly prevents `s_catch_up` from opening the scale-up gate while
+   `replPair.hasPendingBigStringFetches()` is true:
+
+   ```java
+   localPersist.publishStreamReadyAndRefreshGate(slot, !replPair.hasPendingBigStringFetches());
+   ```
+
+   But `s_incremental_big_string` only clears the pending state after the file write:
+
+   ```java
+   writePromise.whenResult(v -> replPair.doneFetchBigStringUuid(uuid));
+   ```
+
+   It does not re-publish stream readiness after clearing the final pending big-string fetch.
+   In the 13-byte no-more-binlog branch, if `masterReadonlyFlag == 1`, `s_catch_up` does not schedule another
+   catch-up request (`if (!isMasterReadonly) { ... delayRun(... catch_up ...) }`). Therefore the sequence can be:
+
+   - stream receives readonly 13-byte no-more-binlog response while a big-string fetch is pending;
+   - gate publishes `ready=false`;
+   - no next catch-up is scheduled because the master is readonly;
+   - big-string fetch completes and pending state is cleared;
+   - no code publishes `ready=true`, so the scale-up read gate stays closed indefinitely.
+
+   The new test misses this because it manually invokes `s_catch_up` a second time after calling
+   `doneFetchBigStringUuid`. That second no-more-binlog response is not guaranteed in the real readonly path.
+
+   Suggested fix: after the final big-string fetch completes, re-evaluate and publish readiness for the stream.
+   A minimal approach is to make `doneFetchBigStringUuid` (or the `s_incremental_big_string` completion callback)
+   detect when no pending big-string fetches remain and then publish/readiness-refresh for the stream, using the
+   last known caught-up state. Be careful to cover both scale-up global gate and equal-slot `canRead` paths.
+
+### Strengths
+
+- The fix correctly models both queued and in-flight big-string fetches via `hasPendingBigStringFetches()`.
+- Moving `doneFetchBigStringUuid` after the target-slot file write addresses the original premature in-flight-clear
+  problem.
+- The gate checks were added in both relevant catch-up readiness paths: segment finish and 13-byte no-more-binlog.
+
+### Verification
+
+- Ran:
+  `./gradlew :test --tests "io.velo.command.XGroupTest.test finish catch up gate stays closed when big string fetches pending"`
+- Result: Gradle build successful.
+- Ran:
+  `./gradlew :test --tests "io.velo.command.XGroupTest.test as slave handle s incremental big string" --tests "io.velo.command.XGroupTest.test as slave handle s incremental big string when master file missing"`
+- Result: Gradle build successful.
+
+### Follow-ups
+
+- ~~Add a regression test for the readonly 13-byte path where pending big strings complete without another `s_catch_up`
+  invocation; the gate should open after the final big-string file write.~~ **Done** — commit `1f716c3d` adds
+  `tryRePublishReadiness()` which re-publishes stream readiness after the last pending big-string fetch completes
+  (checking `isAllCaughtUp()`). New test `'test gate opens after big string fetch completes without another catch up'`
+  proves the gate opens with no further `s_catch_up`. JaCoCo confirms the re-publish path (lines 1144-1147, 1164) is covered.
+- Non-blocking doc mismatch: this document's Bug 2 fixed commit is listed as `019df3c9`, but the reviewed commit in
+  this workspace is `433e94fd`.
