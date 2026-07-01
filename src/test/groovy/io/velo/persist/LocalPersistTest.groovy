@@ -255,6 +255,41 @@ class LocalPersistTest extends Specification {
         eventloop.breakEventloop()
     }
 
+    def 'test is as slave scale up'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+        def localPersist = LocalPersist.instance
+
+        when: 'not in slave mode'
+        ConfForGlobal.masterSlotNumber = 0
+        ConfForGlobal.slotNumber = (short) 4
+        then:
+        !localPersist.isAsSlaveScaleUp()
+
+        when: 'equal slot topology'
+        ConfForGlobal.masterSlotNumber = (short) 4
+        ConfForGlobal.slotNumber = (short) 4
+        then:
+        !localPersist.isAsSlaveScaleUp()
+
+        when: 'local slot number is smaller than master slot number'
+        ConfForGlobal.masterSlotNumber = (short) 4
+        ConfForGlobal.slotNumber = (short) 2
+        then:
+        !localPersist.isAsSlaveScaleUp()
+
+        when: 'local slot number is greater than master slot number'
+        ConfForGlobal.masterSlotNumber = (short) 2
+        ConfForGlobal.slotNumber = (short) 4
+        then:
+        localPersist.isAsSlaveScaleUp()
+
+        cleanup:
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+    }
+
     def 'test scale-up read gate'() {
         given:
         def savedSlotNumber = ConfForGlobal.slotNumber
