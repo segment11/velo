@@ -1782,7 +1782,8 @@ public class XGroup extends BaseCommand {
         // Scale-up mode must always route through the async apply path so that Promises.all
         // awaits all cross-slot writes before the fetched-offset is advanced (await-before-advance).
         // In equal-slot mode, hasAsyncApply is false for same-slot entries and the sync path is safe.
-        boolean useAsync = hasAsyncApply || localPersist.isAsSlaveScaleUp();
+        boolean isScaleUp = localPersist.isAsSlaveScaleUp();
+        boolean useAsync = hasAsyncApply || isScaleUp;
 
         if (!useAsync) {
             try {
@@ -1794,7 +1795,7 @@ public class XGroup extends BaseCommand {
                             replPair.getSlaveUuid(), replPair.getHostAndPort(), fetchedFileIndex, fetchedOffset, decodedContents.size(), slot);
                 }
                 return finishSlaveCatchUpApply(slot, replPair, oneSlot, metaChunkSegmentIndex, binlogMasterUuid,
-                        isMasterReadonly, fetchedFileIndex, fetchedOffset, masterCurrentFileIndex, masterCurrentOffset,
+                        isScaleUp, isMasterReadonly, fetchedFileIndex, fetchedOffset, masterCurrentFileIndex, masterCurrentOffset,
                         readSegmentLength, catchUpIntervalMillis);
             } catch (Exception e) {
                 var errorMessage = "Repl slave handle error: decode and apply binlog error, slot=" + slot;
@@ -1830,7 +1831,7 @@ public class XGroup extends BaseCommand {
                             replPair.getSlaveUuid(), replPair.getHostAndPort(), fetchedFileIndex, fetchedOffset, decodedContents.size(), slot);
                 }
                 finalPromise.set(finishSlaveCatchUpApply(slot, replPair, oneSlot, metaChunkSegmentIndex, binlogMasterUuid,
-                        isMasterReadonly, fetchedFileIndex, fetchedOffset, masterCurrentFileIndex, masterCurrentOffset,
+                        isScaleUp, isMasterReadonly, fetchedFileIndex, fetchedOffset, masterCurrentFileIndex, masterCurrentOffset,
                         readSegmentLength, catchUpIntervalMillis));
             } catch (Exception ex) {
                 var errorMessage = "Repl slave handle error: decode and apply binlog error, slot=" + slot;
@@ -1843,7 +1844,7 @@ public class XGroup extends BaseCommand {
 
     private Reply finishSlaveCatchUpApply(short slot, @NotNull ReplPair replPair, @NotNull OneSlot oneSlot,
                                           @NotNull MetaChunkSegmentIndex metaChunkSegmentIndex, long binlogMasterUuid,
-                                          boolean isMasterReadonly, int fetchedFileIndex, long fetchedOffset,
+                                          boolean isScaleUp, boolean isMasterReadonly, int fetchedFileIndex, long fetchedOffset,
                                           int masterCurrentFileIndex, long masterCurrentOffset, int readSegmentLength,
                                           int catchUpIntervalMillis) {
         replPair.setMasterReadonly(isMasterReadonly);
@@ -1860,7 +1861,7 @@ public class XGroup extends BaseCommand {
             canRead = false;
         }
 
-        if (localPersist.isAsSlaveScaleUp()) {
+        if (isScaleUp) {
             // 2N scale-up: publish this stream's readiness to the central gate, which fans
             // canRead to ALL local slots only when the global AND changes. Do NOT set canRead
             // per-slot here — any local slot can hold keys from any master stream.

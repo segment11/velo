@@ -2801,6 +2801,57 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test finish catch up keeps captured scale up gate after role flag clears'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 4)
+        def localPersist = LocalPersist.instance
+        for (short s = 0; s < 4; s++) {
+            localPersist.fixSlotThreadId(s, Thread.currentThread().threadId())
+            localPersist.oneSlot(s).canRead = false
+        }
+
+        and:
+        ConfForGlobal.slotNumber = (short) 4
+        ConfForGlobal.masterSlotNumber = (short) 2
+        localPersist.resetScaleUpReadGate(2)
+        def oneSlot = localPersist.oneSlot(slot)
+        def masterUuid = 102L
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        def replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
+
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+
+        and: 'the role flag is cleared after dispatch but before completion'
+        ConfForGlobal.masterSlotNumber = 0
+        def binlogOneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength
+        def method = XGroup.getDeclaredMethod('finishSlaveCatchUpApply',
+                Short.TYPE, ReplPair, OneSlot, MetaChunkSegmentIndex, Long.TYPE,
+                Boolean.TYPE, Boolean.TYPE, Integer.TYPE, Long.TYPE, Integer.TYPE, Long.TYPE,
+                Integer.TYPE, Integer.TYPE)
+        method.accessible = true
+
+        when:
+        method.invoke(x, slot, replPairAsSlave, oneSlot, oneSlot.metaChunkSegmentIndex, masterUuid,
+                true, false, 0, 0L, 0, (long) binlogOneSegmentLength, binlogOneSegmentLength, 1)
+
+        then: 'captured scale-up mode publishes to the gate instead of setting only the stream slot readable'
+        !localPersist.oneSlot((short) 0).canRead
+        !localPersist.oneSlot((short) 1).canRead
+        !localPersist.oneSlot((short) 2).canRead
+        !localPersist.oneSlot((short) 3).canRead
+
+        cleanup:
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test handle repl rejects malformed catch up binlog before state change'() {
         given:
         LocalPersistTest.prepareLocalPersist()
