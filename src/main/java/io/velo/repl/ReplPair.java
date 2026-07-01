@@ -696,4 +696,12 @@ public class ReplPair {
     public void doneFetchBigStringUuid(long uuid) {
         doFetchingBigStringIdList.removeIf(e -> e.uuid() == uuid);
     }
+
+    /**
+     * @return true if there are big-string files still queued for fetch or in-flight,
+     *         meaning the slot's data is not yet fully materialized on disk
+     */
+    public boolean hasPendingBigStringFetches() {
+        return !toFetchBigStringIdList.isEmpty() || !doFetchingBigStringIdList.isEmpty();
+    }
 }

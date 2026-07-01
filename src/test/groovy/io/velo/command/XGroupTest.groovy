@@ -2852,6 +2852,84 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test finish catch up gate stays closed when big string fetches pending'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 4)
+        def localPersist = LocalPersist.instance
+        for (short s = 0; s < 4; s++) {
+            localPersist.fixSlotThreadId(s, Thread.currentThread().threadId())
+            localPersist.oneSlot(s).readonly = true
+            localPersist.oneSlot(s).canRead = false
+        }
+
+        and: 'single master stream (slot 0), 3 extra slots'
+        ConfForGlobal.slotNumber = (short) 4
+        ConfForGlobal.masterSlotNumber = (short) 1
+        localPersist.resetScaleUpReadGate(1)
+        def oneSlot = localPersist.oneSlot(slot)
+        def masterUuid = 102L
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        def replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
+
+        and: 'queue a pending big-string fetch on the slave repl pair'
+        replPairAsSlave.addToFetchBigStringId(999L, 0, 1L, 'big-key')
+
+        and:
+        def x = new XGroup(null, null, null)
+        x.from(BaseCommand.mockAGroup())
+
+        def binlogOneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength
+        def method = XGroup.getDeclaredMethod('finishSlaveCatchUpApply',
+                Short.TYPE, ReplPair, OneSlot, MetaChunkSegmentIndex, Long.TYPE,
+                Boolean.TYPE, Boolean.TYPE, Integer.TYPE, Long.TYPE, Integer.TYPE, Long.TYPE,
+                Integer.TYPE, Integer.TYPE)
+        method.accessible = true
+
+        and: '13-byte no-more-binlog response (readonly=1, fileIndex=0, offset=segmentLen)'
+        def thirteenBytes = ByteBuffer.allocate(13)
+                .put((byte) 1)
+                .putInt(0)
+                .putLong((long) binlogOneSegmentLength)
+                .array()
+        def sCatchUpMethod = XGroup.getDeclaredMethod('s_catch_up', Short.TYPE, byte[].class)
+        sCatchUpMethod.accessible = true
+
+        when: 'finishSlaveCatchUpApply — binlog caught up but big-string fetch pending'
+        method.invoke(x, slot, replPairAsSlave, oneSlot, oneSlot.metaChunkSegmentIndex, masterUuid,
+                true, false, 0, 0L, 0, (long) binlogOneSegmentLength, binlogOneSegmentLength, 1)
+
+        then: 'gate must NOT open — all slots stay unreadable'
+        !localPersist.oneSlot((short) 0).canRead
+        !localPersist.oneSlot((short) 3).canRead
+
+        when: '13-byte no-more-binlog response — still pending, gate stays closed'
+        x.replPair = replPairAsSlave
+        sCatchUpMethod.invoke(x, slot, thirteenBytes)
+
+        then:
+        !localPersist.oneSlot((short) 0).canRead
+        !localPersist.oneSlot((short) 3).canRead
+
+        when: 'pending fetch is consumed and 13-byte response arrives again'
+        replPairAsSlave.doingFetchBigStringId()
+        replPairAsSlave.doneFetchBigStringUuid(999L)
+        sCatchUpMethod.invoke(x, slot, thirteenBytes)
+
+        then: 'gate opens — all slots readable'
+        localPersist.oneSlot((short) 0).canRead
+        localPersist.oneSlot((short) 3).canRead
+
+        cleanup:
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test handle repl rejects malformed catch up binlog before state change'() {
         given:
         LocalPersistTest.prepareLocalPersist()

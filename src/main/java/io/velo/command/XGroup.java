@@ -1130,16 +1130,20 @@ public class XGroup extends BaseCommand {
             buffer.get(bigStringBytes);
             var s = slot(key);
             var oneSlot = localPersist.oneSlot(s.slot());
-            oneSlot.asyncExecute(() -> {
+            var writePromise = oneSlot.asyncRun(() -> {
                 var bigStringFiles = oneSlot.getBigStringFiles();
                 bigStringFiles.writeBigStringBytes(uuid, s.bucketIndex(), s.keyHash(), bigStringBytes);
                 log.warn("Repl slave fetch incremental big string done, uuid={}, key={}, slot={}", uuid, key, s.slot());
             });
+            // Defer clearing the in-flight list until the target-slot file write completes,
+            // so gate-readiness sees an accurate pending count. whenResult fires on the
+            // caller's thread (stream slot eventloop), preserving @ForSlaveField safety.
+            writePromise.whenResult(v -> replPair.doneFetchBigStringUuid(uuid));
         } else {
             log.warn("Repl slave fetch incremental big string, master file missing, uuid={}, key={}, slot={}", uuid, key, slot);
+            replPair.doneFetchBigStringUuid(uuid);
         }
 
-        replPair.doneFetchBigStringUuid(uuid);
         return Repl.emptyReply();
     }
 
@@ -1697,8 +1701,9 @@ public class XGroup extends BaseCommand {
                 replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(masterCurrentFo);
 
                 // 2N scale-up: master has no more binlog, this stream is read-ready
+                // unless big-string files are still being fetched
                 if (localPersist.isAsSlaveScaleUp()) {
-                    localPersist.publishStreamReadyAndRefreshGate(slot, true);
+                    localPersist.publishStreamReadyAndRefreshGate(slot, !replPair.hasPendingBigStringFetches());
                 }
             }
 
@@ -1858,6 +1863,12 @@ public class XGroup extends BaseCommand {
             var diffOffset = masterCurrentOffset - slaveCurrentOffset;
             canRead = diffOffset < ConfForSlot.global.confRepl.catchUpOffsetMinDiff;
         } else {
+            canRead = false;
+        }
+
+        // Big-string markers may be persisted (CompressedValue) while the backing files are
+        // still queued for fetch or in-flight. Block reads until all files are written.
+        if (canRead && replPair.hasPendingBigStringFetches()) {
             canRead = false;
         }
 

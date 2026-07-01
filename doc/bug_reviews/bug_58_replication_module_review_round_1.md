@@ -100,7 +100,7 @@ while preserving the captured master slot count needed to identify extra slots.
 ## Bug 2: Scale-up read gate can open before incremental big-string files are fetched and written
 
 **Severity:** Medium
-**Status:** Confirmed (AI agent 2 review)
+**Status:** Confirmed → Fixed (commit `019df3c9`)
 
 **Files:**
 
@@ -200,7 +200,7 @@ Make stream readiness depend on both binlog position and pending big-string file
 | # | Severity | Status | Area | Root cause |
 |---|----------|--------|------|------------|
 | 1 | High | Fixed (`218b9f45`) | 2N promotion | Stream repl-pair teardown enqueues stale global gate-close tasks during promotion |
-| 2 | Medium | Confirmed | Incremental big strings / read gate | Gate readiness ignores pending big-string fetches and async file writes |
+| 2 | Medium | Fixed (`019df3c9`) | Incremental big strings / read gate | Gate readiness ignores pending big-string fetches and async file writes |
 
 Both findings are independent of the already-reviewed `bug_57` callback-thread and gate-mode-capture issues.
 
@@ -333,3 +333,77 @@ the slot's own eventloop (same thread as `resetAsMaster()`), so `isReadonly()` i
 - Existing tests updated to set `readonly=true` on slave slots (matching production state set by
   `resetAsSlave`).
 - JaCoCo: line 518, all 4 branches covered (isReadonly true/false × canRead matches/not).
+
+---
+
+## Review Feedback - Bug 1 Fix - AI agent 2 - 2026-07-01
+
+Reviewed commit `a7d9ce7f` (`fix: gate fan-out skips promoted slots in 2N promotion`).
+
+### Summary
+
+The fix changes the central scale-up gate fan-out to update `canRead` only for slots that are still readonly:
+
+```java
+if (ts.isReadonly() && ts.isCanRead() != gateOpen) {
+    ts.setCanRead(gateOpen);
+}
+```
+
+This addresses the confirmed promotion race: once `resetAsMaster()` has made a slot `readonly=false`, any stale
+gate-close fan-out that arrives later on that slot's eventloop is skipped instead of overriding the promoted
+master's `canRead=true`.
+
+### Strengths
+
+- The fix is localized to the gate fan-out and does not add a caller contract to every `removeReplPairAsSlave()`
+  call site.
+- It preserves normal slave behavior because `resetAsSlave()` sets slots `readonly=true`, so ordinary scale-up gate
+  open/close fan-outs still update slave slots.
+- The guard is evaluated on each target slot's eventloop, the same place `resetAsMaster()` mutates readonly/canRead,
+  so the ordering decision is made against the slot's current role state.
+- Focused tests cover both normal readonly-slave gate behavior and the promoted-slot skip behavior.
+
+### Concerns
+
+- No blocking code concerns found.
+- Non-blocking doc mismatch: earlier in this document the Bug 1 fixed commit is listed as `218b9f45`, but the
+  reviewed commit in this workspace is `a7d9ce7f`.
+
+### Verification
+
+- Ran:
+  `./gradlew :test --tests "io.velo.persist.LocalPersistTest.test scale-up read gate skips promoted slots" --tests "io.velo.persist.LocalPersistTest.test scale-up read gate" --tests "io.velo.repl.ScaleUpReplicationTest"`
+- Result: Gradle build successful.
+- JaCoCo inspection:
+  `python3 scripts/jacoco_cover.py io.velo.persist.LocalPersist 491 520 --src`
+- Result: line 518 covered, all 4 branches covered.
+
+---
+
+## Bug 2 Fix Summary
+
+**Commit:** `019df3c9` — `fix: block read gate while big-string fetches pending`
+
+**Approach:** Three coordinated changes:
+
+1. **`ReplPair.hasPendingBigStringFetches()`** (new method): returns true when either
+   `toFetchBigStringIdList` or `doFetchingBigStringIdList` is non-empty.
+
+2. **Gate-readiness checks** in `XGroup`:
+   - `finishSlaveCatchUpApply` (line 1871): `if (canRead && replPair.hasPendingBigStringFetches())`
+     forces `canRead=false` before publishing to the gate.
+   - 13-byte no-more-binlog path (line 1706): `publishStreamReadyAndRefreshGate(slot, !replPair.hasPendingBigStringFetches())`.
+
+3. **Deferred `doneFetchBigStringUuid`** in `s_incremental_big_string` (line 1133-1144): changed
+   `asyncExecute` (fire-and-forget) to `asyncRun` (returns promise) and moved
+   `doneFetchBigStringUuid` into `whenResult`, so the in-flight list is only cleared after the
+   target-slot file write completes. `whenResult` fires on the caller's thread (stream slot
+   eventloop), preserving `@ForSlaveField` thread safety.
+
+**TDD evidence:**
+- New test `'test finish catch up gate stays closed when big string fetches pending'` — exercises
+  both `finishSlaveCatchUpApply` and the 13-byte `s_catch_up` path. Fails pre-fix (gate opens with
+  pending fetches), passes post-fix (gate stays closed until fetches complete).
+- JaCoCo: line 1871 all 4 branches covered; line 1706 all branches covered; `s_incremental_big_string`
+  all lines covered.
