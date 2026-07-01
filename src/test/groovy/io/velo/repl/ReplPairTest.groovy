@@ -181,14 +181,17 @@ class ReplPairTest extends Specification {
         when:
         replPairAsMaster.addToFetchBigStringId(1L, 0, 1L, 'a')
         then:
+        replPairAsMaster.hasPendingBigStringFetches()
         replPairAsMaster.doingFetchBigStringId().uuid() == 1L
         replPairAsMaster.doFetchingBigStringIdList[0].uuid() == 1L
+        replPairAsMaster.hasPendingBigStringFetches()
 
         when:
         replPairAsMaster.doneFetchBigStringUuid(100L)
         replPairAsMaster.doneFetchBigStringUuid(1L)
         then:
         replPairAsMaster.doFetchingBigStringIdList.size() == 0
+        !replPairAsMaster.hasPendingBigStringFetches()
 
         when:
         replPairAsSlave.masterCanNotConnect = false
