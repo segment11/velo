@@ -51,4 +51,37 @@ class PrimaryTaskRunnableTest extends Specification {
         then:
         1 == 1
     }
+
+    def 'test scheduler keeps running after the task callback throws'() {
+        given:
+        def callCount = new AtomicInteger()
+        def primaryTaskRunnable = new PrimaryTaskRunnable((i) -> {
+            if (callCount.getAndIncrement() == 0) {
+                throw new RuntimeException('boom first tick')
+            }
+        })
+
+        and:
+        def eventloop = Eventloop.builder()
+                .withThreadName('test-primary-reschedule-after-throw')
+                .withIdleInterval(Duration.ofMillis(10))
+                .build()
+        eventloop.keepAlive(true)
+        primaryTaskRunnable.primaryEventloop = eventloop
+
+        when:
+        Thread.start {
+            Thread.currentThread().sleep(1000 * 2)
+            primaryTaskRunnable.stop()
+            Thread.currentThread().sleep(500)
+            eventloop.breakEventloop()
+        }
+        // first run() tick throws inside the callback; the loop must catch it and keep rescheduling
+        primaryTaskRunnable.run()
+        eventloop.run()
+
+        then:
+        // first tick threw; if the loop kept rescheduling (1s interval), the callback ran again
+        callCount.get() > 1
+    }
 }

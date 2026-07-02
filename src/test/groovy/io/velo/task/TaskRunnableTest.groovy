@@ -6,6 +6,7 @@ import io.velo.persist.OneSlot
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicInteger
 
 class TaskRunnableTest extends Specification {
     def 'test delay run task'() {
@@ -72,5 +73,48 @@ class TaskRunnableTest extends Specification {
 
         then:
         1 == 1
+    }
+
+    def 'test scheduler keeps running after a slot doTask throws'() {
+        given:
+        // a slot whose doTask throws on the first tick, then just counts subsequent ticks
+        def callCount = new AtomicInteger()
+        def oneSlot = new OneSlot((short) 0) {
+            @Override
+            void doTask(int loopCount) {
+                if (callCount.getAndIncrement() == 0) {
+                    throw new RuntimeException('boom first tick')
+                }
+            }
+        }
+        OneSlot[] oneSlots = [oneSlot] as OneSlot[]
+
+        and:
+        def taskRunnable = new TaskRunnable((byte) 0, (byte) 1)
+        taskRunnable.chargeOneSlots(oneSlots)
+        taskRunnable.startDone(true)
+
+        def eventloop = Eventloop.builder()
+                .withThreadName('test-task-reschedule-after-throw')
+                .withIdleInterval(Duration.ofMillis(10))
+                .build()
+        eventloop.keepAlive(true)
+        taskRunnable.slotWorkerEventloop = eventloop
+        taskRunnable.requestHandler = null
+
+        when:
+        Thread.start {
+            Thread.currentThread().sleep(1000)
+            taskRunnable.stop()
+            Thread.currentThread().sleep(500)
+            eventloop.breakEventloop()
+        }
+        // first run() tick throws inside doTask; the loop must catch it and keep rescheduling
+        taskRunnable.run()
+        eventloop.run()
+
+        then:
+        // first tick threw; if the loop kept rescheduling, doTask ran many more times
+        callCount.get() > 1
     }
 }

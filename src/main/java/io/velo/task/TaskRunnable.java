@@ -4,6 +4,8 @@ import io.activej.eventloop.Eventloop;
 import io.velo.RequestHandler;
 import io.velo.persist.OneSlot;
 import org.jetbrains.annotations.VisibleForTesting;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 
@@ -11,6 +13,8 @@ import java.util.ArrayList;
  * Runnable task for slot workers that processes slots in a loop.
  */
 public class TaskRunnable implements Runnable {
+    private static final Logger log = LoggerFactory.getLogger(TaskRunnable.class);
+
     /** The slot worker ID. */
     private final byte slotWorkerId;
 
@@ -82,7 +86,11 @@ public class TaskRunnable implements Runnable {
         }
 
         for (var oneSlot : oneSlots) {
-            oneSlot.doTask(loopCount);
+            try {
+                oneSlot.doTask(loopCount);
+            } catch (Exception e) {
+                log.error("Slot task error, slot worker id={}, loop count={}", slotWorkerId, loopCount, e);
+            }
         }
         loopCount++;
 
