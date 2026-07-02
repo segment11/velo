@@ -13,6 +13,8 @@ import io.velo.reply.AsyncReply
 import io.velo.reply.BulkReply
 import spock.lang.Specification
 
+import java.lang.management.MemoryUsage
+
 class InfoCommandTest extends Specification {
     def _InfoCommand = new InfoCommand()
 
@@ -140,6 +142,29 @@ class InfoCommandTest extends Specification {
         then:
         reply instanceof BulkReply
         new String((reply as BulkReply).raw).contains('total_system_memory:')
+    }
+
+    def 'test memory handles undefined (-1) max without corrupting totals'() {
+        given: 'non-heap max is -1 (the JVM "undefined" sentinel), as is common'
+        def heap = new MemoryUsage(0L, 1000L, 5000L, 10000L)
+        def nonHeap = new MemoryUsage(0L, 500L, 2000L, -1L)
+
+        when:
+        def lines = InfoCommand.memory(heap, nonHeap).split('\n')
+
+        then: 'the -1 sentinel must not subtract from the heap max'
+        lines.find { it.trim().startsWith('used_memory_peak:') }.trim() == 'used_memory_peak:10000'
+        lines.find { it.trim().startsWith('maxmemory:') }.trim() == 'maxmemory:10000'
+
+        when: 'both maxes are undefined (-1)'
+        def heapUndef = new MemoryUsage(0L, 1000L, 5000L, -1L)
+        def nonHeapUndef = new MemoryUsage(0L, 500L, 2000L, -1L)
+        lines = InfoCommand.memory(heapUndef, nonHeapUndef).split('\n')
+        def peakPercLine = lines.find { it.trim().startsWith('used_memory_peak_perc:') }.trim()
+
+        then: 'totals are non-negative and percent never divides by zero / goes negative'
+        lines.find { it.trim().startsWith('used_memory_peak:') }.trim() == 'used_memory_peak:0'
+        !peakPercLine.startsWith('used_memory_peak_perc:-')
     }
 
     def 'test replication'() {

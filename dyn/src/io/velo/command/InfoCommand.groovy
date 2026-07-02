@@ -13,6 +13,7 @@ import org.apache.lucene.util.RamUsageEstimator
 import oshi.SystemInfo
 
 import java.lang.management.ManagementFactory
+import java.lang.management.MemoryUsage
 
 /**
  * Implements the INFO command, returning server statistics and runtime information sections.
@@ -175,19 +176,26 @@ total_blocking_keys:${BlockingList.blockingKeyCount()}
         list
     }
 
-    private static String memory() {
+    static String memory() {
         def memoryMXBean = ManagementFactory.getMemoryMXBean()
-        def heapMemoryUsage = memoryMXBean.heapMemoryUsage
-        def nonHeapMemoryUsage = memoryMXBean.nonHeapMemoryUsage
+        memory(memoryMXBean.heapMemoryUsage, memoryMXBean.nonHeapMemoryUsage)
+    }
 
+    // Package-private so tests can drive the arithmetic with crafted MemoryUsage (e.g. max == -1,
+    // the JVM "undefined" sentinel) instead of depending on the live JVM values.
+    static String memory(MemoryUsage heapMemoryUsage, MemoryUsage nonHeapMemoryUsage) {
         def totalUsed = heapMemoryUsage.used + nonHeapMemoryUsage.used
         def totalUsedHumanReadable = RamUsageEstimator.humanReadableUnits(totalUsed).replace(' ', '')
 
-        // nonHeapMemoryUsage.max may == -1
-        def totalMax = heapMemoryUsage.max + nonHeapMemoryUsage.max
+        // MemoryUsage.getMax() returns -1 when the maximum is undefined (typical for non-heap).
+        // Clamp -1 to 0 so the sentinel does not corrupt totalMax / usedPercent, and guard the
+        // division so an all-undefined maximum cannot divide by zero or yield a negative percent.
+        long heapMax = Math.max(0L, heapMemoryUsage.max)
+        long nonHeapMax = Math.max(0L, nonHeapMemoryUsage.max)
+        def totalMax = heapMax + nonHeapMax
         def totalMaxHumanReadable = RamUsageEstimator.humanReadableUnits(totalMax).replace(' ', '')
 
-        def usedPercent = (totalUsed / totalMax) * 100
+        def usedPercent = (totalMax > 0 ? (totalUsed / totalMax) * 100 : 0.0) as BigDecimal
 
         def si = new SystemInfo()
         def globalMemory = si.hardware.memory
