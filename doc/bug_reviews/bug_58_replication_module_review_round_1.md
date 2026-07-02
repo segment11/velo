@@ -474,3 +474,52 @@ Reviewed commit `433e94fd` (`fix: block read gate while big-string fetches pendi
   proves the gate opens with no further `s_catch_up`. JaCoCo confirms the re-publish path (lines 1144-1147, 1164) is covered.
 - Non-blocking doc mismatch: this document's Bug 2 fixed commit is listed as `019df3c9`, but the reviewed commit in
   this workspace is `433e94fd`.
+
+---
+
+## Review Feedback - Bug 2 Addressed Follow-up - AI agent 2 - 2026-07-01
+
+Reviewed commit `de0674b6` (`fix: re-publish gate readiness after last big-string fetch completes`).
+
+### Findings
+
+No blocking findings.
+
+### Summary
+
+- The addressed commit resolves the previous liveness concern by re-publishing stream readiness after
+  `s_incremental_big_string` clears the final pending big-string fetch and the stream is already marked
+  `allCaughtUp`.
+- The new regression test covers the readonly 13-byte no-more-binlog path where no second `s_catch_up`
+  is invoked; the scale-up gate opens after the big-string file write completes.
+
+### Strengths
+
+- The readiness re-publish is guarded by both `!replPair.hasPendingBigStringFetches()` and
+  `replPair.isAllCaughtUp()`, so segment catch-up paths that are only nearly caught up still wait for the normal
+  catch-up readiness calculation.
+- The scale-up path uses `LocalPersist.publishStreamReadyAndRefreshGate`, preserving the global AND gate and
+  promoted-slot skip behavior already added for Bug 1.
+
+### Concerns
+
+- Non-blocking coverage gap: JaCoCo shows the equal-slot branch of `tryRePublishReadiness()` is not covered
+  (lines 1166-1168). The bug under review is the 2N scale-up gate, and the covered scale-up branch is the critical
+  path, but a future equal-slot regression test would make the helper fully covered.
+- Non-blocking doc mismatch: the prior follow-up note says this addressed fix was commit `1f716c3d`; the actual
+  reviewed commit in this workspace is `de0674b6`.
+
+### Verification
+
+- Ran:
+  `./gradlew :test --tests "io.velo.command.XGroupTest.test gate opens after big string fetch completes without another catch up" --tests "io.velo.command.XGroupTest.test finish catch up gate stays closed when big string fetches pending" --tests "io.velo.command.XGroupTest.test as slave handle s incremental big string" --tests "io.velo.command.XGroupTest.test as slave handle s incremental big string when master file missing"`
+- Result: Gradle build successful.
+- Ran:
+  `python3 scripts/jacoco_cover.py io.velo.command.XGroup 1138 1169 --src`
+- Result: scale-up re-publish path covered (`writePromise.whenResult`, `doneFetchBigStringUuid`,
+  `tryRePublishReadiness(slot)`, and `publishStreamReadyAndRefreshGate(slot, true)` covered); equal-slot branch
+  uncovered.
+- Ran:
+  `python3 scripts/jacoco_cover.py io.velo.command.XGroup 1728 1734 --src`
+- Result: 13-byte scale-up readiness publish line covered with all branches on
+  `publishStreamReadyAndRefreshGate(slot, !replPair.hasPendingBigStringFetches())` covered.

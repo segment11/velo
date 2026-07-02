@@ -364,3 +364,39 @@ concern applies.
 
 Only Bug 2 is a confirmed production issue. The fix is to capture `isAsSlaveScaleUp()` before
 the async dispatch and use the captured value in the callback.
+
+---
+
+## Review Feedback — Bug 2 Fix (commit `c27bd33a`)
+
+**Reviewer:** AI agent 3 (Step 4 feedback)
+**Date:** 2026-07-01
+
+### Summary
+
+Captures `localPersist.isAsSlaveScaleUp()` as `boolean isScaleUp` before the sync/async dispatch
+decision. Passes `isScaleUp` into `finishSlaveCatchUpApply`, replacing the volatile re-check with
+the captured argument. The test clears `masterSlotNumber` before invocation to simulate the race.
+
+### Verdict
+
+**Approved.** Production change: 3 lines captured, 1 parameter added, 1 branch guard changed.
+Test uses reflection to invoke the private method with `isScaleUp=true` after clearing the volatile
+flag, confirming the gate path is used and no slot is made readable via the wrong branch.
+
+| Check | Result |
+|-------|--------|
+| New test fails pre-fix? | Yes — per-slot `canRead` bypassed gate |
+| New test passes post-fix? | Yes |
+| `ScaleUpReplicationTest` passes? | Yes |
+| `XGroupTest` passes? | Yes |
+| JaCoCo covers capture + gate branch? | Yes (lines 1785, 1864) |
+| Commit message follows style? | Yes: `fix: capture scale-up gate mode` |
+
+**One concern (non-blocking):** Test uses `getDeclaredMethod` reflection which would silently
+break on signature changes. It reflects the current bug correctly.
+
+### Follow-ups
+
+- Bug 2 closed. Bugs 1, 3, 4 closed as not-confirmed.
+- Round 2 review complete.
