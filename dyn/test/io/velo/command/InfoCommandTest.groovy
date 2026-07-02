@@ -62,13 +62,27 @@ class InfoCommandTest extends Specification {
         then:
         reply instanceof AsyncReply
 
-        when:
+        when: 'an unknown section returns the default content, not a bogus placeholder'
         def data2 = new byte[2][]
+        data2[0] = 'info'.bytes
         data2[1] = 'zzz'.bytes
         infoCommand.data = data2
         reply = infoCommand.handle()
         then:
         reply instanceof BulkReply
+        def zzzRaw = new String((reply as BulkReply).raw)
+        zzzRaw.contains('# Server')
+        !zzzRaw.contains('key:value')
+
+        when: 'an empty section must not throw and returns default content'
+        def data2Empty = new byte[2][]
+        data2Empty[0] = 'info'.bytes
+        data2Empty[1] = new byte[0]
+        infoCommand.data = data2Empty
+        reply = infoCommand.handle()
+        then:
+        reply instanceof BulkReply
+        new String((reply as BulkReply).raw).contains('# Server')
 
         cleanup:
         localPersist.cleanUp()

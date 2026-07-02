@@ -74,10 +74,15 @@ class InfoCommand extends BaseCommand {
         } else if ('keyspace' == section) {
             return new StringOrReply(keyspace())
         } else {
-            def r = """# ${section[0].toUpperCase() + section.substring(1)}
-key:value
-"""
-            return new StringOrReply(r.toString())
+            // Unknown or empty section. Redis returns the default content (all standard sections)
+            // rather than erroring or emitting a placeholder. Iterating the known `sections` array
+            // (which never reaches this branch) also avoids the StringIndexOutOfBoundsException that
+            // `section[0]` / `section.substring(1)` threw for an empty section argument.
+            def sb = new StringBuilder()
+            for (knownSection in sections) {
+                sb << getOneSection(knownSection).s << '\r\n'
+            }
+            return new StringOrReply(sb.toString())
         }
     }
 
