@@ -1,6 +1,6 @@
 package io.velo.command;
 
-import org.jetbrains.annotations.VisibleForTesting;
+import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,7 +100,7 @@ public final class CommandRegistry {
      * {@link #register}) so a shared-JVM test run does not observe an empty
      * registry afterwards.
      */
-    @VisibleForTesting
+    @TestOnly
     public static void clear() {
         ALL.clear();
     }
