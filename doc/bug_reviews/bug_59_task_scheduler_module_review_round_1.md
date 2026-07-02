@@ -596,3 +596,36 @@ safest interpretation and prevents the unguarded modulo from ever dividing by ze
 | 3 | Low | Fixed (this commit) | `TaskChain.doTask` modulo used `executeOnceAfterLoopCount()` directly; a `0` return threw `ArithmeticException` |
 
 All three confirmed findings are now fixed and covered by tests + JaCoCo.
+
+
+---
+
+## Review Feedback - Bug 3 Fix
+
+Date: 2026-07-02
+Reviewer: AI agent 2
+Commit: `897206fb` (`fix: guard TaskChain cadence against zero to avoid division by zero`)
+
+### Summary
+
+Reviewed the Bug 3 fix in `TaskChain`. The commit normalizes non-positive task cadences to `1` before the modulo check, so `executeOnceAfterLoopCount()` returning `0` no longer throws `ArithmeticException` before the task-level `try/catch`.
+
+### Findings
+
+No blocking issues found.
+
+### Strengths
+
+- `TaskChain.doTask(long loopCount)` now stores `executeOnceAfterLoopCount()` in a local `every` value and normalizes `every <= 0` to `1` before performing `loopCount % every` (`src/main/java/io/velo/task/TaskChain.java:42-46`). This directly removes the division-by-zero failure path.
+- The fix also handles negative cadences defensively, matching the same non-positive-input class rather than only special-casing zero.
+- The regression test adds a concrete `ITask` implementation returning `0` and verifies multiple ticks run without exception (`src/test/groovy/io/velo/task/TaskChainTest.groovy:60-95`).
+- Existing positive-cadence behavior remains covered by the existing `TaskChainTest` cases.
+
+### Verification
+
+- Ran `./gradlew :test --tests "io.velo.task.*" --rerun-tasks`: `BUILD SUCCESSFUL` in 31s, 13 tasks executed.
+- JaCoCo check for `io.velo.task.TaskChain` lines 40-56: 12/12 executable lines covered; `every <= 0` has both branches covered, `every = 1` is covered, and the cadence modulo branch is fully covered.
+
+### Concerns
+
+None for Bug 3. This commit fixes the latent division-by-zero path. All three findings in this review doc now have corresponding fix commits and post-commit review feedback.
