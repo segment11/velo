@@ -39,7 +39,11 @@ public class TaskChain {
      */
     public void doTask(long loopCount) {
         for (var t : list) {
-            if (loopCount % t.executeOnceAfterLoopCount() == 0) {
+            var every = t.executeOnceAfterLoopCount();
+            if (every <= 0) {
+                every = 1;
+            }
+            if (loopCount % every == 0) {
                 t.setLoopCount(loopCount);
 
                 try {

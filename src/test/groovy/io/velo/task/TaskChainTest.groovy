@@ -57,6 +57,43 @@ class TaskChainTest extends Specification {
         }
     }
 
+    static class TaskZeroCadence implements ITask {
+        int runCount = 0
+
+        @Override
+        String name() {
+            'zero'
+        }
+
+        @Override
+        void run() {
+            runCount++
+        }
+
+        @Override
+        int executeOnceAfterLoopCount() {
+            0
+        }
+    }
+
+    def 'test do task tolerates executeOnceAfterLoopCount returning zero'() {
+        given:
+        def taskChain = new TaskChain()
+        def task = new TaskZeroCadence()
+        taskChain.add(task)
+
+        when:
+        // pre-fix: loopCount % 0 throws ArithmeticException which is not caught here
+        taskChain.doTask(0)
+        taskChain.doTask(1)
+        taskChain.doTask(2)
+
+        then:
+        noExceptionThrown()
+        // a non-positive cadence is normalized to run every tick
+        task.runCount == 3
+    }
+
     def 'test all'() {
         given:
         def taskChain = new TaskChain()

@@ -269,7 +269,7 @@ function of elapsed scheduler ticks.
 ## Bug 3: `TaskChain.doTask` does not guard against `executeOnceAfterLoopCount() == 0` (division by zero)
 
 **Severity:** Low
-**Status:** Confirmed (latent)
+**Status:** Confirmed (latent) → Fixed
 
 **Files:**
 
@@ -508,3 +508,91 @@ counter to `long` + make the array index non-negative):
   all branches covered.
 - The `long` widening of `TaskRunnable.loopCount` is verified by compilation and the passing
   end-to-end task tests (it is private and only consumed by `OneSlot.doTask(long)`).
+
+
+---
+
+## Review Feedback - Bug 2 Fix
+
+Date: 2026-07-02
+Reviewer: AI agent 2
+Commit: `4eab15cc` (`fix: widen loopCount to long and use floorMod for wal index`)
+
+### Summary
+
+Reviewed the Bug 2 fix in `TaskRunnable`, `OneSlot`, and `TaskChain`. The commit addresses the practical 248-day slot-worker overflow by widening the slot-worker loop counter path to `long` and making the WAL-group array index non-negative with `Math.floorMod`.
+
+### Findings
+
+No blocking issues found.
+
+### Strengths
+
+- `TaskRunnable.loopCount` is now `long` (`src/main/java/io/velo/task/TaskRunnable.java:70`), so the 10 ms slot-worker counter no longer overflows after about 248 days.
+- `OneSlot.doTask` and `TaskChain.doTask` now accept `long` loop counts (`src/main/java/io/velo/persist/OneSlot.java:1219`, `src/main/java/io/velo/task/TaskChain.java:40`), avoiding a narrowing conversion that would reintroduce the overflow downstream.
+- `OneSlot` now uses `Math.floorMod(loopCount, walArray.length)` for the WAL-group index (`src/main/java/io/velo/persist/OneSlot.java:1234`), so even explicitly negative loop counts stay within `[0, walArray.length)`.
+- The regression test drives real negative multiples of 10, including `-2147483640`, through `OneSlot.doTask(...)`, which is the shape of the original failure.
+
+### Verification
+
+- Ran `./gradlew :test --tests "io.velo.task.*" --tests "io.velo.persist.OneSlotTest" --tests "io.velo.command.XGroupTest" --rerun-tasks`: `BUILD SUCCESSFUL` in 1m 20s, 13 tasks executed.
+- JaCoCo check for `io.velo.persist.OneSlot` lines 1219-1234: `taskChain.doTask(loopCount)`, the `loopCount % 10 == 0` branch, and `walArray[Math.floorMod(loopCount, walArray.length)]` are covered. The unchanged stopping/truncate branches remain partially or not covered in this line range.
+- JaCoCo check for `io.velo.task.TaskChain` lines 40-43: 3/3 executable lines covered, with both loop and cadence branches fully covered.
+- JaCoCo check for `io.velo.task.TaskRunnable` lines 69-97: the widened `long loopCount` declaration, normal execution, exception catch, increment, and reschedule lines are covered. The pre-existing startup-delay branch at lines 83-85 remains uncovered in this focused run.
+
+### Concerns
+
+None for Bug 2. `PrimaryTaskRunnable.loopCount` remains `int`, but this does not leave the confirmed 248-day slot-worker failure open because the primary scheduler ticks once per second and does not feed `OneSlot.doTask`. Bug 3 (`executeOnceAfterLoopCount() == 0`) remains a separate confirmed finding and is not fixed by this commit.
+
+---
+
+## Bug 3 Fix Summary
+
+**Approach:** Follow the original doc's first suggested direction — defensively normalize a
+non-positive cadence to `1` at the modulo check site, so a task returning `0` (or negative) from
+`executeOnceAfterLoopCount()` can no longer throw `ArithmeticException`.
+
+`TaskChain.doTask(long loopCount)` (`src/main/java/io/velo/task/TaskChain.java:40-56`):
+
+```java
+var every = t.executeOnceAfterLoopCount();
+if (every <= 0) {
+    every = 1;
+}
+if (loopCount % every == 0) {
+    ...
+}
+```
+
+A cadence of `0`/negative is treated as "run every tick" (divisor normalized to `1`), which is the
+safest interpretation and prevents the unguarded modulo from ever dividing by zero. The per-task
+`try/catch` around `t.run()` is unchanged.
+
+**TDD evidence:**
+
+- New test `TaskChainTest.'test do task tolerates executeOnceAfterLoopCount returning zero'`: a
+  `TaskZeroCadence` task whose `executeOnceAfterLoopCount()` returns `0`. It calls `doTask(0)`,
+  `doTask(1)`, `doTask(2)` and asserts `noExceptionThrown()` plus `runCount == 3`.
+- Pre-fix this failed with `ArithmeticException: / by zero` at the first `doTask(0)` (the modulo is
+  evaluated before the per-task try-catch). Post-fix it passes.
+- `./gradlew :test --tests "io.velo.task.*"` — all task tests pass; existing tasks (cadence 1/2)
+  are unaffected by the normalization.
+
+**JaCoCo confirmation:**
+
+- `io.velo.task.TaskChain` line 43 `if (every <= 0)` — all 2 branches covered (the `<= 0` true
+  branch by `TaskZeroCadence`, the `> 0` false branch by existing cadence 1/2 tasks).
+- Line 44 `every = 1` — covered (the normalization executes).
+- Line 46 `if (loopCount % every == 0)` — all branches covered.
+
+---
+
+## Round 1 Status
+
+| # | Severity | Status | Root cause |
+|---|----------|--------|------------|
+| 1 | High | Fixed (`82c6e3ce`) | Scheduler loops reschedule as the last statement with no try/catch; an exception kills the worker loop |
+| 2 | Medium | Fixed (`4eab15cc`) | `loopCount` was `int` (overflows after ~248 days); `walArray[loopCount % len]` then indexed negatively → AIOOBE |
+| 3 | Low | Fixed (this commit) | `TaskChain.doTask` modulo used `executeOnceAfterLoopCount()` directly; a `0` return threw `ArithmeticException` |
+
+All three confirmed findings are now fixed and covered by tests + JaCoCo.
