@@ -232,6 +232,40 @@ class InfoCommandTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test replication emits a slaveN line for every connected replica'() {
+        given:
+        def data2 = new byte[2][]
+        data2[0] = 'info'.bytes
+        data2[1] = 'replication'.bytes
+
+        def iGroup = new IGroup('info', data2, null)
+        iGroup.from(BaseCommand.mockAGroup())
+        def infoCommand = new InfoCommand(iGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        when: 'three replicas are attached while acting as master'
+        oneSlot.createIfNotExistReplPairAsMaster(11L, 'localhost', 7380)
+        oneSlot.createIfNotExistReplPairAsMaster(12L, 'localhost', 7381)
+        oneSlot.createIfNotExistReplPairAsMaster(13L, 'localhost', 7382)
+        def reply = infoCommand.handle()
+        def lines = ClusterxCommandTest.infoToLines(reply)
+
+        then: 'connected_slaves and the number of slaveN lines must agree'
+        lines.find { it.contains('connected_slaves:3') } != null
+        lines.find { it.contains('slave0:') } != null
+        lines.find { it.contains('slave1:') } != null
+        lines.find { it.contains('slave2:') } != null
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test cpu'() {
         given:
         def iGroup = new IGroup('info', null, null)

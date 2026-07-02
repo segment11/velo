@@ -269,8 +269,9 @@ maxmemory_human:${totalMaxHumanReadable}
             if (!replPairAsMasterList.isEmpty()) {
                 // Real Redis emits all slaveN: lines consecutively immediately after connected_slaves
                 // and before master_replid; keep the same order so Redis Sentinel's line-based parser
-                // sees every replica in the expected position.
-                for (int i = 0; i < replPairAsMasterList.size() && i < 2; i++) {
+                // sees every replica in the expected position. One line per replica, so that
+                // connected_slaves and the emitted slaveN lines always agree (no hard cap).
+                for (int i = 0; i < replPairAsMasterList.size(); i++) {
                     list.addAll slaveConnectState(replPairAsMasterList.get(i), i)
                 }
 
