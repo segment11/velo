@@ -13,12 +13,64 @@ import io.velo.reply.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Set;
 
 /**
  * Handles Redis commands starting with letter 'C'.
  * This includes commands like CLIENT, CLUSTER, COMMAND, CONFIG, COPY, etc.
  */
 public class CGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "client", -2,
+                Set.of("loading", "stale"),
+                0, 0, 0,
+                Set.of("@connection"),
+                "connection",
+                "A container for client connection commands.",
+                "2.4.0", "Depends on subcommand."));
+        CommandRegistry.register(new CommandEntry(
+                "cluster", -2,
+                Set.of("loading", "stale"),
+                0, 0, 0,
+                Set.of("@admin", "@slow", "@dangerous"),
+                "cluster",
+                "A container for cluster management commands.",
+                "3.0.0", "Depends on subcommand."));
+        CommandRegistry.register(new CommandEntry(
+                "clusterx", -2,
+                Set.of("loading", "stale"),
+                0, 0, 0,
+                Set.of("@admin", "@slow", "@dangerous"),
+                "cluster",
+                "A container for Velo cluster extension commands.",
+                "1.0.0", "Depends on subcommand."));
+        CommandRegistry.register(new CommandEntry(
+                "command", -1,
+                Set.of("loading", "stale"),
+                0, 0, 0,
+                Set.of("@connection", "@slow"),
+                "server",
+                "Returns detailed information about all commands.",
+                "2.8.13", "O(N) where N is the total number of Redis commands"));
+        CommandRegistry.register(new CommandEntry(
+                "config", -2,
+                Set.of("loading", "stale"),
+                0, 0, 0,
+                Set.of("@admin", "@slow", "@dangerous"),
+                "server",
+                "A container for runtime configuration commands.",
+                "2.0.0", "Depends on subcommand."));
+        CommandRegistry.register(new CommandEntry(
+                "copy", -3,
+                Set.of("write", "denyoom"),
+                1, 2, 1,
+                Set.of("@keyspace", "@write", "@slow"),
+                "generic",
+                "Copy the value of a key to a new key.",
+                "6.2.0", "O(N) worst case for collections"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

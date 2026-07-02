@@ -17,6 +17,7 @@ import redis.clients.jedis.params.RestoreParams;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -24,6 +25,57 @@ import java.util.stream.Collectors;
  * This includes commands like MANAGE, MGET, MSET, MIGRATE, MOVE.
  */
 public class MGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "manage", -2,
+                Set.of("admin", "loading", "stale"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@slow"),
+                "server",
+                "A container for Velo management commands.",
+                "1.0.0", null));
+        CommandRegistry.register(new CommandEntry(
+                "mget", -2,
+                Set.of("readonly", "fast"),
+                1, -1, 1,
+                Set.of("@read", "@string", "@fast"),
+                "string",
+                "Get the values of all the given keys.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "migrate", -6,
+                Set.of("write"),
+                0, 0, 0,
+                Set.of("@keyspace", "@write", "@slow", "@dangerous"),
+                "generic",
+                "Atomically transfer a key from one instance to another.",
+                "2.6.0", "This command actually executes a series of commands"));
+        CommandRegistry.register(new CommandEntry(
+                "move", 3,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@keyspace", "@write", "@fast"),
+                "generic",
+                "Move a key to another database.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "mset", -3,
+                Set.of("write", "denyoom"),
+                1, -1, 2,
+                Set.of("@write", "@string", "@slow"),
+                "string",
+                "Set multiple keys to multiple values.",
+                "1.0.1", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "msetnx", -3,
+                Set.of("write", "denyoom"),
+                1, -1, 2,
+                Set.of("@write", "@string", "@slow"),
+                "string",
+                "Set multiple keys to multiple values, only if none of the keys exist.",
+                "1.0.1", "O(N)"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

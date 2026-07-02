@@ -6,12 +6,24 @@ import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
+import java.util.Set;
 
 /**
  * Handles Redis commands starting with letter 'U'.
  * This class is part of command organization where commands are grouped alphabetically.
  */
 public class UGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "unsubscribe", -1,
+                Set.of("pubsub", "noscript", "loading", "stale"),
+                0, 0, 0,
+                Set.of("@pubsub", "@slow"),
+                "pubsub",
+                "Stop listening for messages posted to the given channels.",
+                "2.0.0", "O(N)"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

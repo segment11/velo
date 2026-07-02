@@ -29,6 +29,257 @@ import static io.velo.CompressedValue.NO_EXPIRE;
  * This includes commands like SAVE, SCARD, SDIFF, SET, SINTER.
  */
 public class SGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "sadd", -3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@set", "@fast"),
+                "set",
+                "Add one or more members to a set.",
+                "1.0.0", "O(1) for each element added"));
+        CommandRegistry.register(new CommandEntry(
+                "save", 1,
+                Set.of("admin", "noscript"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@slow"),
+                "server",
+                "Synchronously save the dataset to disk.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "scan", -2,
+                Set.of("readonly"),
+                0, 0, 0,
+                Set.of("@keyspace", "@read", "@slow"),
+                "generic",
+                "Incrementally iterate the keys space.",
+                "2.8.0", "O(1) for every call"));
+        CommandRegistry.register(new CommandEntry(
+                "scard", 2,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@set", "@fast"),
+                "set",
+                "Get the number of members in a set.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "sdiff", -2,
+                Set.of("readonly"),
+                1, -1, 1,
+                Set.of("@read", "@set", "@slow"),
+                "set",
+                "Subtract multiple sets.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "sdiffstore", -3,
+                Set.of("write", "denyoom"),
+                1, -1, 1,
+                Set.of("@write", "@set", "@slow"),
+                "set",
+                "Subtract multiple sets and store the resulting set in a key.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "select", 2,
+                Set.of("loading", "stale", "fast"),
+                0, 0, 0,
+                Set.of("@fast", "@connection"),
+                "connection",
+                "Change the selected database for the current connection.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "sentinel", -2,
+                Set.of("admin"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@slow"),
+                "sentinel",
+                "A container for Sentinel commands.",
+                "2.8.4", "Depends on subcommand."));
+        CommandRegistry.register(new CommandEntry(
+                "set", -3,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@slow"),
+                "string",
+                "Set the string value of a key.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "setbit", 4,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@write", "@bitmap", "@slow"),
+                "bitmap",
+                "Sets or clears the bit at offset in the string value stored at key.",
+                "2.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "setex", 4,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@slow"),
+                "string",
+                "Set the value and expiration of a key.",
+                "2.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "setnx", 3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@fast"),
+                "string",
+                "Set the value of a key, only if the key does not exist.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "setrange", 4,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@slow"),
+                "string",
+                "Overwrite a part of a string at key starting at the specified offset.",
+                "2.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "sinter", -2,
+                Set.of("readonly"),
+                1, -1, 1,
+                Set.of("@read", "@set", "@slow"),
+                "set",
+                "Intersect multiple sets.",
+                "1.0.0", "O(N*M)"));
+        CommandRegistry.register(new CommandEntry(
+                "sintercard", -3,
+                Set.of("readonly", "movablekeys"),
+                0, 0, 0,
+                Set.of("@read", "@set", "@slow"),
+                "set",
+                "Cardinality of the intersection of multiple sets.",
+                "7.0.0", "O(N*M)"));
+        CommandRegistry.register(new CommandEntry(
+                "sinterstore", -3,
+                Set.of("write", "denyoom"),
+                1, -1, 1,
+                Set.of("@write", "@set", "@slow"),
+                "set",
+                "Intersect multiple sets and store the resulting set in a key.",
+                "1.0.0", "O(N*M)"));
+        CommandRegistry.register(new CommandEntry(
+                "sismember", 3,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@set", "@fast"),
+                "set",
+                "Determine whether a given value is a member of a set.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "slaveof", 3,
+                Set.of("admin", "noscript", "stale"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@slow"),
+                "server",
+                "Make the server a replica of another instance, or promote it as master.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "smembers", 2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@set", "@slow"),
+                "set",
+                "Get all the members in a set.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "smismember", -3,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@set", "@fast"),
+                "set",
+                "Returns the membership associated with the given elements for a set.",
+                "6.2.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "smove", 4,
+                Set.of("write", "fast"),
+                1, 2, 1,
+                Set.of("@write", "@set", "@fast"),
+                "set",
+                "Move a member from one set to another.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "sort", -2,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@set", "@sortedset", "@list", "@write", "@slow", "@dangerous"),
+                "generic",
+                "Sort the elements in a list, set or sorted set.",
+                "1.0.0", "O(N+M*log(M))"));
+        CommandRegistry.register(new CommandEntry(
+                "spop", -2,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@set", "@fast"),
+                "set",
+                "Get one or multiple random elements from a set and remove them.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "srandmember", -2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@set", "@slow"),
+                "set",
+                "Get one or multiple random elements from a set.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "srem", -3,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@set", "@fast"),
+                "set",
+                "Remove one or more members from a set.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "sscan", -3,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@set", "@slow"),
+                "set",
+                "Incrementally iterate set elements.",
+                "2.8.0", "O(1) for every call"));
+        CommandRegistry.register(new CommandEntry(
+                "strlen", 2,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@string", "@fast"),
+                "string",
+                "Get the length of the value stored in a key.",
+                "2.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "subscribe", -2,
+                Set.of("pubsub", "noscript", "loading", "stale", "denyoom"),
+                0, 0, 0,
+                Set.of("@pubsub", "@slow"),
+                "pubsub",
+                "Listen for messages published to the given channels.",
+                "2.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "substr", 4,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@string", "@slow"),
+                "string",
+                "Get a substring of the string stored at a key.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "sunion", -2,
+                Set.of("readonly"),
+                1, -1, 1,
+                Set.of("@read", "@set", "@slow"),
+                "set",
+                "Add multiple sets.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "sunionstore", -3,
+                Set.of("write", "denyoom"),
+                1, -1, 1,
+                Set.of("@write", "@set", "@slow"),
+                "set",
+                "Add multiple sets and store the resulting set in a key.",
+                "1.0.0", "O(N)"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

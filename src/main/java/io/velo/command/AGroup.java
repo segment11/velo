@@ -16,6 +16,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static java.util.stream.Collectors.toSet;
 
@@ -24,6 +25,33 @@ import static java.util.stream.Collectors.toSet;
  * This includes commands like ACL, APPEND, ASKING, etc.
  */
 public class AGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "acl", -2,
+                Set.of("loading", "stale"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@slow", "@connection"),
+                "server",
+                "A container for Access List Control commands.",
+                "6.0.0", "Depends on subcommand."));
+        CommandRegistry.register(new CommandEntry(
+                "append", 3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@fast"),
+                "string",
+                "Appends a string to the value of a key. Creates the key if it doesn't exist.",
+                "2.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "asking", 1,
+                Set.of("fast"),
+                0, 0, 0,
+                Set.of("@fast", "@connection"),
+                "cluster",
+                "Signals that a cluster client is following an -ASK redirect.",
+                "3.0.0", "O(1)"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

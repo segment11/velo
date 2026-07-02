@@ -18,12 +18,248 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Random;
+import java.util.Set;
 
 /**
  * Handles Redis commands starting with letter 'H'.
  * This includes commands like HGET, HSET, HMGET, HMSET, HDEL, HEXISTS, HKEYS, HLEN, HGETALL, etc.
  */
 public class HGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "hdel", -3,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Delete one or more hash fields.",
+                "2.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "hello", -1,
+                Set.of("noscript", "loading", "stale", "fast", "no_auth"),
+                0, 0, 0,
+                Set.of("@fast", "@connection"),
+                "connection",
+                "Handshake with Redis.",
+                "6.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hexists", 3,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@fast"),
+                "hash",
+                "Determine whether a field exists in a hash.",
+                "2.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hexpire", -6,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Set the time to live of a hash field in seconds.",
+                "7.4.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hexpireat", -6,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Set the expiration time of a hash field as a UNIX timestamp.",
+                "7.4.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hexpiretime", -4,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@fast"),
+                "hash",
+                "Get the expiration time of a hash field as a UNIX timestamp.",
+                "7.4.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hget", 2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@slow"),
+                "hash",
+                "Get the value of a hash field.",
+                "2.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hgetall", 2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@slow"),
+                "hash",
+                "Get all the fields and values in a hash.",
+                "2.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "hgetdel", -5,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Get the value of a hash field and delete it.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "hgetex", -4,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Get the value of a hash field and optionally set its expiration.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hincrby", 4,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Increment the integer value of a hash field by the given amount.",
+                "2.6.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hincrbyfloat", 4,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Increment the floating point value of a hash field by the given amount.",
+                "2.6.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hkeys", 2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@slow"),
+                "hash",
+                "Get all the fields in a hash.",
+                "2.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "hlen", 2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@slow"),
+                "hash",
+                "Get the number of fields in a hash.",
+                "2.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hmget", -3,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@fast"),
+                "hash",
+                "Get the values of all the given hash fields.",
+                "2.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "hmset", -4,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Set multiple hash fields to multiple values.",
+                "2.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "hpersist", -4,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Remove the expiration time of a hash field.",
+                "7.4.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hpexpire", -6,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Set the time to live of a hash field in milliseconds.",
+                "7.4.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hpexpireat", -6,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Set the expiration time of a hash field as a UNIX milliseconds timestamp.",
+                "7.4.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hpexpiretime", -4,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@fast"),
+                "hash",
+                "Get the expiration time of a hash field as a UNIX milliseconds timestamp.",
+                "7.4.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hpttl", -4,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@fast"),
+                "hash",
+                "Get the time to live of a hash field in milliseconds.",
+                "7.4.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hrandfield", -2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@slow"),
+                "hash",
+                "Get one or multiple random fields from a hash.",
+                "6.2.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "hscan", -3,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@slow"),
+                "hash",
+                "Incrementally iterate hash fields and associated values.",
+                "2.8.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hset", -4,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Set the string value of a hash field.",
+                "2.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hsetex", -6,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Set the value of a hash field with expiration.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hsetnx", 4,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hash", "@fast"),
+                "hash",
+                "Set the value of a hash field, only when the field doesn't exist.",
+                "2.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hstrlen", 3,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@fast"),
+                "hash",
+                "Get the length of the value of a hash field.",
+                "3.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "httl", -4,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@fast"),
+                "hash",
+                "Get the time to live of a hash field in seconds.",
+                "7.4.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "hvals", 2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@hash", "@slow"),
+                "hash",
+                "Get all the values in a hash.",
+                "2.0.0", "O(N)"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

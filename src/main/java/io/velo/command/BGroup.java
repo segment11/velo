@@ -14,6 +14,7 @@ import io.velo.type.RedisBitSet;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -21,6 +22,169 @@ import java.util.concurrent.atomic.AtomicLong;
  * This includes commands like BITCOUNT, BF.*, BLPOP, BRPOP, BGSAVE, etc.
  */
 public class BGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "bgsave", -1,
+                Set.of("admin", "noscript"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@slow"),
+                "server",
+                "Asynchronously save the dataset to disk.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "bitcount", -2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@bitmap", "@slow"),
+                "bitmap",
+                "Count the number of set bits (population counting) in a string.",
+                "2.6.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "bitfield", -2,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@write", "@bitmap", "@slow"),
+                "bitmap",
+                "Perform arbitrary bitfield integer operations on strings.",
+                "3.2.0", "O(1) for each subcommand specified"));
+        CommandRegistry.register(new CommandEntry(
+                "bitop", -4,
+                Set.of("write", "denyoom"),
+                2, -1, 1,
+                Set.of("@write", "@bitmap", "@slow"),
+                "bitmap",
+                "Perform bitwise operations between multiple strings.",
+                "2.6.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "bitpos", -3,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@bitmap", "@slow"),
+                "bitmap",
+                "Find the position of the first bit set or clear in a string.",
+                "2.8.7", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "blmove", 6,
+                Set.of("write", "denyoom", "blocking"),
+                1, 2, 1,
+                Set.of("@write", "@list", "@slow", "@blocking"),
+                "list",
+                "Blocking version of LMOVE.",
+                "6.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "blmpop", -5,
+                Set.of("write", "blocking", "movablekeys"),
+                0, 0, 0,
+                Set.of("@write", "@list", "@slow", "@blocking"),
+                "list",
+                "Blocking variant of LMPOP.",
+                "7.0.0", "O(N+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "blpop", -3,
+                Set.of("write", "blocking"),
+                1, -2, 1,
+                Set.of("@write", "@list", "@slow", "@blocking"),
+                "list",
+                "Remove and get the first element in a list, or block until one is available.",
+                "2.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "brpop", -3,
+                Set.of("write", "blocking"),
+                1, -2, 1,
+                Set.of("@write", "@list", "@slow", "@blocking"),
+                "list",
+                "Remove and get the last element in a list, or block until one is available.",
+                "2.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "brpoplpush", 4,
+                Set.of("write", "denyoom", "blocking"),
+                1, 2, 1,
+                Set.of("@write", "@list", "@slow", "@blocking"),
+                "list",
+                "Pop an element from a list, push it to another list and return it; or block until one is available.",
+                "2.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "bf.add", -3,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@write", "@bloom"),
+                "bloom",
+                "Add an element to a Bloom filter.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "bf.card", 2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@bloom"),
+                "bloom",
+                "Return the cardinality of a Bloom filter.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "bf.exists", 3,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@bloom"),
+                "bloom",
+                "Determine whether an item exists in a Bloom filter.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "bf.info", -2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@bloom"),
+                "bloom",
+                "Return information about a Bloom filter.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "bf.insert", -2,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@write", "@bloom"),
+                "bloom",
+                "Add one or more elements to a Bloom filter, creating it if it does not yet exist.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "bf.loadchunk", 3,
+                Set.of("write"),
+                1, 1, 1,
+                Set.of("@write", "@bloom"),
+                "bloom",
+                "Restore a Bloom filter previously saved using SCANDUMP.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "bf.madd", -3,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@write", "@bloom"),
+                "bloom",
+                "Add multiple elements to a Bloom filter.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "bf.mexists", -3,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@bloom"),
+                "bloom",
+                "Determine whether multiple items exist in a Bloom filter.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "bf.reserve", -3,
+                Set.of("write"),
+                1, 1, 1,
+                Set.of("@write", "@bloom"),
+                "bloom",
+                "Create an empty Bloom filter with a desired initial capacity and false positive ratio.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "bf.scandump", 3,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@bloom"),
+                "bloom",
+                "Begin an incremental save of a Bloom filter.",
+                "1.0.0", "O(N)"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

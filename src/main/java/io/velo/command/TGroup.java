@@ -10,12 +10,40 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Set;
 
 /**
  * Handles Redis commands starting with letter 'T'.
  * This includes commands like TIME, TTL, TOUCH, TYPE.
  */
 public class TGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "time", 1,
+                Set.of("loading", "stale", "fast"),
+                0, 0, 0,
+                Set.of("@fast", "@connection"),
+                "server",
+                "Return the current server time.",
+                "2.6.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "ttl", 2,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@keyspace", "@read", "@fast"),
+                "generic",
+                "Get the time to live for a key in seconds.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "type", 2,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@keyspace", "@read", "@fast"),
+                "generic",
+                "Determine the type stored at key.",
+                "1.0.0", "O(1)"));
+    }
+
     @VisibleForTesting
     static final BulkReply TYPE_NONE = new BulkReply("none");
     @VisibleForTesting

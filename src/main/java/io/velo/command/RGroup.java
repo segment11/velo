@@ -15,6 +15,7 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -22,6 +23,105 @@ import java.util.function.Consumer;
  * This includes commands like RANDOMKEY, READONLY, RENAME, RPOP, RPUSH, RSET.
  */
 public class RGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "randomkey", 1,
+                Set.of("readonly"),
+                0, 0, 0,
+                Set.of("@keyspace", "@read", "@slow"),
+                "generic",
+                "Return a random key from the keyspace.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "readonly", 1,
+                Set.of("fast", "loading", "stale"),
+                0, 0, 0,
+                Set.of("@fast", "@connection"),
+                "cluster",
+                "Enables read queries for a connection to a cluster replica node.",
+                "3.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "readwrite", 1,
+                Set.of("fast", "loading", "stale"),
+                0, 0, 0,
+                Set.of("@fast", "@connection"),
+                "cluster",
+                "Enables read and write queries for a connection to a cluster replica node.",
+                "3.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "rename", 3,
+                Set.of("write"),
+                1, 2, 1,
+                Set.of("@keyspace", "@write", "@slow"),
+                "generic",
+                "Rename a key.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "renamenx", 3,
+                Set.of("write", "fast"),
+                1, 2, 1,
+                Set.of("@keyspace", "@write", "@fast"),
+                "generic",
+                "Rename a key, only if the new key does not exist.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "replicaof", 3,
+                Set.of("admin", "noscript", "stale"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@slow"),
+                "server",
+                "Configure a server as replica of another, or promote it to a master.",
+                "5.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "restore", -4,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@keyspace", "@write", "@slow", "@dangerous"),
+                "generic",
+                "Create a key using the serialized value, previously obtained using DUMP.",
+                "2.6.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "role", 1,
+                Set.of("noscript", "loading", "stale", "fast"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@fast"),
+                "server",
+                "Return the role of the instance.",
+                "2.8.12", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "rpop", -2,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@list", "@fast"),
+                "list",
+                "Remove and return the last elements of a list.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "rpoplpush", 3,
+                Set.of("write", "denyoom"),
+                1, 2, 1,
+                Set.of("@write", "@list", "@slow"),
+                "list",
+                "Remove the last element in a list, prepend it to another list and return it.",
+                "1.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "rpush", -3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@list", "@fast"),
+                "list",
+                "Append one or more elements to a list.",
+                "1.0.0", "O(1) for each element added"));
+        CommandRegistry.register(new CommandEntry(
+                "rpushx", -3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@list", "@fast"),
+                "list",
+                "Append an element to a list, only if the list exists.",
+                "2.2.0", "O(1) for each element added"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

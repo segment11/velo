@@ -16,12 +16,136 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Set;
 
 /**
  * Handles Redis commands starting with letter 'L'.
  * This includes commands like LASTSAVE, LINDEX, LLEN, LPOP, LPUSH, LRANGE, LREM, LSET, LTRIM.
  */
 public class LGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "lastsave", 1,
+                Set.of("loading", "stale", "fast"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@fast"),
+                "server",
+                "Get the UNIX time stamp of the last successful save to disk.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "lindex", 3,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@list", "@slow"),
+                "list",
+                "Get an element from a list by its index.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "linsert", 5,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@write", "@list", "@slow"),
+                "list",
+                "Insert an element before or after another element in a list.",
+                "2.2.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "llen", 2,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@list", "@fast"),
+                "list",
+                "Get the length of a list.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "lmove", 5,
+                Set.of("write", "denyoom"),
+                1, 2, 1,
+                Set.of("@write", "@list", "@slow"),
+                "list",
+                "Pop an element from a list, push it to another list and return it.",
+                "6.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "lmpop", -4,
+                Set.of("write", "movablekeys"),
+                0, 0, 0,
+                Set.of("@write", "@list", "@slow"),
+                "list",
+                "Pop elements from a list.",
+                "7.0.0", "O(N+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "lpop", -2,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@list", "@fast"),
+                "list",
+                "Remove and return the first elements of a list.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "lpos", -3,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@list", "@slow"),
+                "list",
+                "Return the index of matching elements on a list.",
+                "6.0.6", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "lpush", -3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@list", "@fast"),
+                "list",
+                "Prepend one or more elements to a list.",
+                "1.0.0", "O(1) for each element added"));
+        CommandRegistry.register(new CommandEntry(
+                "lpushx", -3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@list", "@fast"),
+                "list",
+                "Prepend an element to a list, only if the list exists.",
+                "2.2.0", "O(1) for each element added"));
+        CommandRegistry.register(new CommandEntry(
+                "lrange", 4,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@list", "@slow"),
+                "list",
+                "Get a range of elements from a list.",
+                "1.0.0", "O(S+N)"));
+        CommandRegistry.register(new CommandEntry(
+                "lrem", 4,
+                Set.of("write"),
+                1, 1, 1,
+                Set.of("@write", "@list", "@slow"),
+                "list",
+                "Remove elements from a list.",
+                "1.0.0", "O(N+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "lset", 4,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@write", "@list", "@slow"),
+                "list",
+                "Set the value of an element in a list by its index.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "ltrim", 4,
+                Set.of("write"),
+                1, 1, 1,
+                Set.of("@write", "@list", "@slow"),
+                "list",
+                "Trim a list to the specified range.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "load-rdb", -2,
+                Set.of("admin"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@slow"),
+                "server",
+                "Load an RDB file into Velo (Velo-specific).",
+                "1.0.0", null));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

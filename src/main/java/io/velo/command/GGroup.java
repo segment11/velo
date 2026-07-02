@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 import static io.velo.CompressedValue.NO_EXPIRE;
 
@@ -22,6 +23,121 @@ import static io.velo.CompressedValue.NO_EXPIRE;
  * This includes commands like GET, GETBIT, GETDEL, GETEX, GETRANGE, GETSET, GEO.*, etc.
  */
 public class GGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "geoadd", -5,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@geo", "@write", "@slow"),
+                "geo",
+                "Add one or more geospatial items in the geospatial index represented using a sorted set.",
+                "3.2.0", "O(log(N)) for each item added"));
+        CommandRegistry.register(new CommandEntry(
+                "geodist", -4,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@geo", "@read", "@slow"),
+                "geo",
+                "Returns the distance between two members of a geospatial index.",
+                "3.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "geohash", -2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@geo", "@read", "@slow"),
+                "geo",
+                "Returns members from a geospatial index as geohash strings.",
+                "3.2.0", "O(1) for each member requested"));
+        CommandRegistry.register(new CommandEntry(
+                "geopos", -2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@geo", "@read", "@slow"),
+                "geo",
+                "Returns the longitude and latitude of members of a geospatial index.",
+                "3.2.0", "O(1) for each member requested"));
+        CommandRegistry.register(new CommandEntry(
+                "georadius", -6,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@geo", "@write", "@slow"),
+                "geo",
+                "Query a sorted set representing a geospatial index to fetch members matching a maximum distance from a point.",
+                "3.2.0", "O(N+log(M))"));
+        CommandRegistry.register(new CommandEntry(
+                "georadiusbymember", -5,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@geo", "@write", "@slow"),
+                "geo",
+                "Query a sorted set representing a geospatial index to fetch members matching a maximum distance from a member.",
+                "3.2.0", "O(N+log(M))"));
+        CommandRegistry.register(new CommandEntry(
+                "geosearch", -7,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@geo", "@read", "@slow"),
+                "geo",
+                "Query a sorted set representing a geospatial index to fetch members inside an area of a box or a circle.",
+                "6.2.0", "O(N+log(M))"));
+        CommandRegistry.register(new CommandEntry(
+                "geosearchstore", -8,
+                Set.of("write", "denyoom"),
+                1, 2, 1,
+                Set.of("@geo", "@write", "@slow"),
+                "geo",
+                "Query a sorted set representing a geospatial index to fetch members matching an area, store the result in another key.",
+                "6.2.0", "O(N+log(M))"));
+        CommandRegistry.register(new CommandEntry(
+                "get", 2,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@string", "@fast"),
+                "string",
+                "Get the value of a key.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "getbit", 3,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@bitmap", "@fast"),
+                "bitmap",
+                "Returns the bit value at offset in the string value stored at key.",
+                "2.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "getdel", 2,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@fast"),
+                "string",
+                "Get the value of a key and delete the key.",
+                "6.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "getex", -2,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@fast"),
+                "string",
+                "Get the value of a key and optionally set its expiration time.",
+                "6.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "getrange", 4,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@string", "@slow"),
+                "string",
+                "Get a substring of the string stored at a key.",
+                "2.4.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "getset", 3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@fast"),
+                "string",
+                "Set the string value of a key and return its old value.",
+                "1.0.0", "O(1)"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

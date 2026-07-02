@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -27,6 +28,65 @@ import java.util.stream.Collectors;
  * This includes commands like DEBUG, DEL, DECR, DECRBY, DUMP, etc.
  */
 public class DGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "dbsize", 1,
+                Set.of("readonly", "fast"),
+                0, 0, 0,
+                Set.of("@keyspace", "@read", "@fast", "@slow"),
+                "server",
+                "Return the number of keys in the currently-selected database.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "debug", -2,
+                Set.of("admin", "noscript", "loading", "stale"),
+                0, 0, 0,
+                Set.of("@admin", "@slow", "@dangerous"),
+                "server",
+                "A container for debugging commands.",
+                "1.0.0", "Depends on subcommand."));
+        CommandRegistry.register(new CommandEntry(
+                "decr", 2,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@fast"),
+                "string",
+                "Decrement the integer value of a key by one.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "decrby", 3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@fast"),
+                "string",
+                "Decrement the integer value of a key by the given amount.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "decrbyfloat", 3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@fast"),
+                "string",
+                "Decrement the floating point value of a key by the given amount.",
+                "2.6.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "del", -2,
+                Set.of("write"),
+                1, -1, 1,
+                Set.of("@keyspace", "@write", "@slow"),
+                "generic",
+                "Delete a key.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "dump", 2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@keyspace", "@read", "@slow"),
+                "generic",
+                "Return a serialized version of the value stored at the specified key.",
+                "2.6.0", "O(1) to access the key and additional time for serializing it"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

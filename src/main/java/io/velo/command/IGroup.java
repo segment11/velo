@@ -25,12 +25,64 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Set;
 
 /**
  * Handles Redis commands starting with letter 'I'.
  * This includes commands like INCR, INCRBY, INFO, etc.
  */
 public class IGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "incr", 2,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@fast"),
+                "string",
+                "Increment the integer value of a key by one.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "incrby", 3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@fast"),
+                "string",
+                "Increment the integer value of a key by the given amount.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "incrbyfloat", 3,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@fast"),
+                "string",
+                "Increment the floating point value of a key by the given amount.",
+                "2.6.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "info", -1,
+                Set.of("loading", "stale"),
+                0, 0, 0,
+                Set.of("@slow", "@dangerous"),
+                "server",
+                "Get information and statistics about the server.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "ingest", -7,
+                Set.of("admin"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@slow"),
+                "server",
+                "Ingest files from a directory into Velo (Velo-specific).",
+                "1.0.0", null));
+        CommandRegistry.register(new CommandEntry(
+                "ingest_sst", -2,
+                Set.of("admin"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@slow"),
+                "server",
+                "Ingest SST files into Velo (Velo-specific).",
+                "1.0.0", null));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

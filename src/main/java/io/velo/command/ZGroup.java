@@ -15,12 +15,296 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Set;
 
 /**
  * Handles Redis commands starting with letter 'Z'.
  * This includes commands like ZADD, ZCARD, ZCOUNT, ZRANGE.
  */
 public class ZGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "bzmpop", -5,
+                Set.of("write", "blocking", "movablekeys"),
+                0, 0, 0,
+                Set.of("@write", "@sortedset", "@slow", "@blocking"),
+                "sorted_set",
+                "Blocking variant of ZMPOP.",
+                "7.0.0", "O(K)+O(M*log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "bzpopmax", -3,
+                Set.of("write", "fast", "blocking"),
+                1, -2, 1,
+                Set.of("@write", "@sortedset", "@fast", "@blocking"),
+                "sorted_set",
+                "Remove and return the member with the highest score, or block until one is available.",
+                "5.0.0", "O(log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "bzpopmin", -3,
+                Set.of("write", "fast", "blocking"),
+                1, -2, 1,
+                Set.of("@write", "@sortedset", "@fast", "@blocking"),
+                "sorted_set",
+                "Remove and return the member with the lowest score, or block until one is available.",
+                "5.0.0", "O(log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "zadd", -4,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@sortedset", "@fast"),
+                "sorted_set",
+                "Add one or more members to a sorted set, or update existing members' scores.",
+                "1.2.0", "O(log(N)) for each item added"));
+        CommandRegistry.register(new CommandEntry(
+                "zcard", 2,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@fast"),
+                "sorted_set",
+                "Count the number of members in a sorted set.",
+                "1.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "zcount", 4,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@fast"),
+                "sorted_set",
+                "Count the members in a sorted set with scores within the given values.",
+                "2.0.0", "O(log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "zdiff", -3,
+                Set.of("readonly", "movablekeys"),
+                0, 0, 0,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Subtract multiple sorted sets.",
+                "6.2.0", "O(L+(N-K)log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "zdiffstore", -4,
+                Set.of("write", "denyoom", "movablekeys"),
+                0, 0, 0,
+                Set.of("@write", "@sortedset", "@slow"),
+                "sorted_set",
+                "Subtract multiple sorted sets and store the resulting sorted set in a key.",
+                "6.2.0", "O(L+(N-K)log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "zincrby", 4,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@sortedset", "@fast"),
+                "sorted_set",
+                "Increment the score of a member in a sorted set.",
+                "1.2.0", "O(log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "zinter", -3,
+                Set.of("readonly", "movablekeys"),
+                0, 0, 0,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Intersect multiple sorted sets.",
+                "6.2.0", "O(N*K)+O(M*log(M))"));
+        CommandRegistry.register(new CommandEntry(
+                "zintercard", -3,
+                Set.of("readonly", "movablekeys"),
+                0, 0, 0,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Intersect multiple sorted sets and return the cardinality of the result.",
+                "7.0.0", "O(N*K)"));
+        CommandRegistry.register(new CommandEntry(
+                "zinterstore", -4,
+                Set.of("write", "denyoom", "movablekeys"),
+                0, 0, 0,
+                Set.of("@write", "@sortedset", "@slow"),
+                "sorted_set",
+                "Intersect multiple sorted sets and store the resulting sorted set in a new key.",
+                "2.0.0", "O(N*K)+O(M*log(M))"));
+        CommandRegistry.register(new CommandEntry(
+                "zlexcount", 4,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@fast"),
+                "sorted_set",
+                "Count the number of members in a sorted set between a given lexicographical range.",
+                "2.8.9", "O(log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "zmpop", -4,
+                Set.of("write", "movablekeys"),
+                0, 0, 0,
+                Set.of("@write", "@sortedset", "@slow"),
+                "sorted_set",
+                "Pop members from one or more sorted sets.",
+                "7.0.0", "O(K)+O(M*log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "zmscore", -3,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@fast"),
+                "sorted_set",
+                "Get the score of one or more members in a sorted set.",
+                "6.2.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "zpopmax", -2,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@sortedset", "@fast"),
+                "sorted_set",
+                "Remove and return members with the highest scores in a sorted set.",
+                "5.0.0", "O(log(N)*M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zpopmin", -2,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@sortedset", "@fast"),
+                "sorted_set",
+                "Remove and return members with the lowest scores in a sorted set.",
+                "5.0.0", "O(log(N)*M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zrandmember", -2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Get one or multiple random elements from a sorted set.",
+                "6.2.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "zrange", -4,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Return a range of members in a sorted set.",
+                "1.2.0", "O(log(N)+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zrangebylex", -4,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Return a range of members in a sorted set, by lexicographical range.",
+                "2.8.9", "O(log(N)+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zrangebyscore", -4,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Return a range of members in a sorted set, by score.",
+                "1.0.5", "O(log(N)+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zrangestore", -5,
+                Set.of("write", "denyoom"),
+                1, 2, 1,
+                Set.of("@write", "@sortedset", "@slow"),
+                "sorted_set",
+                "Store a range of members from sorted set into another key.",
+                "6.2.0", "O(log(N)+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zrank", -3,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@fast"),
+                "sorted_set",
+                "Determine the index of a member in a sorted set.",
+                "2.0.0", "O(log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "zrem", -3,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@sortedset", "@fast"),
+                "sorted_set",
+                "Remove one or more members from a sorted set.",
+                "1.2.0", "O(M*log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "zremrangebylex", 4,
+                Set.of("write"),
+                1, 1, 1,
+                Set.of("@write", "@sortedset", "@slow"),
+                "sorted_set",
+                "Remove all members in a sorted set between the given lexicographical range.",
+                "2.8.9", "O(log(N)+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zremrangebyrank", 4,
+                Set.of("write"),
+                1, 1, 1,
+                Set.of("@write", "@sortedset", "@slow"),
+                "sorted_set",
+                "Remove all members in a sorted set within the given indexes.",
+                "2.0.0", "O(log(N)+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zremrangebyscore", 4,
+                Set.of("write"),
+                1, 1, 1,
+                Set.of("@write", "@sortedset", "@slow"),
+                "sorted_set",
+                "Remove all members in a sorted set within the given scores.",
+                "1.2.0", "O(log(N)+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zrevrange", -4,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Return a range of members in a sorted set, by index, with scores ordered from high to low.",
+                "1.2.0", "O(log(N)+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zrevrangebylex", -4,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Return a range of members in a sorted set, by lexicographical range ordered from high to low.",
+                "2.8.9", "O(log(N)+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zrevrangebyscore", -4,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Return a range of members in a sorted set, by score, with scores ordered from high to low.",
+                "2.2.0", "O(log(N)+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "zrevrank", -3,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@fast"),
+                "sorted_set",
+                "Determine the index of a member in a sorted set, with scores ordered from high to low.",
+                "2.0.0", "O(log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "zscan", -3,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Incrementally iterate sorted sets elements and associated scores.",
+                "2.8.0", "O(1) for every call"));
+        CommandRegistry.register(new CommandEntry(
+                "zscore", 3,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@read", "@sortedset", "@fast"),
+                "sorted_set",
+                "Get the score of a member in a sorted set.",
+                "1.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "zunion", -3,
+                Set.of("readonly", "movablekeys"),
+                0, 0, 0,
+                Set.of("@read", "@sortedset", "@slow"),
+                "sorted_set",
+                "Add multiple sorted sets.",
+                "6.2.0", "O(N)+O(M*log(M))"));
+        CommandRegistry.register(new CommandEntry(
+                "zunionstore", -4,
+                Set.of("write", "denyoom", "movablekeys"),
+                0, 0, 0,
+                Set.of("@write", "@sortedset", "@slow"),
+                "sorted_set",
+                "Add multiple sorted sets and store the resulting sorted set in a new key.",
+                "2.0.0", "O(N)+O(M log(M))"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

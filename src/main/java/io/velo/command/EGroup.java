@@ -12,6 +12,7 @@ import io.velo.reply.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -19,6 +20,57 @@ import java.util.stream.Collectors;
  * This includes commands like ECHO, EVAL, EXISTS, EXPIRE, EXPIREAT, EXPIRETIME, etc.
  */
 public class EGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "echo", 2,
+                Set.of("loading", "stale", "fast"),
+                0, 0, 0,
+                Set.of("@fast", "@connection"),
+                "connection",
+                "Returns the given string.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "exists", -2,
+                Set.of("readonly", "fast"),
+                1, -1, 1,
+                Set.of("@keyspace", "@read", "@fast"),
+                "generic",
+                "Determine whether one or more keys exist.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "expire", -3,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@keyspace", "@write", "@fast"),
+                "generic",
+                "Set a key's time to live in seconds.",
+                "1.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "expireat", -3,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@keyspace", "@write", "@fast"),
+                "generic",
+                "Set the expiration for a key as a UNIX timestamp.",
+                "1.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "expiretime", 2,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@keyspace", "@read", "@fast"),
+                "generic",
+                "Get the expiration time of a key in seconds.",
+                "7.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "extend", -2,
+                Set.of("loading", "stale"),
+                0, 0, 0,
+                Set.of("@slow"),
+                "generic",
+                "A container for Velo extension commands.",
+                "1.0.0", null));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

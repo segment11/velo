@@ -7,12 +7,24 @@ import io.velo.SocketInspector;
 import io.velo.reply.*;
 
 import java.util.ArrayList;
+import java.util.Set;
 
 /**
  * Handles Redis commands starting with letter 'W'.
  * This includes commands like WAIT.
  */
 public class WGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "wait", 3,
+                Set.of(),
+                0, 0, 0,
+                Set.of("@connection", "@fast", "@slow"),
+                "generic",
+                "Block until the specified number of replicas have acknowledged all the writes.",
+                "3.0.0", "O(1)"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

@@ -9,6 +9,7 @@ import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
@@ -17,6 +18,17 @@ import java.util.regex.Pattern;
  * This includes commands like KEYS.
  */
 public class KGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "keys", 2,
+                Set.of("readonly"),
+                0, 0, 0,
+                Set.of("@keyspace", "@read", "@slow", "@dangerous"),
+                "generic",
+                "Find all keys matching the given pattern.",
+                "1.0.0", "O(N)"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

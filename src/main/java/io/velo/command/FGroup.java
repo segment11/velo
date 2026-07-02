@@ -11,12 +11,40 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Set;
 
 /**
  * Handles Redis commands starting with letter 'F'.
  * This includes commands like FAILOVER, FLUSHDB, FLUSHALL, etc.
  */
 public class FGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "failover", -1,
+                Set.of("admin", "noscript", "stale"),
+                0, 0, 0,
+                Set.of("@admin", "@dangerous", "@slow"),
+                "server",
+                "Start a coordinated failover from a server to one of its replicas.",
+                "6.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "flushall", -1,
+                Set.of("write"),
+                0, 0, 0,
+                Set.of("@keyspace", "@write", "@slow", "@dangerous"),
+                "server",
+                "Remove all keys from all databases.",
+                "1.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "flushdb", -1,
+                Set.of("write"),
+                0, 0, 0,
+                Set.of("@keyspace", "@write", "@slow", "@dangerous"),
+                "server",
+                "Remove all keys from the current database.",
+                "1.0.0", "O(N)"));
+    }
+
     /**
      * @param cmd    the command string
      * @param data   the data array

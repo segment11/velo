@@ -17,6 +17,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -24,6 +25,113 @@ import java.util.stream.Collectors;
  * This includes commands like PERSIST, PEXPIRE, PFADD, PFMERGE.
  */
 public class PGroup extends BaseCommand {
+    static {
+        CommandRegistry.register(new CommandEntry(
+                "persist", 2,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@keyspace", "@write", "@fast"),
+                "generic",
+                "Remove the expiration from a key.",
+                "2.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "pexpire", -3,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@keyspace", "@write", "@fast"),
+                "generic",
+                "Set a key's time to live in milliseconds.",
+                "2.6.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "pexpireat", -3,
+                Set.of("write", "fast"),
+                1, 1, 1,
+                Set.of("@keyspace", "@write", "@fast"),
+                "generic",
+                "Set the expiration for a key as a UNIX milliseconds timestamp.",
+                "2.6.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "pexpiretime", 2,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@keyspace", "@read", "@fast"),
+                "generic",
+                "Get the expiration time of a key in milliseconds.",
+                "7.0.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "pfadd", -2,
+                Set.of("write", "denyoom", "fast"),
+                1, 1, 1,
+                Set.of("@write", "@hyperloglog", "@fast"),
+                "hyperloglog",
+                "Adds the specified elements to the specified HyperLogLog.",
+                "2.8.9", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "pfcount", -2,
+                Set.of("readonly"),
+                1, -1, 1,
+                Set.of("@read", "@hyperloglog", "@slow"),
+                "hyperloglog",
+                "Return the approximated cardinality of the set(s) observed by the HyperLogLog at key(s).",
+                "2.8.9", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "pfmerge", -2,
+                Set.of("write", "denyoom"),
+                1, -1, 1,
+                Set.of("@write", "@hyperloglog", "@slow"),
+                "hyperloglog",
+                "Merge N different HyperLogLogs into a single one.",
+                "2.8.9", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "psetex", 4,
+                Set.of("write", "denyoom"),
+                1, 1, 1,
+                Set.of("@write", "@string", "@slow"),
+                "string",
+                "Set the value and expiration in milliseconds of a key.",
+                "2.6.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "psubscribe", -2,
+                Set.of("pubsub", "noscript", "loading", "stale", "denyoom"),
+                0, 0, 0,
+                Set.of("@pubsub", "@slow"),
+                "pubsub",
+                "Listen for messages published to channels matching the given patterns.",
+                "2.0.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "pttl", 2,
+                Set.of("readonly", "fast"),
+                1, 1, 1,
+                Set.of("@keyspace", "@read", "@fast"),
+                "generic",
+                "Get the time to live for a key in milliseconds.",
+                "2.6.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "publish", 3,
+                Set.of("pubsub", "loading", "stale", "fast"),
+                0, 0, 0,
+                Set.of("@pubsub", "@fast"),
+                "pubsub",
+                "Post a message to a channel.",
+                "2.0.0", "O(N+M)"));
+        CommandRegistry.register(new CommandEntry(
+                "pubsub", -2,
+                Set.of("pubsub", "loading", "stale"),
+                0, 0, 0,
+                Set.of("@pubsub", "@slow"),
+                "pubsub",
+                "A container for pubsub commands.",
+                "2.8.0", "Depends on subcommand."));
+        CommandRegistry.register(new CommandEntry(
+                "punsubscribe", -1,
+                Set.of("pubsub", "noscript", "loading", "stale"),
+                0, 0, 0,
+                Set.of("@pubsub", "@slow"),
+                "pubsub",
+                "Stop listening for messages posted to channels matching the given patterns.",
+                "2.0.0", "O(N)"));
+    }
+
     private static HyperLogLog emptyHll() {
         return HyperLogLog.builder()
                 .setEncoding(HyperLogLog.EncodingType.SPARSE)
