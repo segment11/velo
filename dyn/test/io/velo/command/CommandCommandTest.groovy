@@ -71,6 +71,13 @@ class CommandCommandTest extends Specification {
         def patNames = (reply as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
         patNames == CommandRegistry.all().collect { it.name() }.findAll { it.startsWith('cl') }
 
+        when: 'filter by pattern is case-insensitive (Redis stringmatchlen nocase)'
+        reply = commandCommand.execute('command list filterby pattern CL*')
+        then:
+        reply instanceof MultiBulkReply
+        def ciNames = (reply as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        ciNames == patNames
+
         when: 'filter by module (always empty)'
         reply = commandCommand.execute('command list filterby module foo')
         then:

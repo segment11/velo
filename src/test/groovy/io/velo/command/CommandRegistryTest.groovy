@@ -1,11 +1,26 @@
 package io.velo.command
 
+import io.velo.command.CommandEntry
 import spock.lang.Specification
 
 class CommandRegistryTest extends Specification {
 
+    // Snapshot of the registry taken before each feature clears it, so the
+    // production singleton (populated by group static blocks) is restored in
+    // cleanup. Static initializers do not re-run after class loading, so a bare
+    // clear() would permanently erase registrations in a shared-JVM test run.
+    private Collection<CommandEntry> savedSnapshot
+
     def setup() {
+        savedSnapshot = CommandRegistry.all()
         CommandRegistry.clear()
+    }
+
+    def cleanup() {
+        CommandRegistry.clear()
+        for (CommandEntry entry : savedSnapshot) {
+            CommandRegistry.register(entry)
+        }
     }
 
     def 'test register and get'() {

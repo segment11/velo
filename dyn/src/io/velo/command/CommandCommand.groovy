@@ -304,7 +304,8 @@ class CommandCommand extends BaseCommand {
 
     /**
      * Simple glob matcher: {@code *} matches any sequence, {@code ?} matches a single character.
-     * Regex metacharacters in the pattern are escaped, matching Redis {@code stringmatchlen}.
+     * Regex metacharacters in the pattern are escaped. Case-insensitive to match Redis
+     * {@code stringmatchlen(..., 1)} used by COMMAND LIST FILTERBY PATTERN (server.c:5095).
      */
     static boolean globMatch(String pattern, String str) {
         def sb = new StringBuilder()
@@ -318,6 +319,6 @@ class CommandCommand extends BaseCommand {
                 sb.append(Pattern.quote(String.valueOf(c)))
             }
         }
-        Pattern.compile(sb.toString()).matcher(str).matches()
+        Pattern.compile(sb.toString(), Pattern.CASE_INSENSITIVE).matcher(str).matches()
     }
 }

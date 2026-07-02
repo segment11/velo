@@ -75,7 +75,7 @@ public class HGroup extends BaseCommand {
                 "Get the expiration time of a hash field as a UNIX timestamp.",
                 "7.4.0", "O(1)"));
         CommandRegistry.register(new CommandEntry(
-                "hget", 2,
+                "hget", 3,
                 Set.of("readonly"),
                 1, 1, 1,
                 Set.of("@read", "@hash", "@slow"),

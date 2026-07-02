@@ -93,6 +93,12 @@ public final class CommandRegistry {
 
     /**
      * Clears the registry. Test only — production code never clears the registry.
+     *
+     * <p><b>Hazard:</b> group class static initializers run only once per JVM, so
+     * calling this does NOT cause commands to be re-registered. Any caller that
+     * clears must restore the prior state (e.g. via {@link #all()} snapshot +
+     * {@link #register}) so a shared-JVM test run does not observe an empty
+     * registry afterwards.
      */
     @VisibleForTesting
     public static void clear() {
