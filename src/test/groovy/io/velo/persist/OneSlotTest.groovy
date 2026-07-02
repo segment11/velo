@@ -120,6 +120,31 @@ class OneSlotTest extends Specification {
         oneSlot.metaChunkSegmentIndex.cleanUp()
     }
 
+    def 'test do task wal array index stays valid for negative loopCount'() {
+        given:
+        // a real slot with multiple wal groups (default c1m -> walGroupNumber > 1)
+        def persistConfig = Config.create()
+        ConfVolumeDirsForSlot.initFromConfig(persistConfig, slotNumber)
+        new File(Consts.persistDir, "slot-${slot}").deleteDir()
+
+        def snowFlake = new SnowFlake(1, 1)
+        def oneSlot = new OneSlot(slot, slotNumber, snowFlake, Consts.persistDir, persistConfig)
+
+        expect:
+        oneSlot.walGroupNumber > 1
+
+        when:
+        // negative loopCount values (the shape loopCount takes after int overflow ~248 days),
+        // all multiples of 10 so the wal-array index line is reached.
+        // pre-fix: walArray[loopCount % length] uses a negative index -> AIOOBE
+        oneSlot.doTask(-10)
+        oneSlot.doTask(-2147483640)
+        oneSlot.doTask(-20000)
+
+        then:
+        noExceptionThrown()
+    }
+
     def 'test init'() {
         given:
         def persistConfig = Config.create()

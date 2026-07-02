@@ -37,7 +37,7 @@ public class TaskChain {
      *
      * @param loopCount the current loop count
      */
-    public void doTask(int loopCount) {
+    public void doTask(long loopCount) {
         for (var t : list) {
             if (loopCount % t.executeOnceAfterLoopCount() == 0) {
                 t.setLoopCount(loopCount);

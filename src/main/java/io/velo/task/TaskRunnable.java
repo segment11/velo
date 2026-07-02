@@ -67,7 +67,7 @@ public class TaskRunnable implements Runnable {
     }
 
     /** The number of loops completed. */
-    private int loopCount = 0;
+    private long loopCount = 0;
 
     /**
      * Runs tasks for all assigned slots, reschedules every 10ms.

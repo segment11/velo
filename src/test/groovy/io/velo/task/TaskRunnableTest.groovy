@@ -81,7 +81,7 @@ class TaskRunnableTest extends Specification {
         def callCount = new AtomicInteger()
         def oneSlot = new OneSlot((short) 0) {
             @Override
-            void doTask(int loopCount) {
+            void doTask(long loopCount) {
                 if (callCount.getAndIncrement() == 0) {
                     throw new RuntimeException('boom first tick')
                 }

@@ -1216,7 +1216,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      *
      * @param loopCount the current loop count
      */
-    public void doTask(int loopCount) {
+    public void doTask(long loopCount) {
         if (MultiWorkerServer.isStopping) {
             return;
         }
@@ -1231,7 +1231,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         // delete expired big string files in wal, only when master role
         // execute once every 100ms
         if (!isAsSlave() && loopCount % 10 == 0) {
-            var wal = walArray[loopCount % walArray.length];
+            var wal = walArray[Math.floorMod(loopCount, walArray.length)];
             // wal == null for unit test
             if (wal != null) {
                 try {

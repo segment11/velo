@@ -169,7 +169,7 @@ defensive correctness fix independent of Bug 2.
 ## Bug 2: `TaskRunnable.loopCount` is an `int` that overflows to negative after ~248 days, breaking modulo-based array indexing and task cadence
 
 **Severity:** Medium
-**Status:** Confirmed
+**Status:** Confirmed → Fixed
 
 **Files:**
 
@@ -428,3 +428,83 @@ Both classes gained an SLF4J logger for the caught errors.
 - Remaining uncovered lines (`TaskRunnable` 84-85 `!isStartDone` startup-delay path;
   `PrimaryTaskRunnable` 48 mid-task `isStopped` re-check return) are pre-existing branches not
   touched by this fix.
+
+
+---
+
+## Review Feedback - Bug 1 Fix
+
+Date: 2026-07-02
+Reviewer: AI agent 2
+Commit: `82c6e3ce` (`fix: guard scheduler loops so exceptions cannot stop rescheduling`)
+
+### Summary
+
+Reviewed the Bug 1 fix in `TaskRunnable` and `PrimaryTaskRunnable`. The commit adds scheduler-level exception guards around the slot/callback work and preserves the self-rescheduling path after caught exceptions.
+
+### Findings
+
+No blocking issues found.
+
+### Strengths
+
+- `TaskRunnable.run()` now catches exceptions per slot (`src/main/java/io/velo/task/TaskRunnable.java:88-93`), so one failing slot no longer prevents later slots in the same worker tick from running.
+- The slot-worker loop still increments `loopCount` and re-arms with `slotWorkerEventloop.delay(INTERVAL_MS, this)` after a caught exception (`src/main/java/io/velo/task/TaskRunnable.java:95-97`). This directly addresses the one-way loop-death failure.
+- `PrimaryTaskRunnable.run()` now catches callback exceptions before incrementing and rescheduling (`src/main/java/io/velo/task/PrimaryTaskRunnable.java:40-51`), covering the primary scheduler variant of the same pattern.
+- Regression tests exercise the actual pre-fix failure mode: a task throws on the first tick, then the event loop must run a later tick.
+
+### Verification
+
+- Ran `./gradlew :test --tests "io.velo.task.*" --rerun-tasks`: `BUILD SUCCESSFUL` in 32s, 13 tasks executed.
+- JaCoCo check for `io.velo.task.TaskRunnable` lines 86-97: 8/8 relevant executable lines covered; catch branch and reschedule line covered.
+- JaCoCo check for `io.velo.task.PrimaryTaskRunnable` lines 37-51: catch branch, increment, and reschedule line covered. The only uncovered changed-region branch is the pre-existing mid-run `isStopped` return at line 48, which is unrelated to the Bug 1 exception-reschedule path.
+
+### Concerns
+
+None for Bug 1. Bug 2 and Bug 3 remain separate confirmed findings and are not fixed by this commit.
+
+---
+
+## Bug 2 Fix Summary
+
+**Approach:** Two coordinated changes following the original doc's suggested direction (widen the
+counter to `long` + make the array index non-negative):
+
+1. **Widen the slot-worker counter to `long`.** `TaskRunnable.loopCount` (`int` → `long`), and the
+   types that carry it downstream: `OneSlot.doTask(int)` → `OneSlot.doTask(long)` and
+   `TaskChain.doTask(int)` → `TaskChain.doTask(long)`. `TaskChain.doTask` had to become `long`
+   because `OneSlot.doTask` now passes a `long` to it (an `int` param would narrow and reintroduce
+   the overflow). All existing call sites pass `int` literals which widen to `long`, so nothing else
+   changes. `PrimaryTaskRunnable.loopCount` is intentionally left as `int`: its callback is
+   `Consumer<Integer>` (widening would require a cast that truncates, or an API break to
+   `Consumer<Long>`), and at 1 tick/second an `int` overflows only after ~68 years — not a practical
+   trigger.
+
+2. **Non-negative array index.** `OneSlot.java:1234` changed from `walArray[loopCount %
+   walArray.length]` to `walArray[Math.floorMod(loopCount, walArray.length)]`. Java's `%` keeps the
+   dividend's sign, so a negative `loopCount` produced a negative index; `Math.floorMod` always
+   returns `[0, length)`. This is defense-in-depth so that even if a negative value ever reaches the
+   line, it indexes validly and the round-robin WAL-group sweep stays correct.
+
+**TDD evidence:**
+
+- New test `OneSlotTest.'test do task wal array index stays valid for negative loopCount'`: builds a
+  real slot (default c1m → `walGroupNumber=2048`, i.e. `walArray.length > 1`) and calls
+  `oneSlot.doTask(-10)`, `oneSlot.doTask(-2147483640)`, `oneSlot.doTask(-20000)` (negative
+  multiples of 10, the shape `loopCount` takes after int overflow).
+- Pre-fix this failed with `ArrayIndexOutOfBoundsException` at the `doTask(-10)` line — exactly the
+  confirmed Bug 2 symptom. Post-fix it passes (`noExceptionThrown()`).
+- Updated the Bug 1 test's anonymous `OneSlot` override from `doTask(int)` to `doTask(long)` to
+  match the new signature.
+- `./gradlew :test --tests "io.velo.task.*" --tests "io.velo.persist.OneSlotTest" --tests
+  "io.velo.command.XGroupTest"` — all pass (no regressions from the `int` → `long` widening).
+
+**JaCoCo confirmation:**
+
+- `io.velo.persist.OneSlot` line 1233 `if (!isAsSlave() && loopCount % 10 == 0)` — all 4 branches
+  covered (the test exercises master + negative-multiple-of-10).
+- `io.velo.persist.OneSlot` line 1234 `walArray[Math.floorMod(loopCount, walArray.length)]` — covered.
+- `io.velo.task.TaskChain` `doTask(long)` line 42 `loopCount % executeOnceAfterLoopCount() == 0` —
+  all branches covered.
+- The `long` widening of `TaskRunnable.loopCount` is verified by compilation and the passing
+  end-to-end task tests (it is private and only consumed by `OneSlot.doTask(long)`).
