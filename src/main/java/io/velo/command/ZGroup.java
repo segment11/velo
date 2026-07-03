@@ -1140,7 +1140,7 @@ public class ZGroup extends BaseCommand {
         return null;
     }
 
-    @VisibleForTesting
+    @TestOnly
     Reply zdiff(boolean isInter, boolean isUnion) {
         return zdiff(data, isInter, isUnion, null);
     }
@@ -2636,7 +2636,8 @@ public class ZGroup extends BaseCommand {
         }
 
         // cross-slot path
-        record IndexAndRz(int index, RedisZSet rz, boolean isWrongType) {}
+        record IndexAndRz(int index, RedisZSet rz, boolean isWrongType) {
+        }
         ArrayList<Promise<IndexAndRz>> rzPromises = new ArrayList<>(numKeys);
         for (int i = 0; i < numKeys; i++) {
             var slotWithKeyHash = slotWithKeyHashListParsed.get(i);

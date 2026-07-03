@@ -1,6 +1,5 @@
 package io.velo.task;
 
-import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,13 +16,16 @@ public class TaskChain {
      */
     private final ArrayList<ITask> list = new ArrayList<>();
 
-    /** @return the list of tasks in the chain */
-    @VisibleForTesting
+    /**
+     * @return the list of tasks in the chain
+     */
     public ArrayList<ITask> getList() {
         return list;
     }
 
-    /** @return string representation with size and task names */
+    /**
+     * @return string representation with size and task names
+     */
     @Override
     public String toString() {
         return "TaskChain{" +

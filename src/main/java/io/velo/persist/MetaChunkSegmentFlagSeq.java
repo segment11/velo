@@ -122,7 +122,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     }
 
     /**
-     * @param slot slot index
+     * @param slot    slot index
      * @param slotDir directory of the slot
      * @throws IOException If an I/O error occurs during file operations
      */
@@ -196,9 +196,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     }
 
     /**
-     * @param fdIndex the file descriptor index
+     * @param fdIndex            the file descriptor index
      * @param targetSegmentIndex the target segment index
-     * @param canReuse Whether the segment can be reused
+     * @param canReuse           Whether the segment can be reused
      */
     void updateBitSetCanReuseForSegmentIndex(int fdIndex, int targetSegmentIndex, boolean canReuse) {
         var bitSet = segmentCanReuseBitSet[fdIndex];
@@ -231,7 +231,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
     /**
      * @param beginSegmentIndex the starting index to search for a reusable segment
-     * @param segmentCount the number of segments to find
+     * @param segmentCount      the number of segments to find
      * @return the index of the first segment that can be reused, or -1 if no such segment is found
      */
     int findCanReuseSegmentIndex(int beginSegmentIndex, int segmentCount) {
@@ -417,9 +417,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     byte splitMarkedRunForPreRead = PRE_READ_WHOLE_MARKED_RUN;
 
     /**
-     * @param walGroupIndex the wal group index
+     * @param walGroupIndex     the wal group index
      * @param beginSegmentIndex the begin segment index
-     * @param segmentCount Persisted segment count
+     * @param segmentCount      Persisted segment count
      */
     public void markPersistedSegmentIndexToTargetWalGroup(int walGroupIndex, int beginSegmentIndex, short segmentCount) {
         var beginSegmentIndexMoveIndex = beginSegmentIndexMoveIndexGroupByWalGroupIndex[walGroupIndex];
@@ -504,10 +504,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     }
 
     /**
-     * @param walGroupIndex the wal group index
+     * @param walGroupIndex      the wal group index
      * @param mergedSegmentIndex the start segment index of the merged range
      * @param mergedSegmentCount the number of segments that were merged
-     * @param markerIdx the marker array index returned by {@link #findThoseNeedToMerge(int)}
+     * @param markerIdx          the marker array index returned by {@link #findThoseNeedToMerge(int)}
      */
     public void commitMergedRangeWithMarkerIdx(int walGroupIndex, int mergedSegmentIndex, int mergedSegmentCount, int markerIdx) {
         var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
@@ -532,7 +532,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
         }
     }
 
-    @VisibleForTesting
+    @TestOnly
     int countMarkersForWalGroup(int walGroupIndex) {
         var markedLongs = beginSegmentIndexGroupByWalGroupIndex[walGroupIndex];
         int count = 0;
@@ -565,9 +565,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
      */
     public interface IterateCallBack {
         /**
-         * @param segmentIndex the segment index
-         * @param flagByte the flag byte
-         * @param segmentSeq the segment sequence
+         * @param segmentIndex  the segment index
+         * @param flagByte      the flag byte
+         * @param segmentSeq    the segment sequence
          * @param walGroupIndex the wal group index
          * @return true to continue iterating, false to stop
          */
@@ -576,8 +576,8 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
     /**
      * @param beginSegmentIndex the beginning segment index
-     * @param segmentCount the number of segments to iterate over
-     * @param callBack the callback to be invoked for each segment
+     * @param segmentCount      the number of segments to iterate over
+     * @param callBack          the callback to be invoked for each segment
      */
     public void iterateRange(int beginSegmentIndex, int segmentCount, @NotNull IterateCallBack callBack) {
         var end = Math.min(beginSegmentIndex + segmentCount, maxSegmentNumber);
@@ -612,7 +612,7 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
     /**
      * @param beginSegmentIndex the beginning segment index
-     * @param segmentCount the number of segments to retrieve
+     * @param segmentCount      the number of segments to retrieve
      * @return the list of segment sequence numbers
      */
     List<Long> getSegmentSeqListBatchForRepl(int beginSegmentIndex, int segmentCount) {
@@ -626,9 +626,9 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
     }
 
     /**
-     * @param segmentIndex the segment index
-     * @param flagByte the flag byte
-     * @param segmentSeq the segment sequence number
+     * @param segmentIndex  the segment index
+     * @param flagByte      the flag byte
+     * @param segmentSeq    the segment sequence number
      * @param walGroupIndex the wal group index
      */
     public void setSegmentMergeFlag(int segmentIndex, byte flagByte, long segmentSeq, int walGroupIndex) {
@@ -655,10 +655,10 @@ public class MetaChunkSegmentFlagSeq implements InMemoryEstimate, NeedCleanUp, I
 
     /**
      * @param beginSegmentIndex the beginning segment index
-     * @param segmentCount the number of segments to set
-     * @param flagByte the flag byte
-     * @param segmentSeqList the segment sequence numbers
-     * @param walGroupIndex the wal group index
+     * @param segmentCount      the number of segments to set
+     * @param flagByte          the flag byte
+     * @param segmentSeqList    the segment sequence numbers
+     * @param walGroupIndex     the wal group index
      */
     void setSegmentMergeFlagBatch(int beginSegmentIndex,
                                   int segmentCount,

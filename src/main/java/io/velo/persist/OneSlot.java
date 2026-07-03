@@ -1092,8 +1092,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      *
      * @return the current write segment index
      */
-    @VisibleForTesting
-    public int getChunkWriteSegmentIndexInt() {
+    @TestOnly
+    int getChunkWriteSegmentIndexInt() {
         return metaChunkSegmentIndex.get();
     }
 
@@ -2408,9 +2408,6 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
 
         return new BeforePersistWalExtFromMerge(segmentIndexList, cvList, updatedFlagPersistedSegmentIndexList, markerIdx);
     }
-
-    @VisibleForTesting
-    long logMergeCount = 0;
 
     @VisibleForTesting
     long extCvListCheckCountTotal = 0;

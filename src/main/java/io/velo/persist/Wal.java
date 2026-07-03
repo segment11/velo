@@ -709,7 +709,7 @@ public class Wal implements InMemoryEstimate {
         return put(true, key, v, lastPersistTimeMs);
     }
 
-    @VisibleForTesting
+    @TestOnly
     boolean exists(@NotNull String key) {
         var vShort = delayToKeyBucketShortValues.get(key);
         if (vShort != null) {
