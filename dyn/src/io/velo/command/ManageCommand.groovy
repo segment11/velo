@@ -941,7 +941,7 @@ class ManageCommand extends BaseCommand {
         def configValue = new String(configValueBytes)
 
         ArrayList<Promise<Boolean>> promises = []
-        def oneSlots = localPersist.oneSlots()
+        def oneSlots = localPersist.initializedOneSlots()
         for (oneSlot in oneSlots) {
             def p = oneSlot.asyncCall(() -> oneSlot.updateDynConfig(configKey, configValue))
             promises.add(p)

@@ -382,6 +382,10 @@ migrating_state:ok
         def oneInnerSlotIncludeToClientSlotCount = (MultiShard.TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber).intValue()
 
         def oneSlot = localPersist.oneSlot(innerSlot)
+        if (oneSlot == null) {
+            // slot not initialized locally (not owned, or transient pre-init) — no keys here
+            return new IntegerReply(0)
+        }
         def avgKeyCount = (oneSlot.allKeyCount / oneInnerSlotIncludeToClientSlotCount).intValue()
 
         new IntegerReply(avgKeyCount)

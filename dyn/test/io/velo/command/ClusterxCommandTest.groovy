@@ -1,12 +1,15 @@
 package io.velo.command
 
+import io.activej.config.Config
 import io.velo.BaseCommand
 import io.velo.ConfForGlobal
+import io.velo.SnowFlake
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
 import io.velo.repl.LeaderSelector
+import io.velo.repl.cluster.MultiShard
 import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
 import io.velo.reply.*
@@ -1116,6 +1119,47 @@ slots
 
         cleanup:
         ConfForGlobal.clusterEnabled = false
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test countkeysinslot returns 0 for uninitialized slot'() {
+        given:
+        def data3 = new byte[3][]
+        data3[1] = 'countkeysinslot'.bytes
+        data3[2] = '0'.bytes // client slot 0 -> inner slot 0 (not owned/initialized here)
+        def cGroup = new CGroup('cluster', data3, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        and:
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def localPersist = LocalPersist.instance
+        localPersist.resetForTest()
+        Consts.persistDir.mkdirs()
+
+        and:
+        def multiShard = new MultiShard(Consts.persistDir)
+        multiShard.mySelfShard().multiSlotRange.addSingle(8192, 12287) // only inner slot 2 initialized
+        multiShard.updateClusterVersion(1)
+
+        and:
+        def snowFlakes = [new SnowFlake(1, 1)] as SnowFlake[]
+        localPersist.initSlots((byte) 1, (short) 4, snowFlakes, Consts.persistDir, Config.create())
+
+        when: 'inner slot 0 is null (uninitialized) — must not NPE'
+        def reply = clusterx.countkeysinslot()
+
+        then: 'returns 0 (Redis "no keys here" semantics), restoring pre-lazy-init behavior'
+        reply instanceof IntegerReply
+        ((IntegerReply) reply).integer == 0
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = (short) 1
+        localPersist.cleanUp()
         localPersist.resetForTest()
         Consts.persistDir.deleteDir()
     }

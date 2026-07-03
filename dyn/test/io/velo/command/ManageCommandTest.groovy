@@ -1,11 +1,13 @@
 package io.velo.command
 
+import io.activej.config.Config
 import io.velo.*
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
 import io.velo.persist.Wal
+import io.velo.repl.cluster.MultiShard
 import io.velo.reply.*
 import redis.clients.jedis.Jedis
 import spock.lang.Specification
@@ -997,6 +999,49 @@ class ManageCommandTest extends Specification {
 
         cleanup:
         localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test dyn-config on sparse local persist skips uninitialized slots'() {
+        given:
+        def data4 = new byte[4][]
+        def mGroup = new MGroup('manage', data4, null)
+        mGroup.from(BaseCommand.mockAGroup())
+        def manage = new ManageCommand(mGroup)
+        manage.from(mGroup)
+
+        and:
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def localPersist = LocalPersist.instance
+        localPersist.resetForTest()
+        Consts.persistDir.mkdirs()
+
+        and:
+        def multiShard = new MultiShard(Consts.persistDir)
+        multiShard.mySelfShard().multiSlotRange.addSingle(8192, 12287) // only inner slot 2
+        multiShard.updateClusterVersion(1)
+
+        and:
+        def snowFlakes = [new SnowFlake(1, 1)] as SnowFlake[]
+        localPersist.initSlots((byte) 1, (short) 4, snowFlakes, Consts.persistDir, Config.create())
+        localPersist.fixSlotThreadId((short) 2, Thread.currentThread().threadId())
+
+        when: 'dyn-config iterates slots — must skip uninitialized slots 0/1/3 (no NPE)'
+        data4[1] = 'dyn-config'.bytes
+        data4[2] = 'testKey'.bytes
+        data4[3] = '1'.bytes
+        def reply = manage.dynConfig()
+
+        then:
+        reply instanceof AsyncReply
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = (short) 1
+        localPersist.cleanUp()
+        localPersist.resetForTest()
         Consts.persistDir.deleteDir()
     }
 }
