@@ -295,7 +295,7 @@ class ManageCommandTest extends Specification {
 
         def dict = new Dict()
         dict.dictBytes = 'test'.bytes
-        dict.seq = 1
+        dict.seq = 2
         dict.createdTime = System.currentTimeMillis()
         dictMap.putDict('key:', dict)
 
@@ -323,7 +323,7 @@ class ManageCommandTest extends Specification {
         when:
         data4[2] = 'output-dict-bytes'.bytes
         // use dict seq
-        data4[3] = '1'.bytes
+        data4[3] = '2'.bytes
         reply = manage.dict()
         then:
         reply == OKReply.INSTANCE
@@ -331,7 +331,7 @@ class ManageCommandTest extends Specification {
         when:
         data4[2] = 'output-dict-bytes'.bytes
         // use dict seq, but not exists
-        data4[3] = '2'.bytes
+        data4[3] = '3'.bytes
         reply = manage.dict()
         then:
         reply instanceof ErrorReply
