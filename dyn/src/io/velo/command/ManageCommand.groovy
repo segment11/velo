@@ -551,8 +551,13 @@ class ManageCommand extends BaseCommand {
         def innerSlot = slotWithKeyHashListParsed.first.slot()
 //        def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
 
-        // clusterx use the same thread as one slot 0
-        localPersist.oneSlot((short) 0).asyncRun(() -> {
+        // run on the first initialized slot's worker (do not assume slot 0 exists in cluster mode,
+        // where this node may own only a higher slot range); fall back to the target slot itself
+        def controlSlot = localPersist.firstOneSlot()
+        if (controlSlot == null) {
+            controlSlot = localPersist.ensureOneSlotInitialized(innerSlot as short)
+        }
+        controlSlot.asyncRun(() -> {
             def mySelfShard = LocalPersist.instance.multiShard.mySelfShard()
             mySelfShard.importMigratingSlot = toClientSlot
         }).whenComplete((r, e) -> {
@@ -563,7 +568,7 @@ class ManageCommand extends BaseCommand {
             }
         })
 
-        def oneSlot = localPersist.oneSlot(innerSlot)
+        def oneSlot = localPersist.ensureOneSlotInitialized(innerSlot as short)
 
         var replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
         if (replPairAsSlave) {

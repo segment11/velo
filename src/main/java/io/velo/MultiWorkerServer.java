@@ -1113,12 +1113,11 @@ public class MultiWorkerServer extends Launcher {
         // interval 1s
         primaryEventloop.delay(1000L, primaryScheduleRunnable);
 
-        // fix slot thread id
-        int slotNumber = configInject.get(ofInteger(), "slotNumber", (int) LocalPersist.DEFAULT_SLOT_NUMBER);
-        for (short slot = 0; slot < slotNumber; slot++) {
-            int i = slot % requestHandlerArray.length;
-            localPersist.fixSlotThreadId(slot, slotWorkerThreadIds[i]);
-        }
+        // bind slot worker runtime state (eventloop / handler / thread id) and register scheduler
+        // task runnables. replaces the old per-slot fixSlotThreadId loop; lazy slots created later
+        // bind themselves via LocalPersist.ensureOneSlotInitialized(short).
+        localPersist.initSlotRuntimeBindings(slotWorkerEventloopArray, requestHandlerArray, slotWorkerThreadIds);
+        localPersist.initSlotTaskRunnables(scheduleRunnableArray);
 
         localPersist.startIndexHandlerPool();
 

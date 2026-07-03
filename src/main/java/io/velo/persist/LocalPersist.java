@@ -11,6 +11,7 @@ import io.velo.persist.index.IndexHandlerPool;
 import io.velo.repl.cluster.MultiShard;
 import io.velo.reply.AsyncReply;
 import io.velo.reply.Reply;
+import io.velo.task.TaskRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -20,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
@@ -70,7 +72,21 @@ public class LocalPersist implements NeedCleanUp {
     private LocalPersist() {
     }
 
-    private OneSlot[] oneSlots;
+    // Volatile copy-on-write array: ensureOneSlotInitialized(short) clones before publishing a new
+    // slot so lock-free readers (oneSlot(short), initializedOneSlots()) see a fully initialized slot.
+    // Test-only helpers addOneSlot/addOneSlotForTest2 mutate in place and are single-threaded only.
+    private volatile OneSlot[] oneSlots;
+
+    // saved by initSlots(...) so ensureOneSlotInitialized(short) can construct slots lazily later
+    private byte netWorkers;
+    private short slotNumber;
+    private SnowFlake[] snowFlakes;
+
+    // runtime worker binding, populated by initSlotRuntimeBindings(...) / initSlotTaskRunnables(...)
+    private Eventloop[] slotWorkerEventloopArray;
+    private RequestHandler[] requestHandlerArray;
+    private long[] slotWorkerThreadIds;
+    private TaskRunnable[] slotTaskRunnables;
 
     /**
      * @return the array of OneSlot instances
@@ -88,15 +104,132 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
+     * @param slot the slot index
+     * @return true if the OneSlot at the given index has been constructed (non-null)
+     */
+    public boolean isOneSlotInitialized(short slot) {
+        return oneSlots != null && slot >= 0 && slot < oneSlots.length && oneSlots[slot] != null;
+    }
+
+    /**
+     * @return a snapshot list of all currently constructed (non-null) OneSlot instances
+     */
+    public ArrayList<OneSlot> initializedOneSlots() {
+        var list = new ArrayList<OneSlot>();
+        if (oneSlots == null) {
+            return list;
+        }
+        for (var oneSlot : oneSlots) {
+            if (oneSlot != null) {
+                list.add(oneSlot);
+            }
+        }
+        return list;
+    }
+
+    /**
+     * Construct and publish the OneSlot for the given slot if it has not been initialized yet.
+     * Thread-safe via the monitor + volatile copy-on-write publication. Runtime binding happens
+     * before the volatile publish so readers see a bound slot; scheduler registration happens after.
+     *
+     * @param slot the slot index
+     * @return the OneSlot for the slot
+     * @throws IOException          if initFds fails
+     * @throws IllegalArgumentException if the slot is out of range
+     */
+    public synchronized OneSlot ensureOneSlotInitialized(short slot) throws IOException {
+        if (slot < 0 || oneSlots == null || slot >= oneSlots.length) {
+            throw new IllegalArgumentException("Invalid slot=" + slot);
+        }
+        var existing = oneSlots[slot];
+        if (existing != null) {
+            return existing;
+        }
+
+        var i = slot % netWorkers;
+        var oneSlot = new OneSlot(slot, slotNumber, snowFlakes[i], persistDir, persistConfig);
+        oneSlot.initFds();
+        if (isDebugMode) {
+            oneSlot.debugMode();
+        }
+        bindOneSlotIfInitialized(oneSlot);
+
+        var newSlots = oneSlots.clone();
+        newSlots[slot] = oneSlot;
+        oneSlots = newSlots;
+        registerOneSlotWithTaskRunnableIfInitialized(oneSlot);
+        return oneSlot;
+    }
+
+    private void bindOneSlotIfInitialized(@NotNull OneSlot oneSlot) {
+        if (slotWorkerThreadIds == null) {
+            return;
+        }
+        int i = oneSlot.slot() % slotWorkerThreadIds.length;
+        oneSlot.threadIdProtectedForSafe = slotWorkerThreadIds[i];
+        if (slotWorkerEventloopArray != null) {
+            oneSlot.setSlotWorkerEventloop(slotWorkerEventloopArray[i]);
+        }
+        if (requestHandlerArray != null) {
+            oneSlot.setRequestHandler(requestHandlerArray[i]);
+        }
+    }
+
+    private void registerOneSlotWithTaskRunnableIfInitialized(@NotNull OneSlot oneSlot) {
+        if (slotTaskRunnables == null) {
+            return;
+        }
+        int i = oneSlot.slot() % slotTaskRunnables.length;
+        var taskRunnable = slotTaskRunnables[i];
+        if (taskRunnable != null) {
+            taskRunnable.addOneSlotIfCharged(oneSlot);
+        }
+    }
+
+    /**
+     * Store the worker runtime binding arrays and bind every currently initialized slot.
+     * Called once during {@link io.velo.MultiWorkerServer} startup. Lazy slots created later bind
+     * themselves via {@link #ensureOneSlotInitialized(short)}.
+     *
+     * @param slotWorkerEventloopArray eventloop per slot worker
+     * @param requestHandlerArray      request handler per slot worker
+     * @param slotWorkerThreadIds      thread id per slot worker
+     */
+    public void initSlotRuntimeBindings(@NotNull Eventloop[] slotWorkerEventloopArray,
+                                         @NotNull RequestHandler[] requestHandlerArray,
+                                         @NotNull long[] slotWorkerThreadIds) {
+        this.slotWorkerEventloopArray = slotWorkerEventloopArray;
+        this.requestHandlerArray = requestHandlerArray;
+        this.slotWorkerThreadIds = slotWorkerThreadIds;
+        for (var oneSlot : initializedOneSlots()) {
+            bindOneSlotIfInitialized(oneSlot);
+        }
+    }
+
+    /**
+     * Store the per-worker task runnables and register every currently initialized slot with its
+     * worker. Slots created later register themselves via {@link #ensureOneSlotInitialized(short)}.
+     *
+     * @param slotTaskRunnables task runnable per slot worker
+     */
+    public void initSlotTaskRunnables(@NotNull TaskRunnable[] slotTaskRunnables) {
+        this.slotTaskRunnables = slotTaskRunnables;
+        for (var oneSlot : initializedOneSlots()) {
+            registerOneSlotWithTaskRunnableIfInitialized(oneSlot);
+        }
+    }
+
+    /**
      * @param fnApplyOneSlot the function to apply to each slot
      * @param fn the function to aggregate the results from all slots
      * @param <R> the type of result from fnApplyOneSlot
      * @return the AsyncReply containing the aggregated results
      */
     public <R> AsyncReply doSthInSlots(@NotNull Function<OneSlot, R> fnApplyOneSlot, @NotNull Function<ArrayList<R>, Reply> fn) {
-        Promise<R>[] promises = new Promise[oneSlots.length];
-        for (int i = 0; i < oneSlots.length; i++) {
-            var oneSlot = oneSlots[i];
+        var slots = initializedOneSlots();
+        Promise<R>[] promises = new Promise[slots.size()];
+        for (int i = 0; i < slots.size(); i++) {
+            var oneSlot = slots.get(i);
             promises[i] = oneSlot.asyncCall(() -> fnApplyOneSlot.apply(oneSlot));
         }
 
@@ -127,6 +260,8 @@ public class LocalPersist implements NeedCleanUp {
      */
     @TestOnly
     public void addOneSlot(short slot, @NotNull Eventloop eventloop) {
+        // Test-only: mutates oneSlots[slot] in place. Exempt from the production copy-on-write
+        // publication rule because it is single-threaded test setup. Do not copy this pattern.
         try {
             Thread.sleep(100);
         } catch (InterruptedException e) {
@@ -152,6 +287,8 @@ public class LocalPersist implements NeedCleanUp {
      */
     @TestOnly
     public void addOneSlotForTest2(short slot) {
+        // Test-only: mutates oneSlots[slot] in place. Exempt from the production copy-on-write
+        // publication rule because it is single-threaded test setup. Do not copy this pattern.
         var oneSlot = new OneSlot(slot);
 
         if (oneSlots == null || slot >= oneSlots.length) {
@@ -181,28 +318,63 @@ public class LocalPersist implements NeedCleanUp {
                           @NotNull Config persistConfig) throws IOException {
         this.persistDir = persistDir;
         this.persistConfig = persistConfig;
-        ConfVolumeDirsForSlot.initFromConfig(persistConfig, slotNumber);
+        this.netWorkers = netWorkers;
+        this.slotNumber = slotNumber;
+        this.snowFlakes = snowFlakes;
 
+        ConfVolumeDirsForSlot.initFromConfig(persistConfig, slotNumber);
         isHashSaveMemberTogether = persistConfig.get(ofBoolean(), "isHashSaveMemberTogether", true);
 
         this.oneSlots = new OneSlot[slotNumber];
-        for (short slot = 0; slot < slotNumber; slot++) {
-            var i = slot % netWorkers;
-            var oneSlot = new OneSlot(slot, slotNumber, snowFlakes[i], persistDir, persistConfig);
-            oneSlot.initFds();
 
-            oneSlots[slot] = oneSlot;
+        // load cluster metadata before deciding which slots to initialize
+        this.multiShard = new MultiShard(persistDir);
+
+        var localSlots = localAssignedInnerSlots();
+        if (ConfForGlobal.clusterEnabled && !localSlots.isEmpty()) {
+            for (var slot : localSlots) {
+                ensureOneSlotInitialized(slot);
+            }
+        } else {
+            for (short slot = 0; slot < slotNumber; slot++) {
+                ensureOneSlotInitialized(slot);
+            }
         }
 
-        this.multiShard = new MultiShard(persistDir);
         this.initSlotsAgainAfterMultiShardLoadedOrChanged();
+    }
+
+    /**
+     * Compute the inner slots this local node owns based on persisted cluster metadata.
+     * Each inner slot maps to a block of {@code TO_CLIENT_SLOT_NUMBER / slotNumber} client slots;
+     * only client-slot boundaries aligned to that block size map to a real inner slot.
+     *
+     * @return a sorted set of owned inner slot indexes (empty if cluster disabled or no ownership)
+     */
+    private TreeSet<Short> localAssignedInnerSlots() {
+        var slots = new TreeSet<Short>();
+        if (!ConfForGlobal.clusterEnabled || multiShard == null) {
+            return slots;
+        }
+        var mySelfShard = multiShard.mySelfShard();
+        if (mySelfShard == null) {
+            return slots;
+        }
+        var step = MultiShard.TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber;
+        for (var range : mySelfShard.getMultiSlotRange().getList()) {
+            var firstBoundary = ((range.getBegin() + step - 1) / step) * step;
+            for (int toClientSlot = firstBoundary; toClientSlot <= range.getEnd(); toClientSlot += step) {
+                slots.add(MultiShard.asInnerSlotByToClientSlot(toClientSlot));
+            }
+        }
+        return slots;
     }
 
     /**
      * @throws IOException if an I/O error occurs during reinitialization
      */
     public void initSlotsAgainAfterMultiShardLoadedOrChanged() throws IOException {
-        for (var oneSlot : oneSlots) {
+        for (var oneSlot : initializedOneSlots()) {
             oneSlot.clearGlobalMetricsCollect();
         }
 
@@ -223,9 +395,10 @@ public class LocalPersist implements NeedCleanUp {
      */
     public boolean walLazyRead() {
         var beginT = System.currentTimeMillis();
-        CompletableFuture<Boolean>[] fArray = new CompletableFuture[oneSlots.length];
-        for (int i = 0; i < oneSlots.length; i++) {
-            var oneSlot = oneSlots[i];
+        var slots = initializedOneSlots();
+        CompletableFuture<Boolean>[] fArray = new CompletableFuture[slots.size()];
+        for (int i = 0; i < slots.size(); i++) {
+            var oneSlot = slots.get(i);
             fArray[i] = oneSlot.walLazyReadFromFile();
         }
 
@@ -249,9 +422,10 @@ public class LocalPersist implements NeedCleanUp {
      */
     public boolean initCheck() {
         var beginT = System.currentTimeMillis();
-        CompletableFuture<Integer>[] fArray = new CompletableFuture[oneSlots.length];
-        for (int i = 0; i < oneSlots.length; i++) {
-            var oneSlot = oneSlots[i];
+        var slots = initializedOneSlots();
+        CompletableFuture<Integer>[] fArray = new CompletableFuture[slots.size()];
+        for (int i = 0; i < slots.size(); i++) {
+            var oneSlot = slots.get(i);
             fArray[i] = oneSlot.initCheck();
         }
 
@@ -275,9 +449,10 @@ public class LocalPersist implements NeedCleanUp {
      */
     public boolean warmUp() {
         var beginT = System.currentTimeMillis();
-        CompletableFuture<Integer>[] fArray = new CompletableFuture[oneSlots.length];
-        for (int i = 0; i < oneSlots.length; i++) {
-            var oneSlot = oneSlots[i];
+        var slots = initializedOneSlots();
+        CompletableFuture<Integer>[] fArray = new CompletableFuture[slots.size()];
+        for (int i = 0; i < slots.size(); i++) {
+            var oneSlot = slots.get(i);
             fArray[i] = oneSlot.warmUp();
         }
 
@@ -327,7 +502,7 @@ public class LocalPersist implements NeedCleanUp {
      */
     public void debugMode() {
         isDebugMode = true;
-        for (var oneSlot : oneSlots) {
+        for (var oneSlot : initializedOneSlots()) {
             oneSlot.debugMode();
         }
     }
@@ -346,7 +521,7 @@ public class LocalPersist implements NeedCleanUp {
      * @throws IllegalStateException if no slot is associated with the current thread
      */
     public OneSlot currentThreadFirstOneSlot() {
-        for (var oneSlot : oneSlots) {
+        for (var oneSlot : initializedOneSlots()) {
             if (oneSlot.threadIdProtectedForSafe == Thread.currentThread().threadId()) {
                 return oneSlot;
             }
@@ -414,12 +589,10 @@ public class LocalPersist implements NeedCleanUp {
         }
 
         var slot = MultiShard.asInnerSlotByToClientSlot(toClientSlot);
-        for (var oneSlot : oneSlots) {
-            if (oneSlot.slot() == slot) {
-                return oneSlot;
-            }
+        if (slot < 0 || oneSlots == null || slot >= oneSlots.length) {
+            return null;
         }
-        return null;
+        return oneSlots[slot];
     }
 
     private IndexHandlerPool indexHandlerPool;
@@ -509,8 +682,7 @@ public class LocalPersist implements NeedCleanUp {
             // (runs inline for the current slot) and returns immediately; the lock is held
             // only briefly during submission. Lock-ordered submits guarantee per-slot ordering.
             final boolean gateOpen = open;
-            for (short s = 0; s < ConfForGlobal.slotNumber; s++) {
-                var ts = oneSlot(s);
+            for (var ts : initializedOneSlots()) {
                 ts.asyncRun(() -> {
                     // Skip slots already promoted to master (readonly=false). The gate is a
                     // slave-only mechanism; a promoted slot's canRead must not be overridden by
@@ -558,7 +730,7 @@ public class LocalPersist implements NeedCleanUp {
     @TestOnly
     @Override
     public void cleanUp() {
-        for (var oneSlot : oneSlots) {
+        for (var oneSlot : initializedOneSlots()) {
             oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId();
             oneSlot.cleanUp();
         }
@@ -597,9 +769,10 @@ public class LocalPersist implements NeedCleanUp {
      * @return a {@link CompletableFuture} that completes when all slot cleanups are done
      */
     public CompletableFuture<Void> cleanUpAsync() {
-        Promise<Void>[] promises = new Promise[oneSlots.length];
-        for (int i = 0; i < oneSlots.length; i++) {
-            var oneSlot = oneSlots[i];
+        var slots = initializedOneSlots();
+        Promise<Void>[] promises = new Promise[slots.size()];
+        for (int i = 0; i < slots.size(); i++) {
+            var oneSlot = slots.get(i);
             promises[i] = oneSlot.asyncCall(() -> {
                 oneSlot.cleanUp();
                 return null;

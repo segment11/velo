@@ -1182,10 +1182,20 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             isMySelfNodeChargeThisInnerSlot = mySelfNode.nodeId() == nodeId
         }
 
-        def oneSlot = localPersist.oneSlot(innerSlot)
+        // only initialize the target slot when this node owns it; for slots owned by other shards
+        // there is no local persistence, so flush() must be skipped when oneSlot is null
+        def oneSlot = isMySelfNodeChargeThisInnerSlot
+                ? localPersist.ensureOneSlotInitialized(innerSlot as short)
+                : localPersist.oneSlot(innerSlot)
 
         SettablePromise<Reply> finalPromise = new SettablePromise<>()
         def asyncReply = new AsyncReply(finalPromise)
+
+        if (oneSlot == null) {
+            // not owned locally and not initialized — nothing to flush
+            finalPromise.set(OK)
+            return asyncReply
+        }
 
         oneSlot.asyncRun(RunnableEx.of {
             if (isMySelfNodeChargeThisInnerSlot) {

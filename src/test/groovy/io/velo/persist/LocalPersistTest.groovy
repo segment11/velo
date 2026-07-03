@@ -4,9 +4,11 @@ import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.velo.ConfForGlobal
 import io.velo.SnowFlake
+import io.velo.repl.cluster.MultiShard
 import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
 import io.velo.reply.IntegerReply
+import io.velo.task.TaskRunnable
 import spock.lang.Specification
 
 import java.time.Duration
@@ -229,6 +231,43 @@ class LocalPersistTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test cluster init slots only initializes local assigned slots'() {
+        given:
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def localPersist = LocalPersist.instance
+        localPersist.resetForTest()
+        Consts.persistDir.mkdirs()
+
+        and:
+        def multiShard = new MultiShard(Consts.persistDir)
+        def mySelfShard = multiShard.mySelfShard()
+        mySelfShard.multiSlotRange.addSingle(8192, 12287) // inner slot 2 for slotNumber=4
+        multiShard.updateClusterVersion(1)
+
+        and:
+        def snowFlakes = [new SnowFlake(1, 1)] as SnowFlake[]
+
+        when:
+        localPersist.initSlots((byte) 1, (short) 4, snowFlakes, Consts.persistDir, Config.create())
+
+        then:
+        localPersist.oneSlots().length == 4
+        !localPersist.isOneSlotInitialized((short) 0)
+        !localPersist.isOneSlotInitialized((short) 1)
+        localPersist.isOneSlotInitialized((short) 2)
+        !localPersist.isOneSlotInitialized((short) 3)
+        localPersist.firstOneSlot().slot() == 2
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = (short) 1
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test cleanUp runs on slot worker thread not caller thread'() {
         given:
         def eventloop = Eventloop.builder()
@@ -408,5 +447,194 @@ class LocalPersistTest extends Specification {
         ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+    }
+
+    def 'test scale-up read gate fan-out skips uninitialized slots'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def localPersist = LocalPersist.instance
+        localPersist.resetForTest()
+        Consts.persistDir.mkdirs()
+
+        and:
+        def multiShard = new MultiShard(Consts.persistDir)
+        multiShard.mySelfShard().multiSlotRange.addSingle(8192, 12287) // inner slot 2 for slotNumber=4
+        multiShard.updateClusterVersion(1)
+
+        and:
+        def snowFlakes = [new SnowFlake(1, 1)] as SnowFlake[]
+        localPersist.initSlots((byte) 1, (short) 4, snowFlakes, Consts.persistDir, Config.create())
+        // sparse: only slot 2 initialized; fix only its thread id so asyncRun runs inline
+        localPersist.fixSlotThreadId((short) 2, Thread.currentThread().threadId())
+
+        and:
+        ConfForGlobal.masterSlotNumber = (short) 2
+        ConfForGlobal.slotNumber = (short) 4
+        localPersist.resetScaleUpReadGate(2)
+
+        def slot2 = localPersist.oneSlot((short) 2)
+        slot2.readonly = true
+        slot2.canRead = false
+
+        expect: 'gate starts closed — no slot is readable yet'
+        !slot2.canRead
+
+        when: 'both streams ready — gate opens; fan-out must touch only initialized slot 2 (no NPE on 0/1/3)'
+        localPersist.publishStreamReadyAndRefreshGate((short) 0, true)
+        localPersist.publishStreamReadyAndRefreshGate((short) 1, true)
+        then:
+        slot2.canRead
+
+        when: 'a stream drops — gate closes; fan-out again touches only initialized slots'
+        localPersist.publishStreamReadyAndRefreshGate((short) 0, false)
+        then:
+        !slot2.canRead
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test sparse slot aggregate operations'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def localPersist = LocalPersist.instance
+        localPersist.resetForTest()
+        Consts.persistDir.mkdirs()
+
+        and:
+        def multiShard = new MultiShard(Consts.persistDir)
+        multiShard.mySelfShard().multiSlotRange.addSingle(8192, 12287) // inner slot 2
+        multiShard.updateClusterVersion(1)
+
+        and:
+        def snowFlakes = [new SnowFlake(1, 1)] as SnowFlake[]
+        localPersist.initSlots((byte) 1, (short) 4, snowFlakes, Consts.persistDir, Config.create())
+        localPersist.fixSlotThreadId((short) 2, Thread.currentThread().threadId())
+
+        expect: 'only slot 2 initialized'
+        localPersist.initializedOneSlots().size() == 1
+
+        when: 'aggregate ops touch only initialized slots and succeed'
+        def isOkWal = localPersist.walLazyRead()
+        def isOkInit = localPersist.initCheck()
+        def isOkWarm = localPersist.warmUp()
+        then:
+        isOkWal
+        isOkInit
+        isOkWarm
+
+        when: 'doSthInSlots aggregates over initialized slots only'
+        def reply = localPersist.doSthInSlots(oneSlot -> { 1L }, (ArrayList<Long> resultList) -> {
+            new IntegerReply(resultList.sum() as long)
+        })
+        then:
+        reply.settablePromise.getResult() instanceof IntegerReply
+        (reply.settablePromise.getResult() as IntegerReply).integer == 1L
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = savedSlotNumber
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test firstOneSlot is null when peer owns lower client slot range'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def localPersist = LocalPersist.instance
+        localPersist.resetForTest()
+        Consts.persistDir.mkdirs()
+
+        and:
+        // myself owns inner slot 2 (client slots 8192-12287); a peer shard owns client 0-4095
+        // (inner slot 0). The globally-first client slot is 0, mapping to inner slot 0 which is
+        // not initialized locally, so firstOneSlot() must return null rather than NPE.
+        def multiShard = new MultiShard(Consts.persistDir)
+        multiShard.mySelfShard().multiSlotRange.addSingle(8192, 12287)
+        def peerShard = new Shard(nodes: [new Node(master: true, host: '10.0.0.2', port: 7379)])
+        peerShard.multiSlotRange.addSingle(0, 4095)
+        multiShard.shards << peerShard
+        multiShard.updateClusterVersion(1)
+
+        and:
+        def snowFlakes = [new SnowFlake(1, 1)] as SnowFlake[]
+        localPersist.initSlots((byte) 1, (short) 4, snowFlakes, Consts.persistDir, Config.create())
+
+        expect: 'only slot 2 initialized locally'
+        localPersist.initializedOneSlots().size() == 1
+        localPersist.isOneSlotInitialized((short) 2)
+        !localPersist.isOneSlotInitialized((short) 0)
+
+        and: 'firstOneSlot() is null because the globally-first client slot maps to a non-local slot'
+        localPersist.firstOneSlot() == null
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = savedSlotNumber
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test slot runtime binding and scheduler registration'() {
+        given:
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def snowFlakes = [new SnowFlake(1, 1)] as SnowFlake[]
+        def localPersist = LocalPersist.instance
+        localPersist.resetForTest()
+        localPersist.initSlots((byte) 1, (short) 1, snowFlakes, Consts.persistDir, Config.create())
+        def slot0 = localPersist.oneSlot((short) 0)
+
+        and:
+        def tid = Thread.currentThread().threadId()
+        def eventloop = Eventloop.builder().withIdleInterval(Duration.ofMillis(100)).build()
+        eventloop.keepAlive(true)
+        Thread.start { eventloop.run() }
+        Thread.sleep(100)
+        def taskRunnable = new TaskRunnable((byte) 0, (byte) 1)
+
+        when: 'startup-style runtime binding + scheduler registration for initialized slots'
+        localPersist.initSlotRuntimeBindings([eventloop] as Eventloop[], null, [tid] as long[])
+        localPersist.initSlotTaskRunnables([taskRunnable] as TaskRunnable[])
+
+        then: 'the initialized slot was bound to the worker thread and registered with its task runnable'
+        slot0.threadIdProtectedForSafe == tid
+
+        when: 'ensureOneSlotInitialized returns the already-initialized slot (no rebuild)'
+        def same = localPersist.ensureOneSlotInitialized((short) 0)
+        then:
+        same.is(slot0)
+
+        when: 'an out-of-range slot is rejected'
+        def caught = null
+        try {
+            localPersist.ensureOneSlotInitialized((short) 99)
+        } catch (IllegalArgumentException e) {
+            caught = e
+        }
+        then:
+        caught != null
+
+        cleanup:
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+        eventloop.breakEventloop()
     }
 }

@@ -391,9 +391,12 @@ public class LeaderSelector implements NeedCleanUp {
         try {
             var localPersist = LocalPersist.getInstance();
 
-            Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
-            for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
-                var oneSlot = localPersist.oneSlot((short) i);
+            // iterate only initialized slots: in cluster mode this node may own a subset of
+            // ConfForGlobal.slotNumber, and unowned oneSlots[] entries are null.
+            var initSlots = localPersist.initializedOneSlots();
+            Promise<Void>[] promises = new Promise[initSlots.size()];
+            for (int i = 0; i < initSlots.size(); i++) {
+                var oneSlot = initSlots.get(i);
                 promises[i] = oneSlot.asyncRun(() -> {
                     boolean canResetSelfAsMasterNow = false;
 
@@ -557,9 +560,12 @@ public class LeaderSelector implements NeedCleanUp {
             // prior 2N session is cleared.
             localPersist.resetScaleUpReadGate(localPersist.isAsSlaveScaleUp() ? ConfForGlobal.masterSlotNumber : 0);
 
-            Promise<Void>[] promises = new Promise[ConfForGlobal.slotNumber];
-            for (int i = 0; i < ConfForGlobal.slotNumber; i++) {
-                var oneSlot = localPersist.oneSlot((short) i);
+            // iterate only initialized slots: in cluster mode this node may own a subset of
+            // ConfForGlobal.slotNumber, and unowned oneSlots[] entries are null.
+            var initSlots = localPersist.initializedOneSlots();
+            Promise<Void>[] promises = new Promise[initSlots.size()];
+            for (int i = 0; i < initSlots.size(); i++) {
+                var oneSlot = initSlots.get(i);
                 promises[i] = oneSlot.asyncRun(() -> {
                     var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
                     if (replPairAsSlave != null) {

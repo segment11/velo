@@ -117,4 +117,58 @@ class TaskRunnableTest extends Specification {
         // first tick threw; if the loop kept rescheduling, doTask ran many more times
         callCount.get() > 1
     }
+
+    def 'test chargeOneSlots skips null entries'() {
+        given:
+        // a sparse OneSlot[] where slot 1 is null (uninitialized, as in cluster lazy init)
+        def oneSlot = new OneSlot((short) 0, Consts.slotDir, null, null)
+        OneSlot[] oneSlots = [oneSlot, null] as OneSlot[]
+
+        and:
+        def taskRunnable = new TaskRunnable((byte) 0, (byte) 1)
+
+        when:
+        taskRunnable.chargeOneSlots(oneSlots)
+
+        then:
+        taskRunnable.oneSlots.size() == 1
+        taskRunnable.oneSlots.contains(oneSlot)
+    }
+
+    def 'test addOneSlotIfCharged routes to owning worker and is idempotent'() {        given:
+        // slotWorkers=2: slot 0 -> worker 0, slot 1 -> worker 1, slot 3 -> worker 1
+        def worker0 = new TaskRunnable((byte) 0, (byte) 2)
+        def worker1 = new TaskRunnable((byte) 1, (byte) 2)
+        def oneSlot0 = new OneSlot((short) 0, Consts.slotDir, null, null)
+        def oneSlot1 = new OneSlot((short) 1, Consts.slotDir, null, null)
+
+        when:
+        // lazy registration of slot 1 (simulating setslot init from a different worker context)
+        worker1.addOneSlotIfCharged(oneSlot1)
+        // idempotent: same slot is not added twice
+        worker1.addOneSlotIfCharged(oneSlot1)
+        // slot 0 is not owned by worker 1, must be rejected
+        worker1.addOneSlotIfCharged(oneSlot0)
+
+        then:
+        worker1.oneSlots.size() == 1
+        worker1.oneSlots.contains(oneSlot1)
+        !worker1.oneSlots.contains(oneSlot0)
+        worker0.oneSlots.isEmpty()
+
+        when:
+        // concurrent mutation from another thread while iterating must not throw (CopyOnWriteArrayList)
+        def t = Thread.start {
+            worker1.addOneSlotIfCharged(new OneSlot((short) 3, Consts.slotDir, null, null))
+        }
+        def snapshot = []
+        for (var s : worker1.oneSlots) {
+            snapshot.add(s)
+        }
+        t.join()
+
+        then:
+        noExceptionThrown()
+        worker1.oneSlots.size() == 2
+    }
 }

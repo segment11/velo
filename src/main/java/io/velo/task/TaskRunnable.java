@@ -7,7 +7,7 @@ import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Runnable task for slot workers that processes slots in a loop.
@@ -30,17 +30,26 @@ public class TaskRunnable implements Runnable {
         this.slotWorkers = slotWorkers;
     }
 
-    /** The slots assigned to this worker. */
+    /**
+     * Slots assigned to this worker. CopyOnWriteArrayList because lazy registration
+     * ({@link #addOneSlotIfCharged}) can run on a different worker thread than the one that owns
+     * this TaskRunnable, while {@link #run()} iterates this list every tick. Mutations are rare
+     * (lazy slot init) and iteration is frequent, so snapshot iteration is the simplest safe model.
+     */
     @VisibleForTesting
-    final ArrayList<OneSlot> oneSlots = new ArrayList<>();
+    final CopyOnWriteArrayList<OneSlot> oneSlots = new CopyOnWriteArrayList<>();
 
     /**
-     * Assigns slots to this worker based on worker ID.
+     * Assigns slots to this worker based on worker ID. Skips null (uninitialized) entries so a
+     * sparse {@code LocalPersist.oneSlots()} array in cluster mode only charges owned slots.
      *
      * @param oneSlots all slots to consider
      */
     public void chargeOneSlots(OneSlot[] oneSlots) {
         for (var oneSlot : oneSlots) {
+            if (oneSlot == null) {
+                continue;
+            }
             if (oneSlot.slot() % slotWorkers == slotWorkerId) {
                 this.oneSlots.add(oneSlot);
 
@@ -48,6 +57,21 @@ public class TaskRunnable implements Runnable {
                 oneSlot.setRequestHandler(requestHandler);
             }
         }
+    }
+
+    /**
+     * Register a lazily created slot into this worker's task list if it belongs to this worker.
+     * Idempotent: skips slots already present or not owned by this worker.
+     *
+     * @param oneSlot the slot to register
+     */
+    public void addOneSlotIfCharged(OneSlot oneSlot) {
+        if (oneSlot.slot() % slotWorkers != slotWorkerId || oneSlots.contains(oneSlot)) {
+            return;
+        }
+        oneSlots.add(oneSlot);
+        oneSlot.setSlotWorkerEventloop(slotWorkerEventloop);
+        oneSlot.setRequestHandler(requestHandler);
     }
 
     /** The Eventloop for this slot worker. */
