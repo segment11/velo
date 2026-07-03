@@ -637,4 +637,29 @@ class LocalPersistTest extends Specification {
         Consts.persistDir.deleteDir()
         eventloop.breakEventloop()
     }
+
+    def 'test resetForTest clears lazy init cached state'() {
+        given: 'a first session that binds runtime state on the singleton'
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def snowFlakes = [new SnowFlake(1, 1)] as SnowFlake[]
+        def localPersist = LocalPersist.instance
+        localPersist.resetForTest()
+        localPersist.initSlots((byte) 1, (short) 1, snowFlakes, Consts.persistDir, Config.create())
+        def staleTid = 999999L
+        localPersist.initSlotRuntimeBindings(null, null, [staleTid] as long[])
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+
+        when: 'a second session inits a slot without re-binding runtime state'
+        localPersist.initSlots((byte) 1, (short) 1, snowFlakes, Consts.persistDir, Config.create())
+        def slot0 = localPersist.ensureOneSlotInitialized((short) 0)
+
+        then: 'the slot must not inherit the stale thread id leaked from the first session'
+        slot0.threadIdProtectedForSafe != staleTid
+
+        cleanup:
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
 }

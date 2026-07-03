@@ -1071,4 +1071,52 @@ slots
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test setslot does not persist ownership when local slot init fails'() {
+        given:
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        ConfForGlobal.clusterEnabled = true
+        def multiShard = localPersist.multiShard
+        def shard0 = multiShard.shards[0]
+        shard0.multiSlotRange.addSingle(0, 16383)
+
+        and:
+        def data6 = new byte[6][]
+        data6[1] = 'setslot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'node'.bytes
+        data6[4] = shard0.nodes[0].nodeId().bytes // self is the target node
+        data6[5] = '5'.bytes
+        clusterx.data = data6
+
+        and: 'make local slot init fail by clearing the slots array (ensureOneSlotInitialized throws)'
+        def versionBefore = multiShard.clusterCurrentEpoch
+        localPersist.clearOneSlotsForTest()
+
+        when:
+        def thrown = null
+        try {
+            clusterx.setslot()
+        } catch (RuntimeException e) {
+            thrown = e
+        }
+
+        then: 'local slot init failed'
+        thrown != null
+        and: 'cluster metadata was NOT persisted (no ownership advertised for an unservable slot)'
+        multiShard.clusterCurrentEpoch == versionBefore
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
 }

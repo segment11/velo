@@ -750,6 +750,16 @@ public class LocalPersist implements NeedCleanUp {
         persistDir = null;
         persistConfig = null;
         indexHandlerPool = null;
+
+        // lazy-init cached state — must be cleared so a later test session does not construct
+        // slots with stale worker bindings / task runnables from a previous session
+        netWorkers = 0;
+        slotNumber = 0;
+        snowFlakes = null;
+        slotWorkerEventloopArray = null;
+        requestHandlerArray = null;
+        slotWorkerThreadIds = null;
+        slotTaskRunnables = null;
     }
 
     /**

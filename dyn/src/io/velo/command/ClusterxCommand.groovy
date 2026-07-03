@@ -1160,6 +1160,21 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             addSet << i
         }
 
+        // check if to node id is my self node charge (computed before mutating metadata)
+        boolean isMySelfNodeChargeThisInnerSlot = false
+        def mySelfShard = multiShard.mySelfShard()
+        if (mySelfShard) {
+            def mySelfNode = mySelfShard.mySelfNode()
+            isMySelfNodeChargeThisInnerSlot = mySelfNode.nodeId() == nodeId
+        }
+
+        // initialize the local slot BEFORE persisting ownership, so a failed init (fd/disk/memory)
+        // does not leave cluster metadata advertising a slot this node cannot serve. for slots owned
+        // by other shards there is no local persistence, so flush() is skipped when oneSlot is null.
+        def oneSlot = isMySelfNodeChargeThisInnerSlot
+                ? localPersist.ensureOneSlotInitialized(innerSlot as short)
+                : localPersist.oneSlot(innerSlot)
+
         // add
         toShard.multiSlotRange.removeOrAddSet(removeNone, addSet)
         toShard.importMigratingSlot = Shard.NO_MIGRATING_SLOT
@@ -1173,20 +1188,6 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             }
         }
         multiShard.updateClusterVersion(clusterVersion)
-
-        // check if to node id is my self node charge
-        boolean isMySelfNodeChargeThisInnerSlot = false
-        def mySelfShard = multiShard.mySelfShard()
-        if (mySelfShard) {
-            def mySelfNode = mySelfShard.mySelfNode()
-            isMySelfNodeChargeThisInnerSlot = mySelfNode.nodeId() == nodeId
-        }
-
-        // only initialize the target slot when this node owns it; for slots owned by other shards
-        // there is no local persistence, so flush() must be skipped when oneSlot is null
-        def oneSlot = isMySelfNodeChargeThisInnerSlot
-                ? localPersist.ensureOneSlotInitialized(innerSlot as short)
-                : localPersist.oneSlot(innerSlot)
 
         SettablePromise<Reply> finalPromise = new SettablePromise<>()
         def asyncReply = new AsyncReply(finalPromise)
