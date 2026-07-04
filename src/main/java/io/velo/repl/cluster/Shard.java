@@ -1,5 +1,8 @@
 package io.velo.repl.cluster;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
 
 /**
@@ -12,16 +15,11 @@ public class Shard {
      * @return the multi slot range
      */
     // for json
-    public MultiSlotRange getMultiSlotRange() {
+    public @NotNull MultiSlotRange getMultiSlotRange() {
         return multiSlotRange;
     }
 
-    /**
-     * Sets the multi slot range owned by this shard.
-     *
-     * @param multiSlotRange the multi slot range
-     */
-    public void setMultiSlotRange(MultiSlotRange multiSlotRange) {
+    public void setMultiSlotRange(@NotNull MultiSlotRange multiSlotRange) {
         this.multiSlotRange = multiSlotRange;
     }
 
@@ -30,7 +28,7 @@ public class Shard {
      *
      * @return the list of nodes
      */
-    public ArrayList<Node> getNodes() {
+    public @NotNull ArrayList<Node> getNodes() {
         return nodes;
     }
 
@@ -39,7 +37,7 @@ public class Shard {
      *
      * @param nodes the list of nodes
      */
-    public void setNodes(ArrayList<Node> nodes) {
+    public void setNodes(@NotNull ArrayList<Node> nodes) {
         this.nodes = nodes;
     }
 
@@ -84,7 +82,7 @@ public class Shard {
      *
      * @return the migrating target host, or null if not migrating
      */
-    public String getMigratingToHost() {
+    public @Nullable String getMigratingToHost() {
         return migratingToHost;
     }
 
@@ -93,7 +91,7 @@ public class Shard {
      *
      * @param migratingToHost the migrating target host
      */
-    public void setMigratingToHost(String migratingToHost) {
+    public void setMigratingToHost(@Nullable String migratingToHost) {
         this.migratingToHost = migratingToHost;
     }
 
@@ -137,7 +135,7 @@ public class Shard {
      *
      * @return the master node, or null if none
      */
-    public Node master() {
+    public @Nullable Node master() {
         for (var node : nodes) {
             if (node.isMaster) {
                 return node;
@@ -152,7 +150,7 @@ public class Shard {
      * @param slaveIndex the slave index
      * @return the slave node, or null if none
      */
-    public Node slave(int slaveIndex) {
+    public @Nullable Node slave(int slaveIndex) {
         for (var node : nodes) {
             if (!node.isMaster && node.slaveIndex == slaveIndex) {
                 return node;
@@ -166,7 +164,7 @@ public class Shard {
      *
      * @return the local node, or null if none
      */
-    public Node mySelfNode() {
+    public @Nullable Node mySelfNode() {
         for (var node : nodes) {
             if (node.isMySelf) {
                 return node;
@@ -190,7 +188,7 @@ public class Shard {
      *
      * @return the list of formatted node lines
      */
-    public ArrayList<String> clusterNodesSlotRangeList() {
+    public @NotNull ArrayList<String> clusterNodesSlotRangeList() {
         ArrayList<String> list = new ArrayList<>();
         if (this.multiSlotRange.getList().isEmpty()) {
             for (var node : nodes) {
@@ -206,7 +204,7 @@ public class Shard {
     }
 
     @Override
-    public String toString() {
+    public @NotNull String toString() {
         return "Shard{" +
                 "multiSlotRange=" + multiSlotRange +
                 ", nodes=" + nodes +

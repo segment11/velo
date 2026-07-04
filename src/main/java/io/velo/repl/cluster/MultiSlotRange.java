@@ -15,16 +15,11 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
      *
      * @return the list of slot ranges
      */
-    public ArrayList<SlotRange> getList() {
+    public @NotNull ArrayList<SlotRange> getList() {
         return list;
     }
 
-    /**
-     * Sets the list of slot ranges.
-     *
-     * @param list the list of slot ranges
-     */
-    public void setList(ArrayList<SlotRange> list) {
+    public void setList(@NotNull ArrayList<SlotRange> list) {
         this.list = list;
     }
 
@@ -73,7 +68,7 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
     }
 
     @Override
-    public String toString() {
+    public @NotNull String toString() {
         if (list.isEmpty()) {
             return "";
         }
@@ -103,7 +98,7 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
      * @return the parsed MultiSlotRange
      * @throws IllegalArgumentException if the string is invalid
      */
-    public static MultiSlotRange fromSelfString(String toString) {
+    public static @NotNull MultiSlotRange fromSelfString(@NotNull String toString) {
         var r = new MultiSlotRange();
         r.list = new ArrayList<>();
         if (toString.isEmpty()) {
@@ -133,7 +128,7 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
      *
      * @return the sorted set of slot numbers
      */
-    public TreeSet<Integer> toTreeSet() {
+    public @NotNull TreeSet<Integer> toTreeSet() {
         TreeSet<Integer> r = new TreeSet<>();
         if (list.isEmpty()) {
             return r;
@@ -147,7 +142,7 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
         return r;
     }
 
-    private static MultiSlotRange fromSet(TreeSet<Integer> all) {
+    private static @NotNull MultiSlotRange fromSet(@NotNull TreeSet<Integer> all) {
         var r = new MultiSlotRange();
         r.list = new ArrayList<>();
         if (all.isEmpty()) {
@@ -198,7 +193,7 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
      * @param remove the slots to remove
      * @param add    the slots to add
      */
-    public void removeOrAddSet(TreeSet<Integer> remove, TreeSet<Integer> add) {
+    public void removeOrAddSet(@NotNull TreeSet<Integer> remove, @NotNull TreeSet<Integer> add) {
         if (remove.isEmpty() && add.isEmpty()) {
             return;
         }
@@ -258,7 +253,7 @@ public class MultiSlotRange implements Comparable<MultiSlotRange> {
      * @param port   the node port
      * @return the formatted node line(s) including slot ranges
      */
-    public ArrayList<String> clusterNodesSlotRangeList(String nodeId, String ip, Integer port) {
+    public @NotNull ArrayList<String> clusterNodesSlotRangeList(@NotNull String nodeId, @NotNull String ip, @NotNull Integer port) {
         ArrayList<String> list = new ArrayList<>();
         if (this.list.isEmpty()) {
             list.add(nodeId + " " + ip + " " + port + " master -");

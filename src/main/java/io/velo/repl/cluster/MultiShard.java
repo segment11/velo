@@ -3,8 +3,9 @@ package io.velo.repl.cluster;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.velo.ConfForGlobal;
 import io.velo.persist.LocalPersist;
-import io.velo.repl.ReplPair;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,7 +60,7 @@ vars currentEpoch 0 lastVoteEpoch 0
      *
      * @return the list of shards
      */
-    public ArrayList<Shard> getShards() {
+    public @NotNull ArrayList<Shard> getShards() {
         return shards;
     }
 
@@ -69,7 +70,7 @@ vars currentEpoch 0 lastVoteEpoch 0
      * @param toClientSlot the client slot
      * @return the owning shard, or null if none
      */
-    public Shard getShardBySlot(int toClientSlot) {
+    public @Nullable Shard getShardBySlot(int toClientSlot) {
         for (var shard : shards) {
             if (shard.contains(toClientSlot)) {
                 return shard;
@@ -87,7 +88,7 @@ vars currentEpoch 0 lastVoteEpoch 0
      * @param persistDir the directory where cluster metadata is persisted
      * @throws IOException if loading or saving metadata fails
      */
-    public MultiShard(File persistDir) throws IOException {
+    public MultiShard(@NotNull File persistDir) throws IOException {
         this.persistDir = persistDir;
         loadMeta();
         addMySelfIfNeed();
@@ -136,7 +137,7 @@ vars currentEpoch 0 lastVoteEpoch 0
      *
      * @return the local node's shard, or null if none
      */
-    public Shard mySelfShard() {
+    public @Nullable Shard mySelfShard() {
         for (var shard : shards) {
             for (var node : shard.getNodes()) {
                 if (node.isMySelf()) {
@@ -174,7 +175,7 @@ vars currentEpoch 0 lastVoteEpoch 0
      * @param clusterVersion the new cluster version (current epoch)
      * @throws IOException if saving metadata fails
      */
-    public synchronized void refreshAllShards(ArrayList<Shard> shardsNew, int clusterVersion) throws IOException {
+    public synchronized void refreshAllShards(@NotNull ArrayList<Shard> shardsNew, int clusterVersion) throws IOException {
         shards.clear();
         shards.addAll(shardsNew);
         clusterCurrentEpoch = clusterVersion;
@@ -246,7 +247,7 @@ vars currentEpoch 0 lastVoteEpoch 0
      *
      * @return the first client slot, or null if none
      */
-    public Integer firstToClientSlot() {
+    public @Nullable Integer firstToClientSlot() {
         Integer min = null;
         for (var shard : shards) {
             var list = shard.getMultiSlotRange().getList();
@@ -267,7 +268,7 @@ vars currentEpoch 0 lastVoteEpoch 0
      *
      * @return the last client slot, or null if none
      */
-    public Integer lastToClientSlot() {
+    public @Nullable Integer lastToClientSlot() {
         Integer max = null;
         for (var shard : shards) {
             var list = shard.getMultiSlotRange().getList();
@@ -289,7 +290,7 @@ vars currentEpoch 0 lastVoteEpoch 0
      * @param toClientSlot the reference client slot
      * @return the next client slot, or null if none
      */
-    public Integer nextToClientSlot(int toClientSlot) {
+    public @Nullable Integer nextToClientSlot(int toClientSlot) {
         Integer min = null;
         for (var shard : shards) {
             var list = shard.getMultiSlotRange().getList();

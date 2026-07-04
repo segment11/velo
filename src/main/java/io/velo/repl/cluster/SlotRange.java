@@ -1,5 +1,7 @@
 package io.velo.repl.cluster;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Represents a range of slots.
  */
@@ -67,7 +69,7 @@ public class SlotRange implements Comparable<SlotRange> {
     }
 
     @Override
-    public String toString() {
+    public @NotNull String toString() {
         if (begin == end) {
             return String.valueOf(begin);
         }
@@ -75,7 +77,7 @@ public class SlotRange implements Comparable<SlotRange> {
     }
 
     @Override
-    public int compareTo(SlotRange o) {
+    public int compareTo(@NotNull SlotRange o) {
         return this.begin - o.begin;
     }
 }

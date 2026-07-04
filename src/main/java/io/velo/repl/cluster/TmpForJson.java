@@ -1,5 +1,7 @@
 package io.velo.repl.cluster;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.ArrayList;
 
 /**
@@ -12,7 +14,7 @@ public class TmpForJson {
      *
      * @return the list of shards
      */
-    public ArrayList<Shard> getShards() {
+    public @NotNull ArrayList<Shard> getShards() {
         return shards;
     }
 
@@ -21,7 +23,7 @@ public class TmpForJson {
      *
      * @param shards the list of shards
      */
-    public void setShards(ArrayList<Shard> shards) {
+    public void setShards(@NotNull ArrayList<Shard> shards) {
         this.shards = shards;
     }
 
@@ -61,7 +63,7 @@ public class TmpForJson {
         this.clusterCurrentEpoch = clusterCurrentEpoch;
     }
 
-    private ArrayList<Shard> shards;
+    private ArrayList<Shard> shards = new ArrayList<>();
 
     private int clusterMyEpoch;
 

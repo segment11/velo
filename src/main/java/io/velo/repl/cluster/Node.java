@@ -3,6 +3,8 @@ package io.velo.repl.cluster;
 import io.velo.Utils;
 import io.velo.repl.support.JedisCallback;
 import io.velo.repl.support.JedisPoolHolder;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Represents a node in the cluster.
@@ -104,7 +106,7 @@ public class Node {
      *
      * @return the follow node id
      */
-    public String getFollowNodeId() {
+    public @Nullable String getFollowNodeId() {
         return followNodeId;
     }
 
@@ -113,7 +115,7 @@ public class Node {
      *
      * @param followNodeId the follow node id
      */
-    public void setFollowNodeId(String followNodeId) {
+    public void setFollowNodeId(@Nullable String followNodeId) {
         this.followNodeId = followNodeId;
     }
 
@@ -122,7 +124,7 @@ public class Node {
      *
      * @return the fixed node id, or null if not set
      */
-    public String getNodeIdFix() {
+    public @Nullable String getNodeIdFix() {
         return nodeIdFix;
     }
 
@@ -131,7 +133,7 @@ public class Node {
      *
      * @param nodeIdFix the fixed node id
      */
-    public void setNodeIdFix(String nodeIdFix) {
+    public void setNodeIdFix(@Nullable String nodeIdFix) {
         this.nodeIdFix = nodeIdFix;
     }
 
@@ -151,7 +153,7 @@ public class Node {
      *
      * @return the node id
      */
-    public String nodeId() {
+    public @NotNull String nodeId() {
         if (nodeIdFix != null) {
             return nodeIdFix;
         }
@@ -172,7 +174,7 @@ public class Node {
      *
      * @return the node info prefix string
      */
-    public String nodeInfoPrefix() {
+    public @NotNull String nodeInfoPrefix() {
         return nodeId() + " " + host + ":" + port + " " +
                 (isMySelf ? "myself," : "") +
                 (isMaster ? "master" : "slave") +
@@ -180,7 +182,7 @@ public class Node {
     }
 
     @Override
-    public String toString() {
+    public @NotNull String toString() {
         return "Node{" +
                 "isMaster=" + isMaster +
                 ", slaveIndex=" + slaveIndex +
@@ -199,7 +201,7 @@ public class Node {
      * @param <R>      the result
      * @return the result
      */
-    public <R> R exe(JedisCallback<R> callback) {
+    public <R> R exe(@NotNull JedisCallback<R> callback) {
         var jedisPoolHolder = JedisPoolHolder.getInstance();
         var jedisPool = jedisPoolHolder.createIfNotCached(host, port);
         return JedisPoolHolder.exe(jedisPool, callback);
