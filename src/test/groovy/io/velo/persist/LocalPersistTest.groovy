@@ -268,6 +268,79 @@ class LocalPersistTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test cluster init slots uses slot 0 when self shard owns no slots yet'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def localPersist = LocalPersist.instance
+        localPersist.resetForTest()
+        Consts.persistDir.mkdirs()
+
+        and:
+        def multiShard = new MultiShard(Consts.persistDir)
+        multiShard.updateClusterVersion(1)
+
+        and:
+        def snowFlakes = [new SnowFlake(1, 1)] as SnowFlake[]
+
+        when:
+        localPersist.initSlots((byte) 1, (short) 4, snowFlakes, Consts.persistDir, Config.create())
+
+        then:
+        localPersist.oneSlots().length == 4
+        localPersist.initializedOneSlots().size() == 1
+        localPersist.isOneSlotInitialized((short) 0)
+        !localPersist.isOneSlotInitialized((short) 1)
+        !localPersist.isOneSlotInitialized((short) 2)
+        !localPersist.isOneSlotInitialized((short) 3)
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = savedSlotNumber
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test cluster init slots uses slot 0 when self shard is missing'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def localPersist = LocalPersist.instance
+        localPersist.resetForTest()
+        Consts.persistDir.mkdirs()
+
+        and:
+        def multiShard = new MultiShard(Consts.persistDir)
+        multiShard.mySelfShard().mySelfNode().mySelf = false
+        multiShard.updateClusterVersion(1)
+
+        and:
+        def snowFlakes = [new SnowFlake(1, 1)] as SnowFlake[]
+
+        when:
+        localPersist.initSlots((byte) 1, (short) 4, snowFlakes, Consts.persistDir, Config.create())
+
+        then:
+        localPersist.oneSlots().length == 4
+        localPersist.initializedOneSlots().size() == 1
+        localPersist.isOneSlotInitialized((short) 0)
+        !localPersist.isOneSlotInitialized((short) 1)
+        !localPersist.isOneSlotInitialized((short) 2)
+        !localPersist.isOneSlotInitialized((short) 3)
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = savedSlotNumber
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test cleanUp runs on slot worker thread not caller thread'() {
         given:
         def eventloop = Eventloop.builder()

@@ -134,7 +134,7 @@ public class LocalPersist implements NeedCleanUp {
      *
      * @param slot the slot index
      * @return the OneSlot for the slot
-     * @throws IOException          if initFds fails
+     * @throws IOException              if initFds fails
      * @throws IllegalArgumentException if the slot is out of range
      */
     public synchronized OneSlot ensureOneSlotInitialized(short slot) throws IOException {
@@ -196,8 +196,8 @@ public class LocalPersist implements NeedCleanUp {
      * @param slotWorkerThreadIds      thread id per slot worker
      */
     public void initSlotRuntimeBindings(@NotNull Eventloop[] slotWorkerEventloopArray,
-                                         @NotNull RequestHandler[] requestHandlerArray,
-                                         @NotNull long[] slotWorkerThreadIds) {
+                                        @NotNull RequestHandler[] requestHandlerArray,
+                                        @NotNull long[] slotWorkerThreadIds) {
         this.slotWorkerEventloopArray = slotWorkerEventloopArray;
         this.requestHandlerArray = requestHandlerArray;
         this.slotWorkerThreadIds = slotWorkerThreadIds;
@@ -221,8 +221,8 @@ public class LocalPersist implements NeedCleanUp {
 
     /**
      * @param fnApplyOneSlot the function to apply to each slot
-     * @param fn the function to aggregate the results from all slots
-     * @param <R> the type of result from fnApplyOneSlot
+     * @param fn             the function to aggregate the results from all slots
+     * @param <R>            the type of result from fnApplyOneSlot
      * @return the AsyncReply containing the aggregated results
      */
     public <R> AsyncReply doSthInSlots(@NotNull Function<OneSlot, R> fnApplyOneSlot, @NotNull Function<ArrayList<R>, Reply> fn) {
@@ -255,7 +255,7 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * @param slot the index of the slot to add
+     * @param slot      the index of the slot to add
      * @param eventloop the Eventloop instance associated with the new slot
      */
     @TestOnly
@@ -305,10 +305,10 @@ public class LocalPersist implements NeedCleanUp {
     private Config persistConfig;
 
     /**
-     * @param netWorkers the number of network workers
-     * @param slotNumber the number of slots to initialize
-     * @param snowFlakes the array of SnowFlake instances for generating unique identifiers
-     * @param persistDir the directory for persistence storage
+     * @param netWorkers    the number of network workers
+     * @param slotNumber    the number of slots to initialize
+     * @param snowFlakes    the array of SnowFlake instances for generating unique identifiers
+     * @param persistDir    the directory for persistence storage
      * @param persistConfig the configuration for persistence
      * @throws IOException if an I/O error occurs during initialization
      */
@@ -357,9 +357,12 @@ public class LocalPersist implements NeedCleanUp {
             return slots;
         }
         var mySelfShard = multiShard.mySelfShard();
-        if (mySelfShard == null) {
+        if (mySelfShard == null || mySelfShard.getMultiSlotRange().getList().isEmpty()) {
+            // Keep a minimal local slot available before cluster ownership metadata assigns real slots.
+            slots.add((short) 0);
             return slots;
         }
+
         var step = MultiShard.TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber;
         for (var range : mySelfShard.getMultiSlotRange().getList()) {
             var firstBoundary = ((range.getBegin() + step - 1) / step) * step;
@@ -508,7 +511,7 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
-     * @param slot the index of the slot
+     * @param slot     the index of the slot
      * @param threadId the new thread ID to set
      */
     public void fixSlotThreadId(short slot, long threadId) {
